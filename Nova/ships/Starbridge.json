@@ -1,0 +1,17 @@
+{"frames": {
+
+"Starbridge 1.png":
+{
+    "frame": {"x":0,"y":0,"w":48,"h":48},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":0,"w":48,"h":48},
+    "sourceSize": {"w":48,"h":48}
+}},
+"meta": {
+    "image": "Starbridge.png",
+    "format": "RGBA8888",
+    "size": {"w":288, "h":864},
+    "scale": "1"
+}
+}

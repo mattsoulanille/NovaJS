@@ -1,0 +1,89 @@
+ <!DOCTYPE HTML>
+<html>
+<head>
+	<title>Nova</title>
+	<style>
+		body {
+			margin: 0;
+			padding: 0;
+			background-color: #000000;
+		}
+	</style>
+        <script src="//code.jquery.com/jquery-1.10.2.min.js"></script>
+	<script src="pixi.js"></script>
+
+</head>
+<body>
+	<script>
+	
+
+
+	  
+	// create an new instance of a pixi stage
+	var stage = new PIXI.Stage(0x66FF99);
+	
+	// create a renderer instance
+        var screenW = $(window).width(), screenH = $(window).height();
+        //var screenW = 800, screenH = 600;
+	var renderer = PIXI.autoDetectRenderer(screenW, screenH);
+	$(window).resize(onResize);
+	// add the renderer view element to the DOM
+	document.body.appendChild(renderer.view);
+	
+
+	var ship;
+
+
+        var starbridgeAssetsToLoader = ["ships/Starbridge.json"];
+        starbridgeLoader = new PIXI.AssetLoader(starbridgeAssetsToLoader);
+        starbridgeLoader.onComplete = onAssetsLoaded;
+        starbridgeLoader.load();
+        function onAssetsLoaded() {
+	    
+	    var shipTextures = [];
+	    for (var i=0; i<1; i++) {
+	
+		var texture = PIXI.Texture.fromFrame("Starbridge " + (i+1) + ".png");
+		shipTextures.push(texture);
+
+
+	    };
+	    // create a texture from an image path
+	    //var test = PIXI.Texture.fromImage("ships/Starbridge.png");
+	    // create a new Sprite using the texture
+	    ship = new PIXI.Sprite(shipTextures[0]);
+	    console.log("made it past line 54");
+	    //ship.setTexture(shipTextures[0]);
+	    // center the sprites anchor point
+	    ship.anchor.x = 0.5;
+	    ship.anchor.y = 0.5;
+
+	    // move the sprite t the center of the screen
+	    ship.position.x = screenW/2;
+	    ship.position.y = screenH/2;	
+	    stage.addChild(ship);    
+	    requestAnimFrame( animate );
+
+	}
+        
+	function animate() {
+	
+	    requestAnimFrame( animate );
+	
+	    // just for fun, lets rotate mr rabbit a little
+	    ship.rotation += 0.1;
+	    ship.position.x = screenW/2;
+	    ship.position.y = screenH/2;
+	    // render the stage   
+	    renderer.render(stage);
+	}
+	
+	function onResize() {
+	    screenW = $(window).width();
+	    screenH = $(window).height();
+	    renderer.resize(screenW,screenH);
+	}
+	</script>
+
+	</body>
+</html>
