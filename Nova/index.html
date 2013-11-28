@@ -36,7 +36,7 @@
 	var ship;
         var shipTextures;
         var shipTexture = 1;
-        
+
         var starbridgeAssetsToLoader = ["ships/Starbridge.json"];
         starbridgeLoader = new PIXI.AssetLoader(starbridgeAssetsToLoader);
         starbridgeLoader.onComplete = onAssetsLoaded;
@@ -60,12 +60,12 @@
 	    // center the sprites anchor point
 	    ship.anchor.x = 0.5;
 	    ship.anchor.y = 0.5;
-	    ship.pointing = 0
-
+	    ship.pointing = Math.random() * 2 * Math.PI
+	    ship.turnRate = 0.1
 	    
 	    // move the sprite t the center of the screen
 	    ship.position.x = screenW/2;
-	    ship.position.y = screenH/2;	
+	    ship.position.y = screenH/2;
 	    stage.addChild(ship);    
 	    requestAnimFrame( animate );
 
@@ -77,18 +77,38 @@
 	
 	    // just for fun, lets rotate mr rabbit a little
 	    //ship.rotation += 0.1;
-	    ship.pointing += .05
+	    //ship.turnRate = 0.01
+	    var keys = KeyboardJS.activeKeys()
+	    ship.banking = 0
+	    if (_.contains(keys, 'right')) {
+		ship.pointing += ship.turnRate
+		ship.banking = 72
+	    }
+	    if (_.contains(keys, 'left')) {
+		ship.pointing = ship.pointing - ship.turnRate
+		ship.banking = 36
+	    }
+	    if (_.contains(keys, 'left') && _.contains(keys, 'right')) {
+		ship.banking = 0
+	    }
+
+
+
 	    if (ship.pointing >= 2*Math.PI) {
 		ship.pointing = 0
 	    }
-
+	    if (ship.pointing < 0) {
+		ship.pointing += 2*Math.PI
+	    }
+	    
 	    var shipRange = ship.pointing * 36 / (2*Math.PI)
-	    shipTexture = Math.floor(shipRange) 
+	    shipTexture = Math.floor(shipRange) + ship.banking
 	    
 	    ship.rotation = ((shipRange % 1 - 0.5) * Math.PI / 18)
 	    
 
 	    ship.setTexture(shipTextures[shipTexture])
+
 
 	    //if (shipTexture < 35) {
 		//shipTexture++
