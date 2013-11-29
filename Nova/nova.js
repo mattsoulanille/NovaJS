@@ -40,8 +40,11 @@ playerShip.prototype = new will_be_ship
 
 playerShip.prototype.gimmieOnJsonLoaded = function() {
     var self = this
+    var parent_ojl = will_be_ship.prototype.gimmieOnJsonLoaded.call(this)
     var onJsonLoaded = function() {
-	console.log("loaded my ship " + self.name)
+	parent_ojl()
+//	console.log("loaded my ship " + self.name)
+	console.log("and it's mine")
     }
     return onJsonLoaded
 }
