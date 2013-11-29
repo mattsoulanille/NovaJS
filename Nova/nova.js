@@ -10,14 +10,55 @@ $(window).resize(onResize);
 document.body.appendChild(renderer.view);
 
 
+
+
+function will_be_ship(shipName) {
+    this.name = shipName || ""
+}
+
+will_be_ship.prototype.gimmieOnJsonLoaded = function() {
+    var self = this //grab the 'this' of the ship
+    var onJsonLoaded = function() { //this is necessary because the shipLoader.onComplete will run this within its own scope. 
+	console.log("loaded " + self.name)
+    }
+    return onJsonLoaded
+}
+
+will_be_ship.prototype.build = function() {
+    //console.log(this.name)
+    var shipAssetsToLoad = ["ships/" + this.name + '.json']
+    var shipLoader = new PIXI.AssetLoader(shipAssetsToLoad)
+    shipLoader.onComplete = this.gimmieOnJsonLoaded() //this function returns the function that gets run after the asset is loaded
+    shipLoader.load()
+}
+
+function playerShip(shipJsonName) {
+    will_be_ship.call(this, shipJsonName)
+}
+
+playerShip.prototype = new will_be_ship
+
+playerShip.prototype.gimmieOnJsonLoaded = function() {
+    var self = this
+    var onJsonLoaded = function() {
+	console.log("loaded my ship " + self.name)
+    }
+    return onJsonLoaded
+}
+
+
 var ship;
 var shipTextures;
 var shipTexture = 1;
+
+var myShip = new playerShip("Starbridge")
+myShip.build()
 
 var starbridgeAssetsToLoader = ["ships/Starbridge.json"];
 starbridgeLoader = new PIXI.AssetLoader(starbridgeAssetsToLoader);
 starbridgeLoader.onComplete = onAssetsLoaded;
 starbridgeLoader.load();
+
 function onAssetsLoaded() {
 
     shipTextures = [];
@@ -105,3 +146,5 @@ function onResize() {
     screenH = $(window).height();
     renderer.resize(screenW,screenH);
 }
+
+
