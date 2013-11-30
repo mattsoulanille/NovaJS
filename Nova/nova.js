@@ -16,27 +16,38 @@ function will_be_ship(shipName) {
     this.name = shipName || ""
 }
 
-will_be_ship.prototype.onJsonLoaded = function() { //this is necessary because the shipLoader.onComplete will run this within its own scope.
-    self.textures = []
-    console.log("loaded " + self.name)
-}
-
 will_be_ship.prototype.build = function() {
     //console.log(this.name)
-    var shipAssetsToLoad = ["ships/" + this.name + '.json']
+    var url = "ships/" + this.name + '.json'
+    var loader = new PIXI.JsonLoader(url);
+    loader.on('loaded', _.bind(this.interpretShipJson, this))
+    loader.load()
+}
+
+will_be_ship.prototype.interpretShipJson = function(evt) {
+    //data is in evt.content.json
+    this.meta = evt.content.json
+    console.log(this.meta)	// DEBUG
+
+    var shipAssetsToLoad = ["ships/" + this.meta.imageAssetsFile]
     var shipLoader = new PIXI.AssetLoader(shipAssetsToLoad)
-    shipLoader.onComplete = _.bind(this.onJsonLoaded, this)
+    shipLoader.onComplete = _.bind(this.onAssetsLoaded, this)
     shipLoader.load()
 }
 
-function playerShip(shipJsonName) {
-    will_be_ship.call(this, shipJsonName)
+will_be_ship.prototype.onAssetsLoaded = function() {
+    console.log("loaded assets for " + self.name)
+}
+
+
+function playerShip(shipName) {
+    will_be_ship.call(this, shipName)
 }
 
 playerShip.prototype = new will_be_ship
 
-playerShip.prototype.onJsonLoaded = function() {
-    will_be_ship.prototype.onJsonLoaded.call(this)
+playerShip.prototype.onAssetsLoaded = function() {
+    will_be_ship.prototype.onAssetsLoaded.call(this)
     console.log("and it's mine")
 }
 
@@ -45,7 +56,7 @@ var ship;
 var shipTextures;
 var shipTexture = 1;
 
-var myShip = new playerShip("Starbridge")
+var myShip = new playerShip("mother")
 myShip.build()
 
 var starbridgeAssetsToLoader = ["ships/Starbridge.json"];
