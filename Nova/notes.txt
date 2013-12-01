@@ -1,0 +1,10 @@
+Give ship a position in the universe, and a velocity. Cartesian.
+
+Make a function that goes from position in the universe to position on
+the stage. For the player's ship, it always puts it in the center of
+the stage (for now ;-). So this function has a reference to the
+player's ship, and uses it to peer inside to get it's position in the
+universe. Use vector subtraction to find the position on the stage of
+any position in the universe. This function can return in addition to
+an x and y of position on the stage, a boolean that says whether it's
+on the stage or off it.
