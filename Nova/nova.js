@@ -12,12 +12,12 @@ document.body.appendChild(renderer.view);
 
 
 
-function will_be_ship(shipName) {
+function ship(shipName) {
     this.name = shipName || ""
     this.renderReady = false
 }
 
-will_be_ship.prototype.build = function() {
+ship.prototype.build = function() {
     //console.log(this.name)
     var url = "ships/" + this.name + '.json'
     var loader = new PIXI.JsonLoader(url);
@@ -25,7 +25,7 @@ will_be_ship.prototype.build = function() {
     loader.load()
 }
 
-will_be_ship.prototype.interpretShipJsonAndStartInterpretShipImageJson = function(evt) {
+ship.prototype.interpretShipJsonAndStartInterpretShipImageJson = function(evt) {
     //data is in evt.content.json
     this.meta = evt.content.json //generic ship infromation. Not Graphics.
     console.log(this.meta)	// DEBUG
@@ -37,7 +37,7 @@ will_be_ship.prototype.interpretShipJsonAndStartInterpretShipImageJson = functio
     loader.on('loaded', _.bind(this.interpretShipImageJson, this))
     loader.load()
 }
-will_be_ship.prototype.interpretShipImageJson = function(evt) {
+ship.prototype.interpretShipImageJson = function(evt) {
     this.shipImageInfo = evt.content.json
     console.log(this.shipImageInfo.meta.imagePurposes)
 
@@ -50,7 +50,7 @@ will_be_ship.prototype.interpretShipImageJson = function(evt) {
 }
 
 
-will_be_ship.prototype.onAssetsLoaded = function() {
+ship.prototype.onAssetsLoaded = function() {
     // Get a list of the textures for the ship.
     this.textures = _.map(_.keys(this.shipImageInfo.frames),
 			 function(frame) { return(PIXI.Texture.fromFrame(frame)) })
@@ -76,7 +76,7 @@ render(time, turning):
   set_my_picture_to(direction)
 */
 
-will_be_ship.prototype.render = function(time, turning) {
+ship.prototype.render = function(time, turning) {
     if (this.renderReady == true) {
 	var frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
 	var frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
@@ -113,13 +113,11 @@ will_be_ship.prototype.render = function(time, turning) {
 	    this.pointing += 2*Math.PI
 	}
 	
-	var frameShifted = this.pointing - (Math.PI / frameCount) // get the adjusted range for the rotation
-	if (frameShifted < 0) {
-	    frameShifted += 2*Math.PI
-	}
+	
 	// ship uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
-	var useThisImage = Math.floor(frameShifted * frameCount/(2*Math.PI) + frameStart) 
-	this.sprite.rotation = (frameShifted) % (2*Math.PI/frameCount) + Math.PI/frameCount // how much to rotate the image
+	var useThisImage = Math.floor((this.pointing * frameCount/(2*Math.PI) + .5) % frameCount) + frameStart
+
+	this.sprite.rotation = (this.pointing + (Math.PI / frameCount)) % (2*Math.PI/frameCount) - Math.PI/frameCount // how much to rotate the image
 
 	this.sprite.setTexture(this.textures[useThisImage])
 
@@ -136,13 +134,13 @@ will_be_ship.prototype.render = function(time, turning) {
 
 function playerShip(shipName) {
     this.pointing = Math.random()*2*Math.PI
-    will_be_ship.call(this, shipName)
+    ship.call(this, shipName)
 }
 
-playerShip.prototype = new will_be_ship
+playerShip.prototype = new ship
 
 playerShip.prototype.onAssetsLoaded = function() {
-    if (will_be_ship.prototype.onAssetsLoaded.call(this)) {
+    if (ship.prototype.onAssetsLoaded.call(this)) {
 	console.log("and it's mine")
 
 
@@ -151,12 +149,12 @@ playerShip.prototype.onAssetsLoaded = function() {
 playerShip.prototype.render = function(time, turning) {
     this.sprite.position.x = screenW/2 
     this.sprite.position.y = screenH/2
-    will_be_ship.prototype.render.call(this, time, turning)
+    ship.prototype.render.call(this, time, turning)
 }	
 
 
 
-var myShip = new playerShip("mother")
+var myShip = new playerShip("Starbridge A")
 myShip.build()
 
 
