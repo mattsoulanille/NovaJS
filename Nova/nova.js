@@ -14,44 +14,171 @@ document.body.appendChild(renderer.view);
 
 function will_be_ship(shipName) {
     this.name = shipName || ""
+    this.renderReady = false
 }
 
 will_be_ship.prototype.build = function() {
     //console.log(this.name)
     var url = "ships/" + this.name + '.json'
     var loader = new PIXI.JsonLoader(url);
-    loader.on('loaded', _.bind(this.interpretShipJson, this))
+    loader.on('loaded', _.bind(this.interpretShipJsonAndStartInterpretShipImageJson, this))
     loader.load()
 }
 
-will_be_ship.prototype.interpretShipJson = function(evt) {
+will_be_ship.prototype.interpretShipJsonAndStartInterpretShipImageJson = function(evt) {
     //data is in evt.content.json
-    this.meta = evt.content.json
+    this.meta = evt.content.json //generic ship infromation. Not Graphics.
     console.log(this.meta)	// DEBUG
+    
+    var url = "ships/" + this.meta.imageAssetsFile
+    var loader = new PIXI.JsonLoader(url)
+    console.log('loading ships/' + this.meta.imageAssetsFile) //DEBUG
+
+    loader.on('loaded', _.bind(this.interpretShipImageJson, this))
+    loader.load()
+}
+will_be_ship.prototype.interpretShipImageJson = function(evt) {
+    this.shipImageInfo = evt.content.json
+    console.log(this.shipImageInfo.meta.imagePurposes)
+
 
     var shipAssetsToLoad = ["ships/" + this.meta.imageAssetsFile]
     var shipLoader = new PIXI.AssetLoader(shipAssetsToLoad)
+    
     shipLoader.onComplete = _.bind(this.onAssetsLoaded, this)
     shipLoader.load()
 }
 
+
 will_be_ship.prototype.onAssetsLoaded = function() {
-    console.log("loaded assets for " + self.name)
+    // Get a list of the textures for the ship.
+    this.textures = _.map(_.keys(this.shipImageInfo.frames),
+			 function(frame) { return(PIXI.Texture.fromFrame(frame)) })
+
+    this.sprite = new PIXI.Sprite(this.textures[0])
+    this.sprite.anchor.x = 0.5
+    this.sprite.anchor.y = 0.5
+    this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 // 10 nova ship turn rate/sec ~= 30°/sec This turn rate is radians/sec
+    stage.addChild(myShip.sprite)
+    this.renderReady = true
+    requestAnimFrame( animate ) // make a system for this where multiple ships are happy.
+    console.log("loaded assets for " + self.name) //should happen when ship is finished loading
+    return true
 }
 
+/*
+render(time, turning):
+  if turning different from last_turning:
+    turning_start_time = time
+    turning_start_direction = direction
+    omega = omega[turning]
+  direction = (time - turning_start_time) * omega
+  set_my_picture_to(direction)
+*/
+
+will_be_ship.prototype.render = function(time, turning) {
+    if (this.renderReady == true) {
+	var frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
+	var frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
+
+
+	// if the new direction does not equal the previous direction
+	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning)) { 
+	    this.turnStartTime = time // the turn started at the average of the times
+	    this.origionalPointing = this.pointing
+
+	}
+	if (turning == "left") {
+	    this.pointing = this.origionalPointing - (this.turnRate * (time - this.turnStartTime) / 1000)
+	    frameStart = this.shipImageInfo.meta.imagePurposes.left.start
+	    frameCount = this.shipImageInfo.meta.imagePurposes.left.length
+	}
+	else if (turning == "right") {
+	    this.pointing = this.origionalPointing + (this.turnRate * (time - this.turnStartTime) / 1000)
+	    frameStart = this.shipImageInfo.meta.imagePurposes.right.start
+	    frameCount = this.shipImageInfo.meta.imagePurposes.right.length
+	}
+	else if (turning == "back") { // turn backwards to velocity. Velocity not yet implemented.
+	    //put some code here
+	    console.log('turning = back')
+	}
+	else {
+	    frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
+	    frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
+	}
+
+
+	this.pointing = this.pointing % (2*Math.PI)  //makes sure ship.pointing is in the range [0, 2pi)
+	if (this.pointing < 0) {
+	    this.pointing += 2*Math.PI
+	}
+	
+	var frameShifted = this.pointing - (Math.PI / frameCount) // get the adjusted range for the rotation
+	if (frameShifted < 0) {
+	    frameShifted += 2*Math.PI
+	}
+	// ship uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+	var useThisImage = Math.floor(frameShifted * frameCount/(2*Math.PI) + frameStart) 
+	this.sprite.rotation = (frameShifted) % (2*Math.PI/frameCount) + Math.PI/frameCount // how much to rotate the image
+
+	this.sprite.setTexture(this.textures[useThisImage])
+
+
+	// this.origionalPointing is the angle the ship was pointed towards before it was told a different direction to turn.
+	this.lastTurning = turning // last turning value: left, right, or back
+
+	return true
+    }
+    else {
+	return false // oh no. I'm not ready to render. better not try
+    }
+}
 
 function playerShip(shipName) {
+    this.pointing = Math.random()*2*Math.PI
     will_be_ship.call(this, shipName)
 }
 
 playerShip.prototype = new will_be_ship
 
 playerShip.prototype.onAssetsLoaded = function() {
-    will_be_ship.prototype.onAssetsLoaded.call(this)
-    console.log("and it's mine")
+    if (will_be_ship.prototype.onAssetsLoaded.call(this)) {
+	console.log("and it's mine")
+
+
+    }
 }
+playerShip.prototype.render = function(time, turning) {
+    this.sprite.position.x = screenW/2 
+    this.sprite.position.y = screenH/2
+    will_be_ship.prototype.render.call(this, time, turning)
+}	
 
 
+
+var myShip = new playerShip("mother")
+myShip.build()
+
+
+
+
+function animate() {
+    requestAnimFrame( animate )
+    time = new Date().getTime()
+    var keys = KeyboardJS.activeKeys()
+
+    if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
+	myShip.render(time, 'right')
+    }
+    else if (_.contains(keys, 'left') && !_.contains(keys, 'right')) {
+	myShip.render(time, 'left')
+    }
+    else {
+	myShip.render(time, '')
+    }
+    renderer.render(stage)
+}
+/*
 var ship;
 var shipTextures;
 var shipTexture = 1;
@@ -65,7 +192,7 @@ starbridgeLoader.onComplete = onAssetsLoaded;
 starbridgeLoader.load();
 
 function onAssetsLoaded() {
-    console.log(this.assetURLs.length)
+
 
     shipTextures = [];
     for (var i=0; i<108; i++) {
@@ -146,6 +273,7 @@ function animate() {
     // render the stage   
     renderer.render(stage);
 }
+*/
 
 function onResize() {
     screenW = $(window).width();

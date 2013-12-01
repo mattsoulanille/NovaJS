@@ -867,6 +867,10 @@
     "image": "Starbridge.png",
     "format": "RGBA8888",
     "size": {"w":288,"h":864},
-    "scale": "1"
+    "scale": "1",
+    "imagePurposes": {"normal": {"start": 0, "length": 36 },
+		      "left": {"start": 36, "length": 36},
+		      "right": {"start": 72, "length":36}}
 }
 }
+
