@@ -1,20 +1,33 @@
 // create an new instance of a pixi stage
-var stage = new PIXI.Stage(0x000000);
+var stage = new PIXI.Stage(0x000000)
 
 // create a renderer instance
-var screenW = $(window).width(), screenH = $(window).height();
+var screenW = $(window).width(), screenH = $(window).height() - 10
 //var screenW = 800, screenH = 600;
-var renderer = PIXI.autoDetectRenderer(screenW, screenH);
-$(window).resize(onResize);
+var renderer = PIXI.autoDetectRenderer(screenW, screenH)
+$(window).resize(onResize)
 // add the renderer view element to the DOM
-document.body.appendChild(renderer.view);
+document.body.appendChild(renderer.view)
 
+
+
+function stagePosition(x, y) { //where x and y are absolute positions in the universe
+//    stageX = 
+
+
+
+
+
+
+
+}
 
 
 
 function ship(shipName) {
     this.name = shipName || ""
     this.renderReady = false
+    this.lastAccelerating = false
 }
 
 ship.prototype.build = function() {
@@ -59,10 +72,10 @@ ship.prototype.onAssetsLoaded = function() {
     this.sprite.anchor.x = 0.5
     this.sprite.anchor.y = 0.5
     this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 // 10 nova ship turn rate/sec ~= 30°/sec This turn rate is radians/sec
-    stage.addChild(myShip.sprite)
+    stage.addChild(this.sprite)
     this.renderReady = true
     requestAnimFrame( animate ) // make a system for this where multiple ships are happy.
-    console.log("loaded assets for " + self.name) //should happen when ship is finished loading
+    console.log("loaded assets for " + this.name) //should happen when ship is finished loading
     return true
 }
 
@@ -75,13 +88,41 @@ render(time, turning):
   direction = (time - turning_start_time) * omega
   set_my_picture_to(direction)
 */
+ship.prototype.updateStats = function(time, turning, accelerating) {
 
-ship.prototype.render = function(time, turning) {
+    ship.prototype.render.call(this, time, turning, accelerating) 
+}
+	
+ship.prototype.render = function(time, turning, accelerating) {
     if (this.renderReady == true) {
+
 	var frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
 	var frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
 
+	if (this.isPlayerShip == true) {
+	    this.sprite.position.x = screenW/2 
+	    this.sprite.position.y = screenH/2
+	}	    
 
+	if (turning == 'back') {
+	    var vvector = Math.acos((Math.pow(this.xvelocity, 2) - Math.pow(this.yvelocity, 2) - (Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2)))/(-2*Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), 0.5) * this.yvelocity))
+	    console.log(vvector)
+	    var pointto = (vvector + Math.PI) % (2*Math.PI)
+	    var pointDiff = pointto - this.pointing
+	    if (pointDiff < 0) {
+		pointDiff += 2*Math.PI
+	    }
+	    if (pointDiff < Math.PI) {
+		turning = "right"
+	    }
+	    else if(pointDiff > Math.PI) {
+		turning = "left"
+	    }
+	    else {
+		turning = "nowhere"
+	    }
+	}
+	
 	// if the new direction does not equal the previous direction
 	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning)) { 
 	    this.turnStartTime = time // the turn started at the average of the times
@@ -106,7 +147,7 @@ ship.prototype.render = function(time, turning) {
 	    frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
 	    frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
 	}
-
+	
 
 	this.pointing = this.pointing % (2*Math.PI)  //makes sure ship.pointing is in the range [0, 2pi)
 	if (this.pointing < 0) {
@@ -125,6 +166,18 @@ ship.prototype.render = function(time, turning) {
 	// this.origionalPointing is the angle the ship was pointed towards before it was told a different direction to turn.
 	this.lastTurning = turning // last turning value: left, right, or back
 
+	//acceleration
+	var xaccel = Math.sin(this.pointing) * this.meta.physics.acceleration
+	var yaccel = Math.cos(this.pointing) * this.meta.physics.acceleration
+	if (accelerating == true) {
+	    if (typeof this.previousAccelTime != 'undefined') {
+		this.xvelocity += xaccel * (time - this.previousAccelTime)/1000
+		this.yvelocity += yaccel * (time - this.previousAccelTime)/1000
+	    }
+
+	    this.previousAccelTime = time
+	}
+
 	return true
     }
     else {
@@ -135,6 +188,9 @@ ship.prototype.render = function(time, turning) {
 function playerShip(shipName) {
     this.pointing = Math.random()*2*Math.PI
     ship.call(this, shipName)
+    this.xvelocity = 0
+    this.yvelocity = 0
+    this.isPlayerShip = true
 }
 
 playerShip.prototype = new ship
@@ -146,11 +202,7 @@ playerShip.prototype.onAssetsLoaded = function() {
 
     }
 }
-playerShip.prototype.render = function(time, turning) {
-    this.sprite.position.x = screenW/2 
-    this.sprite.position.y = screenH/2
-    ship.prototype.render.call(this, time, turning)
-}	
+
 
 
 
@@ -164,16 +216,27 @@ function animate() {
     requestAnimFrame( animate )
     time = new Date().getTime()
     var keys = KeyboardJS.activeKeys()
-
+    var turning
+    var accelerating
     if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
-	myShip.render(time, 'right')
+	turning = 'right'
     }
     else if (_.contains(keys, 'left') && !_.contains(keys, 'right')) {
-	myShip.render(time, 'left')
+	turning = 'left'
     }
     else {
-	myShip.render(time, '')
+	turning = ''
     }
+    if (_.contains(keys, 'down')) {
+	turning = 'back'
+    }
+    if (_.contains(keys, 'up')) {
+	accelerating = true
+    }
+    else {
+	accelerating = false
+    }
+    myShip.updateStats(time, turning, accelerating)
     renderer.render(stage)
 }
 /*

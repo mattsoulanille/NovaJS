@@ -1,7 +1,0 @@
-{ "imageAssetsFile": "Starbridge.json",
-  "physics": {
-      "thrust": 10,
-      "mass": 200,
-      "turn_rate": 50
-  }
-}

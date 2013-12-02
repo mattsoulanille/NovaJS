@@ -1,7 +1,8 @@
 { "imageAssetsFile": "Starbridge.json",
   "physics": {
-      "thrust": 10,
-      "mass": 200,
+      "acceleration": 550,
+      "max_speed": 400,
+      "mass": 98,
       "turn_rate": 50
   }
 }
