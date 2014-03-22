@@ -105,9 +105,12 @@ ship.prototype.render = function(time, turning, accelerating) {
 	}	    
 
 	if (turning == 'back') {
-	    var vvector = Math.acos((Math.pow(this.xvelocity, 2) - Math.pow(this.yvelocity, 2) - (Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2)))/(-2*Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), 0.5) * this.yvelocity))
-	    console.log(vvector)
-	    var pointto = (vvector + Math.PI) % (2*Math.PI)
+	    var vAngle = Math.acos((Math.pow(this.xvelocity, 2) - Math.pow(this.yvelocity, 2) - (Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2)))/(-2*Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), 0.5) * this.yvelocity))
+	    if (this.xvelocity < 0) {
+		vAngle = vAngle * -1
+	    }
+	    console.log(vAngle)
+	    var pointto = (vAngle + Math.PI) % (2*Math.PI)
 	    var pointDiff = pointto - this.pointing
 	    if (pointDiff < 0) {
 		pointDiff += 2*Math.PI
