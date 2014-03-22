@@ -163,9 +163,10 @@ ship.prototype.render = function(time, turning, accelerating) {
 	
 	
 	// ship uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+
 	var useThisImage = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount / (2*Math.PI)) + frameStart
 	//console.log(useThisImage)
-	this.sprite.rotation = (this.pointing + (Math.PI / frameCount)) % (2*Math.PI/frameCount) - Math.PI/frameCount // how much to rotate the image
+	this.sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount) - (Math.PI/frameCount)  // how much to rotate the image
 
 	this.sprite.setTexture(this.textures[useThisImage])
 
