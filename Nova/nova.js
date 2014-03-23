@@ -95,10 +95,10 @@ ship.prototype.updateStats = function(time, turning, accelerating) {
 	
 ship.prototype.render = function(time, turning, accelerating) {
     if (this.renderReady == true) {
-
+	
 	var frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
 	var frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
-
+	var turnback = false
 	if (this.isPlayerShip == true) {
 	    this.sprite.position.x = screenW/2 
 	    this.sprite.position.y = screenH/2
@@ -114,37 +114,66 @@ ship.prototype.render = function(time, turning, accelerating) {
 	    */
 
 
-	    var vAngle = Math.atan(this.yvelocity / this.xvelocity) * sign(this.xvelocity)
-	    var pointto = (vAngle + Math.PI)%(2*Math.PI)
-	    console.log(pointto)
-	    var pointDiff = (pointto - this.pointing)
-
-	    if (pointDiff < Math.PI) {
-		turning = "right"
+	    var vAngle = Math.atan(this.yvelocity / this.xvelocity)
+	    if (this.xvelocity < 0) {
+		vAngle = vAngle + Math.PI
 	    }
-	    else if(pointDiff > Math.PI) {
+	    pointto = (vAngle + Math.PI) % (2*Math.PI)
+	    //console.log(pointto)
+	    var pointDiff = (pointto - this.pointing + 2*Math.PI) % (2*Math.PI)
+	    //console.log(pointDiff)
+	    if (pointDiff < Math.PI) {
 		turning = "left"
 	    }
-	    else {
-		turning = "nowhere"
+	    else if(pointDiff >= Math.PI) {
+		turning = "right"
 	    }
+	    turnback = true
 	}
 	
 	// if the new direction does not equal the previous direction
-	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning)) { 
+	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning) || turnback != this.lastTurnBack) { 
 	    this.turnStartTime = time // the turn started at the average of the times
 	    this.origionalPointing = this.pointing
+	    this.lastTurnBack = turnback
 
 	}
 	if (turning == "left") {
+	    if (turnback == true) {
+		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (time - this.lastTime) / 1000)) {
+		    this.pointing = pointto
+		}
+		else {
+		    this.pointing = this.origionalPointing + (this.turnRate * (time - this.turnStartTime) / 1000)
+		    frameStart = this.shipImageInfo.meta.imagePurposes.left.start
+		    frameCount = this.shipImageInfo.meta.imagePurposes.left.length
+		}
+
+	    }
+	    else {
 	    this.pointing = this.origionalPointing + (this.turnRate * (time - this.turnStartTime) / 1000)
 	    frameStart = this.shipImageInfo.meta.imagePurposes.left.start
 	    frameCount = this.shipImageInfo.meta.imagePurposes.left.length
+	    
+	    }
 	}
 	else if (turning == "right") {
-	    this.pointing = this.origionalPointing - (this.turnRate * (time - this.turnStartTime) / 1000)
-	    frameStart = this.shipImageInfo.meta.imagePurposes.right.start
-	    frameCount = this.shipImageInfo.meta.imagePurposes.right.length
+	    if (turnback == true) {
+		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (time - this.lastTime) / 1000)) {
+		    this.pointing = pointto
+		}
+		else {
+		    this.pointing = this.origionalPointing - (this.turnRate * (time - this.turnStartTime) / 1000)
+		    frameStart = this.shipImageInfo.meta.imagePurposes.right.start
+		    frameCount = this.shipImageInfo.meta.imagePurposes.right.length
+		}
+		
+	    }
+	    else {
+		this.pointing = this.origionalPointing - (this.turnRate * (time - this.turnStartTime) / 1000)
+		frameStart = this.shipImageInfo.meta.imagePurposes.right.start
+		frameCount = this.shipImageInfo.meta.imagePurposes.right.length
+	    }
 	}
 	else if (turning == "back") { // turn backwards to velocity. Velocity not yet implemented.
 	    //put some code here
@@ -154,8 +183,8 @@ ship.prototype.render = function(time, turning, accelerating) {
 	    frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
 	    frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
 	}
-	
 
+	this.lastTime = time
 	this.pointing = this.pointing % (2*Math.PI)  //makes sure ship.pointing is in the range [0, 2pi)
 	if (this.pointing < 0) {
 	    this.pointing += 2*Math.PI
@@ -166,7 +195,7 @@ ship.prototype.render = function(time, turning, accelerating) {
 
 	var useThisImage = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount / (2*Math.PI)) + frameStart
 	//console.log(useThisImage)
-	this.sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount) - (Math.PI/frameCount)  // how much to rotate the image
+	this.sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount) + (Math.PI/frameCount)  // how much to rotate the image
 
 	this.sprite.setTexture(this.textures[useThisImage])
 
@@ -182,9 +211,8 @@ ship.prototype.render = function(time, turning, accelerating) {
 		this.xvelocity += xaccel * (time - this.previousAccelTime)/1000
 		this.yvelocity += yaccel * (time - this.previousAccelTime)/1000
 	    }
-
-	    this.previousAccelTime = time
 	}
+	this.previousAccelTime = time
 
 	return true
     }
@@ -245,12 +273,20 @@ function animate() {
 	accelerating = false
     }
     myShip.updateStats(time, turning, accelerating)
+    line.clear()
+    line.lineStyle(5, 0xFF0000, 1)
+    line.moveTo(myShip.sprite.position.x, myShip.sprite.position.y)
+    line.lineTo(myShip.xvelocity/10 + myShip.sprite.position.x, -myShip.yvelocity/10 + myShip.sprite.position.y)
+
+    //line.lineTo(300,300)
     renderer.render(stage)
 }
 
-function sign(x) {
-    return typeof x === 'number' ? x ? x < 0 ? -1 : 1 : x === x ? 0 : NaN : NaN;
-}
+var line = new PIXI.Graphics()
+stage.addChild(line)
+
+
+
 /*
 var ship;
 var shipTextures;
