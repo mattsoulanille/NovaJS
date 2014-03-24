@@ -175,10 +175,7 @@ ship.prototype.render = function(time, turning, accelerating) {
 		frameCount = this.shipImageInfo.meta.imagePurposes.right.length
 	    }
 	}
-	else if (turning == "back") { // turn backwards to velocity. Velocity not yet implemented.
-	    //put some code here
-	    console.log('turning = back')
-	}
+
 	else {
 	    frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
 	    frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
@@ -208,8 +205,18 @@ ship.prototype.render = function(time, turning, accelerating) {
 	var yaccel = Math.sin(this.pointing) * this.meta.physics.acceleration
 	if (accelerating == true) {
 	    if (typeof this.previousAccelTime != 'undefined') {
+		//var aCoefficient = (this.meta.physics.max_speed - Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), .5)) / this.meta.physics.max_speed
 		this.xvelocity += xaccel * (time - this.previousAccelTime)/1000
 		this.yvelocity += yaccel * (time - this.previousAccelTime)/1000
+		if (Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), .5) > this.meta.physics.max_speed) {
+		    var tmpAngle = Math.atan(this.yvelocity / this.xvelocity)
+		    if (this.xvelocity < 0) {
+			tmpAngle = tmpAngle + Math.PI
+		    }
+		    console.log(tmpAngle)
+		    this.xvelocity = Math.cos(tmpAngle) * this.meta.physics.max_speed
+		    this.yvelocity = Math.sin(tmpAngle) * this.meta.physics.max_speed
+		}
 	    }
 	}
 	this.previousAccelTime = time
@@ -276,7 +283,7 @@ function animate() {
     line.clear()
     line.lineStyle(5, 0xFF0000, 1)
     line.moveTo(myShip.sprite.position.x, myShip.sprite.position.y)
-    line.lineTo(myShip.xvelocity/10 + myShip.sprite.position.x, -myShip.yvelocity/10 + myShip.sprite.position.y)
+    line.lineTo(myShip.xvelocity + myShip.sprite.position.x, -myShip.yvelocity + myShip.sprite.position.y)
 
     //line.lineTo(300,300)
     renderer.render(stage)
