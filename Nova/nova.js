@@ -28,11 +28,12 @@ function object(objectName) {
     this.name = objectName || ""
     this.renderReady = false
     this.lastAccelerating = false
+    this.url = 'objects/'
 }
 
 object.prototype.build = function() {
     //console.log(this.name)
-    var url = "ships/" + this.name + '.json'
+    var url = this.url + this.name + '.json'
     var loader = new PIXI.JsonLoader(url);
     loader.on('loaded', _.bind(this.interpretObjectJsonAndStartInterpretObjectImageJson, this))
     loader.load()
@@ -43,9 +44,9 @@ object.prototype.interpretObjectJsonAndStartInterpretObjectImageJson = function(
     this.meta = evt.content.json //generic object infromation. Not Graphics.
     console.log(this.meta)	// DEBUG
     
-    var url = "ships/" + this.meta.imageAssetsFile
+    var url = this.url + this.meta.imageAssetsFile
     var loader = new PIXI.JsonLoader(url)
-    console.log('loading ships/' + this.meta.imageAssetsFile) //DEBUG
+    console.log('loading' + this.url + this.meta.imageAssetsFile) //DEBUG
 
     loader.on('loaded', _.bind(this.interpretObjectImageJson, this))
     loader.load()
@@ -55,7 +56,7 @@ object.prototype.interpretObjectImageJson = function(evt) {
     console.log(this.objectImageInfo.meta.imagePurposes)
 
 
-    var objectAssetsToLoad = ["ships/" + this.meta.imageAssetsFile]
+    var objectAssetsToLoad = [this.url + this.meta.imageAssetsFile]
     var objectLoader = new PIXI.AssetLoader(objectAssetsToLoad)
     
     objectLoader.onComplete = _.bind(this.onAssetsLoaded, this)
@@ -237,7 +238,8 @@ inertial.prototype = new object
 
 
 function ship(shipName) {
-    object.call(this, shipName)
+    inertial.call(this, shipName)
+    this.url = 'objects/ships/'
 }
 
 ship.prototype = new inertial
@@ -245,7 +247,7 @@ ship.prototype = new inertial
 
 function playerShip(shipName) {
     this.pointing = Math.random()*2*Math.PI
-    object.call(this, shipName)
+    ship.call(this, shipName)
     this.xvelocity = 0
     this.yvelocity = 0
     this.isPlayerShip = true
