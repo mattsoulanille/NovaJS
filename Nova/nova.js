@@ -24,58 +24,58 @@ function stagePosition(x, y) { //where x and y are absolute positions in the uni
 
 
 
-function ship(shipName) {
-    this.name = shipName || ""
+function object(objectName) {
+    this.name = objectName || ""
     this.renderReady = false
     this.lastAccelerating = false
 }
 
-ship.prototype.build = function() {
+object.prototype.build = function() {
     //console.log(this.name)
     var url = "ships/" + this.name + '.json'
     var loader = new PIXI.JsonLoader(url);
-    loader.on('loaded', _.bind(this.interpretShipJsonAndStartInterpretShipImageJson, this))
+    loader.on('loaded', _.bind(this.interpretObjectJsonAndStartInterpretObjectImageJson, this))
     loader.load()
 }
 
-ship.prototype.interpretShipJsonAndStartInterpretShipImageJson = function(evt) {
+object.prototype.interpretObjectJsonAndStartInterpretObjectImageJson = function(evt) {
     //data is in evt.content.json
-    this.meta = evt.content.json //generic ship infromation. Not Graphics.
+    this.meta = evt.content.json //generic object infromation. Not Graphics.
     console.log(this.meta)	// DEBUG
     
     var url = "ships/" + this.meta.imageAssetsFile
     var loader = new PIXI.JsonLoader(url)
     console.log('loading ships/' + this.meta.imageAssetsFile) //DEBUG
 
-    loader.on('loaded', _.bind(this.interpretShipImageJson, this))
+    loader.on('loaded', _.bind(this.interpretObjectImageJson, this))
     loader.load()
 }
-ship.prototype.interpretShipImageJson = function(evt) {
-    this.shipImageInfo = evt.content.json
-    console.log(this.shipImageInfo.meta.imagePurposes)
+object.prototype.interpretObjectImageJson = function(evt) {
+    this.objectImageInfo = evt.content.json
+    console.log(this.objectImageInfo.meta.imagePurposes)
 
 
-    var shipAssetsToLoad = ["ships/" + this.meta.imageAssetsFile]
-    var shipLoader = new PIXI.AssetLoader(shipAssetsToLoad)
+    var objectAssetsToLoad = ["ships/" + this.meta.imageAssetsFile]
+    var objectLoader = new PIXI.AssetLoader(objectAssetsToLoad)
     
-    shipLoader.onComplete = _.bind(this.onAssetsLoaded, this)
-    shipLoader.load()
+    objectLoader.onComplete = _.bind(this.onAssetsLoaded, this)
+    objectLoader.load()
 }
 
 
-ship.prototype.onAssetsLoaded = function() {
-    // Get a list of the textures for the ship.
-    this.textures = _.map(_.keys(this.shipImageInfo.frames),
+object.prototype.onAssetsLoaded = function() {
+    // Get a list of the textures for the object.
+    this.textures = _.map(_.keys(this.objectImageInfo.frames),
 			 function(frame) { return(PIXI.Texture.fromFrame(frame)) })
 
     this.sprite = new PIXI.Sprite(this.textures[0])
     this.sprite.anchor.x = 0.5
     this.sprite.anchor.y = 0.5
-    this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 // 10 nova ship turn rate/sec ~= 30°/sec This turn rate is radians/sec
+    this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 // 10 nova object turn rate/sec ~= 30°/sec This turn rate is radians/sec
     stage.addChild(this.sprite)
     this.renderReady = true
-    requestAnimFrame( animate ) // make a system for this where multiple ships are happy.
-    console.log("loaded assets for " + this.name) //should happen when ship is finished loading
+    requestAnimFrame( animate ) // make a system for this where multiple objects are happy.
+    console.log("loaded assets for " + this.name) //should happen when object is finished loading
     return true
 }
 
@@ -88,16 +88,16 @@ render(time, turning):
   direction = (time - turning_start_time) * omega
   set_my_picture_to(direction)
 */
-ship.prototype.updateStats = function(time, turning, accelerating) {
+object.prototype.updateStats = function(turning, accelerating) {
 
-    ship.prototype.render.call(this, time, turning, accelerating) 
+    object.prototype.render.call(this, turning, accelerating) 
 }
 	
-ship.prototype.render = function(time, turning, accelerating) {
+object.prototype.render = function(turning, accelerating) {
     if (this.renderReady == true) {
 	
-	var frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
-	var frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
+	var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
+	var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
 	var turnback = false
 	if (this.isPlayerShip == true) {
 	    this.sprite.position.x = screenW/2 
@@ -133,62 +133,62 @@ ship.prototype.render = function(time, turning, accelerating) {
 	
 	// if the new direction does not equal the previous direction
 	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning) || turnback != this.lastTurnBack) { 
-	    this.turnStartTime = time // the turn started at the average of the times
+	    this.turnStartTime = this.time // the turn started at the average of the times
 	    this.origionalPointing = this.pointing
 	    this.lastTurnBack = turnback
 
 	}
 	if (turning == "left") {
 	    if (turnback == true) {
-		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (time - this.lastTime) / 1000)) {
+		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000)) {
 		    this.pointing = pointto
 		}
 		else {
-		    this.pointing = this.origionalPointing + (this.turnRate * (time - this.turnStartTime) / 1000)
-		    frameStart = this.shipImageInfo.meta.imagePurposes.left.start
-		    frameCount = this.shipImageInfo.meta.imagePurposes.left.length
+		    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000)
+		    frameStart = this.objectImageInfo.meta.imagePurposes.left.start
+		    frameCount = this.objectImageInfo.meta.imagePurposes.left.length
 		}
 
 	    }
 	    else {
-	    this.pointing = this.origionalPointing + (this.turnRate * (time - this.turnStartTime) / 1000)
-	    frameStart = this.shipImageInfo.meta.imagePurposes.left.start
-	    frameCount = this.shipImageInfo.meta.imagePurposes.left.length
+	    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000)
+	    frameStart = this.objectImageInfo.meta.imagePurposes.left.start
+	    frameCount = this.objectImageInfo.meta.imagePurposes.left.length
 	    
 	    }
 	}
 	else if (turning == "right") {
 	    if (turnback == true) {
-		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (time - this.lastTime) / 1000)) {
+		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000)) {
 		    this.pointing = pointto
 		}
 		else {
-		    this.pointing = this.origionalPointing - (this.turnRate * (time - this.turnStartTime) / 1000)
-		    frameStart = this.shipImageInfo.meta.imagePurposes.right.start
-		    frameCount = this.shipImageInfo.meta.imagePurposes.right.length
+		    this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000)
+		    frameStart = this.objectImageInfo.meta.imagePurposes.right.start
+		    frameCount = this.objectImageInfo.meta.imagePurposes.right.length
 		}
 		
 	    }
 	    else {
-		this.pointing = this.origionalPointing - (this.turnRate * (time - this.turnStartTime) / 1000)
-		frameStart = this.shipImageInfo.meta.imagePurposes.right.start
-		frameCount = this.shipImageInfo.meta.imagePurposes.right.length
+		this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000)
+		frameStart = this.objectImageInfo.meta.imagePurposes.right.start
+		frameCount = this.objectImageInfo.meta.imagePurposes.right.length
 	    }
 	}
 
 	else {
-	    frameStart = this.shipImageInfo.meta.imagePurposes.normal.start
-	    frameCount = this.shipImageInfo.meta.imagePurposes.normal.length
+	    frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
+	    frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
 	}
 
-	this.lastTime = time
-	this.pointing = this.pointing % (2*Math.PI)  //makes sure ship.pointing is in the range [0, 2pi)
+	this.lastTime = this.time
+	this.pointing = this.pointing % (2*Math.PI)  //makes sure object.pointing is in the range [0, 2pi)
 	if (this.pointing < 0) {
 	    this.pointing += 2*Math.PI
 	}
 	
 	
-	// ship uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+	// object uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
 
 	var useThisImage = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount / (2*Math.PI)) + frameStart
 	//console.log(useThisImage)
@@ -197,7 +197,7 @@ ship.prototype.render = function(time, turning, accelerating) {
 	this.sprite.setTexture(this.textures[useThisImage])
 
 
-	// this.origionalPointing is the angle the ship was pointed towards before it was told a different direction to turn.
+	// this.origionalPointing is the angle the object was pointed towards before it was told a different direction to turn.
 	this.lastTurning = turning // last turning value: left, right, or back
 
 	//acceleration
@@ -206,20 +206,20 @@ ship.prototype.render = function(time, turning, accelerating) {
 	if (accelerating == true) {
 	    if (typeof this.previousAccelTime != 'undefined') {
 		//var aCoefficient = (this.meta.physics.max_speed - Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), .5)) / this.meta.physics.max_speed
-		this.xvelocity += xaccel * (time - this.previousAccelTime)/1000
-		this.yvelocity += yaccel * (time - this.previousAccelTime)/1000
+		this.xvelocity += xaccel * (this.time - this.previousAccelTime)/1000
+		this.yvelocity += yaccel * (this.time - this.previousAccelTime)/1000
 		if (Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), .5) > this.meta.physics.max_speed) {
 		    var tmpAngle = Math.atan(this.yvelocity / this.xvelocity)
 		    if (this.xvelocity < 0) {
 			tmpAngle = tmpAngle + Math.PI
 		    }
-		    console.log(tmpAngle)
+		    //console.log(tmpAngle)
 		    this.xvelocity = Math.cos(tmpAngle) * this.meta.physics.max_speed
 		    this.yvelocity = Math.sin(tmpAngle) * this.meta.physics.max_speed
 		}
 	    }
 	}
-	this.previousAccelTime = time
+	this.previousAccelTime = this.time
 
 	return true
     }
@@ -230,16 +230,16 @@ ship.prototype.render = function(time, turning, accelerating) {
 
 function playerShip(shipName) {
     this.pointing = Math.random()*2*Math.PI
-    ship.call(this, shipName)
+    object.call(this, shipName)
     this.xvelocity = 0
     this.yvelocity = 0
     this.isPlayerShip = true
 }
 
-playerShip.prototype = new ship
+playerShip.prototype = new object
 
 playerShip.prototype.onAssetsLoaded = function() {
-    if (ship.prototype.onAssetsLoaded.call(this)) {
+    if (object.prototype.onAssetsLoaded.call(this)) {
 	console.log("and it's mine")
 
 
@@ -257,7 +257,6 @@ myShip.build()
 
 function animate() {
     requestAnimFrame( animate )
-    time = new Date().getTime()
     var keys = KeyboardJS.activeKeys()
     var turning
     var accelerating
@@ -279,7 +278,8 @@ function animate() {
     else {
 	accelerating = false
     }
-    myShip.updateStats(time, turning, accelerating)
+    object.prototype.time = new Date().getTime()
+    myShip.updateStats(turning, accelerating)
     line.clear()
     line.lineStyle(5, 0xFF0000, 1)
     line.moveTo(myShip.sprite.position.x, myShip.sprite.position.y)
