@@ -228,6 +228,21 @@ object.prototype.render = function(turning, accelerating) {
     }
 }
 
+function inertial(name) {
+    object.call(this, name)
+}
+
+inertial.prototype = new object
+
+
+
+function ship(shipName) {
+    object.call(this, shipName)
+}
+
+ship.prototype = new inertial
+
+
 function playerShip(shipName) {
     this.pointing = Math.random()*2*Math.PI
     object.call(this, shipName)
@@ -236,7 +251,7 @@ function playerShip(shipName) {
     this.isPlayerShip = true
 }
 
-playerShip.prototype = new object
+playerShip.prototype = new ship
 
 playerShip.prototype.onAssetsLoaded = function() {
     if (object.prototype.onAssetsLoaded.call(this)) {
