@@ -31,6 +31,14 @@ function object(objectName) {
     this.url = 'objects/'
 }
 
+function inertial(name) {
+    object.call(this, name)
+    
+}
+
+inertial.prototype = new object
+
+
 object.prototype.build = function() {
     //console.log(this.name)
     var url = this.url + this.name + '.json'
@@ -89,92 +97,39 @@ render(time, turning):
   direction = (time - turning_start_time) * omega
   set_my_picture_to(direction)
 */
-object.prototype.updateStats = function(turning, accelerating) {
+object.prototype.updateStats = function(turning) {
 
-    object.prototype.render.call(this, turning, accelerating) 
+    object.prototype.render.call(this, turning) 
 }
 	
-object.prototype.render = function(turning, accelerating) {
+object.prototype.render = function(turning) {
     if (this.renderReady == true) {
 	
 	var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
 	var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
-	var turnback = false
 	if (this.isPlayerShip == true) {
 	    this.sprite.position.x = screenW/2 
 	    this.sprite.position.y = screenH/2
 	}	    
 
-	if (turning == 'back') {
-	    /*
-	    var vAngle = Math.acos((Math.pow(this.xvelocity, 2) - Math.pow(this.yvelocity, 2) - (Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2)))/(-2*Math.pow(Math.pow(this.xvelocity, 2) + Math.pow(this.yvelocity, 2), 0.5) * this.yvelocity))
-	    if (this.xvelocity < 0) {
-		vAngle = vAngle * -1
-	    }
-	    var pointto = (vAngle + Math.PI) % (2*Math.PI)
-	    */
-
-
-	    var vAngle = Math.atan(this.yvelocity / this.xvelocity)
-	    if (this.xvelocity < 0) {
-		vAngle = vAngle + Math.PI
-	    }
-	    pointto = (vAngle + Math.PI) % (2*Math.PI)
-	    //console.log(pointto)
-	    var pointDiff = (pointto - this.pointing + 2*Math.PI) % (2*Math.PI)
-	    //console.log(pointDiff)
-	    if (pointDiff < Math.PI) {
-		turning = "left"
-	    }
-	    else if(pointDiff >= Math.PI) {
-		turning = "right"
-	    }
-	    turnback = true
-	}
 	
 	// if the new direction does not equal the previous direction
-	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning) || turnback != this.lastTurnBack) { 
+	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning) || this.turnback != this.lastTurnBack) { 
 	    this.turnStartTime = this.time // the turn started at the average of the times
 	    this.origionalPointing = this.pointing
-	    this.lastTurnBack = turnback
+	    this.lastTurnBack = this.turnback
 
 	}
 	if (turning == "left") {
-	    if (turnback == true) {
-		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000)) {
-		    this.pointing = pointto
-		}
-		else {
-		    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000)
-		    frameStart = this.objectImageInfo.meta.imagePurposes.left.start
-		    frameCount = this.objectImageInfo.meta.imagePurposes.left.length
-		}
-
-	    }
-	    else {
 	    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000)
 	    frameStart = this.objectImageInfo.meta.imagePurposes.left.start
-	    frameCount = this.objectImageInfo.meta.imagePurposes.left.length
-	    
-	    }
+	    frameCount = this.objectImageInfo.meta.imagePurposes.left.length   
+
 	}
 	else if (turning == "right") {
-	    if (turnback == true) {
-		if (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000)) {
-		    this.pointing = pointto
-		}
-		else {
-		    this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000)
-		    frameStart = this.objectImageInfo.meta.imagePurposes.right.start
-		    frameCount = this.objectImageInfo.meta.imagePurposes.right.length
-		}
-		
-	    }
-	    else {
-		this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000)
-		frameStart = this.objectImageInfo.meta.imagePurposes.right.start
-		frameCount = this.objectImageInfo.meta.imagePurposes.right.length
-	    }
+	    this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000)
+	    frameStart = this.objectImageInfo.meta.imagePurposes.right.start
+	    frameCount = this.objectImageInfo.meta.imagePurposes.right.length
 	}
 
 	else {
@@ -201,6 +156,47 @@ object.prototype.render = function(turning, accelerating) {
 	// this.origionalPointing is the angle the object was pointed towards before it was told a different direction to turn.
 	this.lastTurning = turning // last turning value: left, right, or back
 
+
+	return true
+    }
+    else {
+	return false // oh no. I'm not ready to render. better not try
+    }
+}
+inertial.prototype.updateStats = function(turning, accelerating) {
+    inertial.prototype.render.call(this, turning, accelerating)
+
+}
+inertial.prototype.render = function(turning, accelerating) {
+    if (this.renderReady == true) {
+	
+	this.turnback = false
+	if (turning == 'back') {
+	    var vAngle = Math.atan(this.yvelocity / this.xvelocity)
+	    if (this.xvelocity < 0) {
+		vAngle = vAngle + Math.PI
+	    }
+	    pointto = (vAngle + Math.PI) % (2*Math.PI)
+	    //console.log(pointto)
+	    var pointDiff = (pointto - this.pointing + 2*Math.PI) % (2*Math.PI)
+	    //console.log(pointDiff)
+	    if (pointDiff < Math.PI) {
+		turning = "left"
+	    }
+	    else if(pointDiff >= Math.PI) {
+		turning = "right"
+	    }
+	    this.turnback = true
+	}
+	if ((this.turnback == true) && ((turning == "left") || (turning == "right")) && (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
+	    this.pointing = pointto
+	    turning = "back"
+	}
+
+
+	object.prototype.render.call(this, turning)
+
+
 	//acceleration
 	var xaccel = Math.cos(this.pointing) * this.meta.physics.acceleration
 	var yaccel = Math.sin(this.pointing) * this.meta.physics.acceleration
@@ -221,19 +217,14 @@ object.prototype.render = function(turning, accelerating) {
 	    }
 	}
 	this.previousAccelTime = this.time
-
 	return true
     }
     else {
-	return false // oh no. I'm not ready to render. better not try
+	return false
     }
+
 }
 
-function inertial(name) {
-    object.call(this, name)
-}
-
-inertial.prototype = new object
 
 
 
