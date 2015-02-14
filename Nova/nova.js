@@ -25,14 +25,15 @@ function stagePosition(x, y) { //where x and y are absolute positions in the uni
 function ship(shipName) {
     inertial.call(this, shipName)
     this.url = 'objects/ships/'
+    this.pointing = 0
 }
 
 ship.prototype = new inertial
 
 
 function playerShip(shipName) {
-    this.pointing = Math.random()*2*Math.PI
     ship.call(this, shipName)
+    this.pointing = Math.random()*2*Math.PI
     this.xvelocity = 0
     this.yvelocity = 0
     this.isPlayerShip = true
@@ -45,14 +46,35 @@ playerShip.prototype.onAssetsLoaded = function() {
 	console.log("and it's mine")
     }
 }
-/*
-playerShip.prototype.updateStats = function(turning) {
+
+playerShip.prototype.updateStats = function() {
+    var keys = KeyboardJS.activeKeys()
+    var turning
+    var accelerating
+    if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
+	turning = 'right'
+    }
+    else if (_.contains(keys, 'left') && !_.contains(keys, 'right')) {
+	turning = 'left'
+    }
+    else {
+	turning = ''
+    }
+    if (_.contains(keys, 'down')) {
+	turning = 'back'
+    }
+    if (_.contains(keys, 'up')) {
+	accelerating = true
+    }
+    else {
+	accelerating = false
+    }
     
 
-    inertial.prototype.updateStats.call(this, turning)
+    inertial.prototype.updateStats.call(this, turning, accelerating)
 
 }
-*/
+
 
 
 var ships = []
@@ -88,33 +110,12 @@ function startGame() {
 
 function animate() {
     requestAnimFrame( animate )
-    var keys = KeyboardJS.activeKeys()
-    var turning
-    var accelerating
-    if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
-	turning = 'right'
-    }
-    else if (_.contains(keys, 'left') && !_.contains(keys, 'right')) {
-	turning = 'left'
-    }
-    else {
-	turning = ''
-    }
-    if (_.contains(keys, 'down')) {
-	turning = 'back'
-    }
-    if (_.contains(keys, 'up')) {
-	accelerating = true
-    }
-    else {
-	accelerating = false
-    }
     object.prototype.time = new Date().getTime()
     ships[1].sprite.position.x = 100
     ships[1].sprite.position.y = 100
+    ships[1].updateStats('right', false)
+    myShip.updateStats()
 
-    myShip.updateStats(turning, accelerating)
-//    ships[1].updateStats('right', false)
 //    for (var i = 0; i < ships.length; i++) {
 //	ships[i].updateStats(turning, accelerating)
 //    }
