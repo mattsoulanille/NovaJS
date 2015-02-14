@@ -45,16 +45,46 @@ playerShip.prototype.onAssetsLoaded = function() {
 	console.log("and it's mine")
     }
 }
+/*
+playerShip.prototype.updateStats = function(turning) {
+    
+
+    inertial.prototype.updateStats.call(this, turning)
+
+}
+*/
 
 
-
-
+var ships = []
 var myShip = new playerShip("Starbridge A")
-myShip.build()
+var randomShip = new ship("Starbridge A")
 
-//var randomShip = new ship("Starbridge A")
-//randomShip.build()
+ships[0] = myShip
+ships[1] = randomShip
+ships[0].build()
+ships[1].build()
 
+var startGameTimer = setInterval(function () {startGame()}, 1000);
+
+
+/*
+Starts the game if everything is ready to render.
+*/
+function startGame() {
+    var readyToRender = true;
+    for (var i = 0; i < ships.length; i++) {
+	if (!ships[i].renderReady) {
+	    readyToRender = false;
+	}
+    }
+    if (readyToRender) {
+	requestAnimFrame(animate)
+	clearInterval(startGameTimer)
+	console.log("Rendering started")
+    }
+}
+
+//requestAnimFrame(animate)
 
 function animate() {
     requestAnimFrame( animate )
@@ -80,7 +110,16 @@ function animate() {
 	accelerating = false
     }
     object.prototype.time = new Date().getTime()
+    ships[1].sprite.position.x = 100
+    ships[1].sprite.position.y = 100
+
     myShip.updateStats(turning, accelerating)
+//    ships[1].updateStats('right', false)
+//    for (var i = 0; i < ships.length; i++) {
+//	ships[i].updateStats(turning, accelerating)
+//    }
+
+
     line.clear()
     line.lineStyle(5, 0xFF0000, 1)
     line.moveTo(myShip.sprite.position.x, myShip.sprite.position.y)
@@ -103,4 +142,4 @@ function onResize() {
 
 
 
-requestAnimFrame( animate );
+
