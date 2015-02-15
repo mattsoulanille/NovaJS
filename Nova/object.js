@@ -3,6 +3,7 @@ function object(objectName) {
     this.renderReady = false
     this.lastAccelerating = false
     this.url = 'objects/'
+    this.position = [0,0]
 }
 
 object.prototype.build = function() {
@@ -67,14 +68,17 @@ object.prototype.updateStats = function(turning) {
 */
 object.prototype.render = function(turning) {
     if (this.renderReady == true) {
-	
+
 	var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
 	var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
 	if (this.isPlayerShip == true) {
 	    this.sprite.position.x = screenW/2 
 	    this.sprite.position.y = screenH/2
-	}	    
-
+	}
+	else {
+	    this.sprite.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2
+	    this.sprite.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2
+	}
 	
 	// if the new direction does not equal the previous direction
 	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning) || this.turnback != this.lastTurnBack) { 
@@ -100,7 +104,7 @@ object.prototype.render = function(turning) {
 	    frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
 	}
 
-	this.lastTime = this.time
+
 	this.pointing = this.pointing % (2*Math.PI)  //makes sure object.pointing is in the range [0, 2pi)
 	if (this.pointing < 0) {
 	    this.pointing += 2*Math.PI
@@ -119,7 +123,7 @@ object.prototype.render = function(turning) {
 	// this.origionalPointing is the angle the object was pointed towards before it was told a different direction to turn.
 	this.lastTurning = turning // last turning value: left, right, or back
 
-
+	this.lastTime = this.time
 	return true
     }
     else {

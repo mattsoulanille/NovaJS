@@ -3,6 +3,7 @@ var stage = new PIXI.Stage(0x000000)
 
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10
+var positionConstant = 1
 //var screenW = 800, screenH = 600;
 var renderer = PIXI.autoDetectRenderer(screenW, screenH)
 $(window).resize(onResize)
@@ -11,12 +12,6 @@ document.body.appendChild(renderer.view)
 
 
 
-function stagePosition(x, y) { //where x and y are absolute positions in the universe
-//    stageX = 
-
-
-
-}
 
 
 	
@@ -34,8 +29,8 @@ ship.prototype = new inertial
 function playerShip(shipName) {
     ship.call(this, shipName)
     this.pointing = Math.random()*2*Math.PI
-    this.xvelocity = 0
-    this.yvelocity = 0
+    this.velocity[0] = 0
+    this.velocity[1] = 0
     this.isPlayerShip = true
 }
 
@@ -89,6 +84,7 @@ ships[1].build()
 var startGameTimer = setInterval(function () {startGame()}, 1000);
 
 
+
 /*
 Starts the game if everything is ready to render.
 */
@@ -107,14 +103,14 @@ function startGame() {
 }
 
 //requestAnimFrame(animate)
-
+var stagePosition
 function animate() {
+    stagePosition = myShip.position
     requestAnimFrame( animate )
     object.prototype.time = new Date().getTime()
-    ships[1].sprite.position.x = 100
-    ships[1].sprite.position.y = 100
     ships[1].updateStats('right', false)
     myShip.updateStats()
+
 
 //    for (var i = 0; i < ships.length; i++) {
 //	ships[i].updateStats(turning, accelerating)
@@ -124,7 +120,7 @@ function animate() {
     line.clear()
     line.lineStyle(5, 0xFF0000, 1)
     line.moveTo(myShip.sprite.position.x, myShip.sprite.position.y)
-    line.lineTo(myShip.xvelocity + myShip.sprite.position.x, -myShip.yvelocity + myShip.sprite.position.y)
+    line.lineTo(myShip.velocity[0] + myShip.sprite.position.x, -myShip.velocity[1] + myShip.sprite.position.y)
 
     //line.lineTo(300,300)
     renderer.render(stage)
