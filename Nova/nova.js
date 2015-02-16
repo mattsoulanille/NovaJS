@@ -74,10 +74,12 @@ playerShip.prototype.updateStats = function() {
 
 var ships = []
 var myShip = new playerShip("Starbridge A")
-var randomShip = new ship("Starbridge A")
+var starbridge = new ship("Starbridge A")
+var shuttle = new ship("Shuttle A")
+
 
 ships[0] = myShip
-ships[1] = randomShip
+ships[1] = shuttle
 ships[0].build()
 ships[1].build()
 
@@ -116,12 +118,13 @@ function animate() {
 //	ships[i].updateStats(turning, accelerating)
 //    }
 
-
+/*
+// Velocity vector line
     line.clear()
     line.lineStyle(5, 0xFF0000, 1)
     line.moveTo(myShip.sprites.ship.sprite.position.x, myShip.sprites.ship.sprite.position.y)
     line.lineTo(myShip.velocity[0] + myShip.sprites.ship.sprite.position.x, -myShip.velocity[1] + myShip.sprites.ship.sprite.position.y)
-
+*/
     //line.lineTo(300,300)
     renderer.render(stage)
 }
