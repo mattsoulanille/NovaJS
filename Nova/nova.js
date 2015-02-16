@@ -83,7 +83,7 @@ ships[1].build()
 
 var startGameTimer = setInterval(function () {startGame()}, 1000);
 
-
+//var printmyShip = setInterval(function() {console.log(myShip)}, 1000)
 
 /*
 Starts the game if everything is ready to render.
@@ -119,8 +119,8 @@ function animate() {
 
     line.clear()
     line.lineStyle(5, 0xFF0000, 1)
-    line.moveTo(myShip.sprite.position.x, myShip.sprite.position.y)
-    line.lineTo(myShip.velocity[0] + myShip.sprite.position.x, -myShip.velocity[1] + myShip.sprite.position.y)
+    line.moveTo(myShip.sprites.ship.sprite.position.x, myShip.sprites.ship.sprite.position.y)
+    line.lineTo(myShip.velocity[0] + myShip.sprites.ship.sprite.position.x, -myShip.velocity[1] + myShip.sprites.ship.sprite.position.y)
 
     //line.lineTo(300,300)
     renderer.render(stage)

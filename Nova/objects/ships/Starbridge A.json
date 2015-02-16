@@ -1,8 +1,12 @@
-{ "imageAssetsFile": "Starbridge.json",
-  "physics": {
-      "acceleration": 550,
-      "max_speed": 400,
-      "mass": 98,
-      "turn_rate": 50
+{ 
+    "imageAssetsFiles": {
+	"ship": "Starbridge.json",
+	"engine": "Starbridge_Engine.json"
+},
+    "physics": {
+	"acceleration": 550,
+	"max_speed": 400,
+	"mass": 98,
+	"turn_rate": 50
   }
 }

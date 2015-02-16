@@ -7,60 +7,51 @@ function object(objectName) {
 }
 
 object.prototype.build = function() {
-    //console.log(this.name)
-    var url = this.url + this.name + '.json'
-    var loader = new PIXI.JsonLoader(url);
-    loader.on('loaded', _.bind(this.interpretObjectJsonAndStartInterpretObjectImageJson, this))
+    var jsonUrl = this.url + this.name + '.json'
+    var loader = new PIXI.JsonLoader(jsonUrl);
+    loader.on('loaded', _.bind(this.makeSprites, this))
     loader.load()
 }
 
-object.prototype.interpretObjectJsonAndStartInterpretObjectImageJson = function(evt) {
-    //data is in evt.content.json
-    this.meta = evt.content.json //generic object infromation. Not Graphics.
-    console.log(this.meta)	// DEBUG
-    
-    var url = this.url + this.meta.imageAssetsFile
-    var loader = new PIXI.JsonLoader(url)
-    console.log('loading' + this.url + this.meta.imageAssetsFile) //DEBUG
-
-    loader.on('loaded', _.bind(this.interpretObjectImageJson, this))
-    loader.load()
-}
-
-object.prototype.interpretObjectImageJson = function(evt) {
-    this.objectImageInfo = evt.content.json
-    console.log(this.objectImageInfo.meta.imagePurposes)
-
-
-    var objectAssetsToLoad = [this.url + this.meta.imageAssetsFile]
-    var objectLoader = new PIXI.AssetLoader(objectAssetsToLoad)
-    
-    objectLoader.onComplete = _.bind(this.onAssetsLoaded, this)
-    objectLoader.load()
-}
-
-object.prototype.onAssetsLoaded = function() {
-    // Get a list of the textures for the object.
-    this.textures = _.map(_.keys(this.objectImageInfo.frames),
-			 function(frame) { return(PIXI.Texture.fromFrame(frame)) })
-
-    this.sprite = new PIXI.Sprite(this.textures[0])
-    this.sprite.anchor.x = 0.5
-    this.sprite.anchor.y = 0.5
+object.prototype.makeSprites = function(evt) {
+    console.log("making sprites")
+    this.meta = evt.content.json 
     this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 // 10 nova object turn rate/sec ~= 30°/sec This turn rate is radians/sec
-    stage.addChild(this.sprite)
-    this.renderReady = true
-//    requestAnimFrame( animate ) // make a system for this where multiple objects are happy.
-    console.log("loaded assets for " + this.name) //should happen when object is finished loading
-    return true
+    console.log(this.meta)
+    this.sprites = {};
+
+    _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
+	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
+	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key])
+	}
+    }, this);
+    this.loadedSprites = 0;
+    
+    var scope = this
+
+    var spriteLoadedCallback = function(scope) {
+	scope.loadedSprites ++;
+	console.log("spriteCallbackScope: ")
+	console.log(scope)
+	if (scope.loadedSprites == _.keys(scope.sprites).length) {
+	    scope.renderReady = true
+	}
+    }
+    _.each(_.values(this.sprites), function(s) {s.build(spriteLoadedCallback(scope))} )
+    
 }
+
+
+
 
 object.prototype.updateStats = function(turning) {
 
     object.prototype.render.call(this, turning) 
 }
 
-
+object.prototype.callSprites = function(toCall) {
+    _.each(_.map(_.values(this.sprites), function(x) {return x.sprite}), toCall, this)
+}
 
 /*
   The object render function handles the turning and rendering of space objects. TODO: instead of having this handle one pixi object, make it handle the ship, the running lights, and the thrusters. It can have a list to store the pixi objects in and iterate over that list? 
@@ -68,16 +59,23 @@ object.prototype.updateStats = function(turning) {
 */
 object.prototype.render = function(turning) {
     if (this.renderReady == true) {
+	var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start})
+	var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length})
+	//this.callSprites(function(a,b,c) {console.log(a)})
 
-	var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
-	var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
+	//var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
+	//var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
 	if (this.isPlayerShip == true) {
-	    this.sprite.position.x = screenW/2 
-	    this.sprite.position.y = screenH/2
+	    this.callSprites(function(s,b,c) {s.position.x = screenW/2})
+	    this.callSprites(function(s,b,c) {s.position.y = screenH/2})
+	    //this.sprite.position.x = screenW/2 
+	    //this.sprite.position.y = screenH/2
 	}
 	else {
-	    this.sprite.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2
-	    this.sprite.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2
+	    this.callSprites(function(s,b,c) {s.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2})
+	    this.callSprites(function(s,b,c) {s.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2})
+	    //this.sprite.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2
+	    //this.sprite.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2
 	}
 	
 	// if the new direction does not equal the previous direction
@@ -89,19 +87,19 @@ object.prototype.render = function(turning) {
 	}
 	if (turning == "left") {
 	    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000)
-	    frameStart = this.objectImageInfo.meta.imagePurposes.left.start
-	    frameCount = this.objectImageInfo.meta.imagePurposes.left.length   
-
+	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start })
+	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length })
 	}
 	else if (turning == "right") {
 	    this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000)
-	    frameStart = this.objectImageInfo.meta.imagePurposes.right.start
-	    frameCount = this.objectImageInfo.meta.imagePurposes.right.length
+
+	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start })
+	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length })
 	}
 
 	else {
-	    frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
-	    frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
+	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.normal.start })
+	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.normal.length })
 	}
 
 
@@ -109,16 +107,17 @@ object.prototype.render = function(turning) {
 	if (this.pointing < 0) {
 	    this.pointing += 2*Math.PI
 	}
-	
-	
-	// object uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
 
-	var useThisImage = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount / (2*Math.PI)) + frameStart
-	//console.log(useThisImage)
-	this.sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount) + (Math.PI/frameCount)  // how much to rotate the image
+	var useThisImage = []
+	for (var i = 0; i < _.keys(this.sprites).length; i++) {
+	    // object uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+	    var spr = _.values(this.sprites)
+	    useThisImage[i] = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i]
+	    //console.log(useThisImage)
+	    spr[i].sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i])  // how much to rotate the image
 
-	this.sprite.setTexture(this.textures[useThisImage])
-
+	    spr[i].sprite.setTexture(spr[i].textures[useThisImage[i]])
+	}
 
 	// this.origionalPointing is the angle the object was pointed towards before it was told a different direction to turn.
 	this.lastTurning = turning // last turning value: left, right, or back
