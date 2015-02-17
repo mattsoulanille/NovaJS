@@ -19,6 +19,7 @@ object.prototype.makeSprites = function(evt) {
     this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 // 10 nova object turn rate/sec ~= 30°/sec This turn rate is radians/sec
     console.log(this.meta)
     this.sprites = {};
+    this.spriteContainer = new PIXI.DisplayObjectContainer()
 
     _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
 	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
@@ -28,21 +29,30 @@ object.prototype.makeSprites = function(evt) {
     this.loadedSprites = 0;
     
     var scope = this
-
+    
     var spriteLoadedCallback = function(scope) {
-	scope.loadedSprites ++;
-	console.log("spriteCallbackScope: ")
-	console.log(scope)
-	if (scope.loadedSprites == _.keys(scope.sprites).length) {
-	    scope.renderReady = true
+	return function() {
+	    scope.loadedSprites ++;
+//	    console.log(this)
+	    if (scope.loadedSprites == _.keys(scope.sprites).length) {
+		scope.renderReady = true
+		scope.addSpritesToContainer()
+	    }
 	}
     }
-    _.each(_.values(this.sprites), function(s) {s.build(spriteLoadedCallback(scope))} )
-    
+
+    _.each(_.values(this.sprites), function(s) {s.build(spriteLoadedCallback(scope))} );
+
 }
 
+//write this method in the ships funcitons to add engines and lights in the right order
+object.prototype.addSpritesToContainer = function() {
+
+    _.each(_.map(_.values(this.sprites), function(s) {return s.sprite}), function(s) {this.spriteContainer.addChild(s)}, this);
+    stage.addChild(this.spriteContainer)
 
 
+}
 
 object.prototype.updateStats = function(turning) {
 
@@ -66,16 +76,16 @@ object.prototype.render = function(turning) {
 	//var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
 	//var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
 	if (this.isPlayerShip == true) {
-	    this.callSprites(function(s,b,c) {s.position.x = screenW/2})
-	    this.callSprites(function(s,b,c) {s.position.y = screenH/2})
-	    //this.sprite.position.x = screenW/2 
-	    //this.sprite.position.y = screenH/2
+	    //this.callSprites(function(s,b,c) {s.position.x = screenW/2})
+	    //this.callSprites(function(s,b,c) {s.position.y = screenH/2})
+	    this.spriteContainer.position.x = screenW/2 
+	    this.spriteContainer.position.y = screenH/2
 	}
 	else {
-	    this.callSprites(function(s,b,c) {s.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2})
-	    this.callSprites(function(s,b,c) {s.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2})
-	    //this.sprite.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2
-	    //this.sprite.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2
+	    //this.callSprites(function(s,b,c) {s.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2})
+	    //this.callSprites(function(s,b,c) {s.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2})
+	    this.spriteContainer.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2
+	    this.spriteContainer.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2
 	}
 	
 	// if the new direction does not equal the previous direction

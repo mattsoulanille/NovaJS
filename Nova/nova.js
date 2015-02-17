@@ -25,6 +25,26 @@ function ship(shipName) {
 
 ship.prototype = new inertial
 
+ship.prototype.addSpritesToContainer = function() {
+
+    var orderedSprites = [this.sprites.ship.sprite]
+    if ("lights" in this.sprites) {
+	orderedSprites.push(this.sprites.lights.sprite)
+    }
+     
+    if ("engine" in this.sprites) {
+	orderedSprites.push(this.sprites.engine.sprite)
+    }
+
+
+    var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite})
+    var without =  _.difference(spriteList, orderedSprites)
+    console.log(without)
+    _.each(without, function(x) {this.spriteContainer.addChild(x)}, this);
+    _.each(orderedSprites, function(x) {this.spriteContainer.addChild(x)}, this);
+    stage.addChild(this.spriteContainer)
+
+}
 
 function playerShip(shipName) {
     ship.call(this, shipName)

@@ -29,7 +29,7 @@ sprite.prototype.onAssetsLoaded = function() {
     this.sprite = new PIXI.Sprite(this.textures[0])
     this.sprite.anchor.x = 0.5
     this.sprite.anchor.y = 0.5
-    stage.addChild(this.sprite)
+    //stage.addChild(this.sprite)
     this.renderReady = true
     console.log("loaded assets for " + this.url) //should happen when sprite is finished loading
     this.callback()
