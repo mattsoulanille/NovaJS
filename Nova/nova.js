@@ -43,6 +43,41 @@ ship.prototype.addSpritesToContainer = function() {
     _.each(without, function(x) {this.spriteContainer.addChild(x)}, this);
     _.each(orderedSprites, function(x) {this.spriteContainer.addChild(x)}, this);
     stage.addChild(this.spriteContainer)
+}
+
+ship.prototype.updateStats = function(turning, accelerating) {
+    if (accelerating) {
+	this.sprites.engine.sprite.alpha = 1
+    }
+    else {
+	this.sprites.engine.sprite.alpha = 0
+    }
+
+    if ("lights" in this.sprites) {
+	this.manageLights()
+    }
+
+    inertial.prototype.updateStats.call(this, turning, accelerating)
+}
+
+ship.prototype.manageLights = function() {
+    
+    if (typeof this.manageLights.state == 'undefined' || typeof this.manageLights.lastSwitch == 'undefined') {
+	this.manageLights.state = true
+	this.manageLights.lastSwitch = this.time
+    }
+    else {
+	if (this.time - this.manageLights.lastSwitch > 1000) {
+	    this.manageLights.state = !this.manageLights.state
+	    this.manageLights.lastSwitch = this.time
+	}
+    }
+    if (this.manageLights.state) {
+	this.sprites.lights.sprite.alpha = 1
+    }
+    else {
+	this.sprites.lights.sprite.alpha = 0
+    }
 
 }
 
@@ -84,24 +119,28 @@ playerShip.prototype.updateStats = function() {
     else {
 	accelerating = false
     }
-    
 
-    inertial.prototype.updateStats.call(this, turning, accelerating)
+    
+    ship.prototype.updateStats.call(this, turning, accelerating)
 
 }
 
 
 
 var ships = []
-var myShip = new playerShip("Starbridge A")
+//var myShip = new playerShip("Starbridge A")
+var myShip = new playerShip("Shuttle A")
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 
 
 ships[0] = myShip
 ships[1] = shuttle
+ships[2] = starbridge
 ships[0].build()
 ships[1].build()
+ships[2].build()
+ships[2].position = [200,200]
 
 var startGameTimer = setInterval(function () {startGame()}, 1000);
 
@@ -131,6 +170,7 @@ function animate() {
     requestAnimFrame( animate )
     object.prototype.time = new Date().getTime()
     ships[1].updateStats('right', false)
+    ships[2].updateStats('', false)
     myShip.updateStats()
 
 
