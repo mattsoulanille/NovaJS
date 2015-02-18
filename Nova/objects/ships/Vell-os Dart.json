@@ -1,0 +1,12 @@
+{ 
+    "imageAssetsFiles": {
+	"ship": "Vell-os Dart_Ship.json",
+	"engine": "Vell-os Dart_Engine.json"
+},
+    "physics": {
+	"acceleration": 1250,
+	"max_speed": 600,
+	"mass": 6,
+	"turn_rate": 100
+  }
+}

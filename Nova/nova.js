@@ -129,7 +129,7 @@ playerShip.prototype.updateStats = function() {
 
 var ships = []
 //var myShip = new playerShip("Starbridge A")
-var myShip = new playerShip("Shuttle A")
+var myShip = new playerShip("Vell-os Dart")
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 
@@ -169,8 +169,8 @@ function animate() {
     stagePosition = myShip.position
     requestAnimFrame( animate )
     object.prototype.time = new Date().getTime()
-    ships[1].updateStats('right', false)
-    ships[2].updateStats('', false)
+    ships[1].updateStats('left', false)
+    ships[2].updateStats('right', false)
     myShip.updateStats()
 
 
