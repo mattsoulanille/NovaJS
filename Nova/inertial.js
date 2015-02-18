@@ -26,7 +26,7 @@ inertial.prototype.render = function(turning, accelerating) {
     if (this.renderReady == true) {
 	
 	this.turnback = false
-	if (turning == 'back') {
+	if (accelerating == -1) {
 	    var vAngle = Math.atan(this.velocity[1] / this.velocity[0])
 	    if (this.velocity[0] < 0) {
 		vAngle = vAngle + Math.PI
@@ -45,7 +45,7 @@ inertial.prototype.render = function(turning, accelerating) {
 	}
 	if ((this.turnback == true) && ((turning == "left") || (turning == "right")) && (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
 	    this.pointing = pointto
-	    turning = "back"
+	    turning = ""
 	}
 
 
