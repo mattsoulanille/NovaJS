@@ -18,12 +18,13 @@ document.body.appendChild(renderer.view)
 
 
 function ship(shipName) {
-    inertial.call(this, shipName)
+    movable.call(this, shipName)
     this.url = 'objects/ships/'
     this.pointing = 0
-}
 
-ship.prototype = new inertial
+}
+ship.prototype = new movable
+
 
 ship.prototype.addSpritesToContainer = function() {
 
@@ -57,7 +58,7 @@ ship.prototype.updateStats = function(turning, accelerating) {
 	this.manageLights()
     }
 
-    inertial.prototype.updateStats.call(this, turning, accelerating)
+    movable.prototype.updateStats.call(this, turning, accelerating)
 }
 
 ship.prototype.manageLights = function() {

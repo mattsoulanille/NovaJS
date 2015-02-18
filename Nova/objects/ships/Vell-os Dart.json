@@ -7,6 +7,7 @@
 	"acceleration": 1250,
 	"max_speed": 600,
 	"mass": 6,
-	"turn_rate": 100
-  }
+	"turn_rate": 100,
+	"inertialess": true
+    }
 }
