@@ -111,13 +111,13 @@ playerShip.prototype.updateStats = function() {
 	turning = ''
     }
     if (_.contains(keys, 'down')) {
-	turning = 'back'
+	accelerating = -1
     }
-    if (_.contains(keys, 'up')) {
-	accelerating = true
+    else if (_.contains(keys, 'up')) {
+	accelerating = 1
     }
     else {
-	accelerating = false
+	accelerating = 0
     }
 
     
