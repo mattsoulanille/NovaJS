@@ -11,13 +11,6 @@ $(window).resize(onResize)
 document.body.appendChild(renderer.view)
 
 
-
-
-
-	
-
-
-
 function playerShip(shipName) {
     ship.call(this, shipName)
     this.pointing = Math.random()*2*Math.PI
@@ -97,13 +90,13 @@ function startGame() {
 	}
     }
     if (readyToRender) {
-	requestAnimFrame(animate)
+	requestAnimationFrame(animate)
 	clearInterval(startGameTimer)
 	console.log("Rendering started")
     }
 }
 
-//requestAnimFrame(animate)
+//requestAnimationFrame(animate)
 var stagePosition
 function animate() {
     stagePosition = myShip.position
@@ -111,7 +104,7 @@ function animate() {
 
     $.when(ships[1].updateStats('left', false), ships[2].updateStats('right', false), ships[3].updateStats('right', true), myShip.updateStats()).done(function() {
 	renderer.render(stage)
-	requestAnimFrame( animate ) 
+	requestAnimationFrame( animate ) 
 
     });
 //    for (var i = 0; i < ships.length; i++) {
