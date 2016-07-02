@@ -22,7 +22,7 @@ function playerShip(shipName) {
 playerShip.prototype = new ship
 
 playerShip.prototype.onAssetsLoaded = function() {
-    if (object.prototype.onAssetsLoaded.call(this)) {
+    if (spaceObject.prototype.onAssetsLoaded.call(this)) {
 	console.log("and it's mine")
     }
 }
@@ -59,7 +59,7 @@ playerShip.prototype.updateStats = function() {
 
 var ships = []
 //var myShip = new playerShip("Starbridge A")
-var myShip = new playerShip("Vell-os Dart")
+var myShip = new playerShip("Starbridge A")
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 var dart = new ship("Vell-os Dart")
@@ -100,9 +100,9 @@ function startGame() {
 var stagePosition
 function animate() {
     stagePosition = myShip.position
-    object.prototype.time = new Date().getTime()
+    spaceObject.prototype.time = new Date().getTime()
 
-    $.when(ships[1].updateStats('left', false), ships[2].updateStats('right', false), ships[3].updateStats('right', true), myShip.updateStats()).done(function() {
+    $.when( ships.map(function(s){s.updateStats()}) ).done(function() {
 	renderer.render(stage)
 	requestAnimationFrame( animate ) 
 

@@ -1,4 +1,4 @@
-function object(objectName) {
+function spaceObject(objectName) {
     this.name = objectName || "";
     this.renderReady = false;
     this.lastAccelerating = false;
@@ -6,7 +6,7 @@ function object(objectName) {
     this.position = [0,0];
 }
 
-object.prototype.promiseBuild = function(scope) {
+spaceObject.prototype.promiseBuild = function(scope) {
     return new RSVP.Promise(function(fulfill, reject) {
 	//console.log(this);
 	var jsonUrl = this.url + this.name + '.json';
@@ -34,13 +34,13 @@ object.prototype.promiseBuild = function(scope) {
 //    }.bind(this)); // for the promise
 };
 
-object.prototype.build = function() {
-    object.prototype.promiseBuild(this)
-	.then(object.prototype.makeSprites.bind(this), function() {console.log('rejected');});
+spaceObject.prototype.build = function() {
+    spaceObject.prototype.promiseBuild(this)
+	.then(spaceObject.prototype.makeSprites.bind(this), function() {console.log('rejected');});
     
 };
 /*
-object.prototype.build = function() {
+spaceObject.prototype.build = function() {
     var jsonUrl = this.url + this.name + '.json';
     var loader = new PIXI.loaders.Loader();
     
@@ -53,10 +53,10 @@ object.prototype.build = function() {
 
 };
 */
-object.prototype.makeSprites = function() {
+spaceObject.prototype.makeSprites = function() {
 //    console.log("making sprites");
 //    console.log(this);
-    this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120; // 10 nova object turn rate/sec ~= 30°/sec This turn rate is radians/sec
+    this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120; // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
 //    console.log(this.meta);
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
@@ -86,7 +86,7 @@ object.prototype.makeSprites = function() {
 }
 
 //write this method in the ships funcitons to add engines and lights in the right order
-object.prototype.addSpritesToContainer = function() {
+spaceObject.prototype.addSpritesToContainer = function() {
 
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}), function(s) {this.spriteContainer.addChild(s);}, this);
     stage.addChild(this.spriteContainer);
@@ -94,27 +94,27 @@ object.prototype.addSpritesToContainer = function() {
 
 }
 
-object.prototype.updateStats = function(turning) {
+spaceObject.prototype.updateStats = function(turning) {
 
-    object.prototype.render.call(this, turning); 
+    spaceObject.prototype.render.call(this, turning); 
 }
 
-object.prototype.callSprites = function(toCall) {
+spaceObject.prototype.callSprites = function(toCall) {
     _.each(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
 }
 
 /*
-  The object render function handles the turning and rendering of space objects. TODO: instead of having this handle one pixi object, make it handle the ship, the running lights, and the thrusters. It can have a list to store the pixi objects in and iterate over that list? 
+  The spaceObject render function handles the turning and rendering of space objects. TODO: instead of having this handle one pixi object, make it handle the ship, the running lights, and the thrusters. It can have a list to store the pixi objects in and iterate over that list? 
 
 */
-object.prototype.render = function(turning) {
+spaceObject.prototype.render = function(turning) {
     if (this.renderReady == true) {
 	var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
 	var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length;});
 	//this.callSprites(function(a,b,c) {console.log(a)})
 
-	//var frameStart = this.objectImageInfo.meta.imagePurposes.normal.start
-	//var frameCount = this.objectImageInfo.meta.imagePurposes.normal.length
+	//var frameStart = this.spaceObjectImageInfo.meta.imagePurposes.normal.start
+	//var frameCount = this.spaceObjectImageInfo.meta.imagePurposes.normal.length
 	if (this.isPlayerShip == true) {
 	    //this.callSprites(function(s,b,c) {s.position.x = screenW/2})
 	    //this.callSprites(function(s,b,c) {s.position.y = screenH/2})
@@ -153,14 +153,14 @@ object.prototype.render = function(turning) {
 	}
 
 
-	this.pointing = this.pointing % (2*Math.PI);  //makes sure object.pointing is in the range [0, 2pi)
+	this.pointing = this.pointing % (2*Math.PI);  //makes sure spaceObject.pointing is in the range [0, 2pi)
 	if (this.pointing < 0) {
 	    this.pointing += 2*Math.PI;
 	}
 
 	var useThisImage = [];
 	for (var i = 0; i < _.keys(this.sprites).length; i++) {
-	    // object uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+	    // spaceObject uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
 	    var spr = _.values(this.sprites);
 	    useThisImage[i] = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
 	    //console.log(useThisImage)
@@ -169,7 +169,7 @@ object.prototype.render = function(turning) {
 	    spr[i].sprite.texture = spr[i].textures[useThisImage[i]];
 	}
 
-	// this.origionalPointing is the angle the object was pointed towards before it was told a different direction to turn.
+	// this.origionalPointing is the angle the spaceObject was pointed towards before it was told a different direction to turn.
 	this.lastTurning = turning; // last turning value: left, right, or back
 
 	this.lastTime = this.time;

@@ -8,11 +8,11 @@ Handles any space object that moves with inertia
 
 
 function movable(name) {
-    object.call(this, name)
+    spaceObject.call(this, name)
     this.velocity = [0,0]
 }
 
-movable.prototype = new object
+movable.prototype = new spaceObject
 
 
 movable.prototype.updateStats = function(turning, accelerating) {
@@ -110,7 +110,7 @@ movable.prototype.render = function(turning, accelerating) {
 	}
 
 //	this.previousMoveTime = this.time
-	object.prototype.render.call(this, turning)
+	spaceObject.prototype.render.call(this, turning)
 	return true
     }
     else {
