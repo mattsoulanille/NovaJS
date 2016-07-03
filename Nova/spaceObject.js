@@ -28,7 +28,7 @@ spaceObject.prototype.loadResources = function(that) {
 	    }.bind(this)) // for loader.load
 	    .once('complete', function() {
 
-		if (typeof(this.meta) !== 'undefined') {
+		if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
 		    //console.log('fulfilling');
 		    fulfill(that);
 
@@ -59,10 +59,12 @@ spaceObject.prototype.build = function() {
 */
 spaceObject.prototype.makeSprites = function(that) {
     return new RSVP.Promise(function(fulfill, reject) {
-    //    console.log("making sprites");
-    //    console.log(that);
-	that.turnRate = that.meta.physics.turn_rate * 2*Math.PI/120; // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
-    //    console.log(that.meta);
+	//    console.log("making sprites");
+	//    console.log(that);
+	//if (typeof(that.meta.physics.turn_rate) !== "undefined") {
+	that.turnRate = that.meta.physics.turn_rate * 2*Math.PI/120 || 0; // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
+	//}
+	//console.log(that.meta);
 	that.sprites = {};
 	that.spriteContainer = new PIXI.Container();
 

@@ -57,23 +57,23 @@ playerShip.prototype.updateStats = function() {
 
 
 
-var ships = []
+var spaceObjects = []
 //var myShip = new playerShip("Starbridge A")
 var myShip = new playerShip("Starbridge A")
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 var dart = new ship("Vell-os Dart")
 
-ships[0] = myShip
-ships[1] = shuttle
-ships[2] = starbridge
-ships[3] = dart
-ships[0].build()
-ships[1].build()
-ships[2].build()
-ships[2].position = [200,200]
-ships[3].build()
-ships[3].position = [-200, -200]
+spaceObjects[0] = myShip
+spaceObjects[1] = shuttle
+spaceObjects[2] = starbridge
+spaceObjects[3] = dart
+spaceObjects[0].build()
+spaceObjects[1].build()
+spaceObjects[2].build()
+spaceObjects[2].position = [200,200]
+spaceObjects[3].build()
+spaceObjects[3].position = [-200, -200]
 
 var startGameTimer = setInterval(function () {startGame()}, 1000);
 
@@ -84,8 +84,8 @@ Starts the game if everything is ready to render.
 */
 function startGame() {
     var readyToRender = true;
-    for (var i = 0; i < ships.length; i++) {
-	if (!ships[i].renderReady) {
+    for (var i = 0; i < spaceObjects.length; i++) {
+	if (!spaceObjects[i].renderReady) {
 	    readyToRender = false;
 	}
     }
@@ -102,13 +102,13 @@ function animate() {
     stagePosition = myShip.position
     spaceObject.prototype.time = new Date().getTime()
 
-    $.when( ships.map(function(s){s.updateStats()}) ).done(function() {
+    $.when( spaceObjects.map(function(s){s.updateStats()}) ).done(function() {
 	renderer.render(stage)
 	requestAnimationFrame( animate ) 
 
     });
-//    for (var i = 0; i < ships.length; i++) {
-//	ships[i].updateStats(turning, accelerating)
+//    for (var i = 0; i < spaceObjects.length; i++) {
+//	spaceObjects[i].updateStats(turning, accelerating)
 //    }
 
 /*
