@@ -100,10 +100,13 @@ spaceObject.prototype.addSpritesToContainer = function(that) {
 
 }
 
+
+
 spaceObject.prototype.updateStats = function(turning) {
 
-    spaceObject.prototype.render.call(this, turning); 
+    spaceObject.prototype.render.call(this); 
 }
+
 
 spaceObject.prototype.callSprites = function(toCall) {
     _.each(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
@@ -113,7 +116,26 @@ spaceObject.prototype.callSprites = function(toCall) {
   The spaceObject render function handles the turning and rendering of space objects. TODO: instead of having this handle one pixi object, make it handle the ship, the running lights, and the thrusters. It can have a list to store the pixi objects in and iterate over that list? 
 
 */
-spaceObject.prototype.render = function(turning) {
+
+spaceObject.prototype.turning = "";
+spaceObject.autoRender = false
+
+spaceObject.prototype.doAutoRender = function() {
+    if (this.autoRender) {
+	this.render();
+	setTimeout(_.bind(this.doAutoRender, this), 0);
+    }
+}
+
+
+spaceObject.prototype.startRender = function() {
+    if (this.renderReady) {
+	this.autoRender = true
+	this.doAutoRender()
+    }
+}
+
+spaceObject.prototype.render = function() {
     if (this.renderReady == true) {
 	var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
 	var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length;});
@@ -135,18 +157,18 @@ spaceObject.prototype.render = function(turning) {
 	}
 	
 	// if the new direction does not equal the previous direction
-	if ((typeof this.lastTurning == 'undefined') || (turning != this.lastTurning) || this.turnback != this.lastTurnBack) { 
+	if ((typeof this.lastTurning == 'undefined') || (this.turning != this.lastTurning) || this.turnback != this.lastTurnBack) { 
 	    this.turnStartTime = this.time; // the turn started at the average of the times
 	    this.origionalPointing = this.pointing;
 	    this.lastTurnBack = this.turnback;
 
 	}
-	if (turning == "left") {
+	if (this.turning == "left") {
 	    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000);
 	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
 	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length; });
 	}
-	else if (turning == "right") {
+	else if (this.turning == "right") {
 	    this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000);
 
 	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
@@ -176,7 +198,7 @@ spaceObject.prototype.render = function(turning) {
 	}
 
 	// this.origionalPointing is the angle the spaceObject was pointed towards before it was told a different direction to turn.
-	this.lastTurning = turning; // last turning value: left, right, or back
+	this.lastTurning = this.turning; // last turning value: left, right, or back
 
 	this.lastTime = this.time;
 	return true;

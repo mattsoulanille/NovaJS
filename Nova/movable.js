@@ -1,6 +1,6 @@
 /*
 movable.js
-Handles any space object that moves with inertia
+Handles any space object that moves
 
 
 
@@ -12,22 +12,28 @@ function movable(name) {
     this.velocity = [0,0]
 }
 
-movable.prototype = new spaceObject
+movable.prototype = new spaceObject;
+movable.prototype.accelerating = false;
+
 
 
 movable.prototype.updateStats = function(turning, accelerating) {
     
-    movable.prototype.render.call(this, turning, accelerating)
+    this.turning = turning;
+    this.accelerating = accelerating;
+    //movable.prototype.render.call(this);
+    
 
 }
 
 
-movable.prototype.render = function(turning, accelerating) {
+
+movable.prototype.render = function() {
     if (this.renderReady == true) {
 	
 	this.turnback = false
 	if (!this.meta.physics.inertialess) {
-	    if (accelerating == -1) {
+	    if (this.accelerating == -1) {
 		var vAngle = Math.atan(this.velocity[1] / this.velocity[0])
 		if (this.velocity[0] < 0) {
 		    vAngle = vAngle + Math.PI
@@ -37,23 +43,23 @@ movable.prototype.render = function(turning, accelerating) {
 		var pointDiff = (pointto - this.pointing + 2*Math.PI) % (2*Math.PI)
 		//console.log(pointDiff)
 		if (pointDiff < Math.PI) {
-		    turning = "left"
+		    this.turning = "left"
 		}
 		else if(pointDiff >= Math.PI) {
-		    turning = "right"
+		    this.turning = "right"
 		}
 		this.turnback = true
 	    }
-	    if ((this.turnback == true) && ((turning == "left") || (turning == "right")) && (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
+	    if ((this.turnback == true) && ((this.turning == "left") || (this.turning == "right")) && (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
 		this.pointing = pointto
-		turning = ""
+		this.turning = ""
 	    }
 
 
 	    //acceleration
 	    var xaccel = Math.cos(this.pointing) * this.meta.physics.acceleration
 	    var yaccel = Math.sin(this.pointing) * this.meta.physics.acceleration
-	    if (accelerating == true) {
+	    if (this.accelerating == true) {
 		if (typeof this.lastTime != 'undefined') {
 		    //var aCoefficient = (this.meta.physics.max_speed - Math.pow(Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2), .5)) / this.meta.physics.max_speed
 		    this.velocity[0] += xaccel * (this.time - this.lastTime)/1000
@@ -78,7 +84,7 @@ movable.prototype.render = function(turning, accelerating) {
 	    var angle = this.pointing;
 	    var accelDir = 0
 	    this.velocity = [Math.cos(angle) * this.polarVelocity, Math.sin(angle) * this.polarVelocity]
-	    if (accelerating == -1) {
+	    if (this.accelerating == -1) {
 		if (this.polarVelocity > 0) {
 		    accelDir += -1
 		}
@@ -88,7 +94,7 @@ movable.prototype.render = function(turning, accelerating) {
 		}
 	    }
 
-	    if (accelerating == 1) {
+	    if (this.accelerating == 1) {
 		if (typeof this.lastTime != 'undefined') {
 
 		    accelDir += 1
@@ -110,7 +116,7 @@ movable.prototype.render = function(turning, accelerating) {
 	}
 
 //	this.previousMoveTime = this.time
-	spaceObject.prototype.render.call(this, turning)
+	spaceObject.prototype.render.call(this)
 	return true
     }
     else {

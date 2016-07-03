@@ -1,14 +1,16 @@
 // create an new instance of a pixi stage
-var stage = new PIXI.Stage(0x000000)
+var stage = new PIXI.Stage(0x000000);
 
 // create a renderer instance
-var screenW = $(window).width(), screenH = $(window).height() - 10
-var positionConstant = 1
+var screenW = $(window).width(), screenH = $(window).height() - 10;
+var positionConstant = 1;
 //var screenW = 800, screenH = 600;
-var renderer = PIXI.autoDetectRenderer(screenW, screenH)
-$(window).resize(onResize)
+var renderer = PIXI.autoDetectRenderer(screenW, screenH);
+$(window).resize(onResize);
 // add the renderer view element to the DOM
-document.body.appendChild(renderer.view)
+document.body.appendChild(renderer.view);
+
+var p = PubSub;
 
 
 function playerShip(shipName) {
@@ -64,6 +66,8 @@ var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 var dart = new ship("Vell-os Dart")
 
+
+
 spaceObjects[0] = myShip
 spaceObjects[1] = shuttle
 spaceObjects[2] = starbridge
@@ -82,6 +86,7 @@ var startGameTimer = setInterval(function () {startGame()}, 1000);
 /*
 Starts the game if everything is ready to render.
 */
+var stagePosition = myShip.position
 function startGame() {
     var readyToRender = true;
     for (var i = 0; i < spaceObjects.length; i++) {
@@ -90,23 +95,31 @@ function startGame() {
 	}
     }
     if (readyToRender) {
-	requestAnimationFrame(animate)
-	clearInterval(startGameTimer)
-	console.log("Rendering started")
+	//replace with promises
+	$.when( spaceObjects.map(function(s){s.startRender()}) ).done(function() {
+	    requestAnimationFrame(animate)
+	    clearInterval(startGameTimer)
+	    console.log("Rendering started")
+	});
+
     }
 }
 
 //requestAnimationFrame(animate)
-var stagePosition
+
 function animate() {
     stagePosition = myShip.position
     spaceObject.prototype.time = new Date().getTime()
 
-    $.when( spaceObjects.map(function(s){s.updateStats()}) ).done(function() {
-	renderer.render(stage)
-	requestAnimationFrame( animate ) 
+    myShip.updateStats()
+    renderer.render(stage)
+    requestAnimationFrame( animate ) 
 
-    });
+    // $.when( spaceObjects.map(function(s){s.updateStats()}) ).done(function() {
+    // 	renderer.render(stage)
+    // 	requestAnimationFrame( animate ) 
+
+    // });
 //    for (var i = 0; i < spaceObjects.length; i++) {
 //	spaceObjects[i].updateStats(turning, accelerating)
 //    }

@@ -28,18 +28,8 @@ ship.prototype.addSpritesToContainer = function() {
 }
 
 ship.prototype.updateStats = function(turning, accelerating) {
-    if (accelerating) {
-	this.sprites.engine.sprite.alpha = 1
-    }
-    else {
-	this.sprites.engine.sprite.alpha = 0
-    }
 
-    if ("lights" in this.sprites) {
-	this.manageLights()
-    }
-
-    movable.prototype.updateStats.call(this, turning, accelerating)
+    movable.prototype.updateStats.call(this, turning, accelerating);
 }
 
 ship.prototype.manageLights = function() {
@@ -61,4 +51,18 @@ ship.prototype.manageLights = function() {
 	this.sprites.lights.sprite.alpha = 0
     }
 
+}
+
+ship.prototype.render = function() {
+    if (this.accelerating) {
+	this.sprites.engine.sprite.alpha = 1;
+    }
+    else {
+	this.sprites.engine.sprite.alpha = 0;
+    }
+
+    if ("lights" in this.sprites) {
+	this.manageLights();
+    }
+    movable.prototype.render.call(this);
 }
