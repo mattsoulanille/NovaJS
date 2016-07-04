@@ -19,7 +19,7 @@ ship.prototype.addSpritesToContainer = function() {
     }
 
 
-    var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite})
+    var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite;})
     var without =  _.difference(spriteList, orderedSprites)
     console.log(without)
     _.each(without, function(x) {this.spriteContainer.addChild(x)}, this);

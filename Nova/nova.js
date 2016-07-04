@@ -51,6 +51,9 @@ playerShip.prototype.updateStats = function() {
     else {
 	accelerating = 0
     }
+    if (_.contains(keys, 'space')) {
+	//medium_blaster.fire(this.pointing, this.position, this.velocity);
+    }
 
     
     ship.prototype.updateStats.call(this, turning, accelerating)
@@ -65,7 +68,7 @@ var myShip = new playerShip("Starbridge A")
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 var dart = new ship("Vell-os Dart")
-
+//var medium_blaster = new projectile("Medium Blaster")
 
 
 spaceObjects[0] = myShip
@@ -78,6 +81,9 @@ spaceObjects[2].build()
 spaceObjects[2].position = [200,200]
 spaceObjects[3].build()
 spaceObjects[3].position = [-200, -200]
+//spaceObjects[4] = medium_blaster
+//spaceObjects[4].position = [200,0]
+//spaceObjects[4].build()
 
 var startGameTimer = setInterval(function () {startGame()}, 1000);
 

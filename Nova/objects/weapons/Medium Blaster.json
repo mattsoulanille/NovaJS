@@ -1,0 +1,13 @@
+{ 
+    "physics": {
+	"speed": 1400,
+	"duration": 25
+
+    },
+    "properties": {
+	"shieldDamage": 10,
+	"armorDamage": 5,
+	"reload": 13,
+	"accuracy": 4
+    }
+}

@@ -38,21 +38,8 @@ movable.prototype.render = function() {
 		if (this.velocity[0] < 0) {
 		    vAngle = vAngle + Math.PI
 		}
-		pointto = (vAngle + Math.PI) % (2*Math.PI)
-		//console.log(pointto)
-		var pointDiff = (pointto - this.pointing + 2*Math.PI) % (2*Math.PI)
-		//console.log(pointDiff)
-		if (pointDiff < Math.PI) {
-		    this.turning = "left"
-		}
-		else if(pointDiff >= Math.PI) {
-		    this.turning = "right"
-		}
-		this.turnback = true
-	    }
-	    if ((this.turnback == true) && ((this.turning == "left") || (this.turning == "right")) && (Math.min(Math.abs(Math.abs(this.pointing - pointto) - 2*Math.PI), Math.abs(this.pointing - pointto)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
-		this.pointing = pointto
-		this.turning = ""
+		pointto = (vAngle + Math.PI) % (2*Math.PI);
+		this.turnTo(pointto);
 	    }
 
 

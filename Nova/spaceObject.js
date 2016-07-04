@@ -7,15 +7,15 @@ function spaceObject(objectName) {
 }
 
 spaceObject.prototype.build = function() {
-    spaceObject.prototype.loadResources(this)
-	.then(spaceObject.prototype.makeSprites, function() {console.log('rejected loadResources');})
-	.then(spaceObject.prototype.addSpritesToContainer, function() {console.log('rejected makeSprites');});
+    return this.loadResources()
+	.then(_.bind(this.makeSprites, this), function() {console.log('rejected loadResources'); console.log(reason)})
+	.then(_.bind(this.addSpritesToContainer, this), function(reason) {console.log('rejected makeSprites'); console.log(reason)});
 
     
 };
 
 
-spaceObject.prototype.loadResources = function(that) {
+spaceObject.prototype.loadResources = function() {
     return new RSVP.Promise(function(fulfill, reject) {
 	//console.log(this);
 	var jsonUrl = this.url + this.name + '.json';
@@ -30,7 +30,7 @@ spaceObject.prototype.loadResources = function(that) {
 
 		if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
 		    //console.log('fulfilling');
-		    fulfill(that);
+		    fulfill()
 
 		}
 		else {
@@ -39,8 +39,7 @@ spaceObject.prototype.loadResources = function(that) {
 
 	    }.bind(this)); // for loader.once('complete'...
 
-    }.bind(that)); // Do NOT bind the promise to 'this' here. this binds to the object. not instance
-//    }.bind(this)); // for the promise
+    }.bind(this)); // for the promise
 };
 
 /*
@@ -57,25 +56,25 @@ spaceObject.prototype.build = function() {
 
 };
 */
-spaceObject.prototype.makeSprites = function(that) {
+spaceObject.prototype.makeSprites = function() {
     return new RSVP.Promise(function(fulfill, reject) {
 	//    console.log("making sprites");
-	//    console.log(that);
-	//if (typeof(that.meta.physics.turn_rate) !== "undefined") {
-	that.turnRate = that.meta.physics.turn_rate * 2*Math.PI/120 || 0; // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
+	//    console.log(this);
+	//if (typeof(this.meta.physics.turn_rate) !== "undefined") {
+	this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0; // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
 	//}
-	//console.log(that.meta);
-	that.sprites = {};
-	that.spriteContainer = new PIXI.Container();
+	//console.log(this.meta);
+	this.sprites = {};
+	this.spriteContainer = new PIXI.Container();
 
-	_.each(_.keys(that.meta.imageAssetsFiles), function(key) {
-	    if (that.meta.imageAssetsFiles.hasOwnProperty(key)) {
-		that.sprites[key] = new sprite(that.url + that.meta.imageAssetsFiles[key]);
+	_.each(_.keys(this.meta.imageAssetsFiles), function(key) {
+	    if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
+		this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key]);
 	    }
-	});
-	that.loadedSprites = 0;
+	}, this);
+	this.loadedSprites = 0;
 
-	//console.log(that);
+	//console.log(this);
 
 	var spriteLoadedCallback = function(that) {
 	    return function() {
@@ -83,19 +82,20 @@ spaceObject.prototype.makeSprites = function(that) {
     //	    console.log(that)
 		if (that.loadedSprites == _.keys(that.sprites).length) {
 		    that.renderReady = true;
-		    fulfill(that)
+		    fulfill()
 		}
 	    };
 	};
 
-	_.each(_.values(that.sprites), function(s) {s.build(spriteLoadedCallback(that));} );
-    }); // matches Promise
+	_.each(_.values(this.sprites), function(s) {s.build(spriteLoadedCallback(this));}, this);
+    }.bind(this)); // matches Promise
 }
 
 //write this method in the ships funcitons to add engines and lights in the right order
-spaceObject.prototype.addSpritesToContainer = function(that) {
-    _.each(_.map(_.values(that.sprites), function(s) {return s.sprite;}), function(s) {that.spriteContainer.addChild(s);}, that);
-    stage.addChild(that.spriteContainer);
+spaceObject.prototype.addSpritesToContainer = function() {
+    _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
+	   function(s) {this.spriteContainer.addChild(s);}, this);
+    stage.addChild(this.spriteContainer);
 
 
 }
@@ -103,8 +103,8 @@ spaceObject.prototype.addSpritesToContainer = function(that) {
 
 
 spaceObject.prototype.updateStats = function(turning) {
-
-    spaceObject.prototype.render.call(this); 
+    this.turning = turning
+    //spaceObject.prototype.render.call(this); 
 }
 
 
@@ -112,10 +112,19 @@ spaceObject.prototype.callSprites = function(toCall) {
     _.each(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
 }
 
+spaceObject.prototype.hide = function() {
+    this.callSprites(function(s) {s.visible = false})
+}
+
+spaceObject.prototype.show = function() {
+    this.callSprites(function(s) {s.visible = true})
+}
+
 /*
   The spaceObject render function handles the turning and rendering of space objects. TODO: instead of having this handle one pixi object, make it handle the ship, the running lights, and the thrusters. It can have a list to store the pixi objects in and iterate over that list? 
 
 */
+
 
 spaceObject.prototype.turning = "";
 spaceObject.autoRender = false
@@ -133,6 +142,29 @@ spaceObject.prototype.startRender = function() {
 	this.autoRender = true
 	this.doAutoRender()
     }
+}
+
+spaceObject.prototype.turnTo = function(pointTo) {
+    // Sets this.turning to turn the object to a given direction
+
+    var pointDiff = (pointTo - this.pointing + 2*Math.PI) % (2*Math.PI)
+    var turning
+    if (pointDiff < Math.PI) {
+	turning = "left"
+    }
+    else if(pointDiff >= Math.PI) {
+	turning = "right"
+    }
+
+    if ((this.pointing == pointTo) || (Math.min(Math.abs(Math.abs(this.pointing - pointTo) - 2*Math.PI),
+		  Math.abs(this.pointing - pointTo)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
+	this.pointing = pointTo
+	this.turning = ""
+    }
+    else {
+	this.turning = turning
+    }
+
 }
 
 spaceObject.prototype.render = function() {

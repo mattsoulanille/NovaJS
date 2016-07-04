@@ -1,0 +1,11 @@
+{ 
+    "imageAssetsFiles": {
+	"projectile": "Medium Blaster frames.json"
+},
+    "physics": {
+	"speed": 1400,
+	"duration": 25
+	
+
+}
+}
