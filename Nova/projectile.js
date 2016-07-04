@@ -17,7 +17,7 @@ projectile.prototype.build = function() {
     }
 
     spaceObject.prototype.build.call(this).then(_.bind(setAvailable, this));
-    
+
 }
 // projectile.prototype.fire = function(direction, ship_position, ship_velocity) {
 //     this.placeOnShip(direction, ship_position, ship_velocity)

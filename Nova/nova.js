@@ -71,7 +71,7 @@ var myShip = new playerShip("Starbridge A")
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 var dart = new ship("Vell-os Dart")
-var medium_blaster = new weapon("Medium Blaster", myShip)
+var medium_blaster = new weapon("Medium Blaster", myShip, 2)
 medium_blaster.build()
 
 spaceObjects[0] = myShip

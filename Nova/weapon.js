@@ -1,9 +1,16 @@
-function weapon(weaponName, source) {
+function weapon(weaponName, source, count) {
     this.url = 'objects/weapons/'
     this.name = weaponName;
     this.firing = false;
     this.doAutoFire = false;
-    this.source = source
+    this.source = source;
+    if (typeof(count) == 'undefined') {
+	this.count = 1;
+    }
+    else {
+	this.count = count;
+    }
+
 }
 
 weapon.prototype.build = function() {
@@ -15,8 +22,8 @@ weapon.prototype.build = function() {
 	this.projectiles = [];
 	// as many projectiles as can be in the air at once as a result of the weapon's
 	// duration and reload times
-	var required_projectiles = Math.floor(this.meta.physics.duration /
-					      this.meta.properties.reload) + 1;
+	var required_projectiles = this.count * (Math.floor(this.meta.physics.duration /
+							    this.meta.properties.reload) + 1);
 	var meta = {}
 	meta.imageAssetsFiles = this.meta.imageAssetsFiles;
 	meta.physics = this.meta.physics;
@@ -36,7 +43,9 @@ weapon.prototype.fire = function() {
     for (i=0; i < this.projectiles.length; i++) {
 	var proj = this.projectiles[i];
 	if (proj.available) {
-	    var direction = this.source.pointing;
+	    var direction = this.source.pointing +
+		((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		(2 * Math.PI / 360);
 	    var position = this.source.position;
 	    var velocity = this.source.velocity;
 	    proj.fire(direction, position, velocity)
@@ -72,7 +81,8 @@ weapon.prototype.autoFire = function() {
 	this.fire()
 	
 	// fire again after reload time
-	setTimeout(_.bind(this.autoFire, this), this.meta.properties.reload * 1000/30)
+	var reloadTimeMilliseconds = this.meta.properties.reload * 1000/30 / this.count;
+	setTimeout(_.bind(this.autoFire, this), reloadTimeMilliseconds)
     }
     else {
 	this.firing = false
