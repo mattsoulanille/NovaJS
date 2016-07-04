@@ -1,11 +1,11 @@
-function projectile(projName, physics) {
+function projectile(projName, meta) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
     movable.call(this, projName)
-    this.url = 'objects/projectiles/'
-    this.pointing = 0
-    this.available = false
-    this.meta.physics = physics
+    this.url = 'objects/projectiles/';
+    this.pointing = 0;
+    this.available = false;
+    this.meta = meta
 }
 
 projectile.prototype = new movable
@@ -16,7 +16,7 @@ projectile.prototype.build = function() {
 	this.available = true
     }
 
-    spaceObject.prototype.build.call(this).then(_.bind(setAvailable, this))
+    spaceObject.prototype.build.call(this).then(_.bind(setAvailable, this));
     
 }
 // projectile.prototype.fire = function(direction, ship_position, ship_velocity) {
@@ -31,7 +31,7 @@ projectile.prototype.loadResources = function() {
     // would set this.meta.physics, but
     // this.meta.physics is given by weapon on construction.
     return new RSVP.Promise(function(fulfill, reject) {
-	fulfill()
+	fulfill();
     });
 }
 
@@ -44,9 +44,15 @@ projectile.prototype.fire = function(direction, position, velocity) {
     this.pointing = direction;
     this.position = _.map(position, function(x) {return x});
     var factor = 30/100;
+
+    // update the projectile's sprite's properties with the new ones
+    // Placed before this.velocity... to reset this.lastTime
+    this.render(); 
     this.velocity = [Math.cos(direction) * this.meta.physics.speed * factor + velocity[0],
 		     Math.sin(direction) * this.meta.physics.speed * factor + velocity[1]];
-    this.render(); // update the projectile's sprite's properties with the new ones
+    //this.lastTime = this.time
+
+    this.startRender()
     this.show();
 
     setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
@@ -57,6 +63,7 @@ projectile.prototype.fire = function(direction, position, velocity) {
 projectile.prototype.end = function() {
     this.velocity = [0,0];
     this.hide();
+    this.stopRender()
     this.available = true;
 }
 

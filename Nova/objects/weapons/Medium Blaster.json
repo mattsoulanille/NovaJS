@@ -3,7 +3,10 @@
 	"speed": 1400,
 	"duration": 25
 
-    },
+    },    
+    "imageAssetsFiles": {
+	"projectile": "Medium Blaster.json"
+    },	    
     "properties": {
 	"shieldDamage": 10,
 	"armorDamage": 5,

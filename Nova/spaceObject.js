@@ -30,7 +30,7 @@ spaceObject.prototype.loadResources = function() {
 
 		if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
 		    //console.log('fulfilling');
-		    fulfill()
+		    fulfill();
 
 		}
 		else {
@@ -127,7 +127,7 @@ spaceObject.prototype.show = function() {
 
 
 spaceObject.prototype.turning = "";
-spaceObject.autoRender = false
+spaceObject.prototype.autoRender = false
 
 spaceObject.prototype.doAutoRender = function() {
     if (this.autoRender) {
@@ -142,6 +142,10 @@ spaceObject.prototype.startRender = function() {
 	this.autoRender = true
 	this.doAutoRender()
     }
+}
+
+spaceObject.prototype.stopRender = function() {
+    this.autoRender = false;
 }
 
 spaceObject.prototype.turnTo = function(pointTo) {
