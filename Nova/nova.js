@@ -12,6 +12,19 @@ document.body.appendChild(renderer.view);
 
 var p = PubSub;
 
+document.onkeydown = function(e) {
+    e = e || event;
+    switch(e.keyCode) {
+	//todo: use events instead of loops for keypresses
+    }
+    myShip.updateStats();
+    return false;
+}
+document.onkeyup = function(e) {
+    myShip.updateStats();
+}
+
+
 
 function playerShip(shipName) {
     ship.call(this, shipName)
@@ -120,7 +133,7 @@ function animate() {
     stagePosition = myShip.position
     spaceObject.prototype.time = new Date().getTime()
 
-    myShip.updateStats()
+
     renderer.render(stage)
     requestAnimationFrame( animate ) 
 

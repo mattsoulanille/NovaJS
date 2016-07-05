@@ -18,7 +18,7 @@ weapon.prototype.build = function() {
     $.getJSON(this.url + this.name + ".json", _.bind(function(data) {
 
 	this.meta = data;
-	console.log(this);
+
 	this.projectiles = [];
 	// as many projectiles as can be in the air at once as a result of the weapon's
 	// duration and reload times
