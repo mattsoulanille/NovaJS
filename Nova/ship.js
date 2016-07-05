@@ -1,8 +1,8 @@
 function ship(shipName) {
     movable.call(this, shipName)
     this.url = 'objects/ships/'
-    this.pointing = 0
-
+    this.pointing = 0;
+    this.outfits = [];
 }
 ship.prototype = new movable
 

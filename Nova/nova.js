@@ -101,7 +101,7 @@ spaceObjects[3].position = [-200, -200]
 // spaceObjects[4].position = [200,0]
 // spaceObjects[4].build()
 
-var startGameTimer = setInterval(function () {startGame()}, 1000);
+var startGameTimer = setInterval(function () {startGame()}, 500);
 
 //var printmyShip = setInterval(function() {console.log(myShip)}, 1000)
 
