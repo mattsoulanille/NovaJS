@@ -1,0 +1,12 @@
+{
+    "function": {
+	"weapon": [
+	    "Medium Blaster"
+	],
+	"speed increase": -1
+    },
+    "cost": 20000,
+    "mass": 8,
+    "maximum": 6    
+
+}
