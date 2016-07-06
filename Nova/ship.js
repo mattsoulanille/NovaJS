@@ -1,14 +1,39 @@
-function ship(shipName) {
+function ship(shipName, outfits) {
     movable.call(this, shipName)
     this.url = 'objects/ships/'
     this.pointing = 0;
-    this.outfits = [];
+    this.outfits = outfits || [];
 }
 ship.prototype = new movable
 
 
+ship.prototype.build = function() {
+
+    var outfitPromises = _.map(this.outfits, function(outfit) {
+	//build unbuild outfits
+	if (outfit.ready) {
+	    return new RSVP.Promise(function(fulfill, reject){fulfill()})
+	}
+	else {
+	    return outfit.build(this);
+	}
+	//console.log(this);
+	
+    }.bind(this));
+
+    return RSVP.all(outfitPromises)
+	.then(movable.prototype.build.call(this))
+	.catch(function(reason) {console.log(reason)});
+
+
+}
+
+
+
 ship.prototype.addSpritesToContainer = function() {
 
+    // adds sprites to the container in the correct order to have proper
+    // layering of engine, ship, lights etc.
     var orderedSprites = [this.sprites.ship.sprite]
     if ("lights" in this.sprites) {
 	orderedSprites.push(this.sprites.lights.sprite)
@@ -20,8 +45,10 @@ ship.prototype.addSpritesToContainer = function() {
 
 
     var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite;})
-    var without =  _.difference(spriteList, orderedSprites)
-    console.log(without)
+
+    //sprites that have no specified order
+    var without =  _.difference(spriteList, orderedSprites) 
+    //console.log(without)
     _.each(without, function(x) {this.spriteContainer.addChild(x)}, this);
     _.each(orderedSprites, function(x) {this.spriteContainer.addChild(x)}, this);
     stage.addChild(this.spriteContainer)

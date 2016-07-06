@@ -4,7 +4,7 @@ function sprite(url) {
 }
 
 sprite.prototype.build = function(callback) {
-    console.log("loading sprite: " + this.url);
+//    console.log("loading sprite: " + this.url);
     this.callback = callback;
     var loader = new PIXI.loaders.Loader();
     loader

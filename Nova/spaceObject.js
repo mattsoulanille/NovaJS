@@ -4,12 +4,20 @@ function spaceObject(objectName) {
     this.lastAccelerating = false;
     this.url = 'objects/';
     this.position = [0,0];
+    // planets can have weapons
+    // this also means projectiles can have weapons :P
+    this.weapons = {};
+    this.weapons.all = [];
 }
 
 spaceObject.prototype.build = function() {
     return this.loadResources()
-	.then(_.bind(this.makeSprites, this), function() {console.log('rejected loadResources'); console.log(reason)})
-	.then(_.bind(this.addSpritesToContainer, this), function(reason) {console.log('rejected makeSprites'); console.log(reason)});
+    	.then(_.bind(this.setProperties, this),
+	      function(reason) {console.log('rejected loadResources'); console.log(reason)})
+	.then(_.bind(this.makeSprites, this),
+	      function(reason) {console.log('rejected setProperties'); console.log(reason)})
+	.then(_.bind(this.addSpritesToContainer, this),
+	      function(reason) {console.log('rejected makeSprites'); console.log(reason)});
 
     
 };
@@ -42,28 +50,25 @@ spaceObject.prototype.loadResources = function() {
     }.bind(this)); // for the promise
 };
 
-/*
-spaceObject.prototype.build = function() {
-    var jsonUrl = this.url + this.name + '.json';
-    var loader = new PIXI.loaders.Loader();
+
+spaceObject.prototype.setProperties = function() {
+    return new RSVP.Promise(function(fulfill, reject) {
+	this.properties = {};
+
+	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
+	//if (typeof(this.meta.physics.turn_rate) !== "undefined") {
+	this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
+	fulfill()
+    }.bind(this));
     
-    loader
-	.add('meta', jsonUrl)
-	.load(function (loader, resource) {
-	    this.meta = resource.meta.data;
 
-	}.bind(this));
-
-};
-*/
+}
 spaceObject.prototype.makeSprites = function() {
     return new RSVP.Promise(function(fulfill, reject) {
 	//    console.log("making sprites");
 	//    console.log(this);
-	//if (typeof(this.meta.physics.turn_rate) !== "undefined") {
-	this.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0; // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
-	//}
 	//console.log(this.meta);
+
 	this.sprites = {};
 	this.spriteContainer = new PIXI.Container();
 
@@ -162,7 +167,7 @@ spaceObject.prototype.turnTo = function(pointTo) {
     }
 
     if ((this.pointing == pointTo) || (Math.min(Math.abs(Math.abs(this.pointing - pointTo) - 2*Math.PI),
-		  Math.abs(this.pointing - pointTo)) < (this.turnRate * (this.time - this.lastTime) / 1000))) {
+		  Math.abs(this.pointing - pointTo)) < (this.properties.turnRate * (this.time - this.lastTime) / 1000))) {
 	this.pointing = pointTo
 	this.turning = ""
     }
@@ -201,12 +206,12 @@ spaceObject.prototype.render = function() {
 
 	}
 	if (this.turning == "left") {
-	    this.pointing = this.origionalPointing + (this.turnRate * (this.time - this.turnStartTime) / 1000);
+	    this.pointing = this.origionalPointing + (this.properties.turnRate * (this.time - this.turnStartTime) / 1000);
 	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
 	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length; });
 	}
 	else if (this.turning == "right") {
-	    this.pointing = this.origionalPointing - (this.turnRate * (this.time - this.turnStartTime) / 1000);
+	    this.pointing = this.origionalPointing - (this.properties.turnRate * (this.time - this.turnStartTime) / 1000);
 
 	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
 	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length; });

@@ -11,6 +11,7 @@
 	"shieldDamage": 10,
 	"armorDamage": 5,
 	"reload": 13,
-	"accuracy": 4
+	"accuracy": 4,
+	"type": "primary"
     }
 }

@@ -4,39 +4,63 @@ function weapon(weaponName, source, count) {
     this.firing = false;
     this.doAutoFire = false;
     this.source = source;
-    if (typeof(count) == 'undefined') {
-	this.count = 1;
-    }
-    else {
-	this.count = count;
-    }
+    this.count = count || 1
+    this.ready = false;
 
 }
 
 weapon.prototype.build = function() {
-
-    $.getJSON(this.url + this.name + ".json", _.bind(function(data) {
-
-	this.meta = data;
-
-	this.projectiles = [];
-	// as many projectiles as can be in the air at once as a result of the weapon's
-	// duration and reload times
-	var required_projectiles = this.count * (Math.floor(this.meta.physics.duration /
-							    this.meta.properties.reload) + 1);
-	var meta = {}
-	meta.imageAssetsFiles = this.meta.imageAssetsFiles;
-	meta.physics = this.meta.physics;
-	console.log(meta)
-	for (i=0; i < required_projectiles; i++) {
-	    proj = new projectile(this.name, meta);
-	    this.projectiles.push(proj);
-	    proj.build()
-	}
-	
-    }, this));
+    return this.loadResources()
+	.then(_.bind(this.buildProjectiles, this))
+	.then(_.bind(function() {
+	    this.ready = true
+	    this.source.weapons.all.push(this)
+	}, this));
 
 }
+
+weapon.prototype.loadResources = function() {
+    return new RSVP.Promise( function(fulfill, reject) {
+	
+	$.getJSON(this.url + this.name + ".json", _.bind(function(data) {
+
+	    this.meta = data;
+
+	    if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
+		fulfill();
+	    }
+	    else {
+		reject();
+	    }
+	    
+
+	}, this));
+
+
+    }.bind(this));
+}
+
+weapon.prototype.buildProjectiles = function() {
+
+    this.projectiles = [];
+    // as many projectiles as can be in the air at once as a result of the weapon's
+    // duration and reload times
+    var required_projectiles = this.count * (Math.floor(this.meta.physics.duration /
+							this.meta.properties.reload) + 1);
+    var meta = {} // for the projectiles
+    meta.imageAssetsFiles = this.meta.imageAssetsFiles;
+    meta.physics = this.meta.physics;
+    //console.log(meta)
+    
+    for (i=0; i < required_projectiles; i++) {
+	proj = new projectile(this.name, meta);
+	this.projectiles.push(proj);
+    }
+    
+    return RSVP.all(_.map( this.projectiles, function(projectile) {projectile.build()} ));
+
+}
+
 
 weapon.prototype.fire = function() {
     // finds an available projectile and fires it

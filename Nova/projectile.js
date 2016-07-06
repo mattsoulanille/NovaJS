@@ -15,8 +15,8 @@ projectile.prototype.build = function() {
     setAvailable = function() {
 	this.available = true
     }
-
-    spaceObject.prototype.build.call(this).then(_.bind(setAvailable, this));
+    
+    return spaceObject.prototype.build.call(this).then(_.bind(setAvailable, this)); // a promise
 
 }
 // projectile.prototype.fire = function(direction, ship_position, ship_velocity) {
@@ -30,6 +30,7 @@ projectile.prototype.build = function() {
 projectile.prototype.loadResources = function() {
     // would set this.meta.physics, but
     // this.meta.physics is given by weapon on construction.
+    // so needed a dummy promise for spaceObject.
     return new RSVP.Promise(function(fulfill, reject) {
 	fulfill();
     });

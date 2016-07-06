@@ -14,11 +14,16 @@ var p = PubSub;
 
 document.onkeydown = function(e) {
     e = e || event;
-    switch(e.keyCode) {
-	//todo: use events instead of loops for keypresses
-    }
+    blocked_keys = [37, 38, 39, 40, 32];
+
     myShip.updateStats();
-    return false;
+
+    if (_.contains(blocked_keys, e.keyCode)) {
+	return false;
+    }
+    else {
+	return true;
+    }
 }
 document.onkeyup = function(e) {
     myShip.updateStats();
@@ -26,53 +31,76 @@ document.onkeyup = function(e) {
 
 
 
-function playerShip(shipName) {
-    ship.call(this, shipName)
-    this.pointing = Math.random()*2*Math.PI
-    this.velocity[0] = 0
-    this.velocity[1] = 0
-    this.isPlayerShip = true
+function playerShip(shipName, outfits) {
+    ship.call(this, shipName, outfits);
+    this.pointing = Math.random()*2*Math.PI;
+    this.velocity[0] = 0;
+    this.velocity[1] = 0;
+    this.isPlayerShip = true;
+    this.weapons.primary = [];
+    this.weapons.secondary = [];
 }
 
 playerShip.prototype = new ship
 
-playerShip.prototype.onAssetsLoaded = function() {
-    if (spaceObject.prototype.onAssetsLoaded.call(this)) {
-	console.log("and it's mine")
-    }
+playerShip.prototype.build = function() {
+    ship.prototype.build.call(this)
+
+	.then(function() {
+	    this.sortWeapons()
+
+	}.bind(this));
+}
+
+playerShip.prototype.sortWeapons = function() {
+
+    _.each(this.weapons.all, function(weapon) {
+
+	if (weapon.meta.properties.type === "primary") {
+	    this.weapons.primary.push(weapon);
+	    
+	}
+	else if (weapon.meta.properties.type === "secondary") {
+	    this.weapons.secondary.push(weapon);
+	    
+	}
+
+    }.bind(this));
+    
 }
 
 playerShip.prototype.updateStats = function() {
-    var keys = KeyboardJS.activeKeys()
-    var turning
-    var accelerating
+    var keys = KeyboardJS.activeKeys();
+    var turning;
+    var accelerating;
     if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
-	turning = 'right'
+	turning = 'right';
     }
     else if (_.contains(keys, 'left') && !_.contains(keys, 'right')) {
-	turning = 'left'
+	turning = 'left';
     }
     else {
-	turning = ''
+	turning = '';
     }
     if (_.contains(keys, 'down')) {
-	accelerating = -1
+	accelerating = -1;
     }
     else if (_.contains(keys, 'up')) {
-	accelerating = 1
+	accelerating = 1;
     }
     else {
-	accelerating = 0
+	accelerating = 0;
     }
     if (_.contains(keys, 'space')) {
-	medium_blaster.startFiring()
+	_.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
+
     }
     else {
-	medium_blaster.stopFiring()
+	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
     }
 
     
-    ship.prototype.updateStats.call(this, turning, accelerating)
+    ship.prototype.updateStats.call(this, turning, accelerating);
 
 }
 
@@ -80,12 +108,14 @@ playerShip.prototype.updateStats = function() {
 
 var spaceObjects = []
 //var myShip = new playerShip("Starbridge A")
-var myShip = new playerShip("Starbridge A")
+var medium_blaster = new outfit("Medium Blaster", 5)
+var myShip = new playerShip("Starbridge A", [medium_blaster])
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
 var dart = new ship("Vell-os Dart")
-var medium_blaster = new weapon("Medium Blaster", myShip, 2)
-medium_blaster.build()
+//var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
+
+//medium_blaster_weapon.build()
 
 spaceObjects[0] = myShip
 spaceObjects[1] = shuttle
@@ -114,6 +144,7 @@ function startGame() {
     for (var i = 0; i < spaceObjects.length; i++) {
 	if (!spaceObjects[i].renderReady) {
 	    readyToRender = false;
+	    console.log("Rendering NOT started")
 	}
     }
     if (readyToRender) {
