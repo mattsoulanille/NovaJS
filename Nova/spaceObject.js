@@ -2,7 +2,7 @@ function spaceObject(objectName) {
     this.name = objectName || "";
     this.renderReady = false;
     this.lastAccelerating = false;
-    this.url = 'objects/';
+    this.url = 'objects/misc/';
     this.position = [0,0];
     // planets can have weapons
     // this also means projectiles can have weapons :P
@@ -57,7 +57,9 @@ spaceObject.prototype.setProperties = function() {
 
 	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
 	//if (typeof(this.meta.physics.turn_rate) !== "undefined") {
-	this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
+	if (this.meta.physics) {
+	    this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
+	}
 	fulfill();
     }.bind(this));
 
@@ -65,36 +67,24 @@ spaceObject.prototype.setProperties = function() {
 
 }
 spaceObject.prototype.makeSprites = function() {
-    return new RSVP.Promise(function(fulfill, reject) {
-	//    console.log("making sprites");
-	//    console.log(this);
-	//console.log(this.meta);
+    //    console.log("making sprites");
+    //    console.log(this);
+    //console.log(this.meta);
 
-	this.sprites = {};
-	this.spriteContainer = new PIXI.Container();
+    this.sprites = {};
+    this.spriteContainer = new PIXI.Container();
 
-	_.each(_.keys(this.meta.imageAssetsFiles), function(key) {
-	    if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
-		this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key]);
-	    }
-	}, this);
-	this.loadedSprites = 0;
+    _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
+	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
+	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key]);
+	}
+    }, this);
 
-	//console.log(this);
+    return RSVP.all(  _.map(_.values(this.sprites), function(s) {return s.build()})  )
+	.then(function() {
+	    this.renderReady = true;
+	}.bind(this));
 
-	var spriteLoadedCallback = function(that) {
-	    return function() {
-		that.loadedSprites ++;
-    //	    console.log(that)
-		if (that.loadedSprites == _.keys(that.sprites).length) {
-		    that.renderReady = true;
-		    fulfill()
-		}
-	    };
-	};
-
-	_.each(_.values(this.sprites), function(s) {s.build(spriteLoadedCallback(this));}, this);
-    }.bind(this)); // matches Promise
 }
 
 //write this method in the ships funcitons to add engines and lights in the right order

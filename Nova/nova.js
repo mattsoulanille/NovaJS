@@ -106,28 +106,29 @@ playerShip.prototype.updateStats = function() {
 
 
 
-var spaceObjects = []
+var spaceObjects = [];
 //var myShip = new playerShip("Starbridge A")
-var medium_blaster = new outfit("Medium Blaster", 5)
-var myShip = new playerShip("Starbridge A", [medium_blaster])
-var starbridge = new ship("Starbridge A")
-var shuttle = new ship("Shuttle A")
-var dart = new ship("Vell-os Dart")
+var medium_blaster = new outfit("Medium Blaster", 5);
+var myShip = new playerShip("Starbridge A", [medium_blaster]);
+var starbridge = new ship("Starbridge A");
+var shuttle = new ship("Shuttle A");
+var dart = new ship("Vell-os Dart");
+var stars = new starfield();
 //var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
 
 //medium_blaster_weapon.build()
 
-spaceObjects[0] = myShip
-spaceObjects[1] = shuttle
-spaceObjects[2] = starbridge
-spaceObjects[3] = dart
-spaceObjects[0].build()
-spaceObjects[1].build()
-spaceObjects[2].build()
-spaceObjects[2].position = [200,200]
-spaceObjects[3].build()
-spaceObjects[3].position = [-200, -200]
-
+spaceObjects[0] = myShip;
+spaceObjects[1] = shuttle;
+spaceObjects[2] = starbridge;
+spaceObjects[3] = dart;
+spaceObjects[0].build();
+spaceObjects[1].build();
+spaceObjects[2].build();
+spaceObjects[2].position = [200,200];
+spaceObjects[3].build();
+spaceObjects[3].position = [-200, -200];
+//spaceObjects[4] = stars;
 // spaceObjects[4] = medium_blaster
 // spaceObjects[4].position = [200,0]
 // spaceObjects[4].build()
@@ -139,6 +140,7 @@ var startGameTimer = setInterval(function () {startGame()}, 500);
 /*
 Starts the game if everything is ready to render.
 */
+
 var stagePosition = myShip.position
 function startGame() {
     var readyToRender = true;
@@ -197,6 +199,7 @@ function onResize() {
     screenW = $(window).width();
     screenH = $(window).height();
     renderer.resize(screenW,screenH);
+    //also update the starfield
 }
 
 

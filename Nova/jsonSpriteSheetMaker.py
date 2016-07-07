@@ -66,7 +66,7 @@ def main(argv):
     
     parser = argparse.ArgumentParser(description = "Tool to manipulate space object json files")
     parser.add_argument('path', type=str, help='Path to the json file to create')
-    parser.add_argument('name', type=str, help='Name of the object (should be the same as the picture filename)')
+    parser.add_argument('name', type=str, help='Name of the object (should be the same as the picture filename INCLUDING EXTENSION)')
     parser.add_argument('px', type=int, help='Picture x dimension in pixels')
     parser.add_argument('py', type=int, help='Picture y dimension in pixels')
     parser.add_argument('x', type=int, help='Number of sprite images in the x direction')
