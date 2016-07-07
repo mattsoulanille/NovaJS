@@ -58,8 +58,9 @@ spaceObject.prototype.setProperties = function() {
 	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
 	//if (typeof(this.meta.physics.turn_rate) !== "undefined") {
 	this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
-	fulfill()
+	fulfill();
     }.bind(this));
+
     
 
 }

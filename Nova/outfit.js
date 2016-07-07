@@ -13,6 +13,7 @@ outfit.prototype.build = function(source) {
     this.source = source
     return this.loadResources()
 	.then(_.bind(this.buildWeapons, this))
+	.then(_.bind(this.applyEffects, this))
 	.then(_.bind(function() {
 	    this.ready = true;
 	    
@@ -58,4 +59,13 @@ outfit.prototype.buildWeapons = function() {
     }
 
     
+}
+
+outfit.prototype.applyEffects = function() {
+
+
+    if (this.meta.functions["speed increase"]) {
+	this.source.properties.maxSpeed += this.meta.functions["speed increase"] * this.count
+    }
+
 }

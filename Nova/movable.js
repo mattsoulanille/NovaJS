@@ -31,16 +31,12 @@ movable.prototype.setProperties = function() {
     // spaceObject.prototype.loadResources promise chain
     return spaceObject.prototype.setProperties.call(this)
 	.then(_.bind(function() {
-
 	    return new RSVP.Promise(function(fulfill, reject) {
-		
 		this.properties.maxSpeed = this.meta.physics.max_speed;
 		this.properties.acceleration = this.meta.physics.acceleration;
 		this.properties.inertialess = this.meta.physics.inertialess;
 		fulfill();
-
 	    }.bind(this));
-
 	}, this));
 
 }
@@ -70,7 +66,8 @@ movable.prototype.render = function() {
 		    this.velocity[1] += yaccel * (this.time - this.lastTime)/1000
 
 		    // keep velocity under max speed
-		    if (Math.pow(Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2), .5) > this.properties.maxSpeed) {
+		    var speed = Math.pow(Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2), .5);
+		    if (speed > this.properties.maxSpeed) {
 			var tmpAngle = Math.atan(this.velocity[1] / this.velocity[0])
 			if (this.velocity[0] < 0) {
 			    tmpAngle = tmpAngle + Math.PI

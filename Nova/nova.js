@@ -108,7 +108,7 @@ playerShip.prototype.updateStats = function() {
 
 var spaceObjects = []
 //var myShip = new playerShip("Starbridge A")
-var medium_blaster = new outfit("Medium Blaster", 5)
+var medium_blaster = new outfit("Medium Blaster", 500)
 var myShip = new playerShip("Starbridge A", [medium_blaster])
 var starbridge = new ship("Starbridge A")
 var shuttle = new ship("Shuttle A")
@@ -127,6 +127,7 @@ spaceObjects[2].build()
 spaceObjects[2].position = [200,200]
 spaceObjects[3].build()
 spaceObjects[3].position = [-200, -200]
+
 // spaceObjects[4] = medium_blaster
 // spaceObjects[4].position = [200,0]
 // spaceObjects[4].build()

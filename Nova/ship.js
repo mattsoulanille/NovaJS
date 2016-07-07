@@ -9,26 +9,46 @@ ship.prototype = new movable
 
 ship.prototype.build = function() {
 
-    var outfitPromises = _.map(this.outfits, function(outfit) {
+
+
+    return movable.prototype.build.call(this)
+//	.then(function() {console.log(this)}.bind(this))
+	.then(_.bind(this.buildOutfits, this))
+	.then(_.bind(function() {
+	    // make sure ship properties are sane after loading outfits
+	    if (this.properties.maxSpeed < 0) {
+		this.properties.maxSpeed = 0
+	    }
+	    if (this.properties.turnRate < 0) {
+		this.properties.turnRate = 0
+	    }
+	    
+	}, this))
+    	.catch(function(reason) {console.log(reason)});
+
+    // return RSVP.all(outfitPromises)
+    // 	.then(movable.prototype.build.call(this))
+    // 	.catch(function(reason) {console.log(reason)});
+
+
+}
+
+ship.prototype.buildOutfits = function() {
+    // builds outfits in this.outfits
+    var outfitPromises = _.map(this.outfits, function(anOutfit) {
 	//build unbuild outfits
-	if (outfit.ready) {
+	if (anOutfit.ready) {
 	    return new RSVP.Promise(function(fulfill, reject){fulfill()})
 	}
 	else {
-	    return outfit.build(this);
+	    return anOutfit.build(this);
 	}
 	//console.log(this);
 	
     }.bind(this));
 
     return RSVP.all(outfitPromises)
-	.then(movable.prototype.build.call(this))
-	.catch(function(reason) {console.log(reason)});
-
-
 }
-
-
 
 ship.prototype.addSpritesToContainer = function() {
 
