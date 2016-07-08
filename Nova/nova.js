@@ -113,10 +113,13 @@ var myShip = new playerShip("Starbridge A", [medium_blaster]);
 var starbridge = new ship("Starbridge A");
 var shuttle = new ship("Shuttle A");
 var dart = new ship("Vell-os Dart");
-//var stars = new starfield();
+var stars = new starfield(myShip);
+stars.build()
+
+
 //var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
-var s = new star(myShip);
-s.build()
+
+//s.build()
 
 spaceObjects[0] = myShip;
 spaceObjects[1] = shuttle;
@@ -153,6 +156,7 @@ function startGame() {
     if (readyToRender) {
 	//replace with promises
 	$.when( spaceObjects.map(function(s){s.startRender()}) ).done(function() {
+	    stars.placeAll()
 	    requestAnimationFrame(animate)
 	    clearInterval(startGameTimer)
 	    console.log("Rendering started")
@@ -166,28 +170,11 @@ function startGame() {
 function animate() {
     stagePosition = myShip.position
     spaceObject.prototype.time = new Date().getTime()
-
+    
 
     renderer.render(stage)
     requestAnimationFrame( animate ) 
 
-    // $.when( spaceObjects.map(function(s){s.updateStats()}) ).done(function() {
-    // 	renderer.render(stage)
-    // 	requestAnimationFrame( animate ) 
-
-    // });
-//    for (var i = 0; i < spaceObjects.length; i++) {
-//	spaceObjects[i].updateStats(turning, accelerating)
-//    }
-
-/*
-// Velocity vector line
-    line.clear()
-    line.lineStyle(5, 0xFF0000, 1)
-    line.moveTo(myShip.sprites.ship.sprite.position.x, myShip.sprites.ship.sprite.position.y)
-    line.lineTo(myShip.velocity[0] + myShip.sprites.ship.sprite.position.x, -myShip.velocity[1] + myShip.sprites.ship.sprite.position.y)
-*/
-    //line.lineTo(300,300)
 
 }
 

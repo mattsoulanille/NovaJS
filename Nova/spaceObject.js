@@ -109,11 +109,15 @@ spaceObject.prototype.callSprites = function(toCall) {
 }
 
 spaceObject.prototype.hide = function() {
-    this.callSprites(function(s) {s.visible = false})
+    this.callSprites(function(s) {s.visible = false});
+    this.stopRender();
 }
 
 spaceObject.prototype.show = function() {
-    this.callSprites(function(s) {s.visible = true})
+    this.callSprites(function(s) {s.visible = true});
+    if (! this.autoRender) {
+	this.startRender();
+    }
 }
 
 /*
@@ -132,7 +136,7 @@ spaceObject.prototype.doAutoRender = function() {
 
 
 spaceObject.prototype.startRender = function() {
-    if (this.renderReady) {
+    if (this.renderReady && !this.autoRender) {
 	this.autoRender = true
 	this.doAutoRender()
     }
