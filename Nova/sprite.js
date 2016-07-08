@@ -6,7 +6,6 @@ function sprite(url) {
 sprite.prototype.build = function() {
 //    console.log("loading sprite: " + this.url);
 
-
     return this.loadResources()
 	.then(_.bind(this.onAssetsLoaded, this))
     

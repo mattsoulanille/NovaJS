@@ -10,9 +10,11 @@ Handles any space object that moves
 function movable(name) {
     spaceObject.call(this, name);
     this.velocity = [0,0];
+    this.lastAccelerating = false;
+
 }
 
-movable.prototype = new spaceObject;
+movable.prototype = new turnable;
 movable.prototype.accelerating = false;
 
 
@@ -29,7 +31,7 @@ movable.prototype.updateStats = function(turning, accelerating) {
 movable.prototype.setProperties = function() {
     // seems a bit insane: inserts a promise into the
     // spaceObject.prototype.loadResources promise chain
-    return spaceObject.prototype.setProperties.call(this)
+    return turnable.prototype.setProperties.call(this)
 	.then(_.bind(function() {
 	    return new RSVP.Promise(function(fulfill, reject) {
 		this.properties.maxSpeed = this.meta.physics.max_speed;
@@ -119,7 +121,7 @@ movable.prototype.render = function() {
 	}
 
 //	this.previousMoveTime = this.time
-	spaceObject.prototype.render.call(this)
+	turnable.prototype.render.call(this)
 	return true
     }
     else {
