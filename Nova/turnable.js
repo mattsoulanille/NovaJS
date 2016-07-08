@@ -1,14 +1,14 @@
 function turnable(name) {
-    spaceObject.call(this, name);
+    movable.call(this, name);
     this.turning = "";
 
 }
 
-turnable.prototype = new spaceObject;
+turnable.prototype = new movable;
 
 turnable.prototype.setProperties = function() {
 
-    return spaceObject.prototype.setProperties.call(this)
+    return movable.prototype.setProperties.call(this)
 	.then(function() {
 	    this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
 
@@ -16,7 +16,8 @@ turnable.prototype.setProperties = function() {
 
 }
 
-turnable.prototype.updateStats = function(turning) {
+turnable.prototype.updateStats = function(turning, accelerating) {
+    movable.prototype.updateStats.call(this, accelerating);
     this.turning = turning;
 }
 
@@ -43,9 +44,12 @@ turnable.prototype.turnTo = function(pointTo) {
 
 }
 
+
+
+
 turnable.prototype.render = function() {
     // this stuff is a mess...
-    if (spaceObject.prototype.render.call(this)) {
+    if (this.renderReady == true) {
 
 
 
@@ -77,14 +81,14 @@ turnable.prototype.render = function() {
 	}
 
 
-	this.pointing = this.pointing % (2*Math.PI);  //makes sure spaceObject.pointing is in the range [0, 2pi)
+	this.pointing = this.pointing % (2*Math.PI);  //makes sure turnable.pointing is in the range [0, 2pi)
 	if (this.pointing < 0) {
 	    this.pointing += 2*Math.PI;
 	}
 
 	var useThisImage = [];
 	for (var i = 0; i < _.keys(this.sprites).length; i++) {
-	    // spaceObject uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+	    // turnable uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
 	    var spr = _.values(this.sprites);
 	    useThisImage[i] = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
 	    //console.log(useThisImage)
@@ -93,10 +97,11 @@ turnable.prototype.render = function() {
 	    spr[i].sprite.texture = spr[i].textures[useThisImage[i]];
 	}
 
-	// this.origionalPointing is the angle the spaceObject was pointed towards before it was told a different direction to turn.
+	// this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.
 	this.lastTurning = this.turning; // last turning value: left, right, or back
 
 
+	movable.prototype.render.call(this);
 	return true;
     }
     else {

@@ -4,14 +4,15 @@ function ship(shipName, outfits) {
     this.pointing = 0;
     this.outfits = outfits || [];
 }
-ship.prototype = new movable
+ship.prototype = new turnable
+
 
 
 ship.prototype.build = function() {
 
 
 
-    return movable.prototype.build.call(this)
+    return turnable.prototype.build.call(this)
 //	.then(function() {console.log(this)}.bind(this))
 	.then(_.bind(this.buildOutfits, this))
 	.then(_.bind(function() {
@@ -27,7 +28,7 @@ ship.prototype.build = function() {
     	.catch(function(reason) {console.log(reason)});
 
     // return RSVP.all(outfitPromises)
-    // 	.then(movable.prototype.build.call(this))
+    // 	.then(turnable.prototype.build.call(this))
     // 	.catch(function(reason) {console.log(reason)});
 
 
@@ -76,7 +77,7 @@ ship.prototype.addSpritesToContainer = function() {
 
 ship.prototype.updateStats = function(turning, accelerating) {
 
-    movable.prototype.updateStats.call(this, turning, accelerating);
+    turnable.prototype.updateStats.call(this, turning, accelerating);
 }
 
 ship.prototype.manageLights = function() {
@@ -111,5 +112,5 @@ ship.prototype.render = function() {
     if ("lights" in this.sprites) {
 	this.manageLights();
     }
-    movable.prototype.render.call(this);
+    turnable.prototype.render.call(this);
 }

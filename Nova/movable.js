@@ -14,14 +14,13 @@ function movable(name) {
 
 }
 
-movable.prototype = new turnable;
+movable.prototype = new spaceObject;
 movable.prototype.accelerating = false;
 
 
 
-movable.prototype.updateStats = function(turning, accelerating) {
+movable.prototype.updateStats = function(accelerating) {
     
-    this.turning = turning;
     this.accelerating = accelerating;
     //movable.prototype.render.call(this);
     
@@ -31,7 +30,7 @@ movable.prototype.updateStats = function(turning, accelerating) {
 movable.prototype.setProperties = function() {
     // seems a bit insane: inserts a promise into the
     // spaceObject.prototype.loadResources promise chain
-    return turnable.prototype.setProperties.call(this)
+    return spaceObject.prototype.setProperties.call(this)
 	.then(_.bind(function() {
 	    return new RSVP.Promise(function(fulfill, reject) {
 		this.properties.maxSpeed = this.meta.physics.max_speed;
@@ -44,7 +43,7 @@ movable.prototype.setProperties = function() {
 }
 
 movable.prototype.render = function() {
-    if (this.renderReady == true) {
+    if (spaceObject.prototype.render.call(this)) {
 	
 	this.turnback = false
 	if (!this.properties.inertialess) {
@@ -119,9 +118,9 @@ movable.prototype.render = function() {
 	    this.position[1] += this.velocity[1] * (this.time - this.lastTime)/1000
 	    
 	}
-
+	this.lastTime = this.time;
 //	this.previousMoveTime = this.time
-	turnable.prototype.render.call(this)
+//	
 	return true
     }
     else {

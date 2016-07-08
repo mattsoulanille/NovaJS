@@ -8,7 +8,7 @@ function projectile(projName, meta) {
     this.meta = meta
 }
 
-projectile.prototype = new movable
+projectile.prototype = new turnable
 
 projectile.prototype.build = function() {
 

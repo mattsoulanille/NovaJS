@@ -160,8 +160,6 @@ spaceObject.prototype.render = function() {
 	}
 
 
-
-	this.lastTime = this.time;
 	return true;
     }
     else {
