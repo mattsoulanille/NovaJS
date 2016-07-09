@@ -41,7 +41,7 @@ var myShip = new playerShip("Starbridge A", [medium_blaster]);
 var starbridge = new ship("Starbridge A");
 var shuttle = new ship("Shuttle A");
 var dart = new ship("Vell-os Dart");
-var stars = new starfield(myShip, 20);
+var stars = new starfield(myShip, 40);
 stars.build()
 
 
@@ -115,6 +115,7 @@ function onResize() {
     screenH = $(window).height();
     renderer.resize(screenW,screenH);
     //also update the starfield
+    stars.resize()
 }
 
 
