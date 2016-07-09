@@ -8,16 +8,12 @@ turnable.prototype = new movable;
 
 turnable.prototype.setProperties = function() {
 
-    return movable.prototype.setProperties.call(this)
-	.then(function() {
-	    this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
-
-	}.bind(this));
-
+    movable.prototype.setProperties.call(this)
+    this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
 }
 
-turnable.prototype.updateStats = function(turning, accelerating) {
-    movable.prototype.updateStats.call(this, accelerating);
+turnable.prototype.updateStats = function(turning) {
+
     this.turning = turning;
 }
 
@@ -49,9 +45,9 @@ turnable.prototype.turnTo = function(pointTo) {
 
 turnable.prototype.render = function() {
     // this stuff is a mess...
-    if (this.renderReady == true) {
+    if (this.renderReady === true) {
 
-
+	
 
     	var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
 	var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length;});

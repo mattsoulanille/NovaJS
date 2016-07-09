@@ -53,15 +53,11 @@ spaceObject.prototype.loadResources = function() {
 
 
 spaceObject.prototype.setProperties = function() {
-    return new RSVP.Promise(function(fulfill, reject) {
-	this.properties = {};
 
-	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
-	//if (typeof(this.meta.physics.turn_rate) !== "undefined") {
+    this.properties = {};
 
-	fulfill();
-    }.bind(this));
-
+    // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
+    //if (typeof(this.meta.physics.turn_rate) !== "undefined") {
     
 
 }
@@ -164,6 +160,12 @@ spaceObject.prototype.render = function() {
 	}
 
 
+
+
+
+
+
+	
 	return true;
     }
     else {

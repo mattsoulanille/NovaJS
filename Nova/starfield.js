@@ -2,28 +2,68 @@
 More of a dust field, really.
 */
 
-function starfield(source, count) {
+function starfield(source, count, starname) {
 
     this.stars = [];
+    this.spriteContainer = new PIXI.Container();
     this.count = count || 20;
     this.ready = false;
     this.source = source;
+    this.url = 'objects/misc/';
+    this.starName = starname || "star";
+    this.autoRender = false;
 }
 
 starfield.prototype.build = function() {
-    return this.buildStars.call(this)
-	.then(function() {this.ready = true}.bind(this))
+    return this.loadResources()
+	.then(this.buildTextures.bind(this))
+	.then(this.buildStars.bind(this))
+	.then(function() {
+	    this.ready = true
+	    stage.addChild(this.spriteContainer);
+	}.bind(this))
+        .catch(function(reason) {console.log(reason)});
 }
+
+
+starfield.prototype.loadResources = function() {
+    return new RSVP.Promise(function(fulfill, reject) {
+	
+	var loader = new PIXI.loaders.Loader();
+	loader
+	    .add('spriteImageInfo', this.url + this.starName + ".json")
+	    .load(function (loader, resource) {
+		this.spriteImageInfo = resource.spriteImageInfo.data;
+		
+	    }.bind(this))
+	    .once('complete', fulfill);
+
+    }.bind(this));
+
+}
+
+starfield.prototype.buildTextures = function() {
+    this.textures = _.map(_.keys(this.spriteImageInfo.frames), function(frame) {
+	return PIXI.Texture.fromFrame(frame);
+    });
+
+}
+
 
 starfield.prototype.buildStars = function() {
 
     for (i = 0; i < this.count; i++) {
-	var s = new star(this.source);
+	var starSprites = {};
+	starSprites.star = {}
+	starSprites.star.textures = this.textures
+	starSprites.star.sprite = new PIXI.Sprite(starSprites.star.textures[0])
+
+	var s = new star(starSprites, this.source, this.spriteContainer);
 	this.stars.push(s);
     }
 
 
-    return RSVP.all(_.map( this.stars, function(s) {s.build()}));
+    _.each( this.stars, function(s) {s.build()});
 
 }
 
@@ -55,5 +95,30 @@ starfield.prototype.placeAll = function() {
     while (this.placeStar(xrange, yrange)) {
 	//pass
     }
+    this.startRender();
     
+}
+
+starfield.prototype.doAutoRender = function() {
+    if (this.autoRender) {
+	this.render();
+	setTimeout(_.bind(this.doAutoRender, this), 0);
+    }
+}
+
+starfield.prototype.startRender = function() {
+    if (this.ready && !this.autoRender) {
+	this.autoRender = true
+	this.doAutoRender()
+    }
+}
+
+starfield.prototype.stopRender = function() {
+    this.autoRender = false;
+}
+
+
+starfield.prototype.render = function() {
+    _.each(this.stars, function(s) {s.render()});
+
 }
