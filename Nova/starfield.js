@@ -26,6 +26,7 @@ starfield.prototype.build = function() {
 }
 
 
+
 starfield.prototype.loadResources = function() {
     return new RSVP.Promise(function(fulfill, reject) {
 	
