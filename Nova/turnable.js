@@ -1,14 +1,16 @@
 function turnable(name) {
-    collidable.call(this, name);
+    damageable.call(this, name);
     this.turning = "";
 
 }
 
-turnable.prototype = new collidable;
+turnable.prototype = new damageable;
 
 turnable.prototype.setProperties = function() {
 
-    collidable.prototype.setProperties.call(this)
+    damageable.prototype.setProperties.call(this)
+
+    // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
     this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
 }
 
@@ -97,7 +99,7 @@ turnable.prototype.render = function() {
 	this.lastTurning = this.turning; // last turning value: left, right, or back
 
 
-	collidable.prototype.render.call(this);
+	damageable.prototype.render.call(this);
 	return true;
     }
     else {

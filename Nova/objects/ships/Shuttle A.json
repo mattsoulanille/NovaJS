@@ -3,12 +3,20 @@
 	"ship": "Shuttle.json",
 	"engine": "Shuttle_Engine.json",
 	"lights": "Shuttle_Lights.json"
-},
+    },
     "physics": {
 	"acceleration": 500,
 	"max_speed": 400,
 	"mass": 15,
 	"turn_rate": 40,
 	"inertialess" : false
-  }
+    },
+    "properties": {
+	"maxShields": 30,
+	"shieldRecharge": 10,
+	"maxArmor": 30,
+	"armorRecharge": 0,
+	"energy": 300
+    }
 }
+

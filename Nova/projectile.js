@@ -60,7 +60,7 @@ projectile.prototype.collide = function(other) {
     collision.shieldDamage = this.meta.properties.shieldDamage;
     collision.armorDamage = this.meta.properties.armorDamage;
     collision.impact = this.meta.properties.impact;
-    collision.angle = this.pointing
+    collision.angle = this.pointing;
     other.receiveCollision(collision);
     
 }

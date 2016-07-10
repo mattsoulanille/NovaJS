@@ -53,11 +53,12 @@ spaceObject.prototype.loadResources = function() {
 
 
 spaceObject.prototype.setProperties = function() {
-
-    this.properties = {};
-
-    // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
-    //if (typeof(this.meta.physics.turn_rate) !== "undefined") {
+    this.properties =  {};
+    if (this.meta.properties) {
+	_.each(this.meta.properties, function(value, key) {
+	    this.properties[key] = value;
+	}, this);
+    }
     
 
 }
@@ -106,11 +107,13 @@ spaceObject.prototype.callSprites = function(toCall) {
 
 spaceObject.prototype.hide = function() {
     this.callSprites(function(s) {s.visible = false});
+    this.visible = false;
     this.stopRender();
 }
 
 spaceObject.prototype.show = function() {
     this.callSprites(function(s) {s.visible = true});
+    this.visible = true;
     if (! this.autoRender) {
 	this.startRender();
     }
@@ -158,12 +161,6 @@ spaceObject.prototype.render = function() {
 	    this.spriteContainer.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2;
 	    this.spriteContainer.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2;
 	}
-
-
-
-
-
-
 
 	
 	return true;

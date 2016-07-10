@@ -2,12 +2,20 @@
     "imageAssetsFiles": {
 	"ship": "Starbridge.json",
 	"engine": "Starbridge_Engine.json"
-},
+    },
     "physics": {
 	"acceleration": 550,
 	"max_speed": 400,
 	"mass": 98,
 	"turn_rate": 50,
 	"inertialess": false
-  }
+    },
+    "properties": {
+	"maxShields": 430,
+	"shieldRecharge": 64,
+	"maxArmor": 135,
+	"armorRecharge": 0,
+	"energy": 500
+    }
+	
 }

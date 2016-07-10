@@ -37,7 +37,9 @@ collidable.prototype.detectCollisions = function(others) {
 	var otherYRange = [other.position[1] + other.hitbox[1][0],
 			   other.position[1] + other.hitbox[1][1]];
 	
-	if (rangeOverlap(thisXRange, otherXRange) && rangeOverlap(thisYRange, otherYRange)) {
+	if (other.visible && rangeOverlap(thisXRange, otherXRange) &&
+	    rangeOverlap(thisYRange, otherYRange)) {
+
 	    collisions.push(other)
 	}
     }, this);

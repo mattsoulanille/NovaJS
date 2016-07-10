@@ -92,7 +92,7 @@ function startGame() {
     }
     if (readyToRender) {
 	//replace with promises
-	$.when( spaceObjects.map(function(s){s.startRender()}) ).done(function() {
+	$.when( spaceObjects.map(function(s){s.show()}) ).done(function() {
 	    stars.placeAll()
 	    requestAnimationFrame(animate)
 	    clearInterval(startGameTimer)
