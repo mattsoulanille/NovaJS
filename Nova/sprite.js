@@ -6,34 +6,60 @@ function sprite(url) {
 sprite.prototype.build = function() {
 //    console.log("loading sprite: " + this.url);
 
-    return this.loadResources()
+    if ( !((textures) && (textures[this.url])) ) {
+	console.log("loading texture " + this.url)
+	textures[this.url] = this.setTextures()
+
+    }	
+
+    return textures[this.url]
+	.then(function(data) {
+	    
+	    this.textures = data[0];
+	    this.spriteImageInfo = data[1];
+	    
+	}.bind(this))
 	.then(_.bind(this.onAssetsLoaded, this))
-    
+
 };
 
 sprite.prototype.loadResources = function() {
 
     return new RSVP.Promise(function(fulfill, reject) {
-	
+	var spriteImageInfo;
 	var loader = new PIXI.loaders.Loader();
+	var url = this.url
 	loader
-	    .add('spriteImageInfo', this.url)
+	    .add('spriteImageInfo', url)
 	    .load(function (loader, resource) {
-		this.spriteImageInfo = resource.spriteImageInfo.data;
+		spriteImageInfo = resource.spriteImageInfo.data;
 		
-	    }.bind(this))
-	    .once('complete', fulfill);
+	    })
+	    .once('complete', function() {fulfill(spriteImageInfo)});
 
     }.bind(this));
 }
 
+sprite.prototype.setTextures = function() {
+
+    return this.loadResources()
+	.then(function(spriteImageInfo) {
+
+	    return new RSVP.Promise(function(fulfill, reject) {
+		// textures of the sprite
+		var t = _.map(_.keys(spriteImageInfo.frames),
+			      function(frame) { return(PIXI.Texture.fromFrame(frame)); });
+
+		fulfill([t, spriteImageInfo]);
+	    }.bind(this))
+
+	}.bind(this))
+}
     
 
 sprite.prototype.onAssetsLoaded = function() {
     // Get a list of the textures for the sprite.
     return new RSVP.Promise(function(fulfill, reject) {
-	this.textures = _.map(_.keys(this.spriteImageInfo.frames),
-			      function(frame) { return(PIXI.Texture.fromFrame(frame)); });
 
 	this.sprite = new PIXI.Sprite(this.textures[0]);
 	this.sprite.anchor.x = 0.5;

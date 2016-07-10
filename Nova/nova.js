@@ -33,7 +33,7 @@ document.onkeyup = function(e) {
 
 
 
-
+var textures = {}; // global texture object that sprites save and load textures from
 var spaceObjects = [];
 var ships = [];
 //var myShip = new playerShip("Starbridge A")

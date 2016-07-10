@@ -13,13 +13,10 @@ function spaceObject(objectName) {
 
 spaceObject.prototype.build = function() {
     return this.loadResources()
-    	.then(_.bind(this.setProperties, this),
-	      function(reason) {console.log('rejected loadResources'); console.log(reason)})
-	.then(_.bind(this.makeSprites, this),
-	      function(reason) {console.log('rejected setProperties'); console.log(reason)})
-	.then(_.bind(this.addSpritesToContainer, this),
-	      function(reason) {console.log('rejected makeSprites'); console.log(reason)});
-
+    	.then(_.bind(this.setProperties, this))
+	.then(_.bind(this.makeSprites, this))
+	.then(_.bind(this.addSpritesToContainer, this))
+        .catch(function(reason) {console.log(reason)});
     
 };
 
