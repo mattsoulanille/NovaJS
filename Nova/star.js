@@ -1,4 +1,4 @@
-function star(starSprites, source, starContainer, name) {
+function star(source, starContainer, name) {
     movable.call(this, name)
     this.url = 'objects/misc/';
     this.name = name || 'star';
@@ -8,8 +8,6 @@ function star(starSprites, source, starContainer, name) {
     this.meta.imageAssetsFiles = {"star": this.name + ".json"};
     this.properties = {};
     this.available = false;
-    this.sprites = starSprites;
-    this.spriteContainer = new PIXI.Container();
     starContainer.addChild(this.spriteContainer);
 }
 
@@ -19,10 +17,12 @@ star.prototype = new movable;
 
 star.prototype.build = function() {
 
-    this.addSpritesToContainer()
-    this.available = true;
-    this.renderReady = true;
-
+    return this.makeSprites()
+	.then(_.bind(this.addSpritesToContainer, this))
+	.then(function() {
+	    this.available = true;
+	    this.renderReady = true;
+	}.bind(this));
 }
 
 star.prototype.addSpritesToContainer = function() {

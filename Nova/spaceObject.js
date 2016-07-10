@@ -8,6 +8,9 @@ function spaceObject(objectName) {
     this.weapons = {};
     this.weapons.all = [];
     this.autoRender = false
+    this.sprites = {};
+    this.spriteContainer = new PIXI.Container();
+
 
 }
 
@@ -64,8 +67,6 @@ spaceObject.prototype.makeSprites = function() {
     //    console.log(this);
     //console.log(this.meta);
 
-    this.sprites = {};
-    this.spriteContainer = new PIXI.Container();
 
     _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
 	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {

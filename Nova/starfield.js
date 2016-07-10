@@ -23,9 +23,7 @@ function starfield(source, count, starname) {
 }
 
 starfield.prototype.build = function() {
-    return this.loadResources()
-	.then(this.buildTextures.bind(this))
-	.then(this.buildStars.bind(this))
+    return this.buildStars()
 	.then(function() {
 	    this.ready = true
 	    stage.addChild(this.spriteContainer);
@@ -34,45 +32,15 @@ starfield.prototype.build = function() {
 }
 
 
-
-starfield.prototype.loadResources = function() {
-    return new RSVP.Promise(function(fulfill, reject) {
-	
-	var loader = new PIXI.loaders.Loader();
-	loader
-	    .add('spriteImageInfo', this.url + this.starName + ".json")
-	    .load(function (loader, resource) {
-		this.spriteImageInfo = resource.spriteImageInfo.data;
-		
-	    }.bind(this))
-	    .once('complete', fulfill);
-
-    }.bind(this));
-
-}
-
-starfield.prototype.buildTextures = function() {
-    this.textures = _.map(_.keys(this.spriteImageInfo.frames), function(frame) {
-	return PIXI.Texture.fromFrame(frame);
-    });
-
-}
-
-
 starfield.prototype.buildStars = function() {
 
     for (i = 0; i < this.count; i++) {
-	var starSprites = {};
-	starSprites.star = {}
-	starSprites.star.textures = this.textures
-	starSprites.star.sprite = new PIXI.Sprite(starSprites.star.textures[0])
-
-	var s = new star(starSprites, this.source, this.spriteContainer);
+	var s = new star(this.source, this.spriteContainer);
 	this.stars.push(s);
     }
 
 
-    _.each( this.stars, function(s) {s.build()});
+    return RSVP.all(_.map( this.stars, function(s) {return s.build()}));
 
 }
 
