@@ -12,6 +12,10 @@ function collidable(name) {
 
 collidable.prototype = new movable;
 
+collidable.prototype.receiveCollision = function(other) {
+
+}    
+
 
 collidable.prototype.detectCollisions = function(others) {
     // others is an array of things to check for collisions with.

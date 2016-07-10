@@ -44,12 +44,27 @@ projectile.prototype.render = function() {
 
 	this.end()
 	clearTimeout(this.fireTimeout)
+	
+	_.each(collisions, function(collision) {
+	    if (collision != this.source) {
+		this.collide(collision);
+	    }
+	}, this);
 
     }
-    
-
 
 }
+
+projectile.prototype.collide = function(other) {
+    var collision = {};
+    collision.shieldDamage = this.meta.properties.shieldDamage;
+    collision.armorDamage = this.meta.properties.armorDamage;
+    collision.impact = this.meta.properties.impact;
+    collision.angle = this.pointing
+    other.receiveCollision(collision);
+    
+}
+
 
 projectile.prototype.fire = function(direction, position, velocity) {
     // temporary. Gun points will be implemented later

@@ -50,6 +50,7 @@ weapon.prototype.buildProjectiles = function() {
     var meta = {} // for the projectiles
     meta.imageAssetsFiles = this.meta.imageAssetsFiles;
     meta.physics = this.meta.physics;
+    meta.properties = this.meta.properties
     //console.log(meta)
     
     for (i=0; i < required_projectiles; i++) {

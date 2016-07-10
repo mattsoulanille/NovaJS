@@ -12,6 +12,7 @@
 	"armorDamage": 5,
 	"reload": 13,
 	"accuracy": 4,
+	"impact": 20,
 	"type": "primary"
     }
 }

@@ -19,6 +19,30 @@ acceleratable.prototype.setProperties = function() {
     this.properties.inertialess = this.meta.physics.inertialess;
 }
 
+acceleratable.prototype.receiveCollision = function(other) {
+    turnable.prototype.receiveCollision.call(this, other);
+
+    if (other.impact > 0) {
+	var deltaV = other.impact / this.meta.physics.mass
+	var newVelocity = [Math.cos(other.angle) * deltaV + this.velocity[0],
+			   Math.sin(other.angle) * deltaV + this.velocity[1]];
+	
+	var speed = Math.pow(Math.pow(newVelocity[0], 2) + Math.pow(newVelocity[1], 2), .5);
+	if (speed > this.properties.maxSpeed) {
+	    var tmpAngle = Math.atan(newVelocity[1] / newVelocity[0])
+	    if (newVelocity[0] < 0) {
+		tmpAngle = tmpAngle + Math.PI
+	    }
+	    //console.log(tmpAngle)
+	    newVelocity[0] = Math.cos(tmpAngle) * this.properties.maxSpeed
+	    newVelocity[1] = Math.sin(tmpAngle) * this.properties.maxSpeed
+	}
+	this.velocity[0] = newVelocity[0];
+	this.velocity[1] = newVelocity[1];    
+
+    }
+}
+
 acceleratable.prototype.render = function() {
 
     if (this.renderReady === true) {
