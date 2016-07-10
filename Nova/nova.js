@@ -34,7 +34,7 @@ document.onkeyup = function(e) {
 
 
 var textures = {}; // global texture object that sprites save and load textures from
-var spaceObjects = [];
+var spaceObjects = []; // global rendered spaceObjects
 var ships = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
@@ -55,23 +55,15 @@ ships[0] = myShip;
 ships[1] = shuttle;
 ships[2] = starbridge;
 ships[3] = dart;
+ships[1].position = [100,100]
+ships[2].position = [200,200];
+ships[3].position = [-200, -200];
 
+_.each(ships, function(ship) {
+    ship.build()
 
+});
 
-spaceObjects[0] = myShip;
-spaceObjects[1] = shuttle;
-spaceObjects[2] = starbridge;
-spaceObjects[3] = dart;
-spaceObjects[0].build();
-spaceObjects[1].build();
-spaceObjects[2].build();
-spaceObjects[2].position = [200,200];
-spaceObjects[3].build();
-spaceObjects[3].position = [-200, -200];
-//spaceObjects[4] = stars;
-// spaceObjects[4] = medium_blaster
-// spaceObjects[4].position = [200,0]
-// spaceObjects[4].build()
 
 var startGameTimer = setInterval(function () {startGame()}, 500);
 
@@ -104,11 +96,19 @@ function startGame() {
 
 //requestAnimationFrame(animate)
 
-function animate() {
-    stagePosition = myShip.position
-    spaceObject.prototype.time = new Date().getTime()
-    
 
+function animate() {
+	
+    spaceObject.prototype.time = new Date().getTime()
+    myShip.render()
+    stars.render()
+    _.each(spaceObjects, function(s) {
+	if (s.rendering) {
+	    s.render()
+	}
+    })
+
+    
     renderer.render(stage)
     requestAnimationFrame( animate ) 
 

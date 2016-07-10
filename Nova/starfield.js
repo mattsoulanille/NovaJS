@@ -27,6 +27,7 @@ starfield.prototype.build = function() {
 	.then(function() {
 	    this.ready = true
 	    stage.addChild(this.spriteContainer);
+
 	}.bind(this))
         .catch(function(reason) {console.log(reason)});
 }
@@ -87,27 +88,9 @@ starfield.prototype.placeAll = function() {
     while (this.placeStar(xrange, yrange)) {
 	//pass
     }
-    this.startRender();
     
 }
 
-starfield.prototype.doAutoRender = function() {
-    if (this.autoRender) {
-	this.render();
-	setTimeout(_.bind(this.doAutoRender, this), 0);
-    }
-}
-
-starfield.prototype.startRender = function() {
-    if (this.ready && !this.autoRender) {
-	this.autoRender = true
-	this.doAutoRender()
-    }
-}
-
-starfield.prototype.stopRender = function() {
-    this.autoRender = false;
-}
 
 
 starfield.prototype.render = function() {
@@ -118,7 +101,7 @@ starfield.prototype.render = function() {
 	this.moveStars();
 	this.lastPosition = _.map(this.source.position, function(n) {return n})
     }
-    _.each(this.stars, function(s) {s.render()});
+//    _.each(this.stars, function(s) {s.render()});
 
 }
 

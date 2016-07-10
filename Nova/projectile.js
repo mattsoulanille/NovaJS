@@ -83,7 +83,6 @@ projectile.prototype.fire = function(direction, position, velocity) {
 		     Math.sin(direction) * this.meta.physics.speed * factor + velocity[1]];
     //this.lastTime = this.time
 
-    this.startRender()
     this.show();
 
 
@@ -94,7 +93,6 @@ projectile.prototype.fire = function(direction, position, velocity) {
 projectile.prototype.end = function() {
     this.velocity = [0,0];
     this.hide();
-    this.stopRender()
     this.available = true;
 }
 

@@ -36,6 +36,10 @@ playerShip.prototype.sortWeapons = function() {
     
 }
 
+playerShip.prototype.addToSpaceObjects = function() {
+    spaceObjects.unshift(this);
+}
+
 playerShip.prototype.updateStats = function() {
     var keys = KeyboardJS.activeKeys();
     var turning;

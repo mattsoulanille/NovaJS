@@ -1,13 +1,13 @@
 function spaceObject(objectName) {
     this.name = objectName || "";
     this.renderReady = false;
+    this.rendering = false; // whether or not to render
     this.url = 'objects/misc/';
     this.position = [0,0];
     // planets can have weapons
     // this also means projectiles can have weapons :P
     this.weapons = {};
     this.weapons.all = [];
-    this.autoRender = false
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
 
@@ -19,10 +19,14 @@ spaceObject.prototype.build = function() {
     	.then(_.bind(this.setProperties, this))
 	.then(_.bind(this.makeSprites, this))
 	.then(_.bind(this.addSpritesToContainer, this))
+	.then(_.bind(this.addToSpaceObjects, this))
         .catch(function(reason) {console.log(reason)});
     
 };
+spaceObject.prototype.addToSpaceObjects = function() {
+    spaceObjects.push(this);
 
+}
 
 spaceObject.prototype.loadResources = function() {
     return new RSVP.Promise(function(fulfill, reject) {
@@ -106,42 +110,15 @@ spaceObject.prototype.callSprites = function(toCall) {
 spaceObject.prototype.hide = function() {
     this.callSprites(function(s) {s.visible = false});
     this.visible = false;
-    this.stopRender();
+    this.rendering = false;
 }
 
 spaceObject.prototype.show = function() {
     this.callSprites(function(s) {s.visible = true});
     this.visible = true;
-    if (! this.autoRender) {
-	this.startRender();
-    }
+    this.rendering = true;
 }
 
-/*
-  The spaceObject render function handles the turning and rendering of space objects. TODO: instead of having this handle one pixi object, make it handle the ship, the running lights, and the thrusters. It can have a list to store the pixi objects in and iterate over that list? 
-
-*/
-
-
-
-spaceObject.prototype.doAutoRender = function() {
-    if (this.autoRender) {
-	this.render();
-	setTimeout(_.bind(this.doAutoRender, this), 0);
-    }
-}
-
-
-spaceObject.prototype.startRender = function() {
-    if (this.renderReady && !this.autoRender) {
-	this.autoRender = true
-	this.doAutoRender()
-    }
-}
-
-spaceObject.prototype.stopRender = function() {
-    this.autoRender = false;
-}
 
 
 spaceObject.prototype.render = function() {

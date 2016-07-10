@@ -20,6 +20,7 @@ star.prototype.build = function() {
     return this.makeSprites()
 	.then(_.bind(this.addSpritesToContainer, this))
 	.then(function() {
+	    spaceObjects.push(this)
 	    this.available = true;
 	    this.renderReady = true;
 	}.bind(this));
@@ -48,9 +49,6 @@ star.prototype.chooseRandomTexture = function() {
 }
 
 
-star.prototype.show = function() {
-    this.callSprites(function(s) {s.visible = true});
-}
 
 star.prototype.render = function() {
     this.velocity[0] = this.source.velocity[0] * this.velocityFactor;
