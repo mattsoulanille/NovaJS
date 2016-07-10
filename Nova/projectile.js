@@ -1,11 +1,13 @@
-function projectile(projName, meta) {
+function projectile(projName, meta, source) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
     movable.call(this, projName)
     this.url = 'objects/projectiles/';
     this.pointing = 0;
     this.available = false;
-    this.meta = meta
+    this.meta = meta;
+    this.source = source;
+    this.targets = ships; // Temporary (PD weapons can hit missiles)
 }
 
 projectile.prototype = new turnable
@@ -15,17 +17,13 @@ projectile.prototype.build = function() {
     setAvailable = function() {
 	this.available = true
     }
-    
-    return spaceObject.prototype.build.call(this).then(_.bind(setAvailable, this)); // a promise
+
+    return spaceObject.prototype.build.call(this)
+	.then(collidable.prototype.makeHitbox.bind(this))
+	.then(_.bind(setAvailable, this));
 
 }
-// projectile.prototype.fire = function(direction, ship_position, ship_velocity) {
-//     this.placeOnShip(direction, ship_position, ship_velocity)
-// 	.then(this.show());
 
-//     setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
-
-// }
 
 projectile.prototype.loadResources = function() {
     // would set this.meta.physics, but
@@ -36,11 +34,28 @@ projectile.prototype.loadResources = function() {
     });
 }
 
+projectile.prototype.render = function() {
+    // Maybe move this to updateStats
+    turnable.prototype.render.call(this);
+    var collisions = this.detectCollisions(ships);
+    
+    if ((collisions.length > 1) ||
+	((collisions.length == 1) && (collisions[0] != this.source)) ) {
+
+	this.end()
+	clearTimeout(this.fireTimeout)
+
+    }
+    
+
+
+}
 
 projectile.prototype.fire = function(direction, position, velocity) {
     // temporary. Gun points will be implemented later
     // maybe pass the ship to the projectile... or not
     // inaccuracy is handled by weapon
+    this.fireTimeout = setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
     this.available = false;
     this.pointing = direction;
     this.position = _.map(position, function(x) {return x});
@@ -56,7 +71,7 @@ projectile.prototype.fire = function(direction, position, velocity) {
     this.startRender()
     this.show();
 
-    setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
+
     
 //    this.
 }

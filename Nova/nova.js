@@ -35,6 +35,7 @@ document.onkeyup = function(e) {
 
 
 var spaceObjects = [];
+var ships = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
 var myShip = new playerShip("Starbridge A", [medium_blaster]);
@@ -48,6 +49,14 @@ stars.build()
 //var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
 
 //s.build()
+
+//for collisions
+ships[0] = myShip;
+ships[1] = shuttle;
+ships[2] = starbridge;
+ships[3] = dart;
+
+
 
 spaceObjects[0] = myShip;
 spaceObjects[1] = shuttle;

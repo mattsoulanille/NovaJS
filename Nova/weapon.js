@@ -53,7 +53,7 @@ weapon.prototype.buildProjectiles = function() {
     //console.log(meta)
     
     for (i=0; i < required_projectiles; i++) {
-	proj = new projectile(this.name, meta);
+	proj = new projectile(this.name, meta, this.source);
 	this.projectiles.push(proj);
     }
     

@@ -1,14 +1,14 @@
 function turnable(name) {
-    movable.call(this, name);
+    collidable.call(this, name);
     this.turning = "";
 
 }
 
-turnable.prototype = new movable;
+turnable.prototype = new collidable;
 
 turnable.prototype.setProperties = function() {
 
-    movable.prototype.setProperties.call(this)
+    collidable.prototype.setProperties.call(this)
     this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
 }
 
@@ -97,7 +97,7 @@ turnable.prototype.render = function() {
 	this.lastTurning = this.turning; // last turning value: left, right, or back
 
 
-	movable.prototype.render.call(this);
+	collidable.prototype.render.call(this);
 	return true;
     }
     else {
