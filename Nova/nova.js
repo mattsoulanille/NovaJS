@@ -84,7 +84,12 @@ function startGame() {
     }
     if (readyToRender) {
 	//replace with promises
-	$.when( spaceObjects.map(function(s){s.show()}) ).done(function() {
+	$.when( spaceObjects.map(function(s){
+	    // improve me
+	    if (! (s instanceof projectile)) {
+		s.show()
+	    }
+	}) ).done(function() {
 	    stars.placeAll()
 	    requestAnimationFrame(animate)
 	    clearInterval(startGameTimer)
