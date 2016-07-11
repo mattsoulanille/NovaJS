@@ -30,7 +30,7 @@ movable.prototype.setProperties = function() {
 }
 
 movable.prototype.render = function() {
-    if (spaceObject.prototype.render.call(this)) {
+    if (this.renderReady) {
 	
 
 	if (typeof this.lastTime != 'undefined') {
@@ -40,7 +40,7 @@ movable.prototype.render = function() {
 	}
 	this.lastTime = this.time;
 //	this.previousMoveTime = this.time
-//	
+	spaceObject.prototype.render.call(this)
 	return true
     }
     else {

@@ -96,21 +96,28 @@ function startGame() {
 
 //requestAnimationFrame(animate)
 
-
+var times;
 function animate() {
 	
     spaceObject.prototype.time = new Date().getTime()
     myShip.render()
-    stars.render()
-    _.each(spaceObjects, function(s) {
-	if (s.rendering) {
-	    s.render()
-	}
-    })
 
+    stars.render()
+    var lastTimes = []
+    _.each(spaceObjects, function(s) {
+    	if (s.rendering) {
+    	    s.render()
+	    lastTimes.push(s.lastTime)
+    	}
+    });
     
-    renderer.render(stage)
-    requestAnimationFrame( animate ) 
+//    times = _.map(lastTimes, function(x) {return myShip.lastTime - x});
+//    console.log(times)
+//    console.log(_.reduce(function(a,b) {return a && b}, times, true))
+    
+    renderer.render(stage);
+
+    requestAnimationFrame( animate );
 
 
 }
