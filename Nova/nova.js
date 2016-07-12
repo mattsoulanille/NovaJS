@@ -44,8 +44,8 @@ var shuttle = new ship("Shuttle A");
 var dart = new ship("Vell-os Dart");
 var stars = new starfield(myShip, 40);
 stars.build()
-
-
+var earth = new planet("Earth");
+earth.build()
 //var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
 
 //s.build()

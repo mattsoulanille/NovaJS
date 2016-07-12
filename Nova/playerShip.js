@@ -40,6 +40,14 @@ playerShip.prototype.addToSpaceObjects = function() {
     spaceObjects.unshift(this);
 }
 
+playerShip.prototype.addSpritesToContainer = function() {
+    _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
+	   function(s) {this.spriteContainer.addChild(s);}, this);
+    this.hide()
+
+    stage.addChildAt(this.spriteContainer, stage.children.length) //playerShip is above all
+}
+
 playerShip.prototype.updateStats = function() {
     var keys = KeyboardJS.activeKeys();
     var turning;
