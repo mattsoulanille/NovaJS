@@ -54,14 +54,16 @@ collidable.prototype.build = function() {
 
 }
 collidable.prototype.makeHitbox = function() {
-    
+
+
+    // assumes all textures are the same size per sprite
     var maxX = _.max(_.map(this.sprites, function(spr) {
-	return spr.textures[0]._frame.height;
+	return spr.textures[0]._frame.width;
     }, this))
 
     
     var maxY = _.max(_.map(this.sprites, function(spr) {
-	return spr.textures[1]._frame.height;
+	return spr.textures[0]._frame.height;
     }, this))
 
     this.hitbox = [[-maxX/2, maxX/2],
