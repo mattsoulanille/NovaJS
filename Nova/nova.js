@@ -39,15 +39,15 @@ var ships = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
 var myShip = new playerShip("Starbridge A", [medium_blaster]);
-var bar = new statusBar("civilian");
-bar.build()
+var bar = new statusBar("civilian", myShip);
+
 var starbridge = new ship("Starbridge A");
 var shuttle = new ship("Shuttle A");
 var dart = new ship("Vell-os Dart");
 var stars = new starfield(myShip, 40);
-stars.build()
+
 var earth = new planet("Earth");
-earth.build()
+
 //var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
 
 //s.build()
@@ -61,10 +61,10 @@ ships[1].position = [100,100]
 ships[2].position = [200,200];
 ships[3].position = [-200, -200];
 
-_.each(ships, function(ship) {
-    ship.build()
+// _.each(ships, function(ship) {
+//     ship.build()
 
-});
+// });
 
 
 var startGameTimer = setInterval(function () {startGame()}, 500);
@@ -76,14 +76,25 @@ Starts the game if everything is ready to render.
 */
 
 var stagePosition = myShip.position
+var readyToRender = false;
+//var buildObjects = _.map(spaceObjects, function(s) {return s.build()});
+//console.log(buildObjects)
+var buildShips = _.map(ships, function(s) {return s.build()})
+Promise.all(buildShips)
+    .then(stars.build.bind(stars))
+    .then(bar.build.bind(bar))
+    .then(earth.build.bind(earth))
+    .then(function() {readyToRender = true; console.log("built objects")});
+
 function startGame() {
-    var readyToRender = true;
-    for (var i = 0; i < spaceObjects.length; i++) {
-	if (!spaceObjects[i].renderReady) {
-	    readyToRender = false;
-	    console.log("Rendering NOT started")
-	}
-    }
+
+    // for (var i = 0; i < spaceObjects.length; i++) {
+    // 	if (!spaceObjects[i].renderReady) {
+    // 	    readyToRender = false;
+    // 	    console.log("Rendering NOT started")
+    // 	}
+    // }
+
     if (readyToRender) {
 	//replace with promises
 	$.when( spaceObjects.map(function(s){
@@ -117,6 +128,9 @@ function animate() {
 	    lastTimes.push(s.lastTime)
     	}
     });
+
+    // still need to build objects w/ promises. No verification that bar is built.
+    bar.render()
     
 //    times = _.map(lastTimes, function(x) {return myShip.lastTime - x});
 //    console.log(times)
@@ -129,8 +143,6 @@ function animate() {
 
 }
 
-var line = new PIXI.Graphics()
-stage.addChild(line)
 
 
 function onResize() {
@@ -141,8 +153,3 @@ function onResize() {
     stars.resize()
     bar.resize()
 }
-
-
-
-
-
