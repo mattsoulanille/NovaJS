@@ -1,9 +1,12 @@
-function statusBar(name) {
+function statusBar(name, player) {
     this.url = "/objects/statusBars/"
     this.ready = false
     this.name = name;
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
+    this.lines = new PIXI.Graphics();
+    this.spriteContainer.addChild(this.lines)
+    this.source = player;
 }
 
 statusBar.prototype.build = function() {
@@ -50,9 +53,10 @@ statusBar.prototype.makeSprites = function() {
 
 }
 
+
 statusBar.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	   function(s) {this.spriteContainer.addChild(s);}, this);
+	   function(s) {this.spriteContainer.addChildAt(s,0);}, this);
 
     stage.addChild(this.spriteContainer);
 }
@@ -62,5 +66,45 @@ statusBar.prototype.resize = function() {
 }
 
 statusBar.prototype.render = function() {
+    // Line positions:
+    // shield: -159,202 to -10,202 width 7
+    // armor:  -158,216 to -10,222
+    // energy: -158,234 to -10,240
+
+    this.lines.clear();
+    this.drawShields();
+    this.drawArmor();
+    this.drawEnergy();
+}
+
+statusBar.prototype.drawShields = function() {
+    // shield: -159,202 to -10,202 width 7
+    this.lines.lineStyle(7, 0xBF0000);
+    this.lines.moveTo(-159,202);
     
+    var totalLength = 149;
+    var length = totalLength * this.source.shield / this.source.properties.maxShields;
+    var lineTo = length -159;
+    
+    this.lines.lineTo(lineTo,202);
+    
+}
+
+statusBar.prototype.drawArmor = function() {
+
+    this.lines.lineStyle(7, 0xA6A6A6);
+    this.lines.moveTo(-159, 219);
+
+    var totalLength = 149;
+    var length = totalLength * this.source.armor / this.source.properties.maxArmor;
+    var lineTo = length - 159;
+    
+    this.lines.lineTo(lineTo, 219);
+}
+
+statusBar.prototype.drawEnergy = function() {
+    //0x4B5C70 for civ
+    this.lines.lineStyle(7, 0x4B5C70);
+    this.lines.moveTo(-159, 237);
+    this.lines.lineTo(-10, 237);
 }
