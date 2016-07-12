@@ -29,7 +29,7 @@ projectile.prototype.loadResources = function() {
     // would set this.meta.physics, but
     // this.meta.physics is given by weapon on construction.
     // so needed a dummy promise for spaceObject.
-    return new RSVP.Promise(function(fulfill, reject) {
+    return new Promise(function(fulfill, reject) {
 	fulfill();
     });
 }

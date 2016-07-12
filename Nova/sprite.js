@@ -1,6 +1,7 @@
-function sprite(url) {
+function sprite(url, anchor) {
     this.url = url;
     this.renderReady = false;
+    this.anchor = anchor || [0.5,0.5]
 }
 
 sprite.prototype.build = function() {
@@ -20,12 +21,13 @@ sprite.prototype.build = function() {
 	    
 	}.bind(this))
 	.then(_.bind(this.onAssetsLoaded, this))
+	.catch(function(err) {console.log(err)});
 
 };
 
 sprite.prototype.loadResources = function() {
 
-    return new RSVP.Promise(function(fulfill, reject) {
+    return new Promise(function(fulfill, reject) {
 	var spriteImageInfo;
 	var loader = new PIXI.loaders.Loader();
 	var url = this.url
@@ -45,7 +47,7 @@ sprite.prototype.setTextures = function() {
     return this.loadResources()
 	.then(function(spriteImageInfo) {
 
-	    return new RSVP.Promise(function(fulfill, reject) {
+	    return new Promise(function(fulfill, reject) {
 		// textures of the sprite
 		var t = _.map(_.keys(spriteImageInfo.frames),
 			      function(frame) { return(PIXI.Texture.fromFrame(frame)); });
@@ -59,11 +61,11 @@ sprite.prototype.setTextures = function() {
 
 sprite.prototype.onAssetsLoaded = function() {
     // Get a list of the textures for the sprite.
-    return new RSVP.Promise(function(fulfill, reject) {
+    return new Promise(function(fulfill, reject) {
 
 	this.sprite = new PIXI.Sprite(this.textures[0]);
-	this.sprite.anchor.x = 0.5;
-	this.sprite.anchor.y = 0.5;
+	this.sprite.anchor.x = this.anchor[0];
+	this.sprite.anchor.y = this.anchor[1];
 	//stage.addChild(this.sprite)
 	this.renderReady = true;
 	//    console.log("loaded assets for " + this.url); //should happen when sprite is finished loading

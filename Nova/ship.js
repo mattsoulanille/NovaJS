@@ -4,7 +4,7 @@ function ship(shipName, outfits) {
     this.pointing = 0;
     this.outfits = outfits || [];
 }
-ship.prototype = new acceleratable
+ship.prototype = new acceleratable;
 
 
 
@@ -39,7 +39,7 @@ ship.prototype.buildOutfits = function() {
     var outfitPromises = _.map(this.outfits, function(anOutfit) {
 	//build unbuild outfits
 	if (anOutfit.ready) {
-	    return new RSVP.Promise(function(fulfill, reject){fulfill()})
+	    return new Promise(function(fulfill, reject){fulfill()})
 	}
 	else {
 	    return anOutfit.build(this);
@@ -48,7 +48,7 @@ ship.prototype.buildOutfits = function() {
 	
     }.bind(this));
 
-    return RSVP.all(outfitPromises)
+    return Promise.all(outfitPromises)
 }
 
 ship.prototype.addSpritesToContainer = function() {

@@ -20,7 +20,7 @@ weapon.prototype.build = function() {
 }
 
 weapon.prototype.loadResources = function() {
-    return new RSVP.Promise( function(fulfill, reject) {
+    return new Promise( function(fulfill, reject) {
 	
 	$.getJSON(this.url + this.name + ".json", _.bind(function(data) {
 
@@ -32,7 +32,7 @@ weapon.prototype.loadResources = function() {
 	    else {
 		reject();
 	    }
-	    
+
 
 	}, this));
 
@@ -58,7 +58,7 @@ weapon.prototype.buildProjectiles = function() {
 	this.projectiles.push(proj);
     }
     
-    return RSVP.all(_.map( this.projectiles, function(projectile) {projectile.build()} ));
+    return Promise.all(_.map( this.projectiles, function(projectile) {projectile.build()} ));
 
 }
 

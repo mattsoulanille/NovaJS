@@ -82,3 +82,12 @@ playerShip.prototype.updateStats = function() {
     ship.prototype.updateStats.call(this, turning, accelerating);
 
 }
+
+playerShip.prototype.render = function() {
+    // -194 for the sidebar
+    this.spriteContainer.position.x = (screenW-194)/2;
+    this.spriteContainer.position.y = screenH/2;
+
+    ship.prototype.render.call(this);
+
+}

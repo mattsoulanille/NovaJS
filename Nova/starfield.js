@@ -41,7 +41,7 @@ starfield.prototype.buildStars = function() {
     }
 
 
-    return RSVP.all(_.map( this.stars, function(s) {return s.build()}));
+    return Promise.all(_.map( this.stars, function(s) {return s.build()}));
 
 }
 

@@ -1,0 +1,17 @@
+{"frames": {
+"civilian 1.png":
+{
+    "frame": {"x":0,"y":0,"w":194,"h":767},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":0,"w":194,"h":767},
+    "sourceSize": {"w":194,"h":767}
+}},
+"meta": {
+    "image": "civilian.png",
+    "format": "RGBA8888",
+    "size": {"w":194,"h":767},
+    "scale": "1",
+    "imagePurposes": {"normal": {"start": 0, "length": 1 }}
+}
+}

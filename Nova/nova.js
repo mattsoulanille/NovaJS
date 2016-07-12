@@ -39,6 +39,8 @@ var ships = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
 var myShip = new playerShip("Starbridge A", [medium_blaster]);
+var bar = new statusBar("civilian");
+bar.build()
 var starbridge = new ship("Starbridge A");
 var shuttle = new ship("Shuttle A");
 var dart = new ship("Vell-os Dart");
@@ -137,6 +139,7 @@ function onResize() {
     renderer.resize(screenW,screenH);
     //also update the starfield
     stars.resize()
+    bar.resize()
 }
 
 

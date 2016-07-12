@@ -29,7 +29,7 @@ spaceObject.prototype.addToSpaceObjects = function() {
 }
 
 spaceObject.prototype.loadResources = function() {
-    return new RSVP.Promise(function(fulfill, reject) {
+    return new Promise(function(fulfill, reject) {
 	//console.log(this);
 	var jsonUrl = this.url + this.name + '.json';
 	var loader = new PIXI.loaders.Loader();
@@ -78,7 +78,7 @@ spaceObject.prototype.makeSprites = function() {
 	}
     }, this);
 
-    return RSVP.all(  _.map(_.values(this.sprites), function(s) {return s.build()})  )
+    return Promise.all(  _.map(_.values(this.sprites), function(s) {return s.build()})  )
 	.then(function() {
 	    this.renderReady = true;
 	}.bind(this));
@@ -124,19 +124,14 @@ spaceObject.prototype.show = function() {
 spaceObject.prototype.render = function() {
     if (this.renderReady == true) {
 
-	if (this.isPlayerShip == true) {
-	    //this.callSprites(function(s,b,c) {s.position.x = screenW/2})
-	    //this.callSprites(function(s,b,c) {s.position.y = screenH/2})
-	    this.spriteContainer.position.x = screenW/2;
-	    this.spriteContainer.position.y = screenH/2;
-	}
-	else {
-	    //this.callSprites(function(s,b,c) {s.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2})
-	    //this.callSprites(function(s,b,c) {s.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2})
-	    this.spriteContainer.position.x = positionConstant * (this.position[0] - stagePosition[0]) + screenW/2;
-	    this.spriteContainer.position.y = -1 * positionConstant * (this.position[1] - stagePosition[1]) + screenH/2;
-	}
+	if (!this.isPlayerShip) {
+	    // -194 for the sidebar
+	    this.spriteContainer.position.x = positionConstant *
+		(this.position[0] - stagePosition[0]) + (screenW-194)/2;
+	    this.spriteContainer.position.y = -1 * positionConstant *
+		(this.position[1] - stagePosition[1]) + screenH/2;
 
+	}
 	
 	return true;
     }

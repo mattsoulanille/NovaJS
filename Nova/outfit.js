@@ -23,7 +23,7 @@ outfit.prototype.build = function(source) {
 
 outfit.prototype.loadResources = function() {
 
-    return new RSVP.Promise( function(fulfill, reject) {
+    return new Promise( function(fulfill, reject) {
 
 	$.getJSON(this.url + this.name + ".json", _.bind(function(data) {
 	    this.meta = data;
@@ -52,7 +52,7 @@ outfit.prototype.buildWeapons = function() {
 
     
     if (this.meta.functions.weapon) {
-	return RSVP.all(_.map( this.weapons, function(weapon) {return weapon.build()}));
+	return Promise.all(_.map( this.weapons, function(weapon) {return weapon.build()}));
     }
     else {
 	return
