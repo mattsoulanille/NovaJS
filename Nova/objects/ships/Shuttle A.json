@@ -17,6 +17,7 @@
 	"maxArmor": 30,
 	"armorRecharge": 0,
 	"energy": 300
-    }
+    },
+    "targetImage": "Shuttle.png"
 }
 

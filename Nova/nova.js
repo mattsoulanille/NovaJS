@@ -14,7 +14,7 @@ var p = PubSub;
 
 document.onkeydown = function(e) {
     e = e || event;
-    blocked_keys = [37, 38, 39, 40, 32];
+    blocked_keys = [37, 38, 39, 40, 32, 9];
 
     myShip.updateStats();
 
@@ -39,7 +39,7 @@ var ships = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
 var myShip = new playerShip("Starbridge A", [medium_blaster]);
-var bar = new statusBar("civilian", myShip);
+//var bar = new statusBar("civilian", myShip);
 
 var starbridge = new ship("Starbridge A");
 var shuttle = new ship("Shuttle A");
@@ -48,18 +48,18 @@ var stars = new starfield(myShip, 40);
 
 var earth = new planet("Earth");
 
-//var medium_blaster_weapon = new weapon("Medium Blaster", myShip, 2)
 
-//s.build()
+//var target = new targetImage("Starbridge.png")
+//target.build()
 
 //for collisions
-ships[0] = myShip;
-ships[1] = shuttle;
-ships[2] = starbridge;
-ships[3] = dart;
-ships[1].position = [100,100]
-ships[2].position = [200,200];
-ships[3].position = [-200, -200];
+
+ships.push(shuttle);
+ships.push(starbridge);
+ships.push(dart);
+shuttle.position = [100,100]
+starbridge.position = [200,200];
+dart.position = [-200, -200];
 
 // _.each(ships, function(ship) {
 //     ship.build()
@@ -82,7 +82,8 @@ var readyToRender = false;
 var buildShips = _.map(ships, function(s) {return s.build()})
 Promise.all(buildShips)
     .then(stars.build.bind(stars))
-    .then(bar.build.bind(bar))
+    .then(myShip.build.bind(myShip))
+//    .then(bar.build.bind(bar))
     .then(earth.build.bind(earth))
     .then(function() {readyToRender = true; console.log("built objects")});
 
@@ -129,8 +130,8 @@ function animate() {
     	}
     });
 
-    // still need to build objects w/ promises. No verification that bar is built.
-    bar.render()
+
+    //bar.render()
     
 //    times = _.map(lastTimes, function(x) {return myShip.lastTime - x});
 //    console.log(times)

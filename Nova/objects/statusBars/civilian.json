@@ -3,7 +3,8 @@
 	"statusBar": "civilian_images.json"
     },
     "properties": {
-	
-
+	"shieldColor": 12517376,
+	"armorColor": 10921638,
+	"energyColor": 4938864
     }
 }

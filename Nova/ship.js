@@ -15,6 +15,7 @@ ship.prototype.build = function() {
     return acceleratable.prototype.build.call(this)
 //	.then(function() {console.log(this)}.bind(this))
 	.then(_.bind(this.buildOutfits, this))
+	.then(_.bind(this.buildTargetImage, this))
 	.then(_.bind(function() {
 	    // make sure ship properties are sane after loading outfits
 	    if (this.properties.maxSpeed < 0) {
@@ -32,6 +33,11 @@ ship.prototype.build = function() {
     // 	.catch(function(reason) {console.log(reason)});
 
 
+}
+
+ship.prototype.buildTargetImage = function() {
+    this.targetImage = new targetImage(this.meta.targetImage);
+    return this.targetImage.build()
 }
 
 ship.prototype.buildOutfits = function() {

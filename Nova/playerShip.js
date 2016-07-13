@@ -6,18 +6,20 @@ function playerShip(shipName, outfits) {
     this.isPlayerShip = true;
     this.weapons.primary = [];
     this.weapons.secondary = [];
+    this.target = undefined;
+    this.targetIndex = -1;
 }
 
 playerShip.prototype = new ship
 
 playerShip.prototype.build = function() {
-    ship.prototype.build.call(this)
 
-	.then(function() {
-	    this.sortWeapons()
-
-	}.bind(this));
+    return ship.prototype.build.call(this)
+	.then(this.sortWeapons.bind(this))
+	.then(this.makeStatusBar.bind(this))
+    
 }
+
 
 playerShip.prototype.sortWeapons = function() {
 
@@ -35,6 +37,13 @@ playerShip.prototype.sortWeapons = function() {
     }.bind(this));
     
 }
+
+playerShip.prototype.makeStatusBar = function() {
+    this.statusBar = new statusBar('civilian', this);
+    return this.statusBar.build()
+}
+
+
 
 playerShip.prototype.addToSpaceObjects = function() {
     spaceObjects.unshift(this);
@@ -78,7 +87,12 @@ playerShip.prototype.updateStats = function() {
 	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
     }
 
-    
+    // if updateStats is ever called in a loop, change the following:
+    if (_.contains(keys, 'tab')) {
+	this.cycleTarget();
+
+    }
+
     ship.prototype.updateStats.call(this, turning, accelerating);
 
 }
@@ -87,7 +101,19 @@ playerShip.prototype.render = function() {
     // -194 for the sidebar
     this.spriteContainer.position.x = (screenW-194)/2;
     this.spriteContainer.position.y = screenH/2;
-
+    
     ship.prototype.render.call(this);
+    this.statusBar.render();
 
+}
+
+playerShip.prototype.cycleTarget = function() {
+    // targetIndex goes from -1 (for no target) to ships.length - 1
+    this.targetIndex = (this.targetIndex + 2) % (ships.length + 1) - 1; // only ships are targets
+
+    // If targetIndex === -1, then target is undefined, which is intentional
+    this.target = ships[this.targetIndex];
+
+    this.statusBar.cycleTarget(this.target)
+    
 }

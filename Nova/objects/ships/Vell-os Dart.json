@@ -16,5 +16,6 @@
 	"maxArmor": 8,
 	"armorRecharge": 1,
 	"energy": 500
-    }
+    },
+    "targetImage": "Vell-os Dart.png"
 }

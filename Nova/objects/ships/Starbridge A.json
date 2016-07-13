@@ -16,6 +16,6 @@
 	"maxArmor": 135,
 	"armorRecharge": 0,
 	"energy": 500
-    }
-	
+    },
+    "targetImage": "Starbridge.png"
 }

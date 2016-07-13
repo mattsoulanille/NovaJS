@@ -1,5 +1,5 @@
 function statusBar(name, player) {
-    this.url = "/objects/statusBars/"
+    this.url = "objects/statusBars/"
     this.ready = false
     this.name = name;
     this.sprites = {};
@@ -79,7 +79,7 @@ statusBar.prototype.render = function() {
 
 statusBar.prototype.drawShields = function() {
     // shield: -159,202 to -10,202 width 7
-    this.lines.lineStyle(7, 0xBF0000);
+    this.lines.lineStyle(7, this.meta.properties.shieldColor);
     this.lines.moveTo(-159,202);
     
     var totalLength = 149;
@@ -92,7 +92,7 @@ statusBar.prototype.drawShields = function() {
 
 statusBar.prototype.drawArmor = function() {
 
-    this.lines.lineStyle(7, 0xA6A6A6);
+    this.lines.lineStyle(7, this.meta.properties.armorColor);
     this.lines.moveTo(-159, 219);
 
     var totalLength = 149;
@@ -103,8 +103,31 @@ statusBar.prototype.drawArmor = function() {
 }
 
 statusBar.prototype.drawEnergy = function() {
-    //0x4B5C70 for civ
-    this.lines.lineStyle(7, 0x4B5C70);
+
+    this.lines.lineStyle(7, this.meta.properties.energyColor);
     this.lines.moveTo(-159, 237);
     this.lines.lineTo(-10, 237);
+}
+
+
+statusBar.prototype.cycleTarget = function(target) {
+    // Hide old target
+    if (this.targetSprite) {
+	this.targetSprite.visible = false;
+    }
+
+    // Show new target
+    if (target) {
+	this.targetSprite = target.targetImage.sprite;
+
+	if ( !(_.contains(this.spriteContainer.children, this.targetSprite)) ) {
+	    this.spriteContainer.addChild(this.targetSprite)
+	}
+
+	this.targetSprite.position.x = -97;
+	this.targetSprite.position.y = 384;
+	this.targetSprite.visible = true;
+
+    }
+    
 }
