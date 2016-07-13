@@ -87,11 +87,7 @@ playerShip.prototype.updateStats = function() {
 	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
     }
 
-    // if updateStats is ever called in a loop, change the following:
-    if (_.contains(keys, 'tab')) {
-	this.cycleTarget();
 
-    }
 
     ship.prototype.updateStats.call(this, turning, accelerating);
 
@@ -113,7 +109,7 @@ playerShip.prototype.cycleTarget = function() {
 
     // If targetIndex === -1, then target is undefined, which is intentional
     this.target = ships[this.targetIndex];
-
+//    console.log(this.targetIndex)
     this.statusBar.cycleTarget(this.target)
     
 }

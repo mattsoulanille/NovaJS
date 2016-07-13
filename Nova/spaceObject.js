@@ -10,7 +10,7 @@ function spaceObject(objectName) {
     this.weapons.all = [];
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
-
+    this.spriteContainer.visible = false;
 
 }
 
@@ -108,13 +108,13 @@ spaceObject.prototype.callSprites = function(toCall) {
 }
 
 spaceObject.prototype.hide = function() {
-    this.callSprites(function(s) {s.visible = false});
+    this.spriteContainer.visible = false;
     this.visible = false;
     this.rendering = false;
 }
 
 spaceObject.prototype.show = function() {
-    this.callSprites(function(s) {s.visible = true});
+    this.spriteContainer.visible = true;
     this.visible = true;
     this.rendering = true;
 }

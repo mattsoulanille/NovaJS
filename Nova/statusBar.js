@@ -75,6 +75,10 @@ statusBar.prototype.render = function() {
     this.drawShields();
     this.drawArmor();
     this.drawEnergy();
+    if (this.target) {
+	this.drawTarget();
+    }
+    
 }
 
 statusBar.prototype.drawShields = function() {
@@ -109,6 +113,9 @@ statusBar.prototype.drawEnergy = function() {
     this.lines.lineTo(-10, 237);
 }
 
+statusBar.prototype.drawTarget = function() {
+    
+}
 
 statusBar.prototype.cycleTarget = function(target) {
     // Hide old target
@@ -119,7 +126,7 @@ statusBar.prototype.cycleTarget = function(target) {
     // Show new target
     if (target) {
 	this.targetSprite = target.targetImage.sprite;
-
+	this.target = target;
 	if ( !(_.contains(this.spriteContainer.children, this.targetSprite)) ) {
 	    this.spriteContainer.addChild(this.targetSprite)
 	}

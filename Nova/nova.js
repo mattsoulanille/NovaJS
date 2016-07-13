@@ -16,7 +16,16 @@ document.onkeydown = function(e) {
     e = e || event;
     blocked_keys = [37, 38, 39, 40, 32, 9];
 
+
     myShip.updateStats();
+
+    switch (e.keyCode) {
+    case 9:
+	myShip.cycleTarget();
+	break;
+    }
+    
+
 
     if (_.contains(blocked_keys, e.keyCode)) {
 	return false;
@@ -152,5 +161,5 @@ function onResize() {
     renderer.resize(screenW,screenH);
     //also update the starfield
     stars.resize()
-    bar.resize()
+    myShip.statusBar.resize()
 }
