@@ -86,9 +86,11 @@ playerShip.prototype.updateStats = function() {
     else {
 	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
     }
+    if (_.contains(keys, 'a')) {
+	//this.turnToTarget();
+    }
 
-
-
+    
     ship.prototype.updateStats.call(this, turning, accelerating);
 
 }
@@ -102,6 +104,7 @@ playerShip.prototype.render = function() {
     this.statusBar.render();
 
 }
+
 
 playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1

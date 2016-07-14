@@ -13,8 +13,9 @@ damageable.prototype.setProperties = function() {
 
 damageable.prototype.receiveCollision = function(other) {
     this.shield -= other.shieldDamage;
-    if (this.shield < 0) {
-	this.shield = 0;
+    var minShield = -this.properties.maxShields * 0.05
+    if (this.shield < minShield) {
+	this.shield = minShield;
 	this.armor -= other.armorDamage;
     }
     if (this.armor <= 0) {

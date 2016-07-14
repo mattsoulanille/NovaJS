@@ -5,7 +5,14 @@ var stage = new PIXI.Stage(0x000000);
 var screenW = $(window).width(), screenH = $(window).height() - 10;
 var positionConstant = 1;
 //var screenW = 800, screenH = 600;
-var renderer = PIXI.autoDetectRenderer(screenW, screenH);
+var renderer = PIXI.autoDetectRenderer(screenW, screenH, {
+    resolution: window.devicePixelRatio || 1,
+    autoResize: true
+
+});
+
+PIXI.RESOLUTION = window.devicePixelRatio;
+
 $(window).resize(onResize);
 // add the renderer view element to the DOM
 document.body.appendChild(renderer.view);
@@ -84,6 +91,7 @@ var startGameTimer = setInterval(function () {startGame()}, 500);
 Starts the game if everything is ready to render.
 */
 
+// Be careful about reassigning myShip.position
 var stagePosition = myShip.position
 var readyToRender = false;
 //var buildObjects = _.map(spaceObjects, function(s) {return s.build()});

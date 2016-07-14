@@ -4,9 +4,12 @@ function statusBar(name, player) {
     this.name = name;
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
+    this.targetContainer = new PIXI.Container();
     this.lines = new PIXI.Graphics();
-    this.spriteContainer.addChild(this.lines)
+    this.spriteContainer.addChild(this.lines);
+    this.spriteContainer.addChild(this.targetContainer);
     this.source = player;
+    this.text = {};
 }
 
 statusBar.prototype.build = function() {
@@ -14,6 +17,7 @@ statusBar.prototype.build = function() {
 	.then(_.bind(this.makeSprites, this))
 	.then(_.bind(this.addSpritesToContainer, this))
 	.then(this.resize.bind(this))
+	.then(this.buildTargetText.bind(this))
 //	.catch(function(err) {console.log(err)});
 }
 
@@ -42,7 +46,7 @@ statusBar.prototype.loadResources = function() {
 statusBar.prototype.makeSprites = function() {
     _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
 	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
-	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key], [1,0]);
+	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key], [0,0]);
 	}
     }, this);
 
@@ -62,7 +66,7 @@ statusBar.prototype.addSpritesToContainer = function() {
 }
 
 statusBar.prototype.resize = function() {
-    this.spriteContainer.position.x = $(window).width();
+    this.spriteContainer.position.x = $(window).width() - 194;
 }
 
 statusBar.prototype.render = function() {
@@ -72,49 +76,108 @@ statusBar.prototype.render = function() {
     // energy: -158,234 to -10,240
 
     this.lines.clear();
-    this.drawShields();
+    this.drawShield();
     this.drawArmor();
     this.drawEnergy();
     if (this.target) {
 	this.drawTarget();
+	this.targetContainer.visible = true;
     }
+    else {
+	this.targetContainer.visible = false;
+    }
+
     
 }
 
-statusBar.prototype.drawShields = function() {
+statusBar.prototype.drawLine = function(dataArea, color, fullness) {
     // shield: -159,202 to -10,202 width 7
-    this.lines.lineStyle(7, this.meta.properties.shieldColor);
-    this.lines.moveTo(-159,202);
+
+    var pos = [dataArea.position[0], dataArea.position[1]];
+    var size = [dataArea.size[0], dataArea.size[1]];
+    pos[1] += size[1] / 2
+
+    this.lines.lineStyle(size[1], color);    
+
+    this.lines.moveTo(pos[0], pos[1]);
     
-    var totalLength = 149;
-    var length = totalLength * this.source.shield / this.source.properties.maxShields;
-    var lineTo = length -159;
+    // var totalLength = 149;
+    // var length = totalLength * this.source.shield / this.source.properties.maxShields;
+    // var lineTo = length -159;
     
-    this.lines.lineTo(lineTo,202);
+    this.lines.lineTo(pos[0] + size[0] * fullness, pos[1]);
     
+}
+
+statusBar.prototype.drawShield = function() {
+    var fullness = this.source.shield / this.source.properties.maxShields;
+    if (fullness < 0) { fullness = 0; }
+    this.drawLine(this.meta.dataAreas.shield, this.meta.colors.shield, fullness)
 }
 
 statusBar.prototype.drawArmor = function() {
-
-    this.lines.lineStyle(7, this.meta.properties.armorColor);
-    this.lines.moveTo(-159, 219);
-
-    var totalLength = 149;
-    var length = totalLength * this.source.armor / this.source.properties.maxArmor;
-    var lineTo = length - 159;
-    
-    this.lines.lineTo(lineTo, 219);
+    var fullness = this.source.armor / this.source.properties.maxArmor;
+    this.drawLine(this.meta.dataAreas.armor, this.meta.colors.armor, fullness)
 }
 
 statusBar.prototype.drawEnergy = function() {
-
-    this.lines.lineStyle(7, this.meta.properties.energyColor);
-    this.lines.moveTo(-159, 237);
-    this.lines.lineTo(-10, 237);
+    this.drawLine(this.meta.dataAreas.fuel, this.meta.colors.fuelFull, 1)
 }
 
 statusBar.prototype.drawTarget = function() {
+    this.renderTargetText()
+}
+
+statusBar.prototype.buildTargetText = function() {
+
+    var pos = [this.meta.dataAreas.targeting.position[0],
+	       this.meta.dataAreas.targeting.position[1]];
+    var size = [this.meta.dataAreas.targeting.size[0],
+		this.meta.dataAreas.targeting.size[1]];
+
+    var font = {font: "12px Geneva", fill:0xFFFFFF, align:'center'}
+    var dimfont = {font: "12px Geneva", fill:0x888888, align:'center'}
     
+    this.text.shield = new PIXI.Text('Shield:', dimfont);
+    this.text.shield.anchor.y = 1;
+    this.text.shield.position.x = pos[0] + 6;
+    this.text.shield.position.y = pos[1] + size[1] - 3;
+
+    this.targetContainer.addChild(this.text.shield);
+
+    this.text.armor = new PIXI.Text('Armor:', dimfont);
+    this.text.armor.anchor.y = 1;
+    this.text.armor.position.x = pos[0] + 6;
+    this.text.armor.position.y = pos[1] + size[1] - 3;
+    this.text.armor.visible = false;
+    this.targetContainer.addChild(this.text.armor);
+
+    
+    this.text.percent = new PIXI.Text("100%", font);
+    this.text.percent.anchor.y = 1;
+    this.text.percent.position.x = pos[0] + 49;
+    this.text.percent.position.y = pos[1] + size[1] - 3;
+
+    this.targetContainer.addChild(this.text.percent);
+    
+}
+
+statusBar.prototype.renderTargetText = function() {
+    if (this.target.shield > 0) {
+	this.text.shield.visible = true;
+	this.text.armor.visible = false;
+	var shieldPercent = Math.round(100 * this.target.shield /
+				       this.target.properties.maxShields) + "%";
+	this.text.percent.text = shieldPercent;
+    }
+    else {
+	this.text.shield.visible = false;
+	this.text.armor.visible = true;
+	var armorPercent = Math.round(100 * this.target.armor /
+				      this.target.properties.maxArmor) + "%";
+	this.text.percent.text = armorPercent;
+    }
+
 }
 
 statusBar.prototype.cycleTarget = function(target) {
@@ -124,17 +187,24 @@ statusBar.prototype.cycleTarget = function(target) {
     }
 
     // Show new target
+    this.target = target;
     if (target) {
 	this.targetSprite = target.targetImage.sprite;
-	this.target = target;
-	if ( !(_.contains(this.spriteContainer.children, this.targetSprite)) ) {
-	    this.spriteContainer.addChild(this.targetSprite)
+
+	if ( !(_.contains(this.targetContainer.children, this.targetSprite)) ) {
+	    this.targetContainer.addChild(this.targetSprite)
 	}
 
-	this.targetSprite.position.x = -97;
-	this.targetSprite.position.y = 384;
+	var pos = [this.meta.dataAreas.targeting.position[0],
+		   this.meta.dataAreas.targeting.position[1]];
+	var size = [this.meta.dataAreas.targeting.size[0],
+		    this.meta.dataAreas.targeting.size[1]];
+	
+	this.targetSprite.position.x = (size[0] / 2) + pos[0];
+	this.targetSprite.position.y = (size[1] / 2) + pos[1];
 	this.targetSprite.visible = true;
 
     }
     
 }
+

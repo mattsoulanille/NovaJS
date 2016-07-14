@@ -4,6 +4,7 @@ function targetImage(name) {
     this.name = name;
     this.sprite;
     this.url = url + this.name
+
 }
 
 targetImage.prototype.build = function() {
@@ -21,7 +22,6 @@ targetImage.prototype.build = function() {
 	    this.sprite.visible = false;
 	    this.sprite.anchor.x = 0.5;
 	    this.sprite.anchor.y = 0.5;
-	    this.ready = true;
 	}.bind(this));
 	        
 }
