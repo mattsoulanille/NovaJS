@@ -9,13 +9,18 @@
 	"mass": 98,
 	"turn_rate": 50,
 	"inertialess": false
+
     },
     "properties": {
 	"maxShields": 430,
 	"shieldRecharge": 64,
 	"maxArmor": 135,
 	"armorRecharge": 0,
-	"energy": 500
+	"maxFuel": 500,
+	"disabledAt": 0.33
     },
-    "targetImage": "Starbridge.png"
+    "targetImage": "Starbridge.png",
+    "subtitle": "Class A",
+    "comm name": "Starbridge"
+    
 }

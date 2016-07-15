@@ -11,16 +11,17 @@ function spaceObject(objectName) {
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
     this.spriteContainer.visible = false;
-
+    this.size = [];
 }
 
 spaceObject.prototype.build = function() {
     return this.loadResources()
     	.then(_.bind(this.setProperties, this))
 	.then(_.bind(this.makeSprites, this))
+	.then(_.bind(this.makeSize, this))
 	.then(_.bind(this.addSpritesToContainer, this))
 	.then(_.bind(this.addToSpaceObjects, this))
-        .catch(function(reason) {console.log(reason)});
+
     
 };
 spaceObject.prototype.addToSpaceObjects = function() {
@@ -85,6 +86,22 @@ spaceObject.prototype.makeSprites = function() {
 
 }
 
+spaceObject.prototype.makeSize = function() {
+
+    var textures = _.map(this.sprites, function(s) {return s.textures});
+
+    this.size[0] = Math.max.apply(null, _.map(textures, function(textureList) {
+	return Math.max.apply(null, _.map(textureList, function(texture) {return texture.width}));
+    }));
+
+    this.size[1] = Math.max.apply(null, _.map(textures, function(textureList) {
+	return Math.max.apply(null, _.map(textureList, function(texture) {return texture.height}));
+    }));
+
+
+}
+
+
 //write this method in the ships funcitons to add engines and lights in the right order
 spaceObject.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
@@ -104,7 +121,7 @@ spaceObject.prototype.addSpritesToContainer = function() {
 
 
 spaceObject.prototype.callSprites = function(toCall) {
-    _.each(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
+    return _.map(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
 }
 
 spaceObject.prototype.hide = function() {

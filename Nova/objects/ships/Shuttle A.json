@@ -16,8 +16,11 @@
 	"shieldRecharge": 10,
 	"maxArmor": 30,
 	"armorRecharge": 0,
-	"energy": 300
+	"maxFuel": 300,
+	"disabledAt": 0.33
     },
-    "targetImage": "Shuttle.png"
+    "targetImage": "Shuttle.png",
+    "subtitle": "Version A",
+    "comm name": "Shuttle"
 }
 

@@ -132,10 +132,12 @@ function startGame() {
 
 //requestAnimationFrame(animate)
 
-var times;
+
+spaceObject.prototype.lastTime = new Date().getTime()
 function animate() {
 	
     spaceObject.prototype.time = new Date().getTime()
+
     myShip.render()
 
     stars.render()

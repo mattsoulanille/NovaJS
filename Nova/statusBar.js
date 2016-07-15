@@ -18,6 +18,7 @@ statusBar.prototype.build = function() {
 	.then(_.bind(this.addSpritesToContainer, this))
 	.then(this.resize.bind(this))
 	.then(this.buildTargetText.bind(this))
+	.then(this.buildTargetCorners.bind(this))
 //	.catch(function(err) {console.log(err)});
 }
 
@@ -121,7 +122,12 @@ statusBar.prototype.drawArmor = function() {
 }
 
 statusBar.prototype.drawEnergy = function() {
-    this.drawLine(this.meta.dataAreas.fuel, this.meta.colors.fuelFull, 1)
+    var full = (Math.floor(this.source.fuel / 100) * 100) / this.source.properties.maxFuel;
+    var partial = (this.source.fuel) / this.source.properties.maxFuel;
+
+    this.drawLine(this.meta.dataAreas.fuel, this.meta.colors.fuelPartial, partial);    
+    this.drawLine(this.meta.dataAreas.fuel, this.meta.colors.fuelFull, full);
+
 }
 
 statusBar.prototype.drawTarget = function() {
@@ -160,6 +166,11 @@ statusBar.prototype.buildTargetText = function() {
 
     this.targetContainer.addChild(this.text.percent);
     
+}
+
+statusBar.prototype.buildTargetCorners = function() {
+    this.targetCorners = new targetCorners();
+    return this.targetCorners.build()
 }
 
 statusBar.prototype.renderTargetText = function() {
@@ -204,7 +215,15 @@ statusBar.prototype.cycleTarget = function(target) {
 	this.targetSprite.position.y = (size[1] / 2) + pos[1];
 	this.targetSprite.visible = true;
 
+	this.targetCorners.target(target);
+	
+	
+
+    }
+    else {
+	this.targetCorners.hide();
     }
     
 }
+
 

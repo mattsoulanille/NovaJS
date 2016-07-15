@@ -3,6 +3,7 @@ function ship(shipName, outfits) {
     this.url = 'objects/ships/'
     this.pointing = 0;
     this.outfits = outfits || [];
+
 }
 ship.prototype = new acceleratable;
 
@@ -24,6 +25,9 @@ ship.prototype.build = function() {
 	    if (this.properties.turnRate < 0) {
 		this.properties.turnRate = 0
 	    }
+	    
+	    this.fuel = this.properties.maxFuel;
+	    
 	    
 	}, this))
     	.catch(function(reason) {console.log(reason)});
@@ -118,5 +122,16 @@ ship.prototype.render = function() {
     if ("lights" in this.sprites) {
 	this.manageLights();
     }
+    
+    if (this.properties.fuelRecharge) {
+	// Fuel recharge is in frames / unit, so recharge ^ -1 = units / frame
+	// 30 nova frames / second
+	// 30 frames/sec * x units / frame = x units / sec
+	this.fuel += (30 / this.properties.fuelRecharge) * (this.time - this.lastTime) / 1000;
+    }
+    if (this.fuel > this.properties.maxFuel) {
+	this.fuel = this.properties.maxFuel;
+    }
+    
     acceleratable.prototype.render.call(this);
 }

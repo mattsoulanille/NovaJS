@@ -15,7 +15,10 @@
 	"shieldRecharge": 125,
 	"maxArmor": 8,
 	"armorRecharge": 1,
-	"energy": 500
+	"maxFuel": 500,
+	"fuelRecharge": 8,
+	"disabledAt": 0.1
     },
-    "targetImage": "Vell-os Dart.png"
+    "targetImage": "Vell-os Dart.png",
+    "comm name": "Vell-os Dart"
 }
