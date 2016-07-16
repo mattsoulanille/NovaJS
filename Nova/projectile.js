@@ -76,7 +76,9 @@ projectile.prototype.fire = function(direction, position, velocity, target) {
     this.available = false;
     this.pointing = direction;
     this.position = _.map(position, function(x) {return x});
-    var factor = 30/100;
+
+    // nova speeds for weapons is in pixels / frame * 100. 3/10 pixels / ms
+    var factor = 3/10;
 
     // update the projectile's sprite's properties with the new ones
     // Placed before this.velocity... to reset this.lastTime
