@@ -1,0 +1,20 @@
+{
+    "physics": {
+	"speed": 1350,
+	"duration": 100,
+	"turn_rate": 70,
+	"type": "guided",
+	"inertialess": true
+    },
+    "imageAssetsFiles": {
+	"projectile": "IR Missile.json"
+    },
+    "properties": {
+	"shieldDamage": 10,
+	"armorDamage": 20,
+	"reload": 15,
+	"accuracy": 2,
+	"impact": 50,
+	"type": "secondary"
+    }
+}

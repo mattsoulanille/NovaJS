@@ -30,7 +30,7 @@ ship.prototype.build = function() {
 	    
 	    
 	}, this))
-    	.catch(function(reason) {console.log(reason)});
+
 
     // return RSVP.all(outfitPromises)
     // 	.then(acceleratable.prototype.build.call(this))

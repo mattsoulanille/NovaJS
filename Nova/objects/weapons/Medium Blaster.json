@@ -1,8 +1,8 @@
 { 
     "physics": {
 	"speed": 1400,
-	"duration": 25
-
+	"duration": 25,
+	"type": "unguided"
     },    
     "imageAssetsFiles": {
 	"projectile": "Medium Blaster.json"

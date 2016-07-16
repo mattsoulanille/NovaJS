@@ -52,9 +52,21 @@ weapon.prototype.buildProjectiles = function() {
     meta.physics = this.meta.physics;
     meta.properties = this.meta.properties
     //console.log(meta)
-    
+
     for (i=0; i < required_projectiles; i++) {
-	proj = new projectile(this.name, meta, this.source);
+	if (!(this.meta.physics.type)){
+	    this.meta.physics.type = 'unguided';
+	}
+	var proj;
+	switch (this.meta.physics.type) {
+	case "unguided":
+	    proj = new projectile(this.name, meta, this.source);
+	    break;
+	case "guided":
+	    proj = new guided(this.name, meta, this.source);
+	    break;
+	}
+
 	this.projectiles.push(proj);
     }
     
@@ -73,7 +85,7 @@ weapon.prototype.fire = function() {
 		(2 * Math.PI / 360);
 	    var position = this.source.position;
 	    var velocity = this.source.velocity;
-	    proj.fire(direction, position, velocity)
+	    proj.fire(direction, position, velocity, this.target)
 	    return true
 	}
 
@@ -112,4 +124,8 @@ weapon.prototype.autoFire = function() {
     else {
 	this.firing = false
     }
+}
+
+weapon.prototype.cycleTarget = function(target) {
+    this.target = target;
 }

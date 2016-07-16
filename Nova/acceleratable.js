@@ -88,31 +88,28 @@ acceleratable.prototype.render = function() {
 	    }
 
 	    var angle = this.pointing;
-	    var accelDir = 0
+	    var change_in_speed = (this.properties.acceleration *
+				   (this.time - this.lastTime) / 1000);
+	    
 	    this.velocity = [Math.cos(angle) * this.polarVelocity, Math.sin(angle) * this.polarVelocity]
-	    if (this.accelerating == -1) {
-		if (this.polarVelocity > 0) {
-		    accelDir += -1
-		}
-		else if (this.polarVelocity < 0) {
-		    this.polarVelocity = 0
-		    accelDir = 0
-		}
-	    }
 
-	    if (this.accelerating == 1) {
-		if (typeof this.lastTime != 'undefined') {
+	    if ((this.accelerating == -1) && (this.polarVelocity > 0)) {
 
-		    accelDir += 1
-		    if (this.polarVelocity > this.properties.maxSpeed) {
-			this.polarVelocity = this.properties.maxSpeed
-      			accelDir = 0
-		    }
+		this.polarVelocity -= change_in_speed;
+		if (this.polarVelocity < 0) {
+		    this.polarVelocity = 0;
 		}
+
 	    }
-	    if (typeof this.lastTime != 'undefined') {
-		this.polarVelocity += this.properties.acceleration * accelDir * (this.time - this.lastTime)/1000
+	    else if ((this.accelerating == 1) && (this.polarVelocity < this.properties.maxSpeed)) {
+
+		this.polarVelocity += change_in_speed;
+		if (this.polarVelocity > this.properties.maxSpeed) {
+		    this.polarVelocity = this.properties.maxSpeed;
+		}
+
 	    }
+		
 	}
 
 	turnable.prototype.render.call(this)

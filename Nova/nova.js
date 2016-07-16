@@ -21,7 +21,7 @@ var p = PubSub;
 
 document.onkeydown = function(e) {
     e = e || event;
-    blocked_keys = [37, 38, 39, 40, 32, 9];
+    blocked_keys = [37, 38, 39, 40, 32, 9, 17];
 
 
     myShip.updateStats();
@@ -55,12 +55,13 @@ var ships = [];
 var planets = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
-var myShip = new playerShip("Starbridge A", [medium_blaster]);
+var ir_missile = new outfit("IR Missile Launcher", 4);
+var myShip = new playerShip("Starbridge A", [medium_blaster, ir_missile]);
 //var bar = new statusBar("civilian", myShip);
 
 var starbridge = new ship("Starbridge A");
 var shuttle = new ship("Shuttle A");
-var dart = new ship("Vell-os Dart");
+//var dart = new ship("Vell-os Dart");
 var stars = new starfield(myShip, 40);
 
 var earth = new planet("Earth");
@@ -73,10 +74,10 @@ var earth = new planet("Earth");
 
 ships.push(shuttle);
 ships.push(starbridge);
-ships.push(dart);
+//ships.push(dart);
 shuttle.position = [100,100]
 starbridge.position = [200,200];
-dart.position = [-200, -200];
+//dart.position = [-200, -200];
 
 // _.each(ships, function(ship) {
 //     ship.build()

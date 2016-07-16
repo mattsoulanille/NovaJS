@@ -7,14 +7,15 @@ function projectile(projName, meta, source) {
     this.available = false;
     this.meta = meta;
     this.source = source;
-    this.targets = ships; // Temporary (PD weapons can hit missiles)
+    this.target;
+
 }
 
-projectile.prototype = new turnable
+projectile.prototype = new acceleratable
 
 projectile.prototype.build = function() {
-
-    setAvailable = function() {
+    this.targets = ships; // Temporary (PD weapons can hit missiles)
+    var setAvailable = function() {
 	this.available = true
     }
 
@@ -36,7 +37,7 @@ projectile.prototype.loadResources = function() {
 
 projectile.prototype.render = function() {
     // Maybe move this to updateStats
-    turnable.prototype.render.call(this);
+    acceleratable.prototype.render.call(this);
     var collisions = this.detectCollisions(ships);
     
     if ((collisions.length > 1) ||
@@ -66,10 +67,11 @@ projectile.prototype.collide = function(other) {
 }
 
 
-projectile.prototype.fire = function(direction, position, velocity) {
+projectile.prototype.fire = function(direction, position, velocity, target) {
     // temporary. Gun points will be implemented later
     // maybe pass the ship to the projectile... or not
     // inaccuracy is handled by weapon
+    this.target = target;
     this.fireTimeout = setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
     this.available = false;
     this.pointing = direction;
@@ -78,10 +80,11 @@ projectile.prototype.fire = function(direction, position, velocity) {
 
     // update the projectile's sprite's properties with the new ones
     // Placed before this.velocity... to reset this.lastTime
-    this.render(); 
+    this.lastTime = this.time;
+//    this.render(); 
     this.velocity = [Math.cos(direction) * this.meta.physics.speed * factor + velocity[0],
 		     Math.sin(direction) * this.meta.physics.speed * factor + velocity[1]];
-    //this.lastTime = this.time
+    
 
     this.show();
 
@@ -94,6 +97,7 @@ projectile.prototype.end = function() {
     this.velocity = [0,0];
     this.hide();
     this.available = true;
+
 }
 
 

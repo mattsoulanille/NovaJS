@@ -1,0 +1,297 @@
+{"frames": {
+"IR Missile 1.png":
+{
+    "frame": {"x":0,"y":0,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":0,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 2.png":
+{
+    "frame": {"x":18,"y":0,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":18,"y":0,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 3.png":
+{
+    "frame": {"x":36,"y":0,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":36,"y":0,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 4.png":
+{
+    "frame": {"x":54,"y":0,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":54,"y":0,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 5.png":
+{
+    "frame": {"x":72,"y":0,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":72,"y":0,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 6.png":
+{
+    "frame": {"x":90,"y":0,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":90,"y":0,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 7.png":
+{
+    "frame": {"x":0,"y":18,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":18,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 8.png":
+{
+    "frame": {"x":18,"y":18,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":18,"y":18,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 9.png":
+{
+    "frame": {"x":36,"y":18,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":36,"y":18,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 10.png":
+{
+    "frame": {"x":54,"y":18,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":54,"y":18,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 11.png":
+{
+    "frame": {"x":72,"y":18,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":72,"y":18,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 12.png":
+{
+    "frame": {"x":90,"y":18,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":90,"y":18,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 13.png":
+{
+    "frame": {"x":0,"y":36,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":36,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 14.png":
+{
+    "frame": {"x":18,"y":36,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":18,"y":36,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 15.png":
+{
+    "frame": {"x":36,"y":36,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":36,"y":36,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 16.png":
+{
+    "frame": {"x":54,"y":36,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":54,"y":36,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 17.png":
+{
+    "frame": {"x":72,"y":36,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":72,"y":36,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 18.png":
+{
+    "frame": {"x":90,"y":36,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":90,"y":36,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 19.png":
+{
+    "frame": {"x":0,"y":54,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":54,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 20.png":
+{
+    "frame": {"x":18,"y":54,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":18,"y":54,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 21.png":
+{
+    "frame": {"x":36,"y":54,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":36,"y":54,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 22.png":
+{
+    "frame": {"x":54,"y":54,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":54,"y":54,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 23.png":
+{
+    "frame": {"x":72,"y":54,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":72,"y":54,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 24.png":
+{
+    "frame": {"x":90,"y":54,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":90,"y":54,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 25.png":
+{
+    "frame": {"x":0,"y":72,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":72,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 26.png":
+{
+    "frame": {"x":18,"y":72,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":18,"y":72,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 27.png":
+{
+    "frame": {"x":36,"y":72,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":36,"y":72,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 28.png":
+{
+    "frame": {"x":54,"y":72,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":54,"y":72,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 29.png":
+{
+    "frame": {"x":72,"y":72,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":72,"y":72,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 30.png":
+{
+    "frame": {"x":90,"y":72,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":90,"y":72,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 31.png":
+{
+    "frame": {"x":0,"y":90,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":0,"y":90,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 32.png":
+{
+    "frame": {"x":18,"y":90,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":18,"y":90,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 33.png":
+{
+    "frame": {"x":36,"y":90,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":36,"y":90,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 34.png":
+{
+    "frame": {"x":54,"y":90,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":54,"y":90,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 35.png":
+{
+    "frame": {"x":72,"y":90,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":72,"y":90,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+},
+"IR Missile 36.png":
+{
+    "frame": {"x":90,"y":90,"w":18,"h":18},
+    "rotated": false,
+    "trimmed": false,
+    "spriteSourceSize": {"x":90,"y":90,"w":18,"h":18},
+    "sourceSize": {"w":18,"h":18}
+}},
+"meta": {
+    "image": "IR Missile.png",
+    "format": "RGBA8888",
+    "size": {"w":108,"h":108},
+    "scale": "1",
+    "imagePurposes": {"normal": {"start": 0, "length": 36 }}
+}
+}

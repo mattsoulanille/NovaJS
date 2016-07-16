@@ -89,8 +89,13 @@ playerShip.prototype.updateStats = function() {
     if (_.contains(keys, 'a')) {
 	//this.turnToTarget();
     }
+    if (_.contains(keys, 'ctrl')) {
+	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
 
-    
+    }
+    else {
+	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
+    }
     ship.prototype.updateStats.call(this, turning, accelerating);
 
 }
@@ -114,5 +119,6 @@ playerShip.prototype.cycleTarget = function() {
     this.target = ships[this.targetIndex];
 //    console.log(this.targetIndex)
     this.statusBar.cycleTarget(this.target)
+    _.each(this.weapons.all, function(w) {w.cycleTarget(this.target)}, this);
     
 }

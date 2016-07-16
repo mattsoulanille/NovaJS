@@ -12,6 +12,7 @@ turnable.prototype.setProperties = function() {
 
     // 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
     this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
+
 }
 
 turnable.prototype.updateStats = function(turning) {
@@ -22,8 +23,12 @@ turnable.prototype.updateStats = function(turning) {
 turnable.prototype.turnTo = function(pointTo) {
     // Sets this.turning to turn the object to a given direction
 
+    if (pointTo < 0 || pointTo >= 2*Math.PI) {
+	console.log("turnTo called with invalid angle");
+    }
+    
     var pointDiff = (pointTo - this.pointing + 2*Math.PI) % (2*Math.PI)
-    var turning
+    var turning;
     if (pointDiff < Math.PI) {
 	turning = "left"
     }
@@ -42,6 +47,31 @@ turnable.prototype.turnTo = function(pointTo) {
 
 }
 
+turnable.prototype.build = function() {
+    return damageable.prototype.build.call(this)
+	.then(function() {
+	    this.hasLeftTexture = _.every(this.sprites, function(s) {
+		if (s.spriteImageInfo.meta.imagePurposes.left) {
+		    return true;
+		}
+		else {
+		    return false;
+		}
+	    });
+
+	    
+	    this.hasRightTexture = _.every(this.sprites, function(s) {
+		if (s.spriteImageInfo.meta.imagePurposes.right) {
+		    return true;
+		}
+		else {
+		    return false;
+		}
+	    });
+	}.bind(this));
+
+
+}
 
 
 
@@ -63,20 +93,21 @@ turnable.prototype.render = function() {
 	}
 	if (this.turning == "left") {
 	    this.pointing = this.origionalPointing + (this.properties.turnRate * (this.time - this.turnStartTime) / 1000);
-	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
-	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length; });
+
+	    if (this.hasLeftTexture) {
+		frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
+		frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length; });
+	    }
 	}
 	else if (this.turning == "right") {
 	    this.pointing = this.origionalPointing - (this.properties.turnRate * (this.time - this.turnStartTime) / 1000);
 
-	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
-	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length; });
+	    if (this.hasRightTexture) {
+		frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
+		frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length; });
+	    }
 	}
 
-	else {
-	    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.normal.start; });
-	    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.normal.length; });
-	}
 
 
 	this.pointing = this.pointing % (2*Math.PI);  //makes sure turnable.pointing is in the range [0, 2pi)
