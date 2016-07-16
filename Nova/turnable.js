@@ -84,15 +84,8 @@ turnable.prototype.render = function() {
     	var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
 	var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length;});
 
-	// if the new direction does not equal the previous direction
-	if ((typeof this.lastTurning == 'undefined') || (this.turning != this.lastTurning) || this.turnback != this.lastTurnBack) { 
-	    this.turnStartTime = this.time; // the turn started at the average of the times
-	    this.origionalPointing = this.pointing;
-	    this.lastTurnBack = this.turnback;
-
-	}
 	if (this.turning == "left") {
-	    this.pointing = this.origionalPointing + (this.properties.turnRate * (this.time - this.turnStartTime) / 1000);
+	    this.pointing = this.pointing + (this.properties.turnRate * (this.time - this.lastTime) / 1000);
 
 	    if (this.hasLeftTexture) {
 		frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
@@ -100,7 +93,7 @@ turnable.prototype.render = function() {
 	    }
 	}
 	else if (this.turning == "right") {
-	    this.pointing = this.origionalPointing - (this.properties.turnRate * (this.time - this.turnStartTime) / 1000);
+	    this.pointing = this.pointing - (this.properties.turnRate * (this.time - this.lastTime) / 1000);
 
 	    if (this.hasRightTexture) {
 		frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
@@ -127,7 +120,7 @@ turnable.prototype.render = function() {
 	}
 
 	// this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.
-	this.lastTurning = this.turning; // last turning value: left, right, or back
+
 
 
 	damageable.prototype.render.call(this);
