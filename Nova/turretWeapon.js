@@ -12,6 +12,10 @@ turretWeapon.prototype.fire = function() {
 
 
 	var fireAngle = this.calcFireAngle() || directionToTarget;
+
+	// weapon inaccuracy
+	fireAngle += ((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		(2 * Math.PI / 360);
 	
 	basicWeapon.prototype.fire.call(this, fireAngle);
 
