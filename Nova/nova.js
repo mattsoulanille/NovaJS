@@ -52,6 +52,7 @@ document.onkeyup = function(e) {
 var textures = {}; // global texture object that sprites save and load textures from
 var spaceObjects = []; // global rendered spaceObjects
 var ships = [];
+var planets = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
 var myShip = new playerShip("Starbridge A", [medium_blaster]);

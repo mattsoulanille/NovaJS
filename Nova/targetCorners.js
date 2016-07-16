@@ -2,6 +2,7 @@ function targetCorners(name) {
     this.name = name || "targetCorners";
     spaceObject.call(this, this.name);
     this.textures = {};
+    this.targetTime = this.time;
 }
 
 targetCorners.prototype = new spaceObject;
@@ -17,8 +18,8 @@ targetCorners.prototype.makeSprites = function() {
     this.sprites.bottomRight = new PIXI.Sprite();
 
     _.each(this.sprites, function(spr) {
-	spr.anchor.x = 0.5;
-	spr.anchor.y = 0.5;
+	// spr.anchor.x = 0.5;
+	// spr.anchor.y = 0.5;
     }, this);
 
     this.sprites.bottomLeft.rotation = Math.PI * 3/2;
@@ -51,21 +52,37 @@ targetCorners.prototype.callSprites = function(toCall) {
 targetCorners.prototype.target = function(target) {
     this.position = target.position;
     this.callSprites(function(s) {s.texture = this.textures.neutral});
-    this.placeSprites(target);
+
+    this.targetTime = this.time;
+    this.placeSprites(target, 1);
+    this.other = target;
     this.show();
 }
 
-targetCorners.prototype.placeSprites = function(target) {
-    this.sprites.topLeft.position.x = -target.size[0] / 2;
-    this.sprites.topLeft.position.y = -target.size[1] / 2;
+targetCorners.prototype.placeSprites = function(target, scale) {
 
-    this.sprites.topRight.position.x = target.size[0] / 2;
-    this.sprites.topRight.position.y = -target.size[1] / 2;
+    this.sprites.topLeft.position.x = -target.size[0] / 2 * scale;
+    this.sprites.topLeft.position.y = -target.size[1] / 2 * scale;
 
-    this.sprites.bottomLeft.position.x = -target.size[0] / 2;
-    this.sprites.bottomLeft.position.y = target.size[1] / 2;
+    this.sprites.topRight.position.x = target.size[0] / 2 * scale;
+    this.sprites.topRight.position.y = -target.size[1] / 2 * scale;
 
-    this.sprites.bottomRight.position.x = target.size[0] / 2;
-    this.sprites.bottomRight.position.y = target.size[1] / 2;
+    this.sprites.bottomLeft.position.x = -target.size[0] / 2 * scale;
+    this.sprites.bottomLeft.position.y = target.size[1] / 2 * scale;
 
+    this.sprites.bottomRight.position.x = target.size[0] / 2 * scale;
+    this.sprites.bottomRight.position.y = target.size[1] / 2 * scale;
+
+}
+
+targetCorners.prototype.render = function() {
+    if (this.other) {
+	var time = 100;
+	var timeLeft = (time - (this.time - this.targetTime))
+	if (timeLeft < 0) {timeLeft = 0;}
+	var scale = (timeLeft/20) + 1;
+    
+	this.placeSprites(this.other, scale);
+    }
+    spaceObject.prototype.render.call(this);
 }
