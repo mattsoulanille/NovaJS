@@ -50,7 +50,8 @@ collidable.prototype.detectCollisions = function(others) {
 collidable.prototype.build = function() {
     return movable.prototype.build.call(this)
 //	.then(function() {console.log(this.renderReady)}.bind(this))
-	.then(collidable.prototype.makeHitbox.bind(this));
+	.then(collidable.prototype.makeHitbox.bind(this))
+	.then(function() {collidables.push(this)}.bind(this));
 
 }
 collidable.prototype.makeHitbox = function() {

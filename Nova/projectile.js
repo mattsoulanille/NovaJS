@@ -38,7 +38,7 @@ projectile.prototype.loadResources = function() {
 projectile.prototype.render = function() {
     // Maybe move this to updateStats
     acceleratable.prototype.render.call(this);
-    var collisions = this.detectCollisions(ships);
+    var collisions = this.detectCollisions(collidables);
     
     if ((collisions.length > 1) ||
 	((collisions.length == 1) && (collisions[0] != this.source)) ) {
