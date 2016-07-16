@@ -1,0 +1,11 @@
+{
+    "functions": {
+	"weapon": [
+	    "Medium Blaster Turret"
+	]
+    },
+    "cost": 40000,
+    "mass": 25,
+    "maximum": 4
+
+}

@@ -56,9 +56,10 @@ var planets = [];
 var collidables = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
+var medium_blaster_t = new outfit("Medium Blaster Turret", 1);
 var ir_missile = new outfit("IR Missile Launcher", 4);
 var shuttle_missile = new outfit("IR Missile Launcher", 1);
-var myShip = new playerShip("Starbridge A", [medium_blaster, ir_missile]);
+var myShip = new playerShip("Starbridge A", [medium_blaster_t, ir_missile]);
 //var bar = new statusBar("civilian", myShip);
 
 var starbridge = new ship("Starbridge A");
