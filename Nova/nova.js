@@ -18,12 +18,13 @@ $(window).resize(onResize);
 document.body.appendChild(renderer.view);
 
 var p = PubSub;
+var socket = io();
 
 document.onkeydown = function(e) {
     e = e || event;
     blocked_keys = [37, 38, 39, 40, 32, 9, 17];
 
-
+    socket.emit('test', "Hey look, i'm a test event");
     myShip.updateStats();
 
     switch (e.keyCode) {

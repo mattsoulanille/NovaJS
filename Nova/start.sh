@@ -1,1 +1,1 @@
-python -m "SimpleHTTPServer"
+node index.js
