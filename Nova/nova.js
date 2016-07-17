@@ -20,11 +20,15 @@ document.body.appendChild(renderer.view);
 var p = PubSub;
 var socket = io();
 
+
+var sync = new syncTime(socket)
+
+
 document.onkeydown = function(e) {
     e = e || event;
     blocked_keys = [37, 38, 39, 40, 32, 9, 17];
 
-    socket.emit('test', "Hey look, i'm a test event");
+//    socket.emit('test', "Hey look, i'm a test event");
     myShip.updateStats();
 
     switch (e.keyCode) {
@@ -109,7 +113,9 @@ Promise.all(buildShips)
     .then(myShip.build.bind(myShip))
 //    .then(bar.build.bind(bar))
     .then(earth.build.bind(earth))
-    .then(function() {readyToRender = true; console.log("built objects")});
+    .then(function() {readyToRender = true; console.log("built objects")})
+
+
 
 function startGame() {
 
@@ -139,11 +145,16 @@ function startGame() {
 
 //requestAnimationFrame(animate)
 
+// the time difference between the server and client clocks
+// NOT the ping time.
+var timeDifference = 0;
+var syncClocksTimer = setInterval(function() {sync.getDifference()
+					      .then(function(d) {timeDifference = d})}, 10000);
 
 spaceObject.prototype.lastTime = new Date().getTime()
 function animate() {
-	
-    spaceObject.prototype.time = new Date().getTime()
+    
+    spaceObject.prototype.time = new Date().getTime() + timeDifference;
 
     myShip.render()
 

@@ -11,14 +11,37 @@ app.get('/', function(req, res){
 
 app.use(express.static(__dirname))
 
-io.on('connection', function(socket){
-    // socket.on('test', function(msg) {
-    // 	console.log(msg);
-    // });
+var sendTime = function() {
+    
+}
 
+io.on('connection', function(socket){
+     socket.on('test', function(msg) {
+     	console.log(msg);
+     });
+    
+    
+    socket.on('pingTime', function(msg) {
+    	var response = {};
+    	if (msg.hasOwnProperty('time')) {
+    	    response.clientTime = msg.time;
+    	    response.serverTime = new Date().getTime();
+    	    socket.emit('pongTime', response);
+//	    console.log(msg);
+	    
+
+    	}
+    });
+    socket.on('disconnect', function() {
+	console.log('a user disconnected');
+    });
     
     console.log('a user connected');
 });
+
+
+
+
 
 http.listen(8000, function(){
     console.log('listening on *:8000');
