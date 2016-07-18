@@ -2,7 +2,7 @@ var express = require('express');
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-
+var UUID = require('node-uuid');
 
 
 app.get('/', function(req, res){
@@ -15,24 +15,29 @@ var sendTime = function() {
     
 }
 
-io.on('connection', function(socket){
-     socket.on('test', function(msg) {
+io.on('connection', function(client){
+     client.on('test', function(msg) {
      	console.log(msg);
      });
     
+
+    client.userid = UUID(); // seems like bad practice...
+    //    console.log(client);
+    console.log(client.userid);
+    client.emit('onconnected', {id: client.userid})
     
-    socket.on('pingTime', function(msg) {
+    client.on('pingTime', function(msg) {
     	var response = {};
     	if (msg.hasOwnProperty('time')) {
     	    response.clientTime = msg.time;
     	    response.serverTime = new Date().getTime();
-    	    socket.emit('pongTime', response);
+    	    client.emit('pongTime', response);
 //	    console.log(msg);
 	    
 
     	}
     });
-    socket.on('disconnect', function() {
+    client.on('disconnect', function() {
 	console.log('a user disconnected');
     });
     

@@ -19,7 +19,11 @@ document.body.appendChild(renderer.view);
 
 var p = PubSub;
 var socket = io();
-
+var UUID;
+socket.on('onconnected', function(data) {
+    UUID = data.id;
+    console.log("Connected to server. UUID: "+UUID);
+});
 
 var sync = new syncTime(socket)
 
@@ -148,8 +152,9 @@ function startGame() {
 // the time difference between the server and client clocks
 // NOT the ping time.
 var timeDifference = 0;
-var syncClocksTimer = setInterval(function() {sync.getDifference()
-					      .then(function(d) {timeDifference = d})}, 10000);
+setTimeout(function() {sync.getDifference().then(function(d) {timeDifference = d})}, 1000);
+//var syncClocksTimer = setInterval(function() {sync.getDifference()
+//					      .then(function(d) {timeDifference = d})}, 120000);
 
 spaceObject.prototype.lastTime = new Date().getTime()
 function animate() {

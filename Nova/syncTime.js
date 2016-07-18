@@ -23,7 +23,7 @@ syncTime.prototype.getDifference = function() {
 
 	    }
 	    else if (this.counter === this.repeat) {
-		console.log(this.difference);
+//		console.log(this.difference);
 		fulfill(this.difference);
 	    }
 	    else {
