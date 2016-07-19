@@ -4,6 +4,23 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var UUID = require('node-uuid');
 
+var PIXI = require("./pixistub.js");
+var spaceObject = require("./spaceObject");
+
+var movable = require("./movable");
+var collidable = require("./collidable");
+var damageable = require("./damageable");
+var turnable = require("./damageable");
+var acceleratable = require("./acceleratable");
+var ship = require("./ship");
+var playerShip = require("./playerShip");
+
+
+
+var test = new playerShip("Starbridge A");
+
+
+
 
 app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');

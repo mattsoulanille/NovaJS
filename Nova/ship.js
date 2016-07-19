@@ -1,5 +1,11 @@
-function ship(shipName, outfits) {
-    movable.call(this, shipName)
+if (typeof(module) !== 'undefined') {
+    module.exports = ship;
+    acceleratable = require("./acceleratable.js");
+}
+
+
+function ship(shipName, outfits, system) {
+    movable.call(this, shipName, system)
     this.url = 'objects/ships/'
     this.pointing = 0;
     this.outfits = outfits || [];

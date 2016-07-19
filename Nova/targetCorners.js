@@ -1,6 +1,6 @@
-function targetCorners(name) {
+function targetCorners(system, name) {
     this.name = name || "targetCorners";
-    spaceObject.call(this, this.name);
+    spaceObject.call(this, this.name, system);
     this.textures = {};
     this.targetTime = this.time;
 }

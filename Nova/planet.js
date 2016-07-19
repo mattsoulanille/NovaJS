@@ -1,5 +1,11 @@
-function planet(name) {
-    spaceObject.call(this, name);
+if (typeof(module) !== 'undefined') {
+    module.exports = planet;
+    spaceObject = require("./spaceObject.js");
+}
+
+
+function planet(name, system) {
+    spaceObject.call(this, name, system);
     this.url = "objects/planets/"
 }
 
@@ -10,7 +16,7 @@ planet.prototype = new spaceObject;
 planet.prototype.build = function() {
     return spaceObject.prototype.build.call(this)
 	.then(function() {
-	    planets.push(this);
+	    this.system.planets.push(this);
 	}.bind(this));
     
 }

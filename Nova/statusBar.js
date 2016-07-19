@@ -10,6 +10,9 @@ function statusBar(name, player) {
     this.spriteContainer.addChild(this.targetContainer);
     this.source = player;
     this.text = {};
+    if (typeof(this.source) !== 'undefined') {
+	this.system = this.source.system;
+    }
 }
 
 statusBar.prototype.build = function() {
@@ -169,7 +172,7 @@ statusBar.prototype.buildTargetText = function() {
 }
 
 statusBar.prototype.buildTargetCorners = function() {
-    this.targetCorners = new targetCorners();
+    this.targetCorners = new targetCorners(this.system);
     return this.targetCorners.build()
 }
 

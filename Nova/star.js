@@ -1,5 +1,5 @@
-function star(source, starContainer, name) {
-    movable.call(this, name)
+function star(source, starContainer, system, name) {
+    movable.call(this, name, system)
     this.url = 'objects/misc/';
     this.name = name || 'star';
     this.velocityFactor = 0;
@@ -20,7 +20,7 @@ star.prototype.build = function() {
     return this.makeSprites()
 	.then(_.bind(this.addSpritesToContainer, this))
 	.then(function() {
-	    spaceObjects.push(this)
+	    this.system.spaceObjects.push(this)
 	    this.available = true;
 	    this.renderReady = true;
 	}.bind(this));

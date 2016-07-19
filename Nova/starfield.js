@@ -19,6 +19,7 @@ function starfield(source, count, starname) {
     this.yrange = [-this.ysize/2, this.ysize/2];
     this.position = _.map(this.source.position, function(n) {return n})
     this.lastPosition = _.map(this.source.position, function(n) {return n})
+    this.system = source.system
 
 }
 
@@ -29,14 +30,14 @@ starfield.prototype.build = function() {
 	    stage.addChild(this.spriteContainer);
 
 	}.bind(this))
-        .catch(function(reason) {console.log(reason)});
+
 }
 
 
 starfield.prototype.buildStars = function() {
 
     for (i = 0; i < this.count; i++) {
-	var s = new star(this.source, this.spriteContainer);
+	var s = new star(this.source, this.spriteContainer, this.system);
 	this.stars.push(s);
     }
 

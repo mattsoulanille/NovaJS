@@ -1,5 +1,12 @@
-function damageable(name) {
-    collidable.call(this, name)
+
+
+if (typeof(module) !== 'undefined') {
+    module.exports = damageable;
+    collidable = require("./collidable.js");
+}
+
+function damageable(name, system) {
+    collidable.call(this, name, system)
 
 }
 

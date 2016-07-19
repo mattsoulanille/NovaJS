@@ -1,3 +1,9 @@
+if (typeof(module) !== 'undefined') {
+    module.exports = basicWeapon;
+
+}
+
+
 function basicWeapon(weaponName, source, meta, count) {
     this.name = weaponName;
     this.meta = meta;

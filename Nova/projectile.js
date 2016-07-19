@@ -1,7 +1,16 @@
+if (typeof(module) !== 'undefined') {
+    module.exports = projectile;
+    acceleratable = require("./acceleratable.js");
+}
+
+
 function projectile(projName, meta, source) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
-    movable.call(this, projName)
+
+    if (typeof(source) !== 'undefined') {
+	movable.call(this, projName, source.system);
+    }
     this.url = 'objects/projectiles/';
     this.pointing = 0;
     this.available = false;
@@ -14,7 +23,7 @@ function projectile(projName, meta, source) {
 projectile.prototype = new acceleratable
 
 projectile.prototype.build = function() {
-    this.targets = ships; // Temporary (PD weapons can hit missiles)
+    this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
     var setAvailable = function() {
 	this.available = true
     }
@@ -38,7 +47,7 @@ projectile.prototype.loadResources = function() {
 projectile.prototype.render = function() {
     // Maybe move this to updateStats
     acceleratable.prototype.render.call(this);
-    var collisions = this.detectCollisions(collidables);
+    var collisions = this.detectCollisions(this.system.collidables);
     
     if ((collisions.length > 1) ||
 	((collisions.length == 1) && (collisions[0] != this.source)) ) {

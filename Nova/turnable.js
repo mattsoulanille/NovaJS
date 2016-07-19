@@ -1,5 +1,11 @@
-function turnable(name) {
-    damageable.call(this, name);
+if (typeof(module) !== 'undefined') {
+    module.exports = turnable;
+    damageable = require("./damageable.js");
+}
+
+
+function turnable(name, system) {
+    damageable.call(this, name, system);
     this.turning = "";
 
 }

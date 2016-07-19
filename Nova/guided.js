@@ -1,3 +1,9 @@
+if (typeof(module) !== 'undefined') {
+    module.exports = guided;
+    projectile = require("./projectile.js");
+}
+
+
 function guided(projName, meta, source) {
     projectile.call(this, projName, meta, source);
 

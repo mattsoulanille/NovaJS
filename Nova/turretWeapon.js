@@ -1,3 +1,9 @@
+if (typeof(module) !== 'undefined') {
+    module.exports = turretWeapon;
+    basicWeapon = require("./basicWeapon.js");
+}
+
+
 function turretWeapon(name, source, meta, count) {
     basicWeapon.call(this, name, source, meta, count);
 }

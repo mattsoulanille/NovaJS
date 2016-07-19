@@ -1,5 +1,12 @@
-function spaceObject(objectName) {
+if (typeof(module) !== 'undefined') {
+    module.exports = spaceObject;
+    PIXI = require("./pixistub.js")
+}
+
+
+function spaceObject(objectName, system) {
     this.name = objectName || "";
+    this.system = system;
     this.renderReady = false;
     this.rendering = false; // whether or not to render
     this.url = 'objects/misc/';
@@ -25,7 +32,7 @@ spaceObject.prototype.build = function() {
     
 };
 spaceObject.prototype.addToSpaceObjects = function() {
-    spaceObjects.push(this);
+    this.system.spaceObjects.push(this);
 
 }
 
@@ -33,6 +40,8 @@ spaceObject.prototype.loadResources = function() {
     return new Promise(function(fulfill, reject) {
 	//console.log(this);
 	var jsonUrl = this.url + this.name + '.json';
+
+	
 	var loader = new PIXI.loaders.Loader();
 	loader
 	    .add('meta', jsonUrl)

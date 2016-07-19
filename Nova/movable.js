@@ -7,8 +7,14 @@ Handles any space object that moves
 */
 
 
-function movable(name) {
-    spaceObject.call(this, name);
+if (typeof(module) !== 'undefined') {
+    module.exports = movable;
+    spaceObject = require("./spaceObject.js");
+}
+
+
+function movable(name, system) {
+    spaceObject.call(this, name, system);
     this.velocity = [0,0];
 
 

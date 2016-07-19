@@ -1,3 +1,5 @@
+//module.exports = sprite;
+
 function sprite(url, anchor) {
     this.url = url;
     this.renderReady = false;

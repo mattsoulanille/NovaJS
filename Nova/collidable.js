@@ -2,8 +2,14 @@
 Anything that can have collisions (with projectiles etc)
 */
 
-function collidable(name) {
-    movable.call(this, name);
+if (typeof(module) !== 'undefined') {
+    module.exports = collidable;
+    movable = require("./movable.js");
+}
+
+
+function collidable(name, system) {
+    movable.call(this, name, system);
 
     // assumes all textures of a PIXI sprite are the same size
 
@@ -51,7 +57,7 @@ collidable.prototype.build = function() {
     return movable.prototype.build.call(this)
 //	.then(function() {console.log(this.renderReady)}.bind(this))
 	.then(collidable.prototype.makeHitbox.bind(this))
-	.then(function() {collidables.push(this)}.bind(this));
+	.then(function() {this.system.collidables.push(this)}.bind(this));
 
 }
 collidable.prototype.makeHitbox = function() {

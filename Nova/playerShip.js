@@ -1,5 +1,11 @@
-function playerShip(shipName, outfits) {
-    ship.call(this, shipName, outfits);
+if (typeof(module) !== 'undefined') {
+    module.exports = playerShip;
+    ship = require("./ship.js");
+}
+
+
+function playerShip(shipName, outfits, system) {
+    ship.call(this, shipName, outfits, system);
     this.pointing = Math.random()*2*Math.PI;
     this.velocity[0] = 0;
     this.velocity[1] = 0;
@@ -46,7 +52,7 @@ playerShip.prototype.makeStatusBar = function() {
 
 
 playerShip.prototype.addToSpaceObjects = function() {
-    spaceObjects.unshift(this);
+    this.system.spaceObjects.unshift(this);
 }
 
 playerShip.prototype.addSpritesToContainer = function() {
@@ -113,10 +119,10 @@ playerShip.prototype.render = function() {
 
 playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1
-    this.targetIndex = (this.targetIndex + 2) % (ships.length + 1) - 1; // only ships are targets
+    this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1; // only ships are targets
 
     // If targetIndex === -1, then target is undefined, which is intentional
-    this.target = ships[this.targetIndex];
+    this.target = this.system.ships[this.targetIndex];
 //    console.log(this.targetIndex)
     this.statusBar.cycleTarget(this.target)
     _.each(this.weapons.all, function(w) {w.cycleTarget(this.target)}, this);

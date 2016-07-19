@@ -56,28 +56,34 @@ document.onkeyup = function(e) {
 
 
 
+// global system variable; eventually will become a syst (like sol or wolf 359).
+// will be given by the server on client entrance to the system;
+var system = {
+    "name": "sol",  //for now, we just define a system so the universe works...
+    "spaceObjects": [],
+    "ships": [],
+    "planets": [],
+    "collidables": []
+};
+
 
 
 var textures = {}; // global texture object that sprites save and load textures from
-var spaceObjects = []; // global rendered spaceObjects
-var ships = [];
-var planets = [];
-var collidables = [];
 //var myShip = new playerShip("Starbridge A")
 var medium_blaster = new outfit("Medium Blaster", 5);
 var medium_blaster_t = new outfit("Medium Blaster Turret", 1);
 var ir_missile = new outfit("IR Missile Launcher", 4);
 var shuttle_missile = new outfit("IR Missile Launcher", 1);
 var shuttle_blaster = new outfit("Medium Blaster Turret", 2);
-var myShip = new playerShip("Starbridge A", [medium_blaster_t, ir_missile]);
+var myShip = new playerShip("Starbridge A", [medium_blaster_t, ir_missile], system);
 //var bar = new statusBar("civilian", myShip);
 
-var starbridge = new ship("Starbridge A");
-var shuttle = new ship("Shuttle A", [shuttle_missile, shuttle_blaster]);
-var dart = new ship("Vell-os Dart");
+var starbridge = new ship("Starbridge A", [], system);
+var shuttle = new ship("Shuttle A", [shuttle_missile, shuttle_blaster], system);
+var dart = new ship("Vell-os Dart", [], system);
 var stars = new starfield(myShip, 40);
 
-var earth = new planet("Earth");
+var earth = new planet("Earth", system);
 
 
 //var target = new targetImage("Starbridge.png")
@@ -85,9 +91,10 @@ var earth = new planet("Earth");
 
 //for collisions
 
-ships.push(shuttle);
-ships.push(starbridge);
-ships.push(dart);
+//have ships do this pushing themselves
+system.ships.push(shuttle);
+system.ships.push(starbridge);
+system.ships.push(dart);
 shuttle.position = [100,100]
 starbridge.position = [200,200];
 dart.position = [-200, -200];
@@ -111,7 +118,7 @@ var stagePosition = myShip.position
 var readyToRender = false;
 //var buildObjects = _.map(spaceObjects, function(s) {return s.build()});
 //console.log(buildObjects)
-var buildShips = _.map(ships, function(s) {return s.build()})
+var buildShips = _.map(system.ships, function(s) {return s.build()})
 Promise.all(buildShips)
     .then(stars.build.bind(stars))
     .then(myShip.build.bind(myShip))
@@ -132,7 +139,7 @@ function startGame() {
 
     if (readyToRender) {
 	//replace with promises
-	$.when( spaceObjects.map(function(s){
+	$.when( system.spaceObjects.map(function(s){
 	    // improve me
 	    if (! (s instanceof projectile)) {
 		s.show()
@@ -165,7 +172,7 @@ function animate() {
 
     stars.render()
     var lastTimes = []
-    _.each(spaceObjects, function(s) {
+    _.each(system.spaceObjects, function(s) {
     	if (s.rendering) {
     	    s.render()
 	    lastTimes.push(s.lastTime)

@@ -1,3 +1,8 @@
+if (typeof(module) !== 'undefined') {
+    module.exports = weapon;
+}
+
+
 function weapon(name, source, count) {
     this.url = 'objects/weapons/';
     this.name = name;

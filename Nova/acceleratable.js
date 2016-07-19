@@ -1,5 +1,11 @@
-function acceleratable(name) {
-    turnable.call(this, name)
+if (typeof(module) !== 'undefined') {
+    module.exports = acceleratable;
+    turnable = require("./turnable.js");
+}
+
+
+function acceleratable(name, system) {
+    turnable.call(this, name, system)
     this.lastAccelerating = false;
     this.accelerating = false;
 }
