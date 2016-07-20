@@ -1,6 +1,8 @@
 if (typeof(module) !== 'undefined') {
     module.exports = turretWeapon;
-    basicWeapon = require("./basicWeapon.js");
+    var basicWeapon = require("./basicWeapon.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
 }
 
 

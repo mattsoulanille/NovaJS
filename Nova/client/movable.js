@@ -9,7 +9,10 @@ Handles any space object that moves
 
 if (typeof(module) !== 'undefined') {
     module.exports = movable;
-    spaceObject = require("./spaceObject.js");
+    var spaceObject = require("../server/spaceObjectServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+
 }
 
 
@@ -26,13 +29,7 @@ movable.prototype = new spaceObject;
 
 
 movable.prototype.setProperties = function() {
-    // seems a bit insane: inserts a promise into the
-    // spaceObject.prototype.loadResources promise chain
     spaceObject.prototype.setProperties.call(this)
-
-
-
-
 }
 
 movable.prototype.render = function() {

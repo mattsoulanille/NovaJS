@@ -1,6 +1,8 @@
 if (typeof(module) !== 'undefined') {
     module.exports = turnable;
-    damageable = require("./damageable.js");
+    var damageable = require("../server/damageableServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
 }
 
 
@@ -100,7 +102,8 @@ turnable.prototype.render = function() {
 	}
 	else if (this.turning == "right") {
 	    this.pointing = this.pointing - (this.properties.turnRate * (this.time - this.lastTime) / 1000);
-
+	    
+	    // Right != correct in this instance. Right = a direction.
 	    if (this.hasRightTexture) {
 		frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
 		frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length; });

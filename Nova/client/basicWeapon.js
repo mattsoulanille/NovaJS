@@ -1,6 +1,9 @@
 if (typeof(module) !== 'undefined') {
     module.exports = basicWeapon;
-
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+    var projectile = require("../server/projectileServer.js");
+    var guided = require("../server/guidedServer.js");
 }
 
 

@@ -1,6 +1,10 @@
 if (typeof(module) !== 'undefined') {
     module.exports = spaceObject;
-    PIXI = require("./pixistub.js")
+    var sprite = require("../server/spriteServer.js")
+    var PIXI = require("../server/pixistub.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+
 }
 
 

@@ -1,6 +1,9 @@
 if (typeof(module) !== 'undefined') {
     module.exports = acceleratable;
-    turnable = require("./turnable.js");
+    var turnable = require("../server/turnableServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+    
 }
 
 

@@ -1,3 +1,11 @@
+if (typeof(module) !== 'undefined') {
+    module.exports = outfit;
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+    var weapon = require("../server/weaponServer.js");
+}
+
+
 function outfit(outfitName, count) {
     // source is a ship / object the outfit is equipped to
     this.ready = false;

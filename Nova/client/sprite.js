@@ -1,4 +1,9 @@
-//module.exports = sprite;
+if (typeof(module) !== 'undefined') {
+    module.exports = sprite;
+    var PIXI = require("../server/pixistub.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+}
 
 function sprite(url, anchor) {
     this.url = url;

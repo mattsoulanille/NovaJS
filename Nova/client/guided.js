@@ -1,6 +1,9 @@
 if (typeof(module) !== 'undefined') {
     module.exports = guided;
-    projectile = require("./projectile.js");
+    var projectile = require("../server/projectileServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+
 }
 
 

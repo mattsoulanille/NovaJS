@@ -1,6 +1,9 @@
 if (typeof(module) !== 'undefined') {
     module.exports = projectile;
-    acceleratable = require("./acceleratable.js");
+    var acceleratable = require("../server/acceleratableServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+    
 }
 
 
@@ -9,7 +12,7 @@ function projectile(projName, meta, source) {
     // one single projectile. Usually created en masse by a weapon.
 
     if (typeof(source) !== 'undefined') {
-	movable.call(this, projName, source.system);
+	acceleratable.call(this, projName, source.system);
     }
     this.url = 'objects/projectiles/';
     this.pointing = 0;
@@ -20,7 +23,7 @@ function projectile(projName, meta, source) {
 
 }
 
-projectile.prototype = new acceleratable
+projectile.prototype = new acceleratable;
 
 projectile.prototype.build = function() {
     this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
@@ -28,8 +31,8 @@ projectile.prototype.build = function() {
 	this.available = true
     }
 
-    return spaceObject.prototype.build.call(this)
-	.then(collidable.prototype.makeHitbox.bind(this))
+    return acceleratable.prototype.build.call(this)
+	.then(acceleratable.prototype.makeHitbox.bind(this))
 	.then(_.bind(setAvailable, this));
 
 }

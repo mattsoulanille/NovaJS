@@ -4,7 +4,10 @@ Anything that can have collisions (with projectiles etc)
 
 if (typeof(module) !== 'undefined') {
     module.exports = collidable;
-    movable = require("./movable.js");
+    var movable = require("../server/movableServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+
 }
 
 
@@ -62,7 +65,7 @@ collidable.prototype.build = function() {
 }
 collidable.prototype.makeHitbox = function() {
 
-
+/*
     // assumes all textures are the same size per sprite
     var maxX = _.max(_.map(this.sprites, function(spr) {
 	return spr.textures[0]._frame.width;
@@ -72,8 +75,8 @@ collidable.prototype.makeHitbox = function() {
     var maxY = _.max(_.map(this.sprites, function(spr) {
 	return spr.textures[0]._frame.height;
     }, this))
-
-    this.hitbox = [[-maxX/2, maxX/2],
-		   [-maxY/2, maxY/2]];
+*/
+    this.hitbox = [[-this.size[0]/2, this.size[0]/2],
+		   [-this.size[1]/2, this.size[1]/2]];
 
 }

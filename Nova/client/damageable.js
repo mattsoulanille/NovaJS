@@ -2,7 +2,10 @@
 
 if (typeof(module) !== 'undefined') {
     module.exports = damageable;
-    collidable = require("./collidable.js");
+    var collidable = require("../server/collidableServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+
 }
 
 function damageable(name, system) {

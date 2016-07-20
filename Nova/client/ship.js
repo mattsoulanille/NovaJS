@@ -1,11 +1,14 @@
 if (typeof(module) !== 'undefined') {
     module.exports = ship;
-    acceleratable = require("./acceleratable.js");
+    var acceleratable = require("../server/acceleratableServer.js");
+    var _ = require("underscore");
+    var Promise = require("bluebird");
+
 }
 
 
 function ship(shipName, outfits, system) {
-    movable.call(this, shipName, system)
+    acceleratable.call(this, shipName, system)
     this.url = 'objects/ships/'
     this.pointing = 0;
     this.outfits = outfits || [];
@@ -118,11 +121,13 @@ ship.prototype.manageLights = function() {
 }
 
 ship.prototype.render = function() {
-    if (this.accelerating) {
-	this.sprites.engine.sprite.alpha = 1;
-    }
-    else {
-	this.sprites.engine.sprite.alpha = 0;
+    if ("engine" in this.sprites) {
+	if (this.accelerating) {
+	    this.sprites.engine.sprite.alpha = 1;
+	}
+	else {
+	    this.sprites.engine.sprite.alpha = 0;
+	}
     }
 
     if ("lights" in this.sprites) {
