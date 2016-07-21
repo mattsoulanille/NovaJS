@@ -94,9 +94,9 @@ ship.prototype.addSpritesToContainer = function() {
     stage.addChild(this.spriteContainer)
 }
 
-ship.prototype.updateStats = function(turning, accelerating) {
+ship.prototype.updateStats = function(stats) {
 
-    acceleratable.prototype.updateStats.call(this, turning, accelerating);
+    acceleratable.prototype.updateStats.call(this, stats);
 }
 
 ship.prototype.manageLights = function() {

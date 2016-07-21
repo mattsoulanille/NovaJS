@@ -16,10 +16,20 @@ function acceleratable(name, system) {
 
 acceleratable.prototype = new turnable;
 
-acceleratable.prototype.updateStats = function(turning, accelerating) {
-    turnable.prototype.updateStats.call(this, turning);
-    this.accelerating = accelerating;
+acceleratable.prototype.updateStats = function(stats) {
+    turnable.prototype.updateStats.call(this, stats);
+    if (typeof(stats.accelerating) !== 'undefined') {
+	this.accelerating = stats.accelerating;
+    }
+
 }
+
+acceleratable.prototype.getStats = function() {
+    var stats = turnable.prototype.getStats.call(this);
+    stats.accelerating = this.accelerating;
+    return stats;
+}
+
 acceleratable.prototype.setProperties = function() {
 
     turnable.prototype.setProperties.call(this);

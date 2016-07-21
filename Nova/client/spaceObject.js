@@ -149,7 +149,18 @@ spaceObject.prototype.show = function() {
     this.rendering = true;
 }
 
+spaceObject.prototype.updateStats = function(stats) {
+    if (typeof(stats.position) !== 'undefined') {
+	this.position[0] = stats.position[0];
+	this.position[1] = stats.position[1];
+    }
+}
 
+spaceObject.prototype.getStats = function() {
+    var stats = {};
+    stats.position = [this.position[0], this.position[1]];
+    return stats;
+}
 
 spaceObject.prototype.render = function() {
     if (this.renderReady == true) {

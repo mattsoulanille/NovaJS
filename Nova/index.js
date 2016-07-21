@@ -36,12 +36,27 @@ var buildSystem = function(system) {
 //uuid, ship
 var players = {};
 var gameloop = function(system) {
-    _.each(players, function(player) {player.render()});
+    
+    _.each(players, function(player) {
+	player.time = new Date().getTime();
+	player.render()
+    });
 
     setTimeout(function() {gameloop(system)}, 0);
 }
 
+//notify clients of
+/*
+setInterval(function() {
 
+
+})
+*/
+/*
+setInterval(function() {
+    console.log(_.map(players, function(p) {return p.position}))
+}, 5000)
+*/
 
 
 
@@ -54,22 +69,55 @@ app.use(express.static(__dirname))
 
 
 io.on('connection', function(client){
-     client.on('test', function(msg) {
-     	console.log(msg);
-     });
+    console.log('a user connected');
+    var userid = UUID(); 
+    client.emit('onconnected', {id: userid})
+
+    var playerInfo = {};
+    
+    _.each(players, function(value, key) {
+	playerInfo[key] = value.name;
+    });
+
+    client.emit('addPlayers', playerInfo)
+    
+    var myShip = new ship("Starbridge A", [], system);
+    myShip.build()
+//	.then(function() {players[userid] = myShip;})
+//	.then(function() {console.log(players);});
+    players[userid] = myShip;
+
+    
+//    console.log(playerInfo);
+
+    playerInfo = {};
+    playerInfo[userid] = myShip.name;
+    client.broadcast.emit('addPlayers', playerInfo);
+
+
+    
+    
+    client.on('updateStats', function(stats) {
+	var myShip = players[userid];
+	myShip.updateStats(stats);
+	
+	var newStats = {};
+	newStats[userid] = stats;
+//	console.log(newStats);
+	client.broadcast.emit('updateStats', newStats);
+//	client.broadcast.emit('test', "does this work?");
+
+	
+    });
+
+    client.on("test", function(data) {
+	console.log(data);
+    });
     
 
-    client.userid = UUID(); // seems like bad practice...
-    var myShip = new ship("Starbridge A", [], system);
-
-    myShip.build()
-	.then(function() {players[client.userid] = myShip;})
-	.then(function() {console.log(players);});
-
-
     //    console.log(client);
-//    console.log(client.userid);
-    client.emit('onconnected', {id: client.userid})
+//    console.log(userid);
+
     
     client.on('pingTime', function(msg) {
     	var response = {};
@@ -84,10 +132,10 @@ io.on('connection', function(client){
     });
     client.on('disconnect', function() {
 	console.log('a user disconnected');
-	delete players[client.userid];
+	delete players[userid];
     });
     
-    console.log('a user connected');
+
 });
 
 

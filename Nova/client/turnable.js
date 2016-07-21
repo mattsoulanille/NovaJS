@@ -23,9 +23,22 @@ turnable.prototype.setProperties = function() {
 
 }
 
-turnable.prototype.updateStats = function(turning) {
+turnable.prototype.updateStats = function(stats) {
+    damageable.prototype.updateStats.call(this, stats);
+    if (typeof(stats.turning) !== 'undefined') {
+	this.turning = stats.turning;
+    }
+    if (typeof(stats.pointing) !== 'undefined') {
+	this.pointing = stats.pointing;
+    }
 
-    this.turning = turning;
+}
+
+turnable.prototype.getStats = function() {
+    var stats = damageable.prototype.getStats.call(this);
+    stats.turning = this.turning;
+    stats.pointing = this.pointing;
+    return stats;
 }
 
 turnable.prototype.turnTo = function(pointTo) {

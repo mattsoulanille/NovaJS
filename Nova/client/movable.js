@@ -32,6 +32,20 @@ movable.prototype.setProperties = function() {
     spaceObject.prototype.setProperties.call(this)
 }
 
+movable.prototype.updateStats = function(stats) {
+    spaceObject.prototype.updateStats.call(this, stats);
+    if (typeof(stats.velocity) !== 'undefined') {
+	this.velocity[0] = stats.velocity[0];
+	this.velocity[1] = stats.velocity[1];
+    }
+}
+
+movable.prototype.getStats = function() {
+    var stats = spaceObject.prototype.getStats.call(this);
+    stats.velocity = [this.velocity[0], this.velocity[1]];
+    return stats;
+}
+
 movable.prototype.render = function() {
     if (this.renderReady) {
 	

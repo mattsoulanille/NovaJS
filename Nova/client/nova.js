@@ -17,17 +17,7 @@ $(window).resize(onResize);
 // add the renderer view element to the DOM
 document.body.appendChild(renderer.view);
 
-var p = PubSub;
 var socket = io();
-var UUID;
-socket.on('onconnected', function(data) {
-    UUID = data.id;
-    console.log("Connected to server. UUID: "+UUID);
-});
-
-var sync = new syncTime(socket)
-
-
 document.onkeydown = function(e) {
     e = e || event;
     blocked_keys = [37, 38, 39, 40, 32, 9, 17];
@@ -41,8 +31,9 @@ document.onkeydown = function(e) {
 	break;
     }
     
-
-
+    var newStats = myShip.getStats();
+    socket.emit('updateStats', newStats);
+    
     if (_.contains(blocked_keys, e.keyCode)) {
 	return false;
     }
@@ -52,7 +43,17 @@ document.onkeydown = function(e) {
 }
 document.onkeyup = function(e) {
     myShip.updateStats();
+    var newStats = myShip.getStats();
+    socket.emit('updateStats', newStats);
+
 }
+
+var p = PubSub;
+
+var UUID;
+
+var sync = new syncTime(socket)
+
 
 
 
@@ -85,6 +86,41 @@ var stars = new starfield(myShip, 40);
 
 var earth = new planet("Earth", system);
 
+var players = {};
+
+socket.on('onconnected', function(data) {
+    UUID = data.id;
+    console.log("Connected to server. UUID: "+UUID);
+    players[UUID] = myShip;
+});
+
+socket.on('disconnect', function() {
+    console.log("disconnected");
+    players = {};
+    UUID = undefined;
+});
+
+socket.on('addPlayers', function(p) {
+    _.each(p, function(shipName, playerUUID) {
+	if (typeof(players[playerUUID]) === 'undefined') {
+	    var otherShip = new ship(shipName, [], system);
+	    players[playerUUID] = otherShip;
+	    otherShip.build()
+		.then(function() {otherShip.show()});
+	    console.log("added player " + playerUUID);
+	}
+    });
+});
+socket.on('updateStats', function(stats) {
+//    console.log(stats);
+    _.each(stats, function(newStats, userID) {
+	players[userID].updateStats(newStats);
+    });
+});
+
+socket.on('test', function(data) {
+    console.log(data);
+});
 
 //var target = new targetImage("Starbridge.png")
 //target.build()
@@ -167,7 +203,7 @@ spaceObject.prototype.lastTime = new Date().getTime()
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
-
+    
     myShip.render()
 
     stars.render()

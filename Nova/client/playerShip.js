@@ -63,7 +63,7 @@ playerShip.prototype.addSpritesToContainer = function() {
     stage.addChildAt(this.spriteContainer, stage.children.length) //playerShip is above all
 }
 
-playerShip.prototype.updateStats = function() {
+playerShip.prototype.updateStats = function(stats = {}) {
     var keys = KeyboardJS.activeKeys();
     var turning;
     var accelerating;
@@ -102,7 +102,12 @@ playerShip.prototype.updateStats = function() {
     else {
 	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
     }
-    ship.prototype.updateStats.call(this, turning, accelerating);
+    
+
+    stats.turning = turning;
+    stats.accelerating = accelerating;
+
+    ship.prototype.updateStats.call(this, stats);
 
 }
 

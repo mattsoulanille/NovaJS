@@ -26,6 +26,7 @@ collidable.prototype.receiveCollision = function(other) {
 }    
 
 
+
 collidable.prototype.detectCollisions = function(others) {
     // others is an array of things to check for collisions with.
     var thisXRange = [this.position[0] + this.hitbox[0][0], this.position[0] + this.hitbox[0][1]];

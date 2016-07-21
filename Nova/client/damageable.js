@@ -38,6 +38,25 @@ damageable.prototype.receiveCollision = function(other) {
 
 }
 
+damageable.prototype.updateStats = function(stats) {
+    collidable.prototype.updateStats.call(this, stats);
+    if (typeof(stats.shield) !== 'undefined') {
+	this.shield = stats.shield;
+    }
+
+    if (typeof(stats.armor) !== 'undefined') {
+	this.shield = stats.armor;
+    }
+    
+}
+
+damageable.prototype.getStats = function() {
+    var stats = collidable.prototype.getStats.call(this);
+    stats.shield = this.shield;
+    stats.armor = this.armor;
+    return stats;
+}
+
 damageable.prototype.render = function() {
 
     if (typeof(this.lastTime) != 'undefined') {
