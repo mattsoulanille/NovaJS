@@ -33,7 +33,7 @@ damageable.prototype.receiveCollision = function(other) {
     if (this.armor <= 0) {
 	this.armor = 0;
 	this.velocity = [0,0];
-	this.destroy();
+	this.onDeath();
     }
 
 }
@@ -77,9 +77,15 @@ damageable.prototype.render = function() {
     collidable.prototype.render.call(this);
 }
 
-damageable.prototype.destroy = function() {
-    
+damageable.prototype.onDeath = function() {
     this.hide();
     
 
 }
+
+// damageable.prototype.destroy = function() {
+    
+//     this.hide();
+    
+
+// }

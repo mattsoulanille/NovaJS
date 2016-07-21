@@ -15,14 +15,19 @@ function basicWeapon(weaponName, source, meta, count) {
     this.source = source;
     this.count = count || 1
     this.ready = false;
-
+    
 }
 
 basicWeapon.prototype.build = function() {
+    // this is temporary
+    // normal or pd. will be implemented eventually.
+    this.meta.properties.hits = "normal";
+    this.meta.properties.vulnerableTo = []; // normal and/or pd
     return this.buildProjectiles()
 	.then(_.bind(function() {
 	    this.ready = true
 	    this.source.weapons.all.push(this)
+
 	}, this));
 
 }

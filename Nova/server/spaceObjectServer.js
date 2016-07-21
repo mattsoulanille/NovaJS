@@ -37,18 +37,22 @@ spaceObjectServer.prototype.makeSize = function() {
 spaceObjectServer.prototype.addSpritesToContainer = function() {
     // do nothing
 }
-spaceObject.prototype.makeSprites = function() {
+spaceObjectServer.prototype.makeSprites = function() {
 }
 
-spaceObject.prototype.callSprites = function(call) {
+spaceObjectServer.prototype.callSprites = function(call) {
     // also do nothing
 }
     
-spaceObject.prototype.render = function() {
+spaceObjectServer.prototype.render = function() {
     // again, do nothing
 
 }
 
-    
+spaceObjectServer.prototype.destroy = function() {
+    var index = this.system.spaceObjects.indexOf(this);
+    this.system.spaceObjects.splice(index, 1);
+
+}
 
     

@@ -36,9 +36,10 @@ ship.prototype.build = function() {
 	    }
 	    
 	    this.fuel = this.properties.maxFuel;
-	    
+
 	    
 	}, this))
+	.then(this.addToSystem.bind(this));
 
 
     // return RSVP.all(outfitPromises)
@@ -47,7 +48,9 @@ ship.prototype.build = function() {
 
 
 }
-
+ship.prototype.addToSystem = function() {
+    this.system.ships.push(this);
+}
 ship.prototype.buildTargetImage = function() {
     this.targetImage = new targetImage(this.meta.targetImage);
     return this.targetImage.build()
@@ -145,4 +148,24 @@ ship.prototype.render = function() {
     }
     
     acceleratable.prototype.render.call(this);
+}
+
+
+ship.prototype.show = function() {
+    this.targetable = true;
+    acceleratable.prototype.show.call(this);
+}
+
+ship.prototype.hide = function() {
+    this.targetable = false;
+    acceleratable.prototype.hide.call(this);
+}
+
+
+ship.prototype.destroy = function() {
+    if (_.contains(this.system.ships, this)) {
+	var index = this.system.ships.indexOf(this);
+	this.system.ships.splice(index, 1);
+    }
+    acceleratable.prototype.destroy.call(this);
 }

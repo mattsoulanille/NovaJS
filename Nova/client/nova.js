@@ -92,6 +92,7 @@ socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
     players[UUID] = myShip;
+    socket.emit('makeShip', myShip.name);
 });
 
 socket.on('disconnect', function() {
@@ -111,6 +112,16 @@ socket.on('addPlayers', function(p) {
 	}
     });
 });
+
+socket.on('removePlayers', function(p) {
+    _.each(p, function(playerUUID) {
+	if (typeof(players[playerUUID]) !== 'undefined') {
+	    players[playerUUID].destroy();
+	    delete players[playerUUID];
+	}
+    });
+});
+
 socket.on('updateStats', function(stats) {
 //    console.log(stats);
     _.each(stats, function(newStats, userID) {
@@ -128,9 +139,10 @@ socket.on('test', function(data) {
 //for collisions
 
 //have ships do this pushing themselves
-system.ships.push(shuttle);
-system.ships.push(starbridge);
-system.ships.push(dart);
+var ships = [];
+ships.push(shuttle);
+ships.push(starbridge);
+ships.push(dart);
 shuttle.position = [100,100]
 starbridge.position = [200,200];
 dart.position = [-200, -200];
@@ -154,7 +166,7 @@ var stagePosition = myShip.position
 var readyToRender = false;
 //var buildObjects = _.map(spaceObjects, function(s) {return s.build()});
 //console.log(buildObjects)
-var buildShips = _.map(system.ships, function(s) {return s.build()})
+var buildShips = _.map(ships, function(s) {return s.build()})
 Promise.all(buildShips)
     .then(stars.build.bind(stars))
     .then(myShip.build.bind(myShip))

@@ -124,7 +124,11 @@ playerShip.prototype.render = function() {
 
 playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1
-    this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1; // only ships are targets
+    var incrementTargetIndex = function() {
+	this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1;
+    }.bind(this);
+
+    incrementTargetIndex();
 
     // If targetIndex === -1, then target is undefined, which is intentional
     this.target = this.system.ships[this.targetIndex];
@@ -133,3 +137,5 @@ playerShip.prototype.cycleTarget = function() {
     _.each(this.weapons.all, function(w) {w.cycleTarget(this.target)}, this);
     
 }
+
+playerShip.prototype.addToSystem = function() {};

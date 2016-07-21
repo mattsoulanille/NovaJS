@@ -23,6 +23,7 @@ function spaceObject(objectName, system) {
     this.spriteContainer = new PIXI.Container();
     this.spriteContainer.visible = false;
     this.size = [];
+    this.visible;
 }
 
 spaceObject.prototype.build = function() {
@@ -154,11 +155,21 @@ spaceObject.prototype.updateStats = function(stats) {
 	this.position[0] = stats.position[0];
 	this.position[1] = stats.position[1];
     }
+    if (typeof(stats.visible) !== 'undefined') {
+	if (stats.visible && !this.visible) {
+	    this.show();
+	}
+	else if (!stats.visible && this.visible) {
+	    this.hide();
+	}
+    }
+    
 }
 
 spaceObject.prototype.getStats = function() {
     var stats = {};
     stats.position = [this.position[0], this.position[1]];
+    stats.visible = this.visible;
     return stats;
 }
 
@@ -181,3 +192,13 @@ spaceObject.prototype.render = function() {
     }
 }
 
+// destroys the object. This is NOT the function to call
+// if you want it to explode.
+spaceObject.prototype.destroy = function() {
+    var index = this.system.spaceObjects.indexOf(this);
+    this.system.spaceObjects.splice(index, 1);
+    this.hide();
+    this.spriteContainer.destroy();
+    _.each(this.sprites, function(s) {s.sprite.destroy()});
+    
+}

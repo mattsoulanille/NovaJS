@@ -13,7 +13,7 @@ if (typeof(module) !== 'undefined') {
 
 function collidable(name, system) {
     movable.call(this, name, system);
-
+    
     // assumes all textures of a PIXI sprite are the same size
 
 
@@ -24,7 +24,6 @@ collidable.prototype = new movable;
 collidable.prototype.receiveCollision = function(other) {
 
 }    
-
 
 
 collidable.prototype.detectCollisions = function(others) {
@@ -41,16 +40,18 @@ collidable.prototype.detectCollisions = function(others) {
     var collisions = [];
     
     _.each(others, function(other) {
-	var otherXRange = [other.position[0] + other.hitbox[0][0],
-			   other.position[0] + other.hitbox[0][1]];
-
-	var otherYRange = [other.position[1] + other.hitbox[1][0],
-			   other.position[1] + other.hitbox[1][1]];
-	
-	if (other.visible && rangeOverlap(thisXRange, otherXRange) &&
-	    rangeOverlap(thisYRange, otherYRange)) {
-
-	    collisions.push(other)
+	if (_.contains(other.properties.vulnerableTo, this.properties.hits)) {
+	    var otherXRange = [other.position[0] + other.hitbox[0][0],
+			       other.position[0] + other.hitbox[0][1]];
+	    
+	    var otherYRange = [other.position[1] + other.hitbox[1][0],
+			       other.position[1] + other.hitbox[1][1]];
+	    
+	    if (other.visible && rangeOverlap(thisXRange, otherXRange) &&
+		rangeOverlap(thisYRange, otherYRange)) {
+		
+		collisions.push(other)
+	    }
 	}
     }, this);
     return collisions;
@@ -61,23 +62,31 @@ collidable.prototype.build = function() {
     return movable.prototype.build.call(this)
 //	.then(function() {console.log(this.renderReady)}.bind(this))
 	.then(collidable.prototype.makeHitbox.bind(this))
-	.then(function() {this.system.collidables.push(this)}.bind(this));
+	.then(function() {
+	    this.system.collidables.push(this)
+
+	}.bind(this));
 
 }
-collidable.prototype.makeHitbox = function() {
 
-/*
-    // assumes all textures are the same size per sprite
-    var maxX = _.max(_.map(this.sprites, function(spr) {
-	return spr.textures[0]._frame.width;
-    }, this))
-
+collidable.prototype.setProperties = function() {
+    movable.prototype.setProperties.call(this);
     
-    var maxY = _.max(_.map(this.sprites, function(spr) {
-	return spr.textures[0]._frame.height;
-    }, this))
-*/
+    if (typeof(this.properties.vulnerableTo) === 'undefined') {
+	this.properties.vulnerableTo = ["normal"] // normal and/or pd
+    }
+}
+
+
+collidable.prototype.makeHitbox = function() {
     this.hitbox = [[-this.size[0]/2, this.size[0]/2],
 		   [-this.size[1]/2, this.size[1]/2]];
+
+}
+
+collidable.prototype.destroy = function() {
+    var index = this.system.collidables.indexOf(this);
+    this.system.collidables.splice(index, 1);
+    movable.prototype.destroy.call(this);
 
 }
