@@ -9,11 +9,11 @@ var Promise = require("bluebird");
 
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
-
+var planet = require("./server/planetServer");
 
 var medium_blaster = new outfit("Medium Blaster", 1);
-var system = {spaceObjects:[], ships:[], collidables:[]}
-var starbridge = new ship("Starbridge A", [medium_blaster], system);
+var system = {spaceObjects:[], ships:[], collidables:[], planets:[], multiplayer:{}}
+//var starbridge = new ship("Starbridge A", [medium_blaster], system);
 
 var players = {};
 var gameloop = function(system) {
@@ -33,11 +33,11 @@ setInterval(function() {
 
 })
 */
-/*
-setInterval(function() {
-    console.log(_.map(players, function(p) {return p.position}))
-}, 5000)
-*/
+
+// setInterval(function() {
+//     console.log(_.map(players, function(p) {return p.position}))
+// }, 5000)
+
 
 
 app.get('/', function(req, res){
@@ -47,28 +47,56 @@ app.get('/', function(req, res){
 app.use(express.static(__dirname))
 
 
+var earth = new planet({name:"earth", multiplayer:true,UUID:UUID()}, system);
+earth.build()
+
+var playerShipType = {
+    "name":"Starbridge A",
+    "outfits":{"Medium Blaster Turret":4, "IR Missile Launcher":4},
+    "multiplayer": true
+};
+
+    
 io.on('connection', function(client){
     console.log('a user connected');
-    var userid = UUID(); 
-    client.emit('onconnected', {id: userid})
-    
-    
+    var userid = UUID();
+
+    var systemInfo = {};
+//    _.each(system.multiplayer, function(obj, key) {systemInfo[key] = obj;})
+    console.log(system.multiplayer);
+//    console.log(systemInfo);
+    playerShipType.UUID = userid;
+    myShip = new ship(playerShipType, system);
+    client.emit('onconnected', {
+	"playerShip":playerShipType,
+	"id": userid
+//	"systemInfo": systemInfo
+    });
+
     var playerInfo = {};
     
     _.each(players, function(value, key) {
-	playerInfo[key] = value.name;
+	playerInfo[key] = value.buildInfo;
     });
 
     client.emit('addPlayers', playerInfo)
     var myShip;
 
-    client.on('makeShip', function(name) {
-	myShip = new ship(name, [], system);
+    players[userid] = myShip;
+    playerInfo = {};
+    playerInfo[userid] = myShip.buildInfo;
+    client.broadcast.emit('addPlayers', playerInfo);
+
+    
+    client.on('makeShip', function(buildInfo) {
+	buildInfo.UUID = userid;
+
 	myShip.build()
-	players[userid] = myShip;
-	playerInfo = {};
-	playerInfo[userid] = myShip.name;
-	client.broadcast.emit('addPlayers', playerInfo);
+	    // .then(function() {
+	    // 	console.log("built ship: ");
+	    // 	console.log(myShip);
+	    // });
+
 	
     });
     

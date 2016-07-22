@@ -3,8 +3,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var turretWeapon = require("../client/turretWeapon.js");
 
-function turretWeaponServer(name, source, meta, count) {
-    turretWeapon.call(this, name, source, meta, count);
+function turretWeaponServer(buildInfo) {
+    turretWeapon.call(this, buildInfo);
 }
 
 turretWeaponServer.prototype = new turretWeapon;

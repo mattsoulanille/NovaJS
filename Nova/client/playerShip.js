@@ -4,8 +4,8 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function playerShip(shipName, outfits, system) {
-    ship.call(this, shipName, outfits, system);
+function playerShip(buildInfo, system) {
+    ship.call(this, buildInfo, system);
     this.pointing = Math.random()*2*Math.PI;
     this.velocity[0] = 0;
     this.velocity[1] = 0;
@@ -16,7 +16,7 @@ function playerShip(shipName, outfits, system) {
     this.targetIndex = -1;
 }
 
-playerShip.prototype = new ship
+playerShip.prototype = new ship;
 
 playerShip.prototype.build = function() {
 

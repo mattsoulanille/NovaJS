@@ -7,18 +7,21 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function basicWeapon(weaponName, source, meta, count) {
-    this.name = weaponName;
-    this.meta = meta;
+function basicWeapon(buildInfo) {
     this.firing = false;
     this.doAutoFire = false;
-    this.source = source;
-    this.count = count || 1
     this.ready = false;
-    
+    if (typeof(buildInfo) !== 'undefined') {
+	this.name = buildInfo.name;
+	this.meta = buildInfo.meta;
+	this.source = buildInfo.source;
+	this.count = buildInfo.count || 1
+    }
 }
 
 basicWeapon.prototype.build = function() {
+
+    
     // this is temporary
     // normal or pd. will be implemented eventually.
     this.meta.properties.hits = "normal";
@@ -45,21 +48,25 @@ basicWeapon.prototype.buildProjectiles = function() {
     meta.physics = this.meta.physics;
     meta.properties = this.meta.properties
     //console.log(meta)
-
+    var buildInfo = {
+	"meta":meta,
+	"name":this.name,
+	"source":this.source
+    };
     for (i=0; i < required_projectiles; i++) {
 	var proj;
 	switch (this.meta.physics.type) {
 	case undefined:
-	    proj = new projectile(this.name, meta, this.source);
+	    proj = new projectile(buildInfo);
 	    break;
 	case "unguided":
-	    proj = new projectile(this.name, meta, this.source);
+	    proj = new projectile(buildInfo);
 	    break;
 	case "guided":
-	    proj = new guided(this.name, meta, this.source);
+	    proj = new guided(buildInfo);
 	    break;
 	case 'turret':
-	    proj = new projectile(this.name, meta, this.source);
+	    proj = new projectile(buildInfo);
 	}
 	this.projectiles.push(proj);
     }

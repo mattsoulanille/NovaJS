@@ -6,10 +6,12 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function turnable(name, system) {
-    damageable.call(this, name, system);
+function turnable(buildInfo, system) {
+    damageable.call(this, buildInfo, system);
     this.turning = "";
-
+    if (typeof(buildInfo) !== 'undefined') {
+	this.buildInfo.type = "turnable";
+    }
 }
 
 turnable.prototype = new damageable;
@@ -39,6 +41,7 @@ turnable.prototype.getStats = function() {
     stats.turning = this.turning;
     stats.pointing = this.pointing;
     return stats;
+    
 }
 
 turnable.prototype.turnTo = function(pointTo) {

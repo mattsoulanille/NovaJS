@@ -4,8 +4,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var damageable = require("../server/damageableServer.js");
 
-function turnableServer(name, system) {
-    turnable.call(this, name, system);
+function turnableServer(buildInfo, system) {
+    turnable.call(this, buildInfo, system);
 }
 
 turnableServer.prototype = new turnable;

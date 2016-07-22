@@ -4,8 +4,8 @@ var Promise = require("bluebird");
 var damageable = require("../client/damageable.js");
 
 
-function damageableServer(name, system) {
-    damageable.call(this, name, system);
+function damageableServer(buildInfo, system) {
+    damageable.call(this, buildInfo, system);
 }
 
 damageableServer.prototype = new damageable;

@@ -1,5 +1,5 @@
 function star(source, starContainer, system, name) {
-    movable.call(this, name, system)
+    movable.call(this, {"name":name}, system)
     this.url = 'objects/misc/';
     this.name = name || 'star';
     this.velocityFactor = 0;

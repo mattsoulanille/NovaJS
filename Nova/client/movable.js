@@ -16,15 +16,16 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function movable(name, system) {
-    spaceObject.call(this, name, system);
+function movable(buildInfo, system) {
+    spaceObject.call(this, buildInfo, system);
     this.velocity = [0,0];
-
+    if (typeof(buildInfo) !== 'undefined') {
+	this.buildInfo.type = "movable";
+    }
 
 }
 
 movable.prototype = new spaceObject;
-
 
 
 

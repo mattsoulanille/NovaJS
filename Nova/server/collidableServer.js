@@ -3,8 +3,8 @@ var collidable = require("../client/collidable.js");
 var _ = require("underscore");
 var Promise = require("bluebird");
 
-function collidableServer(name, system) {
-    collidable.call(this, name, system);
+function collidableServer(buildInfo, system) {
+    collidable.call(this, buildInfo, system);
 }
 
 collidableServer.prototype = new collidable;

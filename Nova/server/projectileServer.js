@@ -3,8 +3,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var projectile = require("../client/projectile.js")
 
-function projectileServer(name, meta, source) {
-    projectile.call(this, name, meta, source);
+function projectileServer(buildInfo) {
+    projectile.call(this, buildInfo);
 }
 
 projectileServer.prototype = new projectile;

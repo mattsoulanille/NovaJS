@@ -6,8 +6,8 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function turretWeapon(name, source, meta, count) {
-    basicWeapon.call(this, name, source, meta, count);
+function turretWeapon(buildInfo) {
+    basicWeapon.call(this, buildInfo);
 }
 turretWeapon.prototype = new basicWeapon;
 

@@ -7,8 +7,8 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function guided(projName, meta, source) {
-    projectile.call(this, projName, meta, source);
+function guided(buildInfo) {
+    projectile.call(this, buildInfo);
 
 
 }

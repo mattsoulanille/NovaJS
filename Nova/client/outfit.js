@@ -6,14 +6,15 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function outfit(outfitName, count) {
+function outfit(buildInfo) {
     // source is a ship / object the outfit is equipped to
     this.ready = false;
     this.url = 'objects/outfits/';
-    this.name = outfitName;
+    if (typeof(buildInfo) !== 'undefined') {
+	this.name = buildInfo.name;
+	this.count = buildInfo.count || 1;
+    }
     this.weapons = [];
-    this.count = count || 1
-
 }
 
 
@@ -55,7 +56,12 @@ outfit.prototype.loadResources = function() {
 outfit.prototype.buildWeapons = function() {
 
     this.weapons = _.map( this.meta.functions.weapon, function(weaponName) {
-	return new weapon(weaponName, this.source, this.count);
+	var buildInfo = {
+	    "name": weaponName,
+	    "source": this.source,
+	    "count": this.count
+	};
+	return new weapon(buildInfo);
     }.bind(this));
 
     

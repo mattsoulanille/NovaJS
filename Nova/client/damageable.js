@@ -8,8 +8,11 @@ if (typeof(module) !== 'undefined') {
 
 }
 
-function damageable(name, system) {
-    collidable.call(this, name, system)
+function damageable(buildInfo, system) {
+    collidable.call(this, buildInfo, system)
+    if (typeof(buildInfo) !== 'undefined') {
+	this.buildInfo.type = "damageable";
+    }
 
 }
 
@@ -45,7 +48,7 @@ damageable.prototype.updateStats = function(stats) {
     }
 
     if (typeof(stats.armor) !== 'undefined') {
-	this.shield = stats.armor;
+	this.armor = stats.armor;
     }
     
 }

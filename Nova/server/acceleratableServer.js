@@ -3,8 +3,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var acceleratable = require("../client/acceleratable.js");
 
-function acceleratableServer(name, system) {
-    acceleratable.call(this, name, system);
+function acceleratableServer(buildInfo, system) {
+    acceleratable.call(this, buildInfo, system);
 }
 
 acceleratableServer.prototype = new acceleratable;

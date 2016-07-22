@@ -3,15 +3,20 @@ if (typeof(module) !== 'undefined') {
     var acceleratable = require("../server/acceleratableServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
+    var outfit = require("../server/outfitServer.js");
 
 }
 
 
-function ship(shipName, outfits, system) {
-    acceleratable.call(this, shipName, system)
-    this.url = 'objects/ships/'
+function ship(buildInfo, system) {
+    acceleratable.call(this, buildInfo, system);
+    this.url = 'objects/ships/';
     this.pointing = 0;
-    this.outfits = outfits || [];
+    this.outfits = [];
+    if (typeof(buildInfo) !== 'undefined') {
+	this.outfitList = buildInfo.outfits || [];
+	this.buildInfo.type = "ship";
+    }
 
 }
 ship.prototype = new acceleratable;
@@ -37,7 +42,7 @@ ship.prototype.build = function() {
 	    
 	    this.fuel = this.properties.maxFuel;
 
-	    
+
 	}, this))
 	.then(this.addToSystem.bind(this));
 
@@ -57,7 +62,17 @@ ship.prototype.buildTargetImage = function() {
 }
 
 ship.prototype.buildOutfits = function() {
-    // builds outfits in this.outfits
+    // builds outfits to this.outfits from this.outfitList
+
+    _.each(this.outfitList, function(count, name) {
+	var buildInfo = {
+	    "name":name,
+	    "count":count
+	};
+	var o = new outfit(buildInfo);
+	this.outfits.push(o);
+    }.bind(this));
+    
     var outfitPromises = _.map(this.outfits, function(anOutfit) {
 	//build unbuild outfits
 	if (anOutfit.ready) {

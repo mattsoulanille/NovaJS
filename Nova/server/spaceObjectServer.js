@@ -2,8 +2,8 @@ module.exports = spaceObjectServer;
 var spaceObject = require("../client/spaceObject.js");
 var Promise = require("bluebird");
 
-function spaceObjectServer(name, system) {
-    spaceObject.call(this, name, system);
+function spaceObjectServer(buildInfo, system) {
+    spaceObject.call(this, buildInfo, system);
 
 }
 

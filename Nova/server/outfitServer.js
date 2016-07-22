@@ -3,8 +3,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var outfit = require("../client/outfit.js");
 
-function outfitServer(name, count) {
-    outfit.call(this, name, count);
+function outfitServer(buildInfo) {
+    outfit.call(this, buildInfo);
 }
 
 outfitServer.prototype = new outfit;

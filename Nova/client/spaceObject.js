@@ -8,8 +8,8 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function spaceObject(objectName, system) {
-    this.name = objectName || "";
+function spaceObject(buildInfo, system) {
+    this.buildInfo = buildInfo
     this.system = system;
     this.renderReady = false;
     this.rendering = false; // whether or not to render
@@ -24,20 +24,32 @@ function spaceObject(objectName, system) {
     this.spriteContainer.visible = false;
     this.size = [];
     this.visible;
+
+    if (typeof(buildInfo) !== 'undefined') {
+	this.name = buildInfo.name;
+	this.buildInfo.type = 'spaceObject';
+	this.buildInfo.UUID = buildInfo.UUID;
+	this.buildInfo.multiplayer = buildInfo.multiplayer || false;
+    }
 }
 
 spaceObject.prototype.build = function() {
+
+
     return this.loadResources()
     	.then(_.bind(this.setProperties, this))
 	.then(_.bind(this.makeSprites, this))
 	.then(_.bind(this.makeSize, this))
 	.then(_.bind(this.addSpritesToContainer, this))
-	.then(_.bind(this.addToSpaceObjects, this))
+	.then(_.bind(this.addToSpaceObjects, this));
 
     
 };
 spaceObject.prototype.addToSpaceObjects = function() {
     this.system.spaceObjects.push(this);
+    if (this.buildInfo.multiplayer) {
+	this.system.multiplayer[this.buildInfo.UUID] = this;
+    }
 
 }
 
@@ -119,7 +131,9 @@ spaceObject.prototype.makeSize = function() {
 //write this method in the ships funcitons to add engines and lights in the right order
 spaceObject.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	   function(s) {this.spriteContainer.addChild(s);}, this);
+	   function(s) {
+	       this.spriteContainer.addChild(s);
+	   }, this);
     this.hide()
     stage.addChild(this.spriteContainer);
     

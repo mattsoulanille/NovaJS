@@ -7,25 +7,26 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function projectile(projName, meta, source) {
+function projectile(buildInfo) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
 
-    if (typeof(source) !== 'undefined') {
-	acceleratable.call(this, projName, source.system);
+    if (typeof(buildInfo) !== 'undefined') {
+	this.meta = buildInfo.meta;
+	this.source = buildInfo.source;
+	this.system = this.source.system;
+	acceleratable.call(this, buildInfo, this.source.system);
     }
     this.url = 'objects/projectiles/';
     this.pointing = 0;
     this.available = false;
-    this.meta = meta;
-    this.source = source;
     this.target;
-
 }
 
 projectile.prototype = new acceleratable;
 
 projectile.prototype.build = function() {
+
     this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
     var setAvailable = function() {
 	this.available = true
@@ -45,6 +46,17 @@ projectile.prototype.loadResources = function() {
     return new Promise(function(fulfill, reject) {
 	fulfill();
     });
+}
+
+projectile.prototype.updateStats = function(stats) {
+    acceleratable.prototype.updateStats.call(this, stats);
+    
+}
+
+projectile.prototype.getStats = function() {
+    var stats = acceleratable.prototype.getStats.call(this);
+    stats.target = this.target.UUID;
+    return stats;
 }
 
 projectile.prototype.render = function() {
@@ -77,6 +89,8 @@ projectile.prototype.collide = function(other) {
     other.receiveCollision(collision);
     
 }
+
+
 
 
 projectile.prototype.fire = function(direction, position, velocity, target) {

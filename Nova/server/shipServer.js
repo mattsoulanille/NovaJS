@@ -3,8 +3,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var ship = require("../client/ship.js")
 
-function shipServer(name, outfits, system) {
-    ship.call(this, name, outfits, system);
+function shipServer(buildInfo, system) {
+    ship.call(this, buildInfo, system);
 }
 
 shipServer.prototype = new ship;

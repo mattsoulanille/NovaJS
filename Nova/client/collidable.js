@@ -11,11 +11,11 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function collidable(name, system) {
-    movable.call(this, name, system);
-    
-    // assumes all textures of a PIXI sprite are the same size
-
+function collidable(buildInfo, system) {
+    movable.call(this, buildInfo, system);
+    if (typeof(buildInfo) !== 'undefined') {
+	this.buildInfo.type = "collidable";
+    }
 
 }
 

@@ -64,35 +64,77 @@ var system = {
     "spaceObjects": [],
     "ships": [],
     "planets": [],
-    "collidables": []
+    "collidables": [],
+    "multiplayer": {}
 };
 
 
 
 var textures = {}; // global texture object that sprites save and load textures from
 //var myShip = new playerShip("Starbridge A")
-var medium_blaster = new outfit("Medium Blaster", 5);
-var medium_blaster_t = new outfit("Medium Blaster Turret", 1);
-var ir_missile = new outfit("IR Missile Launcher", 4);
-var shuttle_missile = new outfit("IR Missile Launcher", 1);
-var shuttle_blaster = new outfit("Medium Blaster Turret", 2);
-var myShip = new playerShip("Starbridge A", [medium_blaster_t, ir_missile], system);
+// var medium_blaster = new outfit("Medium Blaster", 5);
+// var medium_blaster_t = new outfit("Medium Blaster Turret", 1);
+// var ir_missile = new outfit("IR Missile Launcher", 4);
+// var shuttle_missile = new outfit("IR Missile Launcher", 1);
+// var shuttle_blaster = new outfit("Medium Blaster Turret", 2);
+
+// var myShip = new playerShip({
+//     "name":"Starbridge A",
+//     "outfits":{"Medium Blaster Turret":4, "IR Missile Launcher":4}}, system);
+
+
+
 //var bar = new statusBar("civilian", myShip);
+/*
+var starbridge = new ship({"name":"Starbridge A", "outfits": {}}, system);
+var shuttle = new ship({"name":"Shuttle A", "outfits":{}}, system);
+var dart = new ship({"name":"Vell-os Dart", "outfits":{}}, system);
 
-var starbridge = new ship("Starbridge A", [], system);
-var shuttle = new ship("Shuttle A", [shuttle_missile, shuttle_blaster], system);
-var dart = new ship("Vell-os Dart", [], system);
-var stars = new starfield(myShip, 40);
 
-var earth = new planet("Earth", system);
+var earth = new planet({"name":"Earth"}, system);
+
+
+*/
+
+var buildFromInfo = function(buildInfo) {
+
+    var types = {
+	ship:ship,
+	planet:planet,
+	spaceObject:spaceObject
+    };
+
+
+}
 
 var players = {};
+var myShip;
+var stars;
+var stagePosition;
+
+function updateSystem(systemInfo) {
+    _.each(systemInfo, function(obj, key) {
+	
+
+
+    });
+}
 
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
+    myShip = new playerShip(data.playerShip, system);
+    stars = new starfield(myShip, 40);
+
+    stars.build()
+	.then(myShip.build.bind(myShip))
+	.then(function() {
+	    readyToRender = true;
+	    console.log("built objects");
+	    stagePosition = myShip.position;
+	});
+    
     players[UUID] = myShip;
-    socket.emit('makeShip', myShip.name);
 });
 
 socket.on('disconnect', function() {
@@ -102,9 +144,9 @@ socket.on('disconnect', function() {
 });
 
 socket.on('addPlayers', function(p) {
-    _.each(p, function(shipName, playerUUID) {
+    _.each(p, function(buildInfo, playerUUID) {
 	if (typeof(players[playerUUID]) === 'undefined') {
-	    var otherShip = new ship(shipName, [], system);
+	    var otherShip = new ship(buildInfo, system);
 	    players[playerUUID] = otherShip;
 	    otherShip.build()
 		.then(function() {otherShip.show()});
@@ -121,6 +163,8 @@ socket.on('removePlayers', function(p) {
 	}
     });
 });
+
+
 
 socket.on('updateStats', function(stats) {
 //    console.log(stats);
@@ -140,40 +184,14 @@ socket.on('test', function(data) {
 
 //have ships do this pushing themselves
 var ships = [];
-ships.push(shuttle);
-ships.push(starbridge);
-ships.push(dart);
-shuttle.position = [100,100]
-starbridge.position = [200,200];
-dart.position = [-200, -200];
-
-// _.each(ships, function(ship) {
-//     ship.build()
-
-// });
 
 
 var startGameTimer = setInterval(function () {startGame()}, 500);
 
-//var printmyShip = setInterval(function() {console.log(myShip)}, 1000)
 
-/*
-Starts the game if everything is ready to render.
-*/
-
-// Be careful about reassigning myShip.position
-var stagePosition = myShip.position
 var readyToRender = false;
-//var buildObjects = _.map(spaceObjects, function(s) {return s.build()});
-//console.log(buildObjects)
-var buildShips = _.map(ships, function(s) {return s.build()})
-Promise.all(buildShips)
-    .then(stars.build.bind(stars))
-    .then(myShip.build.bind(myShip))
-//    .then(bar.build.bind(bar))
-    .then(earth.build.bind(earth))
-    .then(function() {readyToRender = true; console.log("built objects")})
 
+//var buildShips = _.map(ships, function(s) {return s.build()})
 
 
 function startGame() {

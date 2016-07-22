@@ -7,10 +7,13 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function acceleratable(name, system) {
-    turnable.call(this, name, system)
+function acceleratable(buildInfo, system) {
+    turnable.call(this, buildInfo, system)
     this.lastAccelerating = false;
     this.accelerating = false;
+    if (typeof(buildInfo) !== 'undefined') {
+	this.buildInfo.type = "acceleratable";
+    }
 }
 
 
