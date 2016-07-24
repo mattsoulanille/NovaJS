@@ -64,10 +64,15 @@ io.on('connection', function(client){
 //    _.each(system.multiplayer, function(obj, key) {systemInfo[key] = obj;})
 //    console.log(sol.multiplayer);
     //    console.log(systemInfo);
-
+    var medium_blaster = {
+	"name":"Medium Blaster",
+	"count":5,
+	"UUIDS":{"Medium Blaster":UUID()}
+    }
+    
     var medium_blaster_turret = {
 	"name":"Medium Blaster Turret",
-	"count": 4,
+	"count": 2,
 	//temporary. Eventually, the server outfit object will make these
 	"UUIDS":{"Medium Blaster Turret":UUID()} 
     }
@@ -80,7 +85,7 @@ io.on('connection', function(client){
 
     var playerShipType = {
 	"name":"Starbridge A",
-	"outfits":[ir_missile, medium_blaster_turret],
+	"outfits":[ir_missile, medium_blaster_turret, medium_blaster],
 	"UUID":userid
     };
 

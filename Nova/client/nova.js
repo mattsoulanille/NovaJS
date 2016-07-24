@@ -203,7 +203,8 @@ function startGame() {
 // the time difference between the server and client clocks
 // NOT the ping time.
 var timeDifference = 0;
-setTimeout(function() {sync.getDifference().then(function(d) {timeDifference = d})}, 1000);
+//setTimeout(function() {sync.getDifference().then(function(d) {timeDifference = d})}, 1000);
+//setInterval(function() {sync.getDifference().then(function(d) {timeDifference = d})},10000);
 //var syncClocksTimer = setInterval(function() {sync.getDifference()
 //					      .then(function(d) {timeDifference = d})}, 120000);
 

@@ -147,3 +147,11 @@ playerShip.prototype.cycleTarget = function() {
 }
 
 playerShip.prototype.addToSystem = function() {};
+
+playerShip.prototype.onDeath = function() {
+    // temporary respawn
+    this.position[0] = 0;
+    this.position[1] = 0;
+    this.shield = this.properties.maxShields;
+    this.armor = this.properties.maxArmor;
+}

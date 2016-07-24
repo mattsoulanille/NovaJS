@@ -154,13 +154,6 @@ spaceObject.prototype.addSpritesToContainer = function() {
 }
 
 
-
-//spaceObject.prototype.updateStats = function(turning) {
-
-    ////spaceObject.prototype.render.call(this); 
-//}
-
-
 spaceObject.prototype.callSprites = function(toCall) {
     return _.map(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
 }
@@ -235,15 +228,21 @@ spaceObject.prototype.render = function() {
 // destroys the object. This is NOT the function to call
 // if you want it to explode.
 spaceObject.prototype.destroy = function() {
-    var index;
-    if (this.built) {
-	index = this.system.built.spaceObjects.indexOf(this);
+
+
+    var index = this.system.spaceObjects.indexOf(this);
+    if (index !== -1) {
 	this.system.spaceObjects.splice(index, 1);
     }
-    index = this.system.spaceObjects.indexOf(this);
-    this.system.spaceObjects.splice(index, 1);
+    
+    if (this.built) {
+	var index = this.system.built.spaceObjects.indexOf(this);
+	if (index !== -1) {
+	    this.system.built.spaceObjects.splice(index, 1);
+	}
+    }
     this.hide();
     this.spriteContainer.destroy();
     _.each(this.sprites, function(s) {s.sprite.destroy()});
-    
+//    delete this;
 }

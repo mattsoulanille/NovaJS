@@ -175,9 +175,18 @@ ship.prototype.hide = function() {
 
 
 ship.prototype.destroy = function() {
-    if (_.contains(this.system.ships, this)) {
-	var index = this.system.ships.indexOf(this);
+
+    var index = this.system.ships.indexOf(this);
+    if (index !== -1) {
 	this.system.ships.splice(index, 1);
     }
+
+    if (this.built) {
+	index = this.system.built.ships.indexOf(this);
+	if (index !== -1) {
+	    this.system.built.ships.splice(index, 1);
+	}
+    }
+
     acceleratable.prototype.destroy.call(this);
 }

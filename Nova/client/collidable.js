@@ -95,14 +95,20 @@ collidable.prototype.makeHitbox = function() {
 }
 
 collidable.prototype.destroy = function() {
-    var index;
-    if (this.built) {
-	index = this.system.built.spaceObjects.indexOf(this);
-	this.system.spaceObjects.splice(index, 1);
-    }
 
     var index = this.system.collidables.indexOf(this);
-    this.system.collidables.splice(index, 1);
+    if (index !== -1) {
+	this.system.collidables.splice(index, 1);
+    }
+
+
+    if (this.built) {
+	var index = this.system.built.collidables.indexOf(this);
+	if (index !== -1) {
+	    this.system.built.collidables.splice(index, 1);
+	}
+    }
+
     movable.prototype.destroy.call(this);
 
 }
