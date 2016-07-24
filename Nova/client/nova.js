@@ -30,9 +30,11 @@ document.onkeydown = function(e) {
 	myShip.cycleTarget();
 	break;
     }
+
     
-    var newStats = myShip.getStats();
-    socket.emit('updateStats', newStats);
+    var newStats = {};
+    newStats[myShip.UUID] = myShip.getStats();
+    socket.emit('updateStats', newStats)
     
     if (_.contains(blocked_keys, e.keyCode)) {
 	return false;
@@ -43,8 +45,9 @@ document.onkeydown = function(e) {
 }
 document.onkeyup = function(e) {
     myShip.updateStats();
-    var newStats = myShip.getStats();
-    socket.emit('updateStats', newStats);
+    var newStats = {};
+    newStats[myShip.UUID] = myShip.getStats();
+    socket.emit('updateStats', newStats)
 
 }
 
@@ -59,14 +62,7 @@ var sync = new syncTime(socket)
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
-var system = {
-    "name": "sol",  //for now, we just define a system so the universe works...
-    "spaceObjects": [],
-    "ships": [],
-    "planets": [],
-    "collidables": [],
-    "multiplayer": {}
-};
+var sol = new system();
 
 
 
@@ -94,7 +90,7 @@ var dart = new ship({"name":"Vell-os Dart", "outfits":{}}, system);
 var earth = new planet({"name":"Earth"}, system);
 
 
-*/
+pp*/
 
 var buildFromInfo = function(buildInfo) {
 
@@ -123,54 +119,44 @@ function updateSystem(systemInfo) {
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
-    myShip = new playerShip(data.playerShip, system);
-    stars = new starfield(myShip, 40);
 
+    myShip = new playerShip(data.playerShip, sol);
+    stars = new starfield(myShip, 40);
+    sol.setObjects(data.system);
     stars.build()
 	.then(myShip.build.bind(myShip))
+	.then(sol.build.bind(sol))
 	.then(function() {
-	    readyToRender = true;
 	    console.log("built objects");
 	    stagePosition = myShip.position;
+	    startGame();
 	});
     
-    players[UUID] = myShip;
+    //players[UUID] = myShip;
 });
 
 socket.on('disconnect', function() {
     console.log("disconnected");
-    players = {};
+//    players = {};
     UUID = undefined;
 });
 
-socket.on('addPlayers', function(p) {
-    _.each(p, function(buildInfo, playerUUID) {
-	if (typeof(players[playerUUID]) === 'undefined') {
-	    var otherShip = new ship(buildInfo, system);
-	    players[playerUUID] = otherShip;
-	    otherShip.build()
-		.then(function() {otherShip.show()});
-	    console.log("added player " + playerUUID);
-	}
-    });
+
+
+socket.on('addObjects', function(buildInfoList) {
+    console.log("adding objects ", buildInfoList);
+    sol.addObjects(buildInfoList);
+    sol.build()
 });
 
-socket.on('removePlayers', function(p) {
-    _.each(p, function(playerUUID) {
-	if (typeof(players[playerUUID]) !== 'undefined') {
-	    players[playerUUID].destroy();
-	    delete players[playerUUID];
-	}
-    });
+socket.on('removeObjects', function(uuids) {
+    sol.removeObjects(uuids);
 });
-
 
 
 socket.on('updateStats', function(stats) {
-//    console.log(stats);
-    _.each(stats, function(newStats, userID) {
-	players[userID].updateStats(newStats);
-    });
+    //    console.log(stats);
+    sol.updateStats(stats);
 });
 
 socket.on('test', function(data) {
@@ -196,28 +182,20 @@ var readyToRender = false;
 
 function startGame() {
 
-    // for (var i = 0; i < spaceObjects.length; i++) {
-    // 	if (!spaceObjects[i].renderReady) {
-    // 	    readyToRender = false;
-    // 	    console.log("Rendering NOT started")
-    // 	}
-    // }
+    //replace with promises
+    $.when( sol.spaceObjects.map(function(s){
+	// improve me
+	if (! (s instanceof projectile)) {
+	    s.show()
+	}
+    }) ).done(function() {
+	stars.placeAll()
+	requestAnimationFrame(animate)
+	clearInterval(startGameTimer)
+	console.log("Rendering started")
+    });
 
-    if (readyToRender) {
-	//replace with promises
-	$.when( system.spaceObjects.map(function(s){
-	    // improve me
-	    if (! (s instanceof projectile)) {
-		s.show()
-	    }
-	}) ).done(function() {
-	    stars.placeAll()
-	    requestAnimationFrame(animate)
-	    clearInterval(startGameTimer)
-	    console.log("Rendering started")
-	});
 
-    }
 }
 
 //requestAnimationFrame(animate)
@@ -229,7 +207,9 @@ setTimeout(function() {sync.getDifference().then(function(d) {timeDifference = d
 //var syncClocksTimer = setInterval(function() {sync.getDifference()
 //					      .then(function(d) {timeDifference = d})}, 120000);
 
-spaceObject.prototype.lastTime = new Date().getTime()
+basicWeapon.prototype.socket = socket;
+spaceObject.prototype.socket = socket;
+spaceObject.prototype.lastTime = new Date().getTime();
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
@@ -238,7 +218,7 @@ function animate() {
 
     stars.render()
     var lastTimes = []
-    _.each(system.spaceObjects, function(s) {
+    _.each(sol.spaceObjects, function(s) {
     	if (s.rendering) {
     	    s.render()
 	    lastTimes.push(s.lastTime)

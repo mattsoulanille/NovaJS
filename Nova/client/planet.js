@@ -10,6 +10,9 @@ if (typeof(module) !== 'undefined') {
 function planet(buildInfo, system) {
     spaceObject.call(this, buildInfo, system);
     this.url = "objects/planets/"
+    if (typeof system !== 'undefined') {
+	system.planets.push(this);
+    }
 }
 
 
@@ -19,7 +22,7 @@ planet.prototype = new spaceObject;
 planet.prototype.build = function() {
     return spaceObject.prototype.build.call(this)
 	.then(function() {
-	    this.system.planets.push(this);
+	    this.system.built.planets.push(this);
 	    this.buildInfo.type = 'planet';
 	}.bind(this));
     

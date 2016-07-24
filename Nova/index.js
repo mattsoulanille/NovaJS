@@ -10,10 +10,12 @@ var Promise = require("bluebird");
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
+var system = require("./client/system.js");
 
 var medium_blaster = new outfit("Medium Blaster", 1);
-var system = {spaceObjects:[], ships:[], collidables:[], planets:[], multiplayer:{}}
-//var starbridge = new ship("Starbridge A", [medium_blaster], system);
+var sol = new system();
+
+//var starbridge = new ship("Starbridge A", [medium_blaster], sol);
 
 var players = {};
 var gameloop = function(system) {
@@ -47,30 +49,57 @@ app.get('/', function(req, res){
 app.use(express.static(__dirname))
 
 
-var earth = new planet({name:"earth", multiplayer:true,UUID:UUID()}, system);
-earth.build()
+sol.addObject({'name':'earth', 'UUID':UUID(), 'type':'planet'});
+sol.build();
 
-var playerShipType = {
-    "name":"Starbridge A",
-    "outfits":{"Medium Blaster Turret":4, "IR Missile Launcher":4},
-    "multiplayer": true
-};
 
-    
+
+
 io.on('connection', function(client){
     console.log('a user connected');
     var userid = UUID();
-
-    var systemInfo = {};
+    var owned_uuids = [userid];
+    var currentSystem = sol;
+    
 //    _.each(system.multiplayer, function(obj, key) {systemInfo[key] = obj;})
-    console.log(system.multiplayer);
-//    console.log(systemInfo);
-    playerShipType.UUID = userid;
-    myShip = new ship(playerShipType, system);
+//    console.log(sol.multiplayer);
+    //    console.log(systemInfo);
+
+    var medium_blaster_turret = {
+	"name":"Medium Blaster Turret",
+	"count": 4,
+	//temporary. Eventually, the server outfit object will make these
+	"UUIDS":{"Medium Blaster Turret":UUID()} 
+    }
+
+    var ir_missile = {
+	"name":"IR Missile Launcher",
+	"count": 4,
+	"UUIDS":{"IR Missile":UUID()}
+    }
+
+    var playerShipType = {
+	"name":"Starbridge A",
+	"outfits":[ir_missile, medium_blaster_turret],
+	"UUID":userid
+    };
+
+
+    myShip = new ship(playerShipType, currentSystem);
+    myShip.build();
+    _.each(myShip.outfitList, function(outf) {
+	_.each(outf.UUIDS, function(uuid) {
+	    owned_uuids.push(uuid);
+	})
+	    });
+
+//    console.log(owned_uuids);
+//    console.log(playerShipType);
+
     client.emit('onconnected', {
 	"playerShip":playerShipType,
-	"id": userid
-//	"systemInfo": systemInfo
+	"id": userid,
+	"system": currentSystem.getObjects()
     });
 
     var playerInfo = {};
@@ -79,38 +108,31 @@ io.on('connection', function(client){
 	playerInfo[key] = value.buildInfo;
     });
 
-    client.emit('addPlayers', playerInfo)
     var myShip;
 
     players[userid] = myShip;
-    playerInfo = {};
-    playerInfo[userid] = myShip.buildInfo;
-    client.broadcast.emit('addPlayers', playerInfo);
-
     
-    client.on('makeShip', function(buildInfo) {
-	buildInfo.UUID = userid;
+    client.broadcast.emit('addObjects', [myShip.buildInfo]);
 
-	myShip.build()
-	    // .then(function() {
-	    // 	console.log("built ship: ");
-	    // 	console.log(myShip);
-	    // });
 
+    client.on('updateProjectiles', function(stats) {
 	
     });
     
-    
     client.on('updateStats', function(stats) {
-	if (typeof(players[userid]) !== 'undefined') {
-	    var myShip = players[userid];
-	    myShip.updateStats(stats);
-	}
+	var filtered_stats = {};
+//	console.log(stats)
+	_.each(stats, function(newStats, uuid) {
+	    if (_.contains(owned_uuids, uuid)) {
+
+		filtered_stats[uuid] = newStats;
+	    }
+	});
 	
-	var newStats = {};
-	newStats[userid] = stats;
-//	console.log(newStats);
-	client.broadcast.emit('updateStats', newStats);
+//	console.log(filtered_stats);
+	//	console.log(newStats);
+
+	client.broadcast.emit('updateStats', filtered_stats);
 //	client.broadcast.emit('test', "does this work?");
 
 	
@@ -138,7 +160,9 @@ io.on('connection', function(client){
     });
     client.on('disconnect', function() {
 	console.log('a user disconnected');
-	client.broadcast.emit('removePlayers', [userid])
+	client.broadcast.emit('removeObjects', owned_uuids)
+	currentSystem.removeObjects(owned_uuids);
+
 	delete players[userid];
     });
     

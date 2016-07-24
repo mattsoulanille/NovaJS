@@ -52,7 +52,11 @@ playerShip.prototype.makeStatusBar = function() {
 
 
 playerShip.prototype.addToSpaceObjects = function() {
-    this.system.spaceObjects.unshift(this);
+    this.system.built.spaceObjects.unshift(this);
+    if (this.buildInfo.multiplayer) {
+	this.system.built.multiplayer[this.buildInfo.UUID] = this;
+    }
+
 }
 
 playerShip.prototype.addSpritesToContainer = function() {
@@ -126,6 +130,10 @@ playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1
     var incrementTargetIndex = function() {
 	this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1;
+	// super cheapo temporary way to not target the player ship (ship 0)
+	if (this.targetIndex === 0) {
+	    this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1;
+	}
     }.bind(this);
 
     incrementTargetIndex();

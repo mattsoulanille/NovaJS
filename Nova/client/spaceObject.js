@@ -19,17 +19,29 @@ function spaceObject(buildInfo, system) {
     // this also means projectiles can have weapons :P
     this.weapons = {};
     this.weapons.all = [];
+
     this.sprites = {};
     this.spriteContainer = new PIXI.Container();
     this.spriteContainer.visible = false;
     this.size = [];
     this.visible;
+    this.built = false;
 
     if (typeof(buildInfo) !== 'undefined') {
 	this.name = buildInfo.name;
 	this.buildInfo.type = 'spaceObject';
 	this.buildInfo.UUID = buildInfo.UUID;
-	this.buildInfo.multiplayer = buildInfo.multiplayer || false;
+	if (typeof this.buildInfo.UUID !== 'undefined') {
+	    this.buildInfo.multiplayer = true;
+	    this.UUID = this.buildInfo.UUID;
+	}
+
+	if (this.buildInfo.multiplayer) {
+	    this.system.multiplayer[this.buildInfo.UUID] = this;
+	}
+    }
+    if (typeof(system) !== 'undefined') {
+	this.system.spaceObjects.push(this)
     }
 }
 
@@ -41,14 +53,15 @@ spaceObject.prototype.build = function() {
 	.then(_.bind(this.makeSprites, this))
 	.then(_.bind(this.makeSize, this))
 	.then(_.bind(this.addSpritesToContainer, this))
-	.then(_.bind(this.addToSpaceObjects, this));
+	.then(_.bind(this.addToSpaceObjects, this))
+	.then(function() {this.built = true;}.bind(this));
 
     
 };
 spaceObject.prototype.addToSpaceObjects = function() {
-    this.system.spaceObjects.push(this);
+    this.system.built.spaceObjects.push(this);
     if (this.buildInfo.multiplayer) {
-	this.system.multiplayer[this.buildInfo.UUID] = this;
+	this.system.built.multiplayer[this.buildInfo.UUID] = this;
     }
 
 }
@@ -159,9 +172,15 @@ spaceObject.prototype.hide = function() {
 }
 
 spaceObject.prototype.show = function() {
-    this.spriteContainer.visible = true;
-    this.visible = true;
-    this.rendering = true;
+    if (this.built) {
+	this.spriteContainer.visible = true;
+	this.visible = true;
+	this.rendering = true;
+	return true;
+    }
+    else {
+	return false;
+    }
 }
 
 spaceObject.prototype.updateStats = function(stats) {
@@ -177,6 +196,9 @@ spaceObject.prototype.updateStats = function(stats) {
 	    this.hide();
 	}
     }
+    if (typeof(stats.lastTime) !== 'undefined') {
+	this.lastTime = stats.lastTime;
+    }
     
 }
 
@@ -184,8 +206,12 @@ spaceObject.prototype.getStats = function() {
     var stats = {};
     stats.position = [this.position[0], this.position[1]];
     stats.visible = this.visible;
+//    stats.lastTime = this.lastTime;
+//    stats.target = this.target;
     return stats;
 }
+
+
 
 spaceObject.prototype.render = function() {
     if (this.renderReady == true) {
@@ -209,7 +235,12 @@ spaceObject.prototype.render = function() {
 // destroys the object. This is NOT the function to call
 // if you want it to explode.
 spaceObject.prototype.destroy = function() {
-    var index = this.system.spaceObjects.indexOf(this);
+    var index;
+    if (this.built) {
+	index = this.system.built.spaceObjects.indexOf(this);
+	this.system.spaceObjects.splice(index, 1);
+    }
+    index = this.system.spaceObjects.indexOf(this);
     this.system.spaceObjects.splice(index, 1);
     this.hide();
     this.spriteContainer.destroy();

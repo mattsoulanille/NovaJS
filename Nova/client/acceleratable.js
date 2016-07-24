@@ -24,12 +24,17 @@ acceleratable.prototype.updateStats = function(stats) {
     if (typeof(stats.accelerating) !== 'undefined') {
 	this.accelerating = stats.accelerating;
     }
-
+    if (typeof(stats.polarVelocity) !== 'undefined') {
+	this.polarVelocity = stats.polarVelocity;
+    }
 }
 
 acceleratable.prototype.getStats = function() {
     var stats = turnable.prototype.getStats.call(this);
     stats.accelerating = this.accelerating;
+    if (typeof this.polarVelocity !== 'undefined') {
+	stats.polarVelocity = this.polarVelocity;
+    }
     return stats;
 }
 

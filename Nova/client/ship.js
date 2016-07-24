@@ -17,6 +17,9 @@ function ship(buildInfo, system) {
 	this.outfitList = buildInfo.outfits || [];
 	this.buildInfo.type = "ship";
     }
+    if (typeof system !== 'undefined') {
+	system.ships.push(this);
+    }
 
 }
 ship.prototype = new acceleratable;
@@ -42,9 +45,9 @@ ship.prototype.build = function() {
 	    
 	    this.fuel = this.properties.maxFuel;
 
-
+	    this.system.built.ships.push(this)
 	}, this))
-	.then(this.addToSystem.bind(this));
+
 
 
     // return RSVP.all(outfitPromises)
@@ -52,9 +55,6 @@ ship.prototype.build = function() {
     // 	.catch(function(reason) {console.log(reason)});
 
 
-}
-ship.prototype.addToSystem = function() {
-    this.system.ships.push(this);
 }
 ship.prototype.buildTargetImage = function() {
     this.targetImage = new targetImage(this.meta.targetImage);
@@ -64,11 +64,8 @@ ship.prototype.buildTargetImage = function() {
 ship.prototype.buildOutfits = function() {
     // builds outfits to this.outfits from this.outfitList
 
-    _.each(this.outfitList, function(count, name) {
-	var buildInfo = {
-	    "name":name,
-	    "count":count
-	};
+    _.each(this.outfitList, function(buildInfo) {
+
 	var o = new outfit(buildInfo);
 	this.outfits.push(o);
     }.bind(this));

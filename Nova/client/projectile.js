@@ -50,25 +50,38 @@ projectile.prototype.loadResources = function() {
 
 projectile.prototype.updateStats = function(stats) {
     acceleratable.prototype.updateStats.call(this, stats);
-    
+    if (typeof(stats.endTime) !== 'undefined') {
+	this.endTime = stats.endTime
+    }
+
+    if (typeof(stats.target) !== 'undefined') {
+     	this.target = this.system.multiplayer[stats.target];
+    }
+
 }
 
 projectile.prototype.getStats = function() {
     var stats = acceleratable.prototype.getStats.call(this);
-    stats.target = this.target.UUID;
+    if (typeof this.target !== "undefined") {
+	stats.target = this.target.UUID;
+    }
+    stats.lastTime = this.lastTime
+    stats.endTime = this.endTime;
     return stats;
 }
 
 projectile.prototype.render = function() {
-    // Maybe move this to updateStats
+    if (this.endTime <= this.time) {
+	this.end()
+    }
     acceleratable.prototype.render.call(this);
-    var collisions = this.detectCollisions(this.system.collidables);
+    var collisions = this.detectCollisions(this.system.built.collidables);
     
     if ((collisions.length > 1) ||
 	((collisions.length == 1) && (collisions[0] != this.source)) ) {
 
 	this.end()
-	clearTimeout(this.fireTimeout)
+//	clearTimeout(this.fireTimeout)
 	
 	_.each(collisions, function(collision) {
 	    if (collision != this.source) {
@@ -98,7 +111,8 @@ projectile.prototype.fire = function(direction, position, velocity, target) {
     // maybe pass the ship to the projectile... or not
     // inaccuracy is handled by weapon
     this.target = target;
-    this.fireTimeout = setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
+    this.endTime = this.time + this.meta.physics.duration * 1000/30;
+//    this.fireTimeout = setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
     this.available = false;
     this.pointing = direction;
     this.position = _.map(position, function(x) {return x});

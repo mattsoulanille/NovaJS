@@ -7,12 +7,14 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function weapon(buildInfo) {
+function weapon(buildInfo, source) {
     this.url = 'objects/weapons/';
+    this.buildInfo = buildInfo;
+    this.source = source;
     if (typeof(buildInfo) !== 'undefined') {
 	this.name = buildInfo.name;
-	this.source = buildInfo.source;
 	this.count = buildInfo.count || 1;
+	this.buildInfo.count = this.count;
     }
 }
 
@@ -42,24 +44,31 @@ weapon.prototype.loadResources = function() {
 }
 
 weapon.prototype.buildWeapon = function() {
-    var buildInfo = {
-	"name":this.name,
-	"source":this.source,
-	"meta":this.meta,
-	"count":this.count
-    };
+     var buildInfo = {
+     	"name":this.name,
+     	"meta":this.meta,
+     	"count":this.count
+     };
+
+    if (typeof this.buildInfo.UUID !== 'undefined') {
+	buildInfo.UUID = this.buildInfo.UUID;
+    }
+    if (typeof this.buildInfo.socket !== 'undefined') {
+	buildInfo.socket = this.buildInfo.socket;
+    }
+
     switch (this.meta.physics.type) {
     case undefined:
-	this.weapon = new basicWeapon(buildInfo);
+	this.weapon = new basicWeapon(buildInfo, this.source);
 	break;
     case 'unguided':
-	this.weapon = new basicWeapon(buildInfo);
+	this.weapon = new basicWeapon(buildInfo, this.source);
 	break;
     case 'guided':
-	this.weapon = new basicWeapon(buildInfo);
+	this.weapon = new basicWeapon(buildInfo, this.source);
 	break;
     case 'turret':
-	this.weapon = new turretWeapon(buildInfo);
+	this.weapon = new turretWeapon(buildInfo, this.source);
 	break;
     }
     return this.weapon.build()

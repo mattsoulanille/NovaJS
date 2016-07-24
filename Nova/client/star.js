@@ -9,6 +9,7 @@ function star(source, starContainer, system, name) {
     this.properties = {};
     this.available = false;
     starContainer.addChild(this.spriteContainer);
+    this.built = false;
 }
 
 //star.prototype.meta = {}
@@ -23,6 +24,7 @@ star.prototype.build = function() {
 	    this.system.spaceObjects.push(this)
 	    this.available = true;
 	    this.renderReady = true;
+	    this.built = true;
 	}.bind(this));
 }
 

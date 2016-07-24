@@ -16,6 +16,9 @@ function collidable(buildInfo, system) {
     if (typeof(buildInfo) !== 'undefined') {
 	this.buildInfo.type = "collidable";
     }
+    if (typeof system !== 'undefined') {
+	system.collidables.push(this);
+    }
 
 }
 
@@ -40,6 +43,7 @@ collidable.prototype.detectCollisions = function(others) {
     var collisions = [];
     
     _.each(others, function(other) {
+	
 	if (_.contains(other.properties.vulnerableTo, this.properties.hits)) {
 	    var otherXRange = [other.position[0] + other.hitbox[0][0],
 			       other.position[0] + other.hitbox[0][1]];
@@ -63,7 +67,7 @@ collidable.prototype.build = function() {
 //	.then(function() {console.log(this.renderReady)}.bind(this))
 	.then(collidable.prototype.makeHitbox.bind(this))
 	.then(function() {
-	    this.system.collidables.push(this)
+	    this.system.built.collidables.push(this)
 
 	}.bind(this));
 
@@ -85,6 +89,12 @@ collidable.prototype.makeHitbox = function() {
 }
 
 collidable.prototype.destroy = function() {
+    var index;
+    if (this.built) {
+	index = this.system.built.spaceObjects.indexOf(this);
+	this.system.spaceObjects.splice(index, 1);
+    }
+
     var index = this.system.collidables.indexOf(this);
     this.system.collidables.splice(index, 1);
     movable.prototype.destroy.call(this);

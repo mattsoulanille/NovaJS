@@ -50,7 +50,13 @@ spaceObjectServer.prototype.render = function() {
 }
 
 spaceObjectServer.prototype.destroy = function() {
-    var index = this.system.spaceObjects.indexOf(this);
+    var index;
+    if (this.built) {
+	index = this.system.built.spaceObjects.indexOf(this);
+	this.system.spaceObjects.splice(index, 1);
+    }
+
+    index = this.system.spaceObjects.indexOf(this);
     this.system.spaceObjects.splice(index, 1);
 
 }

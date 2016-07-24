@@ -3,8 +3,8 @@ var _ = require("underscore");
 var Promise = require("bluebird");
 var weapon = require("../client/weapon.js")
 
-function weaponServer(buildInfo) {
-    weapon.call(this, buildInfo);
+function weaponServer(buildInfo, source) {
+    weapon.call(this, buildInfo, source);
 
 }
 

@@ -7,15 +7,22 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function basicWeapon(buildInfo) {
+function basicWeapon(buildInfo, source) {
+    this.buildInfo = buildInfo;
     this.firing = false;
     this.doAutoFire = false;
     this.ready = false;
+    this.source = source
+
     if (typeof(buildInfo) !== 'undefined') {
 	this.name = buildInfo.name;
 	this.meta = buildInfo.meta;
-	this.source = buildInfo.source;
+	this.system = this.source.system;
 	this.count = buildInfo.count || 1
+	this.UUID = buildInfo.UUID;
+	if (typeof this.UUID !== 'undefined') {
+	    this.system.multiplayer[this.UUID] = this;
+	}
     }
 }
 
@@ -31,6 +38,11 @@ basicWeapon.prototype.build = function() {
 	    this.ready = true
 	    this.source.weapons.all.push(this)
 
+	    if (typeof this.UUID !== 'undefined') {
+//		this.system.built.multiplayer[this.UUID] = this;
+	    }
+
+	    
 	}, this));
 
 }
@@ -53,6 +65,12 @@ basicWeapon.prototype.buildProjectiles = function() {
 	"name":this.name,
 	"source":this.source
     };
+
+    if (typeof this.buildInfo.socket !== 'undefined') {
+	buildInfo.socket = this.buildInfo.socket;
+    }
+
+    
     for (i=0; i < required_projectiles; i++) {
 	var proj;
 	switch (this.meta.physics.type) {
@@ -87,6 +105,10 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
 	    var position = position || this.source.position;
 	    var velocity = velocity || this.source.velocity;
 	    proj.fire(direction, position, velocity, this.target)
+
+	    if (typeof this.UUID !== 'undefined') {
+		this.notifyServer(proj, i);
+	    }
 	    return true
 	}
 
@@ -94,6 +116,27 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
     return false
 }
 
+basicWeapon.prototype.notifyServer = function(proj, index) {
+    // this.socket is defined in nova.js
+    var newStats = {};
+    newStats[index] = this.projectiles[index].getStats();
+    var with_uuid = {};
+    with_uuid[this.UUID] = newStats;
+    this.socket.emit('updateStats', with_uuid);
+}
+
+basicWeapon.prototype.getStats = function() {
+    var stats = _.map(this.projectiles, function(proj) {
+	return proj.getStats();
+    });
+    return stats;
+}
+
+basicWeapon.prototype.updateStats = function(statsList) {
+    _.each(statsList, function(stats, index) {
+	this.projectiles[index].updateStats(stats);
+    }.bind(this));
+}
 
 basicWeapon.prototype.startFiring = function() {
     if (this.firing) {
@@ -129,4 +172,10 @@ basicWeapon.prototype.autoFire = function() {
 
 basicWeapon.prototype.cycleTarget = function(target) {
     this.target = target;
+}
+
+basicWeapon.prototype.destroy = function() {
+    _.each(this.projectiles, function(proj) {
+	proj.destroy()
+    });
 }

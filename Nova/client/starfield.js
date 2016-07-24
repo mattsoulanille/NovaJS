@@ -20,13 +20,14 @@ function starfield(source, count, starname) {
     this.position = _.map(this.source.position, function(n) {return n})
     this.lastPosition = _.map(this.source.position, function(n) {return n})
     this.system = source.system
-
+    this.built = false;
 }
 
 starfield.prototype.build = function() {
     return this.buildStars()
 	.then(function() {
-	    this.ready = true
+	    this.ready = true;
+	    this.built = true;
 	    stage.addChild(this.spriteContainer);
 
 	}.bind(this))

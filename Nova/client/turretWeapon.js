@@ -6,8 +6,8 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-function turretWeapon(buildInfo) {
-    basicWeapon.call(this, buildInfo);
+function turretWeapon(buildInfo, source, socket) {
+    basicWeapon.call(this, buildInfo, source);
 }
 turretWeapon.prototype = new basicWeapon;
 
@@ -18,7 +18,6 @@ turretWeapon.prototype.fire = function() {
     
 	var directionToTarget = (Math.atan2(y_diff, x_diff) + 2*Math.PI) % (2*Math.PI);
 
-
 	var fireAngle = this.calcFireAngle() || directionToTarget;
 
 	// weapon inaccuracy
@@ -26,7 +25,6 @@ turretWeapon.prototype.fire = function() {
 		(2 * Math.PI / 360);
 	
 	basicWeapon.prototype.fire.call(this, fireAngle);
-
 
     }
 }
