@@ -49,7 +49,7 @@ app.get('/', function(req, res){
 app.use(express.static(__dirname))
 
 
-sol.addObject({'name':'earth', 'UUID':UUID(), 'type':'planet'});
+sol.addObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build();
 
 

@@ -66,10 +66,6 @@ basicWeapon.prototype.buildProjectiles = function() {
 	"source":this.source
     };
 
-    if (typeof this.buildInfo.socket !== 'undefined') {
-	buildInfo.socket = this.buildInfo.socket;
-    }
-
     
     for (i=0; i < required_projectiles; i++) {
 	var proj;

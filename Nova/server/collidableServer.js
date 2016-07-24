@@ -9,4 +9,6 @@ function collidableServer(buildInfo, system) {
 
 collidableServer.prototype = new collidable;
 
-//collidable is fairly simple
+// stops the server from sending bogus updateStats events
+collidable.prototype.receiveCollision = function(other) {}
+

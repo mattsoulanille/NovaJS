@@ -38,6 +38,7 @@ damageable.prototype.receiveCollision = function(other) {
 	this.velocity = [0,0];
 	this.onDeath();
     }
+    collidable.prototype.receiveCollision.call(this, other);
 
 }
 

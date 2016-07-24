@@ -47,7 +47,7 @@ acceleratable.prototype.setProperties = function() {
 }
 
 acceleratable.prototype.receiveCollision = function(other) {
-    turnable.prototype.receiveCollision.call(this, other);
+
 
     if (other.impact > 0) {
 	var deltaV = other.impact / this.meta.physics.mass
@@ -68,6 +68,7 @@ acceleratable.prototype.receiveCollision = function(other) {
 	this.velocity[1] = newVelocity[1];    
 
     }
+    turnable.prototype.receiveCollision.call(this, other);
 }
 
 acceleratable.prototype.render = function() {
