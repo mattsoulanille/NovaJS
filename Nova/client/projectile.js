@@ -54,9 +54,9 @@ projectile.prototype.updateStats = function(stats) {
 	this.endTime = stats.endTime
     }
 
-    if (typeof(stats.target) !== 'undefined') {
-     	this.target = this.system.multiplayer[stats.target];
-    }
+
+    this.target = this.system.multiplayer[stats.target];
+
 
 }
 
