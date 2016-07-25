@@ -45,6 +45,9 @@ function spaceObject(buildInfo, system) {
     }
 }
 
+spaceObject.prototype.factor = 3/10; // the factor for nova object movement. Seems to be 3/10
+
+
 spaceObject.prototype.build = function() {
 
 
@@ -211,9 +214,9 @@ spaceObject.prototype.render = function() {
 
 	if (!this.isPlayerShip) {
 	    // -194 for the sidebar
-	    this.spriteContainer.position.x = positionConstant *
+	    this.spriteContainer.position.x = 
 		(this.position[0] - stagePosition[0]) + (screenW-194)/2;
-	    this.spriteContainer.position.y = -1 * positionConstant *
+	    this.spriteContainer.position.y = -1 *
 		(this.position[1] - stagePosition[1]) + screenH/2;
 
 	}

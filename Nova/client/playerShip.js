@@ -14,6 +14,7 @@ function playerShip(buildInfo, system) {
     this.weapons.secondary = [];
     this.target = undefined;
     this.targetIndex = -1;
+
 }
 
 playerShip.prototype = new ship;
@@ -97,7 +98,10 @@ playerShip.prototype.updateStats = function(stats = {}) {
 	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
     }
     if (_.contains(keys, 'a')) {
-	//this.turnToTarget();
+	this.turningToTarget = true;
+    }
+    else {
+	this.turningToTarget = false;
     }
     if (_.contains(keys, 'ctrl')) {
 	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
@@ -112,13 +116,15 @@ playerShip.prototype.updateStats = function(stats = {}) {
     stats.accelerating = accelerating;
 
     ship.prototype.updateStats.call(this, stats);
-
+    
 }
+
 
 playerShip.prototype.render = function() {
     // -194 for the sidebar
     this.spriteContainer.position.x = (screenW-194)/2;
     this.spriteContainer.position.y = screenH/2;
+
     
     ship.prototype.render.call(this);
     this.statusBar.render();

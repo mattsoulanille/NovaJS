@@ -35,9 +35,9 @@ basicWeapon.prototype.build = function() {
     this.meta.properties.vulnerableTo = []; // normal and/or pd
     return this.buildProjectiles()
 	.then(_.bind(function() {
-	    this.ready = true
-	    this.source.weapons.all.push(this)
-
+	    this.ready = true;
+	    this.source.weapons.all.push(this);
+//	    console.log(this);
 	    if (typeof this.UUID !== 'undefined') {
 //		this.system.built.multiplayer[this.UUID] = this;
 	    }

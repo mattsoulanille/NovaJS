@@ -30,7 +30,7 @@ document.onkeydown = function(e) {
 	myShip.cycleTarget();
 	break;
     }
-
+    
     
     var newStats = {};
     newStats[myShip.UUID] = myShip.getStats();

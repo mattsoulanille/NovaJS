@@ -44,7 +44,7 @@ guided.prototype.turnToTarget = function() {
 
 guided.prototype.fire = function(direction, position, velocity, target) {
     var factor = 30/100;
-    this.polarVelocity = this.meta.physics.speed * factor;
+    this.polarVelocity = this.meta.physics.speed * this.factor;
     projectile.prototype.fire.call(this, direction, position, velocity, target);
 }
 

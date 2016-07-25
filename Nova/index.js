@@ -66,21 +66,18 @@ io.on('connection', function(client){
     //    console.log(systemInfo);
     var medium_blaster = {
 	"name":"Medium Blaster",
-	"count":5,
-	"UUIDS":{"Medium Blaster":UUID()}
+	"count":5
     }
     
     var medium_blaster_turret = {
 	"name":"Medium Blaster Turret",
-	"count": 2,
+	"count": 2
 	//temporary. Eventually, the server outfit object will make these
-	"UUIDS":{"Medium Blaster Turret":UUID()} 
     }
 
     var ir_missile = {
 	"name":"IR Missile Launcher",
-	"count": 4,
-	"UUIDS":{"IR Missile":UUID()}
+	"count": 2
     }
 
     var playerShipType = {
@@ -89,35 +86,39 @@ io.on('connection', function(client){
 	"UUID":userid
     };
 
+    var sendPlayerShip = function() {
+//	console.log(myShip.buildInfo.outfits[0])
+	client.emit('onconnected', {
+	    "playerShip":myShip.buildInfo,
+	    "id": userid,
+	    "system": currentSystem.getObjects()
+	});
+    }
 
     myShip = new ship(playerShipType, currentSystem);
-    myShip.build();
-    _.each(myShip.outfitList, function(outf) {
-	_.each(outf.UUIDS, function(uuid) {
-	    owned_uuids.push(uuid);
-	})
+    myShip.build().
+	then(function() {
+	_.each(myShip.outfitList, function(outf) {
+	    _.each(outf.UUIDS, function(uuid) {
+		owned_uuids.push(uuid);
 	    });
+	});
+	})
+//	.then(function() {console.log(myShip.weapons.all[0].UUID)})
+	.then(sendPlayerShip)
+	.then(function() {
+	    client.broadcast.emit('addObjects', [myShip.buildInfo]);
+	});
 
 //    console.log(owned_uuids);
 //    console.log(playerShipType);
 
-    client.emit('onconnected', {
-	"playerShip":playerShipType,
-	"id": userid,
-	"system": currentSystem.getObjects()
-    });
-
-    var playerInfo = {};
-    
-    _.each(players, function(value, key) {
-	playerInfo[key] = value.buildInfo;
-    });
 
     var myShip;
 
     players[userid] = myShip;
     
-    client.broadcast.emit('addObjects', [myShip.buildInfo]);
+    
 
 
     client.on('updateProjectiles', function(stats) {

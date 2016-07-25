@@ -61,8 +61,8 @@ acceleratable.prototype.receiveCollision = function(other) {
 		tmpAngle = tmpAngle + Math.PI
 	    }
 	    //console.log(tmpAngle)
-	    newVelocity[0] = Math.cos(tmpAngle) * this.properties.maxSpeed
-	    newVelocity[1] = Math.sin(tmpAngle) * this.properties.maxSpeed
+	    newVelocity[0] = Math.cos(tmpAngle) * this.properties.maxSpeed;
+	    newVelocity[1] = Math.sin(tmpAngle) * this.properties.maxSpeed;
 	}
 	this.velocity[0] = newVelocity[0];
 	this.velocity[1] = newVelocity[1];    
@@ -75,26 +75,26 @@ acceleratable.prototype.render = function() {
 
     if (this.renderReady === true) {
 
-	this.turnback = false
+	this.turnback = false;
 	if (!this.properties.inertialess) {
 	    if (this.accelerating == -1) {
-		var vAngle = Math.atan(this.velocity[1] / this.velocity[0])
+		var vAngle = Math.atan(this.velocity[1] / this.velocity[0]);
 		if (this.velocity[0] < 0) {
-		    vAngle = vAngle + Math.PI
+		    vAngle = vAngle + Math.PI;
 		}
-		pointto = (vAngle + Math.PI) % (2*Math.PI);
+		var pointto = (vAngle + Math.PI) % (2*Math.PI);
 		this.turnTo(pointto);
 	    }
 
 
 
-	    var xaccel = Math.cos(this.pointing) * this.properties.acceleration
-	    var yaccel = Math.sin(this.pointing) * this.properties.acceleration
+	    var xaccel = Math.cos(this.pointing) * this.properties.acceleration;
+	    var yaccel = Math.sin(this.pointing) * this.properties.acceleration;
 	    if (this.accelerating == true) {
 		if (typeof this.lastTime != 'undefined') {
 		    //var aCoefficient = (this.properties.maxSpeed - Math.pow(Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2), .5)) / this.properties.maxSpeed
-		    this.velocity[0] += xaccel * (this.time - this.lastTime)/1000
-		    this.velocity[1] += yaccel * (this.time - this.lastTime)/1000
+		    this.velocity[0] += xaccel * (this.time - this.lastTime)/1000;
+		    this.velocity[1] += yaccel * (this.time - this.lastTime)/1000;
 
 		    // keep velocity under max speed
 		    var speed = Math.pow(Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2), .5);

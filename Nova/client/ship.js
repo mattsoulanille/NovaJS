@@ -12,7 +12,11 @@ function ship(buildInfo, system) {
     acceleratable.call(this, buildInfo, system);
     this.url = 'objects/ships/';
     this.pointing = 0;
+    this.weapons = {};
+    this.weapons.all = [];
     this.outfits = [];
+    this.target = undefined;
+    this.turningToTarget = false;
     if (typeof(buildInfo) !== 'undefined') {
 	this.outfitList = buildInfo.outfits || [];
 	this.buildInfo.type = "ship";
@@ -110,9 +114,44 @@ ship.prototype.addSpritesToContainer = function() {
 }
 
 ship.prototype.updateStats = function(stats) {
-
     acceleratable.prototype.updateStats.call(this, stats);
+    if (this.isPlayerShip !== true) {
+	if (typeof stats.target !== 'undefined') {
+	    this.target = this.system.multiplayer[stats.target];
+	}
+	else {
+	    this.target = undefined;
+	}
+    }
+    if (typeof stats.turningToTarget !== 'undefined') {
+	this.turningToTarget = stats.turningToTarget;
+    }
 }
+
+ship.prototype.getStats = function(stats) {
+    var stats = acceleratable.prototype.getStats.call(this);
+    if (typeof this.target !== 'undefined') {
+	stats.target = this.target.UUID;
+    }
+    else {
+	stats.target = undefined;
+    }
+    stats.turningToTarget = this.turningToTarget;
+    return stats;
+}
+
+
+ship.prototype.turnToTarget = function() {
+    if (typeof this.target !== 'undefined') {
+	var x = this.target.position[0] - this.position[0];
+	var y = this.target.position[1] - this.position[1];
+	var direction = (Math.atan2(y,x) + 2*Math.PI) % (2*Math.PI);
+
+	this.turnTo(direction);
+    }
+}
+
+
 
 ship.prototype.manageLights = function() {
     
@@ -137,7 +176,7 @@ ship.prototype.manageLights = function() {
 
 ship.prototype.render = function() {
     if ("engine" in this.sprites) {
-	if (this.accelerating) {
+	if (this.accelerating == 1) {
 	    this.sprites.engine.sprite.alpha = 1;
 	}
 	else {
@@ -148,6 +187,11 @@ ship.prototype.render = function() {
     if ("lights" in this.sprites) {
 	this.manageLights();
     }
+
+    if (this.turningToTarget) {
+	this.turnToTarget();
+    }
+
     
     if (this.properties.fuelRecharge) {
 	// Fuel recharge is in frames / unit, so recharge ^ -1 = units / frame
@@ -175,7 +219,7 @@ ship.prototype.hide = function() {
 
 
 ship.prototype.destroy = function() {
-
+    
     var index = this.system.ships.indexOf(this);
     if (index !== -1) {
 	this.system.ships.splice(index, 1);
