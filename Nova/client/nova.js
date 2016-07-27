@@ -17,6 +17,19 @@ $(window).resize(onResize);
 // add the renderer view element to the DOM
 document.body.appendChild(renderer.view);
 
+var fullscreen = function() {
+    if(document.documentElement.requestFullscreen) {
+	document.documentElement.requestFullscreen();
+    } else if(document.documentElement.mozRequestFullScreen) {
+	document.documentElement.mozRequestFullScreen();
+    } else if(document.documentElement.webkitRequestFullscreen) {
+	document.documentElement.webkitRequestFullscreen();
+    } else if(document.documentElement.msRequestFullscreen) {
+	document.documentElement.msRequestFullscreen();
+    }
+}
+
+
 var socket = io();
 document.onkeydown = function(e) {
     e = e || event;
@@ -29,6 +42,8 @@ document.onkeydown = function(e) {
     case 9:
 	myShip.cycleTarget();
 	break;
+    case 13:
+	fullscreen();
     }
     
     

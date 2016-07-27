@@ -79,6 +79,10 @@ io.on('connection', function(client){
 	"name":"IR Missile Launcher",
 	"count": 2
     }
+    var heavy_blaster_turret = {
+	"name": "Heavy Blaster Turret",
+	"count": 2
+    }
 /*
     var playerShipType = {
 	"name":"Starbridge A",
@@ -91,8 +95,8 @@ io.on('connection', function(client){
 	"count": 1
     }
     var playerShipType = {
-	"name": "Vell-os Dart",
-	"outfits":[flowerOfSpring, medium_blaster],
+	"name": "IDA Frigate 1170",
+	"outfits":[heavy_blaster_turret],
 	"UUID": userid
 
     }

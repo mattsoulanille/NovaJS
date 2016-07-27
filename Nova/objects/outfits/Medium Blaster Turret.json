@@ -2,7 +2,8 @@
     "functions": {
 	"weapon": [
 	    "Medium Blaster Turret"
-	]
+	],
+	"speed increase": -2
     },
     "cost": 40000,
     "mass": 25,

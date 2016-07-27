@@ -1,0 +1,13 @@
+{
+    "functions": {
+	"weapon": [
+	    "Heavy Blaster Turret"
+	],
+	"acceleration boost": -5,
+	"turn increase": -2
+    },
+    "cost": 150000,
+    "mass": 45,
+    "maximum": 4
+
+}
