@@ -210,6 +210,7 @@ setTimeout(function() {sync.getDifference().then(function(d) {timeDifference = d
 
 basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
+beamWeapon.prototype.socket = socket;
 spaceObject.prototype.lastTime = new Date().getTime();
 function animate() {
     
@@ -219,12 +220,13 @@ function animate() {
 
     stars.render()
     var lastTimes = []
-    _.each(sol.spaceObjects, function(s) {
-    	if (s.rendering) {
-    	    s.render()
-	    lastTimes.push(s.lastTime)
-    	}
-    });
+    sol.render();
+    // _.each(sol.spaceObjects, function(s) {
+    // 	if (s.rendering) {
+    // 	    s.render()
+
+    // 	}
+    // });
 
 
     //bar.render()

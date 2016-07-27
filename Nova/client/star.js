@@ -34,6 +34,9 @@ star.prototype.addSpritesToContainer = function() {
 
 }
 
+star.prototype.addToSpaceObjects = function() {
+    this.system.built.spaceObjects.push(this);
+}
 
 star.prototype.randomize = function() {
     this.chooseRandomTexture();

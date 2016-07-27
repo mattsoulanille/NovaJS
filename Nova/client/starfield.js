@@ -29,7 +29,8 @@ starfield.prototype.build = function() {
 	    this.ready = true;
 	    this.built = true;
 	    stage.addChild(this.spriteContainer);
-
+	    this.system.built.render.push(this);
+	    this.rendering = true;
 	}.bind(this))
 
 }
@@ -103,7 +104,7 @@ starfield.prototype.render = function() {
 	this.moveStars();
 	this.lastPosition = _.map(this.source.position, function(n) {return n})
     }
-//    _.each(this.stars, function(s) {s.render()});
+    _.each(this.stars, function(s) {s.render()});
 
 }
 

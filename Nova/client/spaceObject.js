@@ -63,6 +63,7 @@ spaceObject.prototype.build = function() {
 };
 spaceObject.prototype.addToSpaceObjects = function() {
     this.system.built.spaceObjects.push(this);
+    this.system.built.render.push(this);
     if (this.buildInfo.multiplayer) {
 	this.system.built.multiplayer[this.buildInfo.UUID] = this;
     }
@@ -164,6 +165,7 @@ spaceObject.prototype.callSprites = function(toCall) {
 spaceObject.prototype.hide = function() {
     this.spriteContainer.visible = false;
     this.visible = false;
+
     this.rendering = false;
 }
 
@@ -172,6 +174,7 @@ spaceObject.prototype.show = function() {
 	this.spriteContainer.visible = true;
 	this.visible = true;
 	this.rendering = true;
+
 	return true;
     }
     else {
@@ -242,6 +245,11 @@ spaceObject.prototype.destroy = function() {
 	var index = this.system.built.spaceObjects.indexOf(this);
 	if (index !== -1) {
 	    this.system.built.spaceObjects.splice(index, 1);
+	}
+
+	index = this.system.built.render.indexOf(this);
+	if (index !== -1) {
+	    this.system.built.render.splice(index, 1);
 	}
     }
     this.hide();

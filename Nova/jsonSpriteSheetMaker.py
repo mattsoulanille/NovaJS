@@ -71,7 +71,7 @@ def main(argv):
     parser.add_argument('py', type=int, help='Picture y dimension in pixels')
     parser.add_argument('x', type=int, help='Number of sprite images in the x direction')
     parser.add_argument('y', type=int, help='Number of sprite images in the y direction')
-    parser.add_argument('-t', '--turns', type=int, default=1, help='Number of orientations the sprite can have for turning purposes')
+    parser.add_argument('-t', '--turns', type=int, default=1, help='Number of orientations the sprite can have for turning purposes. Usually 1 or 3.')
 
     args=parser.parse_args()
     jsonMaker = json_utils(args.name, args.turns)

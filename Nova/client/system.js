@@ -20,6 +20,7 @@ function system() {
 	ships:[],
 	planets:[],
 	collidables:[],
+	render:[],
 	multiplayer:{}
     };
 
@@ -30,6 +31,16 @@ function system() {
 // 	return value.buildInfo;
 //     });
 // }
+
+system.prototype.render = function() {
+    // renderes everything that is built and needs to render
+    _.each(this.built.render, function(thing) {
+	if (thing.rendering) {
+	    thing.render();
+	}
+    });
+};
+
 
 system.prototype.build = function() {
     // only builds things that are spaceObjects. Not outfits / weapons.

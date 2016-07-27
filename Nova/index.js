@@ -79,13 +79,23 @@ io.on('connection', function(client){
 	"name":"IR Missile Launcher",
 	"count": 2
     }
-
+/*
     var playerShipType = {
 	"name":"Starbridge A",
 	"outfits":[ir_missile, medium_blaster_turret, medium_blaster],
 	"UUID":userid
     };
+*/
+    var flowerOfSpring = {
+	"name":"Flower of Spring",
+	"count": 1
+    }
+    var playerShipType = {
+	"name": "Vell-os Dart",
+	"outfits":[flowerOfSpring, medium_blaster],
+	"UUID": userid
 
+    }
     var sendPlayerShip = function() {
 //	console.log(myShip.buildInfo.outfits[0])
 	client.emit('onconnected', {

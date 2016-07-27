@@ -1,0 +1,17 @@
+{
+    "physics": {
+	"length": 260,
+	"width": 1,
+	"color": 16705594,
+	"type": "beam"
+    },
+    "properties": {
+	"shieldDamage": 4,
+	"armorDamage": 4,
+	"reload": 0,
+	"accuracy": 0,
+	"impact": -5,
+	"type": "secondary"
+    }
+
+}

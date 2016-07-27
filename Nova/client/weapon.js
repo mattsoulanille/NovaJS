@@ -4,6 +4,7 @@ if (typeof(module) !== 'undefined') {
     var Promise = require("bluebird");
     var basicWeapon = require("../server/basicWeaponServer.js");
     var turretWeapon = require("../server/turretWeaponServer.js");
+    var beamWeapon = require("../server/beamWeaponServer.js");
 }
 
 
@@ -70,6 +71,8 @@ weapon.prototype.buildWeapon = function() {
     case 'turret':
 	this.weapon = new turretWeapon(buildInfo, this.source);
 	break;
+    case 'beam':
+	this.weapon = new beamWeapon(buildInfo, this.source);
     }
     return this.weapon.build()
 }
