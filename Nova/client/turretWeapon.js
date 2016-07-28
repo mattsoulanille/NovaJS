@@ -1,32 +1,126 @@
 if (typeof(module) !== 'undefined') {
     module.exports = turretWeapon;
-    var basicWeapon = require("./basicWeapon.js");
+    var basicWeapon = require("../server/basicWeaponServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
 }
 
 
-function turretWeapon(buildInfo, source, socket) {
+function turretWeapon(buildInfo, source) {
     basicWeapon.call(this, buildInfo, source);
+
+    // [front, sides, back]. false means not blind
+    this.blindspots = [false, false, false]; 
+    if (typeof this.buildInfo !== 'undefined') {
+	if (typeof this.buildInfo.blindspots !== 'undefined') {
+	    _.each(this.buildInfo.blindspots, function(value, key) {
+		switch (key) {
+		case "front":
+		    this.blindspots[0] = value;
+		    break;
+		case "sides":
+		    this.blindspots[1] = value;
+		    break;
+		case "back":
+		    this.blindspots[2] = value;
+		    break;
+		}
+		    
+	    }.bind(this));
+	} //closes if typeof this.buildInfo.blindspots...
+    } // closes if typeof this.buildInfo !==...
+
 }
 turretWeapon.prototype = new basicWeapon;
 
-turretWeapon.prototype.fire = function() {
+turretWeapon.prototype.fire = function(defaultFireAngle) {
+    // defaultFireAngle is relative to this.source and is only applied if the turret has blind spots
+    var fireAngle = this.source.pointing;
+    fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		  (2 * Math.PI / 360));
+
+
     if (this.target) {
+
 	var x_diff = this.target.position[0] - this.source.position[0];
 	var y_diff = this.target.position[1] - this.source.position[1];
-    
 	var directionToTarget = (Math.atan2(y_diff, x_diff) + 2*Math.PI) % (2*Math.PI);
 
-	var fireAngle = this.calcFireAngle() || directionToTarget;
+	// if there are any blindspots
+	if (!this.checkBlindspots(directionToTarget)) {
 
-	// weapon inaccuracy
-	fireAngle += ((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
-		(2 * Math.PI / 360);
-	
-	basicWeapon.prototype.fire.call(this, fireAngle);
+
+	    fireAngle = (this.calcFireAngle() || directionToTarget);
+
+	    fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
+	    basicWeapon.prototype.fire.call(this, fireAngle);
+	}
 
     }
+
+    else if (defaultFireAngle) {
+	// used for quadrant turrets
+	fireAngle = (defaultFireAngle + fireAngle + 2*Math.PI) % (2*Math.PI);
+	basicWeapon.prototype.fire.call(this, fireAngle);
+    }
+}
+
+turretWeapon.prototype.autoFire = function() {
+    if (this.doAutoFire && (typeof this.target !== 'undefined')) {
+	this.firing = true;
+	
+	// fire
+	this.fire();
+	
+	// fire again after reload time
+	var reloadTimeMilliseconds = this.meta.properties.reload * 1000/30 / this.count;
+	setTimeout(_.bind(this.autoFire, this), reloadTimeMilliseconds)
+    }
+    else {
+	this.firing = false
+    }
+
+}
+
+turretWeapon.prototype.checkBlindspots = function(directionToTarget) {
+    // returns true if target is in a blindspot
+    if (_.any(this.blindspots)) {
+
+
+	var closeEnough = function(a1, a2) {
+	    // assumes a1 and a2 are [0,2pi)
+	    var maxAngle = 45/360 * 2*Math.PI;
+	    var diff = (a1 - a2 + 2*Math.PI) % (2*Math.PI);
+	    return (diff <= maxAngle) || (diff >= (2*Math.PI - maxAngle));
+
+	}
+
+	// check sides blind spot
+	var leftSide = (this.source.pointing + Math.PI / 2) % (2*Math.PI);
+	var rightSide = (this.source.pointing + Math.PI * 3 / 2) % (2*Math.PI);
+	if (this.blindspots[1] &&
+	    (closeEnough(directionToTarget, leftSide) ||
+	     closeEnough(directionToTarget, rightSide))) {
+	    return true;
+	}
+
+	// check back blind spot
+	var back = (this.source.pointing + Math.PI) % (2*Math.PI);
+	if (this.blindspots[2] &&
+	    closeEnough(directionToTarget, back)) {
+	    return true;
+	}
+	
+	// check front blindspot
+	if (this.blindspots[0] && // this.blindspots[0] = true means it's a blindspot
+	    closeEnough(directionToTarget, this.source.pointing)) {
+	    return true;
+	}
+
+
+    }
+    return false;
+
 }
 
 turretWeapon.prototype.calcFireAngle = function() {
@@ -56,12 +150,12 @@ turretWeapon.prototype.calcFireAngle = function() {
 	    
 	hitTime = Math.min(...times); // ... means 'use elements of array as arguments'
 
-
-
-	var hitPosition = [dx + dvx * hitTime, dy + dvy * hitTime];
-
-	fireAngle = (Math.atan2(hitPosition[1], hitPosition[0]) + 2*Math.PI) % (2*Math.PI);
+	if (hitTime >= 0) {
+	    var hitPosition = [dx + dvx * hitTime, dy + dvy * hitTime];
+	    fireAngle = (Math.atan2(hitPosition[1], hitPosition[0]) + 2*Math.PI) % (2*Math.PI);
+	    return fireAngle;
+	}
     }
     
-    return fireAngle;
+
 }
