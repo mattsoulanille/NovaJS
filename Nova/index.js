@@ -54,9 +54,10 @@ sol.build();
 
 
 
-
+var playerCount = 0;
 io.on('connection', function(client){
-    console.log('a user connected');
+    playerCount ++;
+    console.log('a user connected. ' + playerCount + " playing.");
     var userid = UUID();
     var owned_uuids = [userid];
     var currentSystem = sol;
@@ -191,7 +192,8 @@ io.on('connection', function(client){
     	}
     });
     client.on('disconnect', function() {
-	console.log('a user disconnected');
+	playerCount --;
+	console.log('a user disconnected. ' + playerCount + " playing.");
 	client.broadcast.emit('removeObjects', owned_uuids)
 	currentSystem.removeObjects(owned_uuids);
 
