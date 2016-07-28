@@ -1,0 +1,18 @@
+{ 
+    "physics": {
+	"speed": 1480,
+	"duration": 120,
+	"type": "front quadrant"
+    },    
+    "imageAssetsFiles": {
+	"projectile": "Railgun 200mm.json"
+    },	    
+    "properties": {
+	"shieldDamage": 10,
+	"armorDamage": 40,
+	"reload": 45,
+	"accuracy": 3,
+	"impact": 120,
+	"type": "primary"
+    }
+}

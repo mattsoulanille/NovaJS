@@ -1,0 +1,12 @@
+{
+    "functions": {
+	"weapon": [
+	    "Fixed Railgun (200mm)"
+	],
+	"speed increase": -2
+    },
+    "cost": 300000,
+    "mass": 35,
+    "maximum": 4
+
+}

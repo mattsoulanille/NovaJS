@@ -83,10 +83,12 @@ io.on('connection', function(client){
 	"name": "Heavy Blaster Turret",
 	"count": 2
     }
+    var railgun_200mm = {
+	"name": "200mm Fixed Railgun",
+	"count": 4
+    }
 /*
     var playerShipType = {
-	"name":"Starbridge A",
-	"outfits":[ir_missile, medium_blaster_turret, medium_blaster],
 	"UUID":userid
     };
 */
@@ -94,12 +96,25 @@ io.on('connection', function(client){
 	"name":"Flower of Spring",
 	"count": 1
     }
-    var playerShipType = {
+    var dart = {
+	"name": "Vell-os Dart",
+	"outfits": [flowerOfSpring]
+    }
+    
+    var Starbridge = {
+	"name":"Starbridge A",
+	"outfits":[ir_missile, medium_blaster_turret, medium_blaster]
+    }
+    
+    var IDA_Frigate = {
 	"name": "IDA Frigate 1170",
-	"outfits":[heavy_blaster_turret],
-	"UUID": userid
+	"outfits":[heavy_blaster_turret, railgun_200mm]
 
     }
+    var shipTypes = [dart, Starbridge, IDA_Frigate];
+    var playerShipType = shipTypes[_.random(0,shipTypes.length-1)]
+    playerShipType.UUID = userid;
+
     var sendPlayerShip = function() {
 //	console.log(myShip.buildInfo.outfits[0])
 	client.emit('onconnected', {
@@ -131,9 +146,6 @@ io.on('connection', function(client){
     var myShip;
 
     players[userid] = myShip;
-    
-    
-
 
     client.on('updateProjectiles', function(stats) {
 	

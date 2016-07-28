@@ -218,7 +218,15 @@ function startGame() {
 // the time difference between the server and client clocks
 // NOT the ping time.
 var timeDifference = 0;
-setTimeout(function() {sync.getDifference().then(function(d) {timeDifference = d})}, 2000);
+
+var getTimeUntilSuccess = function() {
+    return sync.getDifference().then(function(d) {
+	timeDifference = d;
+	console.log("Time Difference: ",timeDifference);
+    }, getTimeUntilSuccess);
+}
+
+setTimeout(getTimeUntilSuccess, 2000);
 //setInterval(function() {sync.getDifference().then(function(d) {timeDifference = d})},10000);
 //var syncClocksTimer = setInterval(function() {sync.getDifference()
 //					      .then(function(d) {timeDifference = d})}, 120000);

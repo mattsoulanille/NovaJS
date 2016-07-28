@@ -53,15 +53,15 @@ turretWeapon.prototype.fire = function(defaultFireAngle) {
 	    fireAngle = (this.calcFireAngle() || directionToTarget);
 
 	    fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
-	    basicWeapon.prototype.fire.call(this, fireAngle);
+	    return basicWeapon.prototype.fire.call(this, fireAngle);
 	}
 
     }
 
-    else if (defaultFireAngle) {
+    if (typeof defaultFireAngle !== "undefined") {
 	// used for quadrant turrets
 	fireAngle = (defaultFireAngle + fireAngle + 2*Math.PI) % (2*Math.PI);
-	basicWeapon.prototype.fire.call(this, fireAngle);
+	return basicWeapon.prototype.fire.call(this, fireAngle);
     }
 }
 

@@ -79,12 +79,14 @@ basicWeapon.prototype.buildProjectiles = function() {
 	case "guided":
 	    proj = new guided(buildInfo);
 	    break;
-	case 'turret':
+	case "turret":
+	    proj = new projectile(buildInfo);
+	case "front quadrant":
 	    proj = new projectile(buildInfo);
 	}
 	this.projectiles.push(proj);
     }
-    
+
     return Promise.all(_.map( this.projectiles, function(projectile) {projectile.build()} ));
 
 }

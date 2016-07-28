@@ -5,6 +5,7 @@ if (typeof(module) !== 'undefined') {
     var basicWeapon = require("../server/basicWeaponServer.js");
     var turretWeapon = require("../server/turretWeaponServer.js");
     var beamWeapon = require("../server/beamWeaponServer.js");
+    var frontQuadrantTurretWeapon = require("../server/frontQuadrantTurretWeaponServer.js");
 }
 
 
@@ -73,8 +74,12 @@ weapon.prototype.buildWeapon = function() {
 	break;
     case 'beam':
 	this.weapon = new beamWeapon(buildInfo, this.source);
+	break;
+    case 'front quadrant':
+	this.weapon = new frontQuadrantTurretWeapon(buildInfo, this.source);
+
     }
-    return this.weapon.build()
+    return this.weapon.build();
 }
 
 weapon.prototype.fire = function() {
