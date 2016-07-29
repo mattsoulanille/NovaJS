@@ -130,3 +130,12 @@ system.prototype.getStats = function() {
     });
     return stats;
 }
+
+system.prototype.resume = function() {
+    var time = new Date().getTime() + timeDifference;
+    _.each(this.spaceObjects, function(s) {
+	s.lastTime = time
+    }.bind(this));
+
+
+}

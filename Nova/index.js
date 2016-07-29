@@ -10,7 +10,7 @@ var Promise = require("bluebird");
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
-var system = require("./client/system.js");
+var system = require("./server/systemServer.js");
 
 var medium_blaster = new outfit("Medium Blaster", 1);
 var sol = new system();
@@ -18,14 +18,16 @@ var sol = new system();
 //var starbridge = new ship("Starbridge A", [medium_blaster], sol);
 
 var players = {};
+var gameTimeout;
 var gameloop = function(system) {
     
-    _.each(players, function(player) {
-	player.time = new Date().getTime();
-	player.render()
-    });
+    // _.each(players, function(player) {
+    // 	player.time = new Date().getTime();
+    // 	player.render()
+    // });
+    system.render();
 
-    setTimeout(function() {gameloop(system)}, 0);
+    gameTimeout = setTimeout(function() {gameloop(system)}, 0);
 }
 
 //notify clients of
@@ -53,7 +55,7 @@ sol.addObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build();
 
 
-
+var paused = false;
 var playerCount = 0;
 io.on('connection', function(client){
     playerCount ++;
@@ -121,7 +123,8 @@ io.on('connection', function(client){
 	client.emit('onconnected', {
 	    "playerShip":myShip.buildInfo,
 	    "id": userid,
-	    "system": currentSystem.getObjects()
+	    "system": currentSystem.getObjects(),
+	    "paused": paused
 	});
     }
 
@@ -199,8 +202,18 @@ io.on('connection', function(client){
 
 	delete players[userid];
     });
-    
-
+    client.on('pause', function() {
+	paused = true;
+	clearTimeout(gameTimeout);
+	//	client.broadcast.emit('pause');
+	io.emit('pause', {for:'everyone'});
+    });
+    client.on('resume', function() {
+	paused = false;
+	io.emit('resume', {for:'everyone'});
+	sol.resume();
+//	gameTimeout = setTimeout(function() {gameloop(system)}, 0);
+    });
 });
 
 

@@ -134,10 +134,12 @@ function updateSystem(systemInfo) {
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
-
     myShip = new playerShip(data.playerShip, sol);
     stars = new starfield(myShip, 40);
     sol.setObjects(data.system);
+    if (data.paused) {
+	pause();
+    }
     stars.build()
 	.then(myShip.build.bind(myShip))
 	.then(sol.build.bind(sol))
@@ -145,6 +147,9 @@ socket.on('onconnected', function(data) {
 	    console.log("built objects");
 	    stagePosition = myShip.position;
 	    startGame();
+	    var newStats = {};
+	    newStats[myShip.UUID] = myShip.getStats();
+	    socket.emit('updateStats', newStats)
 	});
     
     //players[UUID] = myShip;
@@ -178,21 +183,23 @@ socket.on('test', function(data) {
     console.log(data);
 });
 
-//var target = new targetImage("Starbridge.png")
-//target.build()
 
-//for collisions
+var paused = false;
 
-//have ships do this pushing themselves
-var ships = [];
-
-
-var startGameTimer = setInterval(function () {startGame()}, 500);
+var pause = function() {
+    console.log("Game paused");
+    paused = true;
+}
+socket.on('pause', pause);
 
 
-var readyToRender = false;
-
-//var buildShips = _.map(ships, function(s) {return s.build()})
+var resume = function() {
+    paused = false;
+    sol.resume();
+    requestAnimationFrame(animate);
+    console.log("Game resumed");
+}
+socket.on('resume', resume);
 
 
 function startGame() {
@@ -206,7 +213,6 @@ function startGame() {
     }) ).done(function() {
 	stars.placeAll()
 	requestAnimationFrame(animate)
-	clearInterval(startGameTimer)
 	console.log("Rendering started")
     });
 
@@ -230,6 +236,8 @@ setTimeout(getTimeUntilSuccess, 2000);
 //setInterval(function() {sync.getDifference().then(function(d) {timeDifference = d})},10000);
 //var syncClocksTimer = setInterval(function() {sync.getDifference()
 //					      .then(function(d) {timeDifference = d})}, 120000);
+
+
 
 basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
@@ -259,8 +267,9 @@ function animate() {
 //    console.log(_.reduce(function(a,b) {return a && b}, times, true))
     
     renderer.render(stage);
-
-    requestAnimationFrame( animate );
+    if (!paused) {
+	requestAnimationFrame( animate );
+    }
 
 
 }
