@@ -56,10 +56,10 @@ sol.build();
 
 
 var paused = false;
-var playerCount = 0;
+
 io.on('connection', function(client){
-    playerCount ++;
-    console.log('a user connected. ' + playerCount + " playing.");
+
+
     var userid = UUID();
     var owned_uuids = [userid];
     var currentSystem = sol;
@@ -150,7 +150,7 @@ io.on('connection', function(client){
     var myShip;
 
     players[userid] = myShip;
-
+    console.log('a user connected. ' + _.keys(players).length + " playing.");
     client.on('updateProjectiles', function(stats) {
 	
     });
@@ -195,12 +195,11 @@ io.on('connection', function(client){
     	}
     });
     client.on('disconnect', function() {
-	playerCount --;
-	console.log('a user disconnected. ' + playerCount + " playing.");
 	client.broadcast.emit('removeObjects', owned_uuids)
 	currentSystem.removeObjects(owned_uuids);
 
 	delete players[userid];
+	console.log('a user disconnected. ' + _.keys(players).length + " playing.");
     });
     client.on('pause', function() {
 	paused = true;
