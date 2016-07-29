@@ -114,7 +114,7 @@ io.on('connection', function(client){
 	"outfits":[heavy_blaster_turret, railgun_200mm]
 
     }
-    var shipTypes = [dart, Starbridge, IDA_Frigate];
+    var shipTypes = [Starbridge, IDA_Frigate];
     var playerShipType = shipTypes[_.random(0,shipTypes.length-1)]
     playerShipType.UUID = userid;
 

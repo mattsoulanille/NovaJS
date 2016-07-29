@@ -229,7 +229,7 @@ var getTimeUntilSuccess = function() {
     return sync.getDifference().then(function(d) {
 	timeDifference = d;
 	console.log("Time Difference: ",timeDifference);
-    }, getTimeUntilSuccess);
+    }, function() {setTimeout(getTimeUntilSuccess, 10000)}); // don't ddos the server
 }
 
 setTimeout(getTimeUntilSuccess, 2000);
