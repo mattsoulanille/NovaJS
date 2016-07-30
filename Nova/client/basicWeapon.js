@@ -112,20 +112,15 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
 }
 
 basicWeapon.prototype.notifyServer = function(proj, index) {
-    // this.socket is defined in nova.js
-    var newStats = {};
-    //    newStats[index] = this.projectiles[index].getStats();
-    newStats.doAutoFire = this.doAutoFire;
+
+    var newStats = this.getStats();
     var with_uuid = {};
     with_uuid[this.UUID] = newStats;
     this.socket.emit('updateStats', with_uuid);
 }
 
 basicWeapon.prototype.getStats = function() {
-    var stats;
-    // stats = _.map(this.projectiles, function(proj) {
-    // 	return proj.getStats();
-    // });
+    var stats = {};
     stats.doAutoFire = this.doAutoFire;
     return stats;
 }

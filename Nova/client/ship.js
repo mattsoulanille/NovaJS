@@ -120,7 +120,7 @@ ship.prototype.updateStats = function(stats) {
 	    this.cycleTarget(this.system.multiplayer[stats.target]);
 	}
 	else {
-	    this.target = undefined;
+	    this.cycleTarget(undefined);
 	}
     }
     if (typeof stats.turningToTarget !== 'undefined') {
@@ -206,7 +206,7 @@ ship.prototype.render = function() {
     acceleratable.prototype.render.call(this);
 }
 ship.prototype.cycleTarget = function(newTarget) {
-    
+
     this.target = newTarget;
     _.each(this.weapons.all, function(w) {w.cycleTarget(this.target)}, this);
     

@@ -57,7 +57,8 @@ sol.build();
 var receives = 0;
 var transmits = 0;
 
-/* // debugging socket.io io
+// debugging socket.io io
+/*
 setInterval(function() {
     console.log("Transmits: ",transmits);
     transmits = 0;
@@ -135,6 +136,7 @@ io.on('connection', function(client){
 	    "playerShip":myShip.buildInfo,
 	    "id": userid,
 	    "system": currentSystem.getObjects(),
+	    "stats": _.omit(currentSystem.getStats(), userid),
 	    "paused": paused
 	});
 	transmits ++;
@@ -154,6 +156,7 @@ io.on('connection', function(client){
 	.then(function() {
 	    client.broadcast.emit('addObjects', [myShip.buildInfo]);
 	    transmits += playercount;
+
 	});
 
 //    console.log(owned_uuids);
@@ -178,6 +181,10 @@ io.on('connection', function(client){
 
 		filtered_stats[uuid] = newStats;
 	    }
+	    else {
+		console.log("client tried to change something it didn't own");
+	    }
+
 	});
 	
 //	console.log(filtered_stats);
@@ -186,7 +193,7 @@ io.on('connection', function(client){
 	client.broadcast.emit('updateStats', filtered_stats);
 	transmits += playercount - 1;
 //	client.broadcast.emit('test', "does this work?");
-
+	currentSystem.updateStats(filtered_stats);
 	
     });
 

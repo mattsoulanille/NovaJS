@@ -50,7 +50,7 @@ document.onkeydown = function(e) {
     new_keys = KeyboardJS.activeKeys();
     if (!new_keys.equals(last_keys)) {
 	myShip.updateStats();
-	console.log('updating stats');
+
 	var newStats = {};
 	newStats[myShip.UUID] = myShip.getStats();
 	socket.emit('updateStats', newStats);
@@ -154,6 +154,8 @@ socket.on('onconnected', function(data) {
 	.then(function() {
 	    console.log("built objects");
 	    stagePosition = myShip.position;
+//	    console.log(data.stats);
+	    sol.updateStats(data.stats);
 	    startGame();
 	    var newStats = {};
 	    newStats[myShip.UUID] = myShip.getStats();
