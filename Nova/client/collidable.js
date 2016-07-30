@@ -25,13 +25,8 @@ function collidable(buildInfo, system) {
 collidable.prototype = new movable;
 
 collidable.prototype.receiveCollision = function(other) {
-
-    if (typeof this.UUID !== 'undefined') {
-	var stats = {};
-	stats[this.UUID] = this.getStats();
 //	console.log(stats);
-	this.socket.emit('updateStats', stats);
-    }
+
 }    
 
 

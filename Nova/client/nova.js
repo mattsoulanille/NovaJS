@@ -37,7 +37,7 @@ document.onkeydown = function(e) {
     blocked_keys = [37, 38, 39, 40, 32, 9, 17];
 
 //    socket.emit('test', "Hey look, i'm a test event");
-    myShip.updateStats();
+
 
     switch (e.keyCode) {
     case 9:
@@ -49,6 +49,8 @@ document.onkeydown = function(e) {
     
     new_keys = KeyboardJS.activeKeys();
     if (!new_keys.equals(last_keys)) {
+	myShip.updateStats();
+	console.log('updating stats');
 	var newStats = {};
 	newStats[myShip.UUID] = myShip.getStats();
 	socket.emit('updateStats', newStats);
@@ -63,6 +65,7 @@ document.onkeydown = function(e) {
     }
 }
 document.onkeyup = function(e) {
+
     last_keys = KeyboardJS.activeKeys();
     myShip.updateStats();
     var newStats = {};

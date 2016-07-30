@@ -104,9 +104,6 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
 	    var velocity = velocity || this.source.velocity;
 	    proj.fire(direction, position, velocity, this.target)
 
-	    if (typeof this.UUID !== 'undefined') {
-		this.notifyServer(proj, i);
-	    }
 	    return true
 	}
 
@@ -117,23 +114,39 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
 basicWeapon.prototype.notifyServer = function(proj, index) {
     // this.socket is defined in nova.js
     var newStats = {};
-    newStats[index] = this.projectiles[index].getStats();
+    //    newStats[index] = this.projectiles[index].getStats();
+    newStats.doAutoFire = this.doAutoFire;
     var with_uuid = {};
     with_uuid[this.UUID] = newStats;
     this.socket.emit('updateStats', with_uuid);
 }
 
 basicWeapon.prototype.getStats = function() {
-    var stats = _.map(this.projectiles, function(proj) {
-	return proj.getStats();
-    });
+    var stats;
+    // stats = _.map(this.projectiles, function(proj) {
+    // 	return proj.getStats();
+    // });
+    stats.doAutoFire = this.doAutoFire;
     return stats;
 }
 
-basicWeapon.prototype.updateStats = function(statsList) {
-    _.each(statsList, function(stats, index) {
-	this.projectiles[index].updateStats(stats);
-    }.bind(this));
+basicWeapon.prototype.updateStats = function(stats) {
+    // _.each(statsList, function(stats, index) {
+    // 	this.projectiles[index].updateStats(stats);
+    // }.bind(this));
+    if (stats.doAutoFire === true) {
+	if (this.firing) {
+	    this.doAutoFire = true
+	    
+	}
+	else {
+	    this.doAutoFire = true
+	    this.autoFire()
+	}
+    }
+    else {
+	this.doAutoFire = false
+    }
 }
 
 basicWeapon.prototype.startFiring = function() {
@@ -145,11 +158,19 @@ basicWeapon.prototype.startFiring = function() {
 	this.doAutoFire = true
 	this.autoFire()
     }
+    if (typeof this.UUID !== 'undefined') {
+	this.notifyServer();
+    }
+
 
 }
 
 basicWeapon.prototype.stopFiring = function() {
     this.doAutoFire = false
+    if (typeof this.UUID !== 'undefined') {
+	this.notifyServer();
+    }
+
 }
 
 basicWeapon.prototype.autoFire = function() {

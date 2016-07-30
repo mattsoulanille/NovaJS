@@ -54,11 +54,22 @@ app.use(express.static(__dirname))
 sol.addObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build();
 
+var receives = 0;
+var transmits = 0;
+
+/* // debugging socket.io io
+setInterval(function() {
+    console.log("Transmits: ",transmits);
+    transmits = 0;
+    console.log("Receives: ", receives);
+    receives = 0;
+}, 1000);
+*/
 
 var paused = false;
-
+var playercount = 0;
 io.on('connection', function(client){
-
+    receives ++;
 
     var userid = UUID();
     var owned_uuids = [userid];
@@ -126,6 +137,7 @@ io.on('connection', function(client){
 	    "system": currentSystem.getObjects(),
 	    "paused": paused
 	});
+	transmits ++;
     }
 
     myShip = new ship(playerShipType, currentSystem);
@@ -141,6 +153,7 @@ io.on('connection', function(client){
 	.then(sendPlayerShip)
 	.then(function() {
 	    client.broadcast.emit('addObjects', [myShip.buildInfo]);
+	    transmits += playercount;
 	});
 
 //    console.log(owned_uuids);
@@ -150,12 +163,14 @@ io.on('connection', function(client){
     var myShip;
 
     players[userid] = myShip;
-    console.log('a user connected. ' + _.keys(players).length + " playing.");
+    playercount = _.keys(players).length;
+    console.log('a user connected. ' + playercount + " playing.");
     client.on('updateProjectiles', function(stats) {
-	
+	receives ++;
     });
     
     client.on('updateStats', function(stats) {
+	receives ++;
 	var filtered_stats = {};
 //	console.log(stats)
 	_.each(stats, function(newStats, uuid) {
@@ -169,12 +184,14 @@ io.on('connection', function(client){
 	//	console.log(newStats);
 
 	client.broadcast.emit('updateStats', filtered_stats);
+	transmits += playercount - 1;
 //	client.broadcast.emit('test', "does this work?");
 
 	
     });
 
     client.on("test", function(data) {
+	receives ++;
 	console.log(data);
     });
     
@@ -184,32 +201,40 @@ io.on('connection', function(client){
 
     
     client.on('pingTime', function(msg) {
+	receives ++;
     	var response = {};
     	if (msg.hasOwnProperty('time')) {
     	    response.clientTime = msg.time;
     	    response.serverTime = new Date().getTime();
     	    client.emit('pongTime', response);
+	    transmits ++;
 //	    console.log(msg);
 	    
 
     	}
     });
     client.on('disconnect', function() {
+	receives ++;
 	client.broadcast.emit('removeObjects', owned_uuids)
+	transmits += playercount - 1;
 	currentSystem.removeObjects(owned_uuids);
 
 	delete players[userid];
 	console.log('a user disconnected. ' + _.keys(players).length + " playing.");
     });
     client.on('pause', function() {
+	receives ++;
 	paused = true;
 	clearTimeout(gameTimeout);
 	//	client.broadcast.emit('pause');
 	io.emit('pause', {for:'everyone'});
+	transmits += playercount;
     });
     client.on('resume', function() {
+	receives ++;
 	paused = false;
 	io.emit('resume', {for:'everyone'});
+	transmits += playercount;
 	sol.resume();
 //	gameTimeout = setTimeout(function() {gameloop(system)}, 0);
     });

@@ -45,6 +45,20 @@ playerShip.prototype.sortWeapons = function() {
     
 }
 
+playerShip.prototype.receiveCollision = function(other) {
+    ship.prototype.receiveCollision.call(this, other);
+    this.sendCollisionToServer();
+}
+
+playerShip.prototype.sendCollisionToServer = _.throttle(function() {
+    if (typeof this.UUID !== 'undefined') {
+	var stats = {};
+	stats[this.UUID] = this.getStats();
+    }
+    this.socket.emit('updateStats', stats);
+    
+}, 1000);
+
 playerShip.prototype.makeStatusBar = function() {
     this.statusBar = new statusBar('civilian', this);
     return this.statusBar.build()
@@ -148,7 +162,8 @@ playerShip.prototype.cycleTarget = function() {
     this.target = this.system.ships[this.targetIndex];
 //    console.log(this.targetIndex)
     this.statusBar.cycleTarget(this.target)
-    _.each(this.weapons.all, function(w) {w.cycleTarget(this.target)}, this);
+    ship.prototype.cycleTarget.call(this, this.target);
+
     
 }
 
