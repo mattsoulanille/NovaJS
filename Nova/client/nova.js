@@ -138,12 +138,17 @@ function updateSystem(systemInfo) {
 
     });
 }
-
+var stars;
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
     myShip = new playerShip(data.playerShip, sol);
-    stars = new starfield(myShip, 40);
+    if (stars) {
+	stars.attach(myShip);
+    }
+    else {
+	stars = new starfield(myShip, 40);
+    }
     sol.setObjects(data.system);
     if (data.paused) {
 	pause();

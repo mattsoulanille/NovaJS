@@ -24,17 +24,25 @@ function starfield(source, count, starname) {
 }
 
 starfield.prototype.build = function() {
-    return this.buildStars()
-	.then(function() {
-	    this.ready = true;
-	    this.built = true;
-	    stage.addChild(this.spriteContainer);
-	    this.system.built.render.push(this);
-	    this.rendering = true;
-	}.bind(this))
-
+    if (!this.built) {
+	return this.buildStars()
+	    .then(function() {
+		this.ready = true;
+		this.built = true;
+		stage.addChild(this.spriteContainer);
+		this.system.built.render.push(this);
+		this.rendering = true;
+	    }.bind(this))
+    }
+    else {
+	return new Promise(function(fulfill, reject) {fulfill()});
+    }
 }
-
+starfield.prototype.attach = function(source) {
+    this.source = source;
+    this.position = _.map(this.source.position, function(n) {return n})
+    this.lastPosition = _.map(this.source.position, function(n) {return n})
+}
 
 starfield.prototype.buildStars = function() {
 
@@ -198,3 +206,4 @@ starfield.prototype.placeUnseen = function(stars) {
 
     
 }
+
