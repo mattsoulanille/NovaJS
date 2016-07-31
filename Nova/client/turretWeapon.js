@@ -36,8 +36,6 @@ turretWeapon.prototype = new basicWeapon;
 turretWeapon.prototype.fire = function(defaultFireAngle) {
     // defaultFireAngle is relative to this.source and is only applied if the turret has blind spots
     var fireAngle = this.source.pointing;
-    fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
-		  (2 * Math.PI / 360));
 
 
     if (this.target) {
@@ -51,6 +49,8 @@ turretWeapon.prototype.fire = function(defaultFireAngle) {
 
 
 	    fireAngle = (this.calcFireAngle() || directionToTarget);
+	    fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+			  (2 * Math.PI / 360));
 
 	    fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
 	    return basicWeapon.prototype.fire.call(this, fireAngle);
@@ -60,7 +60,11 @@ turretWeapon.prototype.fire = function(defaultFireAngle) {
 
     if (typeof defaultFireAngle !== "undefined") {
 	// used for quadrant turrets
-	fireAngle = (defaultFireAngle + fireAngle + 2*Math.PI) % (2*Math.PI);
+	fireAngle = (defaultFireAngle + fireAngle);
+	fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		      (2 * Math.PI / 360));
+
+	fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
 	return basicWeapon.prototype.fire.call(this, fireAngle);
     }
 }
