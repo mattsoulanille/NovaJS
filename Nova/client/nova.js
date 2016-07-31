@@ -194,6 +194,7 @@ socket.on('test', function(data) {
 });
 
 
+
 var paused = false;
 
 var pause = function() {
@@ -248,7 +249,7 @@ setTimeout(getTimeUntilSuccess, 2000);
 //					      .then(function(d) {timeDifference = d})}, 120000);
 
 
-
+system.prototype.socket = socket;
 basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
 beamWeapon.prototype.socket = socket;

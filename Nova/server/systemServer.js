@@ -14,3 +14,5 @@ systemServer.prototype.resume = function() {
     }.bind(this));
 }
     
+systemServer.prototype.getMissingObjects = function() {};
+    

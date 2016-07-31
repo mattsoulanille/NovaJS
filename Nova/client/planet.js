@@ -24,6 +24,7 @@ planet.prototype.build = function() {
 	.then(function() {
 	    this.system.built.planets.push(this);
 	    this.buildInfo.type = 'planet';
+	    this.show();
 	}.bind(this));
     
 }
