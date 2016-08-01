@@ -30,7 +30,7 @@ statusBar.prototype.build = function() {
 	    // radarMeta.colors.brightRadar = this.meta.colors.brightRadar;
 	    // radarMeta.colors.dimRadar = this.meta.colors.dimRadar;
 	    // radarMeta.dataAreas.radar.size = this.meta.dataAreas.radar.size;
-	    this.radar = new radar(this.meta, this.system);
+	    this.radar = new radar(this.meta, this.source);
 	    this.radarContainer.position.x = this.meta.dataAreas.radar.position[0];
 	    this.radarContainer.position.y = this.meta.dataAreas.radar.position[1];
 	    this.radarContainer.addChild(this.radar.graphics);
