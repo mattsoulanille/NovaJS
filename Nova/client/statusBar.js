@@ -3,11 +3,13 @@ function statusBar(name, player) {
     this.ready = false
     this.name = name;
     this.sprites = {};
-    this.spriteContainer = new PIXI.Container();
+    this.container = new PIXI.Container();
     this.targetContainer = new PIXI.Container();
     this.lines = new PIXI.Graphics();
-    this.spriteContainer.addChild(this.lines);
-    this.spriteContainer.addChild(this.targetContainer);
+    this.radarContainer = new PIXI.Container();
+    this.container.addChild(this.lines);
+    this.container.addChild(this.targetContainer);
+    this.container.addChild(this.radarContainer);
     this.source = player;
     this.text = {};
     if (typeof(this.source) !== 'undefined') {
@@ -22,7 +24,18 @@ statusBar.prototype.build = function() {
 	.then(this.resize.bind(this))
 	.then(this.buildTargetText.bind(this))
 	.then(this.buildTargetCorners.bind(this))
-//	.catch(function(err) {console.log(err)});
+	.then(function() {
+	    // var radarMeta = {};
+	    // radarMeta.colors = {};
+	    // radarMeta.colors.brightRadar = this.meta.colors.brightRadar;
+	    // radarMeta.colors.dimRadar = this.meta.colors.dimRadar;
+	    // radarMeta.dataAreas.radar.size = this.meta.dataAreas.radar.size;
+	    this.radar = new radar(this.meta, this.system);
+	    this.radarContainer.position.x = this.meta.dataAreas.radar.position[0];
+	    this.radarContainer.position.y = this.meta.dataAreas.radar.position[1];
+	    this.radarContainer.addChild(this.radar.graphics);
+	    
+	}.bind(this));
 }
 
 statusBar.prototype.loadResources = function() {
@@ -64,13 +77,13 @@ statusBar.prototype.makeSprites = function() {
 
 statusBar.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	   function(s) {this.spriteContainer.addChildAt(s,0);}, this);
+	   function(s) {this.container.addChildAt(s,0);}, this);
 
-    stage.addChild(this.spriteContainer);
+    stage.addChild(this.container);
 }
 
 statusBar.prototype.resize = function() {
-    this.spriteContainer.position.x = $(window).width() - 194;
+    this.container.position.x = $(window).width() - 194;
 }
 
 statusBar.prototype.render = function() {
@@ -83,6 +96,7 @@ statusBar.prototype.render = function() {
     this.drawShield();
     this.drawArmor();
     this.drawEnergy();
+    this.radar.render();
     if (this.target) {
 	this.drawTarget();
 	this.targetContainer.visible = true;
@@ -138,9 +152,9 @@ statusBar.prototype.drawTarget = function() {
 }
 
 statusBar.prototype.buildTargetText = function() {
+    this.targetContainer.position.x = this.meta.dataAreas.targeting.position[0];
+    this.targetContainer.position.y = this.meta.dataAreas.targeting.position[1];
 
-    var pos = [this.meta.dataAreas.targeting.position[0],
-	       this.meta.dataAreas.targeting.position[1]];
     var size = [this.meta.dataAreas.targeting.size[0],
 		this.meta.dataAreas.targeting.size[1]];
 
@@ -149,23 +163,23 @@ statusBar.prototype.buildTargetText = function() {
     
     this.text.shield = new PIXI.Text('Shield:', dimfont);
     this.text.shield.anchor.y = 1;
-    this.text.shield.position.x = pos[0] + 6;
-    this.text.shield.position.y = pos[1] + size[1] - 3;
+    this.text.shield.position.x = 6;
+    this.text.shield.position.y = size[1] - 3;
 
     this.targetContainer.addChild(this.text.shield);
 
     this.text.armor = new PIXI.Text('Armor:', dimfont);
     this.text.armor.anchor.y = 1;
-    this.text.armor.position.x = pos[0] + 6;
-    this.text.armor.position.y = pos[1] + size[1] - 3;
+    this.text.armor.position.x = 6;
+    this.text.armor.position.y = size[1] - 3;
     this.text.armor.visible = false;
     this.targetContainer.addChild(this.text.armor);
 
     
     this.text.percent = new PIXI.Text("100%", font);
     this.text.percent.anchor.y = 1;
-    this.text.percent.position.x = pos[0] + 49;
-    this.text.percent.position.y = pos[1] + size[1] - 3;
+    this.text.percent.position.x = 49;
+    this.text.percent.position.y = size[1] - 3;
 
     this.targetContainer.addChild(this.text.percent);
     
@@ -208,14 +222,12 @@ statusBar.prototype.cycleTarget = function(target) {
 	if ( !(_.contains(this.targetContainer.children, this.targetSprite)) ) {
 	    this.targetContainer.addChild(this.targetSprite)
 	}
-
-	var pos = [this.meta.dataAreas.targeting.position[0],
-		   this.meta.dataAreas.targeting.position[1]];
+	var pos = [0,0];
 	var size = [this.meta.dataAreas.targeting.size[0],
 		    this.meta.dataAreas.targeting.size[1]];
 	
-	this.targetSprite.position.x = (size[0] / 2) + pos[0];
-	this.targetSprite.position.y = (size[1] / 2) + pos[1];
+	this.targetSprite.position.x = (size[0] / 2);
+	this.targetSprite.position.y = (size[1] / 2);
 	this.targetSprite.visible = true;
 
 	this.targetCorners.target(target);
