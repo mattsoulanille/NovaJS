@@ -13,7 +13,7 @@ function basicWeapon(buildInfo, source) {
     this.doAutoFire = false;
     this.ready = false;
     this.source = source
-
+    this.fireTimeout = undefined;
     if (typeof(buildInfo) !== 'undefined') {
 	this.name = buildInfo.name;
 	this.meta = buildInfo.meta;
@@ -177,7 +177,7 @@ basicWeapon.prototype.autoFire = function() {
 	
 	// fire again after reload time
 	var reloadTimeMilliseconds = this.meta.properties.reload * 1000/30 / this.count;
-	setTimeout(_.bind(this.autoFire, this), reloadTimeMilliseconds)
+	this.fireTimeout = setTimeout(_.bind(this.autoFire, this), reloadTimeMilliseconds);
     }
     else {
 	this.firing = false
@@ -189,6 +189,7 @@ basicWeapon.prototype.cycleTarget = function(target) {
 }
 
 basicWeapon.prototype.destroy = function() {
+    this.stopFiring();
     _.each(this.projectiles, function(proj) {
 	proj.destroy()
     });

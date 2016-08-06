@@ -35,15 +35,16 @@ radar.prototype.drawShip = function(s) {
     this.drawDot(s.position, color);
 }
 radar.prototype.drawPlanet = function(p) {
-    // color = 0xFFFF00 // neutral
+    var color = 0xFFFF00; // neutral
+    
 }
 
-radar.prototype.drawDot = function(pos, color) {
+radar.prototype.drawDot = function(pos, color, size) {
     // draws a dot from nova position
     var size = this.meta.dataAreas.radar.size;
     var pixiPos = [(size[0] * (pos[0] - this.source.position[0]) / this.scale[0]) + size[0] / 2,
 		   -(size[1] * (pos[1] - this.source.position[1]) / this.scale[1]) + size[1] / 2];
-
+    
 
     if (pixiPos[0] <= size[0] && pixiPos[0] >= 0 &&
 	pixiPos[1] <= size[1] && pixiPos[1] >= 0) {
