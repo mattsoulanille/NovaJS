@@ -238,5 +238,6 @@ ship.prototype.destroy = function() {
 	}
     }
 
+    _.each(this.outfits, function(o) {o.destroy()});
     acceleratable.prototype.destroy.call(this);
 }

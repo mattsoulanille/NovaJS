@@ -118,10 +118,26 @@ system.prototype.getObjects = function() {
 }
 
 system.prototype.updateStats = function(stats) {
+    var missingObjects = [];
     _.each(stats, function(newStats, uuid) {
-	this.multiplayer[uuid].updateStats(newStats);
+	if (this.multiplayer.hasOwnProperty(uuid)) {
+	    this.multiplayer[uuid].updateStats(newStats);
+	}
+	else {
+	    missingObjects.push(uuid);
+	}
+	
     }.bind(this));
+    if (missingObjects.length != 0) {
+	this.getMissingObjects(missingObjects);
+    }
+    
 }
+
+system.prototype.getMissingObjects = _.throttle(function(missingObjects) {
+    console.log("Requested missing objects: " + missingObjects);
+    this.socket.emit("getMissingObjects", missingObjects);
+}, 1000);
 
 system.prototype.getStats = function() {
     var stats = {};

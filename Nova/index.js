@@ -5,7 +5,8 @@ var io = require('socket.io')(http);
 var UUID = require('node-uuid');
 var _ = require("underscore");
 var Promise = require("bluebird");
-
+var fs = require('fs'),
+    PNG = require('pngjs').PNG;
 
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
@@ -130,8 +131,11 @@ io.on('connection', function(client){
     var playerShipType = shipTypes[_.random(0,shipTypes.length-1)]
     playerShipType.UUID = userid;
 
-    var sendPlayerShip = function() {
-//	console.log(myShip.buildInfo.outfits[0])
+    var sendSystem = function() {
+	//	console.log(myShip.buildInfo.outfits[0])
+	//console.log(currentSystem.getObjects())
+	var testSystem = {};
+	//testSystem[userid] = myShip.buildInfo; // for testing missing objects
 	client.emit('onconnected', {
 	    "playerShip":myShip.buildInfo,
 	    "id": userid,
@@ -152,7 +156,7 @@ io.on('connection', function(client){
 	});
 	})
 //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
-	.then(sendPlayerShip)
+	.then(sendSystem)
 	.then(function() {
 	    client.broadcast.emit('addObjects', [myShip.buildInfo]);
 	    transmits += playercount;
@@ -220,6 +224,22 @@ io.on('connection', function(client){
 
     	}
     });
+
+    client.on('getMissingObjects', function(missing) {
+	var toSend = {};
+	_.each(missing, function(uuid) {
+	    if (currentSystem.multiplayer.hasOwnProperty(uuid)) {
+//		console.log("Sending missing object: "+uuid);
+		toSend[uuid] = currentSystem.multiplayer[uuid].buildInfo;
+	    }
+	    else {
+		console.log("player " + userid + " requested nonexistant object " + uuid);
+	    }
+	});
+
+	client.emit('addObjects', toSend);
+    });
+
     client.on('disconnect', function() {
 	receives ++;
 	client.broadcast.emit('removeObjects', owned_uuids)

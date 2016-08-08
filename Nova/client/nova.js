@@ -138,12 +138,17 @@ function updateSystem(systemInfo) {
 
     });
 }
-
+var stars;
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
     myShip = new playerShip(data.playerShip, sol);
-    stars = new starfield(myShip, 40);
+    if (stars) {
+	stars.attach(myShip);
+    }
+    else {
+	stars = new starfield(myShip, 40);
+    }
     sol.setObjects(data.system);
     if (data.paused) {
 	pause();
@@ -192,6 +197,7 @@ socket.on('updateStats', function(stats) {
 socket.on('test', function(data) {
     console.log(data);
 });
+
 
 
 var paused = false;
@@ -248,7 +254,7 @@ setTimeout(getTimeUntilSuccess, 2000);
 //					      .then(function(d) {timeDifference = d})}, 120000);
 
 
-
+system.prototype.socket = socket;
 basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
 beamWeapon.prototype.socket = socket;

@@ -90,3 +90,7 @@ outfit.prototype.applyEffects = function() {
 
 }
 
+outfit.prototype.destroy = function() {
+    _.each(this.weapons, function(w) {w.destroy()});
+
+}

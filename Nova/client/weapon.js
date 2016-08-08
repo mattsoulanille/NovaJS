@@ -97,3 +97,7 @@ weapon.prototype.stopFiring = function() {
 weapon.prototype.cycleTarget = function(target) {
     return this.weapon.cycleTarget(target);
 }
+
+weapon.prototype.destroy = function() {
+    return this.weapon.destroy();
+}
