@@ -11,6 +11,8 @@ function sprite(url, anchor) {
     this.anchor = anchor || [0.5,0.5]
 }
 
+textures = {}; // array of all textures for all sprites
+
 sprite.prototype.build = function() {
 //    console.log("loading sprite: " + this.url);
 
@@ -78,4 +80,8 @@ sprite.prototype.onAssetsLoaded = function() {
 	//    console.log("loaded assets for " + this.url); //should happen when sprite is finished loading
 	fulfill()
     }.bind(this));
+}
+
+sprite.prototype.destroy = function() {
+    this.sprite.destroy();
 }

@@ -117,9 +117,7 @@ spaceObject.prototype.makeSprites = function() {
 
 
     _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
-	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
-	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key]);
-	}
+	this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key]);
     }, this);
 
     return Promise.all(  _.map(_.values(this.sprites), function(s) {return s.build()})  )
@@ -254,6 +252,6 @@ spaceObject.prototype.destroy = function() {
     }
     this.hide();
     this.spriteContainer.destroy();
-    _.each(this.sprites, function(s) {s.sprite.destroy()});
+    _.each(this.sprites, function(s) {s.destroy()});
 //    delete this;
 }

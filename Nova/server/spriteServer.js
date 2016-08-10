@@ -12,7 +12,7 @@ spriteServer.prototype = new sprite;
 
 spriteServer.prototype.build = function() {
     
-    return this.loadResourecs()
+    return this.loadResources()
 	.then(this.onAssetsLoaded.bind(this));
 
 }
@@ -20,6 +20,7 @@ spriteServer.prototype.build = function() {
 spriteServer.prototype.loadResources = function() {
     return new Promise(function(fulfill, reject) {
 	var spriteImageInfo = require("../" + this.url);
+	this.spriteImageInfo = spriteImageInfo;
 	fulfill(spriteImageInfo);
 
     }.bind(this));
@@ -30,5 +31,8 @@ spriteServer.prototype.setTextures = function() {
 }
 
 spriteServer.prototype.onAssetsLoaded = function() {
+    
     this.renderReady = true;
 }
+
+spriteServer.prototype.destroy = function() {}

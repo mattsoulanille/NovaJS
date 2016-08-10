@@ -1,3 +1,4 @@
+//"use strict";
 // create an new instance of a pixi stage
 var stage = new PIXI.Stage(0x000000);
 
@@ -32,9 +33,10 @@ var fullscreen = function() {
 
 var socket = io();
 var last_keys = KeyboardJS.activeKeys();
+
 document.onkeydown = function(e) {
-    e = e || event;
-    blocked_keys = [37, 38, 39, 40, 32, 9, 17];
+    var e = e || event;
+    var blocked_keys = [37, 38, 39, 40, 32, 9, 17];    
 
 //    socket.emit('test', "Hey look, i'm a test event");
 
@@ -259,6 +261,7 @@ basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
 beamWeapon.prototype.socket = socket;
 spaceObject.prototype.lastTime = new Date().getTime();
+var animateTimeout;
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
@@ -284,7 +287,7 @@ function animate() {
     
     renderer.render(stage);
     if (!paused) {
-	requestAnimationFrame( animate );
+	animateTimeout = setTimeout(requestAnimationFrame( animate ), 0);
     }
 
 

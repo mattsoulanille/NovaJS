@@ -4,6 +4,8 @@ var Promise = require("bluebird");
 
 function spaceObjectServer(buildInfo, system) {
     spaceObject.call(this, buildInfo, system);
+    this.spriteContainer = {};
+    this.spriteContainer.destroy = function() {};
 
 }
 
@@ -34,11 +36,12 @@ spaceObjectServer.prototype.makeSize = function() {
     this.size[1] = 72;
 }
 
+
 spaceObjectServer.prototype.addSpritesToContainer = function() {
     // do nothing
 }
-spaceObjectServer.prototype.makeSprites = function() {
-}
+//spaceObjectServer.prototype.makeSprites = function() {
+//}
 
 spaceObjectServer.prototype.callSprites = function(call) {
     // also do nothing
@@ -48,7 +51,7 @@ spaceObjectServer.prototype.render = function() {
     // again, do nothing
 
 }
-
+/*
 spaceObjectServer.prototype.destroy = function() {
     var index;
     if (this.built) {
@@ -62,3 +65,4 @@ spaceObjectServer.prototype.destroy = function() {
 }
 
     
+*/

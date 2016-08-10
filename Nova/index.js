@@ -1,3 +1,4 @@
+//"use strict";
 var express = require('express');
 var app = express();
 var http = require('http').Server(app);
@@ -127,8 +128,11 @@ io.on('connection', function(client){
 	"outfits":[heavy_blaster_turret, railgun_200mm]
 
     }
-    var shipTypes = [Starbridge, IDA_Frigate];
-    var playerShipType = shipTypes[_.random(0,shipTypes.length-1)]
+    var shipTypes = {"Starbridge":Starbridge,
+		     "IDA Frigate":IDA_Frigate,
+		     "Dart":dart};
+    var shipList = _.values(shipTypes);
+    var playerShipType = shipList[_.random(0,shipList.length-2)];
     playerShipType.UUID = userid;
 
     var sendSystem = function() {
@@ -145,29 +149,44 @@ io.on('connection', function(client){
 	});
 	transmits ++;
     }
+    var myShip;
 
-    myShip = new ship(playerShipType, currentSystem);
-    myShip.build().
-	then(function() {
-	_.each(myShip.outfitList, function(outf) {
-	    _.each(outf.UUIDS, function(uuid) {
-		owned_uuids.push(uuid);
+    var setShip = function(playerShipType) {
+	myShip = new ship(playerShipType, currentSystem);
+	myShip.build().
+	    then(function() {
+	    _.each(myShip.outfitList, function(outf) {
+		_.each(outf.UUIDS, function(uuid) {
+		    owned_uuids.push(uuid);
+		});
 	    });
-	});
-	})
-//	.then(function() {console.log(myShip.weapons.all[0].UUID)})
-	.then(sendSystem)
-	.then(function() {
-	    client.broadcast.emit('addObjects', [myShip.buildInfo]);
-	    transmits += playercount;
+	    })
+    //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
+	    .then(sendSystem)
+	    .then(function() {
+		// buildInfo should really be a promise that resolves to the
+		// objects buildInfo when the object is built...todo
+		client.broadcast.emit('addObjects', [myShip.buildInfo]);
+		transmits += playercount;
+		
+	    });
+    }
 
-	});
+    setShip(playerShipType);
 
+
+    //doesn't work yet
+    client.on('setShip', function(data) {
+	if (_.contains(_.keys(shipTypes), data)) {
+	    var shipInfo = shipTypes[data];
+	    setShip(shipInfo);
+	}
+    });
 //    console.log(owned_uuids);
 //    console.log(playerShipType);
 
 
-    var myShip;
+
 
     players[userid] = myShip;
     playercount = _.keys(players).length;

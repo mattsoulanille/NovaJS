@@ -9,4 +9,7 @@ function basicWeaponServer(buildInfo, source) {
 
 basicWeaponServer.prototype = new basicWeapon;
 
+basicWeaponServer.prototype.notifyServer = function() {};
+
 basicWeaponServer.prototype.destory = function() {};
+

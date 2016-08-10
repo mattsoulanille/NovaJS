@@ -7,6 +7,7 @@ if (typeof(module) !== 'undefined') {
     var movable = require("../server/movableServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
+    var Crash = require("crash-colliders");
 
 }
 
@@ -15,6 +16,9 @@ function collidable(buildInfo, system) {
     movable.call(this, buildInfo, system);
     if (typeof(buildInfo) !== 'undefined') {
 	this.buildInfo.type = "collidable";
+	if (buildInfo.hasOwnProperty('convexHulls')) {
+	    this.convexHulls = buildInfo.convexHulls;
+	}
     }
     if (typeof system !== 'undefined') {
 	system.collidables.push(this);
@@ -29,6 +33,8 @@ collidable.prototype.receiveCollision = function(other) {
 
 }    
 
+collidable.prototype.crash = new Crash();
+collidable.prototype.allConvexHulls = {}; 
 
 collidable.prototype.detectCollisions = function(others) {
     // others is an array of things to check for collisions with.
