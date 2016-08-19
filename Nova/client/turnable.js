@@ -134,14 +134,21 @@ turnable.prototype.render = function() {
 	}
 
 	var useThisImage = [];
+	var keys = _.keys(this.sprites);
 	for (var i = 0; i < _.keys(this.sprites).length; i++) {
 	    // turnable uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
-	    var spr = _.values(this.sprites);
+
+	    var spr = this.sprites[keys[i]]
 	    useThisImage[i] = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
 	    //console.log(useThisImage)
-	    spr[i].sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
+	    spr.sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
 
-	    spr[i].sprite.texture = spr[i].textures[useThisImage[i]];
+	    spr.sprite.texture = spr.textures[useThisImage[i]];
+
+	    if (keys[i] === this.collisionSpriteName) {
+		this.collisionShape = this.collisionShapes[useThisImage[i]];
+		this.collisionShape.setAngle(spr.sprite.rotation);
+	    }
 	}
 
 	// this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.

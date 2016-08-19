@@ -13,9 +13,10 @@ var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
 var system = require("./server/systemServer.js");
-
+var collidable = require("./server/collidableServer.js");
 var medium_blaster = new outfit("Medium Blaster", 1);
 var sol = new system();
+
 
 //var starbridge = new ship("Starbridge A", [medium_blaster], sol);
 
@@ -45,10 +46,13 @@ setInterval(function() {
 // }, 5000)
 
 
+//app.get('/', 
 
 app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');
 });
+
+//app.get('/',
 
 app.use(express.static(__dirname))
 

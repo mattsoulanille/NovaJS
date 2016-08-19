@@ -9,3 +9,15 @@ function projectileServer(buildInfo) {
 
 projectileServer.prototype = new projectile;
 
+
+
+
+projectileServer.prototype.build = function() {
+    return projectile.prototype.build.call(this)
+	.then(function() {
+//	    console.log(this.buildInfo.convexHulls.length);
+	}.bind(this))
+}
+
+
+

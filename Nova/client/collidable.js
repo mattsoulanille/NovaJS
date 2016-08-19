@@ -8,7 +8,6 @@ if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
     var Crash = require("crash-colliders");
-
 }
 
 
@@ -17,7 +16,20 @@ function collidable(buildInfo, system) {
     if (typeof(buildInfo) !== 'undefined') {
 	this.buildInfo.type = "collidable";
 	if (buildInfo.hasOwnProperty('convexHulls')) {
-	    this.convexHulls = buildInfo.convexHulls;
+	    this.collisionShapes = _.map(buildInfo.convexHulls, function(hullPoints) {
+		
+		return new this.crash.Polygon(new this.crash.Vector(0,0),
+					      _.map(hullPoints, function(point) {
+						  return new this.crash.Vector(point[0],
+									       point[1]);
+					      }.bind(this)))
+	    }.bind(this))
+
+	    this.collisionShape = this.collisionShapes[0];
+	    this.collisionSpriteName = buildInfo.collisionSpriteName;
+	}
+	else {
+//	    console.log(this.name, "has no convex hull");
 	}
     }
     if (typeof system !== 'undefined') {
@@ -26,6 +38,15 @@ function collidable(buildInfo, system) {
 
 }
 
+/*
+collidable.prototype.buildConvexHulls = function() {
+    return new Promise(function(fulfill, reject) {
+	this.socket.emit("getConvexHulls", this.name + this.url)
+
+
+    });
+}
+*/
 collidable.prototype = new movable;
 
 collidable.prototype.receiveCollision = function(other) {
@@ -94,7 +115,11 @@ collidable.prototype.makeHitbox = function() {
 		   [-this.size[1]/2, this.size[1]/2]];
 
 }
+collidable.prototype.render = function() {
+    movable.prototype.render.call(this);
+    this.collisionShape.moveTo(...this.position);
 
+}
 collidable.prototype.destroy = function() {
 
     var index = this.system.collidables.indexOf(this);
@@ -113,3 +138,4 @@ collidable.prototype.destroy = function() {
     movable.prototype.destroy.call(this);
 
 }
+

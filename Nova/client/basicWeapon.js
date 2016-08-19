@@ -35,6 +35,7 @@ basicWeapon.prototype.build = function() {
     this.meta.properties.vulnerableTo = []; // normal and/or pd
     return this.buildProjectiles()
 	.then(_.bind(function() {
+//	    console.log(this.projectiles[0].buildInfo.convexHulls);
 	    this.ready = true;
 	    this.source.weapons.all.push(this);
 //	    console.log(this);
@@ -63,10 +64,15 @@ basicWeapon.prototype.buildProjectiles = function() {
     var buildInfo = {
 	"meta":meta,
 	"name":this.name,
-	"source":this.source
-    };
+	"source":this.source,
 
-    
+    };
+/*
+    if (this.buildInfo.hasOwnProperty('convexHulls')) {
+	buildInfo.convexHulls = this.buildInfo.convexHulls;
+    }
+*/
+//    var buildInfo = this.buildInfo;  
     for (i=0; i < required_projectiles; i++) {
 	var proj;
 	switch (this.meta.physics.type) {
@@ -87,7 +93,7 @@ basicWeapon.prototype.buildProjectiles = function() {
 	this.projectiles.push(proj);
     }
 
-    return Promise.all(_.map( this.projectiles, function(projectile) {projectile.build()} ));
+    return Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
 
 }
 

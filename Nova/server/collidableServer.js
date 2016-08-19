@@ -24,14 +24,17 @@ collidableServer.prototype.build = function() {
 		}
 
 		collidable.prototype.allConvexHulls[this.url + this.name]
-		    .then(function(hulls) {
-			this.convexHulls = hulls;
+		    .then(function(data) {
+			this.convexHulls = data.hulls;
+			this.collisionSpriteName = data.collisionSpriteName;
 			fulfill();
 		    }.bind(this));
 	    }.bind(this));
 	}.bind(this))
 	.then(function() {
-	    this.buildInfo.convexHulls = this.convexHulls;
+//	    this.buildInfo.convexHulls = this.convexHulls;
+//	    this.buildInfo.collisionSpriteName = this.collisionSpriteName;
+
 	}.bind(this));
 //	.then(function() {console.log(this.convexHulls)}.bind(this));
 //	.then(collidableServer.prototype.loadImage.bind(this))
@@ -45,8 +48,8 @@ collidableServer.prototype.setConvexHulls = function() {
     return new Promise(function(fulfill, reject) {
 	this.loadImage()
 	    .then(this.makeConvexHulls.bind(this))
-	    .then(function(hulls) {
-		fulfill(hulls);
+	    .then(function(data) {
+		fulfill(data);
 	    }.bind(this))
 //	fulfill("test hulls " + this.url + this.name);
 
@@ -77,26 +80,34 @@ collidableServer.prototype.makeConvexHulls = function(pixelArray) {
 
     }.bind(this));
 
-    return _.map(points_array, function(points) {
+    var convex_hulls = _.map(points_array, function(points) {
 	return hull(points);
     });
 
+    var data = {"hulls":convex_hulls,
+		"collisionSpriteName":this.collisionSpriteName
+	       }
+    return data;
 
 }
 
-// todo: only create convex hull if not yet created.
-// store convex hulls in collidable.prototype.convexHulls
+// todo: only send convex hull to client if client doesn't have it yet...
+// maybe client requests it
 collidableServer.prototype.loadImage = function() {
     return new Promise(function(fulfill, reject) {
 	// fix this. it's a bit hard wired...
-	// maybe specify a collision image (which image to use for collisions
-
+	// maybe specify a collision image (which image to use for collisions) in properties?
+	
 	if (_.size(this.sprites) === 1) {
 	    var key = _.keys(this.sprites)[0];
 	    this.collisionSprite = this.sprites[key];
+	    this.collisionSpriteName = key;
+//	    console.log(this.collisionSpriteName);
+	    
 	}
 	else if (this.sprites.hasOwnProperty('ship')) {
 	    this.collisionSprite = this.sprites['ship'];
+	    this.collisionSpriteName = 'ship';
 	}
 	else {
 	    reject("no collision image");
