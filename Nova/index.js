@@ -16,6 +16,8 @@ var system = require("./server/systemServer.js");
 var collidable = require("./server/collidableServer.js");
 var medium_blaster = new outfit("Medium Blaster", 1);
 var sol = new system();
+var convexHullBuilder = require("./server/convexHullBuilder.js");
+var path = require('path');
 
 
 //var starbridge = new ship("Starbridge A", [medium_blaster], sol);
@@ -48,11 +50,32 @@ setInterval(function() {
 
 //app.get('/', 
 
+global.convexHulls = {};
+
+app.get('/objects/:objectType/:jsonUrl/convexHulls', function(req, res) {
+
+    var decoded = decodeURI(req.path);
+    var objPath = path.normalize(path.join(decoded, '../').slice(0,-1));
+    collidable.prototype.getConvexHulls(objPath).then(function(hulls) {
+	res.json({"hulls":hulls});
+    });
+
+});
+/*
+var getConvexHull = function(url) {
+    if ( !(convexHulls.hasOwnProperty(url)) ) {
+	convexHulls[url] = new convexHullBuilder(url).build()
+    }
+
+    return convexHulls[url];
+    
+}
+*/
 app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');
 });
 
-//app.get('/',
+
 
 app.use(express.static(__dirname))
 

@@ -15,6 +15,7 @@ function collidable(buildInfo, system) {
     movable.call(this, buildInfo, system);
     if (typeof(buildInfo) !== 'undefined') {
 	this.buildInfo.type = "collidable";
+	/*
 	if (buildInfo.hasOwnProperty('convexHulls')) {
 	    this.collisionShapes = _.map(buildInfo.convexHulls, function(hullPoints) {
 		
@@ -31,6 +32,7 @@ function collidable(buildInfo, system) {
 	else {
 //	    console.log(this.name, "has no convex hull");
 	}
+	*/
     }
     if (typeof system !== 'undefined') {
 	system.collidables.push(this);
@@ -94,10 +96,44 @@ collidable.prototype.build = function() {
     return movable.prototype.build.call(this)
 //	.then(function() {console.log(this.renderReady)}.bind(this))
 	.then(collidable.prototype.makeHitbox.bind(this))
+	.then(this.getCollisionSprite.bind(this))
 	.then(function() {
-	    this.system.built.collidables.push(this)
+	    var url = this.getCollisionSprite();
+	    return this.getConvexHulls(url);
+	}.bind(this))
+	.then(function(hulls) {
+	    this.collisionShapes = _.map(hulls, function(hullPoints) {
+		return new this.crash.Polygon(new this.crash.Vector(0,0),
+					      _.map(hullPoints, function(point) {
+						  return new this.crash.Vector(point[0],
+									       point[1]);
+					      }.bind(this)))
+	    }.bind(this));
+
+	    this.system.built.collidables.push(this);
 
 	}.bind(this));
+
+}
+
+collidable.prototype.getConvexHulls = function(url) {
+    url = url + '/convexHulls';
+    if ( !(this.allConvexHulls.hasOwnProperty(url)) ) {
+	this.allConvexHulls[url] = new Promise(function(fulfill, reject) {
+	    $.getJSON(url, _.bind(function(data) {
+		if (data.hasOwnProperty('hulls')) {
+
+		    fulfill(data.hulls);
+		}
+		else {
+		    reject(new Error("data has no property hulls"))
+		}
+	    }, this));
+	    
+	}.bind(this));
+    }
+    
+    return this.allConvexHulls[url]
 
 }
 
@@ -107,6 +143,28 @@ collidable.prototype.setProperties = function() {
     if (typeof(this.properties.vulnerableTo) === 'undefined') {
 	this.properties.vulnerableTo = ["normal"] // normal and/or pd
     }
+}
+collidable.prototype.getCollisionSprite = function() {
+    var collisionSprite;
+    var collisionSpriteName;
+    if (_.size(this.sprites) === 1) {
+	var key = _.keys(this.sprites)[0];
+	collisionSprite = this.sprites[key];
+	collisionSpriteName = key;
+	//    console.log(collisionSpriteName);
+
+    }
+    else if (this.sprites.hasOwnProperty('ship')) {
+	collisionSprite = this.sprites['ship'];
+	collisionSpriteName = 'ship';
+    }
+    else {
+	reject("no collision image");
+	return;
+    }
+    this.collisionSpriteName = collisionSpriteName;
+    var url = collisionSprite.url;
+    return url;
 }
 
 
