@@ -50,9 +50,13 @@ convexHullBuilder.prototype.makeConvexHulls = function(pixelArray) {
     }.bind(this));
 
     var convex_hulls = _.map(points_array, function(points) {
-	return hull(points);
+	// the last element is the same as the first,
+	// and crash does not like that...
+	var h = hull(points);
+	h.pop();
+	return h;
     });
-    
+
     return convex_hulls;
 }
 

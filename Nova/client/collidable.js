@@ -36,6 +36,7 @@ collidable.prototype.crash = new Crash({maxEntries:5});
 collidable.prototype.crashListener = function(a, b, res, cancel) {
     //console.log(a.data + " collided with " + b.data);
     // the entire space object is stored in collider.data... is this bad?
+
     a.data.collideWith(b.data);
     b.data.collideWith(a.data);
 }
@@ -105,18 +106,21 @@ collidable.prototype.build = function() {
 	}.bind(this))
 	.then(function(hulls) {
 	    this.collisionShapes = _.map(hulls, function(hullPoints) {
+		/*
+		// for testing
 		return new this.crash.Polygon(new this.crash.V,
 					      [new this.crash.V(10,10),
 					       new this.crash.V(-10,10),
 					       new this.crash.V(-10,-10),
 					       new this.crash.V(10, -10)],
 					      false, this);
-		/*
+					      */
+
 		return new this.crash.Polygon(new this.crash.Vector(0,0),
 					      _.map(hullPoints, function(point) {
 						  return new this.crash.Vector(point[0], point[1]);
-					      }.bind(this)), false, this.name);
-		*/
+					      }.bind(this)), false, this);
+
 	    }.bind(this));
 	    this.collisionShape = this.collisionShapes[0] // Default
 	    this.system.built.collidables.push(this);
