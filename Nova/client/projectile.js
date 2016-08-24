@@ -50,9 +50,9 @@ projectile.prototype.loadResources = function() {
 
 projectile.prototype.updateStats = function(stats) {
     acceleratable.prototype.updateStats.call(this, stats);
-    if (typeof(stats.endTime) !== 'undefined') {
-	this.endTime = stats.endTime
-    }
+    // if (typeof(stats.endTime) !== 'undefined') {
+    // 	this.endTime = stats.endTime
+    // }
 
 
     this.target = this.system.multiplayer[stats.target];
@@ -71,17 +71,22 @@ projectile.prototype.getStats = function() {
 }
 
 projectile.prototype.render = function() {
-    if (this.endTime <= this.time) {
-	this.end()
-    }
+
+    // if (this.endTime <= this.time) {
+    // 	this.end()
+    // }
+
     acceleratable.prototype.render.call(this);
+
+    /*
     var collisions = this.detectCollisions(this.system.built.collidables);
     
     if ((collisions.length > 1) ||
 	((collisions.length == 1) && (collisions[0] != this.source)) ) {
 
-	this.end()
-//	clearTimeout(this.fireTimeout)
+	clearTimeout(this.endTimeout);
+	this.end();
+
 	
 	_.each(collisions, function(collision) {
 	    if (collision != this.source) {
@@ -90,16 +95,23 @@ projectile.prototype.render = function() {
 	}, this);
 
     }
-
+*/
 }
 
-projectile.prototype.collide = function(other) {
-    var collision = {};
-    collision.shieldDamage = this.meta.properties.shieldDamage;
-    collision.armorDamage = this.meta.properties.armorDamage;
-    collision.impact = this.meta.properties.impact;
-    collision.angle = this.pointing;
-    other.receiveCollision(collision);
+projectile.prototype.collideWith = function(other) {
+    // temporary. will have damage types later
+    if (other.properties.vulnerableTo &&
+	other.properties.vulnerableTo.includes("normal") &&
+	other !== this.source) {
+	var collision = {};
+	collision.shieldDamage = this.meta.properties.shieldDamage;
+	collision.armorDamage = this.meta.properties.armorDamage;
+	collision.impact = this.meta.properties.impact;
+	collision.angle = this.pointing;
+	other.receiveCollision(collision);
+	this.end();
+	clearTimeout(this.endTimeout);
+    }
     
 }
 
@@ -112,7 +124,8 @@ projectile.prototype.fire = function(direction, position, velocity, target) {
     // inaccuracy is handled by weapon
     this.target = target;
     this.endTime = this.time + this.meta.physics.duration * 1000/30;
-//    this.fireTimeout = setTimeout(_.bind(this.end, this), this.meta.physics.duration * 1000/30);
+    this.endTimeout = setTimeout(this.end.bind(this), this.meta.physics.duration * 1000/30);
+
     this.available = false;
     this.pointing = direction;
     this.position = _.map(position, function(x) {return x});

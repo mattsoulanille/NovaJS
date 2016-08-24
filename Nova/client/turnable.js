@@ -146,7 +146,17 @@ turnable.prototype.render = function() {
 	    spr.sprite.texture = spr.textures[useThisImage[i]];
 
 	    if (keys[i] === this.collisionSpriteName) {
-		this.collisionShape = this.collisionShapes[useThisImage[i]];
+		var newShape = this.collisionShapes[useThisImage[i]];
+
+		if (this.collisionShape !== newShape) {
+//		    console.log("inserting new collision shape");
+		    this.collisionShape.remove();
+		    if (! (_.contains(this.crash.all(), newShape)) ) {
+			newShape.insert();
+		    }
+		    this.collisionShape = newShape;
+		}
+
 		this.collisionShape.setAngle(spr.sprite.rotation);
 	    }
 	}

@@ -152,14 +152,14 @@ io.on('connection', function(client){
     
     var IDA_Frigate = {
 	"name": "IDA Frigate 1170",
-	"outfits":[heavy_blaster_turret, railgun_200mm]
+	"outfits":[heavy_blaster_turret, railgun_200mm, ir_missile]
 
     }
     var shipTypes = {"Starbridge":Starbridge,
 		     "IDA Frigate":IDA_Frigate,
 		     "Dart":dart};
     var shipList = _.values(shipTypes);
-    var playerShipType = shipList[_.random(0,shipList.length-2)];
+    var playerShipType = shipList[_.random(1,shipList.length-2)];
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

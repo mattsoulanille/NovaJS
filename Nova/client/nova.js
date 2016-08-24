@@ -117,29 +117,11 @@ var earth = new planet({"name":"Earth"}, system);
 
 pp*/
 
-var buildFromInfo = function(buildInfo) {
-
-    var types = {
-	ship:ship,
-	planet:planet,
-	spaceObject:spaceObject
-    };
-
-
-}
-
 var players = {};
 var myShip;
 var stars;
 var stagePosition;
 
-function updateSystem(systemInfo) {
-    _.each(systemInfo, function(obj, key) {
-	
-
-
-    });
-}
 var stars;
 socket.on('onconnected', function(data) {
     UUID = data.id;
@@ -266,11 +248,13 @@ function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
     
-    myShip.render()
+
 
     stars.render()
     var lastTimes = []
     sol.render();
+    myShip.render();
+    collidable.prototype.crash.check();
     // _.each(sol.spaceObjects, function(s) {
     // 	if (s.rendering) {
     // 	    s.render()

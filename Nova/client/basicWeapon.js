@@ -59,7 +59,7 @@ basicWeapon.prototype.buildProjectiles = function() {
     var meta = {} // for the projectiles
     meta.imageAssetsFiles = this.meta.imageAssetsFiles;
     meta.physics = this.meta.physics;
-    meta.properties = this.meta.properties
+    meta.properties = this.meta.properties;
     //console.log(meta)
     var buildInfo = {
 	"meta":meta,

@@ -15,50 +15,52 @@ function collidable(buildInfo, system) {
     movable.call(this, buildInfo, system);
     if (typeof(buildInfo) !== 'undefined') {
 	this.buildInfo.type = "collidable";
-	/*
-	if (buildInfo.hasOwnProperty('convexHulls')) {
-	    this.collisionShapes = _.map(buildInfo.convexHulls, function(hullPoints) {
-		
-		return new this.crash.Polygon(new this.crash.Vector(0,0),
-					      _.map(hullPoints, function(point) {
-						  return new this.crash.Vector(point[0],
-									       point[1]);
-					      }.bind(this)))
-	    }.bind(this))
-
-	    this.collisionShape = this.collisionShapes[0];
-	    this.collisionSpriteName = buildInfo.collisionSpriteName;
-	}
-	else {
-//	    console.log(this.name, "has no convex hull");
-	}
-	*/
     }
     if (typeof system !== 'undefined') {
 	system.collidables.push(this);
     }
 
 }
-
-/*
-collidable.prototype.buildConvexHulls = function() {
-    return new Promise(function(fulfill, reject) {
-	this.socket.emit("getConvexHulls", this.name + this.url)
-
-
-    });
-}
-*/
 collidable.prototype = new movable;
+
+collidable.prototype.collideWith = function(other) {
+
+}
 
 collidable.prototype.receiveCollision = function(other) {
 //	console.log(stats);
 
 }    
 
-collidable.prototype.crash = new Crash();
+collidable.prototype.crash = new Crash({maxEntries:5});
+collidable.prototype.crashListener = function(a, b, res, cancel) {
+    //console.log(a.data + " collided with " + b.data);
+    // the entire space object is stored in collider.data... is this bad?
+    a.data.collideWith(b.data);
+    b.data.collideWith(a.data);
+}
+collidable.prototype.crash.onCollision(collidable.prototype.crashListener);
+
+
+
 collidable.prototype.allConvexHulls = {}; 
 
+collidable.prototype.show = function() {
+    // Necessary in case show is called twice
+    if (! (_.contains(this.crash.all(), this.collisionShape)) ) {
+	this.collisionShape.insert();
+    }
+    movable.prototype.show.call(this);
+}
+
+collidable.prototype.hide = function() {
+    if (typeof(this.collisionShape) !== 'undefined') {
+	this.collisionShape.remove();
+    }
+    movable.prototype.hide.call(this);
+}
+
+// old. will be replaced with crash
 collidable.prototype.detectCollisions = function(others) {
     // others is an array of things to check for collisions with.
     var thisXRange = [this.position[0] + this.hitbox[0][0], this.position[0] + this.hitbox[0][1]];
@@ -103,13 +105,20 @@ collidable.prototype.build = function() {
 	}.bind(this))
 	.then(function(hulls) {
 	    this.collisionShapes = _.map(hulls, function(hullPoints) {
+		return new this.crash.Polygon(new this.crash.V,
+					      [new this.crash.V(10,10),
+					       new this.crash.V(-10,10),
+					       new this.crash.V(-10,-10),
+					       new this.crash.V(10, -10)],
+					      false, this);
+		/*
 		return new this.crash.Polygon(new this.crash.Vector(0,0),
 					      _.map(hullPoints, function(point) {
-						  return new this.crash.Vector(point[0],
-									       point[1]);
-					      }.bind(this)))
+						  return new this.crash.Vector(point[0], point[1]);
+					      }.bind(this)), false, this.name);
+		*/
 	    }.bind(this));
-
+	    this.collisionShape = this.collisionShapes[0] // Default
 	    this.system.built.collidables.push(this);
 
 	}.bind(this));
@@ -175,7 +184,12 @@ collidable.prototype.makeHitbox = function() {
 }
 collidable.prototype.render = function() {
     movable.prototype.render.call(this);
-    this.collisionShape.moveTo(...this.position);
+    if (this.visible) {
+	this.collisionShape.moveTo(...this.position);
+    }
+//    this.collisionShape.remove();
+
+//    this.collisionShape.insert();
 
 }
 collidable.prototype.destroy = function() {
