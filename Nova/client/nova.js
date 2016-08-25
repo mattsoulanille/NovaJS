@@ -248,12 +248,12 @@ function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
     
-
+    myShip.render();
 
     stars.render()
     var lastTimes = []
     sol.render();
-    myShip.render();
+
     collidable.prototype.crash.check();
     // _.each(sol.spaceObjects, function(s) {
     // 	if (s.rendering) {
