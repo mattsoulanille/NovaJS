@@ -14,14 +14,23 @@ function basicWeapon(buildInfo, source) {
     this.ready = false;
     this.source = source
     this.fireTimeout = undefined;
+    this.doBurstFire = false;
     if (typeof(buildInfo) !== 'undefined') {
 	this.name = buildInfo.name;
 	this.meta = buildInfo.meta;
 	this.system = this.source.system;
 	this.count = buildInfo.count || 1
 	this.UUID = buildInfo.UUID;
+	this.reloadMilliseconds = (this.meta.properties.reload * 1000/30 / this.count) || 1000/60;
 	if (typeof this.UUID !== 'undefined') {
 	    this.system.multiplayer[this.UUID] = this;
+	}
+	if ( (typeof(this.meta.properties.burstCount) !== 'undefined') &&
+	     (typeof(this.meta.properties.burstReload) !== 'undefined') ) {
+	    this.doBurstFire = true;
+	    this.burstCount = 0;
+	    this.burstReloadMilliseconds = this.meta.properties.burstReload * 1000/30;
+	    this.reloadMilliseconds = (this.meta.properties.reload * 1000/30) || 1000/60;
 	}
     }
 }
@@ -42,7 +51,7 @@ basicWeapon.prototype.build = function() {
 	    if (typeof this.UUID !== 'undefined') {
 //		this.system.built.multiplayer[this.UUID] = this;
 	    }
-
+	    
 	    
 	}, this));
 
@@ -52,10 +61,18 @@ basicWeapon.prototype.build = function() {
 basicWeapon.prototype.buildProjectiles = function() {
 
     this.projectiles = [];
+    var burstModifier = 1;
+    if (this.doBurstFire) {
+	burstModifier = ( ((this.meta.properties.reload || 1/60) * this.meta.properties.burstCount) /
+			  this.meta.properties.burstReload);
+	if (burstModifier > 1) {burstModifier = 1}
+    }
+
     // as many projectiles as can be in the air at once as a result of the weapon's
-    // duration and reload times
-    var required_projectiles = this.count * (Math.floor(this.meta.physics.duration /
-							this.meta.properties.reload) + 1);
+    // duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
+    var required_projectiles = burstModifier * this.count * (Math.floor(this.meta.physics.duration /
+								    (this.meta.properties.reload || 1/60)) + 1);
+    
     var meta = {} // for the projectiles
     meta.imageAssetsFiles = this.meta.imageAssetsFiles;
     meta.physics = this.meta.physics;
@@ -64,7 +81,7 @@ basicWeapon.prototype.buildProjectiles = function() {
     var buildInfo = {
 	"meta":meta,
 	"name":this.name,
-	"source":this.source,
+	"source":this.source
 
     };
 /*
@@ -114,6 +131,7 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
 	}
 
     }
+    console.log("No projectile available");
     return false
 }
 
@@ -174,8 +192,19 @@ basicWeapon.prototype.autoFire = function() {
 	this.fire();
 	
 	// fire again after reload time
-	var reloadTimeMilliseconds = this.meta.properties.reload * 1000/30 / this.count;
-	this.fireTimeout = setTimeout(_.bind(this.autoFire, this), reloadTimeMilliseconds);
+	if (this.doBurstFire) {
+	    if (this.burstCount < this.count * this.meta.properties.burstCount - 1) {
+		this.fireTimeout = setTimeout(_.bind(this.autoFire, this), this.reloadMilliseconds);
+		this.burstCount ++;
+	    }
+	    else {
+		this.burstCount = 0;
+		this.burstTimeout = setTimeout(this.autoFire.bind(this), this.burstReloadMilliseconds);
+	    }
+	}
+	else {
+	    this.fireTimeout = setTimeout(_.bind(this.autoFire, this), this.reloadMilliseconds);
+	}
     }
     else {
 	this.firing = false;

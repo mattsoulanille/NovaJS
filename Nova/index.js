@@ -140,6 +140,10 @@ io.on('connection', function(client){
 	"name":"Flower of Spring",
 	"count": 1
     }
+    var hailChaingun = {
+	"name":"Hail Chaingun",
+	"count":2
+    }
     var dart = {
 	"name": "Vell-os Dart",
 	"outfits": [flowerOfSpring]
@@ -155,11 +159,16 @@ io.on('connection', function(client){
 	"outfits":[heavy_blaster_turret, railgun_200mm, ir_missile]
 
     }
-    var shipTypes = {"Starbridge":Starbridge,
+    var Firebird = {
+	"name":"Firebird_Thamgiir",
+	"outfits": [hailChaingun]
+    }
+    var shipTypes = {"Firebird":Firebird,
+		     "Starbridge":Starbridge,
 		     "IDA Frigate":IDA_Frigate,
 		     "Dart":dart};
     var shipList = _.values(shipTypes);
-    var playerShipType = shipList[_.random(1,shipList.length-2)];
+    var playerShipType = shipList[_.random(0,shipList.length-2)];
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

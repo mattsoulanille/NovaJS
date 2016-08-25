@@ -1,0 +1,11 @@
+{
+    "functions": {
+	"weapon": [
+	    "Hail Chaingun"
+	]
+    },
+    "cost": 5000,
+    "mass": 4,
+    "maximum": 8
+
+}
