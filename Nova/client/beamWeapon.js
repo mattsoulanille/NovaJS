@@ -1,7 +1,8 @@
 if (typeof(module) !== 'undefined') {
     module.exports = beamWeapon;
 //    var _ = require("underscore");
-//    var Promise = require("bluebird");
+    //    var Promise = require("bluebird");
+    var collidable = require("../server/collidableServer");
 }
 
 function beamWeapon(buildInfo, source) {
@@ -28,12 +29,14 @@ function beamWeapon(buildInfo, source) {
     }
 }
 
+beamWeapon.prototype.crash = collidable.prototype.crash;
 beamWeapon.prototype.build = function() {
     this.graphics = new PIXI.Graphics();
     stage.addChild(this.graphics);
     this.source.system.built.render.push(this);
     this.source.weapons.all.push(this);
     this.ready = true;
+//    this.collisionShape = new collidable.prototype.crash
 };
 
 beamWeapon.prototype.startFiring = function() {

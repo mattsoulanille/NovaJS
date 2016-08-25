@@ -62,16 +62,18 @@ basicWeapon.prototype.buildProjectiles = function() {
 
     this.projectiles = [];
     var burstModifier = 1;
+    var durationMilliseconds = this.meta.physics.duration * 1000/30;
     if (this.doBurstFire) {
-	burstModifier = ( ((this.meta.properties.reload || 1/60) * this.meta.properties.burstCount) /
-			  this.meta.properties.burstReload);
+	burstModifier = ( ((this.reloadMilliseconds) * this.meta.properties.burstCount) /
+			  this.meta.properties.burstReload * 1000/30);
 	if (burstModifier > 1) {burstModifier = 1}
     }
 
     // as many projectiles as can be in the air at once as a result of the weapon's
     // duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
-    var required_projectiles = burstModifier * this.count * (Math.floor(this.meta.physics.duration /
-								    (this.meta.properties.reload || 1/60)) + 1);
+
+    var required_projectiles = burstModifier * this.count * (Math.floor(durationMilliseconds / 
+									(this.reloadMilliseconds)) + 1);
     
     var meta = {} // for the projectiles
     meta.imageAssetsFiles = this.meta.imageAssetsFiles;

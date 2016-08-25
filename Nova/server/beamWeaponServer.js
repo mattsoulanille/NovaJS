@@ -13,3 +13,12 @@ beamWeaponServer.prototype.startFiring = function() {};
 beamWeaponServer.prototype.stopFiring = function() {};
 
 beamWeaponServer.prototype.render = function() {};
+beamWeaponServer.prototype.updateStats = function(stats) {
+    if (stats.firing) {
+	this.firing = true;
+    }
+    else {
+	this.firing = false;
+    }
+
+};
