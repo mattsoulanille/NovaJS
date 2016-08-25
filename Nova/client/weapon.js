@@ -94,8 +94,8 @@ weapon.prototype.stopFiring = function() {
     return this.weapon.stopFiring();
 }
 
-weapon.prototype.cycleTarget = function(target) {
-    return this.weapon.cycleTarget(target);
+weapon.prototype.setTarget = function(target) {
+    return this.weapon.setTarget(target);
 }
 
 weapon.prototype.destroy = function() {

@@ -208,7 +208,7 @@ statusBar.prototype.renderTargetText = function() {
 
 }
 
-statusBar.prototype.cycleTarget = function(target) {
+statusBar.prototype.setTarget = function(target) {
     // Hide old target
     if (this.targetSprite) {
 	this.targetSprite.visible = false;

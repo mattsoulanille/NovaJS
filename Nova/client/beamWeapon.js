@@ -36,7 +36,9 @@ beamWeapon.prototype.build = function() {
     this.source.system.built.render.push(this);
     this.source.weapons.all.push(this);
     this.ready = true;
-//    this.collisionShape = new collidable.prototype.crash
+    
+    this.meta.physics.length;
+//    this.collisionShape = new this.crash.Polygon(
 };
 
 beamWeapon.prototype.startFiring = function() {

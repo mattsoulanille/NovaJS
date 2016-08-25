@@ -117,10 +117,10 @@ ship.prototype.updateStats = function(stats) {
     acceleratable.prototype.updateStats.call(this, stats);
     if (this.isPlayerShip !== true) {
 	if (typeof stats.target !== 'undefined') {
-	    this.cycleTarget(this.system.multiplayer[stats.target]);
+	    this.setTarget(this.system.multiplayer[stats.target]);
 	}
 	else {
-	    this.cycleTarget(undefined);
+	    this.setTarget(undefined);
 	}
     }
     if (typeof stats.turningToTarget !== 'undefined') {
@@ -205,10 +205,10 @@ ship.prototype.render = function() {
     
     acceleratable.prototype.render.call(this);
 }
-ship.prototype.cycleTarget = function(newTarget) {
+ship.prototype.setTarget = function(newTarget) {
 
     this.target = newTarget;
-    _.each(this.weapons.all, function(w) {w.cycleTarget(this.target)}, this);
+    _.each(this.weapons.all, function(w) {w.setTarget(this.target)}, this);
     
 
 }

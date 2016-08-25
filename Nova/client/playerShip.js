@@ -124,7 +124,9 @@ playerShip.prototype.updateStats = function(stats = {}) {
     else {
 	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
     }
-    
+    if (_.contains(keys, 'r')) {
+	this.targetNearest();
+    }
 
     stats.turning = turning;
     stats.accelerating = accelerating;
@@ -145,6 +147,42 @@ playerShip.prototype.render = function() {
 
 }
 
+playerShip.prototype.targetNearest = function() {
+    var targets = [];
+    this.system.ships.forEach(function(s) {
+	if (s !== this) {
+	    targets.push(s);
+	}
+    }.bind(this));
+
+
+    var get_distance = function(a, b) {
+	return (a.position[0] - b.position[0])**2 + (a.position[1] - b.position[1])**2;
+    }
+    
+    var distances = {};
+    targets.forEach(function(t) {
+	var dist = get_distance(t, this);
+	distances[dist] = t;
+    }.bind(this));
+
+    var min = Math.min(...Object.keys(distances));
+    if (min !== Infinity) {
+	var t = distances[min];
+	if (t !== this.target) {
+	    this.targetIndex = this.system.ships.indexOf(t);
+	    this.setTarget(t);
+	}
+    }
+
+}
+
+playerShip.prototype.setTarget = function(target) {
+    this.target = target;
+    this.statusBar.setTarget(this.target)
+    ship.prototype.setTarget.call(this, this.target);
+    
+}
 
 playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1
@@ -159,13 +197,12 @@ playerShip.prototype.cycleTarget = function() {
     incrementTargetIndex();
 
     // If targetIndex === -1, then target is undefined, which is intentional
-    this.target = this.system.ships[this.targetIndex];
+    this.setTarget(this.system.ships[this.targetIndex]);
 //    console.log(this.targetIndex)
-    this.statusBar.cycleTarget(this.target)
-    ship.prototype.cycleTarget.call(this, this.target);
 
     
 }
+
 
 playerShip.prototype.addToSystem = function() {};
 

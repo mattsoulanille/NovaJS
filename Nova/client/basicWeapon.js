@@ -213,7 +213,7 @@ basicWeapon.prototype.autoFire = function() {
     }
 }
 
-basicWeapon.prototype.cycleTarget = function(target) {
+basicWeapon.prototype.setTarget = function(target) {
     this.target = target;
 }
 

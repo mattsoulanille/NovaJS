@@ -94,7 +94,6 @@ turnable.prototype.build = function() {
 	    });
 	}.bind(this));
 
-
 }
 
 
