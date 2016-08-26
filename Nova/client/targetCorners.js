@@ -39,6 +39,7 @@ targetCorners.prototype.makeSize = function() {
 
 }
 
+
 targetCorners.prototype.addSpritesToContainer = function() {
     _.each(this.sprites, function(spr) { this.spriteContainer.addChild(spr) }, this);
     this.renderReady = true;
@@ -77,11 +78,14 @@ targetCorners.prototype.placeSprites = function(target, scale) {
 
 targetCorners.prototype.render = function() {
     if (this.other) {
+	if ( (!this.other.rendered) && this.other.visible ) {
+	    this.other.render();
+	}
+
 	var time = 100;
 	var timeLeft = (time - (this.time - this.targetTime))
 	if (timeLeft < 0) {timeLeft = 0;}
 	var scale = (timeLeft/20) + 1;
-    
 	this.placeSprites(this.other, scale);
     }
     spaceObject.prototype.render.call(this);

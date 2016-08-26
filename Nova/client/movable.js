@@ -52,8 +52,8 @@ movable.prototype.render = function() {
 	
 
 	if (typeof this.lastTime != 'undefined') {
-	    this.position[0] += this.velocity[0] * (this.time - this.lastTime)/1000
-	    this.position[1] += this.velocity[1] * (this.time - this.lastTime)/1000
+	    this.position[0] += this.velocity[0] * (this.time - this.lastTime)/1000;
+	    this.position[1] += this.velocity[1] * (this.time - this.lastTime)/1000;
 	    
 	}
 	this.lastTime = this.time;

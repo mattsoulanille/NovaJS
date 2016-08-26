@@ -141,7 +141,7 @@ playerShip.prototype.render = function() {
     this.spriteContainer.position.x = (screenW-194)/2;
     this.spriteContainer.position.y = screenH/2;
 
-    
+
     ship.prototype.render.call(this);
     this.statusBar.render();
 

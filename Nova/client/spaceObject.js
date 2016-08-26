@@ -9,9 +9,15 @@ if (typeof(module) !== 'undefined') {
 
 
 function spaceObject(buildInfo, system) {
-    this.buildInfo = buildInfo
+    this.buildInfo = buildInfo;
     this.system = system;
     this.renderReady = false;
+    
+    // whether or not the object has been
+    // rendered yet in this frame. Used for
+    // ordering the rendering.
+    this.rendered = false;
+    
     this.rendering = false; // whether or not to render
     this.url = 'objects/misc/';
     this.position = [0,0];
@@ -41,7 +47,7 @@ function spaceObject(buildInfo, system) {
 	}
     }
     if (typeof(system) !== 'undefined') {
-	this.system.spaceObjects.push(this)
+	this.system.spaceObjects.push(this);
     }
 }
 
@@ -221,7 +227,7 @@ spaceObject.prototype.render = function() {
 		(this.position[1] - stagePosition[1]) + screenH/2;
 
 	}
-	
+	this.rendered = true;
 	return true;
     }
     else {

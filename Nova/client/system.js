@@ -35,8 +35,11 @@ function system() {
 system.prototype.render = function() {
     // renderes everything that is built and needs to render
     _.each(this.built.render, function(thing) {
-	if (thing.rendering) {
-	    thing.render();
+	thing.rendered = false;
+    });
+    _.each(this.built.render, function(thing) {
+	if ( (!thing.rendered) && (thing.rendering) ) {
+	    thing.render();	    
 	}
     });
 };

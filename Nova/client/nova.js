@@ -250,24 +250,12 @@ function animate() {
     
     myShip.render();
 
-    stars.render()
-    var lastTimes = []
+    stars.render();
     sol.render();
 
-    collidable.prototype.crash.check();
-    // _.each(sol.spaceObjects, function(s) {
-    // 	if (s.rendering) {
-    // 	    s.render()
-
-    // 	}
-    // });
-
-
-    //bar.render()
     
-//    times = _.map(lastTimes, function(x) {return myShip.lastTime - x});
-//    console.log(times)
-//    console.log(_.reduce(function(a,b) {return a && b}, times, true))
+    
+    collidable.prototype.crash.check();
     
     renderer.render(stage);
     if (!paused) {
