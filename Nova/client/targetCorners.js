@@ -90,3 +90,4 @@ targetCorners.prototype.render = function() {
     }
     spaceObject.prototype.render.call(this);
 }
+

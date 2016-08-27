@@ -148,7 +148,7 @@ socket.on('onconnected', function(data) {
 	    startGame();
 	    var newStats = {};
 	    newStats[myShip.UUID] = myShip.getStats();
-	    socket.emit('updateStats', newStats)
+	    socket.emit('updateStats', newStats);
 	});
     
     //players[UUID] = myShip;
@@ -247,8 +247,11 @@ var animateTimeout;
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
-    
-    myShip.render();
+
+    // in case the server restarted...
+    if (myShip.rendering) {
+	myShip.render();
+    }
 
     stars.render();
     sol.render();

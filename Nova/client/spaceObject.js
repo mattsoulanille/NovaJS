@@ -12,6 +12,7 @@ function spaceObject(buildInfo, system) {
     this.buildInfo = buildInfo;
     this.system = system;
     this.renderReady = false;
+    this.destroyed = false;
     
     // whether or not the object has been
     // rendered yet in this frame. Used for
@@ -238,8 +239,10 @@ spaceObject.prototype.render = function() {
 // destroys the object. This is NOT the function to call
 // if you want it to explode.
 spaceObject.prototype.destroy = function() {
-
-
+    if (this.destroyed) {
+	return
+    }
+    
     var index = this.system.spaceObjects.indexOf(this);
     if (index !== -1) {
 	this.system.spaceObjects.splice(index, 1);
@@ -259,5 +262,6 @@ spaceObject.prototype.destroy = function() {
     this.hide();
     this.spriteContainer.destroy();
     _.each(this.sprites, function(s) {s.destroy()});
+    this.destroyed = true;
 //    delete this;
 }

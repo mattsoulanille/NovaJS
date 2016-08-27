@@ -162,6 +162,7 @@ io.on('connection', function(client){
     var Firebird = {
 	"name":"Firebird_Thamgiir",
 	"outfits": [hailChaingun]
+//	"outfits": []
     }
     var shipTypes = {"Firebird":Firebird,
 		     "Starbridge":Starbridge,
@@ -169,6 +170,7 @@ io.on('connection', function(client){
 		     "Dart":dart};
     var shipList = _.values(shipTypes);
     var playerShipType = shipList[_.random(0,shipList.length-2)];
+    //var playerShipType = shipList[0];
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

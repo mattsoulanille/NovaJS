@@ -10,6 +10,7 @@ if (typeof(module) !== 'undefined') {
 function basicWeapon(buildInfo, source) {
     this.buildInfo = buildInfo;
     this.firing = false;
+    this.destroyed = false;
     this.doAutoFire = false;
     this.ready = false;
     this.source = source
@@ -218,8 +219,13 @@ basicWeapon.prototype.setTarget = function(target) {
 }
 
 basicWeapon.prototype.destroy = function() {
+    if (this.destroyed) {
+	return
+    }
+
     this.stopFiring();
     _.each(this.projectiles, function(proj) {
 	proj.destroy();
     });
+    this.destroyed = true;
 }
