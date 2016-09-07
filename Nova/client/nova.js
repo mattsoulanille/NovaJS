@@ -243,11 +243,12 @@ basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
 beamWeapon.prototype.socket = socket;
 spaceObject.prototype.lastTime = new Date().getTime();
+beamWeapon.prototype.lastTime = spaceObject.prototype.lastTime;
 var animateTimeout;
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
-
+    beamWeapon.prototype.time = spaceObject.prototype.time;
     // in case the server restarted...
     if (myShip.rendering) {
 	myShip.render();

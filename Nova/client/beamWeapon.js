@@ -29,7 +29,10 @@ function beamWeapon(buildInfo, source) {
     }
 }
 
+
+// need to make this work on the server.... maybe refactor.
 beamWeapon.prototype.crash = collidable.prototype.crash;
+
 beamWeapon.prototype.build = function() {
     this.graphics = new PIXI.Graphics();
     stage.addChild(this.graphics);
@@ -37,26 +40,36 @@ beamWeapon.prototype.build = function() {
     this.source.weapons.all.push(this);
     this.ready = true;
     
-    this.meta.physics.length;
-//    this.collisionShape = new this.crash.Polygon(
+    var length = this.meta.physics.length;
+    var halfWidth = this.meta.physics.width / 2;
+    var collisionPoints = [new this.crash.V(0, halfWidth),
+			   new this.crash.V(0, -halfWidth),
+			   new this.crash.V(length, -halfWidth),
+			   new this.crash.V(length, halfWidth)
+			  ];
+    this.collisionShape = new this.crash.Polygon(new this.crash.V, collisionPoints, false, this);
 };
 
-beamWeapon.prototype.startFiring = function() {
+beamWeapon.prototype.startFiring = function(notify = true) {
     this.graphics.visible = true;
     this.rendering = true;
     this.firing = true;
-    if (typeof this.UUID !== 'undefined') {
+    if ( !(this.crash.all().includes(this.collisionShape)) ) {
+	this.collisionShape.insert();
+    }
+    if ((typeof this.UUID !== 'undefined') && notify) {
 	this.notifyServer();
     }
 
 }
 
-beamWeapon.prototype.stopFiring = function() {
+beamWeapon.prototype.stopFiring = function(notify = true) {
     this.firing = false;
     this.graphics.clear();
     this.graphics.visible = false;
     this.rendering = false;
-    if (typeof this.UUID !== 'undefined') {
+    this.collisionShape.remove();
+    if ((typeof this.UUID !== 'undefined') && notify) {
 	this.notifyServer();
     }
 
@@ -71,15 +84,10 @@ beamWeapon.prototype.getStats = function() {
 beamWeapon.prototype.updateStats = function(stats) {
     if (typeof stats.firing !== 'undefined') {
 	if (stats.firing) {
-	    this.graphics.visible = true;
-	    this.rendering = true;
-	    this.firing = true;
+	    this.startFiring(false);
 	}
 	else {
-	    this.firing = false;
-	    this.graphics.clear();
-	    this.graphics.visible = false;
-	    this.rendering = false;
+	    this.stopFiring(false);
 	}
     }
 }
@@ -105,13 +113,34 @@ beamWeapon.prototype.render = function(fireAngle) {
 	var x = Math.cos(fireAngle) * this.meta.physics.length;
 	var y = -Math.sin(fireAngle) * this.meta.physics.length;
 	this.graphics.lineTo(x,y);
+
+	this.collisionShape.moveTo(...this.position);
+	this.collisionShape.setAngle(fireAngle);
     }
 }
+beamWeapon.prototype.properties = {};
+beamWeapon.prototype.properties.vulnerableTo = ["normal"];
 
-beamWeapon.prototype.detectCollisions = function(toCheck) {
-    // tom writes this.
-    // returns the object in toCheck that is the first thing the beam intersects.
+
+beamWeapon.prototype.collideWith = function(other) {
+    var delta = this.time - this.lastTime;
+    if (other.properties.vulnerableTo &&
+	other.properties.vulnerableTo.includes("normal") &&
+	other !== this.source) {
+	
+	var collision = {};
+	collision.shieldDamage = this.meta.properties.shieldDamage * delta;
+	collision.armorDamage = this.meta.properties.armorDamage * delta;
+
+	// needs improvement for proper tractoring
+	collision.impact = this.meta.properties.impact * delta;
+	collision.angle = this.pointing;
+	other.receiveCollision(collision);
+    }
+
 }
+
+beamWeapon.prototype.receiveCollision = function(collision) {}
 
     
 beamWeapon.prototype.destroy = function() {
@@ -122,6 +151,6 @@ beamWeapon.prototype.destroy = function() {
     }
 }
 
-beamWeapon.prototype.cycleTarget = function(target) {
+beamWeapon.prototype.setTarget = function(target) {
     this.target = target;
 }

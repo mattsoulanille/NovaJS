@@ -32,7 +32,7 @@ collidable.prototype.receiveCollision = function(other) {
 
 }    
 
-collidable.prototype.crash = new Crash({maxEntries:5});
+collidable.prototype.crash = new Crash({maxEntries:10});
 collidable.prototype.crashListener = function(a, b, res, cancel) {
     //console.log(a.data + " collided with " + b.data);
     // the entire space object is stored in collider.data... is this bad?
