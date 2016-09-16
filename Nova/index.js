@@ -169,8 +169,8 @@ io.on('connection', function(client){
 		     "IDA Frigate":IDA_Frigate,
 		     "Dart":dart};
     var shipList = _.values(shipTypes);
-    //var playerShipType = shipList[_.random(0,shipList.length-2)];
-    var playerShipType = shipList[3];
+    var playerShipType = shipList[_.random(0,shipList.length-1)];
+    //var playerShipType = shipList[3];
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

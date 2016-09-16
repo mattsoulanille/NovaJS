@@ -13,6 +13,7 @@
 	"reload": 45,
 	"accuracy": 3,
 	"impact": 120,
-	"type": "primary"
+	"type": "primary",
+	"vulnerableTo": []
     }
 }

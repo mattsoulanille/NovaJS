@@ -51,6 +51,7 @@ beamWeapon.prototype.build = function() {
 };
 
 beamWeapon.prototype.startFiring = function(notify = true) {
+
     this.graphics.visible = true;
     this.rendering = true;
     this.firing = true;
@@ -116,14 +117,17 @@ beamWeapon.prototype.render = function(fireAngle) {
 
 	this.collisionShape.moveTo(...this.position);
 	this.collisionShape.setAngle(fireAngle);
+	
     }
+
 }
 beamWeapon.prototype.properties = {};
-beamWeapon.prototype.properties.vulnerableTo = ["normal"];
+//beamWeapon.prototype.properties.vulnerableTo = ["normal"];
 
 
-beamWeapon.prototype.collideWith = function(other) {
-    var delta = this.time - this.lastTime;
+beamWeapon.prototype.collideWith = function(other, res) {
+    console.log(res);
+    var delta = (other.delta) * 60 / 1000;
     if (other.properties.vulnerableTo &&
 	other.properties.vulnerableTo.includes("normal") &&
 	other !== this.source) {
@@ -131,10 +135,11 @@ beamWeapon.prototype.collideWith = function(other) {
 	var collision = {};
 	collision.shieldDamage = this.meta.properties.shieldDamage * delta;
 	collision.armorDamage = this.meta.properties.armorDamage * delta;
-
 	// needs improvement for proper tractoring
 	collision.impact = this.meta.properties.impact * delta;
 	collision.angle = this.pointing;
+
+//	console.log(collision);
 	other.receiveCollision(collision);
     }
 
@@ -144,7 +149,7 @@ beamWeapon.prototype.receiveCollision = function(collision) {}
 
     
 beamWeapon.prototype.destroy = function() {
-
+    this.stopFiring();
     var index = this.system.built.render.indexOf(this);
     if (index !== -1) {
 	this.system.built.render.splice(index, 1);

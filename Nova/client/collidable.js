@@ -37,8 +37,8 @@ collidable.prototype.crashListener = function(a, b, res, cancel) {
     //console.log(a.data + " collided with " + b.data);
     // the entire space object is stored in collider.data... is this bad?
 
-    a.data.collideWith(b.data);
-    b.data.collideWith(a.data);
+    a.data.collideWith(b.data, res);
+    b.data.collideWith(a.data, res);
 }
 collidable.prototype.crash.onCollision(collidable.prototype.crashListener);
 

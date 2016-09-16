@@ -25,6 +25,8 @@ function projectile(buildInfo) {
 
 projectile.prototype = new acceleratable;
 
+
+
 projectile.prototype.build = function() {
 
     this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)

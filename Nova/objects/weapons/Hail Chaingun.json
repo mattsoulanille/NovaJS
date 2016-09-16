@@ -15,6 +15,7 @@
 	"impact": 10,
 	"type": "primary",
 	"burstCount": 10,
-	"burstReload": 15
+	"burstReload": 15,
+	"vulnerableTo": []
     }
 }

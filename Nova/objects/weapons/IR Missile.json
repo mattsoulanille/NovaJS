@@ -15,6 +15,7 @@
 	"reload": 15,
 	"accuracy": 2,
 	"impact": 50,
-	"type": "secondary"
+	"type": "secondary",
+	"vulnerableTo": ["point defense"]
     }
 }

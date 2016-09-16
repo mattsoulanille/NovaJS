@@ -19,6 +19,7 @@ if (typeof(module) !== 'undefined') {
 function movable(buildInfo, system) {
     spaceObject.call(this, buildInfo, system);
     this.velocity = [0,0];
+    this.delta = 0;
     if (typeof(buildInfo) !== 'undefined') {
 	this.buildInfo.type = "movable";
     }
@@ -50,12 +51,12 @@ movable.prototype.getStats = function() {
 movable.prototype.render = function() {
     if (this.renderReady) {
 	
-
+	this.delta = this.time - this.lastTime;
 	if (typeof this.lastTime != 'undefined') {
-	    this.position[0] += this.velocity[0] * (this.time - this.lastTime)/1000;
-	    this.position[1] += this.velocity[1] * (this.time - this.lastTime)/1000;
-	    
+	    this.position[0] += this.velocity[0] * (this.delta)/1000;
+	    this.position[1] += this.velocity[1] * (this.delta)/1000;
 	}
+
 	this.lastTime = this.time;
 //	this.previousMoveTime = this.time
 	spaceObject.prototype.render.call(this)
