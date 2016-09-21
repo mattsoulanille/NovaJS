@@ -16,6 +16,7 @@ function basicWeapon(buildInfo, source) {
     this.source = source
     this.fireTimeout = undefined;
     this.doBurstFire = false;
+    this.random = Math.random; // Temporary until there is a seeded rng
     if (typeof(buildInfo) !== 'undefined') {
 	this.name = buildInfo.name;
 	this.meta = buildInfo.meta;
@@ -124,7 +125,7 @@ basicWeapon.prototype.fire = function(direction, position, velocity) {
 	var proj = this.projectiles[i];
 	if (proj.available) {
 	    var direction = direction || this.source.pointing +
-		((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		((this.random() - 0.5) * 2 * this.meta.properties.accuracy) *
 		(2 * Math.PI / 360);
 	    var position = position || this.source.position;
 	    var velocity = velocity || this.source.velocity;

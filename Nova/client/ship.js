@@ -153,6 +153,8 @@ ship.prototype.turnToTarget = function() {
 
 
 
+
+
 ship.prototype.manageLights = function() {
     
     if (typeof this.manageLights.state == 'undefined' || typeof this.manageLights.lastSwitch == 'undefined') {

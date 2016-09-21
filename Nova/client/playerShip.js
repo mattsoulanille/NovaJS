@@ -157,7 +157,7 @@ playerShip.prototype.targetNearest = function() {
 
 
     var get_distance = function(a, b) {
-	return (a.position[0] - b.position[0])**2 + (a.position[1] - b.position[1])**2;
+	return Math.pow((a.position[0] - b.position[0]), 2) + Math.pow((a.position[1] - b.position[1]), 2);
     }
     
     var distances = {};
@@ -212,4 +212,8 @@ playerShip.prototype.onDeath = function() {
     this.position[1] = 0;
     this.shield = this.properties.maxShields;
     this.armor = this.properties.maxArmor;
+    var newStats = {};
+    newStats[this.UUID] = this.getStats();
+    this.socket.emit('updateStats', newStats);
+
 }
