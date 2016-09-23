@@ -9,6 +9,45 @@ var Promise = require("bluebird");
 var fs = require('fs'),
     PNG = require('pngjs').PNG;
 
+var repl = require("repl");
+
+var test = function() {
+    return "did a test"
+}
+
+var local = repl.start();
+
+local.context.io = io;
+
+local.context.help = function() {
+    console.log("Available commands:\n" +
+	    "help()\tprints this help\n" + 
+	    "list()\tlists players\n" +
+	    "kick(uuid)\tkicks a player by uuid"
+	       );
+
+}
+
+// lists players
+local.context.list = function() {
+    var formatted = {}
+    _.each(players, function(p, key) {
+	formatted[key] = {"ship":p.ship.name};
+    });
+    return formatted;
+}
+
+// kicks a player
+var kick = function(UUID) {
+    if (_.includes(Object.keys(players), UUID)) {
+	players[UUID].io.disconnect();
+    }
+
+}
+
+local.context.kick = kick;
+local.context.test = test;
+
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
@@ -226,7 +265,7 @@ io.on('connection', function(client){
 
 
 
-    players[userid] = myShip;
+    players[userid] = {"ship":myShip,"io":client};
     playercount = _.keys(players).length;
     console.log('a user connected. ' + playercount + " playing.");
     client.on('updateProjectiles', function(stats) {
@@ -327,7 +366,7 @@ io.on('connection', function(client){
 
 
 
-
-http.listen(8000, function(){
-    console.log('listening on *:8000');
+var port = 8000;
+http.listen(port, function(){
+    console.log('listening on *:'+port);
 });
