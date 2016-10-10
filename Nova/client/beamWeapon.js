@@ -33,6 +33,33 @@ function beamWeapon(buildInfo, source) {
 // need to make this work on the server.... maybe refactor.
 beamWeapon.prototype.crash = collidable.prototype.crash;
 
+
+/*
+Ray intersect convex hull algorithm (not yet implemented):
+
+If there are points of the convex hull on both sides of the ray extended to infinity:
+    
+    For all pairs of points that are sequental and for which 
+    one is on one side and the other is on the other side of the ray:
+
+        If both points of the pair are closer to beam source than length of beam (radius):
+	    
+	    There is an intersection. Line segment intersects line segment linear algebra...
+
+	elif one point of the pair is closer to beam source than length of beam (radius):
+
+	    There may be an intersection. Line segment intersects line segment linear algebra...
+	
+	else:
+	
+	    No intersection
+
+    If intersection, return closest intersection for pairs mentioned before
+    Else, return false
+Else, return false
+*/
+
+
 beamWeapon.prototype.build = function() {
     this.graphics = new PIXI.Graphics();
     stage.addChild(this.graphics);
