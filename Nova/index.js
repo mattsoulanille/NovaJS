@@ -124,7 +124,7 @@ sol.build();
 
 var receives = 0;
 var transmits = 0;
-
+local.context.transmits = transmits;
 // debugging socket.io io
 /*
 setInterval(function() {
@@ -209,7 +209,7 @@ io.on('connection', function(client){
 		     "Dart":dart};
     var shipList = _.values(shipTypes);
     var playerShipType = shipList[_.random(0,shipList.length-1)];
-    //var playerShipType = shipList[3];
+//    var playerShipType = Firebird;
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

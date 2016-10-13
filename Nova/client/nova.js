@@ -1,6 +1,8 @@
 //"use strict";
 // create an new instance of a pixi stage
-var stage = new PIXI.Stage(0x000000);
+var stage;
+var space = new PIXI.Container(0x000000);
+var landed = new PIXI.Container(0x000000);
 
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10;
@@ -246,6 +248,7 @@ spaceObject.prototype.lastTime = new Date().getTime();
 
 
 var animateTimeout;
+stage = space;
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;

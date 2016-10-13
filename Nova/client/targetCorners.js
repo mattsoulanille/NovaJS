@@ -43,7 +43,7 @@ targetCorners.prototype.makeSize = function() {
 targetCorners.prototype.addSpritesToContainer = function() {
     _.each(this.sprites, function(spr) { this.spriteContainer.addChild(spr) }, this);
     this.renderReady = true;
-    stage.addChild(this.spriteContainer);
+    space.addChild(this.spriteContainer);
 }
 
 targetCorners.prototype.callSprites = function(toCall) {

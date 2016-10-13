@@ -29,7 +29,7 @@ starfield.prototype.build = function() {
 	    .then(function() {
 		this.ready = true;
 		this.built = true;
-		stage.addChild(this.spriteContainer);
+		space.addChild(this.spriteContainer);
 		this.system.built.render.push(this);
 		this.rendering = true;
 	    }.bind(this))

@@ -13,6 +13,7 @@ function playerShip(buildInfo, system) {
     this.weapons.primary = [];
     this.weapons.secondary = [];
     this.target = undefined;
+    this.planetTarget = undefined;
     this.targetIndex = -1;
 
 }
@@ -79,13 +80,15 @@ playerShip.prototype.addSpritesToContainer = function() {
 	   function(s) {this.spriteContainer.addChild(s);}, this);
     this.hide()
 
-    stage.addChildAt(this.spriteContainer, stage.children.length) //playerShip is above all
+    space.addChildAt(this.spriteContainer, space.children.length) //playerShip is above all
 }
 
 playerShip.prototype.updateStats = function(stats = {}) {
     var keys = KeyboardJS.activeKeys();
     var turning;
     var accelerating;
+
+    // this is disgusting and not very event based... Fix it.
     if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
 	turning = 'right';
     }
@@ -127,6 +130,28 @@ playerShip.prototype.updateStats = function(stats = {}) {
     if (_.contains(keys, 'r')) {
 	this.targetNearest();
     }
+    if (_.contains(keys, 'l')) {
+	var lastPlanet = this.planetTarget;
+	this.targetNearestPlanet();
+	if ((typeof this.planetTarget !== 'undefined') && (lastPlanet === this.planetTarget)) {
+	    // try to land
+	    var p = this.planetTarget;
+	    var max_dist = ((p.size[0] + p.size[1]) / 4) ** 2;
+	    var max_vel = 900;
+
+	    // planets can't move
+	    var vel = (this.velocity[0] ** 2 + this.velocity[1] ** 2);
+	    var dist = ((this.position[0] - p.position[0]) ** 2 +
+			(this.position[1] - p.position[1]) ** 2);
+	    if ((vel <= max_vel) && (dist <= max_dist)) {
+		this.land(this.planetTarget);
+	    }
+
+	}
+    }
+    if (_.contains(keys, '`')) {
+	this.setPlanetTarget(undefined);
+    }
 
     stats.turning = turning;
     stats.accelerating = accelerating;
@@ -147,6 +172,24 @@ playerShip.prototype.render = function() {
 
 }
 
+playerShip.prototype.findNearest = function(items) {
+    var get_distance = function(a, b) {
+	return Math.pow((a.position[0] - b.position[0]), 2) +
+	       Math.pow((a.position[1] - b.position[1]), 2);
+    }
+
+    var distances = {};
+    items.forEach(function(t) {
+	var dist = get_distance(t, this);
+	distances[dist] = t;
+    }.bind(this));
+
+    var min = Math.min(...Object.keys(distances));
+    if (min !== Infinity) {
+	return distances[min];
+    }
+}
+    
 playerShip.prototype.targetNearest = function() {
     var targets = [];
     this.system.ships.forEach(function(s) {
@@ -155,24 +198,19 @@ playerShip.prototype.targetNearest = function() {
 	}
     }.bind(this));
 
+    var nearest = this.findNearest(targets);
 
-    var get_distance = function(a, b) {
-	return Math.pow((a.position[0] - b.position[0]), 2) + Math.pow((a.position[1] - b.position[1]), 2);
+    if ((typeof nearest !== 'undefined') && (this.target !== nearest)) {
+	this.targetIndex = this.system.ships.indexOf(nearest);
+	this.setTarget(nearest);
     }
+}
     
-    var distances = {};
-    targets.forEach(function(t) {
-	var dist = get_distance(t, this);
-	distances[dist] = t;
-    }.bind(this));
+playerShip.prototype.targetNearestPlanet = function() {
 
-    var min = Math.min(...Object.keys(distances));
-    if (min !== Infinity) {
-	var t = distances[min];
-	if (t !== this.target) {
-	    this.targetIndex = this.system.ships.indexOf(t);
-	    this.setTarget(t);
-	}
+    var nearest = this.findNearest(this.system.planets);
+    if (this.planetTarget !== nearest) {
+	this.setPlanetTarget(nearest);
     }
 
 }
@@ -183,6 +221,17 @@ playerShip.prototype.setTarget = function(target) {
     ship.prototype.setTarget.call(this, this.target);
     
 }
+
+playerShip.prototype.setPlanetTarget = function(planetTarget) {
+    this.planetTarget = planetTarget;
+    this.statusBar.setPlanetTarget(this.planetTarget);
+}
+
+
+playerShip.prototype.land = function(planet) {
+    console.log(planet);
+}
+    
 
 playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1

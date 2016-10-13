@@ -156,8 +156,9 @@ spaceObject.prototype.addSpritesToContainer = function() {
 	   function(s) {
 	       this.spriteContainer.addChild(s);
 	   }, this);
-    this.hide()
-    stage.addChild(this.spriteContainer);
+    this.hide();
+    //the pixi stage
+    space.addChild(this.spriteContainer);
     
 
 }

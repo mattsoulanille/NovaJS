@@ -24,6 +24,7 @@ statusBar.prototype.build = function() {
 	.then(this.resize.bind(this))
 	.then(this.buildTargetText.bind(this))
 	.then(this.buildTargetCorners.bind(this))
+	.then(this.buildPlanetCorners.bind(this))
 	.then(function() {
 	    // var radarMeta = {};
 	    // radarMeta.colors = {};
@@ -79,7 +80,7 @@ statusBar.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	   function(s) {this.container.addChildAt(s,0);}, this);
 
-    stage.addChild(this.container);
+    space.addChild(this.container);
 }
 
 statusBar.prototype.resize = function() {
@@ -189,6 +190,10 @@ statusBar.prototype.buildTargetCorners = function() {
     this.targetCorners = new targetCorners(this.system);
     return this.targetCorners.build()
 }
+statusBar.prototype.buildPlanetCorners = function() {
+    this.planetCorners = new targetCorners(this.system, 'planetCorners');
+    return this.planetCorners.build();
+}
 
 statusBar.prototype.renderTargetText = function() {
     if (this.target.shield > 0) {
@@ -242,3 +247,12 @@ statusBar.prototype.setTarget = function(target) {
 }
 
 
+statusBar.prototype.setPlanetTarget = function(planetTarget) {
+    if (planetTarget) {
+	this.planetCorners.target(planetTarget);
+    }
+    else {
+	this.planetCorners.hide();
+    }
+    
+}

@@ -9,7 +9,12 @@ if (typeof(module) !== 'undefined') {
 
 function planet(buildInfo, system) {
     spaceObject.call(this, buildInfo, system);
-    this.url = "objects/planets/"
+    this.url = "objects/planets/";
+
+    if (typeof this.buildInfo !== undefined) {
+	this.landable = this.buildInfo.landable || false;
+    }
+
     if (typeof system !== 'undefined') {
 	system.planets.push(this);
     }
@@ -32,9 +37,9 @@ planet.prototype.build = function() {
 planet.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	   function(s) {this.spriteContainer.addChild(s);}, this);
-    this.hide()
+    this.hide();
 
-    stage.addChildAt(this.spriteContainer, 0);
+    space.addChildAt(this.spriteContainer, 0);
 }
 
 
