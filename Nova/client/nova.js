@@ -34,51 +34,11 @@ var fullscreen = function() {
 
 
 var socket = io();
-var last_keys = KeyboardJS.activeKeys();
-
-document.onkeydown = function(e) {
-    var e = e || event;
-    var blocked_keys = [37, 38, 39, 40, 32, 9, 17];    
-
-//    socket.emit('test', "Hey look, i'm a test event");
 
 
-    switch (e.keyCode) {
-    case 9:
-	myShip.cycleTarget();
-	break;
-    case 13:
-	fullscreen();
-    }
-    
-    new_keys = KeyboardJS.activeKeys();
-    if (!new_keys.equals(last_keys)) {
-	myShip.updateStats();
 
-	var newStats = {};
-	newStats[myShip.UUID] = myShip.getStats();
-	socket.emit('updateStats', newStats);
 
-    }
-    last_keys = KeyboardJS.activeKeys();    
-    if (_.contains(blocked_keys, e.keyCode)) {
-	return false;
-    }
-    else {
-	return true;
-    }
-}
-document.onkeyup = function(e) {
-
-    last_keys = KeyboardJS.activeKeys();
-    myShip.updateStats();
-    var newStats = {};
-    newStats[myShip.UUID] = myShip.getStats();
-    socket.emit('updateStats', newStats)
-
-}
-
-var p = PubSub;
+//var p = PubSub;
 
 var UUID;
 
@@ -94,31 +54,7 @@ var sol = new system();
 
 
 var textures = {}; // global texture object that sprites save and load textures from
-//var myShip = new playerShip("Starbridge A")
-// var medium_blaster = new outfit("Medium Blaster", 5);
-// var medium_blaster_t = new outfit("Medium Blaster Turret", 1);
-// var ir_missile = new outfit("IR Missile Launcher", 4);
-// var shuttle_missile = new outfit("IR Missile Launcher", 1);
-// var shuttle_blaster = new outfit("Medium Blaster Turret", 2);
-
-// var myShip = new playerShip({
-//     "name":"Starbridge A",
-//     "outfits":{"Medium Blaster Turret":4, "IR Missile Launcher":4}}, system);
-
-
-
-//var bar = new statusBar("civilian", myShip);
-/*
-var starbridge = new ship({"name":"Starbridge A", "outfits": {}}, system);
-var shuttle = new ship({"name":"Shuttle A", "outfits":{}}, system);
-var dart = new ship({"name":"Vell-os Dart", "outfits":{}}, system);
-
-
-var earth = new planet({"name":"Earth"}, system);
-
-
-pp*/
-
+var gameControls = new controls(); // global controls
 var players = {};
 var myShip;
 var stars;
@@ -140,6 +76,7 @@ socket.on('onconnected', function(data) {
 	pause();
     }
     stars.build()
+	.then(gameControls.build.bind(gameControls))
 	.then(myShip.build.bind(myShip))
 	.then(sol.build.bind(sol))
 	.then(function() {
@@ -183,6 +120,64 @@ socket.on('updateStats', function(stats) {
 socket.on('test', function(data) {
     console.log(data);
 });
+
+
+
+
+
+
+var last_keys = KeyboardJS.activeKeys();
+document.onkeydown = gameControls.onkeydown.bind(gameControls);
+document.onkeyup = gameControls.onkeyup.bind(gameControls);
+
+gameControls.onstatechange(function() {
+    var newStats = {};
+    
+});
+
+/*
+document.onkeydown = function(e) {
+    var e = e || event;
+    var blocked_keys = [37, 38, 39, 40, 32, 9, 17];
+
+//    socket.emit('test', "Hey look, i'm a test event");
+
+
+    switch (e.keyCode) {
+    case 9:
+	myShip.cycleTarget();
+	break;
+    case 13:
+	fullscreen();
+    }
+    
+    new_keys = KeyboardJS.activeKeys();
+    if (!new_keys.equals(last_keys)) {
+	myShip.updateStats();
+
+	var newStats = {};
+	newStats[myShip.UUID] = myShip.getStats();
+	socket.emit('updateStats', newStats);
+
+    }
+    last_keys = KeyboardJS.activeKeys();    
+    if (_.contains(blocked_keys, e.keyCode)) {
+	return false;
+    }
+    else {
+	return true;
+    }
+}
+document.onkeyup = function(e) {
+
+    last_keys = KeyboardJS.activeKeys();
+    myShip.updateStats();
+    var newStats = {};
+    newStats[myShip.UUID] = myShip.getStats();
+    socket.emit('updateStats', newStats)
+
+}
+*/
 
 
 

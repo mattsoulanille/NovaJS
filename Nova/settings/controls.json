@@ -1,0 +1,44 @@
+{
+    "land":
+    {
+	"27":"depart",
+	"79":"outfitter",
+	"78":"mission bbs",
+	"66":"bar",
+	"83":"shipyard",
+	"84":"trade center"
+
+    },
+    "space":
+    {
+	"38":"accelerate",
+	"40":"reverse",
+	"39":"right",
+	"37":"left",
+
+	"32":"primary",
+	"17":"secondary",
+	"87":"cycle secondary",
+	"83":"reset secondary",
+	"66":"board",
+
+	"65":"point to",
+	"9":"target",
+	"82":"target nearest",
+
+	"69":"escorts",
+	"86":"hold posiiton",
+	"70":"attack",
+	"67":"formation",
+	"68":"defend",
+
+	"192":"reset nav",
+	"76":"land",
+	"77":"map",
+	"72":"small map",
+	"74":"hyperjump",
+	"80":"properties",
+	"73":"misisons",
+	"89":"hail"
+    }
+}

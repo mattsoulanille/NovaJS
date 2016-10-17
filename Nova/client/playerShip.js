@@ -25,6 +25,9 @@ playerShip.prototype.build = function() {
     return ship.prototype.build.call(this)
 	.then(this.sortWeapons.bind(this))
 	.then(this.makeStatusBar.bind(this))
+	.then(function() {
+	    gameControls.onstatechange(this.onstatechange.bind(this));
+	}.bind(this));
     
 }
 
@@ -83,81 +86,85 @@ playerShip.prototype.addSpritesToContainer = function() {
     space.addChildAt(this.spriteContainer, space.children.length) //playerShip is above all
 }
 
-playerShip.prototype.updateStats = function(stats = {}) {
-    var keys = KeyboardJS.activeKeys();
-    var turning;
-    var accelerating;
+playerShip.prototype.onstatechange = function(state) {
+    var stats = {};
 
-    // this is disgusting and not very event based... Fix it.
-    if (_.contains(keys, 'right') && !_.contains(keys, 'left')) {
-	turning = 'right';
+    //xnor
+    if (! (state.right ^ state.left) ) {
+	stats.turning = '';
     }
-    else if (_.contains(keys, 'left') && !_.contains(keys, 'right')) {
-	turning = 'left';
-    }
-    else {
-	turning = '';
-    }
-    if (_.contains(keys, 'down')) {
-	accelerating = -1;
-    }
-    else if (_.contains(keys, 'up')) {
-	accelerating = 1;
+    else if (state.right) {
+	stats.turning = 'right';
     }
     else {
-	accelerating = 0;
+	stats.turning = 'left';
     }
-    if (_.contains(keys, 'space')) {
+
+    if (state.reverse) {
+	stats.accelerating = -1;
+    }
+    else if (state.accelerate) {
+	stats.accelerating = 1;
+    }
+    else {
+	stats.accelerating = 0;
+    }
+
+    if (state.primary) {
 	_.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
-
     }
     else {
 	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
     }
-    if (_.contains(keys, 'a')) {
-	this.turningToTarget = true;
-    }
-    else {
-	this.turningToTarget = false;
-    }
-    if (_.contains(keys, 'ctrl')) {
-	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
 
+    this.turningToTarget = state["point to"];
+
+    if (state.secondary) {
+	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
     }
     else {
 	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
     }
-    if (_.contains(keys, 'r')) {
-	this.targetNearest();
+
+    if (state["target nearest"]) {
+	this.targetNearest();	
     }
-    if (_.contains(keys, 'l')) {
+
+    if (state.land) {
 	var lastPlanet = this.planetTarget;
 	this.targetNearestPlanet();
 	if ((typeof this.planetTarget !== 'undefined') && (lastPlanet === this.planetTarget)) {
 	    // try to land
 	    var p = this.planetTarget;
-	    var max_dist = ((p.size[0] + p.size[1]) / 4) ** 2;
+	    var max_dist = Math.pow( ((p.size[0] + p.size[1]) / 4), 2 );
 	    var max_vel = 900;
 
 	    // planets can't move
-	    var vel = (this.velocity[0] ** 2 + this.velocity[1] ** 2);
-	    var dist = ((this.position[0] - p.position[0]) ** 2 +
-			(this.position[1] - p.position[1]) ** 2);
+	    var vel = ( Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2));
+	    var dist = (Math.pow( (this.position[0] - p.position[0]), 2) +
+			Math.pow( (this.position[1] - p.position[1]), 2));
 	    if ((vel <= max_vel) && (dist <= max_dist)) {
 		this.land(this.planetTarget);
 	    }
-
 	}
     }
-    if (_.contains(keys, '`')) {
+    if (state["reset nav"]) {
 	this.setPlanetTarget(undefined);
     }
+    
+    this.updateStats(stats);
+    this.sendStats();
+}
 
-    stats.turning = turning;
-    stats.accelerating = accelerating;
-
+playerShip.prototype.updateStats = function(stats = {}) {
     ship.prototype.updateStats.call(this, stats);
     
+}
+
+playerShip.prototype.sendStats = function() {
+    var newStats = {};
+    newStats[this.UUID] = this.getStats();
+    this.socket.emit('updateStats', newStats);
 }
 
 
@@ -229,7 +236,7 @@ playerShip.prototype.setPlanetTarget = function(planetTarget) {
 
 
 playerShip.prototype.land = function(planet) {
-    console.log(planet);
+
 }
     
 
