@@ -127,8 +127,8 @@ socket.on('test', function(data) {
 
 
 var last_keys = KeyboardJS.activeKeys();
-document.onkeydown = gameControls.onkeydown.bind(gameControls);
-document.onkeyup = gameControls.onkeyup.bind(gameControls);
+document.onkeydown = gameControls.keydown.bind(gameControls);
+document.onkeyup = gameControls.keyup.bind(gameControls);
 
 gameControls.onstatechange(function() {
     var newStats = {};

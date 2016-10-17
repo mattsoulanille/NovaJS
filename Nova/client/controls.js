@@ -32,11 +32,12 @@ controls.prototype.build = function() {
 	}.bind(this));
 }
 
-controls.prototype.onkeydown = function(key) {
-    var e = this.onkey(this.eventListenersStart, key);
+controls.prototype.keydown = function(key) {
+    var controlEvent = this.scope[key.keyCode];
 
-    if (this.activeEvents[e] !== true) {
-	this.activeEvents[e] = true;
+    if (this.activeEvents[controlEvent] !== true) {
+	this.activeEvents[controlEvent] = true;
+	this.callAll(this.eventListenersStart[controlEvent]);
 	this.statechange();
     }
 
@@ -49,24 +50,19 @@ controls.prototype.onkeydown = function(key) {
     }
 }
 
-controls.prototype.onkeyup = function(key) {
-    var e = this.onkey(this.eventListenersEnd, key);
-    this.activeEvents[e] = false;
+controls.prototype.keyup = function(key) {
+    var controlEvent = this.scope[key.keyCode];
+    this.callAll(this.eventListenersEnd[controlEvent]);
+    this.activeEvents[controlEvent] = false;
     this.statechange();
-
-    
 }
 
-controls.prototype.onkey = function(eventListeners, key) {
-    var controlEvent = this.scope[key.keyCode];
-    var toCall = eventListeners[controlEvent];
-
+controls.prototype.callAll = function(toCall) {
     if (typeof toCall !== "undefined") {
 	toCall.forEach(function(f) {
 	    f();
 	});
     }
-    return controlEvent;
 }
 
 controls.prototype.statechange = function() {

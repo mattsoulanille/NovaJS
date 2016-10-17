@@ -26,7 +26,8 @@ playerShip.prototype.build = function() {
 	.then(this.sortWeapons.bind(this))
 	.then(this.makeStatusBar.bind(this))
 	.then(function() {
-	    gameControls.onstatechange(this.onstatechange.bind(this));
+	    gameControls.onstatechange(this.statechange.bind(this));
+	    this.assignControls(gameControls);
 	}.bind(this));
     
 }
@@ -86,7 +87,31 @@ playerShip.prototype.addSpritesToContainer = function() {
     space.addChildAt(this.spriteContainer, space.children.length) //playerShip is above all
 }
 
-playerShip.prototype.onstatechange = function(state) {
+
+playerShip.prototype.assignControls = function(c) {
+    c.onstart("primary", function() {
+	_.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
+    }.bind(this));
+
+    c.onend("primary", function() {
+	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
+    }.bind(this));
+
+    c.onstart("secondary", function() {
+	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
+    }.bind(this));
+
+    c.onend("secondary", function() {
+	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
+    }.bind(this));
+
+    c.onstart("target nearest", this.targetNearest.bind(this));
+    c.onstart("target", this.cycleTarget.bind(this));
+    c.onstart("reset nav", function() {
+	this.setPlanetTarget(undefined);
+    }.bind(this));
+}
+playerShip.prototype.statechange = function(state) {
     var stats = {};
 
     //xnor
@@ -109,26 +134,8 @@ playerShip.prototype.onstatechange = function(state) {
     else {
 	stats.accelerating = 0;
     }
-
-    if (state.primary) {
-	_.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
-    }
-    else {
-	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
-    }
-
     this.turningToTarget = state["point to"];
 
-    if (state.secondary) {
-	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
-    }
-    else {
-	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
-    }
-
-    if (state["target nearest"]) {
-	this.targetNearest();	
-    }
 
     if (state.land) {
 	var lastPlanet = this.planetTarget;
@@ -147,9 +154,6 @@ playerShip.prototype.onstatechange = function(state) {
 		this.land(this.planetTarget);
 	    }
 	}
-    }
-    if (state["reset nav"]) {
-	this.setPlanetTarget(undefined);
     }
     
     this.updateStats(stats);
