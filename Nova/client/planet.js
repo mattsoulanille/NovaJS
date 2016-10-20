@@ -11,7 +11,7 @@ function planet(buildInfo, system) {
     spaceObject.call(this, buildInfo, system);
     this.url = "objects/planets/";
 
-    if (typeof this.buildInfo !== undefined) {
+    if (typeof this.buildInfo !== 'undefined') {
 	this.landable = this.buildInfo.landable || false;
     }
 
@@ -25,13 +25,27 @@ planet.prototype = new spaceObject;
 
 
 planet.prototype.build = function() {
+    console.log(this.url);
     return spaceObject.prototype.build.call(this)
+//	.then(this.build)
 	.then(function() {
 	    this.system.built.planets.push(this);
 	    this.buildInfo.type = 'planet';
 	    this.show();
 	}.bind(this));
-    
+}
+
+planet.prototype.land = function() {
+    // make sure you can't land in two places at the same time
+    if (stage === space) {
+	gameControls.scope = gameControls.scopes.land;
+//	stage = 
+	
+    }
+}
+
+planet.prototype.depart = function() {
+    gameControls.scope = gameControls.scopes.space;
 }
 
 planet.prototype.addSpritesToContainer = function() {
@@ -39,7 +53,7 @@ planet.prototype.addSpritesToContainer = function() {
 	   function(s) {this.spriteContainer.addChild(s);}, this);
     this.hide();
 
-    space.addChildAt(this.spriteContainer, 0);
+    this.system.container.addChildAt(this.spriteContainer, 0);
 }
 
 

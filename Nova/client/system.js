@@ -9,6 +9,7 @@ if (typeof(module) !== 'undefined') {
 
 
 function system() {
+    this.container = new PIXI.Container();
     this.spaceObjects = [];
     this.ships = [];
     this.planets = [];

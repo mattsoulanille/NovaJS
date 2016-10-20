@@ -81,7 +81,7 @@ spaceObject.prototype.loadResources = function() {
     return new Promise(function(fulfill, reject) {
 	//console.log(this);
 	var jsonUrl = this.url + this.name + '.json';
-
+	//console.log(jsonUrl);
 	
 	var loader = new PIXI.loaders.Loader();
 	loader
@@ -157,8 +157,8 @@ spaceObject.prototype.addSpritesToContainer = function() {
 	       this.spriteContainer.addChild(s);
 	   }, this);
     this.hide();
-    //the pixi stage
-    space.addChild(this.spriteContainer);
+
+    this.system.container.addChild(this.spriteContainer);
     
 
 }

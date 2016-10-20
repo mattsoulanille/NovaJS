@@ -1,0 +1,8 @@
+{
+    "image":"/objects/menus/outfitter.png",
+    "buttons": {
+	"Buy": "buy"
+	"Sell": "sell"
+	"Leave": "leave"
+    }
+}

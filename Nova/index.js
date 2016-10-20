@@ -335,7 +335,21 @@ io.on('connection', function(client){
 
 	client.emit('addObjects', toSend);
     });
-
+    client.on('land', function() {
+	receives ++;
+	client.broadcast.emit('removeObjects', owned_uuids);
+	transmits += playercount - 1;
+	currentSystem.removeObjects(owned_uuids);	    
+    });
+    client.on('depart', function() {
+	receives ++;
+	client.broadcast.emit('addObjects', [myShip.buildInfo])
+	var stats = {};
+	stats[uuid] = myShip.getStats();
+	client.broadcast.emit('updateStats', stats);
+	transmits += playercount - 1;
+    });
+    
     client.on('disconnect', function() {
 	receives ++;
 	client.broadcast.emit('removeObjects', owned_uuids)

@@ -62,7 +62,7 @@ Else, return false
 
 beamWeapon.prototype.build = function() {
     this.graphics = new PIXI.Graphics();
-    stage.addChild(this.graphics);
+    this.system.container.addChild(this.graphics);
     this.source.system.built.render.push(this);
     this.source.weapons.all.push(this);
     this.ready = true;
@@ -153,7 +153,7 @@ beamWeapon.prototype.properties = {};
 
 
 beamWeapon.prototype.collideWith = function(other, res) {
-    console.log(res);
+//    console.log(res);
     var delta = (other.delta) * 60 / 1000;
     if (other.properties.vulnerableTo &&
 	other.properties.vulnerableTo.includes("normal") &&

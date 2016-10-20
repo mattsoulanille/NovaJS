@@ -110,7 +110,7 @@ ship.prototype.addSpritesToContainer = function() {
     //console.log(without)
     _.each(without, function(x) {this.spriteContainer.addChild(x)}, this);
     _.each(orderedSprites, function(x) {this.spriteContainer.addChild(x)}, this);
-    space.addChild(this.spriteContainer)
+    this.system.container.addChild(this.spriteContainer);
 }
 
 ship.prototype.updateStats = function(stats) {

@@ -1,6 +1,6 @@
 function controls(url) {
     this.url = url || "/settings/controls.json";
-    this.playerShip = playerShip
+    this.playerShip = playerShip;
     this.scopes = {};
     this.built = false;
     this.eventListenersStart = {};

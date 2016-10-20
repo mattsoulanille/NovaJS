@@ -1,8 +1,9 @@
 //"use strict";
 // create an new instance of a pixi stage
-var stage;
+var stage = new PIXI.Container(0x000000);
 var space = new PIXI.Container(0x000000);
-var landed = new PIXI.Container(0x000000);
+stage.addChild(space);
+//var landed = new PIXI.Container(0x000000);
 
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10;
@@ -42,14 +43,14 @@ var socket = io();
 
 var UUID;
 
-var sync = new syncTime(socket)
+var sync = new syncTime(socket);
 
 
 
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
-var sol = new system();
+var currentSystem = new system();
 
 
 
@@ -60,30 +61,32 @@ var myShip;
 var stars;
 var stagePosition;
 
-var stars;
+
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
-    myShip = new playerShip(data.playerShip, sol);
+    myShip = new playerShip(data.playerShip, currentSystem);
     if (stars) {
 	stars.attach(myShip);
     }
     else {
 	stars = new starfield(myShip, 40);
     }
-    sol.setObjects(data.system);
+    currentSystem.setObjects(data.system);
     if (data.paused) {
 	pause();
     }
     stars.build()
 	.then(gameControls.build.bind(gameControls))
 	.then(myShip.build.bind(myShip))
-	.then(sol.build.bind(sol))
+	.then(currentSystem.build.bind(currentSystem))
 	.then(function() {
+	    stage.addChildAt(currentSystem.container, 0);
+//	    stage.addChildAt(stars.container, 0);
 	    console.log("built objects");
 	    stagePosition = myShip.position;
 //	    console.log(data.stats);
-	    sol.updateStats(data.stats);
+	    currentSystem.updateStats(data.stats);
 	    startGame();
 	    var newStats = {};
 	    newStats[myShip.UUID] = myShip.getStats();
@@ -103,18 +106,18 @@ socket.on('disconnect', function() {
 
 socket.on('addObjects', function(buildInfoList) {
     console.log("adding objects ", buildInfoList);
-    sol.addObjects(buildInfoList);
-    sol.build()
+    currentSystem.addObjects(buildInfoList);
+    currentSystem.build()
 });
 
 socket.on('removeObjects', function(uuids) {
-    sol.removeObjects(uuids);
+    currentSystem.removeObjects(uuids);
 });
 
 
 socket.on('updateStats', function(stats) {
     //    console.log(stats);
-    sol.updateStats(stats);
+    currentSystem.updateStats(stats);
 });
 
 socket.on('test', function(data) {
@@ -135,49 +138,6 @@ gameControls.onstatechange(function() {
     
 });
 
-/*
-document.onkeydown = function(e) {
-    var e = e || event;
-    var blocked_keys = [37, 38, 39, 40, 32, 9, 17];
-
-//    socket.emit('test', "Hey look, i'm a test event");
-
-
-    switch (e.keyCode) {
-    case 9:
-	myShip.cycleTarget();
-	break;
-    case 13:
-	fullscreen();
-    }
-    
-    new_keys = KeyboardJS.activeKeys();
-    if (!new_keys.equals(last_keys)) {
-	myShip.updateStats();
-
-	var newStats = {};
-	newStats[myShip.UUID] = myShip.getStats();
-	socket.emit('updateStats', newStats);
-
-    }
-    last_keys = KeyboardJS.activeKeys();    
-    if (_.contains(blocked_keys, e.keyCode)) {
-	return false;
-    }
-    else {
-	return true;
-    }
-}
-document.onkeyup = function(e) {
-
-    last_keys = KeyboardJS.activeKeys();
-    myShip.updateStats();
-    var newStats = {};
-    newStats[myShip.UUID] = myShip.getStats();
-    socket.emit('updateStats', newStats)
-
-}
-*/
 
 
 
@@ -192,7 +152,7 @@ socket.on('pause', pause);
 
 var resume = function() {
     paused = false;
-    sol.resume();
+    currentSystem.resume();
     requestAnimationFrame(animate);
     console.log("Game resumed");
 }
@@ -202,7 +162,7 @@ socket.on('resume', resume);
 function startGame() {
 
     //replace with promises
-    $.when( sol.spaceObjects.map(function(s){
+    $.when( currentSystem.spaceObjects.map(function(s){
 	// improve me
 	if (! (s instanceof projectile)) {
 	    s.show()
@@ -243,7 +203,7 @@ spaceObject.prototype.lastTime = new Date().getTime();
 
 
 var animateTimeout;
-stage = space;
+
 function animate() {
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
@@ -254,7 +214,7 @@ function animate() {
     }
 
     stars.render();
-    sol.render();
+    currentSystem.render();
 
     
     

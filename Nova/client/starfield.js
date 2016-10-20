@@ -5,7 +5,7 @@ More of a dust field, really.
 function starfield(source, count, starname) {
 
     this.stars = [];
-    this.spriteContainer = new PIXI.Container();
+    this.container = new PIXI.Container();
     this.count = count || 20;
     this.ready = false;
     this.source = source;
@@ -19,7 +19,7 @@ function starfield(source, count, starname) {
     this.yrange = [-this.ysize/2, this.ysize/2];
     this.position = _.map(this.source.position, function(n) {return n})
     this.lastPosition = _.map(this.source.position, function(n) {return n})
-    this.system = source.system
+    this.system = source.system;
     this.built = false;
 }
 
@@ -29,7 +29,8 @@ starfield.prototype.build = function() {
 	    .then(function() {
 		this.ready = true;
 		this.built = true;
-		space.addChild(this.spriteContainer);
+		// moved to system model.
+		space.addChild(this.container);
 		this.system.built.render.push(this);
 		this.rendering = true;
 	    }.bind(this))
@@ -47,7 +48,7 @@ starfield.prototype.attach = function(source) {
 starfield.prototype.buildStars = function() {
 
     for (i = 0; i < this.count; i++) {
-	var s = new star(this.source, this.spriteContainer, this.system);
+	var s = new star(this.source, this.container, this.system);
 	this.stars.push(s);
     }
 

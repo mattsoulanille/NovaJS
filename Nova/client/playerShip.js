@@ -82,9 +82,9 @@ playerShip.prototype.addToSpaceObjects = function() {
 playerShip.prototype.addSpritesToContainer = function() {
     _.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	   function(s) {this.spriteContainer.addChild(s);}, this);
-    this.hide()
+    this.hide();
 
-    space.addChildAt(this.spriteContainer, space.children.length) //playerShip is above all
+    this.system.container.addChildAt(this.spriteContainer, this.system.container.children.length) //playerShip is above all
 }
 
 
@@ -240,7 +240,7 @@ playerShip.prototype.setPlanetTarget = function(planetTarget) {
 
 
 playerShip.prototype.land = function(planet) {
-
+    
 }
     
 

@@ -83,5 +83,5 @@ sprite.prototype.onAssetsLoaded = function() {
 }
 
 sprite.prototype.destroy = function() {
-    this.sprite.destroy();
+    //this.sprite.destroy();
 }
