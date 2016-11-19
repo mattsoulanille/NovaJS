@@ -32,6 +32,12 @@ controls.prototype.build = function() {
 	}.bind(this));
 }
 
+controls.prototype.resetEvents = function() {
+    Object.keys(this.activeEvents).forEach(function(key) {
+	this.activeEvents[key] = false;
+    }.bind(this));
+}
+
 controls.prototype.keydown = function(key) {
     var controlEvent = this.scope[key.keyCode];
 
@@ -89,7 +95,24 @@ controls.prototype.offstart = function(control_event, f) {
 controls.prototype.offend = function(control_event, f) {
     return this.off(this.eventListenersEnd, control_event, f);
 }
+controls.prototype.offall = function(f) {
+    var removeAll = function(list, f) {
+	var index = list.indexOf(f);
+	if (index !== -1) {
+	    list.splice(index, 1);
+	}
+    }
 
+    Object.values(this.eventListenersStart).forEach(function(list) {
+	removeAll(list, f);
+    }.bind(this));
+
+    Object.values(this.eventListenersEnd).forEach(function(list) {
+	removeAll(list, f);
+    }.bind(this));
+
+    removeAll(this.eventListenersStateChange, f);
+}
 
 
 controls.prototype.on = function(eventListeners, control_event, f) {
@@ -99,7 +122,7 @@ controls.prototype.on = function(eventListeners, control_event, f) {
     if (!eventListeners[control_event].includes(f)) {
 	eventListeners[control_event].push(f);
     }
-
+    return f;
 }
 
 controls.prototype.off = function(eventListeners, control_event, f) {
@@ -118,6 +141,7 @@ controls.prototype.onstatechange = function(f) {
     if (!e.includes(f)) {
 	e.push(f);
     }
+    return f;
 }
 controls.prototype.offstatechange = function(f) {
     var e = this.eventListenersStateChange;

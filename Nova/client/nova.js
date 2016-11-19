@@ -1,9 +1,11 @@
 //"use strict";
 // create an new instance of a pixi stage
-var stage = new PIXI.Container(0x000000);
+//var stage = new PIXI.Container(0x000000);
+var spaceport = new PIXI.Container(0x000000);
 var space = new PIXI.Container(0x000000);
-stage.addChild(space);
-//var landed = new PIXI.Container(0x000000);
+var landed = false;
+//stage.addChild(space);
+
 
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10;
@@ -81,7 +83,7 @@ socket.on('onconnected', function(data) {
 	.then(myShip.build.bind(myShip))
 	.then(currentSystem.build.bind(currentSystem))
 	.then(function() {
-	    stage.addChildAt(currentSystem.container, 0);
+	    space.addChildAt(currentSystem.container, 0);
 //	    stage.addChildAt(stars.container, 0);
 	    console.log("built objects");
 	    stagePosition = myShip.position;
@@ -94,6 +96,18 @@ socket.on('onconnected', function(data) {
 	});
     
     //players[UUID] = myShip;
+});
+
+socket.on('setPlayerShip', function(buildInfo) {
+    if (myShip) {
+	myShip.destroy();
+    }
+    myShip = new playerShip(buildInfo, currentSystem);
+    stars.attach(myShip);
+    myShip.position = [stagePosition[0], stagePosition[1]];
+    stagePosition = myShip.position;
+    myShip.build()
+	.then(function() {myShip.show()});
 });
 
 socket.on('disconnect', function() {
@@ -203,16 +217,18 @@ spaceObject.prototype.lastTime = new Date().getTime();
 
 
 var animateTimeout;
-
-function animate() {
+var animate = animateSpace;
+var stopRender = false;
+function animateSpace() {
+    stopRender = false;
     
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
 
     // in case the server restarted...
+    
     if (myShip.rendering) {
 	myShip.render();
     }
-
     stars.render();
     currentSystem.render();
 
@@ -220,12 +236,19 @@ function animate() {
     
     collidable.prototype.crash.check();
     
-    renderer.render(stage);
+    renderer.render(space);
     if (!paused) {
 	animateTimeout = setTimeout(requestAnimationFrame( animate ), 0);
     }
+}
 
-
+var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');
+spaceport.addChild(testSpaceport);
+function animateSpaceport() {
+    
+    
+    
+    renderer.render(spaceport);
 }
 
 

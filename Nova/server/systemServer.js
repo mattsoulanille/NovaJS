@@ -14,5 +14,7 @@ systemServer.prototype.resume = function() {
     }.bind(this));
 }
     
-systemServer.prototype.getMissingObjects = function() {};
+systemServer.prototype.getMissingObjects = function(missing) {
+    console.log("server is missing objects: ", missing);
+};
     

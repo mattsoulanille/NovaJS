@@ -17,7 +17,7 @@ sprite.prototype.build = function() {
 //    console.log("loading sprite: " + this.url);
 
     if ( !((textures) && (textures[this.url])) ) {
-	console.log("loading texture " + this.url)
+//	console.log("loading texture " + this.url)
 	textures[this.url] = this.setTextures()
 
     }	

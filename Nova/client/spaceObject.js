@@ -157,10 +157,7 @@ spaceObject.prototype.addSpritesToContainer = function() {
 	       this.spriteContainer.addChild(s);
 	   }, this);
     this.hide();
-
     this.system.container.addChild(this.spriteContainer);
-    
-
 }
 
 

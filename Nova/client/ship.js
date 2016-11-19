@@ -49,17 +49,14 @@ ship.prototype.build = function() {
 	    
 	    this.fuel = this.properties.maxFuel;
 
-	    this.system.built.ships.push(this)
+	    this.addToShips();
 	}, this))
-
-
-
-    // return RSVP.all(outfitPromises)
-    // 	.then(acceleratable.prototype.build.call(this))
-    // 	.catch(function(reason) {console.log(reason)});
-
-
 }
+
+ship.prototype.addToShips = function() {
+    this.system.built.ships.push(this);    
+}
+
 ship.prototype.buildTargetImage = function() {
     this.targetImage = new targetImage(this.meta.targetImage);
     return this.targetImage.build()

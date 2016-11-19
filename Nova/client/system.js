@@ -100,7 +100,7 @@ system.prototype.removeObject = function(uuid) {
 
 system.prototype.setObjects = function(buildInfo) {
     _.each(this.multiplayer, function(obj, uuid) {
-	if (! (uuid in buildInfo)) {
+	if ( (typeof buildInfo !== 'undefined') && (! (uuid in buildInfo))) {
 	    this.removeObject(uuid);
 	}
 
@@ -129,6 +129,7 @@ system.prototype.updateStats = function(stats) {
 	}
 	else {
 	    missingObjects.push(uuid);
+	    //console.log(newStats);
 	}
 	
     }.bind(this));

@@ -9,5 +9,9 @@ function planetServer(buildInfo, system) {
 
 planetServer.prototype = new planet;
 
-planet.prototype.addSpritesToContainer = function() {
+planetServer.prototype.addSpritesToContainer = function() {
 }
+
+planetServer.prototype.land = function() {};
+planetServer.prototype.depart = function() {};
+planetServer.prototype.assignControls = function() {};

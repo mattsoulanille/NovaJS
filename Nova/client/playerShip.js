@@ -26,12 +26,16 @@ playerShip.prototype.build = function() {
 	.then(this.sortWeapons.bind(this))
 	.then(this.makeStatusBar.bind(this))
 	.then(function() {
-	    gameControls.onstatechange(this.statechange.bind(this));
+	    // Is this terrible practice? I'm not sure, but it's definitely insane.	    
+	    this.statechange = gameControls.onstatechange(this.statechange.bind(this));
 	    this.assignControls(gameControls);
 	}.bind(this));
     
 }
 
+playerShip.prototype.addToShips = function() {
+    this.system.built.ships.unshift(this); 
+}
 
 playerShip.prototype.sortWeapons = function() {
 
@@ -86,32 +90,39 @@ playerShip.prototype.addSpritesToContainer = function() {
 
     this.system.container.addChildAt(this.spriteContainer, this.system.container.children.length) //playerShip is above all
 }
-
-
-playerShip.prototype.assignControls = function(c) {
-    c.onstart("primary", function() {
-	_.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
-    }.bind(this));
-
-    c.onend("primary", function() {
-	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
-    }.bind(this));
-
-    c.onstart("secondary", function() {
-	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
-    }.bind(this));
-
-    c.onend("secondary", function() {
-	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
-    }.bind(this));
-
-    c.onstart("target nearest", this.targetNearest.bind(this));
-    c.onstart("target", this.cycleTarget.bind(this));
-    c.onstart("reset nav", function() {
-	this.setPlanetTarget(undefined);
-    }.bind(this));
+playerShip.prototype.firePrimary = function() {
+    _.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
 }
+playerShip.prototype.stopPrimary = function() {
+    _.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
+}
+playerShip.prototype.fireSecondary = function() {
+    _.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
+}
+playerShip.prototype.stopSecondary = function() {
+    _.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
+}
+playerShip.prototype.resetNav = function() {
+    this.setPlanetTarget(undefined);
+}
+playerShip.prototype.assignControls = function(c) {
+    //There is no way this is good practice...
+    this.firePrimary = c.onstart("primary", this.firePrimary.bind(this));
+
+    this.stopPrimary = c.onend("primary", this.stopPrimary.bind(this));
+
+    this.fireSecondary = c.onstart("secondary", this.fireSecondary.bind(this));
+
+    this.stopSecondary = c.onend("secondary", this.stopSecondary.bind(this));
+
+    this.targetNearest = c.onstart("target nearest", this.targetNearest.bind(this));
+    this.cycleTarget = c.onstart("target", this.cycleTarget.bind(this));
+    this.resetNav = c.onstart("reset nav", this.resetNav.bind(this));
+}
+
 playerShip.prototype.statechange = function(state) {
+    //make this into a builder function and make it 
+
     var stats = {};
 
     //xnor
@@ -151,10 +162,14 @@ playerShip.prototype.statechange = function(state) {
 	    var dist = (Math.pow( (this.position[0] - p.position[0]), 2) +
 			Math.pow( (this.position[1] - p.position[1]), 2));
 	    if ((vel <= max_vel) && (dist <= max_dist)) {
+		_.map(this.weapons.all, function(weapon) {weapon.stopFiring();});
 		this.land(this.planetTarget);
+		//		stopRender = true;
+		return;
 	    }
 	}
     }
+
     
     this.updateStats(stats);
     this.sendStats();
@@ -240,24 +255,27 @@ playerShip.prototype.setPlanetTarget = function(planetTarget) {
 
 
 playerShip.prototype.land = function(planet) {
-    
+    this.polarVelocity = 0;
+    this.velocity[0] = this.velocity[1] = 0;
+    this.setTarget(undefined);
+    planet.land();
 }
     
 
 playerShip.prototype.cycleTarget = function() {
     // targetIndex goes from -1 (for no target) to ships.length - 1
     var incrementTargetIndex = function() {
-	this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1;
+	this.targetIndex = (this.targetIndex + 2) % (this.system.built.ships.length + 1) - 1;
 	// super cheapo temporary way to not target the player ship (ship 0)
 	if (this.targetIndex === 0) {
-	    this.targetIndex = (this.targetIndex + 2) % (this.system.ships.length + 1) - 1;
+	    this.targetIndex = (this.targetIndex + 2) % (this.system.built.ships.length + 1) - 1;
 	}
     }.bind(this);
 
     incrementTargetIndex();
 
     // If targetIndex === -1, then target is undefined, which is intentional
-    this.setTarget(this.system.ships[this.targetIndex]);
+    this.setTarget(this.system.built.ships[this.targetIndex]);
 //    console.log(this.targetIndex)
 
     
@@ -276,4 +294,17 @@ playerShip.prototype.onDeath = function() {
     newStats[this.UUID] = this.getStats();
     this.socket.emit('updateStats', newStats);
 
+}
+
+
+playerShip.prototype.destroy = function() {
+    var controlFunctions = [this.firePrimary, this.stopPrimary,
+			    this.fireSecondary, this.stopSecondary,
+			    this.targetNearest, this.cycleTarget,
+			    this.resetNav, this.statechange];
+
+    controlFunctions.forEach(function(k) {
+	gameControls.offall(k);
+    });
+    ship.prototype.destroy.call(this);
 }

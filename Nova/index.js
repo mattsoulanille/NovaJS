@@ -55,6 +55,7 @@ var system = require("./server/systemServer.js");
 var collidable = require("./server/collidableServer.js");
 var medium_blaster = new outfit("Medium Blaster", 1);
 var sol = new system();
+local.context.sol = sol;
 var convexHullBuilder = require("./server/convexHullBuilder.js");
 var path = require('path');
 
@@ -137,9 +138,10 @@ setInterval(function() {
 
 var paused = false;
 var playercount = 0;
+
+local.context.players = players;
 io.on('connection', function(client){
     receives ++;
-
     var userid = UUID();
     var owned_uuids = [userid];
     var currentSystem = sol;
@@ -227,29 +229,30 @@ io.on('connection', function(client){
 	transmits ++;
     }
     var myShip;
-
-    var setShip = function(playerShipType) {
+    var buildShip = function(playerShipType) {
 	myShip = new ship(playerShipType, currentSystem);
-	myShip.build().
+	return myShip.build().
 	    then(function() {
 	    _.each(myShip.outfitList, function(outf) {
 		_.each(outf.UUIDS, function(uuid) {
 		    owned_uuids.push(uuid);
 		});
 	    });
-	    })
-    //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
-	    .then(sendSystem)
-	    .then(function() {
-		// buildInfo should really be a promise that resolves to the
-		// objects buildInfo when the object is built...todo
-		client.broadcast.emit('addObjects', [myShip.buildInfo]);
-		transmits += playercount;
-		
 	    });
+    //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
     }
 
-    setShip(playerShipType);
+    var setShip = function(playerShipType) {
+	return buildShip(playerShipType)
+    	    .then(function() {
+		client.emit('setPlayerShip', myShip.buildInfo);
+		transmits += playercount;
+	    });
+    }
+		 
+
+    buildShip(playerShipType)
+    	.then(sendSystem);
 
 
     //doesn't work yet
@@ -283,6 +286,8 @@ io.on('connection', function(client){
 	    }
 	    else {
 		console.log("client tried to change something it didn't own");
+		console.log("Owned uuids: " + owned_uuids);
+		console.log("Tried to change: " + uuid);
 	    }
 
 	});
@@ -299,6 +304,7 @@ io.on('connection', function(client){
 
     client.on("test", function(data) {
 	receives ++;
+	console.log("test:");
 	console.log(data);
     });
     
@@ -339,15 +345,20 @@ io.on('connection', function(client){
 	receives ++;
 	client.broadcast.emit('removeObjects', owned_uuids);
 	transmits += playercount - 1;
-	currentSystem.removeObjects(owned_uuids);	    
+	currentSystem.removeObjects(owned_uuids);
+	owned_uuids = [userid];
     });
     client.on('depart', function() {
+	playerShipType = shipList[_.random(0,shipList.length-1)];
+	playerShipType.UUID = userid;
+	
+	setShip(playerShipType);
 	receives ++;
-	client.broadcast.emit('addObjects', [myShip.buildInfo])
-	var stats = {};
-	stats[uuid] = myShip.getStats();
-	client.broadcast.emit('updateStats', stats);
-	transmits += playercount - 1;
+	//client.broadcast.emit('addObjects', [myShip.buildInfo])
+	//var stats = {};
+	//stats[userid] = myShip.getStats();
+	//client.broadcast.emit('updateStats', stats);
+	//transmits += playercount - 1;
     });
     
     client.on('disconnect', function() {
