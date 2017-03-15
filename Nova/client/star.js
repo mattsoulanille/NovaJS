@@ -1,65 +1,62 @@
-function star(source, starContainer, system, name) {
-    movable.call(this, {"name":name}, system)
-    this.url = 'objects/misc/';
-    this.name = name || 'star';
-    this.velocityFactor = 0;
-    this.source = source;
-    this.meta = {};
-    this.meta.imageAssetsFiles = {"star": this.name + ".json"};
-    this.properties = {};
-    this.available = false;
-    starContainer.addChild(this.spriteContainer);
-    this.built = false;
-}
 
-//star.prototype.meta = {}
 
-star.prototype = new movable;
+star = class extends movable(spaceObject) {
 
-star.prototype.build = function() {
-
-    return this.makeSprites()
-	.then(_.bind(this.addSpritesToContainer, this))
-	.then(function() {
-	    this.system.spaceObjects.push(this)
-	    this.available = true;
-	    this.renderReady = true;
-	    this.built = true;
-	}.bind(this));
-}
-
-star.prototype.addSpritesToContainer = function() {
-
-    _.each(this.sprites, function(s) {this.spriteContainer.addChild(s.sprite);}, this);
-
-}
-
-star.prototype.addToSpaceObjects = function() {
-    this.system.built.spaceObjects.push(this);
-}
-
-star.prototype.randomize = function() {
-    this.chooseRandomTexture();
-    this.velocityFactor = Math.random() / 2;
+    constructor(source, starContainer, system, name) {
+	super({"name":name}, system);
+	this.url = 'objects/misc/';
+	this.name = name || 'star';
+	this.velocityFactor = 0;
+	this.source = source;
+	this.meta = {};
+	this.meta.imageAssetsFiles = {"star": this.name + ".json"};
+	this.properties = {};
+	this.available = false;
+	starContainer.addChild(this.spriteContainer);
+	this.built = false;
+    }
     
-}
+    //star.prototype.meta = {}
+    
+    build() {
 
-star.prototype.chooseRandomTexture = function() {
+	return this.makeSprites()
+	    .then(_.bind(this.addSpritesToContainer, this))
+	    .then(function() {
+		this.system.spaceObjects.push(this)
+		this.available = true;
+		this.renderReady = true;
+		this.built = true;
+	    }.bind(this));
+    }
 
-    var rand = Math.random()
-    _.map(_.values(this.sprites), function(spr) {
-	var randomSpriteIndex = Math.floor(rand * spr.textures.length);
-	spr.sprite.texture = spr.textures[randomSpriteIndex]
-    });
-}
+    addSpritesToContainer() {
+	_.each(this.sprites, function(s) {this.spriteContainer.addChild(s.sprite);}, this);
+    }
+
+    addToSpaceObjects() {
+	this.system.built.spaceObjects.push(this);
+    }
+    
+    randomize() {
+	this.chooseRandomTexture();
+	this.velocityFactor = Math.random() / 2;
+    }
+
+    chooseRandomTexture() {
+
+	var rand = Math.random()
+	_.map(_.values(this.sprites), function(spr) {
+	    var randomSpriteIndex = Math.floor(rand * spr.textures.length);
+	    spr.sprite.texture = spr.textures[randomSpriteIndex]
+	});
+    }
+    
 
 
-
-star.prototype.render = function() {
-    this.velocity[0] = this.source.velocity[0] * this.velocityFactor;
-    this.velocity[1] = this.source.velocity[1] * this.velocityFactor;
-
-    movable.prototype.render.call(this)
-	
-
+    render() {
+	this.velocity[0] = this.source.velocity[0] * this.velocityFactor;
+	this.velocity[1] = this.source.velocity[1] * this.velocityFactor;
+	super.render.call(this)
+    }
 }

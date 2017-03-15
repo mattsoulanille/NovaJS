@@ -91,11 +91,20 @@ setInterval(function() {
 
 global.convexHulls = {};
 
+var getConvexHulls = function(url) {
+    if ( !(global.convexHulls.hasOwnProperty(url)) ) {
+	global.convexHulls[url] = new convexHullBuilder(url).build();
+	//console.log(global.convexHulls)
+    }
+    return global.convexHulls[url];
+}
+
+
 app.get('/objects/:objectType/:jsonUrl/convexHulls', function(req, res) {
 
     var decoded = decodeURI(req.path);
     var objPath = path.normalize(path.join(decoded, '../').slice(0,-1));
-    collidable.prototype.getConvexHulls(objPath).then(function(hulls) {
+    getConvexHulls(objPath).then(function(hulls) {
 	res.json({"hulls":hulls});
     });
 

@@ -1,12 +1,10 @@
-module.exports = damageableServer;
 var _ = require("underscore");
 var Promise = require("bluebird");
 var damageable = require("../client/damageable.js");
 
-
-function damageableServer(buildInfo, system) {
-    damageable.call(this, buildInfo, system);
+let damageableServer = (superclass) => class extends damageable(superclass) {
+//    constructor() {
+//	super(...arguments);
+//    }
 }
-
-damageableServer.prototype = new damageable;
-
+module.exports = damageableServer;

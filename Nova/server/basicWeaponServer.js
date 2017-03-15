@@ -1,23 +1,23 @@
-module.exports = basicWeaponServer;
 var _ = require("underscore");
 var Promise = require("bluebird");
 var basicWeapon = require("../client/basicWeapon.js");
 
-function basicWeaponServer(buildInfo, source) {
-    basicWeapon.call(this, buildInfo, source);
-}
+class basicWeaponServer extends basicWeapon {
+    constructor() {
+	super(...arguments);
+    }
 
-basicWeaponServer.prototype = new basicWeapon;
-
-basicWeaponServer.prototype.build = function() {
-    return basicWeapon.prototype.build.call(this)
+    build() {
+	return super.build.call(this)
 //	.then(function() {
 
 	    
 //	}.bind(this))
+    }
+
+    notifyServer() {};
+
+    destory() {};
 }
 
-basicWeaponServer.prototype.notifyServer = function() {};
-
-basicWeaponServer.prototype.destory = function() {};
-
+module.exports = basicWeaponServer;
