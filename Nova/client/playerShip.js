@@ -64,6 +64,10 @@ class playerShip extends ship {
 	return this.statusBar.build()
     }
 
+    receiveCollision(other) {
+	ship.prototype.receiveCollision.call(this, other);
+	this.sendCollisionToServer();
+    }
 
 
     addToSpaceObjects() {
