@@ -19,7 +19,7 @@ syncTime.prototype.getDifference = function() {
 	var check = function(fulfill, reject) {
 //	    console.log(times);
 	    if (times > 10) {
-		reject()
+		reject(new Error('syncTime got no reply'));
 
 	    }
 	    else if (this.counter === this.repeat) {

@@ -1,24 +1,27 @@
-module.exports = beamWeaponServer;
 var beamWeapon = require("../client/beamWeapon.js");
 
-function beamWeaponServer(buildInfo, source) {
-    beamWeapon.call(this, buildInfo, source);
+
+
+class beamWeaponServer extends beamWeapon {
+
+    constructor() {
+	super(...arguments);
+    }
+
+    build() {};
+
+    startFiring() {};
+    stopFiring() {};
+    render() {};
+
+    updateStats(stats) {
+	if (stats.firing) {
+	    this.firing = true;
+	}
+	else {
+	    this.firing = false;
+	}
+	
+    };
 }
-
-beamWeaponServer.prototype = new beamWeapon;
-
-beamWeaponServer.prototype.build = function() {};
-
-beamWeaponServer.prototype.startFiring = function() {};
-beamWeaponServer.prototype.stopFiring = function() {};
-
-beamWeaponServer.prototype.render = function() {};
-beamWeaponServer.prototype.updateStats = function(stats) {
-    if (stats.firing) {
-	this.firing = true;
-    }
-    else {
-	this.firing = false;
-    }
-
-};
+module.exports = beamWeaponServer;

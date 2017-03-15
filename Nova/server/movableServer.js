@@ -1,10 +1,7 @@
-module.exports = movableServer;
+
 var movable = require("../client/movable.js");
 
-function movableServer(buildInfo, system) {
-    movable.call(this, buildInfo, system);
-}
+let movableServer = (superclass) => class extends movable(superclass) {};
 
-movableServer.prototype = new movable;
-
+module.exports = movableServer;
 //movable is fairly simple
