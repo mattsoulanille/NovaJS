@@ -1,6 +1,6 @@
 /*
 movable.js
-cHandles any space object that moves
+Handles any space object that moves
 
 
 
@@ -49,7 +49,7 @@ var movable = (superclass) => class extends superclass {
 		this.position[0] += this.velocity[0] * (this.delta)/1000;
 		this.position[1] += this.velocity[1] * (this.delta)/1000;
 	    }
-	    
+
 	    this.lastTime = this.time;
 	    //	this.previousMoveTime = this.time
 	    super.render.call(this)

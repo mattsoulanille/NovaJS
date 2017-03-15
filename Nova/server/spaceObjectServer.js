@@ -1,56 +1,49 @@
-module.exports = spaceObjectServer;
 var spaceObject = require("../client/spaceObject.js");
 var Promise = require("bluebird");
 
-function spaceObjectServer(buildInfo, system) {
-    spaceObject.call(this, buildInfo, system);
-    this.spriteContainer = {};
-    this.spriteContainer.destroy = function() {};
+class spaceObjectServer extends spaceObject {
 
-}
+    constructor(buildInfo, system) {
+	super(buildInfo, system);
+	this.spriteContainer = {};
+	this.spriteContainer.destroy = function() {};
+    }
 
-spaceObjectServer.prototype = new spaceObject;
-
-
-spaceObjectServer.prototype.loadResources = function() {
-    return new Promise(function(fulfill, reject) {
-	var url = "../"+this.url + this.name + '.json';
-	this.meta = require(url);
-
-	if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
-	    //console.log('fulfilling');
-	    fulfill();
+    loadResources() {
+	return new Promise(function(fulfill, reject) {
+	    var url = "../"+this.url + this.name + '.json';
+	    this.meta = require(url);
 	    
-	}
-	else {
-	    reject();
-	}
-
-	
-    }.bind(this));
-}
-
-spaceObjectServer.prototype.makeSize = function() {
-    // fix me later
-    this.size[0] = 72;
-    this.size[1] = 72;
-}
-
-
-spaceObjectServer.prototype.addSpritesToContainer = function() {
-    // do nothing
-}
-//spaceObjectServer.prototype.makeSprites = function() {
-//}
-
-spaceObjectServer.prototype.callSprites = function(call) {
-    // also do nothing
-}
+	    if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
+		//console.log('fulfilling');
+		fulfill();
+	    }
+	    else {
+		reject();
+	    }
+	    
+	    
+	}.bind(this));
+    }
     
-spaceObjectServer.prototype.render = function() {
-    // again, do nothing
+    makeSize() {
+	// fix me later
+	this.size[0] = 72;
+	this.size[1] = 72;
+    }
 
-}
+
+    addSpritesToContainer() {
+	// do nothing
+    }
+
+    callSprites(call) {
+    // also do nothing
+    }
+    
+    render() {
+	// again, do nothing
+    }
 /*
 spaceObjectServer.prototype.destroy = function() {
     var index;
@@ -66,3 +59,5 @@ spaceObjectServer.prototype.destroy = function() {
 
     
 */
+}
+module.exports = spaceObjectServer;

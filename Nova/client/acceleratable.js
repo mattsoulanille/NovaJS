@@ -32,7 +32,7 @@ var acceleratable = (superclass) => class extends superclass {
 	if (typeof(stats.accelerating) !== 'undefined') {
 	    this.accelerating = stats.accelerating;
 	}
-	this.flightMode.updateStats.call(this);
+	this.flightMode.updateStats.call(this, stats);
     }
 
     getStats() {
@@ -77,8 +77,10 @@ var acceleratable = (superclass) => class extends superclass {
     }
 
     render() {
+
 	if (this.renderReady) {
 	    this.flightMode.render.call(this);
+	    super.render.call(this);
 	    return true;
 	}
 	else {

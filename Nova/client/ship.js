@@ -173,6 +173,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
 
     render() {
+
 	if ("engine" in this.sprites) {
 	    if (this.accelerating == 1) {
 		this.sprites.engine.sprite.alpha = 1;

@@ -89,6 +89,7 @@ var turnable = (superclass) => class extends superclass {
     }
 
     render() {
+
 	// this stuff is a mess...
 	if (this.renderReady === true) {
 	    

@@ -78,7 +78,7 @@ class playerShip extends ship {
 	       function(s) {this.spriteContainer.addChild(s);}, this);
 	this.hide()
 
-	stage.addChildAt(this.spriteContainer, stage.children.length) //playerShip is above all
+	this.system.container.addChildAt(this.spriteContainer, this.system.container.children.length) //playerShip is above all
     }
 
 
@@ -173,7 +173,7 @@ class playerShip extends ship {
 	super.updateStats.call(this, stats);
     }
 
-    sendStats = function() {
+    sendStats() {
 	var newStats = {};
 	newStats[this.UUID] = this.getStats();
 	this.socket.emit('updateStats', newStats);

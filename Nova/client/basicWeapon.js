@@ -117,7 +117,7 @@ basicWeapon = class {
 
     fire(direction, position, velocity) {
 	// finds an available projectile and fires it
-	for (i=0; i < this.projectiles.length; i++) {
+	for (var i=0; i < this.projectiles.length; i++) {
 	    var proj = this.projectiles[i];
 	    if (proj.available) {
 		var direction = direction || this.source.pointing +
