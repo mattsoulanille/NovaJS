@@ -9,9 +9,9 @@ if (typeof(module) !== 'undefined') {
 basicWeapon = class {
     constructor(buildInfo, source) {
 	this.buildInfo = buildInfo;
-	this.firing = false;
 	this.destroyed = false;
-	this.doAutoFire = false;
+	this.fireWithoutTarget = true;
+	this._firing = false;
 	this.ready = false;
 	this.source = source
 	this.fireTimeout = undefined;
@@ -145,7 +145,7 @@ basicWeapon = class {
     
     getStats() {
 	var stats = {};
-	stats.doAutoFire = this.doAutoFire;
+	stats.firing = this.firing;
 	return stats;
     }
     
@@ -153,22 +153,56 @@ basicWeapon = class {
 	// _.each(statsList, function(stats, index) {
 	// 	this.projectiles[index].updateStats(stats);
 	// }.bind(this));
-	if (stats.doAutoFire === true) {
+
+	// can't do this since it makes an infinite loop...
+	// this.firing = stats.firing; 
+
+	if (stats.firing === true) {
 	    this.startFiring(false);
+	    this._firing = true;
 	}
 	else {
 	    this.stopFiring(false);
+	    this._firing = false;
 	}
     }
 
-    startFiring(notify = true) {
-	if (this.firing) {
-	    this.doAutoFire = true
-	    
+    set firing(val) {
+	// high level: Auto fires the weapon if it could fire.
+	if (val === true) {
+	    // start auto firing
+	    this._firing = true;
+	    this.startFiring();
 	}
 	else {
-	    this.doAutoFire = true
-	    this.autoFire()
+	    // stop auto firing
+	    this._firing = false;
+	    this.stopFiring();
+	}
+    }
+
+    get firing() {
+	return this._firing;
+    }
+
+    canFire() {
+	// Returns whether or not the weapon can fire based on its costs etc.
+	var targetFire = this.fireWithoutTarget || this.target;
+
+	return this.ready && targetFire;
+    }
+    applyFireCost() {
+	// Applys the cost of firing the weapon (ammo, energy, etc)
+    }
+    
+    startFiring(notify = true) {
+	// low level. Starts firing if not already. Should not be called by ship.
+	if (this.alreadyFiring) {
+	    this.doAutoFire = true;
+	}
+	else {
+	    this.doAutoFire = true;
+	    this.autoFire();
 	}
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.notifyServer();
@@ -177,18 +211,29 @@ basicWeapon = class {
     }
 
     stopFiring(notify = true) {
-	this.doAutoFire = false
+	// low level. Stops firing
+	this.doAutoFire = false;
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.notifyServer();
 	}
     }
     
     autoFire() {
+	
 	if (this.doAutoFire) {
-	    this.firing = true;
 	    
 	    // fire
-	    this.fire();
+	    this.alreadyFiring = true;
+	    if (this.canFire()) {
+		this.fire();
+		this.applyFireCost();
+	    }
+	    else {
+		// Check every 10 milliseconds if I can fire. Probably bad. Probably put it in the
+		// main loop...
+		this.fireTimeout = setTimeout(this.autoFire.bind(this), 10);
+		return;
+	    }
 	    
 	    // fire again after reload time
 	    if (this.doBurstFire) {
@@ -198,7 +243,8 @@ basicWeapon = class {
 		}
 		else {
 		    this.burstCount = 0;
-		    this.burstTimeout = setTimeout(this.autoFire.bind(this), this.burstReloadMilliseconds);
+		    this.burstTimeout = setTimeout(this.autoFire.bind(this),
+						   this.burstReloadMilliseconds);
 		}
 	    }
 	    else {
@@ -206,7 +252,7 @@ basicWeapon = class {
 	    }
 	}
 	else {
-	    this.firing = false;
+	    this.alreadyFiring = false;
 	}
     }
     
@@ -219,7 +265,7 @@ basicWeapon = class {
 	    return
 	}
 	
-	this.stopFiring();
+	this.firing = false;
 	_.each(this.projectiles, function(proj) {
 	    proj.destroy();
 	});

@@ -9,7 +9,7 @@ turretWeapon = class extends basicWeapon {
 
     constructor(buildInfo, source) {
 	super(buildInfo, source);
-
+	this.fireWithoutTarget = false;
 	// [front, sides, back]. false means not blind
 	this.blindspots = [false, false, false]; 
 	if (typeof this.buildInfo !== 'undefined') {
@@ -33,8 +33,9 @@ turretWeapon = class extends basicWeapon {
 	
     }
 
-    fire(defaultFireAngle) {
-	// defaultFireAngle is relative to this.source and is only applied if the turret has blind spots
+    fire(defaultFireAngle = 0) {
+	// defaultFireAngle is relative to this.source and is only applied if the
+	// target is in a blindspot (or nonexistant)
 	var fireAngle = this.source.pointing;
 	
 	
@@ -58,7 +59,7 @@ turretWeapon = class extends basicWeapon {
 	    
 	}
 	
-	if (typeof defaultFireAngle !== "undefined") {
+	if (this.fireWithoutTarget) {
 	    // used for quadrant turrets
 	    fireAngle = (defaultFireAngle + fireAngle);
 	    fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
@@ -68,25 +69,10 @@ turretWeapon = class extends basicWeapon {
 	    return super.fire.call(this, fireAngle);
 	}
     }
-
     autoFire() {
-	if (this.doAutoFire && (typeof this.target !== 'undefined')) {
-	    this.firing = true;
+	super.autoFire();
 	    
-	    // fire
-	    this.fire();
-	    
-	    // fire again after reload time
-	    var reloadTimeMilliseconds = this.meta.properties.reload * 1000/30 / this.count;
-	    setTimeout(_.bind(this.autoFire, this), reloadTimeMilliseconds)
-	}
-	else {
-	    this.firing = false
-	}
-	
     }
-
-
     checkBlindspots(directionToTarget) {
 	// returns true if target is in a blindspot
 	if (_.any(this.blindspots)) {

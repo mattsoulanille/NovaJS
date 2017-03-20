@@ -88,16 +88,16 @@ class playerShip extends ship {
 
 
     firePrimary() {
-	_.map(this.weapons.primary, function(weapon) {weapon.startFiring();});
+	_.map(this.weapons.primary, function(weapon) {weapon.firing = true;});
     }
     stopPrimary() {
-	_.map(this.weapons.primary, function(weapon) {weapon.stopFiring();});
+	_.map(this.weapons.primary, function(weapon) {weapon.firing = false;});
     }
     fireSecondary() {
-	_.map(this.weapons.secondary, function(weapon) {weapon.startFiring();});
+	_.map(this.weapons.secondary, function(weapon) {weapon.firing = true;});
     }
     stopSecondary() {
-	_.map(this.weapons.secondary, function(weapon) {weapon.stopFiring();});
+	_.map(this.weapons.secondary, function(weapon) {weapon.firing = false;});
     }
     resetNav() {
 	this.setPlanetTarget(undefined);

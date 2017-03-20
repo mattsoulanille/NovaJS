@@ -9,7 +9,7 @@ beamWeapon = class extends collidable(class {}){
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.buildInfo = buildInfo;
-	this.firing = false;
+	this._firing = false;
 	this.doAutoFire = false;
 	this.ready = false;
 	this.source = source;
@@ -74,11 +74,25 @@ Else, return false
 	this.collisionShape = new this.crash.Polygon(new this.crash.V, collisionPoints, false, this);
     };
 
-    startFiring(notify = true) {
+    set firing(val) {
 
+	if (val) {
+	    this._firing = true;
+	    this.startFiring();
+	}
+	else {
+	    this._firing = false;
+	    this.stopFiring();
+	}
+    }
+
+    get firing() {
+	return this._firing;
+    }
+    
+    startFiring(notify = true) {
 	this.graphics.visible = true;
 	this.rendering = true;
-	this.firing = true;
 	if ( !(this.crash.all().includes(this.collisionShape)) ) {
 	    this.collisionShape.insert();
 	}
@@ -88,7 +102,6 @@ Else, return false
     }
 
     stopFiring(notify = true) {
-	this.firing = false;
 	this.graphics.clear();
 	this.graphics.visible = false;
 	this.rendering = false;
@@ -108,9 +121,11 @@ Else, return false
 	if (typeof stats.firing !== 'undefined') {
 	    if (stats.firing) {
 		this.startFiring(false);
+		this._firing = true;
 	    }
 	    else {
 		this.stopFiring(false);
+		this._firing = false;
 	    }
 	}
     }
@@ -169,7 +184,7 @@ Else, return false
 
     
     destroy() {
-	this.stopFiring();
+	this.firing = false;
 	var index = this.system.built.render.indexOf(this);
 	if (index !== -1) {
 	    this.system.built.render.splice(index, 1);

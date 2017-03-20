@@ -9,6 +9,7 @@ frontQuadrantTurretWeapon = class extends turretWeapon {
 
     constructor(buildInfo, source) {
 	super(buildInfo, source);
+	this.fireWithoutTarget = true;
 	this.blindspots = [false, true, true];
     }
 
