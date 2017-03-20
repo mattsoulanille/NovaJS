@@ -23,6 +23,12 @@ $(window).resize(onResize);
 // add the renderer view element to the DOM
 document.body.appendChild(renderer.view);
 
+window.onbeforeunload = function() {
+    //currentSystem.destroy();
+    socket.disconnect();
+
+}
+
 var fullscreen = function() {
     if(document.documentElement.requestFullscreen) {
 	document.documentElement.requestFullscreen();

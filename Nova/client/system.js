@@ -160,3 +160,10 @@ system.prototype.resume = function() {
 
 
 }
+
+system.prototype.destroy = function() {
+    this.spaceObjects.forEach(function(obj) {
+	this.removeObject(obj);
+    }.bind(this));
+
+}
