@@ -50,7 +50,19 @@ Deployment is the same as installation, however, the port used for the server ca
 
 ## Contributing
 
-I welcome pull requests, however, I am often in school and unable to accept them immediately.
+I welcome pull requests, however, I am often in school and unable to accept them immediately. Some easy places to contribute include:
+* Sound: Sound has been completely untouched since the start of the project.
+* Menus: Some work on menus has been done, but it has been vary basic so far (on the scale of displaying a box when landing on a planet).
+* Particles: This includes missile trails and hit particles. [pixi-particles](https://github.com/pixijs/pixi-particles) seems like it would work well for this, but a texture generator that turns Nova's particle descriptions into textures will still need to be written (as if every particle were a cicn). 
+
+## Known Bugs
+* When leaving a planet, the planet remains selected even when no navigation target is set. I'm fairly sure I've just forgotten to delete the target corners.
+* When leaving a planet, radar stops working.
+* Ship velocity scaling is wrong in that ships are far too fast. I think the scale should be 3/10 of what it currently is, but Nova gives a speed boost to the player when they're not playing in strict mode, so I don't know what the actual scale is. Perhaps the coordinate system needs to be redone so that no scaling is needed for non-player ships?
+* Beam weapons do not clip after colliding with a target and instead pass through as if they did not collide (more of a feature that hasn't been implemented yet).
+* Beam weapons seem to do too much damage, but maybe that's me just not being used to stock Nova ships.
+* When a client connects, other clients do not immediately show the new client.
+* Sometimes the server does not realize when a client disconnects.
 
 
 
