@@ -37,6 +37,10 @@ At this point, you can run NovaJS with
 ```
 node index.js
 ```
+By default, Nova runs on port 8000. See [Deployment](Deployment) for instructions on changing this. Assuming you installed on the machine you would like to play from, navigate to
+```
+http://localhost:8000
+```
 
 ## Running the Tests
 Haha. Wouldn't it be nice if I had written tests. TODO.
