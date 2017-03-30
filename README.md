@@ -63,7 +63,7 @@ I welcome pull requests, however, I am often in school and unable to accept them
 * Beam weapons seem to do too much damage, but maybe that's me just not being used to stock Nova ships.
 * When a client connects, other clients do not immediately show the new client.
 * Sometimes the server does not realize when a client disconnects.
-
+* Various texture layring issues such as stars being above planets, etc.
 
 
 
