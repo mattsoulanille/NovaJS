@@ -78,7 +78,8 @@ I welcome pull requests, however, I am often in school and unable to accept them
 * Will there be some form of chat, and if so, where will it be? Perhaps you need to hail other ships to talk to them? Perhaps it's just in the bottom left info area?
 * How will hailing other ships be managed when the game can't just pause whenever?
 * How will 2x speed work on a client basis? (It probably just won't and will be a server-configured option).
-* Should we make the AI behave like humans such that it's not obvious who the other players are? This probably won't work since AI never actually lands on planets.
+* Should we make the AI behave like humans such that it's not obvious who the other players are? This probably won't work since AI never actually lands on planets. Also, humans do insane things.
+* How should pilot files be saved? How should deaths be handled? (These have more obvious answers, I think)
 
 
 
