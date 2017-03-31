@@ -54,6 +54,7 @@ I welcome pull requests, however, I am often in school and unable to accept them
 * Sound: Sound has been completely untouched since the start of the project.
 * Menus: Some work on menus has been done, but it has been vary basic so far (on the scale of displaying a box when landing on a planet).
 * Particles: This includes missile trails and hit particles. [pixi-particles](https://github.com/pixijs/pixi-particles) seems like it would work well for this, but a texture generator that turns Nova's particle descriptions into textures will still need to be written (as if every particle were a cicn). 
+* NPCs and AI: The server can supposedly simulate the universe, however, in practice, it has only ever been used to pass messages between clients. Writing in NPCs would require verifying that the server actually simulates the system correctly (which would be a lot easier if I had actually written any tests. I should probably do that).
 
 ## Known Bugs
 * When leaving a planet, the planet remains selected even when no navigation target is set. I'm fairly sure I've just forgotten to delete the target corners.
@@ -66,6 +67,18 @@ I welcome pull requests, however, I am often in school and unable to accept them
 * Various texture layring issues such as stars being above planets, etc.
 
 
+## Unsolved Multiplayer Questions
+* How will mission strings that significantly change the universe work?
+  * Put people in their respective system for every changed system? But then it's not multiplayer.
+  * Put everyone in the same system, but make the planets different based on the state of the universe? But there are fleets...
+  * Choose a system randomly and put everyone in it?
+    * How do you detect which systems are actually just different instances of the same system?
+  * This is probably the biggest proplem with multiplayer support, and I welcome any suggestions.
+* How will dates work? Realtime is definitely a bad idea for timing missions since it takes time to read the dialogue. Maybe everyone just has a different date that changes normally (when you jump / land)?
+* Will there be some form of chat, and if so, where will it be? Perhaps you need to hail other ships to talk to them? Perhaps it's just in the bottom left info area?
+* How will hailing other ships be managed when the game can't just pause whenever?
+* How will 2x speed work on a client basis? (It probably just won't and will be a server-configured option).
+* Should we make the AI behave like humans such that it's not obvious who the other players are? This probably won't work since AI never actually lands on planets.
 
 
 
