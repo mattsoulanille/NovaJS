@@ -67,6 +67,7 @@ I welcome pull requests, however, I am often in school and unable to accept them
 * When a client connects, other clients do not immediately show the new client.
 * Sometimes the server does not realize when a client disconnects.
 * Various texture layring issues such as stars being above planets, etc.
+* Weapon firing does not yet account for the fact that nova ships are rendered slightly off vertical (consequently, ships don't always look like they're firing straight).
 
 
 ## Unsolved Multiplayer Questions
