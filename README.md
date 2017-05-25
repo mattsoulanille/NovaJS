@@ -7,6 +7,7 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 
 ### Project Goals
 * Function as a Nova Engine that can, given Nova files, run EV Nova.
+* Support Nova Plug-ins.
 * Improve on some of the issues with EV Nova's engine (such as limited turning angles) as long as doing so does not greatly affect gameplay.
 * Support multiplayer to an extent.
 
