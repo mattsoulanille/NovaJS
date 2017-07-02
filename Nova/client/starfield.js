@@ -31,7 +31,7 @@ starfield.prototype.build = function() {
 		this.built = true;
 		// moved to system model.
 		space.addChild(this.container);
-		this.system.built.render.push(this);
+		this.system.built.render.add(this);
 		this.rendering = true;
 	    }.bind(this))
     }

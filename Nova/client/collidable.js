@@ -33,9 +33,6 @@ var collidable = function(superclass) {
 	    if (typeof(this.buildInfo) !== 'undefined') {
 		this.buildInfo.type = "collidable";
 	    }
-	    if (typeof this.system !== 'undefined') {
-		this.system.collidables.push(this);
-	    }
 	}
 
 	collideWith(other) {};
@@ -86,7 +83,6 @@ var collidable = function(superclass) {
 
 		    }.bind(this));
 		    this.collisionShape = this.collisionShapes[0] // Default
-		    this.system.built.collidables.push(this);
 
 		}.bind(this));
 	}
@@ -150,24 +146,6 @@ var collidable = function(superclass) {
 	    }
 	}
 
-	destroy() {
-
-	    var index = this.system.collidables.indexOf(this);
-	    if (index !== -1) {
-		this.system.collidables.splice(index, 1);
-	    }
-
-
-	    if (this.built) {
-		var index = this.system.built.collidables.indexOf(this);
-		if (index !== -1) {
-		    this.system.built.collidables.splice(index, 1);
-		}
-	    }
-
-	    super.destroy.call(this);
-
-	}
 
     }
 

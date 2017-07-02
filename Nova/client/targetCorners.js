@@ -41,9 +41,9 @@ targetCorners = class extends spaceObject {
 
 
     addSpritesToContainer() {
-	_.each(this.sprites, function(spr) { this.spriteContainer.addChild(spr) }, this);
+	_.each(this.sprites, function(spr) { this.container.addChild(spr) }, this);
 	this.renderReady = true;
-	space.addChild(this.spriteContainer);
+	space.addChild(this.container);
     }
 
     callSprites(toCall) {

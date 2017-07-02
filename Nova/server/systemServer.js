@@ -9,7 +9,7 @@ function systemServer() {
 systemServer.prototype = new system;
 systemServer.prototype.resume = function() {
     var time = new Date().getTime();
-    _.each(this.spaceObjects, function(s) {
+    this.spaceObjects.forEach(function(s) {
 	s.lastTime = time
     }.bind(this));
 }

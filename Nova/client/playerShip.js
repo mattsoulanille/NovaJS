@@ -33,7 +33,7 @@ class playerShip extends ship {
     }
 
     addToShips() {
-	this.system.built.ships.unshift(this); 
+	this.system.built.ships.add(this); 
     }
 
 
@@ -71,7 +71,7 @@ class playerShip extends ship {
 
 
     addToSpaceObjects() {
-	this.system.built.spaceObjects.unshift(this);
+	this.system.built.spaceObjects.add(this);
 	if (this.buildInfo.multiplayer) {
 	    this.system.built.multiplayer[this.buildInfo.UUID] = this;
 	}
@@ -79,10 +79,10 @@ class playerShip extends ship {
 
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	       function(s) {this.spriteContainer.addChild(s);}, this);
+	       function(s) {this.container.addChild(s);}, this);
 	this.hide()
 
-	this.system.container.addChildAt(this.spriteContainer, this.system.container.children.length) //playerShip is above all
+	this.system.container.addChildAt(this.container, this.system.container.children.length) //playerShip is above all
     }
 
 
@@ -185,8 +185,8 @@ class playerShip extends ship {
 
     render() {
 	// -194 for the sidebar
-	this.spriteContainer.position.x = (screenW-194)/2;
-	this.spriteContainer.position.y = screenH/2;
+	this.container.position.x = (screenW-194)/2;
+	this.container.position.y = screenH/2;
 	
 	
 	super.render.call(this);
@@ -224,7 +224,7 @@ class playerShip extends ship {
 	var nearest = this.findNearest(targets);
 	
 	if ((typeof nearest !== 'undefined') && (this.target !== nearest)) {
-	    this.targetIndex = this.system.ships.indexOf(nearest);
+	    this.targetIndex = Array.from(this.system.ships).indexOf(nearest);
 	    this.setTarget(nearest);
 	}
     }
@@ -258,18 +258,19 @@ class playerShip extends ship {
 
     cycleTarget() {
 	// targetIndex goes from -1 (for no target) to ships.length - 1
+	var targets = Array.from(this.system.built.ships);
 	var incrementTargetIndex = function() {
-	    this.targetIndex = (this.targetIndex + 2) % (this.system.built.ships.length + 1) - 1;
+	    this.targetIndex = (this.targetIndex + 2) % (targets.length + 1) - 1;
 	    // super cheapo temporary way to not target the player ship (ship 0)
 	    if (this.targetIndex === 0) {
-		this.targetIndex = (this.targetIndex + 2) % (this.system.built.ships.length + 1) - 1;
+		this.targetIndex = (this.targetIndex + 2) % (targets.length + 1) - 1;
 	    }
 	}.bind(this);
 	
 	incrementTargetIndex();
 	
 	// If targetIndex === -1, then target is undefined, which is intentional
-	this.setTarget(this.system.built.ships[this.targetIndex]);
+	this.setTarget(targets[this.targetIndex]);
 	//    console.log(this.targetIndex)
     }
 

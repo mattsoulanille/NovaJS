@@ -10,18 +10,18 @@ if (typeof(module) !== 'undefined') {
 
 function system() {
     this.container = new PIXI.Container();
-    this.spaceObjects = [];
-    this.ships = [];
-    this.planets = [];
-    this.collidables = [];
+    this.spaceObjects = new Set();
+    this.ships = new Set();
+    this.planets = new Set();
+
     // has uuids as keys
     this.multiplayer = {};
     this.built = {
-	spaceObjects:[],
-	ships:[],
-	planets:[],
-	collidables:[],
-	render:[],
+	spaceObjects: new Set(),
+	ships: new Set(),
+	planets: new Set(),
+
+	render: new Set(),
 	multiplayer:{}
     };
 
@@ -35,20 +35,20 @@ function system() {
 
 system.prototype.render = function() {
     // renderes everything that is built and needs to render
-    _.each(this.built.render, function(thing) {
+    this.built.render.forEach(function(thing) {
 	thing.rendered = false;
     });
-    _.each(this.built.render, function(thing) {
+    this.built.render.forEach(function(thing) {
 	if ( (!thing.rendered) && (thing.rendering) ) {
 	    thing.render();	    
 	}
     });
-};
+}
 
 
 system.prototype.build = function() {
     // only builds things that are spaceObjects. Not outfits / weapons.
-    var promises = _.map(this.spaceObjects, function(obj) {
+    var promises = Array.from(this.spaceObjects).map(function(obj) {
 	if (! obj.built) {
 	    return obj.build()
 	}
@@ -88,13 +88,8 @@ system.prototype.removeObjects = function(uuids) {
 
 system.prototype.removeObject = function(uuid) {
     if (uuid in this.multiplayer) {
-
 	this.multiplayer[uuid].destroy();
-	delete this.multiplayer[uuid];
-
-	if (uuid in this.built.multiplayer) {
-	    delete this.built.multiplayer[uuid]
-	}
+//	console.log("destroyed");
     }
 }
 
@@ -154,7 +149,7 @@ system.prototype.getStats = function() {
 
 system.prototype.resume = function() {
     var time = new Date().getTime() + timeDifference;
-    _.each(this.spaceObjects, function(s) {
+    this.spaceObjects.forEach(function(s) {
 	s.lastTime = time
     }.bind(this));
 

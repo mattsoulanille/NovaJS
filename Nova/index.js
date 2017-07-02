@@ -371,10 +371,13 @@ io.on('connection', function(client){
     });
     
     client.on('disconnect', function() {
+
 	receives ++;
-	client.broadcast.emit('removeObjects', owned_uuids)
+	client.broadcast.emit('removeObjects', owned_uuids);
 	transmits += playercount - 1;
-	currentSystem.removeObjects(owned_uuids);
+
+	currentSystem.removeObject(userid);
+	console.log("disconnected");
 
 	delete players[userid];
 	console.log('a user disconnected. ' + _.keys(players).length + " playing.");

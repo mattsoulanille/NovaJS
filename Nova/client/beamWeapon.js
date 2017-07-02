@@ -60,7 +60,7 @@ Else, return false
     build() {
 	this.graphics = new PIXI.Graphics();
 	this.system.container.addChild(this.graphics);
-	this.source.system.built.render.push(this);
+	this.source.system.built.render.add(this);
 	this.source.weapons.all.push(this);
 	this.ready = true;
 	
@@ -185,10 +185,7 @@ Else, return false
     
     destroy() {
 	this.firing = false;
-	var index = this.system.built.render.indexOf(this);
-	if (index !== -1) {
-	    this.system.built.render.splice(index, 1);
-	}
+	this.system.built.render.remove(this);
     }
 
     setTarget(target) {

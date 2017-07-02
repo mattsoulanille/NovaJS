@@ -181,18 +181,16 @@ socket.on('resume', resume);
 
 function startGame() {
 
-    //replace with promises
-    $.when( currentSystem.spaceObjects.map(function(s){
-	// improve me
+    currentSystem.spaceObjects.forEach(function(s) {
+        // improve me                                                           
 	if (! (s instanceof projectile)) {
-	    s.show()
-	}
-    }) ).done(function() {
-	stars.placeAll()
-	requestAnimationFrame(animate)
-	console.log("Rendering started")
+            s.show()
+        }
     });
 
+    stars.placeAll();
+    requestAnimationFrame(animate);
+    console.log("Rendering started");
 
 }
 

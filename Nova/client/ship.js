@@ -26,7 +26,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    this.buildInfo.type = "ship";
 	}
 	if (typeof system !== 'undefined') {
-	    system.ships.push(this);
+	    system.ships.add(this);
 	}
 
     }
@@ -53,7 +53,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 
     addToShips() {
-	this.system.built.ships.push(this);    
+	this.system.built.ships.add(this);    
     }
 
     buildTargetImage() {
@@ -104,9 +104,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	//sprites that have no specified order
 	var without =  _.difference(spriteList, orderedSprites) 
 	//console.log(without)
-	_.each(without, function(x) {this.spriteContainer.addChild(x)}, this);
-	_.each(orderedSprites, function(x) {this.spriteContainer.addChild(x)}, this);
-	this.system.container.addChild(this.spriteContainer);
+	_.each(without, function(x) {this.container.addChild(x)}, this);
+	_.each(orderedSprites, function(x) {this.container.addChild(x)}, this);
+	this.system.container.addChild(this.container);
     }
 
     updateStats(stats) {
@@ -221,20 +221,26 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	super.hide.call(this);
     }
 
+    _addToSystem() {
+        if (this.built) {
+            this.system.built.ships.add(this);
+        }
+        this.system.ships.add(this);
 
+        super._addToSystem.call(this);
+    }
+
+    _removeFromSystem() {
+        if (this.built) {
+            this.system.built.ships.delete(this);
+        }
+        this.system.ships.delete(this);
+
+        super._removeFromSystem.call(this);
+    }
+
+    
     destroy() {
-	
-	var index = this.system.ships.indexOf(this);
-	if (index !== -1) {
-	    this.system.ships.splice(index, 1);
-	}
-	
-	if (this.built) {
-	    index = this.system.built.ships.indexOf(this);
-	    if (index !== -1) {
-		this.system.built.ships.splice(index, 1);
-	    }
-	}
 	
 	_.each(this.outfits, function(o) {o.destroy()});
 	super.destroy.call(this);

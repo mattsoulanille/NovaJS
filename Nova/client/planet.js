@@ -17,7 +17,7 @@ planet = class extends spaceObject {
 	}
 	
 	if (typeof system !== 'undefined') {
-	    system.planets.push(this);
+	    system.planets.add(this);
 	}
 	this.makeContainer();
     }
@@ -32,7 +32,7 @@ planet = class extends spaceObject {
 	return super.build.call(this)
 	//	.then(this.build)
 	    .then(function() {
-		this.system.built.planets.push(this);
+		this.system.built.planets.add(this);
 		this.buildInfo.type = 'planet';
 		this.show();
 		this.assignControls();
@@ -71,9 +71,9 @@ planet = class extends spaceObject {
     
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	       function(s) {this.spriteContainer.addChild(s);}, this);
+	       function(s) {this.container.addChild(s);}, this);
 	this.hide();
-	this.system.container.addChildAt(this.spriteContainer, 0);
+	this.system.container.addChildAt(this.container, 0);
     }
     
 }

@@ -12,7 +12,7 @@ star = class extends movable(spaceObject) {
 	this.meta.imageAssetsFiles = {"star": this.name + ".json"};
 	this.properties = {};
 	this.available = false;
-	starContainer.addChild(this.spriteContainer);
+	starContainer.addChild(this.container);
 	this.built = false;
     }
     
@@ -23,7 +23,7 @@ star = class extends movable(spaceObject) {
 	return this.makeSprites()
 	    .then(_.bind(this.addSpritesToContainer, this))
 	    .then(function() {
-		this.system.spaceObjects.push(this)
+		//this.system.spaceObjects.push(this)
 		this.available = true;
 		this.renderReady = true;
 		this.built = true;
@@ -31,12 +31,12 @@ star = class extends movable(spaceObject) {
     }
 
     addSpritesToContainer() {
-	_.each(this.sprites, function(s) {this.spriteContainer.addChild(s.sprite);}, this);
+	_.each(this.sprites, function(s) {this.container.addChild(s.sprite);}, this);
     }
 
-    addToSpaceObjects() {
-	this.system.built.spaceObjects.push(this);
-    }
+    // addToSpaceObjects() {
+    // 	this.system.built.spaceObjects.push(this);
+    // }
     
     randomize() {
 	this.chooseRandomTexture();

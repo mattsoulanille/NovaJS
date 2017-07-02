@@ -29,8 +29,8 @@ spaceObject = class {
 	this.weapons.all = [];
 	
 	this.sprites = {};
-	this.spriteContainer = new PIXI.Container();
-	this.spriteContainer.visible = false;
+	this.container = new PIXI.Container();
+	this.container.visible = false;
 	this.size = [];
 	this.visible;
 	this.built = false;
@@ -49,7 +49,7 @@ spaceObject = class {
 	    }
 	}
 	if (typeof(system) !== 'undefined') {
-	    this.system.spaceObjects.push(this);
+	    this.system.spaceObjects.add(this);
 	}
     }
 
@@ -64,8 +64,8 @@ spaceObject = class {
     };
 
     addToSpaceObjects() {
-	this.system.built.spaceObjects.push(this);
-	this.system.built.render.push(this);
+	this.system.built.spaceObjects.add(this);
+	this.system.built.render.add(this);
 	if (this.buildInfo.multiplayer) {
 	    this.system.built.multiplayer[this.buildInfo.UUID] = this;
 	}
@@ -145,10 +145,10 @@ spaceObject = class {
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	       function(s) {
-		   this.spriteContainer.addChild(s);
+		   this.container.addChild(s);
 	       }, this);
 	this.hide();
-	this.system.container.addChild(this.spriteContainer);
+	this.system.container.addChild(this.container);
     }
 
     callSprites(toCall) {
@@ -156,7 +156,7 @@ spaceObject = class {
     }
 
     hide() {
-	this.spriteContainer.visible = false;
+	this.container.visible = false;
 	this.visible = false;
 	this.rendering = false;
     }
@@ -164,7 +164,7 @@ spaceObject = class {
 
     show() {
 	if (this.built) {
-	    this.spriteContainer.visible = true;
+	    this.container.visible = true;
 	    this.visible = true;
 	    this.rendering = true;
 	    
@@ -209,9 +209,9 @@ spaceObject = class {
 	    
 	    if (!this.isPlayerShip) {
 		// -194 for the sidebar
-		this.spriteContainer.position.x = 
+		this.container.position.x = 
 		    (this.position[0] - stagePosition[0]) + (screenW-194)/2;
-		this.spriteContainer.position.y = -1 *
+		this.container.position.y = -1 *
 		    (this.position[1] - stagePosition[1]) + screenH/2;
 		
 	    }
@@ -223,34 +223,53 @@ spaceObject = class {
 	}
     }
 
+
+    _removeFromSystem() {
+        this.system.container.removeChild(this.container);
+	
+        if (this.UUID && this.system.multiplayer[this.UUID]) {
+            delete this.system.multiplayer[this.UUID];
+        }
+	
+        if (this.built) {
+            this.system.built.spaceObjects.delete(this);
+            this.system.built.render.delete(this);
+        }
+        this.system.spaceObjects.delete(this);
+    }
+
+    _addToSystem() {
+        this.system.container.addChild(this.container);
+        if (this.UUID) {
+            this.system.multiplayer[this.UUID] = this;
+        }
+
+        if (this.built) {
+            this.system.built.spaceObjects.add(this);
+            if (this.rendering) {
+                this.system.built.render.add(this);
+            }
+        }
+
+        this.system.spaceObjects.add(this);
+    }
+    
 // destroys the object. This is NOT the function to call
 // if you want it to explode.
     destroy() {
 	if (this.destroyed) {
-	    return
-	}
-	
-	var index = this.system.spaceObjects.indexOf(this);
-	if (index !== -1) {
-	    this.system.spaceObjects.splice(index, 1);
-	}
-	
-	if (this.built) {
-	    var index = this.system.built.spaceObjects.indexOf(this);
-	    if (index !== -1) {
-		this.system.built.spaceObjects.splice(index, 1);
-	    }
-	    
-	    index = this.system.built.render.indexOf(this);
-	    if (index !== -1) {
-		this.system.built.render.splice(index, 1);
-	    }
-	}
-	this.hide();
-	this.spriteContainer.destroy();
-	_.each(this.sprites, function(s) {s.destroy()});
-	this.destroyed = true;
-	//    delete this;
+            return;
+        }
+
+        this.hide();
+	this._removeFromSystem();
+        this.system = undefined;
+
+        this.container.destroy();
+        _.each(this.sprites, function(s) {s.destroy()});
+//	console.log("debug");
+        this.destroyed = true;
+        //    delete this; 
     }
 
 }
