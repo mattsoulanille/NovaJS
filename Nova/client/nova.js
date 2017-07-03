@@ -73,20 +73,18 @@ var stagePosition;
 socket.on('onconnected', function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
-    myShip = new playerShip(data.playerShip, currentSystem);
-    if (stars) {
-	stars.attach(myShip);
-    }
-    else {
-	stars = new starfield(myShip, 40);
-    }
-    currentSystem.setObjects(data.system);
+//    myShip = new playerShip(data.playerShip);
+
+    stars = new starfield(myShip, 40);
+
+
     if (data.paused) {
 	pause();
     }
-    stars.build()
+    currentSystem.setObjects(data.system)
+	.then(stars.build.bind(stars))
 	.then(gameControls.build.bind(gameControls))
-	.then(myShip.build.bind(myShip))
+//	.then(myShip.build.bind(myShip))
 	.then(currentSystem.build.bind(currentSystem))
 	.then(function() {
 	    space.addChildAt(currentSystem.container, 0);
@@ -124,10 +122,10 @@ socket.on('disconnect', function() {
 
 
 
-socket.on('addObjects', function(buildInfoList) {
+socket.on('buildObjects', function(buildInfoList) {
     console.log("adding objects ", buildInfoList);
-    currentSystem.addObjects(buildInfoList);
-    currentSystem.build()
+    currentSystem.buildObjects(buildInfoList);
+    //currentSystem.build()
 });
 
 socket.on('removeObjects', function(uuids) {
@@ -149,7 +147,6 @@ socket.on('test', function(data) {
 
 
 
-var last_keys = KeyboardJS.activeKeys();
 document.onkeydown = gameControls.keydown.bind(gameControls);
 document.onkeyup = gameControls.keyup.bind(gameControls);
 
@@ -298,3 +295,5 @@ Array.prototype.equals = function (array) {
 }
 // Hide method from for-in loops
 Object.defineProperty(Array.prototype, "equals", {enumerable: false});
+
+

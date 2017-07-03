@@ -220,7 +220,7 @@ io.on('connection', function(client){
 		     "Dart":dart};
     var shipList = _.values(shipTypes);
     var playerShipType = shipList[_.random(0,shipList.length-1)];
-//    var playerShipType = Firebird;
+    //var playerShipType = dart;
     playerShipType.UUID = userid;
 
     var sendSystem = function() {
@@ -228,6 +228,7 @@ io.on('connection', function(client){
 	//console.log(currentSystem.getObjects())
 	var testSystem = {};
 	//testSystem[userid] = myShip.buildInfo; // for testing missing objects
+
 	client.emit('onconnected', {
 	    "playerShip":myShip.buildInfo,
 	    "id": userid,
@@ -240,13 +241,13 @@ io.on('connection', function(client){
     var myShip;
     var buildShip = function(playerShipType) {
 	myShip = new ship(playerShipType, currentSystem);
-	return myShip.build().
-	    then(function() {
-	    _.each(myShip.outfitList, function(outf) {
-		_.each(outf.UUIDS, function(uuid) {
-		    owned_uuids.push(uuid);
+	return myShip.build()
+	    .then(function() {
+		_.each(myShip.outfitList, function(outf) {
+		    _.each(outf.UUIDS, function(uuid) {
+			owned_uuids.push(uuid);
+		    });
 		});
-	    });
 	    });
     //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
     }
@@ -348,7 +349,7 @@ io.on('connection', function(client){
 	    }
 	});
 
-	client.emit('addObjects', toSend);
+	client.emit('buildObjects', toSend);
     });
     client.on('land', function() {
 	receives ++;

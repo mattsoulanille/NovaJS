@@ -32,9 +32,6 @@ class playerShip extends ship {
 	    }.bind(this));
     }
 
-    addToShips() {
-	this.system.built.ships.add(this); 
-    }
 
 
     sortWeapons() {
@@ -69,13 +66,6 @@ class playerShip extends ship {
 	this.sendCollisionToServer();
     }
 
-
-    addToSpaceObjects() {
-	this.system.built.spaceObjects.add(this);
-	if (this.buildInfo.multiplayer) {
-	    this.system.built.multiplayer[this.buildInfo.UUID] = this;
-	}
-    }
 
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
@@ -273,8 +263,6 @@ class playerShip extends ship {
 	this.setTarget(targets[this.targetIndex]);
 	//    console.log(this.targetIndex)
     }
-
-    addToSystem() {}
 
     onDeath() {
 	// temporary respawn

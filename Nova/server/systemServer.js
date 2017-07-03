@@ -18,3 +18,6 @@ systemServer.prototype.getMissingObjects = function(missing) {
     console.log("server is missing objects: ", missing);
 };
     
+systemServer.prototype.buildPlayerShip = function() {
+    return false;
+}

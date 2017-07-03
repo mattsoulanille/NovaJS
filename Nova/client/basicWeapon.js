@@ -3,11 +3,13 @@ if (typeof(module) !== 'undefined') {
     var Promise = require("bluebird");
     var projectile = require("../server/projectileServer.js");
     var guided = require("../server/guidedServer.js");
+    var inSystem = require("./inSystem.js")
 }
 
 
-basicWeapon = class {
+basicWeapon = class extends inSystem {
     constructor(buildInfo, source) {
+	super(...arguments);
 	this.buildInfo = buildInfo;
 	this.destroyed = false;
 	this.fireWithoutTarget = true;
@@ -20,13 +22,9 @@ basicWeapon = class {
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
 	    this.meta = buildInfo.meta;
-	    this.system = this.source.system;
 	    this.count = buildInfo.count || 1
 	    this.UUID = buildInfo.UUID;
 	    this.reloadMilliseconds = (this.meta.properties.reload * 1000/30 / this.count) || 1000/60;
-	    if (typeof this.UUID !== 'undefined') {
-		this.system.multiplayer[this.UUID] = this;
-	    }
 	    if ( (typeof(this.meta.properties.burstCount) !== 'undefined') &&
 		 (typeof(this.meta.properties.burstReload) !== 'undefined') ) {
 		this.doBurstFire = true;
@@ -35,6 +33,14 @@ basicWeapon = class {
 		this.reloadMilliseconds = (this.meta.properties.reload * 1000/30) || 1000/60;
 	    }
 	}
+    }
+
+    _addToSystem(sys) {
+        this.system.multiplayer[this.UUID] = this;
+    }
+
+    _removeFromSystem() {
+        delete this.system.multiplayer[this.UUID];
     }
 
     build() {

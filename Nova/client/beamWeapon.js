@@ -2,12 +2,14 @@ if (typeof(module) !== 'undefined') {
 //    var _ = require("underscore");
     //    var Promise = require("bluebird");
     var collidable = require("../server/collidableServer");
+    var inSystem = require("./inSystem.js");
 }
 
-beamWeapon = class extends collidable(class {}){
+beamWeapon = class extends collidable(inSystem){
 
     constructor(buildInfo, source) {
 	super(...arguments);
+	this.container = new PIXI.Container();
 	this.buildInfo = buildInfo;
 	this._firing = false;
 	this.doAutoFire = false;
@@ -22,12 +24,8 @@ beamWeapon = class extends collidable(class {}){
 	    this.name = buildInfo.name;
 	    this.meta = buildInfo.meta;
 	    
-	    this.system = this.source.system;
 	    this.count = buildInfo.count || 1
 	    this.UUID = buildInfo.UUID;
-	    if (typeof this.UUID !== 'undefined') {
-		this.system.multiplayer[this.UUID] = this;
-	    }
 	}
     }
 
@@ -59,7 +57,8 @@ Else, return false
 
     build() {
 	this.graphics = new PIXI.Graphics();
-	this.system.container.addChild(this.graphics);
+
+	this.container.addChild(this.graphics);
 	this.source.system.built.render.add(this);
 	this.source.weapons.all.push(this);
 	this.ready = true;
@@ -111,6 +110,10 @@ Else, return false
 	}
     }
 
+    show() {
+	// necessary for inheritance
+    }
+    
     getStats() {
 	var stats = {};
 	stats.firing = this.firing;
@@ -138,6 +141,8 @@ Else, return false
 	this.socket.emit('updateStats', with_uuid);
     }
 
+    
+    
 
     render(fireAngle) {
 	if (this.firing) {
@@ -180,8 +185,33 @@ Else, return false
 	}
     }
 
-    receiveCollision(collision) {}
+    receiveCollision(collision) { // maybe do beam clipping here?
+    }
 
+    _removeFromSystem() {
+	this.system.container.removeChild(this.container);
+	if (this.UUID && this.system.multiplayer[this.UUID]) {
+	    delete this.system.multiplayer[this.UUID];
+	}
+
+	this.system.built.render.delete(this);
+	
+    }
+    _addToSystem() {
+	this.system.container.addChild(this.container);
+	if (this.UUID) {
+	    this.system.multiplayer[this.UUID] = this;
+	}
+
+	if (this.built) {
+	    if (this.rendering) {
+		this.system.built.render.add(this);
+	    }
+	}
+
+	this.system.spaceObjects.add(this);
+    }
+    
     
     destroy() {
 	this.firing = false;

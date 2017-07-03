@@ -25,9 +25,6 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    this.outfitList = buildInfo.outfits || [];
 	    this.buildInfo.type = "ship";
 	}
-	if (typeof system !== 'undefined') {
-	    system.ships.add(this);
-	}
 
     }
 
@@ -46,15 +43,14 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 		}
 		
 		this.fuel = this.properties.maxFuel;
-		this.addToShips();
+		if (this.system) {
+		    this.system.built.ships.add(this);
+		}
+		
 	    }, this))
 	
     }
 
-
-    addToShips() {
-	this.system.built.ships.add(this);    
-    }
 
     buildTargetImage() {
 	this.targetImage = new targetImage(this.meta.targetImage);
@@ -68,6 +64,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    
 	    var o = new outfit(buildInfo);
 	    this.outfits.push(o);
+	    this.addChild(o);
 	}.bind(this));
 	
 	var outfitPromises = _.map(this.outfits, function(anOutfit) {

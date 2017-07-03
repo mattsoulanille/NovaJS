@@ -14,6 +14,11 @@ function system() {
     this.ships = new Set();
     this.planets = new Set();
 
+    // this.ships.add = function(t) {
+    // 	console.log("added");
+
+    // }.bind(this);
+    
     // has uuids as keys
     this.multiplayer = {};
     this.built = {
@@ -52,33 +57,72 @@ system.prototype.build = function() {
 	if (! obj.built) {
 	    return obj.build()
 	}
-	else {
-	    return;
-	}
     });
     return Promise.all(promises);
 }
 
-system.prototype.addObjects = function(buildInfo) {
-    _.each(buildInfo, function(b) {
+system.prototype.addObjects = function(objects) {
+    _.each(objects, function(b) {
 	this.addObject(b);
     }.bind(this));
 }
 
-system.prototype.addObject = function(buildInfo) {
-    var type = buildInfo.type;
-    switch (type) {
-    case "spaceObject":
-	new spaceObject(buildInfo, this);
-	break;
-    case "planet":
-	new planet(buildInfo, this);
-	break;
-    case "ship":
-	new ship(buildInfo, this);
-	break;
-    }
+system.prototype.addObject = function(obj) {
+    obj.system = this;
 }
+
+system.prototype.buildObjects = function(buildInfo) {
+    
+    var promises = _.map(buildInfo, function(b) {
+	return this.buildObject(b);
+    }.bind(this));
+
+    return Promise.all(promises);
+}
+
+system.prototype.buildPlayerShip = function(buildInfo) {
+    // builds and sets player ship if UUID === buildInfo.UUID
+    if (buildInfo.UUID === UUID) {
+	//seems very hacky
+	myShip = new playerShip(buildInfo, this);
+
+	if (typeof(stars) !== "undefined") {
+	    stars.attach(myShip);
+	}
+	
+	return myShip;
+    }
+    return false;
+
+}
+
+system.prototype.buildObject = function(buildInfo) {
+
+    // checks if is player ship
+    var newObj = this.buildPlayerShip(buildInfo);
+    if (newObj === false) {
+	var type = buildInfo.type;
+	switch (type) {
+	case "spaceObject":
+	    newObj = new spaceObject(buildInfo, this);
+	    break;
+	case "planet":
+	    newObj = new planet(buildInfo, this);
+	    break;
+	case "ship":
+	    newObj = new ship(buildInfo, this);
+	    break;
+	}
+    }
+    
+    if (newObj) {
+	// in case it wasn't a ship, planet, or spaceObject...
+	return newObj.build();
+    }
+    
+}
+
+
 
 system.prototype.removeObjects = function(uuids) {
     _.each(uuids, function(uuid) {
@@ -88,30 +132,42 @@ system.prototype.removeObjects = function(uuids) {
 
 system.prototype.removeObject = function(uuid) {
     if (uuid in this.multiplayer) {
-	this.multiplayer[uuid].destroy();
-//	console.log("destroyed");
+
+	this.multiplayer[uuid].system = undefined;
+
     }
 }
 
 system.prototype.setObjects = function(buildInfo) {
     _.each(this.multiplayer, function(obj, uuid) {
 	if ( (typeof buildInfo !== 'undefined') && (! (uuid in buildInfo))) {
+            if (obj == myShip) {
+                console.log("Server claims player's ship does not exist");
+            }
 	    this.removeObject(uuid);
 	}
 
     }.bind(this));
 
+    var promises = [];
+    
     _.each(buildInfo, function(b, uuid) {
-	if (! (uuid in this.multiplayer)) {
-	    this.addObject(b);
+	if (uuid in this.multiplayer) {
+	    this.multiplayer[uuid].destroy();
 	}
+	promises.push(this.buildObject(b));
+
+	
     }.bind(this));
+
+    return Promise.all(promises);
 }
 
 system.prototype.getObjects = function() {
     var buildInfo = {};
     _.each(this.multiplayer, function(obj, uuid) {
-	buildInfo[uuid] = obj.buildInfo;
+	// protect objects from having their buildinfo changed
+	buildInfo[uuid] = Object.assign({}, obj.buildInfo);
     });
     return buildInfo;
 }

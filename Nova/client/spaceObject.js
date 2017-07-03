@@ -3,15 +3,15 @@ if (typeof(module) !== 'undefined') {
     var PIXI = require("../server/pixistub.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
-
+    var inSystem = require("./inSystem.js")
 }
 
 
-spaceObject = class {
+spaceObject = class extends inSystem {
 
     constructor(buildInfo, system) {
+	super(...arguments);
 	this.buildInfo = buildInfo;
-	this.system = system;
 	this.renderReady = false;
 	this.destroyed = false;
     
@@ -29,11 +29,15 @@ spaceObject = class {
 	this.weapons.all = [];
 	
 	this.sprites = {};
-	this.container = new PIXI.Container();
-	this.container.visible = false;
+
 	this.size = [];
-	this.visible;
 	this.built = false;
+
+	this.container = new PIXI.Container(); // Must be before call to set system
+	this.container.visible = false;
+
+
+
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
@@ -44,13 +48,15 @@ spaceObject = class {
 		this.UUID = this.buildInfo.UUID;
 	    }
 	    
-	    if (this.buildInfo.multiplayer) {
-		this.system.multiplayer[this.buildInfo.UUID] = this;
-	    }
+	//     if (this.buildInfo.multiplayer) {
+	// 	this.system.multiplayer[this.buildInfo.UUID] = this;
+	//     }
 	}
-	if (typeof(system) !== 'undefined') {
-	    this.system.spaceObjects.add(this);
-	}
+	// if (typeof(system) !== 'undefined') {
+	//     this.system.spaceObjects.add(this);
+	// }
+
+	this.system = system; // a function call (see inSystem.js)
     }
 
     build() {
@@ -262,7 +268,6 @@ spaceObject = class {
         }
 
         this.hide();
-	this._removeFromSystem();
         this.system = undefined;
 
         this.container.destroy();
@@ -279,3 +284,4 @@ spaceObject.prototype.factor = 3/10; // the factor for nova object movement. See
 if (typeof(module) !== 'undefined') {
     module.exports = spaceObject;
 }
+
