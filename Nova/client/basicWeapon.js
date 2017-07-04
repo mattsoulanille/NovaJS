@@ -114,6 +114,7 @@ basicWeapon = class extends inSystem {
 		proj = new projectile(buildInfo, this.source.system);
 	    }
 	    this.projectiles.push(proj);
+	    this.addChild(proj);
 	}
 	
 	return Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));

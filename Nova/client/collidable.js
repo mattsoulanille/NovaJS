@@ -12,20 +12,10 @@ if (typeof(module) !== 'undefined') {
 
 
 var allConvexHulls = {};
-var crashInstance = new Crash({maxEntries:10});
-var crashListener = function(a, b, res, cancel) {
-    //console.log(a.data + " collided with " + b.data);
-    // the entire space object is stored in collider.data... is this bad?
-    // for garbage collection, yes...
-    
-    a.data.collideWith(b.data, res);
-    b.data.collideWith(a.data, res);
-}
 
 
 
 var collidable = function(superclass) {
-
 
     var collidableClass = class extends superclass {
 	constructor(buildInfo, system) {
@@ -33,15 +23,16 @@ var collidable = function(superclass) {
 	    if (typeof(this.buildInfo) !== 'undefined') {
 		this.buildInfo.type = "collidable";
 	    }
+	    this.convexHullData = undefined;
+	    //this.debug = true; // delete me
 	}
-
-	collideWith(other) {};
+	
+	collideWith(other) {}; 
 	receiveCollision(other) {};
-
 
 	show() {
 	    // Necessary in case show is called twice
-	    if (! (_.contains(this.crash.all(), this.collisionShape)) ) {
+	    if (! (this.crash.all().includes(this.collisionShape)) ) {
 		this.collisionShape.insert();
 	    }
 	    super.show.call(this);
@@ -50,10 +41,31 @@ var collidable = function(superclass) {
 	hide() {
 	    if (typeof(this.collisionShape) !== 'undefined') {
 		this.collisionShape.remove();
+		//this.debug = false;
 	    }
 	    super.hide.call(this);
 	}
 
+	_removeFromSystem() {
+	    if (typeof(this.collisionShape) !== 'undefined') {
+		this.collisionShape.remove();
+//		this.debug = false;
+	    }
+	    this.crash = undefined;
+	    super._removeFromSystem.call(this);
+
+	}
+
+	_addToSystem() {
+	    this.crash = this.system.crash;
+	    if (this.built) {
+		this.buildConvexHulls();
+		if (!(this.crash.all().includes(this.collisionShape)) ) {
+		    this.collisionShape.insert();
+		}
+	    }
+	    super._addToSystem.call(this);
+	}
 
 
 	build() {
@@ -65,28 +77,36 @@ var collidable = function(superclass) {
 		    return this.getConvexHulls(url);
 		}.bind(this))
 		.then(function(hulls) {
-		    this.collisionShapes = _.map(hulls, function(hullPoints) {
-			/*
-			// for testing
-			return new this.crash.Polygon(new this.crash.V,
-			[new this.crash.V(10,10),
-			new this.crash.V(-10,10),
-			new this.crash.V(-10,-10),
-			new this.crash.V(10, -10)],
-			false, this);
-			*/
-
-			return new this.crash.Polygon(new this.crash.Vector(0,0),
-						      _.map(hullPoints, function(point) {
-							  return new this.crash.Vector(point[0], point[1]);
-						      }.bind(this)), false, this);
-
-		    }.bind(this));
-		    this.collisionShape = this.collisionShapes[0] // Default
+		    this.convexHullData = hulls;
+		    if (typeof(this.system) !== 'undefined') {
+			this.buildConvexHulls();
+		    }
 
 		}.bind(this));
 	}
-
+	
+	buildConvexHulls() {
+	    
+	    this.collisionShapes = _.map(this.convexHullData, function(hullPoints) {
+		/*
+		// for testing
+		return new this.crash.Polygon(new this.crash.V,
+		[new this.crash.V(10,10),
+		new this.crash.V(-10,10),
+		new this.crash.V(-10,-10),
+		new this.crash.V(10, -10)],
+		false, this);
+		*/
+		
+		return new this.crash.Polygon(new this.crash.Vector(0,0),
+					      _.map(hullPoints, function(point) {
+						  return new this.crash.Vector(point[0], point[1]);
+					      }.bind(this)), false, this);
+		
+	    }.bind(this));
+	    this.collisionShape = this.collisionShapes[0] // Default
+	}
+	
 	getConvexHulls(url) {
 	    url = url + '/convexHulls';
 	    if ( !(this.allConvexHulls.hasOwnProperty(url)) ) {
@@ -150,11 +170,7 @@ var collidable = function(superclass) {
     }
 
 
-    collidableClass.prototype.crash = crashInstance;
-    collidableClass.prototype.crashListener = crashListener;
     
-    collidableClass.prototype.crash.onCollision(collidableClass.prototype.crashListener);
-
     collidableClass.prototype.allConvexHulls = allConvexHulls; 
 
 
@@ -162,7 +178,6 @@ var collidable = function(superclass) {
     return collidableClass;
 }
 
-collidable.prototype.crash = crashInstance;
 
 if (typeof(module) !== 'undefined') {
     module.exports = collidable;

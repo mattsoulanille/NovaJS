@@ -237,7 +237,7 @@ function animateSpace() {
 
     
     
-    collidable.prototype.crash.check();
+    currentSystem.crash.check();
     
     renderer.render(space);
     if (!paused) {

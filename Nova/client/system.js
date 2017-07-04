@@ -5,6 +5,7 @@ if (typeof(module) !== 'undefined') {
     var spaceObject = require("../server/spaceObjectServer.js");
     var planet = require("../server/planetServer.js");
     var ship = require("../server/shipServer.js");
+    var Crash = require("crash-colliders");
 }
 
 
@@ -13,6 +14,14 @@ function system() {
     this.spaceObjects = new Set();
     this.ships = new Set();
     this.planets = new Set();
+    this.crash = new Crash({maxEntries:10});
+    this.crash.onCollision(function(a, b, res, cancel) {
+	//console.log(a.data + " collided with " + b.data);
+	// the entire space object is stored in collider.data... is this bad?
+	// for garbage collection, yes...
+	a.data.collideWith(b.data, res);
+	b.data.collideWith(a.data, res);
+    });
 
     // this.ships.add = function(t) {
     // 	console.log("added");
@@ -168,7 +177,10 @@ system.prototype.getObjects = function() {
     var buildInfo = {};
     _.each(this.multiplayer, function(obj, uuid) {
 	// protect objects from having their buildinfo changed
-	buildInfo[uuid] = Object.assign({}, obj.buildInfo);
+	if (['ship','playership','planet'].includes(obj.buildInfo.type)) {
+	    buildInfo[uuid] = Object.assign({}, obj.buildInfo);
+	}
+	
     });
     return buildInfo;
 }

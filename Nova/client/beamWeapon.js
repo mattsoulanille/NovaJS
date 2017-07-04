@@ -16,6 +16,7 @@ beamWeapon = class extends collidable(inSystem){
 	this.ready = false;
 	this.source = source;
 	this.rendering = false;
+	this.built = false;
 	if (typeof source !== 'undefined') {
 	    this.position = source.position;
 	}
@@ -59,10 +60,19 @@ Else, return false
 	this.graphics = new PIXI.Graphics();
 
 	this.container.addChild(this.graphics);
-	this.source.system.built.render.add(this);
+
 	this.source.weapons.all.push(this);
+
 	this.ready = true;
-	
+	this.built = true;
+	if (typeof(this.system) !== 'undefined') {
+	    this._addToSystem();
+	}
+
+
+    };
+
+    buildConvexHulls() {
 	var length = this.meta.physics.length;
 	var halfWidth = this.meta.physics.width / 2;
 	var collisionPoints = [new this.crash.V(0, halfWidth),
@@ -71,7 +81,7 @@ Else, return false
 			       new this.crash.V(length, halfWidth)
 			      ];
 	this.collisionShape = new this.crash.Polygon(new this.crash.V, collisionPoints, false, this);
-    };
+    }
 
     set firing(val) {
 
@@ -169,6 +179,7 @@ Else, return false
     collideWith(other, res) {
 	//console.log(res);
 	var delta = (other.delta) * 60 / 1000;
+
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes("normal") &&
 	    other !== this.source) {
@@ -180,7 +191,7 @@ Else, return false
 	    collision.impact = this.meta.properties.impact * delta;
 	    collision.angle = this.pointing;
 	    
-	    //	console.log(collision);
+	    //console.log(collision);
 	    other.receiveCollision(collision);
 	}
     }
@@ -195,6 +206,8 @@ Else, return false
 	}
 
 	this.system.built.render.delete(this);
+	super._removeFromSystem.call(this);
+	
 	
     }
     _addToSystem() {
@@ -204,12 +217,11 @@ Else, return false
 	}
 
 	if (this.built) {
-	    if (this.rendering) {
-		this.system.built.render.add(this);
-	    }
+	    this.system.built.render.add(this);
 	}
 
 	this.system.spaceObjects.add(this);
+	super._addToSystem.call(this);
     }
     
     

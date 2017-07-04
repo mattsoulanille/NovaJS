@@ -255,6 +255,7 @@ spaceObject = class extends inSystem {
             this.system.built.spaceObjects.add(this);
             if (this.rendering) {
                 this.system.built.render.add(this);
+
             }
         }
 
