@@ -4,6 +4,8 @@ function statusBar(name, player) {
     this.name = name;
     this.sprites = {};
     this.container = new PIXI.Container();
+    // statusBar is in front of everything
+    this.container.displayGroup = new PIXI.DisplayGroup(100,true);
     this.targetContainer = new PIXI.Container();
     this.lines = new PIXI.Graphics();
     this.radarContainer = new PIXI.Container();

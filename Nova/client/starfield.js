@@ -8,7 +8,7 @@ starfield = class extends inSystem {
 	super(...arguments);
 	this.stars = [];
 	this.container = new PIXI.Container();
-	this.starLayer = new PIXI.DisplayGroup(-1, false);
+	this.starLayer = new PIXI.DisplayGroup(-10, false);
 	this.container.displayGroup = this.starLayer;
 	this.count = count || 20;
 	this.ready = false;

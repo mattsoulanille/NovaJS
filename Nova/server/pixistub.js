@@ -14,7 +14,8 @@ PIXI = {
 	this.anchor = {'x':0, 'y':0};
 
 	this.destroy = function() {};
-    }
+    },
+    DisplayGroup: function() {}
 
 
 }

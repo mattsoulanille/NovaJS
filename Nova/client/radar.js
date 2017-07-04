@@ -9,15 +9,18 @@ function radar(meta, source, iff, density) {
     this.density = density || false;
 }
 
-radar.prototype.scale = [6000,6000]; // scale is the dimensions of the radar in nova coords.
+radar.prototype.scale = [6000,6000]; // scale is the dimensions mapped to the radar in nova coords.
 
 radar.prototype.render = function() {
     this.graphics.clear();
     
+    this.system.ships.forEach(this.drawShip.bind(this));
     this.drawDot(this.source.position, 0xFFFFFF);
+    /*
     for (var i = 1; i < this.system.ships.length; i++) {
 	this.drawShip(this.system.ships[i]);
     }
+*/
 }
 
 
