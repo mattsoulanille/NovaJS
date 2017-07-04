@@ -46,7 +46,7 @@ sprite.prototype.loadResources = function() {
 		spriteImageInfo = resource.spriteImageInfo.data;
 		
 	    })
-	    .once('complete', function() {fulfill(spriteImageInfo)});
+	    .onComplete.add(function() {fulfill(spriteImageInfo)});
 
     }.bind(this));
 }

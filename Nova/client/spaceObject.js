@@ -90,7 +90,8 @@ spaceObject = class extends inSystem {
 		    this.meta = resource.meta.data;
 		    
 		}.bind(this)) // for loader.load
-		.once('complete', function() {
+	    //.once('complete', function() {
+		.onComplete.add(function() {
 		    
 		    if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
 			//console.log('fulfilling');
@@ -101,7 +102,7 @@ spaceObject = class extends inSystem {
 			reject();
 		    }
 		    
-		}.bind(this)); // for loader.once('complete'...
+		}.bind(this)); // for loader.onComplete
 	    
 	}.bind(this)); // for the promise
     };

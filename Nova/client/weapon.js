@@ -42,7 +42,7 @@ weapon = class extends inSystem {
 		.load(function(loader, resource) {
 		    this.meta = resource.meta.data;
 		}.bind(this))
-		.once('complete', function() {fulfill()});
+		.onComplete.add(function() {fulfill()});
 	}.bind(this));
     }
     

@@ -37,7 +37,7 @@ targetImage.prototype.loadTexture = function() {
 
 		texture = resource.picture.texture;
 	    })
-	    .once('complete', function() {fulfill(texture)});
+	    .onComplete.add(function() {fulfill(texture)});
 
     }.bind(this));
 

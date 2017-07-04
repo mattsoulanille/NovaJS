@@ -166,7 +166,7 @@ controls.prototype.loadJson = function(url) {
 	    .load(function(loader, resource) {
 		data = resource.controls.data;
 	    })
-	    .once('complete', function() {fulfill(data)});
+	    .onComplete.add(function() {fulfill(data)});
     });
 }
 
