@@ -3,6 +3,8 @@
 //var stage = new PIXI.Container(0x000000);
 var spaceport = new PIXI.Container(0x000000);
 var space = new PIXI.Container(0x000000);
+space.displayList = new PIXI.DisplayList();
+
 var landed = false;
 //stage.addChild(space);
 
@@ -17,7 +19,7 @@ var renderer = PIXI.autoDetectRenderer(screenW, screenH, {
 
 });
 
-PIXI.RESOLUTION = window.devicePixelRatio;
+PIXI.settings.RESOLUTION = window.devicePixelRatio;
 
 $(window).resize(onResize);
 // add the renderer view element to the DOM
