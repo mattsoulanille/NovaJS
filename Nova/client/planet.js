@@ -40,6 +40,21 @@ planet = class extends spaceObject {
     }
 
 
+    _addToSystem() {
+	if (this.built) {
+	    this.system.built.planets.add(this);
+	}
+	this.system.planets.add(this);
+	super._addToSystem.call(this);
+    }
+    _removeFromSystem() {
+	if (this.built) {
+	    this.system.built.planets.delete(this);
+	}
+	this.system.planets.delete(this);
+	super._removeFromSystem.call(this);
+    }
+    
     assignControls() {
 	gameControls.onstart("depart", this.depart.bind(this));
     }

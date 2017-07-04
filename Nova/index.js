@@ -129,7 +129,7 @@ app.get('/', function(req, res){
 app.use(express.static(__dirname))
 
 
-sol.addObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
+sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build();
 
 var receives = 0;
