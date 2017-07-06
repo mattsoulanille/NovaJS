@@ -1,15 +1,16 @@
 var turnable = require("../client/turnable.js");
 var _ = require("underscore");
 var Promise = require("bluebird");
-var damageable = require("../server/damageableServer.js");
 
-let turnableServer = (superclass) => class extends superclass {
+let turnableServer = (superclass) => class extends turnable(superclass) {
     constructor() {
 	super(...arguments);
+
+	
     }
 
     build() {
-	return super.build.call(this); // this might be bugged
+	return super.build.call(this);
     }
 
     render() {
@@ -21,7 +22,7 @@ let turnableServer = (superclass) => class extends superclass {
 	}
 	this.pointing = (this.pointing + 2*Math.PI) % (2*Math.PI);
 	
-	damageable.prototype.render.call(this);
+	super.render.call(this);
 	return true;
     }
 
