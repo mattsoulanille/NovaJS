@@ -32,7 +32,7 @@ var collidable = function(superclass) {
 
 	show() {
 	    // Necessary in case show is called twice
-	    if (! (this.crash.all().includes(this.collisionShape)) ) {
+	    if (this.crash && ! (this.crash.all().includes(this.collisionShape)) ) {
 		this.collisionShape.insert();
 	    }
 	    super.show.call(this);

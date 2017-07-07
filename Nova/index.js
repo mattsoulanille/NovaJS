@@ -414,7 +414,7 @@ io.on('connection', function(client){
 	client.broadcast.emit('removeObjects', owned_uuids);
 	transmits += playercount - 1;
 
-	currentSystem.removeObject(userid);
+	currentSystem.destroyObjects(owned_uuids);
 	console.log("disconnected");
 
 	delete players[userid];

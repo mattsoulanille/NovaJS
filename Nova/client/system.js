@@ -137,6 +137,19 @@ system.prototype.buildObject = function(buildInfo) {
 }
 
 
+system.prototype.destroyObjects = function(uuids) {
+    uuids.forEach(function(uuid) {
+	this.destroyObject(uuid);
+    }.bind(this));
+
+}
+
+system.prototype.destroyObject = function(uuid) {
+    if (uuid in this.multiplayer) {
+	this.multiplayer[uuid].destroy();
+    }
+
+}
 
 system.prototype.removeObjects = function(uuids) {
     _.each(uuids, function(uuid) {
