@@ -388,6 +388,7 @@ io.on('connection', function(client){
 	client.broadcast.emit('removeObjects', owned_uuids);
 	transmits += playercount - 1;
 	currentSystem.removeObjects(owned_uuids);
+	// make sure this destroys them (it doesn't right now)
 	owned_uuids = [userid];
     });
     client.on('depart', function() {
