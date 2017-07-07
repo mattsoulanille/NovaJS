@@ -12,6 +12,13 @@ function statusBar(name, player) {
     this.container.addChild(this.lines);
     this.container.addChild(this.targetContainer);
     this.container.addChild(this.radarContainer);
+
+    this.children = new Set(); // maybe write a class for children?
+    this.children.add(this.container);
+    this.children.add(this.targetContainer);
+    this.children.add(this.lines);
+    this.children.add(this.radarContainer);
+
     this.source = player;
     this.text = {};
     if (typeof(this.source) !== 'undefined') {
@@ -67,6 +74,7 @@ statusBar.prototype.makeSprites = function() {
     _.each(_.keys(this.meta.imageAssetsFiles), function(key) {
 	if (this.meta.imageAssetsFiles.hasOwnProperty(key)) {
 	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key], [0,0]);
+	    this.children.add(this.sprites[key]);
 	}
     }, this);
 
@@ -190,10 +198,12 @@ statusBar.prototype.buildTargetText = function() {
 
 statusBar.prototype.buildTargetCorners = function() {
     this.targetCorners = new targetCorners(this.system);
+    this.children.add(this.targetCorners);
     return this.targetCorners.build()
 }
 statusBar.prototype.buildPlanetCorners = function() {
     this.planetCorners = new targetCorners(this.system, 'planetCorners');
+    this.children.add(this.planetCorners);
     return this.planetCorners.build();
 }
 
@@ -257,4 +267,12 @@ statusBar.prototype.setPlanetTarget = function(planetTarget) {
 	this.planetCorners.hide();
     }
     
+}
+
+
+statusBar.prototype.destroy = function() {
+    this.children.forEach(function(child) {
+	child.destroy();
+    });
+
 }

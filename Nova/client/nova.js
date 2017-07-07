@@ -77,7 +77,9 @@ socket.on('onconnected', function(data) {
     console.log("Connected to server. UUID: "+UUID);
 //    myShip = new playerShip(data.playerShip);
 
-    stars = new starfield(myShip, 40);
+    if (typeof stars === 'undefined') {
+	stars = new starfield(myShip, 40);
+    }
 
 
     if (data.paused) {

@@ -20,6 +20,7 @@ targetCorners = class extends spaceObject {
 	_.each(this.sprites, function(spr) {
 	    // spr.anchor.x = 0.5;
 	    // spr.anchor.y = 0.5;
+	    
 	}, this);
 
 	this.sprites.bottomLeft.rotation = Math.PI * 3/2;
@@ -90,4 +91,11 @@ targetCorners = class extends spaceObject {
 	}
 	super.render.call(this);
     }
+    /*
+    destroy() {
+	super.destroy.call(this);
+	console.log("destroying targetCorners");
+    }
+    */
+    
 }

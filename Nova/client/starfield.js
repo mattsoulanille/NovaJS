@@ -12,7 +12,6 @@ starfield = class extends inSystem {
 	this.container.displayGroup = this.starLayer;
 	this.count = count || 20;
 	this.ready = false;
-	this.source = source;
 	this.url = 'objects/misc/';
 	this.starName = starname || "star";
 	this.autoRender = false;
@@ -21,10 +20,8 @@ starfield = class extends inSystem {
 	this.ysize = $(window).height()+ 2*this.buffer;
 	this.xrange = [-this.xsize/2, this.xsize/2];
 	this.yrange = [-this.ysize/2, this.ysize/2];
-	if (typeof(this.source) !== "undefined") {
-	    this.position = _.map(this.source.position, function(n) {return n})
-	    this.lastPosition = _.map(this.source.position, function(n) {return n})
-	    this.system = source.system;
+	if (typeof(source) !== "undefined") {
+	    this.attach(source);
 	}
 	this.built = false;
 }
@@ -52,6 +49,8 @@ starfield = class extends inSystem {
 	this.system = source.system;
 	this.position = _.map(this.source.position, function(n) {return n})
 	this.lastPosition = _.map(this.source.position, function(n) {return n})
+	this.stars.forEach(function(s) {s.attach(source)}.bind(this));
+	this.placeAll();
     }
 
     _addToSystem() {
@@ -87,7 +86,7 @@ starfield = class extends inSystem {
 	    }
 	}
 	
-	if (s.available === true) {
+	if (s) {
 	    
 	    s.randomize()
 	    s.position[0] = Math.floor(Math.random() * (xrange[1] - xrange[0]) + xrange[0])
@@ -110,12 +109,12 @@ starfield = class extends inSystem {
     }
 
     placeAll() {
-	var xrange = [-this.xsize/2, this.xsize/2]
-	var yrange = [-this.ysize/2, this.ysize/2]
-	
-	while (this.placeStar(xrange, yrange)) {
-	    //pass
-	}
+	var xrange = [-this.xsize/2 + this.source.position[0],
+		      this.xsize/2 + this.source.position[0]];
+	var yrange = [-this.ysize/2 + this.source.position[1],
+		      this.ysize/2 + this.source.position[1]];
+
+	this.stars.forEach(function(s) {this.placeStar(xrange, yrange, s)}.bind(this));
 	
     }
 

@@ -281,6 +281,7 @@ class playerShip extends ship {
 	controlFunctions.forEach(function(k) {
 	    gameControls.offall(k);
 	});
+	this.statusBar.destroy();
 	super.destroy.call(this);
     }
 }

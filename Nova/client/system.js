@@ -157,8 +157,12 @@ system.prototype.setObjects = function(buildInfo) {
 	if ( (typeof buildInfo !== 'undefined') && (! (uuid in buildInfo))) {
             if (obj == myShip) {
                 console.log("Server claims player's ship does not exist");
+		this.removeObject(uuid);
+		obj.destroy();
             }
-	    this.removeObject(uuid);
+	    else {
+		this.removeObject(uuid);
+	    }
 	}
 
     }.bind(this));

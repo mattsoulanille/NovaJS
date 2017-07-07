@@ -227,7 +227,6 @@ Else, return false
     
     destroy() {
 	this.firing = false;
-	this.system.built.render.remove(this);
     }
 
     setTarget(target) {

@@ -7,7 +7,7 @@ star = class extends movable(spaceObject) {
 	this.url = 'objects/misc/';
 	this.name = name || 'star';
 	this.velocityFactor = 0;
-	this.source = source;
+	this.attach(source);
 	this.meta = {};
 	this.meta.imageAssetsFiles = {"star": this.name + ".json"};
 	this.properties = {};
@@ -17,6 +17,9 @@ star = class extends movable(spaceObject) {
     }
     
     //star.prototype.meta = {}
+    attach(source) {
+	this.source = source;
+    }
     
     build() {
 

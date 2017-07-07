@@ -63,7 +63,14 @@ var inSystem = class {
 	}.bind(this));
 
     }
-
+    /*
+    destory() {
+	this.children.forEach(function(child) {
+	    child.destroy();
+	});	
+    }
+    */
+    
 }
 
 
