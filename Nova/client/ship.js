@@ -205,6 +205,21 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	}
 	
 	super.render.call(this);
+	// super hacky bounding box
+	var bound = [5000,5000];
+	if (this.position[0] > bound[0]/2) {
+	    this.position[0] -= bound[0];
+	}
+	if (this.position[0] < -bound[0]/2) {
+	    this.position[0] += bound[0];
+	}
+	if (this.position[1] > bound[1]/2) {
+	    this.position[1] -= bound[1];
+	}
+	if (this.position[1] < -bound[1]/2) {
+	    this.position[1] += bound[1];
+	}
+
     }
     setTarget(newTarget) {
 	

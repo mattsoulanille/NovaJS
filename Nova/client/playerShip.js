@@ -107,7 +107,7 @@ class playerShip extends ship {
 	this.cycleTarget = c.onstart("target", this.cycleTarget.bind(this));
 	this.resetNav = c.onstart("reset nav", this.resetNav.bind(this));
     }
-
+    
     statechange(state) {
 	//make this into a builder function and make it 
 	
