@@ -66,6 +66,7 @@ var currentSystem = new system();
 
 var textures = {}; // global texture object that sprites save and load textures from
 var gameControls = new controls(); // global controls
+gameControls.onstart("fullscreen", fullscreen);
 var players = {};
 var myShip;
 var stars;

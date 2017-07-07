@@ -39,6 +39,8 @@
 	"74":"hyperjump",
 	"80":"properties",
 	"73":"misisons",
-	"89":"hail"
+	"89":"hail",
+
+	"13":"fullscreen"
     }
 }
