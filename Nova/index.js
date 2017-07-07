@@ -280,6 +280,10 @@ io.on('connection', function(client){
 			owned_uuids.push(uuid);
 		    });
 		});
+		myShip.show();
+		var filtered_stats = {};
+		filtered_stats[userid] = myShip.getStats();
+		client.broadcast.emit('updateStats', filtered_stats);
 	    });
     //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
     }
