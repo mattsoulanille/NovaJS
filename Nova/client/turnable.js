@@ -47,20 +47,21 @@ var turnable = (superclass) => class extends superclass {
 	
 	var pointDiff = (pointTo - this.pointing + 2*Math.PI) % (2*Math.PI)
 	var turning;
-	if (pointDiff < Math.PI) {
-	    turning = "left"
-	}
-	else if(pointDiff >= Math.PI) {
-	    turning = "right"
-	}
-	
-	if ((this.pointing == pointTo) || (Math.min(Math.abs(Math.abs(this.pointing - pointTo) - 2*Math.PI),
-						    Math.abs(this.pointing - pointTo)) < (this.properties.turnRate * (this.time - this.lastTime) / 1000))) {
-	    this.pointing = pointTo;
-	    this.turning = "";
-	}
-	else {
-	    this.turning = turning;
+
+	if (this.delta !== 0) {
+	    if ((this.pointing == pointTo) || (Math.min(Math.abs(Math.abs(this.pointing - pointTo) - 2*Math.PI),
+							Math.abs(this.pointing - pointTo)) <= (this.properties.turnRate * (this.delta) / 1000))) {
+		this.pointing = pointTo;
+		this.turning = "";
+	    }
+
+	    else if (pointDiff < Math.PI) {
+		this.turning = "left"
+	    }
+	    else if(pointDiff >= Math.PI) {
+		this.turning = "right"
+	    }
+
 	}
     }
     
