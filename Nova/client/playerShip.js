@@ -262,8 +262,10 @@ class playerShip extends ship {
 
     onDeath() {
 	// temporary respawn
-	this.position[0] = 0;
-	this.position[1] = 0;
+	this.position[0] = Math.random() * 1000 - 500;
+	this.position[1] = Math.random() * 1000 - 500;
+	this.velocity[0] = 0;
+	this.velocity[1] = 0;
 	this.shield = this.properties.maxShields;
 	this.armor = this.properties.maxArmor;
 	var newStats = {};
