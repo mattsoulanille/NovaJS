@@ -253,10 +253,10 @@ spaceObject = class extends inSystem {
 
         if (this.built) {
             this.system.built.spaceObjects.add(this);
-            if (this.rendering) {
-                this.system.built.render.add(this);
+//            if (this.rendering) {
+            this.system.built.render.add(this);
 
-            }
+//            }
         }
 
         this.system.spaceObjects.add(this);

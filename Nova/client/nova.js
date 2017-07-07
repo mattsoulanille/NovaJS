@@ -230,10 +230,6 @@ function animateSpace() {
     spaceObject.prototype.time = new Date().getTime() + timeDifference;
 
     // in case the server restarted...
-    
-    if (myShip.rendering) {
-	myShip.render();
-    }
     stars.render();
     currentSystem.render();
 

@@ -271,7 +271,32 @@ class playerShip extends ship {
 	this.socket.emit('updateStats', newStats);
 	
     }
+    _addToSystem() {
+        if (this.built) {
+            this.system.built.ships.add(this);
 
+	    // playerShip must be rendered before all others
+	    if (!this.system.built.render.has(this)) {
+		var built = [...this.system.built.render];
+		built.unshift(this);
+		this.system.built.render = new Set(built);
+	    }
+
+        }
+        this.system.ships.add(this);
+
+	
+        super._addToSystem.call(this);
+    }
+    
+    addToSpaceObjects() {
+	var built = [...this.system.built.render];
+	built.unshift(this);
+	this.system.built.render = new Set(built);
+	super.addToSpaceObjects.call(this);
+    }
+
+    
     destroy() {
 	var controlFunctions = [this.firePrimary, this.stopPrimary,
 				this.fireSecondary, this.stopSecondary,

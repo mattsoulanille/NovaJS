@@ -183,7 +183,7 @@ Else, return false
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes("normal") &&
 	    other !== this.source) {
-	    
+
 	    var collision = {};
 	    collision.shieldDamage = this.meta.properties.shieldDamage * delta;
 	    collision.armorDamage = this.meta.properties.armorDamage * delta;
