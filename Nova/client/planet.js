@@ -61,6 +61,7 @@ planet = class extends spaceObject {
 
 //soooo many side effects...
     land() {
+	/*
 	// make sure you can't land in two places at the same time
 	if (animate === animateSpace) {
 	    gameControls.scope = gameControls.scopes.land;
@@ -70,9 +71,11 @@ planet = class extends spaceObject {
 	    //stage.addChild(this.spaceportContainer);
 	    socket.emit('land');
 	}
+	*/
     }
 
     depart() {
+	/*
 	if (animate === animateSpaceport) {
 	    gameControls.scope = gameControls.scopes.space;
 	    gameControls.resetEvents();
@@ -82,6 +85,7 @@ planet = class extends spaceObject {
 	    //stage.addChild(space);
 	    socket.emit('depart');
 	}
+	*/
     }
     
     addSpritesToContainer() {
