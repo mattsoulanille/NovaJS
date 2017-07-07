@@ -1,5 +1,4 @@
 if (typeof(module) !== 'undefined') {
-    var damageable = require("../server/damageableServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
 }
@@ -35,6 +34,7 @@ var turnable = (superclass) => class extends superclass {
 	var stats = super.getStats.call(this);
 	stats.turning = this.turning;
 	stats.pointing = this.pointing;
+	//console.log(stats);
 	return stats;
     }
 
@@ -56,11 +56,11 @@ var turnable = (superclass) => class extends superclass {
 	
 	if ((this.pointing == pointTo) || (Math.min(Math.abs(Math.abs(this.pointing - pointTo) - 2*Math.PI),
 						    Math.abs(this.pointing - pointTo)) < (this.properties.turnRate * (this.time - this.lastTime) / 1000))) {
-	    this.pointing = pointTo
-	    this.turning = ""
+	    this.pointing = pointTo;
+	    this.turning = "";
 	}
 	else {
-	    this.turning = turning
+	    this.turning = turning;
 	}
     }
     
@@ -88,53 +88,54 @@ var turnable = (superclass) => class extends superclass {
 	    }.bind(this));
     }
 
+    renderSprite(spr, rotation, imageIndex) {
+	spr.sprite.rotation = rotation;
+	spr.sprite.texture = spr.textures[imageIndex];
+	
+    }
+    
     render() {
-
-	// this stuff is a mess...
 	if (this.renderReady === true) {
-	    
-    	    var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
+
+	    var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
 	    var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length;});
-	    
+
 	    if (this.turning == "left") {
-		this.pointing = this.pointing + (this.properties.turnRate * (this.time - this.lastTime) / 1000);
 		
+		this.pointing = this.pointing + (this.properties.turnRate * (this.time - this.lastTime) / 1000);
+		//console.log(this.time - this.lastTime);
 		if (this.hasLeftTexture) {
 		    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
 		    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length; });
+		    
 		}
 	    }
 	    else if (this.turning == "right") {
+
 		this.pointing = this.pointing - (this.properties.turnRate * (this.time - this.lastTime) / 1000);
-		
 		// Right != correct in this instance. Right = a direction.
 		if (this.hasRightTexture) {
 		    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
 		    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length; });
 		}
 	    }
-	    
-	    
-	    
-	    this.pointing = this.pointing % (2*Math.PI);  //makes sure turnable.pointing is in the range [0, 2pi)
-	    if (this.pointing < 0) {
-		this.pointing += 2*Math.PI;
-	    }
-	    
-	    var useThisImage = [];
+
+	    // makes sure turnable.pointing is in the range [0, 2pi)
+	    this.pointing = (this.pointing + 2*Math.PI) % (2*Math.PI);  
+
 	    var keys = _.keys(this.sprites);
 	    for (var i = 0; i < _.keys(this.sprites).length; i++) {
 		// turnable uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
 		
-		var spr = this.sprites[keys[i]]
-		useThisImage[i] = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
-		//console.log(useThisImage)
-		spr.sprite.rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
+		var spr = this.sprites[keys[i]];
+		var imageIndex = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
+		//console.log(imageIndex)
+		var rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
 		
-		spr.sprite.texture = spr.textures[useThisImage[i]];
-		
+		this.renderSprite(spr, rotation, imageIndex);
+
 		if (keys[i] === this.collisionSpriteName) {
-		    var newShape = this.collisionShapes[useThisImage[i]];
+		    var newShape = this.collisionShapes[imageIndex];
 		    
 		    if (this.collisionShape !== newShape) {
 			//		    console.log("inserting new collision shape");
@@ -145,16 +146,12 @@ var turnable = (superclass) => class extends superclass {
 			this.collisionShape = newShape;
 		    }
 		    
-		    this.collisionShape.setAngle(spr.sprite.rotation);
+		    this.collisionShape.setAngle(rotation);
 		}
 	    }
-	    
 	    // this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.
 	    
-	    
-	    
-	    super.render.call(this);
-	    return true;
+	    return super.render.call(this);
 	}
 	else {
 	    return false;

@@ -11,25 +11,23 @@ var fs = require('fs'),
 
 var repl = require("repl");
 
-var test = function() {
-    return "did a test"
-}
-
 var local = repl.start();
 
 local.context.io = io;
 
-local.context.help = function() {
+var help = function() {
     console.log("Available commands:\n" +
-	    "help()\tprints this help\n" + 
-	    "list()\tlists players\n" +
-	    "kick(uuid)\tkicks a player by uuid"
+		"help\tprints this help\n" + 
+		"list\tlists players\n" +
+		"kick(uuid)\tkicks a player by uuid"
 	       );
-
 }
+Object.defineProperty(local.context, 'help', {set: function(x) {}, get: help})
 
 // lists players
-local.context.list = function() {
+
+
+var listPlayers = function() {
     var formatted = {}
     _.each(players, function(p, key) {
 	formatted[key] = {"ship":p.ship.name};
@@ -37,17 +35,20 @@ local.context.list = function() {
     return formatted;
 }
 
+Object.defineProperty(local.context, 'list', {set: function(x) {}, get: listPlayers});
+
+
 // kicks a player
 var kick = function(UUID) {
     if (_.includes(Object.keys(players), UUID)) {
 	players[UUID].io.disconnect();
     }
-
 }
 
 local.context.kick = kick;
-local.context.test = test;
 
+var npc = require("./server/npcServer.js");
+npc.prototype.io = io;
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
@@ -56,13 +57,40 @@ var collidable = require("./server/collidableServer.js");
 var medium_blaster = new outfit("Medium Blaster", 1);
 var sol = new system();
 local.context.sol = sol;
+Object.defineProperty(local.context, 'ships', {set: function() {}, get: function() {
+    return Array.from(sol.ships);
+}});
+
 var convexHullBuilder = require("./server/convexHullBuilder.js");
 var path = require('path');
 
 
+var hailChaingun = {
+    "name":"Hail Chaingun",
+    "count":2
+}
+
+var Firebird = {
+    "name":"Firebird_Thamgiir",
+    "outfits": [hailChaingun],
+    "UUID": UUID()
+}
+
+
+
+testNPC = new npc(Firebird, sol);
+testNPC.build().then(testNPC.show.bind(testNPC));
+local.context.testNPC = testNPC;
 //var starbridge = new ship("Starbridge A", [medium_blaster], sol);
 
-var players = {};
+var players = {}; // for repl
+
+var startGame = function() {
+    spaceObject.prototype.lastTime = new Date().getTime();
+    gameloop(sol);
+
+}
+local.context.startGame = startGame;
 var gameTimeout;
 var gameloop = function(system) {
     
@@ -70,10 +98,13 @@ var gameloop = function(system) {
     // 	player.time = new Date().getTime();
     // 	player.render()
     // });
+    spaceObject.prototype.time = new Date().getTime();
     system.render();
-
+    
+    
     gameTimeout = setTimeout(function() {gameloop(system)}, 0);
 }
+
 
 //notify clients of
 /*
@@ -130,7 +161,8 @@ app.use(express.static(__dirname))
 
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
-sol.build();
+sol.build()
+    .then(startGame);
 
 var receives = 0;
 var transmits = 0;

@@ -169,15 +169,20 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	
     }
 
+    manageEngine() {
+	if (this.accelerating == 1) {
+	    this.sprites.engine.sprite.alpha = 1;
+	}
+	else {
+	    this.sprites.engine.sprite.alpha = 0;
+	}
+    }
+    
     render() {
-
+	// maybe revise this to be a set of functions that are all called when rendering
+	// so you don't have to do 'if' every time you render
 	if ("engine" in this.sprites) {
-	    if (this.accelerating == 1) {
-		this.sprites.engine.sprite.alpha = 1;
-	    }
-	    else {
-		this.sprites.engine.sprite.alpha = 0;
-	    }
+	    this.manageEngine();
 	}
 	
 	if ("lights" in this.sprites) {

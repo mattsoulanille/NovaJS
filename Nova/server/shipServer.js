@@ -19,5 +19,9 @@ class shipServer extends ship {
     manageLights() {
 
     }
+
+    manageEngine() {
+
+    }
 }
 module.exports = shipServer;

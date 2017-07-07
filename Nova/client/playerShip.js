@@ -52,7 +52,7 @@ class playerShip extends ship {
 
     receiveCollision(other) {
 	super.receiveCollision.call(this, other);
-	this.sendCollisionToServer();
+	this.sendCollision();
     }
 
 
@@ -63,7 +63,7 @@ class playerShip extends ship {
 
     receiveCollision(other) {
 	ship.prototype.receiveCollision.call(this, other);
-	this.sendCollisionToServer();
+	this.sendCollision();
     }
 
 
@@ -248,18 +248,14 @@ class playerShip extends ship {
 
     cycleTarget() {
 	// targetIndex goes from -1 (for no target) to ships.length - 1
-	var targets = Array.from(this.system.built.ships);
-	var incrementTargetIndex = function() {
-	    this.targetIndex = (this.targetIndex + 2) % (targets.length + 1) - 1;
-	    // super cheapo temporary way to not target the player ship (ship 0)
-	    if (this.targetIndex === 0) {
-		this.targetIndex = (this.targetIndex + 2) % (targets.length + 1) - 1;
-	    }
-	}.bind(this);
-	
-	incrementTargetIndex();
-	
-	// If targetIndex === -1, then target is undefined, which is intentional
+	var targets = Array.from(this.system.built.ships).filter(function(v) {
+	    return v !== this;
+	}.bind(this));
+
+
+	// loops from -1 to targets.length
+	this.targetIndex = (this.targetIndex + 2) % (targets.length + 1) - 1;
+	// If targetIndex === targets.length, then target is undefined, which is intentional
 	this.setTarget(targets[this.targetIndex]);
 	//    console.log(this.targetIndex)
     }
@@ -291,11 +287,11 @@ class playerShip extends ship {
 
 
 
-playerShip.prototype.sendCollisionToServer = _.throttle(function() {
+playerShip.prototype.sendCollision = _.throttle(function() {
     if (typeof this.UUID !== 'undefined') {
 	var stats = {};
 	stats[this.UUID] = this.getStats();
     }
     this.socket.emit('updateStats', stats);
     
-}, 1000);
+}, 100);

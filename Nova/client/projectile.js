@@ -105,6 +105,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    collision.armorDamage = this.meta.properties.armorDamage;
 	    collision.impact = this.meta.properties.impact;
 	    collision.angle = this.pointing;
+	    //console.log("Projectile hit something");
 	    other.receiveCollision(collision);
 	    this.end();
 	    clearTimeout(this.endTimeout);

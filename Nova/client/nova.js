@@ -237,7 +237,7 @@ function animateSpace() {
 
     
     
-    currentSystem.crash.check();
+    //currentSystem.crash.check();
     
     renderer.render(space);
     if (!paused) {

@@ -14,11 +14,12 @@ function system() {
     this.spaceObjects = new Set();
     this.ships = new Set();
     this.planets = new Set();
+    this.npcs = new Set();
     this.crash = new Crash({maxEntries:10});
     this.crash.onCollision(function(a, b, res, cancel) {
 	//console.log(a.data + " collided with " + b.data);
 	// the entire space object is stored in collider.data... is this bad?
-	// for garbage collection, yes...
+	// for garbage collection, yes...?
 	a.data.collideWith(b.data, res);
 	b.data.collideWith(a.data, res);
     });
@@ -55,9 +56,10 @@ system.prototype.render = function() {
     });
     this.built.render.forEach(function(thing) {
 	if ( (!thing.rendered) && (thing.rendering) ) {
-	    thing.render();	    
+	    thing.render();
 	}
     });
+    this.crash.check();
 }
 
 
@@ -122,6 +124,8 @@ system.prototype.buildObject = function(buildInfo) {
 	case "ship":
 	    newObj = new ship(buildInfo, this);
 	    break;
+	case "npc":
+	    newObj = new npc(buildInfo, this);
 	}
     }
     
@@ -176,8 +180,9 @@ system.prototype.setObjects = function(buildInfo) {
 system.prototype.getObjects = function() {
     var buildInfo = {};
     _.each(this.multiplayer, function(obj, uuid) {
-	// protect objects from having their buildinfo changed
-	if (['ship','playership','planet'].includes(obj.buildInfo.type)) {
+	// only send specific object types
+	if (['ship','playership','planet', 'npc'].includes(obj.buildInfo.type)) {
+	    // protect objects from having their buildinfo changed
 	    buildInfo[uuid] = Object.assign({}, obj.buildInfo);
 	}
 	
