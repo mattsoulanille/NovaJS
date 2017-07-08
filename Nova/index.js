@@ -122,8 +122,9 @@ setInterval(function() {
 //app.get('/', 
 
 global.convexHulls = {};
-
+local.context.convexHulls = global.convexHulls;
 var getConvexHulls = function(url) {
+    //console.log(url);
     if ( !(global.convexHulls.hasOwnProperty(url)) ) {
 	global.convexHulls[url] = new convexHullBuilder(url).build();
 	//console.log(global.convexHulls)
@@ -132,7 +133,7 @@ var getConvexHulls = function(url) {
 }
 
 
-app.get('/objects/:objectType/:jsonUrl/convexHulls', function(req, res) {
+app.get('objects/:objectType/:jsonUrl/convexHulls', function(req, res) {
 
     var decoded = decodeURI(req.path);
     var objPath = path.normalize(path.join(decoded, '../').slice(0,-1));
@@ -162,10 +163,10 @@ app.use(express.static(__dirname))
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build()
-    .then(startGame);
+//    .then(startGame);
 
 var receives = 0;
-var transmits = 0;
+transmits = 0;
 local.context.transmits = transmits;
 // debugging socket.io io
 /*
@@ -241,6 +242,7 @@ io.on('connection', function(client){
 	"outfits":[heavy_blaster_turret, railgun_200mm, ir_missile]
 
     }
+
     var Firebird = {
 	"name":"Firebird_Thamgiir",
 	"outfits": [hailChaingun]
@@ -331,9 +333,9 @@ io.on('connection', function(client){
 		filtered_stats[uuid] = newStats;
 	    }
 	    else {
-		console.log("client tried to change something it didn't own");
-		console.log("Owned uuids: " + owned_uuids);
-		console.log("Tried to change: " + uuid);
+		//console.log("client tried to change something it didn't own");
+		//console.log("Owned uuids: " + owned_uuids);
+		//console.log("Tried to change: " + uuid);
 	    }
 
 	});
@@ -357,6 +359,7 @@ io.on('connection', function(client){
 
     //    console.log(client);
 //    console.log(userid);
+
 
     
     client.on('pingTime', function(msg) {

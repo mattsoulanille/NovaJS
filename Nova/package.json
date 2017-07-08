@@ -10,7 +10,7 @@
     "pixi.js": "^3.0.11",
     "pngjs": "^2.3.1",
     "resource-loader": "^1.6.6",
-    "socket.io": "^1.4.8",
+    "socket.io": "^2.0.0",
     "underscore": "^1.8.3",
     "bluebird": "^3.4.6"
   }

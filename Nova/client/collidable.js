@@ -111,15 +111,19 @@ var collidable = function(superclass) {
 	    url = url + '/convexHulls';
 	    if ( !(this.allConvexHulls.hasOwnProperty(url)) ) {
 		this.allConvexHulls[url] = new Promise(function(fulfill, reject) {
-		    $.getJSON(url, _.bind(function(data) {
-			if (data.hasOwnProperty('hulls')) {
 
-			    fulfill(data.hulls);
-			}
-			else {
-			    reject(new Error("data has no property hulls"))
-			}
-		    }, this));
+		    var loader = new PIXI.loaders.Loader();
+		    var hulls;
+		    loader
+			.add('hulls', url)
+			.load(function(loader, resource) {
+			    hulls = resource.hulls.data;
+
+			});
+		    loader.onComplete.add(function() {
+			fulfill(hulls)
+		    });
+		    loader.onError.add(reject.bind(this, "Could not get url " + url));
 
 		}.bind(this));
 	    }

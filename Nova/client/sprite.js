@@ -39,7 +39,7 @@ sprite.prototype.loadResources = function() {
     return new Promise(function(fulfill, reject) {
 	var spriteImageInfo;
 	var loader = new PIXI.loaders.Loader();
-	var url = this.url
+	var url = this.url;
 	loader
 	    .add('spriteImageInfo', url)
 	    .load(function (loader, resource) {

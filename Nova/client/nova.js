@@ -134,7 +134,7 @@ socket.on('buildObjects', function(buildInfoList) {
 });
 
 socket.on('removeObjects', function(uuids) {
-    currentSystem.removeObjects(uuids);
+    currentSystem.destroyObjects(uuids);
 });
 
 

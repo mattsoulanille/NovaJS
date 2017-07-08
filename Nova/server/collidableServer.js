@@ -33,6 +33,7 @@ let collidableServer = (superclass) => class extends collidable(superclass) {
 
     
     getConvexHulls(url) {
+	var url = path.normalize(url);
 	if ( !(global.convexHulls.hasOwnProperty(url)) ) {
 	    global.convexHulls[url] = new convexHullBuilder(url).build();
 	    //console.log(global.convexHulls)

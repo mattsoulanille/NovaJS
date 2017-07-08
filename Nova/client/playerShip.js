@@ -17,6 +17,7 @@ class playerShip extends ship {
 	this.target = undefined;
 	this.planetTarget = undefined;
 	this.targetIndex = -1;
+	this.sendTimeout;
 
     }
 
@@ -29,6 +30,7 @@ class playerShip extends ship {
 		// Is this terrible practice? I'm not sure, but it's definitely insane.	    
 		this.statechange = gameControls.onstatechange(this.statechange.bind(this));
 		this.assignControls(gameControls);
+		this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
 	    }.bind(this));
     }
 
@@ -276,7 +278,9 @@ class playerShip extends ship {
     _addToSystem() {
         if (this.built) {
             this.system.built.ships.add(this);
-
+	    if (typeof(this.sendInterval) === 'undefined') {
+		this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
+	    }
 	    // playerShip must be rendered before all others
 	    if (!this.system.built.render.has(this)) {
 		var built = [...this.system.built.render];
@@ -289,6 +293,12 @@ class playerShip extends ship {
 
 	
         super._addToSystem.call(this);
+    }
+    _removeFromSystem() {
+	if (typeof this.sendInterval !== 'undefined') {
+	    clearInterval(this.sendTimeout);	    
+	}
+	super._removeFromSystem.call(this);
     }
     
     addToSpaceObjects() {
