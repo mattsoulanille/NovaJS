@@ -164,7 +164,7 @@ app.use(express.static(__dirname))
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build()
-//    .then(startGame);
+    .then(startGame);
 
 var receives = 0;
 transmits = 0;
