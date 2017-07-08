@@ -31,6 +31,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     build() {
 	return super.build.call(this)
 	//	.then(function() {console.log(this)}.bind(this))
+	    .then(function() {this.built = false}.bind(this))
 	    .then(_.bind(this.buildOutfits, this))
 	    .then(_.bind(this.buildTargetImage, this))
 	    .then(_.bind(function() {
@@ -46,6 +47,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 		if (this.system) {
 		    this.system.built.ships.add(this);
 		}
+		this.built = true;
 		
 	    }, this))
 	

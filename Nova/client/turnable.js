@@ -67,6 +67,7 @@ var turnable = (superclass) => class extends superclass {
     
     build() {
 	return super.build.call(this)
+	// remember to add this.built = false if you put any promises in here.
 	    .then(function() {
 		this.hasLeftTexture = _.every(this.sprites, function(s) {
 		    if (s.spriteImageInfo.meta.imagePurposes.left) {

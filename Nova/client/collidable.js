@@ -70,6 +70,7 @@ var collidable = function(superclass) {
 
 	build() {
 	    return super.build.call(this)
+		.then(function() {this.built = false}.bind(this)) // Not built yet. Is there a better way of doing this?
 	    //	.then(function() {console.log(this.renderReady)}.bind(this))
 		.then(this.getCollisionSprite.bind(this))
 		.then(function() {
@@ -80,6 +81,7 @@ var collidable = function(superclass) {
 		    this.convexHullData = hulls;
 		    if (typeof(this.system) !== 'undefined') {
 			this.buildConvexHulls();
+			this.built = true;
 		    }
 
 		}.bind(this));

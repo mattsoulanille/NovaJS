@@ -28,16 +28,27 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 
     build() {
 
-	this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
+
 	var setAvailable = function() {
 	    this.available = true
 	}
 	
 	return super.build.call(this)
+	// remember to add this.built = false if you put any promises in here.
 	    .then(_.bind(setAvailable, this));
     }
 
 
+    _addToSystem() {
+	this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
+        super._addToSystem.call(this);
+    }
+
+    _removeFromSystem() {
+	this.targets = new Set();
+        super._removeFromSystem.call(this);
+    }
+    
     loadResources() {
 	// would set this.meta.physics, but
 	// this.meta.physics is given by weapon on construction.
