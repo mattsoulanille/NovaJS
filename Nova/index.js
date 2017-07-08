@@ -133,10 +133,11 @@ var getConvexHulls = function(url) {
 }
 
 
-app.get('objects/:objectType/:jsonUrl/convexHulls', function(req, res) {
+app.get('/objects/:objectType/:jsonUrl/convexHulls.json', function(req, res) {
 
     var decoded = decodeURI(req.path);
-    var objPath = path.normalize(path.join(decoded, '../').slice(0,-1));
+    var objPath = path.normalize(path.join(decoded, '../').slice(0,-1)).slice(1);
+    console.log(objPath);
     getConvexHulls(objPath).then(function(hulls) {
 	res.json({"hulls":hulls});
     });

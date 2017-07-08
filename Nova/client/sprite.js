@@ -12,6 +12,7 @@ function sprite(url, anchor) {
 }
 
 textures = {}; // array of all textures for all sprites
+// maybe use PIXI.utils.TextureCache
 
 sprite.prototype.build = function() {
 //    console.log("loading sprite: " + this.url);

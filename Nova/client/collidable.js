@@ -108,7 +108,7 @@ var collidable = function(superclass) {
 	}
 	
 	getConvexHulls(url) {
-	    url = url + '/convexHulls';
+	    url = url + '/convexHulls.json';
 	    if ( !(this.allConvexHulls.hasOwnProperty(url)) ) {
 		this.allConvexHulls[url] = new Promise(function(fulfill, reject) {
 
@@ -117,11 +117,11 @@ var collidable = function(superclass) {
 		    loader
 			.add('hulls', url)
 			.load(function(loader, resource) {
-			    hulls = resource.hulls.data;
+			    hulls = resource.hulls.data.hulls;
 
 			});
 		    loader.onComplete.add(function() {
-			fulfill(hulls)
+			fulfill(hulls);
 		    });
 		    loader.onError.add(reject.bind(this, "Could not get url " + url));
 
