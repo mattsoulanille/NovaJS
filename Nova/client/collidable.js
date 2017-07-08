@@ -68,11 +68,9 @@ var collidable = function(superclass) {
 	}
 
 
-	build() {
-	    return super.build.call(this)
-		.then(function() {this.built = false}.bind(this)) // Not built yet. Is there a better way of doing this?
+	_build() {
+	    return super._build.call(this)
 	    //	.then(function() {console.log(this.renderReady)}.bind(this))
-		.then(this.getCollisionSprite.bind(this))
 		.then(function() {
 		    var url = this.getCollisionSprite();
 		    return this.getConvexHulls(url);
@@ -81,12 +79,13 @@ var collidable = function(superclass) {
 		    this.convexHullData = hulls;
 		    if (typeof(this.system) !== 'undefined') {
 			this.buildConvexHulls();
-			this.built = true;
 		    }
 
 		}.bind(this));
+
+
 	}
-	
+
 	buildConvexHulls() {
 	    
 	    this.collisionShapes = _.map(this.convexHullData, function(hullPoints) {
@@ -157,8 +156,7 @@ var collidable = function(superclass) {
 		collisionSpriteName = 'ship';
 	    }
 	    else {
-		reject("no collision image");
-		return;
+		return false;
 	    }
 	    this.collisionSpriteName = collisionSpriteName;
 	    var url = collisionSprite.url;

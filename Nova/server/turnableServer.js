@@ -9,10 +9,6 @@ let turnableServer = (superclass) => class extends turnable(superclass) {
 	
     }
 
-    build() {
-	return super.build.call(this);
-    }
-
     renderSprite() {} // don't try to render sprites since there aren't any
 	
     render() {

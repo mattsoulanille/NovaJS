@@ -21,10 +21,9 @@ class playerShip extends ship {
 
     }
 
-    build() {
+    _build() {
 
-	return super.build.call(this)
-	    .then(function() {this.built = false}.bind(this))
+	return super._build.call(this)
 	    .then(this.sortWeapons.bind(this))
 	    .then(this.makeStatusBar.bind(this))
 	    .then(function() {
@@ -32,7 +31,6 @@ class playerShip extends ship {
 		this.statechange = gameControls.onstatechange(this.statechange.bind(this));
 		this.assignControls(gameControls);
 		this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
-		this.built = true;
 	    }.bind(this));
     }
 

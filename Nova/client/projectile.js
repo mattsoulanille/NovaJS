@@ -27,17 +27,12 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     }
 
     build() {
-
-
-	var setAvailable = function() {
-	    this.available = true
-	}
-	
 	return super.build.call(this)
-	// remember to add this.built = false if you put any promises in here.
-	    .then(_.bind(setAvailable, this));
+	    .then(function() {
+		this.available = true;
+	    }.bind(this));
     }
-
+    
 
     _addToSystem() {
 	this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
