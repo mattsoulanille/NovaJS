@@ -59,22 +59,20 @@ spaceObject = class extends inSystem {
 	this.system = system; // a function call (see inSystem.js)
     }
 
-    _build() {
-	// promise chain of building the object
-	return this.loadResources()
-    	    .then(_.bind(this.setProperties, this))
-	    .then(_.bind(this.makeSprites, this))
-	    .then(_.bind(this.makeSize, this))
-	    .then(_.bind(this.addSpritesToContainer, this))
-	    .then(_.bind(this.addToSpaceObjects, this))
+    async _build() {
+	await this.loadResources();
+    	await this.setProperties();
+	await this.makeSprites();
+	this.makeSize();
+	this.addSpritesToContainer();
+	this.addToSpaceObjects();
     }
 
     
-    build() {
-	// calls the promise chain (which may have been extended by superclasses)
+    async build() {
 	this.built = false;
-	return this._build()
-	    .then(function() {this.built = true;}.bind(this));
+	await this._build();
+	this.built = true;
     }
     addToSpaceObjects() {
 	this.system.built.spaceObjects.add(this);
