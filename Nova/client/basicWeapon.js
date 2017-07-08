@@ -15,14 +15,14 @@ basicWeapon = class extends inSystem {
 	this.fireWithoutTarget = true;
 	this._firing = false;
 	this.ready = false;
-	this.source = source
+	this.source = source;
 	this.fireTimeout = undefined;
 	this.doBurstFire = false;
 	this.random = Math.random; // Temporary until there is a seeded rng
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
 	    this.meta = buildInfo.meta;
-	    this.count = buildInfo.count || 1
+	    this.count = buildInfo.count || 1;
 	    this.UUID = buildInfo.UUID;
 	    this.reloadMilliseconds = (this.meta.properties.reload * 1000/30 / this.count) || 1000/60;
 	    if ( (typeof(this.meta.properties.burstCount) !== 'undefined') &&
@@ -43,22 +43,20 @@ basicWeapon = class extends inSystem {
         delete this.system.multiplayer[this.UUID];
     }
 
-    build() {
+    async build() {
     
 	// this is temporary
 	// normal or pd. will be implemented eventually.
 	this.meta.properties.hits = "normal";
 	this.meta.properties.vulnerableTo = []; // normal and/or pd
-	return this.buildProjectiles()
-	    .then(_.bind(function() {
-		//	    console.log(this.projectiles[0].buildInfo.convexHulls);
-		this.ready = true;
-		this.source.weapons.all.push(this);
-		//	    console.log(this);
-		if (typeof this.UUID !== 'undefined') {
-		    //		this.system.built.multiplayer[this.UUID] = this;
-		}
-	    }, this));
+	await this.buildProjectiles();
+	//	    console.log(this.projectiles[0].buildInfo.convexHulls);
+	this.ready = true;
+	this.source.weapons.all.push(this);
+	//	    console.log(this);
+	if (typeof this.UUID !== 'undefined') {
+	    //		this.system.built.multiplayer[this.UUID] = this;
+	}
     }
 
 
@@ -79,7 +77,7 @@ basicWeapon = class extends inSystem {
 	var required_projectiles = burstModifier * this.count * (Math.floor(durationMilliseconds / 
 									    (this.reloadMilliseconds)) + 1);
 	
-	var meta = {} // for the projectiles
+	var meta = {}; // for the projectiles
 	meta.imageAssetsFiles = this.meta.imageAssetsFiles;
 	meta.physics = this.meta.physics;
 	meta.properties = this.meta.properties;

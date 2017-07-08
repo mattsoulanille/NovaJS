@@ -68,22 +68,13 @@ var collidable = function(superclass) {
 	}
 
 
-	_build() {
-	    return super._build.call(this)
-	    //	.then(function() {console.log(this.renderReady)}.bind(this))
-		.then(function() {
-		    var url = this.getCollisionSprite();
-		    return this.getConvexHulls(url);
-		}.bind(this))
-		.then(function(hulls) {
-		    this.convexHullData = hulls;
-		    if (typeof(this.system) !== 'undefined') {
-			this.buildConvexHulls();
-		    }
-
-		}.bind(this));
-
-
+	async _build() {
+	    await super._build();
+	    var url = this.getCollisionSprite();
+	    this.convexHullData = await this.getConvexHulls(url);
+	    if (typeof(this.system) !== 'undefined') {
+		this.buildConvexHulls();
+	    }
 	}
 
 	buildConvexHulls() {
@@ -105,7 +96,7 @@ var collidable = function(superclass) {
 					      }.bind(this)), false, this);
 		
 	    }.bind(this));
-	    this.collisionShape = this.collisionShapes[0] // Default
+	    this.collisionShape = this.collisionShapes[0]; // Default
 	}
 	
 	getConvexHulls(url) {
@@ -129,7 +120,7 @@ var collidable = function(superclass) {
 		}.bind(this));
 	    }
 
-	    return this.allConvexHulls[url]
+	    return this.allConvexHulls[url];
 
 	}
 
@@ -137,7 +128,7 @@ var collidable = function(superclass) {
 	    super.setProperties.call(this);
 
 	    if (typeof(this.properties.vulnerableTo) === 'undefined') {
-		this.properties.vulnerableTo = ["normal"] // normal and/or pd
+		this.properties.vulnerableTo = ["normal"]; // normal and/or pd
 	    }
 	}
 

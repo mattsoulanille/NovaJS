@@ -26,11 +26,9 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.target;
     }
 
-    build() {
-	return super.build.call(this)
-	    .then(function() {
-		this.available = true;
-	    }.bind(this));
+    async build() {
+	await super.build();
+	this.available = true;
     }
     
 

@@ -15,7 +15,7 @@ var turnable = (superclass) => class extends superclass {
     }
 
     setProperties() {
-	super.setProperties.call(this)
+	super.setProperties.call(this);
 	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
 	this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
     }
@@ -45,7 +45,7 @@ var turnable = (superclass) => class extends superclass {
 	    console.log("turnTo called with invalid angle");
 	}
 	
-	var pointDiff = (pointTo - this.pointing + 2*Math.PI) % (2*Math.PI)
+	var pointDiff = (pointTo - this.pointing + 2*Math.PI) % (2*Math.PI);
 	var turning;
 
 	if (this.delta !== 0) {
@@ -56,37 +56,36 @@ var turnable = (superclass) => class extends superclass {
 	    }
 
 	    else if (pointDiff < Math.PI) {
-		this.turning = "left"
+		this.turning = "left";
 	    }
 	    else if(pointDiff >= Math.PI) {
-		this.turning = "right"
+		this.turning = "right";
 	    }
 
 	}
     }
     
-    _build() {
-	return super._build.call(this)
-	    .then(function() {
-		this.hasLeftTexture = _.every(this.sprites, function(s) {
-		    if (s.spriteImageInfo.meta.imagePurposes.left) {
-			return true;
-		    }
-		    else {
-			return false;
-		    }
-		});
+    async _build() {
+	await super._build();
+
+	this.hasLeftTexture = _.every(this.sprites, function(s) {
+	    if (s.spriteImageInfo.meta.imagePurposes.left) {
+		return true;
+	    }
+	    else {
+		return false;
+	    }
+	});
 		
-		
-		this.hasRightTexture = _.every(this.sprites, function(s) {
-		    if (s.spriteImageInfo.meta.imagePurposes.right) {
-			return true;
-		    }
-		    else {
-			return false;
-		    }
-		});
-	    }.bind(this));
+	this.hasRightTexture = _.every(this.sprites, function(s) {
+	    if (s.spriteImageInfo.meta.imagePurposes.right) {
+		return true;
+	    }
+	    else {
+		return false;
+	    }
+	});
+
     }
 
     renderSprite(spr, rotation, imageIndex) {

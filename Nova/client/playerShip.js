@@ -17,21 +17,20 @@ class playerShip extends ship {
 	this.target = undefined;
 	this.planetTarget = undefined;
 	this.targetIndex = -1;
-	this.sendTimeout;
+	//this.sendTimeout;
 
     }
 
-    _build() {
+    async _build() {
 
-	return super._build.call(this)
-	    .then(this.sortWeapons.bind(this))
-	    .then(this.makeStatusBar.bind(this))
-	    .then(function() {
-		// Is this terrible practice? I'm not sure, but it's definitely insane.	    
-		this.statechange = gameControls.onstatechange(this.statechange.bind(this));
-		this.assignControls(gameControls);
-		this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
-	    }.bind(this));
+	await super._build();
+	this.sortWeapons();
+	await this.makeStatusBar();
+	// Is this terrible practice? I'm not sure, but it's definitely insane.	    
+	this.statechange = gameControls.onstatechange(this.statechange.bind(this));
+	this.assignControls(gameControls);
+	this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
+
     }
 
 
@@ -60,7 +59,7 @@ class playerShip extends ship {
 
     makeStatusBar() {
 	this.statusBar = new statusBar('civilian', this);
-	return this.statusBar.build()
+	return this.statusBar.build();
     }
 
     receiveCollision(other) {
@@ -72,9 +71,10 @@ class playerShip extends ship {
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	       function(s) {this.container.addChild(s);}, this);
-	this.hide()
+	this.hide();
 
-	this.system.container.addChildAt(this.container, this.system.container.children.length) //playerShip is above all
+	this.system.container.addChildAt(this.container, this.system.container.children.length); //playerShip is above all
+	// replace this with pixi layering
     }
 
 

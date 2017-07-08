@@ -28,33 +28,30 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     }
 
-    _build() {
-	return super._build.call(this)
+    async _build() {
+	await super._build();
 	//	.then(function() {console.log(this)}.bind(this))
-	    .then(_.bind(this.buildOutfits, this))
-	    .then(_.bind(this.buildTargetImage, this))
-	    .then(_.bind(function() {
-		// make sure ship properties are sane after loading outfits
-		if (this.properties.maxSpeed < 0) {
-		    this.properties.maxSpeed = 0
-		}
-		if (this.properties.turnRate < 0) {
-		    this.properties.turnRate = 0
-		}
-		
-		this.fuel = this.properties.maxFuel;
-		if (this.system) {
-		    this.system.built.ships.add(this);
-		}
-		
-	    }, this))
+	await this.buildOutfits();
+	await this.buildTargetImage();
+
+	// make sure ship properties are sane after loading outfits
+	if (this.properties.maxSpeed < 0) {
+	    this.properties.maxSpeed = 0;
+	}
+	if (this.properties.turnRate < 0) {
+	    this.properties.turnRate = 0;
+	}
 	
+	this.fuel = this.properties.maxFuel;
+	if (this.system) {
+	    this.system.built.ships.add(this);
+	}
     }
 
 
     buildTargetImage() {
 	this.targetImage = new targetImage(this.meta.targetImage);
-	return this.targetImage.build()
+	return this.targetImage.build();
     }
 
     buildOutfits() {
