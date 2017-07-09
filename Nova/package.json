@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "description": "An attempt to recreate EV Nova in the browser",
   "dependencies": {
-    "crash-colliders": "^2.0.0",
+    "crash-colliders": "^2.0.1",
     "express": "^4.14.0",
     "jsdom": "^9.4.1",
     "node-uuid": "^1.4.7",
