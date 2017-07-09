@@ -22,7 +22,7 @@ var help = function() {
 		"kick(uuid)\tkicks a player by uuid"
 	       );
 }
-Object.defineProperty(local.context, 'help', {set: function(x) {}, get: help})
+Object.defineProperty(local.context, 'help', {set: function(x) {}, get: help});
 
 // lists players
 
@@ -74,14 +74,34 @@ var Firebird = {
     "name":"Firebird_Thamgiir",
     "outfits": [hailChaingun],
     "UUID": UUID()
-}
+};
 
 
 
 testNPC = new npc(Firebird, sol);
-testNPC.build().then(testNPC.show.bind(testNPC));
+testNPC.build()
+    .then(testNPC.show.bind(testNPC))
+    .then(function() {
+	setInterval(function() {
+	    var state = testNPC.state;
+	    if (state.targets.length > 0) {
+		state.targetIndex = Math.floor(Math.random() * state.targets.length);
+		state.accelerating = true;
+		state.turningToTarget = true;
+		//console.log("following");
+		debugger;
+	    }
+	    else {
+		state.target = -1;
+		state.accelerating = false;
+		state.turning = "";
+	    }
+	    testNPC.state = state;
+	}, 1000);
+    });
+
 local.context.testNPC = testNPC;
-//var starbridge = new ship("Starbridge A", [medium_blaster], sol);
+
 
 var players = {}; // for repl
 
@@ -103,7 +123,7 @@ var gameloop = function(system) {
     
     
     gameTimeout = setTimeout(function() {gameloop(system)}, 0);
-}
+};
 
 
 //notify clients of
@@ -130,7 +150,7 @@ var getConvexHulls = function(url) {
 	//console.log(global.convexHulls)
     }
     return global.convexHulls[url];
-}
+};
 
 
 app.get('/objects/:objectType/:jsonUrl/convexHulls.json', function(req, res) {
@@ -159,12 +179,12 @@ app.get('/', function(req, res){
 
 
 
-app.use(express.static(__dirname))
+app.use(express.static(__dirname));
 
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build()
-//    .then(startGame);
+    .then(startGame);
 
 var receives = 0;
 transmits = 0;

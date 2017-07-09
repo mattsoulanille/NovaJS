@@ -3,16 +3,71 @@ var _ = require("underscore");
 
 class npcServer extends npc {
     constructor() {
-	super(...arguments)
+	super(...arguments);
 	this.oldStats = this.getStats();
     }
 
 
+
+    get state() {
+	var s = {};
+	var stats = this.getStats();
+
+	// maybe turning should be stored as an int in the ship too?
+	if (this.turning === "left") {
+	    s.turning = -1;
+	}
+	else if (this.turning === "right") {
+	    s.turning = 1;
+	}
+	else {
+	    s.turning = 0;
+	}
+
+	s.accelerating = this.accelerating;
+	s.position = [this.position[0], this.position[1]];
+	s.velocity = [this.velocity[0], this.velocity[1]];
+	s.pointing = this.pointing;
+	s.shield = this.shield;
+	s.armor = this.armor;
+	s.target = this.target;
+	s.targets = this.getTargets();
+	s.targetIndex = s.targets.indexOf(s.target);
+	s.turningToTarget = this.turningToTarget;
+	return s;
+    }
+
+    set state(s) {
+	// since it's connected to a neural net, sanitize all the inputs.
+	if (s.turning === -1) {
+	    this.turning = "left";
+	}
+	else if (s.turning === 1) {
+	    this.turning = "right";
+	}
+	else {
+	    this.turning = "";
+	}
+	
+	this.accelerating = Boolean(s.accelerating);
+	this.turningToTarget = Boolean(s.turningToTarget);
+	if (! isNaN(s.targetIndex)) {
+	    this.target = this.getTargets()[Number(s.targetIndex)];
+	}
+
+	this.sendStatsIfDifferent(); // rather hacky. rewrite so changes automatically call sendStats?	
+    }
+
+    getTargets() {
+	return [...this.system.ships].filter(function(a) {
+	    return a !== this;
+	}.bind(this));
+    }
     
 
     render() {
 	super.render.call(this);
-	this.sendStatsIfDifferent(); // rather hacky. rewrite so changes automatically call sendStats?
+
     }
 
     sendStatsIfDifferent() {
