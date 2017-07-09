@@ -85,26 +85,7 @@ var Firebird = {
 
 
 testNPC = new npc(Firebird, sol);
-testNPC.build()
-    .then(testNPC.show.bind(testNPC))
-    .then(function() {
-	setInterval(function() {
-	    var state = testNPC.state;
-	    if (state.targets.length > 0) {
-		state.targetIndex = Math.floor(Math.random() * state.targets.length);
-		state.accelerating = true;
-		state.turningToTarget = true;
-		//console.log("following");
-		debugger;
-	    }
-	    else {
-		state.target = -1;
-		state.accelerating = false;
-		state.turning = "";
-	    }
-	    testNPC.state = state;
-	}, 1000);
-    });
+
 
 local.context.testNPC = testNPC;
 
@@ -190,6 +171,27 @@ app.use(express.static(__dirname));
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build()
+    .then(testNPC.show.bind(testNPC))
+    .then(function() {
+	setInterval(function() {
+	    var state = testNPC.state;
+	    if (state.targets.length > 0) {
+		state.targetIndex = Math.floor(Math.random() * state.targets.length);
+		state.accelerating = true;
+		state.turningToTarget = true;
+		state.firing[0] = Math.random() >= 0.5;
+		//console.log("following");
+		debugger;
+	    }
+	    else {
+		state.target = -1;
+		state.accelerating = false;
+		state.turning = "";
+		state.firing[0] = false;
+	    }
+	    testNPC.state = state;
+	}, 1000);
+    })
     .then(startGame);
 
 var receives = 0;

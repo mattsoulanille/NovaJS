@@ -44,7 +44,6 @@ basicWeapon = class extends inSystem {
     }
 
     async build() {
-    
 	// this is temporary
 	// normal or pd. will be implemented eventually.
 	this.meta.properties.hits = "normal";

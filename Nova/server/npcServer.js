@@ -24,6 +24,8 @@ class npcServer extends npc {
 	    s.turning = 0;
 	}
 
+	s.weapons = this.weapons.all;
+	s.firing = this.weapons.all.map(function(w) {return w.firing;});
 	s.accelerating = this.accelerating;
 	s.position = [this.position[0], this.position[1]];
 	s.velocity = [this.velocity[0], this.velocity[1]];
@@ -48,6 +50,11 @@ class npcServer extends npc {
 	else {
 	    this.turning = "";
 	}
+
+	for (var i = 0; i < this.weapons.all.length; i++) {
+	    this.weapons.all[i].firing = s.firing[i];
+	}
+	
 	
 	this.accelerating = Boolean(s.accelerating);
 	this.turningToTarget = Boolean(s.turningToTarget);

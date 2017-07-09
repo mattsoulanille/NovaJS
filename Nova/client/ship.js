@@ -56,7 +56,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     buildOutfits() {
 	// builds outfits to this.outfits from this.outfitList
-	
+	this.outfits = [];
+	this.weapons.all = [];
+
 	_.each(this.outfitList, function(buildInfo) {
 	    
 	    var o = new outfit(buildInfo);
@@ -67,7 +69,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	var outfitPromises = _.map(this.outfits, function(anOutfit) {
 	    //build unbuild outfits
 	    if (anOutfit.ready) {
-		return new Promise(function(fulfill, reject){fulfill()})
+		return new Promise(function(fulfill, reject){fulfill();});
 	    }
 	    else {
 		return anOutfit.build(this);
@@ -83,23 +85,23 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 	// adds sprites to the container in the correct order to have proper
 	// layering of engine, ship, lights etc.
-	var orderedSprites = [this.sprites.ship.sprite]
+	var orderedSprites = [this.sprites.ship.sprite];
 	if ("lights" in this.sprites) {
-	    orderedSprites.push(this.sprites.lights.sprite)
+	    orderedSprites.push(this.sprites.lights.sprite);
 	}
 	
 	if ("engine" in this.sprites) {
-	    orderedSprites.push(this.sprites.engine.sprite)
+	    orderedSprites.push(this.sprites.engine.sprite);
 	}
 	
 	
-	var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite;})
+	var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite;});
 	
 	//sprites that have no specified order
-	var without =  _.difference(spriteList, orderedSprites) 
+	var without =  _.difference(spriteList, orderedSprites);
 	//console.log(without)
-	_.each(without, function(x) {this.container.addChild(x)}, this);
-	_.each(orderedSprites, function(x) {this.container.addChild(x)}, this);
+	_.each(without, function(x) {this.container.addChild(x);}, this);
+	_.each(orderedSprites, function(x) {this.container.addChild(x);}, this);
 	this.system.container.addChild(this.container);
     }
 
@@ -118,7 +120,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	}
     }
 
-    getStats(stats) {
+    getStats() {
 	var stats = super.getStats.call(this);
 	if (typeof this.target !== 'undefined') {
 	    stats.target = this.target.UUID;

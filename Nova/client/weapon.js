@@ -10,7 +10,7 @@ if (typeof(module) !== 'undefined') {
 
 
 // Should this be a mixin? should classes of weapons be mixins?
-
+// this entire class seems unnecessary
 weapon = class extends inSystem {
     constructor(buildInfo, source) {
 	super(...arguments);
