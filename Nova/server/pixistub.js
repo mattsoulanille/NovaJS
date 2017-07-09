@@ -15,7 +15,11 @@ PIXI = {
 
 	this.destroy = function() {};
     },
-    DisplayGroup: function() {}
+    DisplayGroup: function() {},
+    Graphics: function() {
+	this.visible = false;
+	this.clear = function() {};
+    }
 
 
 }

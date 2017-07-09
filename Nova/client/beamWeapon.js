@@ -3,6 +3,7 @@ if (typeof(module) !== 'undefined') {
     //    var Promise = require("bluebird");
     var collidable = require("../server/collidableServer");
     var inSystem = require("./inSystem.js");
+    var PIXI = require("../server/pixistub.js");
 }
 
 beamWeapon = class extends collidable(inSystem){
@@ -25,7 +26,7 @@ beamWeapon = class extends collidable(inSystem){
 	    this.name = buildInfo.name;
 	    this.meta = buildInfo.meta;
 	    
-	    this.count = buildInfo.count || 1
+	    this.count = buildInfo.count || 1;
 	    this.UUID = buildInfo.UUID;
 	}
     }
@@ -122,6 +123,7 @@ Else, return false
 
     show() {
 	// necessary for inheritance
+	// wait. is it really necessary anymore?
     }
     
     getStats() {
@@ -154,7 +156,7 @@ Else, return false
     
     
 
-    render(fireAngle) {
+    render(fireAngle = this.source.pointing) {
 	if (this.firing) {
 	    this.graphics.position.x =
 		(this.position[0] - stagePosition[0]) + (screenW-194)/2;
@@ -163,17 +165,19 @@ Else, return false
 	    this.graphics.clear();
 	    this.graphics.lineStyle(this.meta.physics.width, this.meta.physics.color);
 	    this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
-	    var fireAngle = fireAngle || this.source.pointing;
 	    var x = Math.cos(fireAngle) * this.meta.physics.length;
 	    var y = -Math.sin(fireAngle) * this.meta.physics.length;
 	    this.graphics.lineTo(x,y);
-	    
-	    this.collisionShape.moveTo(...this.position);
-	    this.collisionShape.setAngle(fireAngle);
+
+	    this.renderCollisionShape(fireAngle);
 	}
     }
 
-    
+
+    renderCollisionShape(fireAngle = this.source.pointing) {
+	this.collisionShape.moveTo(...this.position);
+	this.collisionShape.setAngle(fireAngle);
+    }
 
 
     collideWith(other, res) {
