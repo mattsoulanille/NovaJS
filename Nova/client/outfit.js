@@ -47,21 +47,7 @@ outfit = class extends inSystem {
 		fulfill();
 	    });
 	    loader.onError.add(reject.bind(this, "Could not get url " + url));
-	    /*
-	    
-	    $.getJSON(this.url + this.name + ".json", _.bind(function(data) {
-		this.meta = data;
-		
-		if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
-		    fulfill();
-		}
-		else {
-		    reject();
-		}
-		
-		
-	    }, this));
-	    */
+
 	}.bind(this));
 	
 	
