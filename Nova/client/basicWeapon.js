@@ -140,12 +140,10 @@ basicWeapon = class extends inSystem {
 	return false
     }
 
-    notifyServer(proj, index) {
-	
-	var newStats = this.getStats();
-	var with_uuid = {};
-	with_uuid[this.UUID] = newStats;
-	this.socket.emit('updateStats', with_uuid);
+    sendStats(proj, index) {
+	var newStats = {};
+	newStats[this.UUID] = this.getStats();
+	this.socket.emit('updateStats', newStats);
     }
     
     getStats() {
@@ -210,7 +208,7 @@ basicWeapon = class extends inSystem {
 	    this.autoFire();
 	}
 	if (notify && (typeof this.UUID !== 'undefined')) {
-	    this.notifyServer();
+	    this.sendStats();
 	}
 	
     }
@@ -219,7 +217,7 @@ basicWeapon = class extends inSystem {
 	// low level. Stops firing
 	this.doAutoFire = false;
 	if (notify && (typeof this.UUID !== 'undefined')) {
-	    this.notifyServer();
+	    this.sendStats();
 	}
     }
     
@@ -267,10 +265,12 @@ basicWeapon = class extends inSystem {
     
     destroy() {
 	if (this.destroyed) {
-	    return
+	    return;
 	}
-	
-	this.firing = false;
+
+	// watch out. this sends stuff over socket.io
+	this._firing = false;
+	this.stopFiring(false);
 	_.each(this.projectiles, function(proj) {
 	    proj.destroy();
 	});

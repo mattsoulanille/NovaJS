@@ -105,7 +105,8 @@ class npcServer extends npc {
 	    this.sendStats(stats);
 	}
     }
-    
+
+    /*
     sendStats(stats=this.getStats()) {
 	//console.log("sending");
 	this.oldStats = stats;
@@ -114,7 +115,7 @@ class npcServer extends npc {
 	// make sure to set npcServer.prototype.io
 	this.io.emit('updateStats', toSend);
     }
-
+*/
     onDeath() {
 	// temporary respawn
 	this.position[0] = Math.random() * 1000 - 500;

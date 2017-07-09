@@ -48,7 +48,13 @@ var kick = function(UUID) {
 local.context.kick = kick;
 
 var npc = require("./server/npcServer.js");
-npc.prototype.io = io;
+//npc.prototype.io = io;
+var spaceObject = require("./server/spaceObjectServer");
+spaceObject.prototype.socket = io;
+var beamWeapon = require("./server/beamWeaponServer");
+beamWeapon.prototype.socket = io;
+var basicWeapon = require("./server/basicWeaponServer");
+basicWeapon.prototype.socket = io;
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");

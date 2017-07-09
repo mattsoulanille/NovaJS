@@ -107,7 +107,7 @@ Else, return false
 	    this.collisionShape.insert();
 	}
 	if ((typeof this.UUID !== 'undefined') && notify) {
-	    this.notifyServer();
+	    this.sendStats();
 	}
     }
 
@@ -117,7 +117,7 @@ Else, return false
 	this.rendering = false;
 	this.collisionShape.remove();
 	if ((typeof this.UUID !== 'undefined') && notify) {
-	    this.notifyServer();
+	    this.sendStats();
 	}
     }
 
@@ -146,11 +146,10 @@ Else, return false
     }
 
 
-    notifyServer() {
-	var stats = this.getStats();
-	var with_uuid = {};
-	with_uuid[this.UUID] = stats;
-	this.socket.emit('updateStats', with_uuid);
+    sendStats() {
+	var newStats = {};
+	newStats[this.UUID] = this.getStats();
+	this.socket.emit('updateStats', newStats);
     }
 
     
@@ -230,7 +229,9 @@ Else, return false
     
     
     destroy() {
-	this.firing = false;
+	this._firing = false;
+	this.stopFiring(false);
+
     }
 
     setTarget(target) {

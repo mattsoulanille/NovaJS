@@ -8,14 +8,13 @@ class basicWeaponServer extends basicWeapon {
     }
 
     build() {
-	return super.build.call(this)
+	return super.build.call(this);
 //	.then(function() {
 
 	    
 //	}.bind(this))
     }
 
-    notifyServer() {};
 
     destory() {};
 }

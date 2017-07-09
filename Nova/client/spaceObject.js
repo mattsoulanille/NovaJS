@@ -74,6 +74,13 @@ spaceObject = class extends inSystem {
 	await this._build();
 	this.built = true;
     }
+
+    sendStats() {
+	var newStats = {};
+	newStats[this.UUID] = this.getStats();
+	this.socket.emit('updateStats', newStats);
+    }
+    
     addToSpaceObjects() {
 	this.system.built.spaceObjects.add(this);
 	this.system.built.render.add(this);

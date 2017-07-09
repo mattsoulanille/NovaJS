@@ -169,12 +169,6 @@ class playerShip extends ship {
 	super.updateStats.call(this, stats);
     }
 
-    sendStats() {
-	var newStats = {};
-	newStats[this.UUID] = this.getStats();
-	this.socket.emit('updateStats', newStats);
-    }
-
     render() {
 	// -194 for the sidebar
 	this.container.position.x = (screenW-194)/2;
