@@ -5,6 +5,7 @@ class npcServer extends npc {
     constructor() {
 	super(...arguments);
 	this.oldStats = this.getStats();
+	this.controlFunction = function(state) {return state;};
     }
 
 
@@ -73,6 +74,7 @@ class npcServer extends npc {
     
 
     render() {
+	this.state = this.controlFunction(this.state);
 	super.render.call(this);
 
     }
@@ -134,12 +136,17 @@ class npcServer extends npc {
 	this.sendStats();
     }
 
+    destroy() {
+	super.destroy.call(this);
+	this.socket.emit("removeObjects", this.UUIDS);
+    }
+
 }
 
 npcServer.prototype.sendCollision = _.throttle(function() {
     var stats = {};
     stats[this.UUID] = this.getStats();
-    this.io.emit('updateStats', stats);
+    this.socket.emit('updateStats', stats);
 });
 
 

@@ -32,6 +32,7 @@ spaceObject = class extends inSystem {
 
 	this.size = [];
 	this.built = false;
+	this.building = false;
 
 	this.container = new PIXI.Container(); // Must be before call to set system
 	this.container.visible = false;
@@ -59,6 +60,14 @@ spaceObject = class extends inSystem {
 	this.system = system; // a function call (see inSystem.js)
     }
 
+    get UUIDS() {
+	var uuids = [];
+	if (this.UUID) {
+	    uuids.push(this.UUID);
+	}
+	return uuids;
+    }
+    
     async _build() {
 	await this.loadResources();
     	await this.setProperties();
@@ -70,9 +79,12 @@ spaceObject = class extends inSystem {
 
     
     async build() {
-	this.built = false;
-	await this._build();
-	this.built = true;
+	if (!this.building && !this.built) {
+	    this.building = true;
+	    await this._build();
+	    this.building = false;
+	    this.built = true;
+	}	
     }
 
     sendStats() {

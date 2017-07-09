@@ -10,7 +10,7 @@ class systemServer extends system {
     resume() {
 	var time = new Date().getTime();
 	this.spaceObjects.forEach(function(s) {
-	    s.lastTime = time
+	    s.lastTime = time;
 	}.bind(this));
     }
 

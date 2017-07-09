@@ -28,7 +28,7 @@ Object.defineProperty(local.context, 'help', {set: function(x) {}, get: help});
 
 
 var listPlayers = function() {
-    var formatted = {}
+    var formatted = {};
     _.each(players, function(p, key) {
 	formatted[key] = {"ship":p.ship.name};
     });
@@ -70,25 +70,11 @@ Object.defineProperty(local.context, 'ships', {set: function() {}, get: function
 var convexHullBuilder = require("./server/convexHullBuilder.js");
 var path = require('path');
 
+var AI = require("./server/AI.js");
+npcMaker= new AI(sol);
 
-var hailChaingun = {
-    "name":"Hail Chaingun",
-    "count":2
-}
-
-var Firebird = {
-    "name":"Firebird_Thamgiir",
-    "outfits": [hailChaingun],
-    "UUID": UUID()
-};
-
-
-
-testNPC = new npc(Firebird, sol);
-
-
-local.context.testNPC = testNPC;
-
+local.context.npcMaker = npcMaker;
+npcMaker.makeShip(npcMaker.followAndShoot);
 
 var players = {}; // for repl
 
@@ -171,27 +157,6 @@ app.use(express.static(__dirname));
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 sol.build()
-    .then(testNPC.show.bind(testNPC))
-    .then(function() {
-	setInterval(function() {
-	    var state = testNPC.state;
-	    if (state.targets.length > 0) {
-		state.targetIndex = Math.floor(Math.random() * state.targets.length);
-		state.accelerating = true;
-		state.turningToTarget = true;
-		state.firing[0] = Math.random() >= 0.5;
-		//console.log("following");
-		debugger;
-	    }
-	    else {
-		state.target = -1;
-		state.accelerating = false;
-		state.turning = "";
-		state.firing[0] = false;
-	    }
-	    testNPC.state = state;
-	}, 1000);
-    })
     .then(startGame);
 
 var receives = 0;

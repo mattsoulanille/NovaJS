@@ -54,6 +54,14 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	return this.targetImage.build();
     }
 
+    get UUIDS() {
+	var uuids = super.UUIDS;
+	this.weapons.all.forEach(function(weap) {
+	    uuids.push(weap.UUID);
+	});
+	return uuids;
+    }
+    
     buildOutfits() {
 	// builds outfits to this.outfits from this.outfitList
 	this.outfits = [];
