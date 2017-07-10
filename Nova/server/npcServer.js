@@ -5,7 +5,9 @@ class npcServer extends npc {
     constructor() {
 	super(...arguments);
 	this.oldStats = this.getStats();
-	this.controlFunction = function(state) {return state;};
+	this._controlFunction = function(state) {return state;};
+	this._delay = 100; // 100 milliseconds
+	this.controlInterval = undefined;
     }
 
 
@@ -39,7 +41,7 @@ class npcServer extends npc {
 	s.turningToTarget = this.turningToTarget;
 	return s;
     }
-
+    
     set state(s) {
 	// since it's connected to a neural net, sanitize all the inputs.
 	if (s.turning === -1) {
@@ -66,6 +68,8 @@ class npcServer extends npc {
 	this.sendStatsIfDifferent(); // rather hacky. rewrite so changes automatically call sendStats?	
     }
 
+
+    
     getTargets() {
 	return [...this.system.ships].filter(function(a) {
 	    return a !== this;
@@ -74,9 +78,39 @@ class npcServer extends npc {
     
 
     render() {
-	this.state = this.controlFunction(this.state);
 	super.render.call(this);
 
+    }
+
+    async build() {
+	await super.build();
+	this.setInterval();
+    }
+
+    get controlFunction() {
+	return this._controlFunction;
+    }
+
+    set controlFunction(f) {
+	this._controlFunction = f;
+	this.setInterval();
+    }
+
+    get delay() {
+	return this._delay;
+    }
+    set delay(milliseconds) {
+	this._delay = milliseconds;
+	this.setInterval();
+    }
+
+    setInterval() {
+	if (typeof this.controlInterval !== 'undefined') {
+	    clearInterval(this.controlInterval);
+	}
+	if (this.built) {
+	    this.controlInterval = setInterval(function() {this.state = this.controlFunction(this.state);}.bind(this), this.delay);
+	}
     }
 
     sendStatsIfDifferent() {
@@ -137,6 +171,9 @@ class npcServer extends npc {
     }
 
     destroy() {
+	if (typeof this.controlInterval !== 'undefined') {
+	    clearInterval(this.controlInterval);
+	}
 	super.destroy.call(this);
 	this.socket.emit("removeObjects", this.UUIDS);
     }
