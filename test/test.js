@@ -112,6 +112,22 @@ describe("weap", function() {
 	assert.equal(missile.sound, 212);
     });
 
-    
+    it("should parse explosion", function() {
+	assert.equal(unguided.explosion, 147);
+	assert.equal(beam.explosion, -1);
+	assert.equal(missile.explosion, 138);
+    });
+
+    it("should parse proxRadius", function() {
+	assert.equal(unguided.proxRadius, 49);
+	//assert.equal(beam.proxRadius, 0);
+	assert.equal(missile.proxRadius, 40);
+    });
+
+    it("should parse blastRadius", function() {
+	assert.equal(unguided.blastRadius, 48);
+	//assert.equal(beam.blastRadius, 0);
+	assert.equal(missile.blastRadius, 39);
+    });
 
 });
