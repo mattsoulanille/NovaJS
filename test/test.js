@@ -94,8 +94,10 @@ describe("weap", function() {
 	assert.equal(missile.fireGroup, "secondary");	
     });
 
-//    it("should parse 
-
-    
+    it("should parse AmmoType", function() {
+	assert.equal(unguided.ammoType, -1);
+	assert.equal(beam.ammoType, -1);
+	assert.equal(missile.ammoType, 130);
+    });
 
 });
