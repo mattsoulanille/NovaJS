@@ -6,11 +6,11 @@ var novaParse = require("./novaParse.js").novaParse;
 
 var ndat4 = new rf("./test/Nova\ Data\ 4.ndat", false);
 var nships1 = new rf("./test/Nova\ Ships\ 1.ndat", false);
-var weapon = new rf("./test/weapon.ndat", false);
+var weap = new rf("./test/files/weap.ndat", false);
 
 
 ndat4.read();
-weapon.read();
+weap.read();
 
 
 
@@ -27,6 +27,6 @@ nships1.read().then(function() {
 local.context.rf = rf;
 local.context.ndat4 = ndat4;
 local.context.nships1 = nships1;
-local.context.weapon = weapon;
+local.context.weap = weap;
 local.context.novaParse = novaParse;
 
