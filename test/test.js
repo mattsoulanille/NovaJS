@@ -100,4 +100,18 @@ describe("weap", function() {
 	assert.equal(missile.ammoType, 130);
     });
 
+    it("should parse graphic", function() {
+	assert.equal(unguided.graphic, 3255);
+	assert.equal(beam.graphic, 3244);
+	assert.equal(missile.graphic, -1);
+    });
+
+    it("should parse sound", function() {
+	assert.equal(unguided.sound, 221);
+	assert.equal(beam.sound, -1);
+	assert.equal(missile.sound, 212);
+    });
+
+    
+
 });
