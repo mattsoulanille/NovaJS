@@ -15,7 +15,7 @@ var rled = function(resource) {
     
     out.numberOfFrames = d.getUint16(8);
     out.bytesPerRow = out.size[0] * 3;
-
+    
     
 
     return out;

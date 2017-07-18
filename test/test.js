@@ -372,6 +372,33 @@ describe("weap", function() {
 	assert.equal(beam.coronaColor, 0xFF191A1B);
     });
 
-    
+    it("should parse submunitions count", function() {
+	assert.equal(unguided.submunitions.count, 25);
+	assert.equal(beam.submunitions.count, 0);
+	assert.equal(missile.submunitions.count, 16);
+	assert.equal(turret.submunitions.count, 32767);
+    });
+
+    it("should parse submunitions type", function() {
+	assert.equal(unguided.submunitions.type, 226);
+	assert.equal(beam.submunitions.type, -1);
+	assert.equal(missile.submunitions.type, 217);
+	assert.equal(turret.submunitions.type, 130);
+    });
+
+    it("should parse submunitions theta", function() {
+	assert.equal(unguided.submunitions.theta, 27);
+	assert.equal(beam.submunitions.theta, 0);
+	assert.equal(missile.submunitions.theta, -18);
+	assert.equal(turret.submunitions.theta, 32767);
+    });
+
+    it("should parse submunitions limit", function() {
+	assert.equal(unguided.submunitions.limit, 28);
+	assert.equal(beam.submunitions.limit, 0);
+	assert.equal(missile.submunitions.limit, 19);
+	assert.equal(turret.submunitions.limit, 32767);
+    });
+
     
 });
