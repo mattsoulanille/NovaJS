@@ -261,7 +261,7 @@ describe("weap", function() {
 
     it("should parse passOverAsteroids", function() {
 	assert.equal(unguided.passOverAsteroids, false);
-	//assert.equal(beam.passOverAsteroids, false);
+	assert.equal(beam.passOverAsteroids, false);
 	assert.equal(missile.passOverAsteroids, true);
 	assert.equal(turret.passOverAsteroids, true);
     });
@@ -404,6 +404,70 @@ describe("weap", function() {
 	assert.equal(turret.proxSafety, 32767);
     });
 
-//    it("should parse spin
+    it("should parse spinShotsBeforeProxSafety", function() {
+	assert.equal(unguided.spinShotsBeforeProxSafety, false);
+	assert.equal(missile.spinShotsBeforeProxSafety, true);
+	assert.equal(turret.spinShotsBeforeProxSafety, false);
+    });
+
+    it("should parse spinStopOnLastFrame", function() {
+	assert.equal(unguided.spinStopOnLastFrame, false);
+	assert.equal(missile.spinStopOnLastFrame, true);
+	assert.equal(turret.spinStopOnLastFrame, true);
+    });
+
+    it("should parse proxIgnoreAsteroids", function() {
+	assert.equal(unguided.proxIgnoreAsteroids, false);
+	assert.equal(beam.proxIgnoreAsteroids, false);
+	assert.equal(missile.proxIgnoreAsteroids, false);
+	assert.equal(turret.proxIgnoreAsteroids, true);
+    });
+
+    it("should parse proxHitAll", function() {
+	// true by default for all but guided type
+	assert.equal(unguided.proxHitAll, true);
+	assert.equal(beam.proxHitAll, true);
+	assert.equal(missile.proxHitAll, false);
+	assert.equal(turret.proxHitAll, true);
+    });
+
+    it("should parse submunitions fireAtNearest", function() {
+	assert.equal(unguided.submunitions[0].fireAtNearest, false);
+	assert.equal(missile.submunitions[0].fireAtNearest, true);
+	assert.equal(turret.submunitions[0].fireAtNearest, false);
+    });
+
+    it("should parse submunitions subIfExpire", function() {
+	assert.equal(unguided.submunitions[0].subIfExpire, true);
+	assert.equal(missile.submunitions[0].subIfExpire, true);
+	assert.equal(turret.submunitions[0].subIfExpire, false);
+    });
+
+    it("should parse showAmmo", function() {
+	assert.equal(unguided.showAmmo, true);
+	assert.equal(beam.showAmmo, false);
+	assert.equal(missile.showAmmo, false);
+	assert.equal(turret.showAmmo, true);
+    });
+
+    it("should parse fireOnlyIfKeyCarried", function() {
+	assert.equal(unguided.fireOnlyIfKeyCarried, false);
+	assert.equal(beam.fireOnlyIfKeyCarried, true);
+	assert.equal(missile.fireOnlyIfKeyCarried, false);
+	assert.equal(turret.fireOnlyIfKeyCarried, true);
+    });
+    it("should parse npcCantUse", function() {
+	assert.equal(unguided.npcCantUse, false);
+	assert.equal(beam.npcCantUse, true);
+	assert.equal(missile.npcCantUse, false);
+	assert.equal(turret.npcCantUse, true);
+    });
+
+    it("should parse useFiringAnimation", function() {
+	assert.equal(unguided.useFiringAnimation, false);
+	assert.equal(beam.useFiringAnimation, false);
+	assert.equal(missile.useFiringAnimation, true);
+	assert.equal(turret.useFiringAnimation, true);
+    });
     
 });
