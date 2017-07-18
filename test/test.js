@@ -345,13 +345,6 @@ describe("weap", function() {
 	assert.equal(turret.trailParticles.color, 0xFFFFFFFF);
     });
 
-    it("should parse trailParticles color", function() {
-	assert.equal(unguided.trailParticles.color, 0xFF242526);
-	assert.equal(beam.trailParticles.color, 0xFF000000);
-	assert.equal(missile.trailParticles.color, 0xFF1B1C1D);
-	assert.equal(turret.trailParticles.color, 0xFFFFFFFF);
-    });
-
     it("should parse beamLength", function() {
 	assert.equal(beam.beamLength, 19);
     });
@@ -510,6 +503,41 @@ describe("weap", function() {
 	assert.equal(beam.asteroidMiner, true);
 	assert.equal(missile.asteroidMiner, false);
 	assert.equal(turret.asteroidMiner, true);
+    });
+
+    it("should parse ionization", function() {
+	assert.equal(unguided.ionization, 29);
+	assert.equal(beam.ionization, 0);
+	assert.equal(missile.ionization, 20);
+	assert.equal(turret.ionization, 32767);
+    });
+
+    it("should parse hitParticles number", function() {
+	assert.equal(unguided.hitParticles.number, 41);
+	assert.equal(beam.hitParticles.number, -1);
+	assert.equal(missile.hitParticles.number, 32);
+	assert.equal(turret.hitParticles.number, 32767);
+    });
+
+    it("should parse hitParticles life", function() {
+	assert.equal(unguided.hitParticles.life, 43);
+	assert.equal(beam.hitParticles.life, -1);
+	assert.equal(missile.hitParticles.life, 34);
+	assert.equal(turret.hitParticles.life, 32767);
+    });
+
+    it("should parse hitParticles velocity", function() {
+	assert.equal(unguided.hitParticles.velocity, 42);
+	assert.equal(beam.hitParticles.velocity, -1);
+	assert.equal(missile.hitParticles.velocity, 33);
+	assert.equal(turret.hitParticles.velocity, 32767);
+    });
+
+    it("should parse hitParticles color", function() {
+	assert.equal(unguided.hitParticles.color, 0xFF2C2D2E);
+	assert.equal(beam.hitParticles.color, 0xFF000000);
+	assert.equal(missile.hitParticles.color, 0xFF232425);
+	assert.equal(turret.hitParticles.color, 0xFFFFFFFF);
     });
 
 });
