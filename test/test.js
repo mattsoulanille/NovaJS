@@ -246,7 +246,6 @@ describe("weap", function() {
 	assert.equal(blindSpots.back, false);
     });
     
-
     it("should parse flak", function() {
 	assert.equal(unguided.flak, false);
 	//assert.equal(beam.flak, false);
@@ -303,5 +302,42 @@ describe("weap", function() {
 	    assert.equal(turret.cicnSmoke[i], turretCicns[i]);
 	};
     });
+
+    it("should parse decay", function() {	
+	assert.equal(unguided.decay, 15);
+	assert.equal(beam.decay, 115);
+	assert.equal(missile.decay, 5);
+	assert.equal(turret.decay, 32767);
+    });
+
+    it("should parse trailParticles number", function() {
+	assert.equal(unguided.trailParticles.number, 34);
+	assert.equal(beam.trailParticles.number, -1);
+	assert.equal(missile.trailParticles.number, 25);
+	assert.equal(turret.trailParticles.number, 32767);
+    });
+
+    it("should parse trailParticles lifeMin", function() {
+	assert.equal(unguided.trailParticles.lifeMin, 35);
+	assert.equal(beam.trailParticles.lifeMin, -1);
+	assert.equal(missile.trailParticles.lifeMin, 26);
+	assert.equal(turret.trailParticles.lifeMin, 32767);
+    });
+
+    it("should parse trailParticles lifeMax", function() {
+	assert.equal(unguided.trailParticles.lifeMax, 40);
+	assert.equal(beam.trailParticles.lifeMax, -1);
+	assert.equal(missile.trailParticles.lifeMax, 31);
+	assert.equal(turret.trailParticles.lifeMax, 32767);
+    });
+
+    /*
+    it("should parse trailParticles lifeMax", function() {
+	assert.equal(unguided.trailParticles.lifeMax, 40);
+	assert.equal(beam.trailParticles.lifeMax, -1);
+	assert.equal(missile.trailParticles.lifeMax, 31);
+	assert.equal(turret.trailParticles.lifeMax, 32767);
+    });
+*/
     
 });
