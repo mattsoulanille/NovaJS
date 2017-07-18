@@ -165,6 +165,12 @@ describe("weap", function() {
 	assert.equal(turret.spinShots, true);
     });
 
+    // see nova bible beamWidth
+    it("should parse spinRate", function() {
+	assert.equal(missile.spinRate, 123);
+	assert.equal(turret.spinRate, 221);
+    });
+
     it("should parse primary/secondary", function() {
 	assert.equal(unguided.fireGroup, "primary"); 
 	assert.equal(beam.fireGroup, "primary");
@@ -344,6 +350,26 @@ describe("weap", function() {
 	assert.equal(beam.trailParticles.color, 0xFF000000);
 	assert.equal(missile.trailParticles.color, 0xFF1B1C1D);
 	assert.equal(turret.trailParticles.color, 0xFFFFFFFF);
+    });
+
+    it("should parse beamLength", function() {
+	assert.equal(beam.beamLength, 19);
+    });
+
+    it("should parse beamWidth", function() {
+	assert.equal(beam.beamWidth, 20);
+    });
+
+    it("should parse coronaFalloff", function() {
+	assert.equal(beam.coronaFalloff, 24);
+    });
+
+    it("should parse beamColor", function() {
+	assert.equal(beam.beamColor, 0xFF151617);
+    });
+
+    it("should parse coronaColor", function() {
+	assert.equal(beam.coronaColor, 0xFF191A1B);
     });
 
     
