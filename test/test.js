@@ -331,13 +331,21 @@ describe("weap", function() {
 	assert.equal(turret.trailParticles.lifeMax, 32767);
     });
 
-    /*
-    it("should parse trailParticles lifeMax", function() {
-	assert.equal(unguided.trailParticles.lifeMax, 40);
-	assert.equal(beam.trailParticles.lifeMax, -1);
-	assert.equal(missile.trailParticles.lifeMax, 31);
-	assert.equal(turret.trailParticles.lifeMax, 32767);
+
+    it("should parse trailParticles color", function() {
+	assert.equal(unguided.trailParticles.color, 0x242526);
+	assert.equal(beam.trailParticles.color, 0x000000);
+	assert.equal(missile.trailParticles.color, 0x1B1C1D);
+	assert.equal(turret.trailParticles.color, 0xFFFFFF);
     });
-*/
+
+    it("should parse trailParticles color", function() {
+	assert.equal(unguided.trailParticles.color, 0x242526);
+	assert.equal(beam.trailParticles.color, 0x000000);
+	assert.equal(missile.trailParticles.color, 0x1B1C1D);
+	assert.equal(turret.trailParticles.color, 0xFFFFFF);
+    });
+
+    
     
 });
