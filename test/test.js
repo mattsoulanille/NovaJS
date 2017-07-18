@@ -208,7 +208,7 @@ describe("weap", function() {
     });
 
     it("should parse vulnerableToPD", function() {
-	assert.equal(guided.vulnerableToPD, true);
+	assert.equal(missile.vulnerableToPD, true);
     });
 
     it("should parse hitsFiringShip", function() {
@@ -251,6 +251,61 @@ describe("weap", function() {
 	assert.equal(turret.turretBackBlindSpot, false);
     });
 
+    it("should parse flak", function() {
+	assert.equal(unguided.flak, false);
+	//assert.equal(beam.flak, false);
+	assert.equal(missile.flak, true);
+	assert.equal(turret.flak, false);
+    });
 
+    it("should parse passOverAsteroids", function() {
+	assert.equal(unguided.passOverAsteroids, false);
+	//assert.equal(beam.passOverAsteroids, false);
+	assert.equal(missile.passOverAsteroids, true);
+	assert.equal(turret.passOverAsteroids, true);
+    });
+
+    it("should parse decoyedByAsteroids", function() {
+	//assert.equal(unguided.decoyedByAsteroids, false);
+	//assert.equal(beam.decoyedByAsteroids, false);
+	assert.equal(missile.decoyedByAsteroids, true);
+	//assert.equal(turret.decoyedByAsteroids, false);
+    });
+
+    it("should parse confusedByInterference", function() {
+	assert.equal(missile.confusedByInterference, true);
+    });
+
+    it("should parse turnsAwayIfJammed", function() {
+	assert.equal(missile.turnsAwayIfJammed, true);
+    });
+
+    it("should parse cantFireWhileIonized", function() {
+	assert.equal(unguided.cantFireWhileIonized, false);
+	assert.equal(beam.cantFireWhileIonized, true);
+	assert.equal(missile.cantFireWhileIonized, true);
+	assert.equal(turret.cantFireWhileIonized, false);
+    });
+
+    it("should parse loseLockIfNotAhead", function() {
+	assert.equal(missile.loseLockIfNotAhead, true);
+    });
+
+    it("should parse attackParentIfJammed", function() {
+	assert.equal(missile.attackParentIfJammed, true);
+    });
+        
+    it("should parse cicnSmoke", function() {
+	assert.equal(unguided.cicnSmoke, false);
+	assert.equal(beam.cicnSmoke, false);
+
+	var missileCicns = [1000,1001,1002,1003,1004,1005,1006,1007];
+	var turretCicns = [1008,1009,1010,1011,1012,1013,1014,1015];
+	
+	for (var i = 0; i < 8; i++) {
+	    assert.equal(missile.cicnSmoke[i], missileCicns[i]);
+	    assert.equal(turret.cicnSmoke[i], turretCicns[i]);
+	};
+    });
     
 });
