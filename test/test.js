@@ -100,6 +100,14 @@ describe("weap", function() {
 	assert.equal(turret.accuracy, 360);
     });
 
+    it("should parse fireAtFixedAngle", function() {
+	assert.equal(unguided.firesAtFixedAngle, false); 
+	assert.equal(beam.firesAtFixedAngle, false);
+	assert.equal(missile.firesAtFixedAngle, true);
+	assert.equal(turret.firesAtFixedAngle, false);
+	
+    });
+
     it("should parse AmmoType", function() {
 	assert.equal(unguided.ammoType, -1);
 	assert.equal(beam.ammoType, -1);
@@ -202,6 +210,20 @@ describe("weap", function() {
 	assert.equal(turret.hitsFiringShip, true);
     });
 
-    
+    it("should parse smallCicnSmoke", function() {
+	assert.equal(unguided.smallCicnSmoke, false); 
+	//assert.equal(beam.smallCicnSmoke, false);
+	assert.equal(missile.smallCicnSmoke, false);
+	assert.equal(turret.smallCicnSmoke, true);
+    });
+
+    it("should parse bigCicnSmoke", function() {
+	assert.equal(unguided.bigCicnSmoke, false); 
+	//assert.equal(beam.bigCicnSmoke, false);
+	assert.equal(missile.bigCicnSmoke, true);
+	assert.equal(turret.bigCicnSmoke, false);
+    });
+
+
 
 });
