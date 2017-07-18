@@ -239,17 +239,13 @@ describe("weap", function() {
 	assert.equal(turret.persistentCicnSmoke, true);
     });
 
-    it("should parse turretFrontBlindSpot", function() {
-	assert.equal(turret.turretFrontBlindSpot, false);
+    it("should parse turretBlindSpots", function() {
+	var blindSpots = turret.turretBlindSpots;
+	assert.equal(blindSpots.front, false);
+	assert.equal(blindSpots.side, true);
+	assert.equal(blindSpots.back, false);
     });
-
-    it("should parse turretSideBlindSpot", function() {
-	assert.equal(turret.turretSideBlindSpot, true);
-    });
-
-    it("should parse turretBackBlindSpot", function() {
-	assert.equal(turret.turretBackBlindSpot, false);
-    });
+    
 
     it("should parse flak", function() {
 	assert.equal(unguided.flak, false);
