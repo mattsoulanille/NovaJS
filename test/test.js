@@ -404,10 +404,10 @@ describe("weap", function() {
 	assert.equal(turret.proxSafety, 32767);
     });
 
-    it("should parse spinShotsBeforeProxSafety", function() {
-	assert.equal(unguided.spinShotsBeforeProxSafety, false);
-	assert.equal(missile.spinShotsBeforeProxSafety, true);
-	assert.equal(turret.spinShotsBeforeProxSafety, false);
+    it("should parse spinBeforeProxSafety", function() {
+	assert.equal(unguided.spinBeforeProxSafety, true);
+	assert.equal(missile.spinBeforeProxSafety, false);
+	assert.equal(turret.spinBeforeProxSafety, true);
     });
 
     it("should parse spinStopOnLastFrame", function() {
