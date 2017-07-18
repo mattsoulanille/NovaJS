@@ -469,5 +469,33 @@ describe("weap", function() {
 	assert.equal(missile.useFiringAnimation, true);
 	assert.equal(turret.useFiringAnimation, true);
     });
+
+    it("should parse planetType", function() {
+	assert.equal(unguided.planetType, false);
+	assert.equal(beam.planetType, true);
+	assert.equal(missile.planetType, true);
+	assert.equal(turret.planetType, false);
+    });
+
+    it("should parse hideIfNoAmmo", function() {
+	assert.equal(unguided.hideIfNoAmmo, false);
+	assert.equal(beam.hideIfNoAmmo, false);
+	assert.equal(missile.hideIfNoAmmo, true);
+	assert.equal(turret.hideIfNoAmmo, true);
+    });
+
+    it("should parse disableOnly", function() {
+	assert.equal(unguided.disableOnly, false);
+	assert.equal(beam.disableOnly, true);
+	assert.equal(missile.disableOnly, true);
+	assert.equal(turret.disableOnly, false);
+    });
+
+    it("should parse beamUnderShip", function() {
+	assert.equal(unguided.beamUnderShip, false);
+	assert.equal(beam.beamUnderShip, true);
+	assert.equal(missile.beamUnderShip, false);
+	assert.equal(turret.beamUnderShip, false);
+    });
     
 });
