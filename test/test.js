@@ -373,32 +373,37 @@ describe("weap", function() {
     });
 
     it("should parse submunitions count", function() {
-	assert.equal(unguided.submunitions.count, 25);
-	assert.equal(beam.submunitions.count, 0);
-	assert.equal(missile.submunitions.count, 16);
-	assert.equal(turret.submunitions.count, 32767);
+	assert.equal(unguided.submunitions[0].count, 25);
+	assert.equal(missile.submunitions[0].count, 16);
+	assert.equal(turret.submunitions[0].count, 32767);
     });
 
     it("should parse submunitions type", function() {
-	assert.equal(unguided.submunitions.type, 226);
-	assert.equal(beam.submunitions.type, -1);
-	assert.equal(missile.submunitions.type, 217);
-	assert.equal(turret.submunitions.type, 130);
+	assert.equal(unguided.submunitions[0].type, 226);
+	assert(typeof beam.submunitions[0] === 'undefined');
+	assert.equal(missile.submunitions[0].type, 217);
+	assert.equal(turret.submunitions[0].type, 130);
     });
 
     it("should parse submunitions theta", function() {
-	assert.equal(unguided.submunitions.theta, 27);
-	assert.equal(beam.submunitions.theta, 0);
-	assert.equal(missile.submunitions.theta, -18);
-	assert.equal(turret.submunitions.theta, 32767);
+	assert.equal(unguided.submunitions[0].theta, 27);
+	assert.equal(missile.submunitions[0].theta, -18);
+	assert.equal(turret.submunitions[0].theta, 32767);
     });
 
     it("should parse submunitions limit", function() {
-	assert.equal(unguided.submunitions.limit, 28);
-	assert.equal(beam.submunitions.limit, 0);
-	assert.equal(missile.submunitions.limit, 19);
-	assert.equal(turret.submunitions.limit, 32767);
+	assert.equal(unguided.submunitions[0].limit, 28);
+	assert.equal(missile.submunitions[0].limit, 19);
+	assert.equal(turret.submunitions[0].limit, 32767);
     });
 
+
+    it("should parse proxSafety", function() {
+	assert.equal(unguided.proxSafety, 50);
+	assert.equal(missile.proxSafety, 41);
+	assert.equal(turret.proxSafety, 32767);
+    });
+
+//    it("should parse spin
     
 });
