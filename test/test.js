@@ -580,6 +580,26 @@ describe("weap", function() {
 	assert.equal(missile.jamVuln[3], 46);
     });
 
+    it("should parse oneAmmoPerBurst", function() {
+	assert.equal(unguided.oneAmmoPerBurst, false);
+	assert.equal(beam.oneAmmoPerBurst, true);
+	assert.equal(missile.oneAmmoPerBurst, true);
+	assert.equal(turret.oneAmmoPerBurst, false);
+    });
 
+    it("should parse translucent", function() {
+	assert.equal(unguided.translucent, false);
+	assert.equal(beam.translucent, false);
+	assert.equal(missile.translucent, true);
+	assert.equal(turret.translucent, true);
+    });
+
+    // prevents other weaps from firing
+    it("should parse exclusive", function() {
+	assert.equal(unguided.exclusive, false);
+	assert.equal(beam.exclusive, true);
+	assert.equal(missile.exclusive, true);
+	assert.equal(turret.exclusive, false);
+    });
     
 });
