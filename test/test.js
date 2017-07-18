@@ -497,5 +497,19 @@ describe("weap", function() {
 	assert.equal(missile.beamUnderShip, false);
 	assert.equal(turret.beamUnderShip, false);
     });
-    
+
+    it("should parse fireWhileCloaked", function() {
+	assert.equal(unguided.fireWhileCloaked, false);
+	assert.equal(beam.fireWhileCloaked, true);
+	assert.equal(missile.fireWhileCloaked, true);
+	assert.equal(turret.fireWhileCloaked, false);
+    });
+
+    it("should parse asteroidMiner", function() {
+	assert.equal(unguided.asteroidMiner, false);
+	assert.equal(beam.asteroidMiner, true);
+	assert.equal(missile.asteroidMiner, false);
+	assert.equal(turret.asteroidMiner, true);
+    });
+
 });
