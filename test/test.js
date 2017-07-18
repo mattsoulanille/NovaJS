@@ -547,7 +547,7 @@ describe("weap", function() {
 	assert.equal(beam.exitType, "gun");
 	assert.equal(missile.exitType, "turret");
 	assert.equal(turret.exitType, "guided");
-	assert.equal(beam2.exitType, "it");
+	assert.equal(beam2.exitType, "beam");
     });
 
     it("should parse burstCount", function() {
@@ -563,14 +563,23 @@ describe("weap", function() {
 	assert.equal(missile.burstReload, 15);
 	assert.equal(turret.burstReload, 32767);
     });
-/*   
+
     it("should parse jamVuln 1", function() {
-	assert.equal(unguided.jamVuln, 29);
-	assert.equal(beam.jamVuln, 0);
-	assert.equal(missile.jamVuln, 20);
-	assert.equal(turret.jamVuln, 32767);
+	assert.equal(missile.jamVuln[0], 43);
     });
-*/
+
+    it("should parse jamVuln 1", function() {
+	assert.equal(missile.jamVuln[1], 44);
+    });
+
+    it("should parse jamVuln 1", function() {
+	assert.equal(missile.jamVuln[2], 45);
+    });
+
+    it("should parse jamVuln 1", function() {
+	assert.equal(missile.jamVuln[3], 46);
+    });
+
 
     
 });
