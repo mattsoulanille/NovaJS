@@ -191,6 +191,16 @@ describe("weap", function() {
 	assert.equal(turret.fireSimultaneously, true);
     });
 
+    it("should parse vulnerableToPD", function() {
+	assert.equal(guided.vulnerableToPD, true);
+    });
+
+    it("should parse hitsFiringShip", function() {
+	assert.equal(unguided.hitsFiringShip, true); 
+	//assert.equal(beam.hitsFiringShip, true);
+	assert.equal(missile.hitsFiringShip, false);
+	assert.equal(turret.hitsFiringShip, true);
+    });
 
     
 
