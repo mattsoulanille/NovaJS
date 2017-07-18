@@ -136,6 +136,14 @@ describe("weap", function() {
 	assert.equal(turret.explosion, 191);
     });
 
+    it("should parse explosion128sparks", function() {
+	assert.equal(unguided.explosion128sparks, false);
+	//assert.equal(beam.explosion128sparks, -1);
+	assert.equal(missile.explosion128sparks, true);
+	assert.equal(turret.explosion128sparks, true);
+	
+    });
+
     it("should parse proxRadius", function() {
 	assert.equal(unguided.proxRadius, 49);
 	//assert.equal(beam.proxRadius, 0);
@@ -224,6 +232,25 @@ describe("weap", function() {
 	assert.equal(turret.bigCicnSmoke, false);
     });
 
+    it("should parse persistentCicnSmoke", function() {
+	assert.equal(unguided.persistentCicnSmoke, false);
+	//assert.equal(beam.persistentCicnSmoke, false);
+	assert.equal(missile.persistentCicnSmoke, false);
+	assert.equal(turret.persistentCicnSmoke, true);
+    });
+
+    it("should parse turretFrontBlindSpot", function() {
+	assert.equal(turret.turretFrontBlindSpot, false);
+    });
+
+    it("should parse turretSideBlindSpot", function() {
+	assert.equal(turret.turretSideBlindSpot, true);
+    });
+
+    it("should parse turretBackBlindSpot", function() {
+	assert.equal(turret.turretBackBlindSpot, false);
+    });
 
 
+    
 });
