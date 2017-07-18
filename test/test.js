@@ -8,6 +8,7 @@ describe("weap", function() {
     var rf;
     var unguided;
     var beam;
+    var beam2;
     var missile;
     var turret;
     before(function(done) {
@@ -18,6 +19,7 @@ describe("weap", function() {
 	    beam = weap(weaps[129]);
 	    missile = weap(weaps[130]);
 	    turret = weap(weaps[131]);
+	    beam2 = weap(weaps[132]);
 	    done();
 	}.bind(this));
     });
@@ -540,4 +542,35 @@ describe("weap", function() {
 	assert.equal(turret.hitParticles.color, 0xFFFFFFFF);
     });
 
+    it("should parse exitType", function() {
+	assert.equal(unguided.exitType, "center");
+	assert.equal(beam.exitType, "gun");
+	assert.equal(missile.exitType, "turret");
+	assert.equal(turret.exitType, "guided");
+	assert.equal(beam2.exitType, "it");
+    });
+
+    it("should parse burstCount", function() {
+	assert.equal(unguided.burstCount, 23);
+	assert.equal(beam.burstCount, -1);
+	assert.equal(missile.burstCount, 14);
+	assert.equal(turret.burstCount, 32767);
+    });
+
+    it("should parse burstReload", function() {
+	assert.equal(unguided.burstReload, 24);
+	assert.equal(beam.burstReload, -1);
+	assert.equal(missile.burstReload, 15);
+	assert.equal(turret.burstReload, 32767);
+    });
+/*   
+    it("should parse jamVuln 1", function() {
+	assert.equal(unguided.jamVuln, 29);
+	assert.equal(beam.jamVuln, 0);
+	assert.equal(missile.jamVuln, 20);
+	assert.equal(turret.jamVuln, 32767);
+    });
+*/
+
+    
 });
