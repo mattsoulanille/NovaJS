@@ -164,8 +164,8 @@ var weap = function(resource) {
     out.coronaFalloff = d.getInt16(52);
     out.beamColor = getColor32(54);
     out.coronaColor = getColor32(58);
-    out.beamLightningDensity = d.getInt16(110);
-    out.beamLightningAmplitude = d.getInt16(112);
+    out.lightningDensity = d.getInt16(110);
+    out.lightningAmplitude = d.getInt16(112);
 
     
     out.proxSafety = d.getInt16(70);
@@ -209,6 +209,8 @@ var weap = function(resource) {
     out.hitParticles.color = getColor32(82);
 
     out.recoil = d.getInt16(86);
+    if (out.recoil == -1)
+	out.recoil = 0;
     
     out.exitTypeN = d.getInt16(88);
     var exitLoc = '';
@@ -270,7 +272,7 @@ var weap = function(resource) {
 
     out.count = d.getInt16(118);
 
-    out.recoil = d.getInt16(120);
+
 
     
     
