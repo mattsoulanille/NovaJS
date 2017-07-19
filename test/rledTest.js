@@ -90,6 +90,11 @@ describe("rled", function() {
 	assert.equal(starbridge.name, "");
     });
 
+    it("should parse resource id", function() {
+	assert.equal(leviathan.id, 1006);
+	assert.equal(starbridge.id, 1010);
+    });
+
     
     it("should parse the images", function() {
 	comparePNGs(starbridge.rawImage, starbridgePNG);
