@@ -8,9 +8,11 @@ var ndat4 = new rf("./test/Nova\ Data\ 4.ndat", false);
 var nships1 = new rf("./test/Nova\ Ships\ 1.ndat", false);
 var weap = new rf("./test/files/weap.ndat", false);
 
+var rled = new rf("./test/files/rled.ndat");
 
 ndat4.read();
 weap.read();
+
 
 
 
