@@ -15,11 +15,11 @@ describe("weap", function() {
 	rf = new resourceFork("./test/files/weap.ndat", false);
 	rf.read().then(function() {
 	    var weaps = rf.resources.wëap;
-	    unguided = weap(weaps[128]);
-	    beam = weap(weaps[129]);
-	    missile = weap(weaps[130]);
-	    turret = weap(weaps[131]);
-	    beamTurret = weap(weaps[132]);
+	    unguided = new weap(weaps[128]);
+	    beam = new weap(weaps[129]);
+	    missile = new weap(weaps[130]);
+	    turret = new weap(weaps[131]);
+	    beamTurret = new weap(weaps[132]);
 	    done();
 	}.bind(this));
     });
