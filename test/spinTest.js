@@ -13,8 +13,8 @@ describe("spin", function() {
 	rf = new resourceFork("./test/files/spin.ndat", false);
 	rf.read().then(function() {
 	    var spins = rf.resources.spïn;
-	    var explosion = new spin(spins[412]);
-	    var blaster = new spin(spins[3000]);
+	    explosion = new spin(spins[412]);
+	    blaster = new spin(spins[3000]);
 	    done();
 	}.bind(this));
     });
