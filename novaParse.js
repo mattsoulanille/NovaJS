@@ -21,7 +21,11 @@ class novaParse {
 		break;
 	    }
 
-	    this.parsed[type] = resArray.map(parseFunction);
+	    this.parsed[type] = resArray.map(function(item) {
+
+		return new parseFunction(item);
+
+	    });
 
 	}.bind(this));
     }

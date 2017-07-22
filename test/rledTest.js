@@ -80,8 +80,8 @@ describe("rled", function() {
 	await rf.read();
 
 	var rleds = rf.resources.rlëD;
-	starbridge = rled(rleds[1010]);
-	leviathan = rled(rleds[1006]);
+	starbridge = new rled(rleds[1010]);
+	leviathan = new rled(rleds[1006]);
     });
 
 
@@ -90,7 +90,12 @@ describe("rled", function() {
 	assert.equal(starbridge.name, "");
     });
 
-    
+    it("should parse resource id", function() {
+	assert.equal(leviathan.id, 1006);
+	assert.equal(starbridge.id, 1010);
+    });
+
+    /*
     it("should parse the images", function() {
 	comparePNGs(starbridge.rawImage, starbridgePNG);
 	comparePNGs(leviathan.rawImage, leviathanPNG);
@@ -100,13 +105,13 @@ describe("rled", function() {
 	comparePNGs(starbridge.mask, starbridgeMask);
 	comparePNGs(leviathan.mask, leviathanMask);
     });
-
+    */
     it("should combine the image and mask to make a new image with alpha", function() {
 	var starbridge_masked = applyMask(starbridgePNG, starbridgeMask);
 	var leviathan_masked = applyMask(leviathanPNG, leviathanMask);
 
 	comparePNGs(starbridge.image, starbridge_masked);
-	comparePNGs(leviathan.image, leviathanMasked);
+	comparePNGs(leviathan.image, leviathan_masked);
 	
 	/*
 	// cheapo testing of applyMask
