@@ -25,7 +25,8 @@ describe("idSpace", function() {
     var plugin2 = {
 	"rled": p2Rleds
     };
-    var ids = new idSpace(novaData);
+    var ids = new idSpace();
+    ids.addNovaData(novaData);
 
     it("should store nova ids with the correct prefix", function() {
 

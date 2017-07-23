@@ -3,7 +3,7 @@
 
 
 var idSpace = class {
-    constructor(global) {
+    constructor() {
 	this.spaces = {};
 	// all the resources in existance
 	// stored by type first. then by id (ex: resources['weap']['nova:128'])
@@ -20,13 +20,12 @@ var idSpace = class {
 		return target[property];
 	    }
 	});
-
-
-
-	// add global nova resources to resources
-	this.addPlugin(global, "nova");
     }
 
+    addNovaData(resources) {
+	return this.addPlugin(resources, "nova");
+    }
+    
     addPlugin(resources, prefix) {
 
 	var pluginSpace = this.getSpace(prefix);
