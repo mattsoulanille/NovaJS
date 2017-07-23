@@ -20,5 +20,10 @@ describe("shan", function() {
 	}.bind(this));
     });
 
+    it("should parse baseImageID", function() {
+	
+	
+    });
+    
 
 });

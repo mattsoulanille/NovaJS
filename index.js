@@ -20,11 +20,11 @@ spin.read();
 var local = repl.start();
 
 var np;
-nships1.read().then(function() {
-    np = new novaParse(nships1.resources);
-    np.parse();
-    local.context.np = np;
-}.bind(this));
+
+np = new novaParse("./test/testFilesystem/");
+local.context.np = np;
+np.read();
+
 
 local.context.rf = rf;
 local.context.ndat4 = ndat4;
