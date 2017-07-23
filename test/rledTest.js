@@ -1,4 +1,6 @@
 var assert = require('assert');
+var chai = require('chai');
+var expect = chai.expect;
 var resourceFork = require('resourceforkjs').resourceFork;
 
 var rled = require('../parsers/rled.js');
@@ -64,7 +66,25 @@ describe("rled", function() {
 	assert.equal(png1.width, png2.width);
 	assert.equal(png1.height, png2.height);
 	assert.equal(png1.gamma, png2.gamma);
-	assert(png1.data.equals(png2.data));
+//	assert(png1.data.equals(png2.data));
+
+	// fuzzy compare
+	for (var y = 0; y < png1.height; y++) {
+	    for (var x = 0; x < png1.width; x++) {
+		var idx = (png1.width * y + x) << 2;
+
+		if ((png1.data[idx + 3] !== 0) || (png2.data[idx + 3]) !== 0) {
+		    assert.equal(png1.data[idx] >> 3,  png2.data[idx] >> 3);
+		    assert.equal(png1.data[idx + 1] >> 3,  png2.data[idx + 1] >> 3);
+		    assert.equal(png1.data[idx + 2] >> 3,  png2.data[idx + 2] >> 3);
+		    assert.equal(png1.data[idx + 3],  png2.data[idx + 3]);
+		    
+		}
+
+	    }
+	}
+
+	
     };
 
     let applyMask = function(image, mask) {
@@ -138,9 +158,17 @@ describe("rled", function() {
     });
     */
 
-    it("comparePNGs should work", function() {
+    it("comparePNGs should work for the same picture", function() {
 	comparePNGs(starbridgePNG, starbridgePNG);
     });
+
+    it("comparePNG should work for different pictures", function() {
+	expect(function() {
+	    comparePNGs(starbridgePNG, starbridgeMask);
+	}).to.throw();
+	
+    });
+
 
     it("getFrames should work", async function() {
 
