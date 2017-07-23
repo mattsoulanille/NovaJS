@@ -9,3 +9,5 @@ var shan = class extends base {
     }
 
 };
+
+module.exports = shan;
