@@ -562,15 +562,15 @@ describe("weap", function() {
 	assert.equal(missile.jamVuln[0], 43);
     });
 
-    it("should parse jamVuln 1", function() {
+    it("should parse jamVuln 2", function() {
 	assert.equal(missile.jamVuln[1], 44);
     });
 
-    it("should parse jamVuln 1", function() {
+    it("should parse jamVuln 3", function() {
 	assert.equal(missile.jamVuln[2], 45);
     });
 
-    it("should parse jamVuln 1", function() {
+    it("should parse jamVuln 4", function() {
 	assert.equal(missile.jamVuln[3], 46);
     });
 
