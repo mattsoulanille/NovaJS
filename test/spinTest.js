@@ -38,7 +38,7 @@ describe("spin", function() {
 
     it("should parse spriteTiles", function() {
 	assert.equal(explosion.spriteTiles[0], 17);
-	assert.equal(explosion.spriteTiles[1], 17);
+	assert.equal(explosion.spriteTiles[1], 1);
 	assert.equal(blaster.spriteTiles[0], 6);
 	assert.equal(blaster.spriteTiles[1], 6);
     });
