@@ -190,12 +190,6 @@ describe("shan", function() {
     });
 
     it("should parse animDelay", function() {
-	assert.equal(shuttle.animDelay, 0);
-	assert.equal(thunderforge.animDelay, 5);
-	assert.equal(miner.animDelay, 5);
-    });
-
-    it("should parse animDelay", function() {
 	// frames per animation frame (assuming 30 fps)
 	assert.equal(shuttle.animDelay, 0);
 	assert.equal(thunderforge.animDelay, 5);
