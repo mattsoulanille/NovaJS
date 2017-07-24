@@ -208,6 +208,34 @@ describe("shan", function() {
 	assert.equal(thunderforge.framesPer, 64);
 	assert.equal(miner.framesPer, 36);
     });
+
+    it("should parse blink mode", function() {
+	assert.equal(shuttle.blink.mode, "square");
+	assert.equal(thunderforge.blink, null);
+	assert.equal(miner.blink.mode, "square");
+    });
+
+    it("should parse blink a", function() {
+	assert.equal(shuttle.blink.a, 4);
+	assert.equal(miner.blink.a, 4);
+    });
+
+    it("should parse blink b", function() {
+	assert.equal(shuttle.blink.b, 1);
+	assert.equal(miner.blink.b, 1);
+    });
+
+    it("should parse blink c", function() {
+	assert.equal(shuttle.blink.c, 2);
+	assert.equal(miner.blink.c, 2);
+    });
+
+    it("should parse blink d", function() {
+	assert.equal(shuttle.blink.d, 20);
+	assert.equal(miner.blink.d, 20);
+    });
+
+
 /*
     it("should parse exitPoints", function() {
 	assert.equal(shuttle.exitPoints, 0);
