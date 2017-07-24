@@ -37,10 +37,10 @@ describe("spin", function() {
     });
 
     it("should parse spriteTiles", function() {
-	assert.equal(explosion.spriteSize[0], 17);
-	assert.equal(explosion.spriteSize[1], 17);
-	assert.equal(blaster.spriteSize[0], 6);
-	assert.equal(blaster.spriteSize[1], 6);
+	assert.equal(explosion.spriteTiles[0], 17);
+	assert.equal(explosion.spriteTiles[1], 17);
+	assert.equal(blaster.spriteTiles[0], 6);
+	assert.equal(blaster.spriteTiles[1], 6);
     });
 
 });
