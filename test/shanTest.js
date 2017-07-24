@@ -1,6 +1,6 @@
 var assert = require('assert');
 var resourceFork = require('resourceforkjs').resourceFork;
-
+var expect = require("chai").expect;
 var shan = require('../parsers/shan.js');
 
 
@@ -236,14 +236,99 @@ describe("shan", function() {
     });
 
 
+    it("should parse shieldImage ID", function() {
+	assert.equal(shuttle.shieldImage.ID, -1);
+	assert.equal(thunderforge.shieldImage.ID, -1);
+	assert.equal(miner.shieldImage.ID, -1);
+    });
+
+    it("should parse shieldImage maskID", function() {
+	assert.equal(shuttle.shieldImage.maskID, -1);
+	assert.equal(thunderforge.shieldImage.maskID, -1);
+	assert.equal(miner.shieldImage.maskID, -1);
+    });
 /*
-    it("should parse exitPoints", function() {
-	assert.equal(shuttle.exitPoints, 0);
-	assert.equal(thunderforge.exitPoints, 5);
-	assert.equal(miner.exitPoints, 5);
+    it("should parse shieldImage setCount", function() {
+	// set this to baseImage setCount (or 0 if no shield image)
+	assert.equal(shuttle.shieldImage.setCount, 3);
+	assert.equal(thunderforge.shieldImage.setCount, 0);
+	assert.equal(miner.shieldImage.setCount, 6);
     });
 */
+    it("should parse shieldImage size", function() {
+	assert.equal(shuttle.shieldImage.size[0], 0);
+	assert.equal(shuttle.shieldImage.size[1], 0);
+	assert.equal(thunderforge.shieldImage.size[0], 0);
+	assert.equal(thunderforge.shieldImage.size[1], 0);
+	assert.equal(miner.shieldImage.size[0], 0);
+	assert.equal(miner.shieldImage.size[1], 0);
+    });
 
-    
+
+    it("should parse exitPoints", function() {
+	expect(shuttle.exitPoints).to.deep.equal({
+	    "gun": [[3,10,-2],
+		    [-3,10,-2],
+		    [3,10,-2],
+		    [-3,10,-2]],
+	    "turret": [[0,0,0],
+		       [0,0,0],
+		       [0,0,0],
+		       [0,0,0]],
+	    "guided": [[0,0,0],
+		       [0,0,0],
+		       [0,0,0],
+		       [0,0,0]],
+	    "beam": [[0,0,0],
+		     [0,0,0],
+		     [0,0,0],
+		     [0,0,0]],
+	    "upCompress": [100,71],
+	    "downCompress": [100,71]
+	});
+
+	expect(thunderforge.exitPoints).to.deep.equal({
+	    "gun": [[2,-25,12],
+		    [-2,-25,12],
+		    [2,-32,16],
+		    [-2,-32,16]],
+	    "turret": [[10,8,5],
+		       [-10,8,5],
+		       [11,-18,5],
+		       [-11,-18,5]],
+	    "guided": [[18,-16,-7],
+		       [-18,-16,-7],
+		       [18,-16,-7],
+		       [-18,-16,-7]],
+	    "beam": [[5,45,3],
+		     [5,45,-3],
+		     [-6,45,-3],
+		     [-6,45,3]],
+	    "upCompress": [130,80],
+	    "downCompress": [140,110]
+	});
+	
+	expect(miner.exitPoints).to.deep.equal({
+	    "gun": [[2,7,2],
+		    [-2,7,-2],
+		    [-2,7,2],
+		    [2,7,-2]],
+	    "turret": [[0,0,0],
+		       [0,0,0],
+		       [0,0,0],
+		       [0,0,0]],
+	    "guided": [[0,0,0],
+		       [0,0,0],
+		       [0,0,0],
+		       [0,0,0]],
+	    "beam": [[0,0,0],
+		     [0,0,0],
+		     [0,0,0],
+		     [0,0,0]],
+	    "upCompress": [0,0],
+	    "downCompress": [0,0]
+	});
+
+    });    
 
 });
