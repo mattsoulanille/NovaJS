@@ -32,7 +32,15 @@ var idSpace = class {
 	Object.keys(resources).forEach(function(type) {
 	    Object.keys(resources[type]).forEach(function(id) {
 		// remember that novaSpace is a proxy.
-		resources[type][id].prefix = prefix;
+		try {
+		    resources[type][id].prefix = prefix;
+		}
+		catch (e) {
+		    if (! (e instanceof TypeError) ) {
+			throw e;
+		    }
+		}
+
 		pluginSpace[type][id] = resources[type][id];
 	    });
 	});
