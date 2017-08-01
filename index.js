@@ -24,7 +24,9 @@ var np;
 //np = new novaParse("./test/testFilesystem/");
 np = new novaParse("./Nova");
 local.context.np = np;
-np.read();
+np.read().then(function() {
+    console.log("done reading np");
+});
 
 
 local.context.rf = rf;
