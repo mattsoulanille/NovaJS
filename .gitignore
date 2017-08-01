@@ -53,3 +53,8 @@ flycheck_*.el
 node_modules
 
 .DS_Store
+
+Nova/
+Nova Data*
+Nova Plug*
+Nova Ship*

@@ -21,7 +21,8 @@ var local = repl.start();
 
 var np;
 
-np = new novaParse("./test/testFilesystem/");
+//np = new novaParse("./test/testFilesystem/");
+np = new novaParse("./Nova");
 local.context.np = np;
 np.read();
 

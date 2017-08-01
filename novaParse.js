@@ -1,12 +1,16 @@
 "use strict";
 
 
-var weap = require("./parsers/weap.js");
+
 var rled = require("./parsers/rled.js");
+var shan = require("./parsers/shan.js");
+var weap = require("./parsers/weap.js");
+
 var idSpace = require("./idSpace.js");
 var fs = require("fs");
 var path = require('path');
 var rf = require("resourceforkjs").resourceFork;
+
 
 class novaParse {
     constructor(path) {
@@ -122,6 +126,9 @@ class novaParse {
 	    switch(type) {
 	    case "rlëD":
 		parseFunction = rled;
+		break;
+	    case "shän":
+		parseFunction = shan;
 		break;
 	    case "wëap":
 		parseFunction = weap;
