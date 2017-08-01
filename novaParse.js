@@ -153,5 +153,6 @@ class novaParse {
     
 }
 
-    
-exports.novaParse = novaParse;
+
+module.exports = novaParse;
+//exports.novaParse = novaParse;

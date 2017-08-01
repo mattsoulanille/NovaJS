@@ -1,7 +1,7 @@
 "use strict";
 var rf = require("resourceforkjs").resourceFork;
 var repl = require("repl");
-var novaParse = require("./novaParse.js").novaParse;
+var novaParse = require("./novaParse.js");
 
 
 var ndat4 = new rf("./test/Nova\ Data\ 4.ndat", false);
