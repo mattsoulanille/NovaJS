@@ -71,10 +71,25 @@ var convexHullBuilder = require("./server/convexHullBuilder.js");
 var path = require('path');
 
 var AI = require("./server/AI.js");
-npcMaker= new AI(sol);
+var npcMaker= new AI(sol);
 
 local.context.npcMaker = npcMaker;
 npcMaker.makeShip(npcMaker.followAndShoot);
+
+local.context.killNPCs = function() {
+    sol.npcs.forEach(function(n) {
+	n.destroy();
+    });
+};
+
+local.context.addNPCs = async function(count) {
+    var newNPCs = [];
+    for (var i = 0; i < count; i++) {
+	var newShip = await npcMaker.makeShip(npcMaker.followAndShoot);
+	newNPCs.push(newShip.buildInfo);
+    }
+    io.emit("buildObjects", newNPCs);
+};
 
 var players = {}; // for repl
 
@@ -239,13 +254,15 @@ io.on('connection', function(client){
 
     var Firebird = {
 	"name":"Firebird_Thamgiir",
+	//	"outfits": [hailChaingun]
 	"outfits": [hailChaingun]
 //	"outfits": []
     }
+
     var shipTypes = {"Firebird":Firebird,
 		     "Starbridge":Starbridge,
-		     "IDA Frigate":IDA_Frigate,
-		     "Dart":dart};
+		     "IDA Frigate":IDA_Frigate};
+//		     "Dart":dart};
     var shipList = _.values(shipTypes);
     var playerShipType = shipList[_.random(0,shipList.length-1)];
     //var playerShipType = dart;

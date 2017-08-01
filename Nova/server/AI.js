@@ -31,6 +31,7 @@ class AI extends inSystem {
 	newNPC.controlFunction = controlFunction;
 	this.npcs.add(newNPC);
 	newNPC.show();
+	return newNPC;
 
     }
 
