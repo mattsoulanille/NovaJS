@@ -1,12 +1,16 @@
 "use strict";
 
 
-var weap = require("./parsers/weap.js");
+
 var rled = require("./parsers/rled.js");
+var shan = require("./parsers/shan.js");
+var weap = require("./parsers/weap.js");
+
 var idSpace = require("./idSpace.js");
 var fs = require("fs");
 var path = require('path');
 var rf = require("resourceforkjs").resourceFork;
+
 
 class novaParse {
     constructor(path) {
@@ -55,27 +59,26 @@ class novaParse {
 	// Each file / directory in Plug-ins gets its own id space (tied to nova files id space)
 	// see idSpace.js for more info
 	this.novaPlugins = await this.readdir(path.join(this.path, "Plug-ins"));
-
 	await this.readNovaFiles(this.novaFiles);
 	await this.readPlugins(this.novaPlugins);
-
+	return;
     }
 
-    async readNovaFiles(novaFiles) {
-	await novaFiles.forEach(async function(novaFileName) {
+    readNovaFiles(novaFiles) {
+	return Promise.all(novaFiles.map(async function(novaFileName) {
 	    var pathTo = path.join(this.path, "Nova Files", novaFileName);
 	    
 	    var novaFile = this.readRF(pathTo);
 	    await novaFile.read();
 	    var parsed = this.parse(novaFile.resources);
 	    this.ids.addNovaData(parsed);
-	}.bind(this));
-
+	}.bind(this)));
+	
     }
     
 
-    async readPlugins(novaPlugins) {
-	await novaPlugins.forEach(async function(idPrefix) {
+    readPlugins(novaPlugins) {
+	return Promise.all(novaPlugins.map(async function(idPrefix) {
 	    var pathTo = path.join(this.path, "Plug-ins", idPrefix);
 	    var idSpace = this.ids.getSpace(idPrefix);
 
@@ -100,7 +103,7 @@ class novaParse {
 		var parsed = this.parse(plugIn.resources);
 		this.ids.addPlugin(parsed, idPrefix);
 	    }
-	}.bind(this));
+	}.bind(this)));
     }
 
     
@@ -122,6 +125,9 @@ class novaParse {
 	    switch(type) {
 	    case "rlëD":
 		parseFunction = rled;
+		break;
+	    case "shän":
+		parseFunction = shan;
 		break;
 	    case "wëap":
 		parseFunction = weap;
@@ -146,5 +152,6 @@ class novaParse {
     
 }
 
-    
-exports.novaParse = novaParse;
+
+module.exports = novaParse;
+//exports.novaParse = novaParse;

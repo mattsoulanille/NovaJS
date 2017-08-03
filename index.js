@@ -1,7 +1,7 @@
 "use strict";
 var rf = require("resourceforkjs").resourceFork;
 var repl = require("repl");
-var novaParse = require("./novaParse.js").novaParse;
+var novaParse = require("./novaParse.js");
 
 
 var ndat4 = new rf("./test/Nova\ Data\ 4.ndat", false);
@@ -21,9 +21,12 @@ var local = repl.start();
 
 var np;
 
-np = new novaParse("./test/testFilesystem/");
+//np = new novaParse("./test/testFilesystem/");
+np = new novaParse("./Nova");
 local.context.np = np;
-np.read();
+np.read().then(function() {
+    console.log("done reading np");
+});
 
 
 local.context.rf = rf;
