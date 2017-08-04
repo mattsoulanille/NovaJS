@@ -5,6 +5,7 @@
 var rled = require("./parsers/rled.js");
 var shan = require("./parsers/shan.js");
 var ship = require("./parsers/ship.js");
+var spin = require("./parsers/spin.js");
 var weap = require("./parsers/weap.js");
 
 var idSpace = require("./idSpace.js");
@@ -132,6 +133,9 @@ class novaParse {
 		break;
 	    case "shïp":
 		parseFunction = ship;
+		break;
+	    case "spïn":
+		parseFunction = spin;
 		break;
 	    case "wëap":
 		parseFunction = weap;
