@@ -1,4 +1,5 @@
-{ 
+{
+    "shanID": "nova:133",
     "imageAssetsFiles": {
 	"ship": "Starbridge.json",
 	"engine": "Starbridge_Engine.json"

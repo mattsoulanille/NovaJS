@@ -2,11 +2,24 @@
 var spriteSheet = require("./spriteSheet.js");
 var shanParse = require("./shanParse.js");
 
+var gettable = class {
+    constructor() {}
+    async get(thing) {
+	// wraps it in a promise so it looks async
+	// for the in-browser style things
+	return this[thing];
+    }
+};
+
+
+// should mirror novaCache.js
+
 var novaData = class {
     constructor(parsed) {
 	this.novaParse = parsed;
-	this.spriteSheets = {};	
-	this.shans = {};
+	this.spriteSheets = new gettable();
+	this.shans = new gettable();
+	
 
     }
 

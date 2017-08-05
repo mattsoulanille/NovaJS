@@ -1,4 +1,5 @@
-{ 
+{
+    "shanID": "nova:173",
     "imageAssetsFiles": {
 	"ship": "Vell-os Dart_Ship.json",
 	"engine": "Vell-os Dart_Engine.json"

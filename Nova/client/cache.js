@@ -1,3 +1,8 @@
+if (typeof(module) !== 'undefined') {
+    var PIXI = require("../server/pixistub.js");
+}
+
+
 
 var cache = class {
     
@@ -44,3 +49,7 @@ var cache = class {
 
 
 };
+
+if (typeof(module) !== 'undefined') {
+    module.exports = cache;
+}

@@ -1,4 +1,5 @@
 { 
+    "shanID": "nova:128",
     "imageAssetsFiles": {
 	"ship": "Shuttle.json",
 	"engine": "Shuttle_Engine.json",

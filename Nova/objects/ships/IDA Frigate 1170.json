@@ -1,4 +1,5 @@
 {
+    "shanID": "nova:140",
     "imageAssetsFiles": {
 	"ship": "IDA Frigate.json",
 	"engine": "IDA Frigate_Engine.json",

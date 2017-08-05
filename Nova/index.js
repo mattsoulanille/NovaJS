@@ -129,6 +129,7 @@ setInterval(function() {
 
 global.convexHulls = {};
 local.context.convexHulls = global.convexHulls;
+
 var getConvexHulls = function(url) {
     //console.log(url);
     if ( !(global.convexHulls.hasOwnProperty(url)) ) {
@@ -175,13 +176,15 @@ sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 // Start the game
 //
 var np = new novaParse("./Nova\ Data");
-var nd;
+var nd; // nova data
+//var nc; // nova cache (not actually a cache. just 
 var startGame = async function() {
     await np.read();
     nd = new novaData(np);
     nd.build();
     local.context.nd = nd;
-
+    
+    
     app.param("spriteSheet", function(req, res, next, id) {
 	req.spriteSheet = nd.spriteSheets[id];
 	next();
@@ -203,6 +206,16 @@ var startGame = async function() {
     app.get('/objects/spriteSheets/:spriteSheet/frameInfo.json', function(req, res) {
 	if (req.spriteSheet) {
 	    res.send(req.spriteSheet.frameInfo);
+	}
+	else {
+	    res.status(404).send("not found");
+	}
+
+    });
+
+    app.get('/objects/spriteSheets/:spriteSheet/convexHullsTest.json', function(req, res) {
+	if (req.spriteSheet) {
+	    res.send(req.spriteSheet.convexHulls);
 	}
 	else {
 	    res.status(404).send("not found");
