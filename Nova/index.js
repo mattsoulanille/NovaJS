@@ -47,6 +47,10 @@ var kick = function(UUID) {
 
 local.context.kick = kick;
 
+// parses nova files + plug-ins
+var novaParse = require("novaParse");
+var novaData = require("./parsing/novaData");
+
 var npc = require("./server/npcServer.js");
 //npc.prototype.io = io;
 var spaceObject = require("./server/spaceObjectServer");
@@ -93,12 +97,6 @@ local.context.addNPCs = async function(count) {
 
 var players = {}; // for repl
 
-var startGame = function() {
-    spaceObject.prototype.lastTime = new Date().getTime();
-    gameloop(sol);
-
-}
-local.context.startGame = startGame;
 var gameTimeout;
 var gameloop = function(system) {
     
@@ -171,8 +169,86 @@ app.use(express.static(__dirname));
 
 
 sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
-sol.build()
-    .then(startGame);
+
+
+//
+// Start the game
+//
+var np = new novaParse("./Nova\ Data");
+var nd;
+var startGame = async function() {
+    await np.read();
+    nd = new novaData(np);
+    nd.build();
+    local.context.nd = nd;
+
+    app.param("spriteSheet", function(req, res, next, id) {
+	req.spriteSheet = nd.spriteSheets[id];
+	next();
+
+
+    });
+    
+    app.get('/objects/spriteSheets/:spriteSheet/image.png', function(req, res) {
+	if (req.spriteSheet) {
+	    var buf = PNG.sync.write(req.spriteSheet.png);
+	    res.send(buf);
+	}
+	else {
+	    res.status(404).send("not found");
+	}
+
+    });
+
+    app.get('/objects/spriteSheets/:spriteSheet/frameInfo.json', function(req, res) {
+	if (req.spriteSheet) {
+	    res.send(req.spriteSheet.frameInfo);
+	}
+	else {
+	    res.status(404).send("not found");
+	}
+
+    });
+
+    app.get('/objects/shans/:shan', function(req, res) {
+	var id = req.params.shan;
+	var s = nd.shans[id];
+	if (s) {
+	    res.send(nd.shans[id].buildInfo);
+	}
+	else {
+	    res.status(404).send("not found");
+	}
+    });
+
+    app.get('/objects/weapons/:weapon', function(req, res) {
+	
+
+
+    });
+
+
+/*
+    app.get('objects/ships/:shipID', function(req, res) {
+	// returns ship blueprint from which a ship can be made
+	// Not a ship object.
+	if 
+    });
+  */  
+    await sol.build();
+    console.log("built");
+    spaceObject.prototype.lastTime = new Date().getTime();
+    gameloop(sol);
+
+};
+local.context.startGame = startGame;
+startGame().then(function() {}, function(err) {console.log(err)});
+    
+
+
+
+
+
 
 var receives = 0;
 transmits = 0;

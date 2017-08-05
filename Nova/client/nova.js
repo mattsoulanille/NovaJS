@@ -56,7 +56,8 @@ var UUID;
 var sync = new syncTime(socket);
 
 
-
+// caches nova data that is loaded from the server
+var nc = new novaCache();
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
