@@ -1,5 +1,5 @@
 if (typeof(module) !== 'undefined') {
-    module.exports = system
+    module.exports = system;
     var _ = require("underscore");
     var Promise = require("bluebird");
     var spaceObject = require("../server/spaceObjectServer.js");

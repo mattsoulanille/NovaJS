@@ -1,9 +1,9 @@
 if (typeof(module) !== 'undefined') {
-    var sprite = require("../server/spriteServer.js")
+    var sprite = require("../server/spriteServer.js");
     var PIXI = require("../server/pixistub.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
-    var inSystem = require("./inSystem.js")
+    var inSystem = require("./inSystem.js");
 }
 
 
@@ -21,6 +21,8 @@ spaceObject = class extends inSystem {
 	this.rendered = false;
 	
 	this.rendering = false; // whether or not to render
+	// is this even used anymore?
+	
 	this.url = 'objects/misc/';
 	this.position = [0,0];
 	// planets can have weapons

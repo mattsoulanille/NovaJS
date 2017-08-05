@@ -1,4 +1,5 @@
-{ 
+{
+    "shanID": "nova:155",
     "imageAssetsFiles": {
 	"ship": "Firebird_Ship.json",
 	"engine": "Firebird_Engine.json"

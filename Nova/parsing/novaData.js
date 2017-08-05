@@ -19,7 +19,6 @@ var novaData = class {
 	this.novaParse = parsed;
 	this.spriteSheets = new gettable();
 	this.shans = new gettable();
-	
 
     }
 

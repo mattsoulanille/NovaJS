@@ -21,7 +21,7 @@ var help = function() {
 		"list\tlists players\n" +
 		"kick(uuid)\tkicks a player by uuid"
 	       );
-}
+};
 Object.defineProperty(local.context, 'help', {set: function(x) {}, get: help});
 
 // lists players
@@ -181,6 +181,7 @@ var nd; // nova data
 var startGame = async function() {
     await np.read();
     nd = new novaData(np);
+    spaceObject.prototype.novaData = nd;
     nd.build();
     local.context.nd = nd;
     
@@ -227,7 +228,7 @@ var startGame = async function() {
 	var id = req.params.shan;
 	var s = nd.shans[id];
 	if (s) {
-	    res.send(nd.shans[id].buildInfo);
+	    res.send(nd.shans[id]);
 	}
 	else {
 	    res.status(404).send("not found");

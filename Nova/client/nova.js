@@ -58,6 +58,7 @@ var sync = new syncTime(socket);
 
 // caches nova data that is loaded from the server
 var nc = new novaCache();
+spaceObject.prototype.novaData = nc; // is this bad practice?
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
@@ -225,7 +226,6 @@ basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
 beamWeapon.prototype.socket = socket;
 spaceObject.prototype.lastTime = new Date().getTime();
-
 
 var animateTimeout;
 var animate = animateSpace;
