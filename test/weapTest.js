@@ -106,9 +106,9 @@ describe("weap", function() {
 
     it("should parse AmmoType", function() {
 	assert.equal(unguided.ammoType, -1);
-	assert.equal(beam.ammoType, -1);
-	assert.equal(missile.ammoType, 130);
-	assert.equal(turret.ammoType, 383);
+	assert.equal(beam.ammoType, -1540); // uses 54 fuel per shot
+	assert.equal(missile.ammoType, 2);
+	assert.equal(turret.ammoType, 255);
     });
 
     it("should parse graphic", function() {

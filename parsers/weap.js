@@ -67,7 +67,7 @@ var weap = class extends base {
 
 	this.speed = d.getInt16(10);
 
-	this.ammoType = conditionalOffset(d.getInt16(12),128);
+	this.ammoType = d.getInt16(12);
 
 
 	this.graphic = conditionalOffset(d.getInt16(14),3000);
