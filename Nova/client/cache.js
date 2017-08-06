@@ -34,12 +34,14 @@ var cache = class {
 
     get(id) {
 	if ( !(this.cached[id]) ) {
-	    this.cached[id] = this.getURL(this.prefix_url + id).then(
-		function() {},
-		function() {
+	    this.cached[id] = this.getURL(this.prefix_url + id);
+/*
+		.then(function() {}, function() {
 		    //if rejected, remove it from this.cached
+		    console.log("could not get " + id);
 		    this.cached[id] = null;
 		}.bind(this));
+*/
 	}
 
 	return this.cached[id];

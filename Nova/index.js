@@ -187,10 +187,15 @@ var startGame = async function() {
     
     
     app.param("spriteSheet", function(req, res, next, id) {
-	req.spriteSheet = nd.spriteSheets[id];
+	try {
+	    req.spriteSheet = nd.spriteSheets.getSync(id);
+	}
+	catch (e) {
+	    if (e.message !== "not found in novaParse") {
+		throw e;
+	    }
+	}
 	next();
-
-
     });
     
     app.get('/objects/spriteSheets/:spriteSheet/image.png', function(req, res) {
@@ -214,6 +219,8 @@ var startGame = async function() {
 
     });
 
+
+
     app.get('/objects/spriteSheets/:spriteSheet/convexHullsTest.json', function(req, res) {
 	if (req.spriteSheet) {
 	    res.send(req.spriteSheet.convexHulls);
@@ -224,21 +231,32 @@ var startGame = async function() {
 
     });
 
-    app.get('/objects/shans/:shan', function(req, res) {
-	var id = req.params.shan;
-	var s = nd.shans[id];
-	if (s) {
-	    res.send(nd.shans[id]);
+    app.get('/objects/ships/:ship', function(req, res) {
+	// change this to ships once it works
+	var id = req.params.ship;
+	var s = nd.ships.getSync(id);
+	try {
+	    res.send(s);
 	}
-	else {
+	catch (e) {
 	    res.status(404).send("not found");
+	    if (e.message !== "not found in novaParse") {
+		throw e;
+	    }
 	}
     });
 
     app.get('/objects/weapons/:weapon', function(req, res) {
-	
-
-
+	var id = req.params.weapon;
+	try {
+	    res.send(nd.weapons.getSync(id));
+	}
+	catch (e) {
+	    res.status(404).send("not found");
+	    if (e.message !== "not found in novaParse") {
+		throw e;
+	    }
+	}
     });
 
 
