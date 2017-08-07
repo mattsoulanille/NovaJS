@@ -5,24 +5,39 @@ var convexHullBuilder = require("../server/convexHullBuilder.js");
 
 var spriteSheet = class {
     constructor(rled) {
+	// number of frames before wrapping one row down
+	this.wrap = 10;
+
 	this.id = rled.prefix + ":" + rled.id;
 	this.frames = rled.frames;
-	this.frameCount = this.frames.length;
-	this.width = this.frames.length * this.frames[0].width;
-	this.height = this.frames[0].height;
 	this.frameWidth = this.frames[0].width;
 	this.frameHeight = this.frames[0].height;
+	this.frameCount = this.frames.length;
+
+	if (this.frameCount < this.wrap) {
+	    this.width = this.frames.length * this.frameWidth;
+	}
+	else {
+	    this.width = this.wrap * this.frameWidth;
+	}
+	
+	this.height = this.frameHeight * Math.ceil(this.frameCount / this.wrap);
+
+
 	this._convexHulls = null;
 	this._png = null;
-	    
+	
 	// make the frame metadata
 	this.frameInfo = {};
 	this.frameInfo.frames = {};
 	for (var f = 0; f < this.frames.length; f++) {
+	    var col = f % this.wrap;
+	    var row = Math.floor(f / this.wrap);
+
 	    this.frameInfo.frames[this.id + " " + f + ".png"] = {
 		frame: {
-		    x:f * this.frameWidth,
-		    y:0,
+		    x:col * this.frameWidth,
+		    y:row * this.frameHeight,
 		    w:this.frameWidth,
 		    h:this.frameHeight
 		},
@@ -65,11 +80,22 @@ var spriteSheet = class {
 	    // copy the frames into this._png	
 	    for (var f = 0; f < this.frames.length; f++) {
 		var frame = this.frames[f];
+		var col = f % this.wrap;
+		var row = Math.floor(f / this.wrap);
+
 
 		for (var y = 0; y < frame.height; y++) {
 		    for (var x = 0; x < frame.width; x++) {
 			var frameIDX = (frame.width * y + x) << 2;
-			var pngIDX = (this._png.width * y + frame.width * f + x) << 2;
+
+			var pngIDX = (this._png.width * y +       // skip to next row of pixels
+				      
+				      this._png.width *           // skip to next row of frames
+				      this.frameHeight * row +
+				      
+				      x +                         // skip to next col of pixels
+				      this.frameWidth * col       // skip to next col of frames
+				     ) << 2;
 
 			this._png.data[pngIDX] = frame.data[frameIDX];
 			this._png.data[pngIDX + 1] = frame.data[frameIDX + 1];
