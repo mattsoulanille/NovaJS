@@ -98,11 +98,11 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	// layering of engine, ship, lights etc.
 	var orderedSprites = [this.sprites.baseImage.sprite];
 	if ("lightImage" in this.sprites) {
-	    orderedSprites.push(this.sprites.lights.sprite);
+	    orderedSprites.push(this.sprites.lightImage.sprite);
 	}
 	
 	if ("glowImage" in this.sprites) {
-	    orderedSprites.push(this.sprites.engine.sprite);
+	    orderedSprites.push(this.sprites.glowImage.sprite);
 	}
 	
 	
