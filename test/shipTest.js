@@ -183,31 +183,31 @@ describe("ship", function() {
 
     it("should parse outfits", function() {
 	expect(s1.outfits).to.deep.equal(
-	    {
-		149: {'count':50},
-		151: {'count':52},
-		153: {'count':54},
-		155: {'count':56},
-		157: {'count':58},
-		159: {'count':60},
-		161: {'count':62},
-		163: {'count':64}
-	    }
+	    [
+		{id:149, 'count':50},
+		{id:151, 'count':52},
+		{id:153, 'count':54},
+		{id:155, 'count':56},
+		{id:157, 'count':58},
+		{id:159, 'count':60},
+		{id:161, 'count':62},
+		{id:163, 'count':64}
+	    ]
 	);
     });
 
     it("should parse weapons", function() {
 	expect(s1.weapons).to.deep.equal(
-	    {
-		225: {'count':26, 'ammo':27},
-		128: {'count':29, 'ammo':30},
-		131: {'count':32, 'ammo':33},
-		134: {'count':35, 'ammo':36},
-		137: {'count':28, 'ammo':39},
-		140: {'count':41, 'ammo':42},
-		143: {'count':44, 'ammo':45},
-		146: {'count':47, 'ammo':48}		
-	    }
+	    [
+		{id:225, 'count':26, 'ammo':27},
+		{id:128, 'count':29, 'ammo':30},
+		{id:131, 'count':32, 'ammo':33},
+		{id:134, 'count':35, 'ammo':36},
+		{id:137, 'count':28, 'ammo':39},
+		{id:140, 'count':41, 'ammo':42},
+		{id:143, 'count':44, 'ammo':45},
+		{id:146, 'count':47, 'ammo':48}		
+	    ]
 	);
     });
 
