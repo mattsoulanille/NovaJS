@@ -43,7 +43,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	if (this.properties.turnRate < 0) {
 	    this.properties.turnRate = 0;
 	}
-	
+
 	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
@@ -96,13 +96,16 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 	// adds sprites to the container in the correct order to have proper
 	// layering of engine, ship, lights etc.
+	// Also set the correct blend mode
 	var orderedSprites = [this.sprites.baseImage.sprite];
 	if ("lightImage" in this.sprites) {
 	    orderedSprites.push(this.sprites.lightImage.sprite);
+	    this.sprites.lightImage.sprite.blendMode = PIXI.BLEND_MODES["ADD"];
 	}
 	
 	if ("glowImage" in this.sprites) {
 	    orderedSprites.push(this.sprites.glowImage.sprite);
+	    this.sprites.glowImage.sprite.blendMode = PIXI.BLEND_MODES["ADD"];
 	}
 	
 	
@@ -113,7 +116,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	//console.log(without)
 	_.each(without, function(x) {this.container.addChild(x);}, this);
 	_.each(orderedSprites, function(x) {this.container.addChild(x);}, this);
-	this.system.container.addChild(this.container);
+	//this.system.container.addChild(this.container);
     }
 
     updateStats(stats) {

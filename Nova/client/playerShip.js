@@ -67,7 +67,7 @@ class playerShip extends ship {
 	this.sendCollision();
     }
 
-
+/*
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	       function(s) {this.container.addChild(s);}, this);
@@ -76,7 +76,7 @@ class playerShip extends ship {
 	this.system.container.addChildAt(this.container, this.system.container.children.length); //playerShip is above all
 	// replace this with pixi layering
     }
-
+*/
 
 
     firePrimary() {
