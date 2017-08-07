@@ -78,7 +78,7 @@ var AI = require("./server/AI.js");
 var npcMaker= new AI(sol);
 
 local.context.npcMaker = npcMaker;
-npcMaker.makeShip(npcMaker.followAndShoot);
+//npcMaker.makeShip(npcMaker.followAndShoot);
 
 local.context.killNPCs = function() {
     sol.npcs.forEach(function(n) {
@@ -169,7 +169,7 @@ app.get('/', function(req, res){
 app.use(express.static(__dirname));
 
 
-sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
+//sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 
 
 //
@@ -177,14 +177,28 @@ sol.buildObject({'name':'Earth', 'UUID':UUID(), 'type':'planet'});
 //
 var np = new novaParse("./Nova\ Data");
 var nd; // nova data
-//var nc; // nova cache (not actually a cache. just 
+//var nc; // nova cache (not actually a cache. just
+
+// all ships
+var shipIDs;
 var startGame = async function() {
     await np.read();
+
+    shipIDs = Object.keys(np.ids.resources.shïp);
+    local.context.shipIDs = shipIDs;
+
     nd = new novaData(np);
     spaceObject.prototype.novaData = nd;
     nd.build();
     local.context.nd = nd;
+
     
+    
+    io.on('connection', connectFunction);
+
+    app.get('objects/planets/:planet.json', function(req, res) {
+	res.sendFile('Earth.json'); //temporary
+    });
     
     app.param("spriteSheet", function(req, res, next, id) {
 	try {
@@ -231,7 +245,7 @@ var startGame = async function() {
 
     });
 
-    app.get('/objects/ships/:ship', function(req, res) {
+    app.get('/objects/ships/:ship.json', function(req, res) {
 	// change this to ships once it works
 	var id = req.params.ship;
 	var s = nd.ships.getSync(id);
@@ -246,7 +260,7 @@ var startGame = async function() {
 	}
     });
 
-    app.get('/objects/weapons/:weapon', function(req, res) {
+    app.get('/objects/weapons/:weapon.json', function(req, res) {
 	var id = req.params.weapon;
 	try {
 	    res.send(nd.weapons.getSync(id));
@@ -299,7 +313,7 @@ var paused = false;
 var playercount = 0;
 
 local.context.players = players;
-io.on('connection', function(client){
+var connectFunction = function(client){
     receives ++;
     var userid = UUID();
     var owned_uuids = [userid];
@@ -337,31 +351,31 @@ io.on('connection', function(client){
     };
 */
     var flowerOfSpring = {
-	"name":"Flower of Spring",
+	"id": "nova:171",
 	"count": 1
     }
     var hailChaingun = {
-	"name":"Hail Chaingun",
+	"id": "nova:155",
 	"count":2
     }
     var dart = {
-	"name": "Vell-os Dart",
+	"id": "nova:173", // the npc dart
 	"outfits": [flowerOfSpring]
     }
     
     var Starbridge = {
-	"name":"Starbridge A",
+	"id": "nova:195",
 	"outfits":[ir_missile, medium_blaster_turret, medium_blaster]
     }
     
     var IDA_Frigate = {
-	"name": "IDA Frigate 1170",
+	"id": "nova:284",
 	"outfits":[heavy_blaster_turret, railgun_200mm, ir_missile]
 
     }
 
     var Firebird = {
-	"name":"Firebird_Thamgiir",
+	"id": "nova:303",
 	//	"outfits": [hailChaingun]
 	"outfits": [hailChaingun]
 //	"outfits": []
@@ -371,9 +385,14 @@ io.on('connection', function(client){
 		     "Starbridge":Starbridge,
 		     "IDA Frigate":IDA_Frigate};
 //		     "Dart":dart};
+
     var shipList = _.values(shipTypes);
-    var playerShipType = shipList[_.random(0,shipList.length-1)];
+    //var playerShipType = shipList[_.random(0,shipList.length-1)];
     //var playerShipType = dart;
+    var playerShipType = {
+	id: shipIDs[_.random(0, shipIDs.length - 1)]
+    };
+    
     playerShipType.UUID = userid;
 
     var sendSystem = function() {
@@ -558,7 +577,7 @@ io.on('connection', function(client){
 	sol.resume();
 //	gameTimeout = setTimeout(function() {gameloop(system)}, 0);
     });
-});
+};
 
 
 

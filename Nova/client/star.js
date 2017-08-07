@@ -2,10 +2,9 @@
 
 star = class extends movable(spaceObject) {
 
-    constructor(source, starContainer, system, name) {
-	super({"name":name}, system);
-	this.url = 'objects/misc/';
-	this.name = name || 'star';
+    constructor(source, starContainer, system, id = "nova:700") {
+	super({}, system);
+	
 	this.velocityFactor = 0;
 	this.attach(source);
 	this.meta = {};
@@ -22,6 +21,13 @@ star = class extends movable(spaceObject) {
     }
     
     build() {
+	this.meta = {
+	    animation: {
+		images: {
+		    baseImage: {id:"nova:700"}
+		}
+	    }
+	};
 
 	return this.makeSprites()
 	    .then(_.bind(this.addSpritesToContainer, this))
@@ -48,10 +54,10 @@ star = class extends movable(spaceObject) {
 
     chooseRandomTexture() {
 
-	var rand = Math.random()
+	var rand = Math.random();
 	_.map(_.values(this.sprites), function(spr) {
 	    var randomSpriteIndex = Math.floor(rand * spr.textures.length);
-	    spr.sprite.texture = spr.textures[randomSpriteIndex]
+	    spr.sprite.texture = spr.textures[randomSpriteIndex];
 	});
     }
     

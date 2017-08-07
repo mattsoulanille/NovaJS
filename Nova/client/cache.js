@@ -34,7 +34,7 @@ var cache = class {
 
     get(id) {
 	if ( !(this.cached[id]) ) {
-	    this.cached[id] = this.getURL(this.prefix_url + id);
+	    this.cached[id] = this.getURL(this.prefix_url + id + ".json");
 /*
 		.then(function() {}, function() {
 		    //if rejected, remove it from this.cached

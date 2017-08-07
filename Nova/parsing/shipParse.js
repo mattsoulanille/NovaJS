@@ -23,6 +23,7 @@ var shipParse = class {
 	this.acceleration = ship.acceleration;
 	this.turnRate = ship.turnRate;
 
+	this.mass = ship.mass;
 	// temporary. Should replace with
 	// parsing what outfit each weapon
 	// corresponds to and just giving

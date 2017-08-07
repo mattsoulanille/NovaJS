@@ -15,7 +15,7 @@ radar.prototype.render = function() {
     this.graphics.clear();
     
     this.system.ships.forEach(this.drawShip.bind(this));
-    this.system.planets.forEach(this.drawPlanet.bind(this))
+    this.system.planets.forEach(this.drawPlanet.bind(this));
     this.drawDot(this.source.position, 0xFFFFFF);
     /*
     for (var i = 1; i < this.system.ships.length; i++) {

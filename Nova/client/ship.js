@@ -11,10 +11,10 @@ if (typeof(module) !== 'undefined') {
 }
 
 ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
-    //temporary. Will make it work with inertialess also
     constructor(buildInfo, system) {
 	super(buildInfo, system);
-	this.url = 'objects/ships/';
+	//this.url = 'objects/ships/';
+	this.type = 'ships';
 	this.pointing = 0;
 	this.weapons = {};
 	this.weapons.all = [];
@@ -31,8 +31,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     async _build() {
 	await super._build();
 	//	.then(function() {console.log(this)}.bind(this))
-	await this.buildOutfits();
-	await this.buildTargetImage();
+
+	// some stuff temporarally broken
+	//await this.buildOutfits();
+	//await this.buildTargetImage();
 
 	// make sure ship properties are sane after loading outfits
 	if (this.properties.maxSpeed < 0) {
@@ -42,7 +44,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    this.properties.turnRate = 0;
 	}
 	
-	this.fuel = this.properties.maxFuel;
+	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
 	}
@@ -64,6 +66,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     
     buildOutfits() {
 	// builds outfits to this.outfits from this.outfitList
+	// does not work yet. Still need to parse outfits from novadata
 	this.outfits = [];
 	this.weapons.all = [];
 
@@ -93,12 +96,12 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 	// adds sprites to the container in the correct order to have proper
 	// layering of engine, ship, lights etc.
-	var orderedSprites = [this.sprites.ship.sprite];
-	if ("lights" in this.sprites) {
+	var orderedSprites = [this.sprites.baseImage.sprite];
+	if ("lightImage" in this.sprites) {
 	    orderedSprites.push(this.sprites.lights.sprite);
 	}
 	
-	if ("engine" in this.sprites) {
+	if ("glowImage" in this.sprites) {
 	    orderedSprites.push(this.sprites.engine.sprite);
 	}
 	
@@ -158,41 +161,41 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     manageLights() {
     
 	if (typeof this.manageLights.state == 'undefined' || typeof this.manageLights.lastSwitch == 'undefined') {
-	    this.manageLights.state = true
-	    this.manageLights.lastSwitch = this.time
+	    this.manageLights.state = true;
+	    this.manageLights.lastSwitch = this.time;
 	}
 	else {
 	    if (this.time - this.manageLights.lastSwitch > 1000) {
-		this.manageLights.state = !this.manageLights.state
-		this.manageLights.lastSwitch = this.time
+		this.manageLights.state = !this.manageLights.state;
+		this.manageLights.lastSwitch = this.time;
 	    }
 	}
 	if (this.manageLights.state) {
-	    this.sprites.lights.sprite.alpha = 1
+	    this.sprites.lightImage.sprite.alpha = 1;
 	}
 	else {
-	    this.sprites.lights.sprite.alpha = 0
+	    this.sprites.lightImage.sprite.alpha = 0;
 	}
 	
     }
 
     manageEngine() {
 	if (this.accelerating == 1) {
-	    this.sprites.engine.sprite.alpha = 1;
+	    this.sprites.glowImage.sprite.alpha = 1;
 	}
 	else {
-	    this.sprites.engine.sprite.alpha = 0;
+	    this.sprites.glowImage.sprite.alpha = 0;
 	}
     }
     
     render() {
 	// maybe revise this to be a set of functions that are all called when rendering
 	// so you don't have to do 'if' every time you render
-	if ("engine" in this.sprites) {
+	if ("glowImage" in this.sprites) {
 	    this.manageEngine();
 	}
 	
-	if ("lights" in this.sprites) {
+	if ("lightImage" in this.sprites) {
 	    this.manageLights();
 	}
 	

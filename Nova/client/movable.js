@@ -43,7 +43,8 @@ var movable = (superclass) => class extends superclass {
 
     render() {
 	if (this.renderReady) {
-	
+
+	    // move this calculation elsewhere for efficiency
 	    this.delta = this.time - this.lastTime;
 	    if (typeof this.lastTime != 'undefined') {
 		this.position[0] += this.velocity[0] * (this.delta)/1000;
@@ -52,11 +53,11 @@ var movable = (superclass) => class extends superclass {
 
 	    this.lastTime = this.time;
 	    //	this.previousMoveTime = this.time
-	    super.render.call(this)
-	    return true
+	    super.render.call(this);
+	    return true;
 	}
 	else {
-	    return false
+	    return false;
 	}
     }
 }

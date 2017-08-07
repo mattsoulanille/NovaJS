@@ -23,13 +23,13 @@ damageable = (superclass) => class extends superclass {
 
     setProperties() {
 	super.setProperties.call(this);
-	this.shield = this.properties.maxShields;
-	this.armor = this.properties.maxArmor;
+	this.shield = this.properties.shield;
+	this.armor = this.properties.armor;
     }
 
     receiveCollision(other) {
 	this.shield -= other.shieldDamage;
-	var minShield = -this.properties.maxShields * 0.05
+	var minShield = -this.properties.shield * 0.05;
 	if (this.shield < 0) {
 	    if (this.shield < minShield) {
 		this.shield = minShield;
@@ -70,12 +70,12 @@ damageable = (superclass) => class extends superclass {
 	    this.shield += this.properties.shieldRecharge * 30/1000 * (this.time - this.lastTime) / 1000;
 	    this.armor += this.properties.armorRecharge * 30/1000 * (this.time - this.lastTime) / 1000;
 	    
-	    if (this.shield > this.properties.maxShields) {
-		this.shield = this.properties.maxShields;
+	    if (this.shield > this.properties.shield) {
+		this.shield = this.properties.shield;
 	    }
 	    
-	    if (this.armor > this.properties.maxArmor) {
-		this.armor = this.properties.maxArmor;
+	    if (this.armor > this.properties.armor) {
+		this.armor = this.properties.armor;
 	    }
 	}
 	
@@ -86,7 +86,7 @@ damageable = (superclass) => class extends superclass {
 	this.hide();
     }
 
-}
+};
 
 // damageable.prototype.destroy = function() {
     

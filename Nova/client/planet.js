@@ -10,8 +10,9 @@ planet = class extends spaceObject {
 
     constructor(buildInfo, system) {
 	super(buildInfo, system);
-	this.url = "objects/planets/";
-	
+//	this.url = "objects/planets/";
+	this.type = 'planets';
+
 	if (typeof this.buildInfo !== 'undefined') {
 	    this.landable = this.buildInfo.landable || false;
 	}

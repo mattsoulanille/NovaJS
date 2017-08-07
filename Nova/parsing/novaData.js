@@ -39,7 +39,7 @@ var novaData = class {
 */
 	this.ships = new gettable(this.getFunction("shïp", shipParse));
 	this.weapons = new gettable(this.getFunction("wëap", weapParse));
-	
+
     }
 
     getFunction(prefix, toBuild) {

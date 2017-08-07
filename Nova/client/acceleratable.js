@@ -44,9 +44,10 @@ var acceleratable = (superclass) => class extends superclass {
 
     setProperties() {
 	super.setProperties.call(this);
-	this.properties.acceleration = this.meta.physics.acceleration;
-	this.properties.maxSpeed = this.meta.physics.max_speed;
-	this.properties.inertialess = this.meta.physics.inertialess;
+	// possibly redundant
+	this.properties.acceleration = this.meta.acceleration;
+	this.properties.maxSpeed = this.meta.speed;
+	this.properties.inertialess = false; // TEMPORARY. FIX ME
 	if (this.properties.inertialess) {
 	    this.flightMode = new inertialess; // default = inertial
 	}
@@ -55,7 +56,7 @@ var acceleratable = (superclass) => class extends superclass {
     receiveCollision(other) {
 
 	if (other.impact > 0) {
-	    var deltaV = other.impact / this.meta.physics.mass;
+	    var deltaV = other.impact / this.properties.mass;
 	    var newVelocity = [Math.cos(other.angle) * deltaV + this.velocity[0],
 			       Math.sin(other.angle) * deltaV + this.velocity[1]];
 	    

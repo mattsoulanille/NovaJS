@@ -9,23 +9,6 @@ class spaceObjectServer extends spaceObject {
 	this.spriteContainer.destroy = function() {};
     }
 
-    loadResources() {
-	return new Promise(function(fulfill, reject) {
-	    var url = "../"+this.url + this.name + '.json';
-	    this.meta = require(url);
-	    
-	    if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
-		//console.log('fulfilling');
-		fulfill();
-	    }
-	    else {
-		reject();
-	    }
-	    
-	    
-	}.bind(this));
-    }
-    
     makeSize() {
 	// fix me later
 	this.size[0] = 72;

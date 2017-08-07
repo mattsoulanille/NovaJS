@@ -22,8 +22,9 @@ spaceObject = class extends inSystem {
 	
 	this.rendering = false; // whether or not to render
 	// is this even used anymore?
-	
-	this.url = 'objects/misc/';
+
+	this.type = 'misc';
+	//this.url = 'objects/misc/';
 	this.position = [0,0];
 	// planets can have weapons
 	// this also means projectiles can have weapons :P
@@ -38,8 +39,6 @@ spaceObject = class extends inSystem {
 
 	this.container = new PIXI.Container(); // Must be before call to set system
 	this.container.visible = false;
-
-
 
 
 	if (typeof(buildInfo) !== 'undefined') {
@@ -74,9 +73,10 @@ spaceObject = class extends inSystem {
 	await this.loadResources();
     	await this.setProperties();
 	await this.makeSprites();
-	this.makeSize();
+	//this.makeSize();
 	this.addSpritesToContainer();
 	this.addToSpaceObjects();
+	this.renderReady = true;
     }
 
     
@@ -103,66 +103,37 @@ spaceObject = class extends inSystem {
 	}
     }
 
-    loadResources() {
-	return new Promise(function(fulfill, reject) {
-	    //console.log(this);
-	    var jsonUrl = this.url + this.name + '.json';
-	    //console.log(jsonUrl);
-	    
-	    var loader = new PIXI.loaders.Loader();
-	    loader
-		.add('meta', jsonUrl)
-		.load(function (loader, resource) {
-		    this.meta = resource.meta.data;
-		    
-		}.bind(this)) // for loader.load
-	    //.once('complete', function() {
-		.onComplete.add(function() {
-		    
-		    if ((typeof(this.meta) !== 'undefined') && (this.meta !== null)) {
-			//console.log('fulfilling');
-			fulfill();
-			
-		    }
-		    else {
-			reject();
-		    }
-		    
-		}.bind(this)); // for loader.onComplete
-	    
-	}.bind(this)); // for the promise
+    async loadResources() {
+	this.meta = await this.novaData[this.type].get(this.buildInfo.id);
     };
 
 
     setProperties() {
 	this.properties =  {};
-	if (this.meta.properties) {
-	    _.each(this.meta.properties, function(value, key) {
-		this.properties[key] = value;
-	    }, this);
-	}
+	_.each(this.meta, function(value, key) {
+	    this.properties[key] = value;
+	}, this);
+	// revise me
     }
 
     makeSprites() {
-	//    console.log("making sprites");
-	//    console.log(this);
-	//console.log(this.meta);
-	
-	
-	_.each(_.keys(this.meta.imageAssetsFiles), function(key) {
-	    this.sprites[key] = new sprite(this.url + this.meta.imageAssetsFiles[key]);
-	}, this);
-	
-	return Promise.all(  _.map(_.values(this.sprites), function(s) {return s.build()})  )
-	    .then(function() {
-		this.renderReady = true;
-	    }.bind(this));
+
+	var images = this.meta.animation.images;
+	var promises = Object.keys(images).map(async function(imageName) {
+	    var imageID = images[imageName].id;
+	    var spriteSheet = await this.novaData.spriteSheets.get(imageID);
+	    this.sprites[imageName] = new sprite(spriteSheet.textures, spriteSheet.convexHulls);
+
+	}.bind(this));
+
+	return Promise.all(promises);
     }
 
 
 
     makeSize() {
 	// Is this used for rendering stuff on the screen? I forget. Maybe remove?
+	// removed from _build
 	var textures = _.map(this.sprites, function(s) {return s.textures});
 	
 	this.size[0] = Math.max.apply(null, _.map(textures, function(textureList) {
@@ -176,11 +147,13 @@ spaceObject = class extends inSystem {
 
 
     addSpritesToContainer() {
-	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	       function(s) {
-		   this.container.addChild(s);
-	       }, this);
+	this.sprites.forEach(function(s) {
+	    this.container.addChild(s.sprite);
+	}.bind(this));
+	
 	this.hide();
+
+	// Didn't I rewrite the add to system code? Maybe this is unneeded
 	this.system.container.addChild(this.container);
     }
 
@@ -239,7 +212,7 @@ spaceObject = class extends inSystem {
 
     render() {
 	if (this.renderReady == true) {
-	    
+	    // rewrite this please. Put it in playerShip. 
 	    if (!this.isPlayerShip) {
 		// -194 for the sidebar
 		this.container.position.x = 
@@ -299,7 +272,7 @@ spaceObject = class extends inSystem {
         this.system = undefined;
 
         this.container.destroy();
-        _.each(this.sprites, function(s) {s.destroy()});
+        _.each(this.sprites, function(s) {s.destroy();});
 //	console.log("debug");
         this.destroyed = true;
         //    delete this; 

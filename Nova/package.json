@@ -10,7 +10,7 @@
     "jsdom": "^9.12.0",
     "mocha": "^3.5.0",
     "node-uuid": "^1.4.8",
-    "novaparse": "0.0.7",
+    "novaparse": "0.0.8",
     "pixi.js": "^3.0.11",
     "pngjs": "^2.3.1",
     "resource-loader": "^1.8.0",

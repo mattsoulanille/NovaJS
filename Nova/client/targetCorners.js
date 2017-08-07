@@ -98,4 +98,4 @@ targetCorners = class extends spaceObject {
     }
     */
     
-}
+};

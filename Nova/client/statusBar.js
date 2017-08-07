@@ -1,6 +1,6 @@
 function statusBar(name, player) {
-    this.url = "objects/statusBars/"
-    this.ready = false
+    this.url = "objects/statusBars/";
+    this.ready = false;
     this.name = name;
     this.sprites = {};
     this.container = new PIXI.Container();
@@ -139,19 +139,19 @@ statusBar.prototype.drawLine = function(dataArea, color, fullness) {
 }
 
 statusBar.prototype.drawShield = function() {
-    var fullness = this.source.shield / this.source.properties.maxShields;
+    var fullness = this.source.shield / this.source.properties.shield;
     if (fullness < 0) { fullness = 0; }
-    this.drawLine(this.meta.dataAreas.shield, this.meta.colors.shield, fullness)
+    this.drawLine(this.meta.dataAreas.shield, this.meta.colors.shield, fullness);
 }
 
 statusBar.prototype.drawArmor = function() {
-    var fullness = this.source.armor / this.source.properties.maxArmor;
-    this.drawLine(this.meta.dataAreas.armor, this.meta.colors.armor, fullness)
+    var fullness = this.source.armor / this.source.properties.armor;
+    this.drawLine(this.meta.dataAreas.armor, this.meta.colors.armor, fullness);
 }
 
 statusBar.prototype.drawEnergy = function() {
-    var full = (Math.floor(this.source.fuel / 100) * 100) / this.source.properties.maxFuel;
-    var partial = (this.source.fuel) / this.source.properties.maxFuel;
+    var full = (Math.floor(this.source.energy / 100) * 100) / this.source.properties.energy;
+    var partial = (this.source.energy) / this.source.properties.energy;
 
     this.drawLine(this.meta.dataAreas.fuel, this.meta.colors.fuelPartial, partial);    
     this.drawLine(this.meta.dataAreas.fuel, this.meta.colors.fuelFull, full);
@@ -159,7 +159,7 @@ statusBar.prototype.drawEnergy = function() {
 }
 
 statusBar.prototype.drawTarget = function() {
-    this.renderTargetText()
+    this.renderTargetText();
 }
 
 statusBar.prototype.buildTargetText = function() {
@@ -169,8 +169,8 @@ statusBar.prototype.buildTargetText = function() {
     var size = [this.meta.dataAreas.targeting.size[0],
 		this.meta.dataAreas.targeting.size[1]];
 
-    var font = {font: "12px Geneva", fill:0xFFFFFF, align:'center'}
-    var dimfont = {font: "12px Geneva", fill:0x888888, align:'center'}
+    var font = {font: "12px Geneva", fill:0xFFFFFF, align:'center'};
+    var dimfont = {font: "12px Geneva", fill:0x888888, align:'center'};
     
     this.text.shield = new PIXI.Text('Shield:', dimfont);
     this.text.shield.anchor.y = 1;
@@ -212,14 +212,14 @@ statusBar.prototype.renderTargetText = function() {
 	this.text.shield.visible = true;
 	this.text.armor.visible = false;
 	var shieldPercent = Math.round(100 * this.target.shield /
-				       this.target.properties.maxShields) + "%";
+				       this.target.properties.shield) + "%";
 	this.text.percent.text = shieldPercent;
     }
     else {
 	this.text.shield.visible = false;
 	this.text.armor.visible = true;
 	var armorPercent = Math.round(100 * this.target.armor /
-				      this.target.properties.maxArmor) + "%";
+				      this.target.properties.armor) + "%";
 	this.text.percent.text = armorPercent;
     }
 

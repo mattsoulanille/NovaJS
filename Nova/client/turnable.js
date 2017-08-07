@@ -17,7 +17,7 @@ var turnable = (superclass) => class extends superclass {
     setProperties() {
 	super.setProperties.call(this);
 	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
-	this.properties.turnRate = this.meta.physics.turn_rate * 2*Math.PI/120 || 0;
+	this.properties.turnRate = this.meta.turnRate * 2*Math.PI/120 || 0;
     }
     
     updateStats(stats) {
@@ -68,17 +68,8 @@ var turnable = (superclass) => class extends superclass {
     async _build() {
 	await super._build();
 
-	this.hasLeftTexture = _.every(this.sprites, function(s) {
-	    if (s.spriteImageInfo.meta.imagePurposes.left) {
-		return true;
-	    }
-	    else {
-		return false;
-	    }
-	});
-		
-	this.hasRightTexture = _.every(this.sprites, function(s) {
-	    if (s.spriteImageInfo.meta.imagePurposes.right) {
+	this.hasLeftTexture = _.every(this.meta.animation.images, function(image) {
+	    if (image.imagePurposes.left) {
 		return true;
 	    }
 	    else {
@@ -86,6 +77,14 @@ var turnable = (superclass) => class extends superclass {
 	    }
 	});
 
+	this.hasRightTexture = _.every(this.meta.animation.images, function(image) {
+	    if (image.imagePurposes.right) {
+		return true;
+	    }
+	    else {
+		return false;
+	    }
+	});
     }
 
     renderSprite(spr, rotation, imageIndex) {
@@ -96,18 +95,19 @@ var turnable = (superclass) => class extends superclass {
     
     render() {
 	if (this.renderReady === true) {
+	    var images = this.meta.animation.images;
 
-	    var frameStart = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.start;});
-	    var frameCount = _.map(this.sprites, function(s) {return s.spriteImageInfo.meta.imagePurposes.normal.length;});
-
+	    var frameStart = _.map(images, function(image) {return image.imagePurposes.normal.start;});
+	    var frameCount = _.map(images, function(image) {return image.imagePurposes.normal.length;});
+	    // continue here
+	    
 	    if (this.turning == "left") {
 		
 		this.pointing = this.pointing + (this.properties.turnRate * (this.time - this.lastTime) / 1000);
 		//console.log(this.time - this.lastTime);
 		if (this.hasLeftTexture) {
-		    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.start; });
-		    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.left.length; });
-		    
+		    frameStart = _.map(images, function(image) {return image.imagePurposes.left.start;});
+		    frameCount = _.map(images, function(image) {return image.imagePurposes.left.length;});		    
 		}
 	    }
 	    else if (this.turning == "right") {
@@ -115,8 +115,8 @@ var turnable = (superclass) => class extends superclass {
 		this.pointing = this.pointing - (this.properties.turnRate * (this.time - this.lastTime) / 1000);
 		// Right != correct in this instance. Right = a direction.
 		if (this.hasRightTexture) {
-		    frameStart = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.start; });
-		    frameCount = _.map(this.sprites, function(s){ return s.spriteImageInfo.meta.imagePurposes.right.length; });
+		    frameStart = _.map(images, function(image) {return image.imagePurposes.right.start;});
+		    frameCount = _.map(images, function(image) {return image.imagePurposes.right.length;});
 		}
 	    }
 

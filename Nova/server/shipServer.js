@@ -1,6 +1,6 @@
 var _ = require("underscore");
 var Promise = require("bluebird");
-var ship = require("../client/ship.js")
+var ship = require("../client/ship.js");
 
 class shipServer extends ship {
 

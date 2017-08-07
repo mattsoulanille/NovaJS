@@ -17,7 +17,7 @@ var shanParse = class {
 		continue; //...to the next iteration of the loop
 	    }
 	    
-	    this.images[imageName] = { ID: shan.prefix + ":" + imageInfo.ID,
+	    this.images[imageName] = { id: shan.prefix + ":" + imageInfo.ID,
 					         imagePurposes: {} };
 
 	    // get the rled from novadata

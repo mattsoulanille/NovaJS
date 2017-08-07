@@ -6,5 +6,5 @@ let damageableServer = (superclass) => class extends damageable(superclass) {
 //    constructor() {
 //	super(...arguments);
 //    }
-}
+};
 module.exports = damageableServer;
