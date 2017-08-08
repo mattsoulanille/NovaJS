@@ -41,10 +41,10 @@ var fullscreen = function() {
     } else if(document.documentElement.msRequestFullscreen) {
 	document.documentElement.msRequestFullscreen();
     }
-}
+};
 
 
-var socket = io();
+var socket = io(); // same as io.connect()
 
 
 
@@ -58,7 +58,7 @@ var sync = new syncTime(socket);
 
 // caches nova data that is loaded from the server
 var nc = new novaCache();
-spaceObject.prototype.novaData = nc; // is this bad practice?
+inSystem.prototype.novaData = nc; // is this bad practice?
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
@@ -103,11 +103,11 @@ socket.on('onconnected', function(data) {
 	    console.log("built objects");
 	    stagePosition = myShip.position;
 //	    console.log(data.stats);
-	    currentSystem.updateStats(data.stats);
+	    //currentSystem.updateStats(data.stats);
 	    startGame();
 	    var newStats = {};
 	    newStats[myShip.UUID] = myShip.getStats();
-	    socket.emit('updateStats', newStats);
+	    //socket.emit('updateStats', newStats);
 	});
     
     //players[UUID] = myShip;
@@ -143,19 +143,16 @@ socket.on('removeObjects', function(uuids) {
     currentSystem.destroyObjects(uuids);
 });
 
-
+/*
 socket.on('updateStats', function(stats) {
     //    console.log(stats);
     currentSystem.updateStats(stats);
 });
+*/
 
 socket.on('test', function(data) {
     console.log(data);
 });
-
-
-
-
 
 
 document.onkeydown = gameControls.keydown.bind(gameControls);

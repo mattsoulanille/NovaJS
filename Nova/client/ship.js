@@ -8,11 +8,13 @@ if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
     var outfit = require("../server/outfitServer.js");
+    var weaponBuilder = require("../server/weaponBuilderServer.js");
+    
 }
 
 ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
     constructor(buildInfo, system) {
-	super(buildInfo, system);
+	super(...arguments);
 	//this.url = 'objects/ships/';
 	this.type = 'ships';
 	this.pointing = 0;
@@ -63,6 +65,25 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	});
 	return uuids;
     }
+
+    async buildWeapon(buildInfo) {
+	var newWeapon = await new weaponBuilder(buildInfo, this).buildWeapon();
+
+	if (newWeapon) {
+	    // temporary for when not all weapon types can be made
+	    this.addChild(newWeapon);
+	}
+    }
+    
+    buildDefaultWeapons() {
+	// builds the default weapons that come with the ship
+	// temporary, but could be useful to adapt for outfit.js
+	// How does it get UUIDS?
+	var promises = this.meta.weapons.map(this.buildWeapon.bind(this));
+
+	return Promise.all(promises);
+
+    }
     
     buildOutfits() {
 	// builds outfits to this.outfits from this.outfitList
@@ -92,6 +113,11 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	return Promise.all(outfitPromises);
     }
 
+    setProperties() {
+	super.setProperties.call(this);
+	this.properties.vulnerableTo = ["normal"];
+    }
+    
     addSpritesToContainer() {
 
 	// adds sprites to the container in the correct order to have proper

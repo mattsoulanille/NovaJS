@@ -3,13 +3,15 @@ if (typeof(module) !== 'undefined') {
     var Promise = require("bluebird");
     var projectile = require("../server/projectileServer.js");
     var guided = require("../server/guidedServer.js");
-    var inSystem = require("./inSystem.js")
+    var inSystem = require("./inSystem.js");
+    var loadsResources = require("./loadsResources.js");
 }
 
 
-basicWeapon = class extends inSystem {
+basicWeapon = class extends loadsResources(inSystem) {
     constructor(buildInfo, source) {
 	super(...arguments);
+	this.socket = source.socket; // necessary for server
 	this.buildInfo = buildInfo;
 	this.destroyed = false;
 	this.fireWithoutTarget = true;
@@ -20,21 +22,16 @@ basicWeapon = class extends inSystem {
 	this.doBurstFire = false;
 	this.random = Math.random; // Temporary until there is a seeded rng
 	if (typeof(buildInfo) !== 'undefined') {
-	    this.name = buildInfo.name;
-	    this.meta = buildInfo.meta;
 	    this.count = buildInfo.count || 1;
 	    this.UUID = buildInfo.UUID;
-	    this.reloadMilliseconds = (this.meta.properties.reload * 1000/30 / this.count) || 1000/60;
-	    if ( (typeof(this.meta.properties.burstCount) !== 'undefined') &&
-		 (typeof(this.meta.properties.burstReload) !== 'undefined') ) {
-		this.doBurstFire = true;
-		this.burstCount = 0;
-		this.burstReloadMilliseconds = this.meta.properties.burstReload * 1000/30;
-		this.reloadMilliseconds = (this.meta.properties.reload * 1000/30) || 1000/60;
-	    }
 	}
+	if (typeof source !== 'undefined') {
+	    this.system = this.source.system;
+	}
+	this.type = "weapons";
     }
 
+    
     _addToSystem(sys) {
         this.system.multiplayer[this.UUID] = this;
     }
@@ -44,10 +41,19 @@ basicWeapon = class extends inSystem {
     }
 
     async build() {
-	// this is temporary
-	// normal or pd. will be implemented eventually.
-	this.meta.properties.hits = "normal";
-	this.meta.properties.vulnerableTo = []; // normal and/or pd
+	// needs refactoring with spaceObject
+	await this.loadResources();
+	this.setProperties();
+
+	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/60;
+	if ( this.properties.burstCount > 0 ) {
+	    this.doBurstFire = true;
+	    this.burstCount = 0;
+	    this.burstReloadMilliseconds = this.properties.burstReload * 1000/30;
+	    this.reloadMilliseconds = (this.properties.reload * 1000/30) || 1000/60;
+	}
+
+	
 	await this.buildProjectiles();
 	//	    console.log(this.projectiles[0].buildInfo.convexHulls);
 	this.ready = true;
@@ -58,16 +64,16 @@ basicWeapon = class extends inSystem {
 	}
     }
 
-
+    
     buildProjectiles() {
 
 	this.projectiles = [];
-	var burstModifier = 1;
-	var durationMilliseconds = this.meta.physics.duration * 1000/30;
+	var burstModifier = 1; // modifier to calculate how many projectiles needed
+	var durationMilliseconds = this.properties.duration * 1000/30;
 	if (this.doBurstFire) {
-	    burstModifier = ( ((this.reloadMilliseconds) * this.meta.properties.burstCount) /
-			      this.meta.properties.burstReload * 1000/30);
-	    if (burstModifier > 1) {burstModifier = 1}
+	    burstModifier = ( ((this.reloadMilliseconds) * this.properties.burstCount) /
+			      this.properties.burstReload * 1000/30);
+	    if (burstModifier > 1) {burstModifier = 1;}
 	}
 	
 	// as many projectiles as can be in the air at once as a result of the weapon's
@@ -76,39 +82,25 @@ basicWeapon = class extends inSystem {
 	var required_projectiles = burstModifier * this.count * (Math.floor(durationMilliseconds / 
 									    (this.reloadMilliseconds)) + 1);
 	
-	var meta = {}; // for the projectiles
-	meta.imageAssetsFiles = this.meta.imageAssetsFiles;
-	meta.physics = this.meta.physics;
-	meta.properties = this.meta.properties;
-	//console.log(meta)
-	var buildInfo = {
-	    "meta":meta,
-	    "name":this.name,
-	    "source":this.source
-	    
-	};
-	/*
-	  if (this.buildInfo.hasOwnProperty('convexHulls')) {
-	  buildInfo.convexHulls = this.buildInfo.convexHulls;
-	  }
-	*/
+
 	//    var buildInfo = this.buildInfo;  
 	for (var i=0; i < required_projectiles; i++) {
 	    var proj;
-	    switch (this.meta.physics.type) {
-	    case undefined:
-		proj = new projectile(buildInfo, this.source.system);
-		break;
+	    switch (this.properties.type) {
 	    case "unguided":
-		proj = new projectile(buildInfo, this.source.system);
+		proj = new projectile(this.buildInfo, this.source.system, this.source);
 		break;
 	    case "guided":
-		proj = new guided(buildInfo, this.source.system);
+		proj = new guided(this.buildInfo, this.source.system, this.source);
 		break;
 	    case "turret":
-		proj = new projectile(buildInfo, this.source.system);
+		proj = new projectile(this.buildInfo, this.source.system, this.source);
 	    case "front quadrant":
-		proj = new projectile(buildInfo, this.source.system);
+		proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    default:
+		// temp
+		proj = new projectile(this.buildInfo, this.source.system, this.source);
+		break;
 	    }
 	    this.projectiles.push(proj);
 	    this.addChild(proj);
@@ -124,19 +116,19 @@ basicWeapon = class extends inSystem {
 	for (var i=0; i < this.projectiles.length; i++) {
 	    var proj = this.projectiles[i];
 	    if (proj.available) {
-		var direction = direction || this.source.pointing +
-		    ((this.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		direction = direction || this.source.pointing +
+		    ((this.random() - 0.5) * 2 * this.properties.accuracy) *
 		    (2 * Math.PI / 360);
-		var position = position || this.source.position;
-		var velocity = velocity || this.source.velocity;
-		proj.fire(direction, position, velocity, this.target)
+		position = position || this.source.position;
+		velocity = velocity || this.source.velocity;
+		proj.fire(direction, position, velocity, this.target);
 		
-		return true
+		return true;
 	    }
 	    
 	}
 	console.log("No projectile available");
-	return false
+	return false;
     }
 
     sendStats(proj, index) {
@@ -239,7 +231,7 @@ basicWeapon = class extends inSystem {
 	    
 	    // fire again after reload time
 	    if (this.doBurstFire) {
-		if (this.burstCount < this.count * this.meta.properties.burstCount - 1) {
+		if (this.burstCount < this.count * this.properties.burstCount - 1) {
 		    this.fireTimeout = setTimeout(_.bind(this.autoFire, this), this.reloadMilliseconds);
 		    this.burstCount ++;
 		}
@@ -268,6 +260,7 @@ basicWeapon = class extends inSystem {
 	}
 
 	// watch out. this sends stuff over socket.io
+	// wait no it doesn't. I think. 
 	this._firing = false;
 	this.stopFiring(false);
 	_.each(this.projectiles, function(proj) {

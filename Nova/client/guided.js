@@ -19,6 +19,11 @@ guided = class extends projectile {
 
 	super.render.call(this);
     }
+
+    setProperties() {
+	this.properties = {inertialess: true};
+	super.setProperties.call(this);
+    }
     
     turnToTarget() {
 	var x_diff = this.target.position[0] - this.position[0];
@@ -33,7 +38,7 @@ guided = class extends projectile {
 
     fire(direction, position, velocity, target) {
 	//var factor = 30/100;
-	this.polarVelocity = this.meta.physics.speed * this.factor;
+	this.polarVelocity = this.properties.speed * this.factor;
 	super.fire.call(this, direction, position, velocity, target);
     }
 

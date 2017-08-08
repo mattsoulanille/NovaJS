@@ -6,6 +6,7 @@ if (typeof(module) !== 'undefined') {
     var PIXI = require("../server/pixistub.js");
 }
 
+// rewrite
 beamWeapon = class extends collidable(inSystem){
 
     constructor(buildInfo, source) {

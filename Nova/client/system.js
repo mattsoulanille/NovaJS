@@ -192,7 +192,7 @@ system.prototype.setObjects = function(buildInfo) {
     }.bind(this));
 
     return Promise.all(promises);
-}
+};
 
 system.prototype.getObjects = function() {
     var buildInfo = {};
@@ -241,7 +241,7 @@ system.prototype.getStats = function() {
 system.prototype.resume = function() {
     var time = new Date().getTime() + timeDifference;
     this.spaceObjects.forEach(function(s) {
-	s.lastTime = time
+	s.lastTime = time;
     }.bind(this));
 
 

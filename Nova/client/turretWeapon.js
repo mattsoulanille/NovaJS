@@ -50,7 +50,7 @@ turretWeapon = class extends basicWeapon {
 		
 		
 		fireAngle = (this.calcFireAngle() || directionToTarget);
-		fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+		fireAngle += (((Math.random() - 0.5) * 2 * this.properties.accuracy) *
 			      (2 * Math.PI / 360));
 		
 		fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
@@ -62,7 +62,7 @@ turretWeapon = class extends basicWeapon {
 	if (this.fireWithoutTarget) {
 	    // used for quadrant turrets
 	    fireAngle = (defaultFireAngle + fireAngle);
-	    fireAngle += (((Math.random() - 0.5) * 2 * this.meta.properties.accuracy) *
+	    fireAngle += (((Math.random() - 0.5) * 2 * this.properties.accuracy) *
 			  (2 * Math.PI / 360));
 	    
 	    fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
@@ -121,7 +121,7 @@ turretWeapon = class extends basicWeapon {
 	var dvy = this.target.velocity[1] - this.source.velocity[1];
 	// 1 nova projectile speed = 100 pixels / frame. 3/10 pixels / ms
 	var factor = 3 / 10;
-	var speed = this.meta.physics.speed * factor;
+	var speed = this.properties.speed * factor;
 	
 	// see https://www.reddit.com/r/gamedev/comments/16ceki/turret_aiming_formula/c7vbu2j
 	// and use math

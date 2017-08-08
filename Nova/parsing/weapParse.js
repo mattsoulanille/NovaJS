@@ -22,7 +22,7 @@ var weapParse = class {
 	    // assumes rleD
 	    this.animation.images = {
 		baseImage: {
-		    ID: weap.prefix + ":" + spin.spriteID
+		    id: weap.prefix + ":" + spin.spriteID
 		}
 	    };
 	}
@@ -35,10 +35,13 @@ var weapParse = class {
 	    // set ship type here
 	}
 	
-	
+
 	this.shieldDamage = weap.shieldDamage;
 	this.armorDamage = weap.armorDamage;
 	this.reload = weap.reload;
+	this.duration = weap.duration;
+	this.speed = weap.speed;
+	this.turnRate = weap.turnRate;
 	this.fireGroup = weap.fireGroup; // primary or secondary
 	this.accuracy = weap.accuracy;
 	this.impact = weap.impact; // knockback force

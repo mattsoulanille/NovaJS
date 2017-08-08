@@ -54,7 +54,8 @@ var novaData = require("./parsing/novaData");
 var npc = require("./server/npcServer.js");
 //npc.prototype.io = io;
 var spaceObject = require("./server/spaceObjectServer");
-spaceObject.prototype.socket = io;
+var inSystem = require("./client/inSystem");
+//spaceObject.prototype.socket = io;
 var beamWeapon = require("./server/beamWeaponServer");
 beamWeapon.prototype.socket = io;
 var basicWeapon = require("./server/basicWeaponServer");
@@ -188,7 +189,7 @@ var startGame = async function() {
     local.context.shipIDs = shipIDs;
 
     nd = new novaData(np);
-    spaceObject.prototype.novaData = nd;
+    inSystem.prototype.novaData = nd;
     nd.build();
     local.context.nd = nd;
 
@@ -319,76 +320,6 @@ var connectFunction = function(client){
     var owned_uuids = [userid];
     var currentSystem = sol;
     
-//    _.each(system.multiplayer, function(obj, key) {systemInfo[key] = obj;})
-//    console.log(sol.multiplayer);
-    //    console.log(systemInfo);
-    var medium_blaster = {
-	"name":"Medium Blaster",
-	"count":5
-    }
-    
-    var medium_blaster_turret = {
-	"name":"Medium Blaster Turret",
-	"count": 2
-	//temporary. Eventually, the server outfit object will make these
-    }
-
-    var ir_missile = {
-	"name":"IR Missile Launcher",
-	"count": 2
-    }
-    var heavy_blaster_turret = {
-	"name": "Heavy Blaster Turret",
-	"count": 2
-    }
-    var railgun_200mm = {
-	"name": "200mm Fixed Railgun",
-	"count": 4
-    }
-/*
-    var playerShipType = {
-	"UUID":userid
-    };
-*/
-    var flowerOfSpring = {
-	"id": "nova:171",
-	"count": 1
-    }
-    var hailChaingun = {
-	"id": "nova:155",
-	"count":2
-    }
-    var dart = {
-	"id": "nova:173", // the npc dart
-	"outfits": [flowerOfSpring]
-    }
-    
-    var Starbridge = {
-	"id": "nova:195",
-	"outfits":[ir_missile, medium_blaster_turret, medium_blaster]
-    }
-    
-    var IDA_Frigate = {
-	"id": "nova:284",
-	"outfits":[heavy_blaster_turret, railgun_200mm, ir_missile]
-
-    }
-
-    var Firebird = {
-	"id": "nova:303",
-	//	"outfits": [hailChaingun]
-	"outfits": [hailChaingun]
-//	"outfits": []
-    }
-
-    var shipTypes = {"Firebird":Firebird,
-		     "Starbridge":Starbridge,
-		     "IDA Frigate":IDA_Frigate};
-//		     "Dart":dart};
-
-    var shipList = _.values(shipTypes);
-    //var playerShipType = shipList[_.random(0,shipList.length-1)];
-    //var playerShipType = dart;
     var playerShipType = {
 	id: shipIDs[_.random(0, shipIDs.length - 1)]
     };
@@ -398,7 +329,6 @@ var connectFunction = function(client){
     var sendSystem = function() {
 	//	console.log(myShip.buildInfo.outfits[0])
 	//console.log(currentSystem.getObjects())
-	var testSystem = {};
 	//testSystem[userid] = myShip.buildInfo; // for testing missing objects
 
 	client.emit('onconnected', {
@@ -409,24 +339,20 @@ var connectFunction = function(client){
 	    "paused": paused
 	});
 	transmits ++;
-    }
+    };
+    
     var myShip;
-    var buildShip = function(playerShipType) {
-	myShip = new ship(playerShipType, currentSystem);
-	return myShip.build()
-	    .then(function() {
-		_.each(myShip.outfitList, function(outf) {
-		    _.each(outf.UUIDS, function(uuid) {
-			owned_uuids.push(uuid);
-		    });
-		});
-		myShip.show();
-		var filtered_stats = {};
-		filtered_stats[userid] = myShip.getStats();
-		client.broadcast.emit('updateStats', filtered_stats);
+    var buildShip = async function(playerShipType) {
+	myShip = new ship(playerShipType, currentSystem, client);
+	await myShip.build();
+	_.each(myShip.outfitList, function(outf) {
+	    _.each(outf.UUIDS, function(uuid) {
+		owned_uuids.push(uuid);
 	    });
+	});
+	myShip.show();
     //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
-    }
+    };
 
     var setShip = function(playerShipType) {
 	return buildShip(playerShipType)
@@ -434,11 +360,17 @@ var connectFunction = function(client){
 		client.emit('setPlayerShip', myShip.buildInfo);
 		transmits += playercount;
 	    });
-    }
+    };
 		 
 
     buildShip(playerShipType)
-    	.then(sendSystem);
+    	.then(sendSystem)
+	.then(function() {
+	    var toEmit = {};
+	    toEmit[myShip.buildInfo.UUID] = myShip.buildInfo;
+	    client.broadcast.emit('buildObjects', toEmit);
+	});
+    
 
 
     //doesn't work yet
@@ -460,34 +392,8 @@ var connectFunction = function(client){
     client.on('updateProjectiles', function(stats) {
 	receives ++;
     });
+
     
-    client.on('updateStats', function(stats) {
-	receives ++;
-	var filtered_stats = {};
-//	console.log(stats)
-	_.each(stats, function(newStats, uuid) {
-	    if (_.contains(owned_uuids, uuid)) {
-
-		filtered_stats[uuid] = newStats;
-	    }
-	    else {
-		//console.log("client tried to change something it didn't own");
-		//console.log("Owned uuids: " + owned_uuids);
-		//console.log("Tried to change: " + uuid);
-	    }
-
-	});
-	
-//	console.log(filtered_stats);
-	//	console.log(newStats);
-
-	client.broadcast.emit('updateStats', filtered_stats);
-	transmits += playercount - 1;
-//	client.broadcast.emit('test', "does this work?");
-	currentSystem.updateStats(filtered_stats);
-	
-    });
-
     client.on("test", function(data) {
 	receives ++;
 	console.log("test:");
@@ -495,11 +401,6 @@ var connectFunction = function(client){
     });
     
 
-    //    console.log(client);
-//    console.log(userid);
-
-
-    
     client.on('pingTime', function(msg) {
 	receives ++;
     	var response = {};

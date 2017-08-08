@@ -68,6 +68,21 @@ var turnable = (superclass) => class extends superclass {
     async _build() {
 	await super._build();
 
+	// default imagePurposes to all for normal if none is given
+	Object.keys(this.meta.animation.images).forEach(function(imageName) {
+	    var image = this.meta.animation.images[imageName];
+	    if (typeof image.imagePurposes === 'undefined') {
+		image.imagePurposes = {
+		    normal: {
+			start:0,
+			length: this.sprites[imageName].convexHulls.length
+			// hacky. server needs this too, and server only has convexHulls
+			// very hacky. Fix me somehow
+		    }
+		};
+	    }
+	}.bind(this));
+	
 	this.hasLeftTexture = _.every(this.meta.animation.images, function(image) {
 	    if (image.imagePurposes.left) {
 		return true;

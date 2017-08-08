@@ -17,14 +17,15 @@ var cache = class {
 	return new Promise(function(fulfill, reject) {
 	    var loader = new PIXI.loaders.Loader();
 	    loader
-		.add('data', url)
+	    // first is what it's known as, second is the url
+		.add(url, url)
 		.load(function(loader, resource) {
-		    if (resource.data.error) {
+		    if (resource[url].error) {
 			console.log("error in loading");
-			reject(resource.data.error);
+			reject(resource[url].error);
 		    }
 		    else {
-			fulfill(resource.data.data);
+			fulfill(resource[url].data);
 		    }
 		});
 

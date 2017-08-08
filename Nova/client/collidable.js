@@ -13,10 +13,7 @@ if (typeof(module) !== 'undefined') {
 
 var collidable = (superclass) => class extends superclass {
     constructor(buildInfo, system) {
-	super(buildInfo, system);
-	if (typeof(this.buildInfo) !== 'undefined') {
-	    this.buildInfo.type = "collidable";
-	}
+	super(...arguments);
 	this.convexHullData = undefined;
 	//this.debug = true; // delete me
     }

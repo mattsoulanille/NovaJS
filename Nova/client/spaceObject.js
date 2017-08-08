@@ -4,17 +4,22 @@ if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
     var inSystem = require("./inSystem.js");
+    var loadsResources = require("./loadsResources.js");
+    var multiplayer = require("../server/multiplayerServer.js");
 }
 
 
-spaceObject = class extends inSystem {
+var spaceObject = class extends loadsResources(inSystem) {
 
-    constructor(buildInfo, system) {
+    constructor(buildInfo, system, socket) {
+
 	super(...arguments);
+	this.socket = socket || this.socket;
 	this.buildInfo = buildInfo;
 	this.renderReady = false;
 	this.destroyed = false;
-    
+
+
 	// whether or not the object has been
 	// rendered yet in this frame. Used for
 	// ordering the rendering.
@@ -48,6 +53,9 @@ spaceObject = class extends inSystem {
 	    if (typeof this.buildInfo.UUID !== 'undefined') {
 		this.buildInfo.multiplayer = true;
 		this.UUID = this.buildInfo.UUID;
+
+		// used for multiplayer communication
+		this.multiplayer = new multiplayer(this.socket, this.UUID);
 	    }
 	    
 	//     if (this.buildInfo.multiplayer) {
@@ -61,6 +69,12 @@ spaceObject = class extends inSystem {
 	this.system = system; // a function call (see inSystem.js)
     }
 
+    setListeners() {
+	this.multiplayer.on('updateStats', function(newStats) {
+	    this.updateStats(newStats);
+	}.bind(this));
+    }
+    
     get UUIDS() {
 	var uuids = [];
 	if (this.UUID) {
@@ -71,15 +85,18 @@ spaceObject = class extends inSystem {
     
     async _build() {
 	await this.loadResources();
+	this.name = this.meta.name; // purely cosmetic
     	await this.setProperties();
 	await this.makeSprites();
+	if (this.multiplayer) {
+	    this.setListeners();
+	}
 	//this.makeSize();
 	this.addSpritesToContainer();
 	this.addToSpaceObjects();
 	this.renderReady = true;
     }
 
-    
     async build() {
 	if (!this.building && !this.built) {
 	    this.building = true;
@@ -91,8 +108,9 @@ spaceObject = class extends inSystem {
 
     sendStats() {
 	var newStats = {};
-	newStats[this.UUID] = this.getStats();
-	this.socket.emit('updateStats', newStats);
+	//newStats[this.UUID] = this.getStats();
+	this.multiplayer.emit("updateStats", this.getStats());
+	//this.socket.emit('updateStats', newStats);
     }
     
     addToSpaceObjects() {
@@ -101,19 +119,6 @@ spaceObject = class extends inSystem {
 	if (this.buildInfo.multiplayer) {
 	    this.system.built.multiplayer[this.buildInfo.UUID] = this;
 	}
-    }
-
-    async loadResources() {
-	this.meta = await this.novaData[this.type].get(this.buildInfo.id);
-    };
-
-
-    setProperties() {
-	this.properties =  {};
-	_.each(this.meta, function(value, key) {
-	    this.properties[key] = value;
-	}, this);
-	// revise me
     }
 
     makeSprites() {
@@ -147,7 +152,7 @@ spaceObject = class extends inSystem {
 
 
     addSpritesToContainer() {
-	this.sprites.forEach(function(s) {
+	_.each(this.sprites, function(s) {
 	    this.container.addChild(s.sprite);
 	}.bind(this));
 	
@@ -267,7 +272,10 @@ spaceObject = class extends inSystem {
 	if (this.destroyed) {
             return;
         }
-
+	if (this.multiplayer) {
+	    this.multiplayer.destroy();
+	}
+		
         this.hide();
         this.system = undefined;
 

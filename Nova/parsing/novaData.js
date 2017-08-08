@@ -49,7 +49,7 @@ var novaData = class {
 		return new toBuild(resource);
 	    }
 	    else {
-		throw new Error("not found in novaParse");
+		throw new Error(id + " not found in novaParse under " + prefix);
 	    }
 	}.bind(this);
 

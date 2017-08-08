@@ -13,45 +13,38 @@ if (typeof(module) !== 'undefined') {
 projectile = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
-    constructor(buildInfo, system) {
+    constructor(buildInfo, system, source) {
 	super(buildInfo, system);
+	this.source = source;
 
-	if (typeof(buildInfo) !== 'undefined') {
-	    this.meta = buildInfo.meta;
-	    this.source = buildInfo.source;
-	}
-	this.url = 'objects/projectiles/';
+	this.type = "weapons"; // that's where the data is. sorry.
+		
 	this.pointing = 0;
 	this.available = false;
-	this.target;
     }
 
     async build() {
 	await super.build();
 	this.available = true;
     }
-    
 
+    // makeSprites() {
+    // 	//console.log(this.meta.animation);
+    // 	super.makeSprites.call(this);
+    // }
+    
     _addToSystem() {
+	//console.log("adding proj to system");
 	this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
         super._addToSystem.call(this);
     }
 
     _removeFromSystem() {
+	//console.log("removing proj from system");
 	this.targets = new Set();
         super._removeFromSystem.call(this);
     }
     
-    loadResources() {
-	// would set this.meta.physics, but
-	// this.meta.physics is given by weapon on construction.
-	// so needed a dummy promise for spaceObject.
-	// Do I really tho?
-	return new Promise(function(fulfill, reject) {
-	    fulfill();
-	});
-    }
-
     updateStats(stats) {
 	    super.updateStats.call(this, stats);
 	// if (typeof(stats.endTime) !== 'undefined') {
@@ -66,48 +59,22 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	if (typeof this.target !== "undefined") {
 	    stats.target = this.target.UUID;
 	}
-	stats.lastTime = this.lastTime
+	stats.lastTime = this.lastTime;
 	stats.endTime = this.endTime;
 	return stats;
     }
 
-    render() {
-
-	// if (this.endTime <= this.time) {
-	// 	this.end()
-	// }
-	
-	super.render.call(this);
-	
-	/*
-	  var collisions = this.detectCollisions(this.system.built.collidables);
-	  
-	  if ((collisions.length > 1) ||
-	  ((collisions.length == 1) && (collisions[0] != this.source)) ) {
-	  
-	  clearTimeout(this.endTimeout);
-	  this.end();
-	  
-	  
-	  _.each(collisions, function(collision) {
-	  if (collision != this.source) {
-	  this.collide(collision);
-	  }
-	  }, this);
-	  
-	  }
-	*/
-    }
-
     collideWith(other) {
 	// temporary. will have damage types later
+	// this should probably be a separate mixin or class. lots of things do damage.
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes("normal") &&
 	    other !== this.source) {
+
 	    var collision = {};
-	    collision.shieldDamage = this.meta.properties.shieldDamage;
-	    collision.armorDamage = this.meta.properties.armorDamage;
-	    collision.impact = this.meta.properties.impact;
+	    collision.shieldDamage = this.properties.shieldDamage;
+	    collision.armorDamage = this.properties.armorDamage;
+	    collision.impact = this.properties.impact;
 	    collision.angle = this.pointing;
 	    //console.log("Projectile hit something");
 	    other.receiveCollision(collision);
@@ -123,8 +90,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// maybe pass the ship to the projectile... or not
 	// inaccuracy is handled by weapon
 	this.target = target;
-	this.endTime = this.time + this.meta.physics.duration * 1000/30;
-	this.endTimeout = setTimeout(this.end.bind(this), this.meta.physics.duration * 1000/30);
+	this.endTime = this.time + this.properties.duration * 1000/30;
+	this.endTimeout = setTimeout(this.end.bind(this), this.properties.duration * 1000/30);
 	
 	this.available = false;
 	this.pointing = direction;
@@ -137,8 +104,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// Placed before this.velocity... to reset this.lastTime
 	this.lastTime = this.time;
 	//    this.render(); 
-	this.velocity = [Math.cos(direction) * this.meta.physics.speed * this.factor  + velocity[0],
-			 Math.sin(direction) * this.meta.physics.speed * this.factor  + velocity[1]];
+	this.velocity = [Math.cos(direction) * this.properties.speed * this.factor  + velocity[0],
+			 Math.sin(direction) * this.properties.speed * this.factor  + velocity[1]];
 	
 	this.show();
     }

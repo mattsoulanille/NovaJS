@@ -7,7 +7,7 @@ if (typeof(module) !== 'undefined') {
 class playerShip extends ship {
 
     constructor(buildInfo, system) {
-	super(buildInfo, system);
+	super(...arguments);
 	this.pointing = Math.random()*2*Math.PI;
 	this.velocity[0] = 0;
 	this.velocity[1] = 0;
@@ -39,11 +39,11 @@ class playerShip extends ship {
 
 	_.each(this.weapons.all, function(weapon) {
 	    
-	    if (weapon.meta.properties.type === "primary") {
+	    if (weapon.meta.fireGroup === "primary") {
 		this.weapons.primary.push(weapon);
 		
 	    }
-	    else if (weapon.meta.properties.type === "secondary") {
+	    else if (weapon.meta.fireGroup === "secondary") {
 		this.weapons.secondary.push(weapon);
 		
 	    }
@@ -66,17 +66,6 @@ class playerShip extends ship {
 	ship.prototype.receiveCollision.call(this, other);
 	this.sendCollision();
     }
-
-/*
-    addSpritesToContainer() {
-	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
-	       function(s) {this.container.addChild(s);}, this);
-	this.hide();
-
-	this.system.container.addChildAt(this.container, this.system.container.children.length); //playerShip is above all
-	// replace this with pixi layering
-    }
-*/
 
 
     firePrimary() {

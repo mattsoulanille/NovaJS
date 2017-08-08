@@ -47,7 +47,9 @@ var acceleratable = (superclass) => class extends superclass {
 	// possibly redundant
 	this.properties.acceleration = this.meta.acceleration;
 	this.properties.maxSpeed = this.meta.speed;
-	this.properties.inertialess = false; // TEMPORARY. FIX ME
+	if (!this.properties.inertialess) {
+	    this.properties.inertialess = false; // TEMPORARY. FIX ME
+	}
 	if (this.properties.inertialess) {
 	    this.flightMode = new inertialess; // default = inertial
 	}

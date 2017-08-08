@@ -15,8 +15,6 @@ class basicWeaponServer extends basicWeapon {
 //	}.bind(this))
     }
 
-
-    destory() {};
 }
 
 module.exports = basicWeaponServer;

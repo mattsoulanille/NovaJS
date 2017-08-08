@@ -1,7 +1,7 @@
 if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
-    var weapon = require("../server/weaponServer.js");
+    var weaponBuilder = require("../server/weaponBuilderServer.js");
     var inSystem = require("./inSystem.js");
 }
 
