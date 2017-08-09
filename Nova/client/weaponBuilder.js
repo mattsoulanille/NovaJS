@@ -30,7 +30,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    this.removeChild(this.weapon);
 	}
 
-	if (['point defence', 'bay', 'beam', 'beam turret', 'point defence beam'].includes(this.meta.type)) {
+	if (['point defence', 'bay', 'beam turret', 'point defence beam'].includes(this.meta.type)) {
 	    // temporary
 	    return false;
 	}

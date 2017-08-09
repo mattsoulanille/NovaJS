@@ -4,13 +4,17 @@ if (typeof(module) !== 'undefined') {
     var collidable = require("../server/collidableServer");
     var inSystem = require("./inSystem.js");
     var PIXI = require("../server/pixistub.js");
+    var multiplayer = require("../server/multiplayerServer.js");
+    var loadsResources = require("./loadsResources");
 }
 
 // rewrite
-beamWeapon = class extends collidable(inSystem){
+beamWeapon = class extends collidable(loadsResources(inSystem)){
 
     constructor(buildInfo, source) {
 	super(...arguments);
+	this.type = "weapons";
+	this.socket = source.socket;
 	this.container = new PIXI.Container();
 	this.buildInfo = buildInfo;
 	this._firing = false;
@@ -23,12 +27,9 @@ beamWeapon = class extends collidable(inSystem){
 	    this.position = source.position;
 	}
 	if (typeof(buildInfo) !== 'undefined') {
-	    
-	    this.name = buildInfo.name;
-	    this.meta = buildInfo.meta;
-	    
-	    this.count = buildInfo.count || 1;
+	    this.id = buildInfo.id;
 	    this.UUID = buildInfo.UUID;
+	    this.multiplayer = new multiplayer(this.socket, this.UUID);
 	}
     }
 
@@ -58,7 +59,10 @@ Else, return false
 */
 
 
-    build() {
+    async build() {
+	
+	await this.loadResources();
+	this.setProperties();
 	this.graphics = new PIXI.Graphics();
 
 	this.container.addChild(this.graphics);
@@ -70,13 +74,13 @@ Else, return false
 	if (typeof(this.system) !== 'undefined') {
 	    this._addToSystem();
 	}
-
+	this.multiplayer.on('updateStats', this.updateStats.bind(this));
 
     };
 
     buildConvexHulls() {
-	var length = this.meta.physics.length;
-	var halfWidth = this.meta.physics.width / 2;
+	var length = this.meta.animation.beamLength;
+	var halfWidth = this.meta.animation.beamWidth / 2;
 	var collisionPoints = [new this.crash.V(0, halfWidth),
 			       new this.crash.V(0, -halfWidth),
 			       new this.crash.V(length, -halfWidth),
@@ -148,14 +152,9 @@ Else, return false
 
 
     sendStats() {
-	var newStats = {};
-	newStats[this.UUID] = this.getStats();
-	this.socket.emit('updateStats', newStats);
+	this.multiplayer.emit('updateStats', this.getStats());
     }
-
     
-    
-
     render(fireAngle = this.source.pointing) {
 	if (this.firing) {
 	    this.graphics.position.x =
@@ -163,10 +162,10 @@ Else, return false
 	    this.graphics.position.y = -1 *
 		(this.position[1] - stagePosition[1]) + screenH/2;
 	    this.graphics.clear();
-	    this.graphics.lineStyle(this.meta.physics.width, this.meta.physics.color);
+	    this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
 	    this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
-	    var x = Math.cos(fireAngle) * this.meta.physics.length;
-	    var y = -Math.sin(fireAngle) * this.meta.physics.length;
+	    var x = Math.cos(fireAngle) * this.meta.animation.beamLength;
+	    var y = -Math.sin(fireAngle) * this.meta.animation.beamLength;
 	    this.graphics.lineTo(x,y);
 
 	    this.renderCollisionShape(fireAngle);
@@ -189,10 +188,10 @@ Else, return false
 	    other !== this.source) {
 
 	    var collision = {};
-	    collision.shieldDamage = this.meta.properties.shieldDamage * delta;
-	    collision.armorDamage = this.meta.properties.armorDamage * delta;
+	    collision.shieldDamage = this.properties.shieldDamage * delta;
+	    collision.armorDamage = this.properties.armorDamage * delta;
 	    // needs improvement for proper tractoring
-	    collision.impact = this.meta.properties.impact * delta;
+	    //collision.impact = this.properties.impact * delta;
 	    collision.angle = this.pointing;
 	    
 	    //console.log(collision);
@@ -232,6 +231,8 @@ Else, return false
     destroy() {
 	this._firing = false;
 	this.stopFiring(false);
+	this.multiplayer.destroy();
+	this.container.destroy();
 
     }
 
@@ -239,8 +240,6 @@ Else, return false
 	this.target = target;
     }
 }
-beamWeapon.prototype.properties = {};
-//beamWeapon.prototype.properties.vulnerableTo = ["normal"];
 
     
 if (typeof(module) !== 'undefined') {
