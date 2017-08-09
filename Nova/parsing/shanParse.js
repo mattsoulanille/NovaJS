@@ -7,6 +7,8 @@ var shanParse = class {
 	this.id = shan.prefix + ":" + shan.id;
 	//this.buildInfo.spriteSheets = {};
 	this.images = {};
+
+	this.exitPoints = shan.exitPoints;
 	
 	var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage'];
 	for (var index in imageNames) {

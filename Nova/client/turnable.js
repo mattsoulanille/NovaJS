@@ -155,7 +155,7 @@ var turnable = (superclass) => class extends superclass {
 		    if (this.collisionShape !== newShape) {
 			//		    console.log("inserting new collision shape");
 			this.collisionShape.remove();
-			if (! (_.contains(this.crash.all(), newShape)) ) {
+			if (! (_.contains(this.crash.all(), newShape)) && newShape ) {
 			    newShape.insert();
 			}
 			this.collisionShape = newShape;

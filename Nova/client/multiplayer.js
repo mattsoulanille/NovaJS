@@ -15,35 +15,44 @@ var multiplayer = class {
     constructor(socket, UUID) {
 	this.socket = socket;
 	this.UUID = UUID;
-	this.eventNames = new Set();
-    }
+	this.events = {};
 
-    getName(name) {
-	var formatted = this.UUID + "/" + name;
-	this.eventNames.add(formatted);
-	return formatted;
+	this.listener = function(event) {
+	    if (event.name in this.events) {
+		this.events[event.name].forEach(function(toCall) {
+		    toCall(event.data);
+		});
+	    }
+	}.bind(this);
+
+
+	this.socket.on(this.UUID, this.listener);
+	
     }
     
     on(eventName, toCall) {
-	var name = this.getName(eventName);
-	this.socket.on(name, toCall);
+	if ( !(eventName in this.events) ) {
+	    this.events[eventName] = new Set();
+	}
+	this.events[eventName].add(toCall);
     }
 
     off(eventName, toCall) {
-	var name = this.getName(eventName);
-	this.socket.off(name, toCall);
+	if (eventName in this.events) {
+	    this.events[eventName].delete(toCall);
+	}
     }
 
-    emit(eventName, toEmit) {
-	var name = this.getName(eventName);
-	this.socket.emit(name, toEmit);
+    emit(eventName, eventData) {
+	// tells it to all the clients
+	var toEmit = {};
+	toEmit.name = eventName;
+	toEmit.data = eventData;
+	this.socket.emit(this.UUID, toEmit);
     }
 
     destroy() {
-	this.eventNames.forEach(function(name) {
-	    // shouldn't matter that it's removing all since UUID is unique
-	    this.socket.removeAllListeners(name);
-	}.bind(this));
+	this.socket.removeAllListeners(this.UUID);
     }
 
 };

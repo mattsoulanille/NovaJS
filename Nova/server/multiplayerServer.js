@@ -4,19 +4,23 @@ var multiplayer = require("../client/multiplayer.js");
 var multiplayerServer = class extends multiplayer {
     constructor() {
 	super(...arguments);
-	this.setListeners();
+
+	this.broadcaster = function(toEmit) {
+	    this.socket.broadcast.emit(this.UUID, toEmit);
+	}.bind(this);
+
+	this.socket.on(this.UUID, this.broadcaster);
 
     }
-    broadcast(eventName, toEmit) {
-	var name = this.getName(eventName);
-	this.socket.broadcast.emit(name, toEmit);
+
+    emit(eventName, eventData) {
+	// broadcast to all the clients
+	var toEmit = {};
+	toEmit.name = eventName;
+	toEmit.data = eventData;
+	this.socket.broadcast.emit(this.UUID, toEmit);
     }
 
-    setListeners() {
-	this.on('updateStats', function(newStats) {
-	    this.broadcast('updateStats', newStats);
-	}.bind(this));
-    }
 
 };
 

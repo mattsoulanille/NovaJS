@@ -342,8 +342,8 @@ var connectFunction = function(client){
     };
     
     var myShip;
-    var buildShip = async function(playerShipType) {
-	myShip = new ship(playerShipType, currentSystem, client);
+    var buildShip = async function(buildInfo) {
+	myShip = new ship(buildInfo, currentSystem, client);
 	await myShip.build();
 	_.each(myShip.outfitList, function(outf) {
 	    _.each(outf.UUIDS, function(uuid) {
@@ -354,15 +354,25 @@ var connectFunction = function(client){
     //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
     };
 
-    var setShip = function(playerShipType) {
-	return buildShip(playerShipType)
-    	    .then(function() {
-		client.emit('setPlayerShip', myShip.buildInfo);
-		transmits += playercount;
-	    });
+    var setShip = async function(id) {
+	var buildInfo = {};
+	if (shipIDs.includes(id)) {
+	    buildInfo.id = id;
+	    buildInfo.UUID = userid;
+	    myShip.system = null;
+	    myShip.destroy();
+	    await buildShip(buildInfo);
+	    await sendSystem(); // revise me
+
+	    var toEmit = {};
+	    toEmit[myShip.buildInfo.UUID] = myShip.buildInfo;
+	    client.broadcast.emit('buildObjects', toEmit);
+	}
+
     };
 		 
-
+	
+	
     buildShip(playerShipType)
     	.then(sendSystem)
 	.then(function() {
@@ -371,14 +381,8 @@ var connectFunction = function(client){
 	    client.broadcast.emit('buildObjects', toEmit);
 	});
     
-
-
-    //doesn't work yet
-    client.on('setShip', function(data) {
-	if (_.contains(_.keys(shipTypes), data)) {
-	    var shipInfo = shipTypes[data];
-	    setShip(shipInfo);
-	}
+    client.on('setShip', function(id) {
+	    setShip(id);
     });
 //    console.log(owned_uuids);
 //    console.log(playerShipType);

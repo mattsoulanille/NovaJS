@@ -186,9 +186,6 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
 
 
-
-
-
     manageLights() {
     
 	if (typeof this.manageLights.state == 'undefined' || typeof this.manageLights.lastSwitch == 'undefined') {
@@ -247,7 +244,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	
 	super.render.call(this);
 	// super hacky bounding box
-	var bound = [5000,5000];
+	var bound = [50000,50000];
 	if (this.position[0] > bound[0]/2) {
 	    this.position[0] -= bound[0];
 	}
@@ -300,7 +297,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     
     destroy() {
 	
-	_.each(this.outfits, function(o) {o.destroy()});
+	_.each(this.outfits, function(o) {o.destroy();});
 	super.destroy.call(this);
     }
 }
