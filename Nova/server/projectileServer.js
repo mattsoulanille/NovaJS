@@ -3,7 +3,7 @@ var Promise = require("bluebird");
 var projectile = require("../client/projectile.js")
 
 class projectileServer extends projectile {
-    constructor() {
+    constructor(buildInfo) {
 	super(...arguments);
     }
 
@@ -11,7 +11,7 @@ class projectileServer extends projectile {
 	return super.build.call(this)
 	    .then(function() {
 		//	    console.log(this.buildInfo.convexHulls.length);
-	    }.bind(this))
+	    }.bind(this));
     }
 }
     

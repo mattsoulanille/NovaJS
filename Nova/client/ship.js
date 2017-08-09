@@ -37,6 +37,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	// some stuff temporarally broken
 	//await this.buildOutfits();
 	//await this.buildTargetImage();
+	await this.buildDefaultWeapons();
 
 	// make sure ship properties are sane after loading outfits
 	if (this.properties.maxSpeed < 0) {
@@ -68,7 +69,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     async buildWeapon(buildInfo) {
 	var newWeapon = await new weaponBuilder(buildInfo, this).buildWeapon();
-
+	
 	if (newWeapon) {
 	    // temporary for when not all weapon types can be made
 	    this.addChild(newWeapon);
@@ -78,8 +79,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     buildDefaultWeapons() {
 	// builds the default weapons that come with the ship
 	// temporary, but could be useful to adapt for outfit.js
-	// How does it get UUIDS?
-	var promises = this.meta.weapons.map(this.buildWeapon.bind(this));
+	// see shipServer.js for how it gets UUIDS
+	
+	var promises = this.buildInfo.weapons.map(this.buildWeapon.bind(this));
 
 	return Promise.all(promises);
 

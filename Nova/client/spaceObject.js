@@ -19,7 +19,6 @@ var spaceObject = class extends loadsResources(inSystem) {
 	this.renderReady = false;
 	this.destroyed = false;
 
-
 	// whether or not the object has been
 	// rendered yet in this frame. Used for
 	// ordering the rendering.
@@ -27,7 +26,7 @@ var spaceObject = class extends loadsResources(inSystem) {
 	
 	this.rendering = false; // whether or not to render
 	// is this even used anymore?
-
+	
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
 	this.position = [0,0];
@@ -53,9 +52,7 @@ var spaceObject = class extends loadsResources(inSystem) {
 	    if (typeof this.buildInfo.UUID !== 'undefined') {
 		this.buildInfo.multiplayer = true;
 		this.UUID = this.buildInfo.UUID;
-
-		// used for multiplayer communication
-		this.multiplayer = new multiplayer(this.socket, this.UUID);
+		this.setMultiplayer();
 	    }
 	    
 	//     if (this.buildInfo.multiplayer) {
@@ -68,7 +65,15 @@ var spaceObject = class extends loadsResources(inSystem) {
 
 	this.system = system; // a function call (see inSystem.js)
     }
+    setMultiplayer() {
+	// this is due to projectile.js
+	// refactor is needed: Multiplayer -> mixin
+	// SpaceObject -> default not multiplayer
+	// used for multiplayer communication
+	this.multiplayer = new multiplayer(this.socket, this.UUID);
+    }
 
+    
     setListeners() {
 	this.multiplayer.on('updateStats', function(newStats) {
 	    this.updateStats(newStats);
@@ -107,7 +112,7 @@ var spaceObject = class extends loadsResources(inSystem) {
     }
 
     sendStats() {
-	var newStats = {};
+//	var newStats = {};
 	//newStats[this.UUID] = this.getStats();
 	this.multiplayer.emit("updateStats", this.getStats());
 	//this.socket.emit('updateStats', newStats);
@@ -238,10 +243,11 @@ var spaceObject = class extends loadsResources(inSystem) {
     _removeFromSystem() {
         this.system.container.removeChild(this.container);
 	
-        if (this.UUID && this.system.multiplayer[this.UUID]) {
+        if (this.UUID) {
             delete this.system.multiplayer[this.UUID];
+	    delete this.system.built.multiplayer[this.UUID];
         }
-	
+
         if (this.built) {
             this.system.built.spaceObjects.delete(this);
             this.system.built.render.delete(this);
@@ -253,6 +259,9 @@ var spaceObject = class extends loadsResources(inSystem) {
         this.system.container.addChild(this.container);
         if (this.UUID) {
             this.system.multiplayer[this.UUID] = this;
+	    if (this.built) {
+		this.system.built.multiplayer[this.UUID] = this;
+	    }
         }
 
         if (this.built) {

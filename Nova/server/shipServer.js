@@ -1,6 +1,7 @@
 var _ = require("underscore");
 var Promise = require("bluebird");
 var ship = require("../client/ship.js");
+var UUID = require('uuid/v4');
 
 class shipServer extends ship {
 
@@ -13,12 +14,18 @@ class shipServer extends ship {
     }
 
     buildDefaultWeapons() {
-	// and also send them to the client
+	this.buildInfo.weapons = [];
+	return Promise.all(this.meta.weapons.map(function(buildInfo) {
+	    buildInfo.UUID = UUID(); // generate UUIDs for all the weapons
+	    this.buildInfo.weapons.push(buildInfo);
+	    return this.buildWeapon(buildInfo);
+	}.bind(this)));
+
+
     }
 
     async _build() {
 	await super._build();
-	await this.buildDefaultWeapons();
 	
     }
     

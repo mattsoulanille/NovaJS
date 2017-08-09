@@ -3,7 +3,7 @@ var express = require('express');
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http);
-var UUID = require('node-uuid');
+var UUID = require('uuid/v4');
 var _ = require("underscore");
 var Promise = require("bluebird");
 var fs = require('fs'),
@@ -429,6 +429,7 @@ var connectFunction = function(client){
 
 	client.emit('buildObjects', toSend);
     });
+    /*
     client.on('land', function() {
 	receives ++;
 	client.broadcast.emit('removeObjects', owned_uuids);
@@ -449,7 +450,7 @@ var connectFunction = function(client){
 	//client.broadcast.emit('updateStats', stats);
 	//transmits += playercount - 1;
     });
-    
+    */
     client.on('disconnect', function() {
 
 	receives ++;

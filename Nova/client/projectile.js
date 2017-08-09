@@ -28,6 +28,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.available = true;
     }
 
+    setMultiplayer() {} // refactor me please
+    
     // makeSprites() {
     // 	//console.log(this.meta.animation);
     // 	super.makeSprites.call(this);

@@ -251,8 +251,8 @@ class playerShip extends ship {
 	this.position[1] = Math.random() * 1000 - 500;
 	this.velocity[0] = 0;
 	this.velocity[1] = 0;
-	this.shield = this.properties.maxShields;
-	this.armor = this.properties.maxArmor;
+	this.shield = this.properties.shield;
+	this.armor = this.properties.armor;
 	var newStats = {};
 	newStats[this.UUID] = this.getStats();
 	this.socket.emit('updateStats', newStats);

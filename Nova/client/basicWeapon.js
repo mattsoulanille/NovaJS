@@ -5,6 +5,7 @@ if (typeof(module) !== 'undefined') {
     var guided = require("../server/guidedServer.js");
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
+    var multiplayer = require("../server/multiplayerServer.js");
 }
 
 
@@ -24,6 +25,9 @@ basicWeapon = class extends loadsResources(inSystem) {
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.count = buildInfo.count || 1;
 	    this.UUID = buildInfo.UUID;
+	    if (this.UUID) {
+		this.multiplayer = new multiplayer(this.socket, this.UUID);
+	    }
 	}
 	if (typeof source !== 'undefined') {
 	    this.system = this.source.system;
@@ -60,7 +64,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 	this.source.weapons.all.push(this);
 	//	    console.log(this);
 	if (typeof this.UUID !== 'undefined') {
-	    //		this.system.built.multiplayer[this.UUID] = this;
+	    this.multiplayer.on('updateStats', this.updateStats.bind(this));
 	}
     }
 
@@ -132,9 +136,10 @@ basicWeapon = class extends loadsResources(inSystem) {
     }
 
     sendStats(proj, index) {
-	var newStats = {};
-	newStats[this.UUID] = this.getStats();
-	this.socket.emit('updateStats', newStats);
+	//var newStats = {};
+	//newStats[this.UUID] = this.getStats();
+	//this.socket.emit('updateStats', newStats);
+	this.multiplayer.emit("updateStats", this.getStats());
     }
     
     getStats() {

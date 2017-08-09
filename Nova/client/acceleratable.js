@@ -58,7 +58,15 @@ var acceleratable = (superclass) => class extends superclass {
     receiveCollision(other) {
 
 	if (other.impact > 0) {
-	    var deltaV = other.impact / this.properties.mass;
+	    var deltaV;
+	    if (this.properties.mass === 0) {
+		// avoid the NaNs
+		deltaV = this.properties.speed;
+	    }
+	    else {
+		deltaV = other.impact / this.properties.mass;
+	    }
+
 	    var newVelocity = [Math.cos(other.angle) * deltaV + this.velocity[0],
 			       Math.sin(other.angle) * deltaV + this.velocity[1]];
 	    

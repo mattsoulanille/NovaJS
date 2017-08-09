@@ -50,6 +50,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    break;
 	case 'front quadrant':
 	    this.weapon = new frontQuadrantTurretWeapon(this.buildInfo, this.source);
+	    break;
 	default:
 	    this.weapon = new basicWeapon(this.buildInfo, this.source);
 	    break;

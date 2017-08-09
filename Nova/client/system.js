@@ -196,7 +196,7 @@ system.prototype.setObjects = function(buildInfo) {
 
 system.prototype.getObjects = function() {
     var buildInfo = {};
-    _.each(this.multiplayer, function(obj, uuid) {
+    _.each(this.built.multiplayer, function(obj, uuid) {
 	// only send specific object types
 	if (['ship','playership','planet', 'npc'].includes(obj.buildInfo.type)) {
 	    // protect objects from having their buildinfo changed
