@@ -35,6 +35,7 @@ var idSpace = class {
 
 		resources[type][id].prefix = prefix;
 		resources[type][id].idSpace = this.getSpace(prefix);
+		resources[type][id].globalID = prefix + ":" + id;
 
 		pluginSpace[type][id] = resources[type][id];
 	    }.bind(this));
