@@ -32,12 +32,22 @@ var idSpace = class {
 	Object.keys(resources).forEach(function(type) {
 	    Object.keys(resources[type]).forEach(function(id) {
 		// remember that novaSpace is a proxy.
+		var resource = resources[type][id];
+		
+		resource.prefix = prefix;
+		resource.idSpace = pluginSpace;
+		// if there's already a resource at this one's id (in its prefix),
+		// then this one's global id is the id of the resource it will replace.
 
-		resources[type][id].prefix = prefix;
-		resources[type][id].idSpace = this.getSpace(prefix);
-		resources[type][id].globalID = prefix + ":" + id;
+		if ((typeof pluginSpace[type][id] !== "undefined") &&
+		    (typeof pluginSpace[type][id].globalID !== "undefined")) {
+		    resource.globalID = pluginSpace[type][id].globalID;
+		}
+		else {
+		    resource.globalID = prefix + ":" + id;
+		}
 
-		pluginSpace[type][id] = resources[type][id];
+		pluginSpace[type][id] = resource;
 	    }.bind(this));
 	}.bind(this));
     }

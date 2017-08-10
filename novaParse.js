@@ -66,21 +66,29 @@ class novaParse {
 	return;
     }
 
-    readNovaFiles(novaFiles) {
-	return Promise.all(novaFiles.map(async function(novaFileName) {
+    async readNovaFiles(novaFiles) {
+	// some total conversions may expect that later files will
+	// overwrite earlier ones, so novaFiles must be read in order
+	for (var fileIndex in novaFiles) {
+	    //return Promise.all(novaFiles.map(async function(novaFileName) {
+
+	    var novaFileName = novaFiles[fileIndex];
 	    var pathTo = path.join(this.path, "Nova Files", novaFileName);
 	    
 	    var novaFile = this.readRF(pathTo);
 	    await novaFile.read();
 	    var parsed = this.parse(novaFile.resources);
 	    this.ids.addNovaData(parsed);
-	}.bind(this)));
-	
+	}
     }
     
 
-    readPlugins(novaPlugins) {
-	return Promise.all(novaPlugins.map(async function(idPrefix) {
+    async readPlugins(novaPlugins) {
+	// these may overwrite the same data in nova files
+	// so they must be read in order
+	for (var pluginIndex in novaPlugins) {
+	    //return Promise.all(novaPlugins.map(async function(idPrefix) {
+	    var idPrefix = novaPlugins[pluginIndex];
 	    var pathTo = path.join(this.path, "Plug-ins", idPrefix);
 	    var idSpace = this.ids.getSpace(idPrefix);
 
@@ -88,15 +96,18 @@ class novaParse {
 
 	    if (isDirectory) {
 		var files = await this.readdir(pathTo);
-		files.forEach(async function(f) {
 
+		// these share id space so they must be read in order
+		// so they can overwrite one another
+
+		for (var fileIndex in files) {
+		    var f = files[fileIndex];
 		    var plugIn = this.readRF(path.join(pathTo, f));
 		    await plugIn.read();
 		    var parsed = this.parse(plugIn.resources);
 		    this.ids.addPlugin(parsed, idPrefix);
-		    
-		}.bind(this));
-
+		}
+		
 	    }
 
 	    else {
@@ -105,7 +116,7 @@ class novaParse {
 		var parsed = this.parse(plugIn.resources);
 		this.ids.addPlugin(parsed, idPrefix);
 	    }
-	}.bind(this)));
+	}
     }
 
     

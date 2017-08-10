@@ -22,10 +22,11 @@ var local = repl.start();
 var np;
 
 //np = new novaParse("./test/testFilesystem/");
-np = new novaParse("./Nova");
+np = new novaParse("./test/testFilesystem/");
 local.context.np = np;
 np.read().then(function() {
     console.log("done reading np");
+    console.log(np.ids.resources.wëap['nova:128'].name);
 });
 
 
