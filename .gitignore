@@ -7,3 +7,6 @@ npm-debug.log
 *.swp
 bower_components
 Nova Data
+node_modules
+favicon.icns
+parsing.js
