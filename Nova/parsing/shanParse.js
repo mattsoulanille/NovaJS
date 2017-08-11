@@ -18,12 +18,13 @@ var shanParse = class {
 	    if (imageInfo.ID <= 0) { // make sure it actually exists
 		continue; //...to the next iteration of the loop
 	    }
-	    
-	    this.images[imageName] = { id: shan.prefix + ":" + imageInfo.ID,
-					         imagePurposes: {} };
 
 	    // get the rled from novadata
 	    var rled = shan.idSpace['rlëD'][imageInfo.ID];
+
+	    this.images[imageName] = { id: rled.prefix + ":" + rled.id,
+					         imagePurposes: {} };
+
 
 	    var imagePurposes = this.images[imageName].imagePurposes;
 	    

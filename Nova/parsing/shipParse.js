@@ -33,7 +33,8 @@ var shipParse = class {
 	    if ( (weapon.id >= 128) && (weapon.count > 0) ) {
 		var out = {};
 		out.count = weapon.count;
-		out.id = this.prefix + ":" + weapon.id;
+		var w = ship.idSpace.wëap[weapon.id];
+		out.id = w.globalID;
 		this.weapons.push(out);
 	    }
 	}.bind(this));

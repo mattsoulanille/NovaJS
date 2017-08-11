@@ -1,6 +1,6 @@
 var npc = require("./npcServer.js");
 var inSystem = require("../client/inSystem.js");
-var UUID = require('node-uuid');
+var UUID = require('uuid/v4');
 
 class AI extends inSystem {
     constructor(system) {

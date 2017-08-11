@@ -20,9 +20,11 @@ var weapParse = class {
 	if (spinGuidances.includes(this.type)) {
 	    var spin = weap.idSpace.spïn[weap.graphic];
 	    // assumes rleD
+	    
+	    var rled = spin.idSpace.rlëD[spin.spriteID];
 	    this.animation.images = {
 		baseImage: {
-		    id: weap.prefix + ":" + spin.spriteID
+		    id: rled.prefix + ":" + rled.id
 		}
 	    };
 	}

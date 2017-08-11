@@ -2,7 +2,7 @@
 var _ = require("underscore");
 var Promise = require("bluebird");
 var outfit = require("../client/outfit.js");
-var UUID = require('node-uuid');
+var UUID = require('uuid/v4');
 
 class outfitServer extends outfit{
 
