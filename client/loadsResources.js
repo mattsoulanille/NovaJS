@@ -11,8 +11,8 @@ var loadsResources = (superclass) => class extends superclass {
 	}
     
     
-    async loadResources() {
-	this.meta = await(this.novaData[this.type].get(this.buildInfo.id));
+    async loadResources(type, id) {
+	return await(this.novaData[type].get(id));
     }
     
     setProperties() {

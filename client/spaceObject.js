@@ -89,14 +89,14 @@ var spaceObject = class extends loadsResources(inSystem) {
     }
     
     async _build() {
-	await this.loadResources();
+	this.meta = await this.loadResources(this.type, this.buildInfo.id);
 	this.name = this.meta.name; // purely cosmetic
     	await this.setProperties();
 	await this.makeSprites();
 	if (this.multiplayer) {
 	    this.setListeners();
 	}
-	//this.makeSize();
+	this.makeSize();
 	this.addSpritesToContainer();
 	this.addToSpaceObjects();
 	this.renderReady = true;
@@ -142,9 +142,8 @@ var spaceObject = class extends loadsResources(inSystem) {
 
 
     makeSize() {
-	// Is this used for rendering stuff on the screen? I forget. Maybe remove?
-	// removed from _build
-	var textures = _.map(this.sprites, function(s) {return s.textures});
+	// used for targetCorners
+	var textures = _.map(this.sprites, function(s) {return s.textures;});
 	
 	this.size[0] = Math.max.apply(null, _.map(textures, function(textureList) {
 	    return Math.max.apply(null, _.map(textureList, function(texture) {return texture.width}));

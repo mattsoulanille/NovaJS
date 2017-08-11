@@ -1,17 +1,18 @@
 targetCorners = class extends spaceObject {
 
-    constructor(system, name = "targetCorners") {
-	super({"name": name}, system);
-	this.name = name;
+    constructor(system, id = "targetCorners") {
+	super({"id": id}, system);
+	this.type = 'misc';
 	this.textures = {};
 	this.targetTime = this.time;
+	this.url = "objects/" + this.type + "/"; // replace with loadsResources
     }
 
     makeSprites() {
-	_.each(this.meta.images, function(image, key) {
+	_.each(this.meta.animation.pictures, function(image, key) {
 	    this.textures[key] = new PIXI.Texture.fromImage(this.url + image);
 	}, this);
-
+	
 	this.sprites.topLeft = new PIXI.Sprite();
 	this.sprites.topRight = new PIXI.Sprite();
 	this.sprites.bottomLeft = new PIXI.Sprite();
@@ -29,22 +30,10 @@ targetCorners = class extends spaceObject {
 
     }
 
-    makeSize() {
-	this.size[0] = Math.max.apply(null, _.map(this.textures, function(texture) {
-	    return texture.width;
-	}));
-
-	this.size[1] = Math.max.apply(null, _.map(this.textures, function(texture) {
-	    return texture.height;
-	}));
-
-    }
-
-
     addSpritesToContainer() {
 	_.each(this.sprites, function(spr) { this.container.addChild(spr) }, this);
 	this.renderReady = true;
-	space.addChild(this.container);
+	space.addChild(this.container); // maybe it should add to statusBar's contianer?
     }
 
     callSprites(toCall) {
@@ -80,11 +69,14 @@ targetCorners = class extends spaceObject {
     render() {
 	if (this.other) {
 	    if ( (!this.other.rendered) && this.other.visible ) {
+		// seems a bit insane perhaps to be rendering others
+		// necessarry so it tracks correctly
+		// and uses the most up to date position
 		this.other.render();
 	    }
 
 	    var time = 100;
-	    var timeLeft = (time - (this.time - this.targetTime))
+	    var timeLeft = (time - (this.time - this.targetTime));
 	    if (timeLeft < 0) {timeLeft = 0;}
 	    var scale = (timeLeft/20) + 1;
 	    this.placeSprites(this.other, scale);

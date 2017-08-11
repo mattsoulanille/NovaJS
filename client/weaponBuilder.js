@@ -23,7 +23,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     }
 
     async buildWeapon() {
-	await this.loadResources();
+	this.meta = await this.loadResources(this.type, this.buildInfo.id);
 
 	if (this.weapon && this.children.has(this.weapon)) {
 	    // if rebuilding (is this even a thing that I support?)

@@ -1,6 +1,6 @@
 
 
-star = class extends movable(spaceObject) {
+var star = class extends movable(spaceObject) {
 
     constructor(source, starContainer, system, id = "nova:700") {
 	super({}, system);

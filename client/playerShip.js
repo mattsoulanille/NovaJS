@@ -25,7 +25,7 @@ class playerShip extends ship {
 
 	await super._build();
 	this.sortWeapons();
-	//await this.makeStatusBar();
+	await this.makeStatusBar();
 	// Is this terrible practice? I'm not sure, but it's definitely insane.	    
 	this.statechange = gameControls.onstatechange(this.statechange.bind(this));
 	this.assignControls(gameControls);
@@ -165,7 +165,7 @@ class playerShip extends ship {
 	
 	
 	super.render.call(this);
-	//this.statusBar.render();
+	this.statusBar.render();
 	
     }
 
@@ -214,13 +214,13 @@ class playerShip extends ship {
 
     setTarget(target) {
 	this.target = target;
-	//this.statusBar.setTarget(this.target)
+	this.statusBar.setTarget(this.target);
 	super.setTarget.call(this, this.target);
     }
 
     setPlanetTarget(planetTarget) {
 	this.planetTarget = planetTarget;
-	//this.statusBar.setPlanetTarget(this.planetTarget);
+	this.statusBar.setPlanetTarget(this.planetTarget);
     }
 
 

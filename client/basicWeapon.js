@@ -46,7 +46,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 
     async build() {
 	// needs refactoring with spaceObject
-	await this.loadResources();
+	this.meta = await this.loadResources(this.type, this.buildInfo.id);
 	this.setProperties();
 
 	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/60;

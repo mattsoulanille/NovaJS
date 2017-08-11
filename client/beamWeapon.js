@@ -61,7 +61,7 @@ Else, return false
 
     async build() {
 	
-	await this.loadResources();
+	this.meta = await this.loadResources(this.type, this.buildInfo.id);
 	this.setProperties();
 	this.graphics = new PIXI.Graphics();
 
@@ -71,6 +71,7 @@ Else, return false
 
 	this.ready = true;
 	this.built = true;
+	
 	if (typeof(this.system) !== 'undefined') {
 	    this._addToSystem();
 	}

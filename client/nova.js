@@ -21,7 +21,19 @@ var renderer = PIXI.autoDetectRenderer(screenW, screenH, {
 
 PIXI.settings.RESOLUTION = window.devicePixelRatio;
 
-$(window).resize(onResize);
+window.addEventListener('resize', onResize);
+
+function onResize(evt) {
+    screenH = evt.currentTarget.innerHeight;
+    screenW = evt.currentTarget.innerWidth;
+    renderer.resize(screenW,screenH);
+    //also update the starfield
+    stars.resize(screenW, screenH);
+    myShip.statusBar.resize(screenW, screenH);
+}
+
+
+
 // add the renderer view element to the DOM
 document.body.appendChild(renderer.view);
 
@@ -59,6 +71,7 @@ var sync = new syncTime(socket);
 // caches nova data that is loaded from the server
 var nc = new novaCache();
 inSystem.prototype.novaData = nc; // is this bad practice?
+statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResourecs's prototype chain
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
@@ -262,18 +275,13 @@ function animateSpaceport() {
 
 
 
-function onResize() {
-    screenW = $(window).width();
-    screenH = $(window).height();
-    renderer.resize(screenW,screenH);
-    //also update the starfield
-    stars.resize()
-    myShip.statusBar.resize()
-}
 
 
 
+			
 
+// is this actually still necessary? I don't think I use it anywhere anymore
+// Also, it's terrible practice
 if(Array.prototype.equals) {
     console.warn("Overriding existing Array.prototype.equals. Possible causes: New API defines the method, there's a framework conflict or you've got double inclusions in your code.");
 }

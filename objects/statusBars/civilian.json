@@ -1,6 +1,8 @@
 {
-    "imageAssetsFiles": {
-	"statusBar": "civilian_images.json"
+    "animation": {
+	"pictures": {
+	    "statusBar": "civilian.png"
+	}
     },
     "colors": {
 	"brightText": 16777215,

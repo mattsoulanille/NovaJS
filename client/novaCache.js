@@ -9,6 +9,7 @@ var novaCache = class {
 	this.planets = new cache("objects/planets/");
 
 	this.misc = new cache("objects/misc/");
+	this.statusBars = new cache("objects/statusBars/");
     }
 
     // should mirror novaData.js

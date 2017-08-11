@@ -101,9 +101,9 @@ starfield = class extends inSystem {
 	
     }
 
-    resize() {
-	this.xsize = $(window).width() + 2*this.buffer;
-	this.ysize = $(window).height()+ 2*this.buffer;
+    resize(width, height) {
+	this.xsize = width + 2*this.buffer;
+	this.ysize = height + 2*this.buffer;
 	this.xrange = [-this.xsize/2, this.xsize/2];
 	this.yrange = [-this.ysize/2, this.ysize/2];
     }
