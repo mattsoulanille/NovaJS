@@ -48,7 +48,7 @@ var kick = function(UUID) {
 local.context.kick = kick;
 
 // parses nova files + plug-ins
-var novaParse = require("novaParse");
+var novaParse = require("novaparse");
 var novaData = require("./parsing/novaData");
 
 var npc = require("./server/npcServer.js");
@@ -109,7 +109,7 @@ var gameloop = function(system) {
     system.render();
     
     
-    gameTimeout = setTimeout(function() {gameloop(system)}, 0);
+    gameTimeout = setTimeout(function() {gameloop(system);}, 0);
 };
 
 
@@ -183,7 +183,19 @@ var nd; // nova data
 // all ships
 var shipIDs;
 var startGame = async function() {
-    await np.read();
+    try {
+	await np.read();
+    }
+    catch(err) {
+	if (err.code === 'ENOENT') {
+	    console.log("Missing data files or directory structure. Expected \"" + err.path + "\" to exist.");
+	    console.log('Please make sure your nova files are located at "./Nova Data/Nova Files/" and your plug-ins at "./Nova Data/Plug-ins/"');
+	    process.exit(1);
+	}
+	else {
+	    throw err;
+	}
+    }
 
     shipIDs = Object.keys(np.ids.resources.shïp);
     local.context.shipIDs = shipIDs;
@@ -289,7 +301,7 @@ var startGame = async function() {
 
 };
 local.context.startGame = startGame;
-startGame().then(function() {}, function(err) {console.log(err)});
+startGame();//.then(function() {}, function(err) {console.log(err)});
     
 
 

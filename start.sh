@@ -1,1 +1,1 @@
-node index.js
+node --trace-warnings index.js
