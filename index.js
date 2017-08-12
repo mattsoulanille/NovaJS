@@ -1,4 +1,5 @@
 //"use strict";
+var port = 8000;
 var express = require('express');
 var app = express();
 var http = require('http').Server(app);
@@ -183,6 +184,7 @@ var nd; // nova data
 // all ships
 var shipIDs;
 var startGame = async function() {
+    console.log("Reading nova data");
     try {
 	await np.read();
     }
@@ -197,11 +199,13 @@ var startGame = async function() {
 	}
     }
 
+
     shipIDs = Object.keys(np.ids.resources.shïp);
     local.context.shipIDs = shipIDs;
 
     nd = new novaData(np);
     inSystem.prototype.novaData = nd;
+    console.log("Parsing nova files and setting up cache");
     nd.build();
     local.context.nd = nd;
 
@@ -295,7 +299,12 @@ var startGame = async function() {
     });
   */  
     await sol.build();
-    console.log("built");
+    console.log("finished loading");
+
+    http.listen(port, function(){
+	console.log('listening on *:'+port);
+    });
+
     spaceObject.prototype.lastTime = new Date().getTime();
     gameloop(sol);
 
@@ -500,7 +509,3 @@ var connectFunction = function(client){
 
 
 
-var port = 8000;
-http.listen(port, function(){
-    console.log('listening on *:'+port);
-});
