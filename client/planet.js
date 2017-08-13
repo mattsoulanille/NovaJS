@@ -9,7 +9,7 @@ if (typeof(module) !== 'undefined') {
 planet = class extends spaceObject {
 
     constructor(buildInfo, system) {
-	super(buildInfo, system);
+	super(...arguments);
 //	this.url = "objects/planets/";
 	this.type = 'planets';
 
@@ -29,12 +29,10 @@ planet = class extends spaceObject {
     }
 
     build() {
-	console.log(this.url);
 	return super.build.call(this)
 	//	.then(this.build)
 	    .then(function() {
 		this.system.built.planets.add(this);
-		this.buildInfo.type = 'planet';
 		this.show();
 		this.assignControls();
 	    }.bind(this));

@@ -4,11 +4,16 @@ var planet = require("../client/planet.js");
 
 planetServer = class extends planet {
     constructor(buildInfo, system) {
-	super(buildInfo, system);
+	super(...arguments);
     }
 
     addSpritesToContainer() {};
 
+    async loadResources(type, id) {
+	// temporary until planets can be parsed
+	return require("../objects/planets/" + id + ".json");
+    }
+    
     land() {};
     depart() {};
     assignControls() {};
