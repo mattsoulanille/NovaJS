@@ -71,10 +71,12 @@ class novaParse {
 	// overwrite earlier ones, so novaFiles must be read in order
 	for (var fileIndex in novaFiles) {
 	    //return Promise.all(novaFiles.map(async function(novaFileName) {
-
 	    var novaFileName = novaFiles[fileIndex];
-	    var pathTo = path.join(this.path, "Nova Files", novaFileName);
-	    
+	    var pathTo = path.join(this.path, "Nova Files", novaFileName);	
+	    if (pathTo.slice(-5) !== ".ndat") {
+		continue; // don't read the nova music or the quicktime movies
+	    }
+    
 	    var novaFile = this.readRF(pathTo);
 	    await novaFile.read();
 	    var parsed = this.parse(novaFile.resources);
