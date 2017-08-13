@@ -363,8 +363,16 @@ var connectFunction = function(client){
     };
     
     var myShip;
+
     var buildShip = async function(buildInfo) {
 	myShip = new ship(buildInfo, currentSystem, client);
+
+	// a hack to make weapon loading work before I refactor system.
+	// System should have unbuilt things as promises (of their build functions)
+	// at least multiplayer objects should be like that
+	myShip.meta = myShip.novaData[myShip.type].getSync(myShip.buildInfo.id);
+	myShip.parseDefaultWeaponsSync();
+
 	await myShip.build();
 	_.each(myShip.outfitList, function(outf) {
 	    _.each(outf.UUIDS, function(uuid) {
@@ -376,6 +384,7 @@ var connectFunction = function(client){
     };
 
     var setShip = async function(id) {
+	// doesn't work
 	var buildInfo = {};
 	if (shipIDs.includes(id)) {
 	    buildInfo.id = id;

@@ -67,7 +67,7 @@ system.prototype.build = function() {
     // only builds things that are spaceObjects. Not outfits / weapons.
     var promises = Array.from(this.spaceObjects).map(function(obj) {
 	if (! obj.built) {
-	    return obj.build()
+	    return obj.build();
 	}
     });
     return Promise.all(promises);
@@ -110,7 +110,15 @@ system.prototype.buildPlayerShip = function(buildInfo) {
 
 system.prototype.buildObject = function(buildInfo) {
 
+    
+    // check if the UUID is already present. If so, don't build.
+    if ( (buildInfo.UUID) && (buildInfo.UUID in this.multiplayer)) {
+	return false; // works fine with Promise.all
+	// maybe throw an exception? but don't want to break server, but do want to know if this happens.
+    }
+    
     // checks if is player ship
+    // confusing, but it only builds it if it is the playerShip
     var newObj = this.buildPlayerShip(buildInfo);
     if (newObj === false) {
 	var type = buildInfo.type;
