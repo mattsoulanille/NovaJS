@@ -6,3 +6,8 @@ npm-debug.log
 *.pyc
 *.swp
 bower_components
+node_modules
+favicon.icns
+parsing.js
+Nova Files
+Plug-ins

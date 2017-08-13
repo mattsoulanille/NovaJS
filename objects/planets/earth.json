@@ -1,0 +1,17 @@
+{
+    "id": "nova:128",
+    "name": "Earth",
+    "animation": {
+	"images": {
+	    "baseImage": {
+		"id": "nova:2000",
+		"imagePurposes": {
+		    "normal": {
+			"start": 0,
+			"length": 1
+		    }
+		}
+	    }
+	}
+    }
+}

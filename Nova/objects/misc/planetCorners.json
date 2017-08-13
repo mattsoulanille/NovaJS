@@ -1,8 +1,0 @@
-{
-    "images": {
-	"neutral": "planetNeutral.png",
-	"hostile": "targetHostile.png",
-	"friendly": "targetFriendly.png",
-	"disabled": "targetDisabled.png"
-    }
-}
