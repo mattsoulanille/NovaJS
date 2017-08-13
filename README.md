@@ -70,6 +70,7 @@ I welcome pull requests, however, I am often in school and unable to accept them
 * NPCs and AI: There are two approaches to this: Writing or training an AI to be as best as possible or trying to mimic Nova's AI's behavior, but for both of them, lots needs to be written in the way of API.
 
 ## Known Bugs
+* Some ships don't have their massees parsed correctly. This results in them doing strange things when they are hit by projectiles.
 * When leaving a planet, the planet remains selected even when no navigation target is set. I'm fairly sure I've just forgotten to delete the target corners.
 * When leaving a planet, radar stops working.
 * Ship velocity scaling is wrong in that ships are far too fast. I think the scale should be 3/10 of what it currently is, but Nova gives a speed boost to the player when they're not playing in strict mode, so I don't know what the actual scale is. Perhaps the coordinate system needs to be redone so that no scaling is needed for non-player ships?
