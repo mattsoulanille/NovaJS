@@ -171,8 +171,6 @@ app.get('/', function(req, res){
 app.use(express.static(__dirname));
 
 
-//sol.buildObject();
-var earth = new planet({'id':'earth', 'UUID':UUID(), 'type':'planet'}, sol, io);
 
 
 //
@@ -298,7 +296,9 @@ var startGame = async function() {
 	// Not a ship object.
 	if 
     });
-  */  
+*/
+    //sol.buildObject();
+    var earth = new planet({'id':'earth', 'UUID':UUID(), 'type':'planet'}, sol, io);
     await sol.build();
     console.log("finished loading");
 

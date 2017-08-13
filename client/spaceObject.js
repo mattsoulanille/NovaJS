@@ -47,8 +47,6 @@ var spaceObject = class extends loadsResources(inSystem) {
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
-	    this.buildInfo.type = 'spaceObject';
-	    this.buildInfo.UUID = buildInfo.UUID;
 	    if (typeof this.buildInfo.UUID !== 'undefined') {
 		this.buildInfo.multiplayer = true;
 		this.UUID = this.buildInfo.UUID;
