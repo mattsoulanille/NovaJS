@@ -21,6 +21,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 	this.source = source;
 	this.fireTimeout = undefined;
 	this.doBurstFire = false;
+	this.exitIndex = 0; // index of exitPoint array
 	this.random = Math.random; // Temporary until there is a seeded rng
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.count = buildInfo.count || 1;
@@ -45,8 +46,16 @@ basicWeapon = class extends loadsResources(inSystem) {
     }
 
     async build() {
-	// needs refactoring with spaceObject
 	this.meta = await this.loadResources(this.type, this.buildInfo.id);
+
+	// assign exitPoints
+	if (this.meta.exitType in this.source.exitPoints) {
+	    this.exitPoints = this.source.exitPoints[this.meta.exitType];
+	}
+	else {
+	    this.exitPoints = this.source.exitPoints['center'];
+	}
+
 	this.setProperties();
 
 	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/60;
@@ -117,6 +126,13 @@ basicWeapon = class extends loadsResources(inSystem) {
 
     fire(direction, position, velocity) {
 	// finds an available projectile and fires it
+
+	// if no position specified, default to the next exitPoint's position
+	if (! position) {
+	    position = this.exitPoints[this.exitIndex].position;
+	    this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
+	}
+
 	for (var i=0; i < this.projectiles.length; i++) {
 	    var proj = this.projectiles[i];
 	    if (proj.available) {

@@ -45,6 +45,7 @@ var weapParse = class {
 	this.speed = weap.speed;
 	this.turnRate = weap.turnRate;
 	this.fireGroup = weap.fireGroup; // primary or secondary
+	this.exitType = weap.exitType;
 	this.accuracy = weap.accuracy;
 	this.impact = weap.impact; // knockback force
 	this.burstCount = weap.burstCount;

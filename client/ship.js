@@ -9,7 +9,7 @@ if (typeof(module) !== 'undefined') {
     var Promise = require("bluebird");
     var outfit = require("../server/outfitServer.js");
     var weaponBuilder = require("../server/weaponBuilderServer.js");
-    
+    var exitPoint = require("./exitPoint.js");    
 }
 
 ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
@@ -37,6 +37,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	// some stuff temporarally broken
 	//await this.buildOutfits();
 	//await this.buildTargetImage();
+	this.buildExitPoints();
 	await this.buildDefaultWeapons();
 
 	// make sure ship properties are sane after loading outfits
@@ -54,6 +55,23 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
 
 
+    buildExitPoints() {
+	for (var name in this.meta.animation.exitPoints) {
+	    if (name === 'upCompress' || name === 'downCompress') {
+		// probably revise how exitPoints are stored in meta
+		continue;
+	    }
+
+	    this.exitPoints[name] = this.meta.animation.exitPoints[name].map(function(offset) {
+		return new exitPoint(this, offset,
+				     this.meta.animation.exitPoints.upCompress,
+				     this.meta.animation.exitPoints.downCompress);
+	    }.bind(this));
+
+
+	}
+    }
+    
     buildTargetImage() {
 	this.targetImage = new targetImage(this.meta.targetImage);
 	return this.targetImage.build();

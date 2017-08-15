@@ -6,6 +6,7 @@ if (typeof(module) !== 'undefined') {
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
+    var exitPoint = require("./exitPoint.js");
 }
 
 
@@ -61,6 +62,8 @@ var spaceObject = class extends loadsResources(inSystem) {
 	//     this.system.spaceObjects.add(this);
 	// }
 
+	this.exitPoints = {};
+	this.exitPoints.center = [new exitPoint(this)];
 	this.system = system; // a function call (see inSystem.js)
     }
     setMultiplayer() {
