@@ -85,7 +85,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes("normal") &&
 	    other !== this.source) {
-
+	    
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage;
 	    collision.armorDamage = this.properties.armorDamage;
@@ -93,12 +93,20 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    collision.angle = this.pointing;
 	    //console.log("Projectile hit something");
 	    other.receiveCollision(collision);
+	    if (this.hitParticles) {
+		this.renderHitParticles();
+	    }
 	    this.end();
 	    clearTimeout(this.endTimeout);
 	}
     
     }
 
+    renderHitParticles() {
+	this.hitParticles.emit = true;
+	this.hitParticles.render();
+	this.hitParticles.emit = false;
+    }
 
     fire(direction, position, velocity, target) {
 	// temporary. Gun points will be implemented later
@@ -160,6 +168,10 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	if (this.trailParticles) {
 	    this.trailParticles.render();
 	    // refactor so you don't use if every render call
+	}
+	if (this.hitParticles) {
+	    // refactor so you don't use if every render call
+	    this.hitParticles.render();
 	}
 	
 

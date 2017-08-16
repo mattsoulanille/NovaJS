@@ -15,9 +15,9 @@ var particleEmitter = class extends inSystem {
 
 	var graphics = new PIXI.Graphics;
 	
-	graphics.lineStyle(40, 0xFFFFFF);
+	graphics.lineStyle(10, 0xFFFFFF);
 	graphics.moveTo(0,0);
-	graphics.lineTo(40,0);
+	graphics.lineTo(10,0);
 
 	var maxLife = 0;
 	var minLife = 0;
@@ -40,13 +40,13 @@ var particleEmitter = class extends inSystem {
 	this.texture = renderer.generateTexture(graphics);
 
 	// 100 is 1 pixel per frame
-	
-	var velocity = (this.properties.velocity || 0);
+	// i don't really know what the correct scaling is
+	var velocity = (this.properties.velocity || 0) / 2;
 
 	var emitterConfig = {
 	    "alpha": {
 		"start": 1,
-		"end": 1
+		"end": 0
 	    },
 	    "scale": {
 		"start": 0.1,
@@ -100,6 +100,7 @@ var particleEmitter = class extends inSystem {
 	    [this.texture],
 	    emitterConfig
 	);
+	this.emitter.emit = false;
 
 	//this.emitter.updateOwnerPos(0,0);
     }

@@ -38,10 +38,10 @@ turretWeapon = class extends basicWeapon {
 	// target is in a blindspot (or nonexistant)
 	var fireAngle = this.source.pointing;
 
-	var position = this.exitPoints[this.exitIndex].position;
-	this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
 	
 	if (this.target) {
+	    var position = this.exitPoints[this.exitIndex].position;
+	    this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
 
 	    var x_diff = this.target.position[0] - position[0];
 	    var y_diff = this.target.position[1] - position[1];
