@@ -225,10 +225,16 @@ var spaceObject = class extends loadsResources(inSystem) {
 	    // rewrite this please. Put it in playerShip. 
 	    if (!this.isPlayerShip) {
 		// -194 for the sidebar
+		// System container handles the movement relative to the ship.
+		/*
 		this.container.position.x = 
 		    (this.position[0] - stagePosition[0]) + (screenW-194)/2;
 		this.container.position.y = -1 *
 		    (this.position[1] - stagePosition[1]) + screenH/2;
+		*/
+
+		this.container.position.x = this.position[0];
+		this.container.position.y = -1 * this.position[1];
 		
 	    }
 	    this.rendered = true;
@@ -240,8 +246,16 @@ var spaceObject = class extends loadsResources(inSystem) {
     }
 
 
+    _addToContainer() {
+	this.system.container.addChild(this.container);
+    }
+
+    _removeFromContainer() {
+	this.system.container.removeChild(this.container);
+    }
+    
     _removeFromSystem() {
-        this.system.container.removeChild(this.container);
+	this._removeFromContainer();
 	
         if (this.UUID) {
             delete this.system.multiplayer[this.UUID];
@@ -256,7 +270,7 @@ var spaceObject = class extends loadsResources(inSystem) {
     }
 
     _addToSystem() {
-        this.system.container.addChild(this.container);
+	this._addToContainer();
         if (this.UUID) {
             this.system.multiplayer[this.UUID] = this;
 	    if (this.built) {

@@ -109,7 +109,7 @@ var turnable = (superclass) => class extends superclass {
     }
     
     render() {
-	if (this.renderReady === true) {
+	if (this.renderReady && this.visible) {
 	    var images = this.meta.animation.images;
 
 	    var frameStart = _.map(images, function(image) {return image.imagePurposes.normal.start;});

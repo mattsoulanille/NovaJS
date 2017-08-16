@@ -1,6 +1,6 @@
 var _ = require("underscore");
 var Promise = require("bluebird");
-var projectile = require("../client/projectile.js")
+var projectile = require("../client/projectile.js");
 
 class projectileServer extends projectile {
     constructor(buildInfo) {
@@ -12,6 +12,9 @@ class projectileServer extends projectile {
 	    .then(function() {
 		//	    console.log(this.buildInfo.convexHulls.length);
 	    }.bind(this));
+    }
+    buildParticles() {
+
     }
 }
     

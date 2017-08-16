@@ -18,16 +18,29 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.source = source;
 
 	this.type = "weapons"; // that's where the data is. sorry.
-		
 	this.pointing = 0;
 	this.available = false;
     }
 
     async build() {
 	await super.build();
+	this.buildParticles();
 	this.available = true;
     }
 
+
+    buildParticles() {
+	if (this.meta.trailParticles.number > 0) {
+	    this.trailParticles = new particleEmitter(this.meta.trailParticles, this);
+	    this.addChild(this.trailParticles);
+	}
+
+	if (this.meta.hitParticles.number > 0) {
+	    this.hitParticles = new particleEmitter(this.meta.hitParticles, this);
+	    this.addChild(this.hitParticles);
+	}
+    }
+    
     setMultiplayer() {} // refactor me please
     
     // makeSprites() {
@@ -108,6 +121,10 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	//    this.render(); 
 	this.velocity = [Math.cos(direction) * this.properties.speed * this.factor  + velocity[0],
 			 Math.sin(direction) * this.properties.speed * this.factor  + velocity[1]];
+
+	if (this.trailParticles) {
+	    this.trailParticles.emit = true;
+	}
 	
 	this.show();
     }
@@ -115,9 +132,51 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     end() {
 	this.velocity = [0,0];
 	this.hide();
-	this.available = true;
+	if (this.trailParticles || this.hitParticles) {
+	    // continue rendering
+	    this.rendering = true;
+
+	    var maxTime = 0;
+	    if (this.trailParticles) {
+		maxTime = Math.max(maxTime, this.trailParticles.emitter.maxLifetime);
+		this.trailParticles.emit = false;
+	    }
+	    if (this.hitParticles) {
+		maxTime = Math.max(maxTime, this.hitParticles.emitter.maxLifetime);
+		this.hitParticles.emit = false;
+	    }
+
+	    setTimeout(function() {
+		this.rendering = false;
+		this.available = true;
+	    }.bind(this), maxTime * 1000);
+	}
+	else {
+	    this.available = true;
+	}
     }
-}
+    render() {
+	super.render();
+	if (this.trailParticles) {
+	    this.trailParticles.render();
+	    // refactor so you don't use if every render call
+	}
+	
+
+    }
+    destroy() {
+	// make a parent child thing for this
+	if (this.trailParticles) {
+	    this.trailParticles.destroy();
+	}
+
+	if (this.hitParticles) {
+	    this.hitParticles.destroy();
+	}
+
+	super.destory();
+    }
+};
 
 
 if (typeof(module) !== 'undefined') {

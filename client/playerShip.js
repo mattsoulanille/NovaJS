@@ -158,6 +158,15 @@ class playerShip extends ship {
 	super.updateStats.call(this, stats);
     }
 
+    _addToContainer() {
+	space.addChild(this.container);
+    }
+
+    _removeFromContainer() {
+	space.removeChild(this.container);
+    }
+
+    
     render() {
 	// -194 for the sidebar
 	this.container.position.x = (screenW-194)/2;
@@ -173,7 +182,7 @@ class playerShip extends ship {
 	var get_distance = function(a, b) {
 	    return Math.pow((a.position[0] - b.position[0]), 2) +
 		Math.pow((a.position[1] - b.position[1]), 2);
-	}
+	};
 	
 	var distances = {};
 	items.forEach(function(t) {

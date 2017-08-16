@@ -14,6 +14,8 @@ class systemServer extends system {
 	}.bind(this));
     }
 
+    renderContainer() {}
+    
     getMissingObjects(missing) {
 	console.log("server is missing objects: ", missing);
     };

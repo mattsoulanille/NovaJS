@@ -33,11 +33,12 @@ starfield = class extends inSystem {
 		.then(function() {
 		    this.ready = true;
 		    this.built = true;
-		    // moved to system model.
-		    space.addChild(this.container);
+
+		    // temporary? seems weird to have the stars connected to the system
+		    this.source.system.container.addChild(this.container);
 		    this.system.built.render.add(this);
 		    this.rendering = true;
-		}.bind(this))
+		}.bind(this));
 	}
 	else {
 	    return new Promise(function(fulfill, reject) {fulfill()});
@@ -47,8 +48,8 @@ starfield = class extends inSystem {
     attach(source) {
 	this.source = source;
 	this.system = source.system;
-	this.position = _.map(this.source.position, function(n) {return n})
-	this.lastPosition = _.map(this.source.position, function(n) {return n})
+	this.position = _.map(this.source.position, function(n) {return n});
+	this.lastPosition = _.map(this.source.position, function(n) {return n});
 	this.stars.forEach(function(s) {s.attach(source)}.bind(this));
 	this.placeAll();
     }
@@ -88,15 +89,15 @@ starfield = class extends inSystem {
 	
 	if (s) {
 	    
-	    s.randomize()
-	    s.position[0] = Math.floor(Math.random() * (xrange[1] - xrange[0]) + xrange[0])
-	    s.position[1] = Math.floor(Math.random() * (yrange[1] - yrange[0]) + yrange[0])
-	    s.show()
+	    s.randomize();
+	    s.position[0] = Math.floor(Math.random() * (xrange[1] - xrange[0]) + xrange[0]);
+	    s.position[1] = Math.floor(Math.random() * (yrange[1] - yrange[0]) + yrange[0]);
+	    s.show();
 	    s.available = false;
-	    return true
+	    return true;
 	}
 	else {
-	    return false	
+	    return false;
 	}
 	
     }
@@ -121,12 +122,12 @@ starfield = class extends inSystem {
 
 
     render() {
-	this.position = _.map(this.source.position, function(n) {return n})
+	this.position = _.map(this.source.position, function(n) {return n});
 	if ((Math.abs(this.position[0] - this.lastPosition[0]) > this.buffer) ||
 	    (Math.abs(this.position[1] - this.lastPosition[1]) > this.buffer)) {
 	    
 	    this.moveStars();
-	    this.lastPosition = _.map(this.source.position, function(n) {return n})
+	    this.lastPosition = _.map(this.source.position, function(n) {return n});
 	}
 	_.each(this.stars, function(s) {s.render()});
 	

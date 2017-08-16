@@ -9,6 +9,7 @@ if (typeof(module) !== 'undefined') {
 }
 
 // rewrite
+// and refactor with basicWeapon
 beamWeapon = class extends collidable(loadsResources(inSystem)){
 
     constructor(buildInfo, source) {
@@ -158,10 +159,10 @@ Else, return false
     
     render(fireAngle = this.source.pointing) {
 	if (this.firing) {
-	    this.graphics.position.x =
-		(this.position[0] - stagePosition[0]) + (screenW-194)/2;
-	    this.graphics.position.y = -1 *
-		(this.position[1] - stagePosition[1]) + screenH/2;
+	    this.graphics.position.x = this.position[0];
+	    //(this.position[0] - stagePosition[0]) + (screenW-194)/2;
+	    this.graphics.position.y = -1 * this.position[1];
+		//(this.position[1] - stagePosition[1]) + screenH/2;
 	    this.graphics.clear();
 	    this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
 	    this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics

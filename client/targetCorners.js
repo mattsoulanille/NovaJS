@@ -33,7 +33,7 @@ targetCorners = class extends spaceObject {
     addSpritesToContainer() {
 	_.each(this.sprites, function(spr) { this.container.addChild(spr) }, this);
 	this.renderReady = true;
-	space.addChild(this.container); // maybe it should add to statusBar's contianer?
+	this.system.container.addChild(this.container); // maybe it should add to statusBar's contianer?
     }
 
     callSprites(toCall) {

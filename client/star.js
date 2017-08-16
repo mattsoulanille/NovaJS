@@ -66,6 +66,6 @@ var star = class extends movable(spaceObject) {
     render() {
 	this.velocity[0] = this.source.velocity[0] * this.velocityFactor;
 	this.velocity[1] = this.source.velocity[1] * this.velocityFactor;
-	super.render.call(this)
+	super.render.call(this);
     }
-}
+};

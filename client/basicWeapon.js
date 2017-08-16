@@ -82,7 +82,10 @@ basicWeapon = class extends loadsResources(inSystem) {
 
 	this.projectiles = [];
 	var burstModifier = 1; // modifier to calculate how many projectiles needed
-	var durationMilliseconds = this.properties.duration * 1000/30;
+	var particleDuration = Math.max(this.properties.trailParticles.lifeMax,
+						    this.properties.hitParticles.life);
+	
+	var durationMilliseconds = (this.properties.duration + particleDuration) * 1000/30;
 	if (this.doBurstFire) {
 	    burstModifier = ( ((this.reloadMilliseconds) * this.properties.burstCount) /
 			      this.properties.burstReload * 1000/30);

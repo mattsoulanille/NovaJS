@@ -37,24 +37,26 @@ turretWeapon = class extends basicWeapon {
 	// defaultFireAngle is relative to this.source and is only applied if the
 	// target is in a blindspot (or nonexistant)
 	var fireAngle = this.source.pointing;
-	
+
+	var position = this.exitPoints[this.exitIndex].position;
+	this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
 	
 	if (this.target) {
-	    
-	    var x_diff = this.target.position[0] - this.source.position[0];
-	    var y_diff = this.target.position[1] - this.source.position[1];
+
+	    var x_diff = this.target.position[0] - position[0];
+	    var y_diff = this.target.position[1] - position[1];
 	    var directionToTarget = (Math.atan2(y_diff, x_diff) + 2*Math.PI) % (2*Math.PI);
 	    
 	    // if there are any blindspots
 	    if (!this.checkBlindspots(directionToTarget)) {
 		
 		
-		fireAngle = (this.calcFireAngle() || directionToTarget);
+		fireAngle = (this.calcFireAngle(position) || directionToTarget);
 		fireAngle += (((Math.random() - 0.5) * 2 * this.properties.accuracy) *
 			      (2 * Math.PI / 360));
 		
 		fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
-		return super.fire.call(this, fireAngle);
+		return super.fire.call(this, fireAngle, position);
 	    }
 	    
 	}
@@ -114,9 +116,9 @@ turretWeapon = class extends basicWeapon {
 	
     }
     
-    calcFireAngle() {
-	var dx = this.target.position[0] - this.source.position[0];
-	var dy = this.target.position[1] - this.source.position[1];
+    calcFireAngle(position) {
+	var dx = this.target.position[0] - position[0];
+	var dy = this.target.position[1] - position[1];
 	var dvx = this.target.velocity[0] - this.source.velocity[0];
 	var dvy = this.target.velocity[1] - this.source.velocity[1];
 	// 1 nova projectile speed = 100 pixels / frame. 3/10 pixels / ms

@@ -51,6 +51,9 @@ var weapParse = class {
 	this.burstCount = weap.burstCount;
 	this.burstReload = weap.burstReload;
 
+	this.trailParticles = weap.trailParticles;
+	this.hitParticles = weap.hitParticles;
+	
 	this.maxAmmo = weap.maxAmmo;
 
 	this.destroyShipWhenFiring = false;
