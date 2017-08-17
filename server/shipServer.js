@@ -17,8 +17,9 @@ class shipServer extends ship {
 	// to be replaced by system having promises (see comment in index.js)
 	// a hack to make weapon loading work
 	this.buildInfo.weapons = this.meta.weapons.map(function(buildInfo) {
-	    buildInfo.UUID = UUID();
-	    return buildInfo;
+	    var copy = Object.assign({}, buildInfo);
+	    copy.UUID = UUID();
+	    return copy;
 	});
 	
 	
