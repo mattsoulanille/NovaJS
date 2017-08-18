@@ -1,8 +1,8 @@
+var baseParse = require("./baseParse.js");
 
-var weapParse = class {
+var weapParse = class extends baseParse {
     constructor(weap) {
-	this.id = weap.prefix + ":" + weap.id;
-	this.name = weap.name;
+	super(...arguments);
 	this.type = weap.guidance;
 	// ones that have spins
 	var spinGuidances = [
@@ -78,6 +78,18 @@ var weapParse = class {
 	if (weap.vulnerableToPD && this.type === "guided") {
 	    this.vulnerableTo.push("point defense");
 	}
+
+	this.submunitions = [];
+	if (weap.submunitions[0]) {
+	    var subs = Object.assign({}, weap.submunitions[0]);
+	    subs.id = weap.idSpace.wëap[subs.type].globalID;
+	    subs.type = undefined;
+	    this.submunitions.push(subs);
+	}
+
+
+
+	
 	
 	
     }

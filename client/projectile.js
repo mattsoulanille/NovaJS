@@ -7,6 +7,8 @@ if (typeof(module) !== 'undefined') {
     var spaceObject = require("../server/spaceObjectServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
+
+    var weaponBuilder;
 }
 
 
@@ -20,14 +22,64 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.type = "weapons"; // that's where the data is. sorry.
 	this.pointing = 0;
 	this.available = false;
+	this.subs = [];
+	this.maxSubTime = 0;
     }
 
-    async build() {
-	await super.build();
+    async _build() {
+	await super._build();
+	await this.buildSubs();
 	this.buildParticles();
+	this.fireTime = this.properties.duration / 30;
+
+	// include 0 so Math.max has a min
+	var additionalTimes = [0];
+	
+	if (this.trailParticles) {
+	    additionalTimes.push(this.trailParticles.emitter.maxLifetime);
+	}
+
+	if (this.hitParticles) {
+	    additionalTimes.push(this.hitParticles.emitter.maxLifetime);
+	}
+
+	this.particleTime = Math.max(...additionalTimes);
+	
+	if (this.subs.length !== 0) {
+	    var subDurations = this.subs.map(function(sub) {
+		return sub.projectiles[0].fireTime;
+	    });
+	    var maxSubTime = Math.max(...subDurations);
+	    additionalTimes.push(maxSubTime);
+	}
+	
+	this.additionalTime = Math.max(...additionalTimes);
+	this.fireTime += this.additionalTime;
 	this.available = true;
     }
 
+    async buildSubs() {
+	if (!this.meta.submunitions) {
+	    return;
+	}
+
+	if ( (! weaponBuilder) && (typeof(module) !== 'undefined') ) {
+	    // is this insane?
+	    weaponBuilder = require("../server/weaponBuilderServer.js");
+	}
+
+	for (var i = 0; i < this.meta.submunitions.length; i++) {
+	    var subData = this.meta.submunitions[i];
+	    var buildInfo = {id: subData.id};
+	    //debugger;
+	    var sub = await new weaponBuilder(buildInfo, this).buildSub(subData);
+	    if (sub) {
+		this.subs.push(sub);
+	    }
+	}
+	
+    }
+    
 
     buildParticles() {
 	if (this.meta.trailParticles.number > 0) {
@@ -96,8 +148,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    if (this.hitParticles) {
 		this.renderHitParticles();
 	    }
-	    this.end();
 	    clearTimeout(this.endTimeout);
+	    this.end();
 	}
     
     }
@@ -138,30 +190,33 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     }
     
     end() {
+	this.subs.forEach(function(sub) {
+	    sub.fire();
+	});
+	
+	
 	this.velocity = [0,0];
 	this.hide();
 	if (this.trailParticles || this.hitParticles) {
 	    // continue rendering
 	    this.rendering = true;
 
-	    var maxTime = 0;
 	    if (this.trailParticles) {
-		maxTime = Math.max(maxTime, this.trailParticles.emitter.maxLifetime);
 		this.trailParticles.emit = false;
 	    }
 	    if (this.hitParticles) {
-		maxTime = Math.max(maxTime, this.hitParticles.emitter.maxLifetime);
 		this.hitParticles.emit = false;
 	    }
-
+	    
 	    setTimeout(function() {
 		this.rendering = false;
-		this.available = true;
-	    }.bind(this), maxTime * 1000);
+	    }.bind(this), this.particleTime * 1000);
 	}
-	else {
+
+
+	setTimeout(function() {
 	    this.available = true;
-	}
+	}.bind(this), this.additionalTime * 1000);
     }
     render() {
 	super.render();

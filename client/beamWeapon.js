@@ -24,6 +24,7 @@ beamWeapon = class extends collidable(loadsResources(inSystem)){
 	this.source = source;
 	this.rendering = false;
 	this.built = false;
+	this.visible = false;
 	if (typeof source !== 'undefined') {
 	    this.position = source.position;
 	}
@@ -110,6 +111,7 @@ Else, return false
     startFiring(notify = true) {
 	this.graphics.visible = true;
 	this.rendering = true;
+	this.visible = true;
 	if ( !(this.crash.all().includes(this.collisionShape)) ) {
 	    this.collisionShape.insert();
 	}
@@ -122,6 +124,7 @@ Else, return false
 	this.graphics.clear();
 	this.graphics.visible = false;
 	this.rendering = false;
+	this.visible = false;
 	this.collisionShape.remove();
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();

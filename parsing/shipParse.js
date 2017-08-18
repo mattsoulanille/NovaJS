@@ -1,10 +1,10 @@
 
 var shanParse = require("./shanParse.js");
-
-var shipParse = class {
+var baseParse = require("./baseParse.js");
+var shipParse = class extends baseParse {
     constructor(ship) {
-	this.id = ship.prefix + ":" + ship.id;
-	this.name = ship.name;
+	super(...arguments);
+	
 	this.shanID = this.id;
 	this.prefix = ship.prefix;
 

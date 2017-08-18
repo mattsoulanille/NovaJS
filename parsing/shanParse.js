@@ -1,10 +1,10 @@
 
 var spriteSheet = require("./spriteSheet.js");
+var baseParse = require("./baseParse.js");
 
-
-var shanParse = class {
+var shanParse = class extends baseParse {
     constructor(shan) {
-	this.id = shan.prefix + ":" + shan.id;
+	super(...arguments);
 	//this.buildInfo.spriteSheets = {};
 	this.images = {};
 

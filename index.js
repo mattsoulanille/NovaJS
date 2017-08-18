@@ -341,11 +341,16 @@ var connectFunction = function(client){
     var userid = UUID();
     var owned_uuids = [userid];
     var currentSystem = sol;
-    
+
+
     var playerShipType = {
 	id: shipIDs[_.random(0, shipIDs.length - 1)]
     };
-    
+
+
+    //playerShipType = {id: "nova:164"}; // Polaris Raven
+    //playerShipType = {id: "nova:176"}; // Krypt Pod
+
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

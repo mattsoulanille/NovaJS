@@ -2,13 +2,15 @@ var PNG = require('pngjs').PNG;
 var fs = require("fs");
 var convexHullBuilder = require("../server/convexHullBuilder.js");
 // maybe move convexHullBuilder to the parsing directory?
+var baseParse = require("./baseParse.js");
 
-var spriteSheet = class {
+var spriteSheet = class extends baseParse {
     constructor(rled) {
+	super(...arguments);
+
 	// number of frames before wrapping one row down
 	this.wrap = 10;
 
-	this.id = rled.prefix + ":" + rled.id;
 	this.frames = rled.frames;
 	this.frameWidth = this.frames[0].width;
 	this.frameHeight = this.frames[0].height;

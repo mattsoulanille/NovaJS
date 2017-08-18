@@ -22,13 +22,11 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	this.type = "weapons";
     }
 
-    async buildWeapon() {
+    async _build() {
 	this.meta = await this.loadResources(this.type, this.buildInfo.id);
-
-	if (this.weapon && this.children.has(this.weapon)) {
-	    // if rebuilding (is this even a thing that I support?)
-	    this.removeChild(this.weapon);
-	}
+    }
+    
+    _setWeaponType() {
 
 	if (['point defence', 'bay', 'beam turret', 'point defence beam'].includes(this.meta.type)) {
 	    // temporary
@@ -54,6 +52,49 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	default:
 	    this.weapon = new basicWeapon(this.buildInfo, this.source);
 	    break;
+	}
+
+	return true;
+    }
+
+    async buildSub(subData) {
+	await this._build();
+
+	if (! this._setWeaponType()) {
+	    return false;
+	}
+
+	// no beam support yet
+	// replace some functions of weapon
+	this.weapon.getProjectileCount = function() {
+	    return subData.count;
+	};
+
+	var fire = this.weapon.fire;
+	this.weapon.fire = function(direction, position, velocity) {
+
+	    for (var i = 0; i < this.projectiles.length; i++) {
+		var proj = this.projectiles[i];
+		var offset = (Math.random() - 0.5) * 2 * subData.theta * 2*Math.PI / 360;
+		direction = this.source.pointing + offset;
+		position = position || this.source.position;
+		velocity = velocity || this.source.velocity;
+		this.target = this.source.target;
+		proj.fire(direction, position, velocity, this.target);
+	    }
+	    return true;
+
+	}.bind(this.weapon);
+
+	await this.weapon.build();
+	return this.weapon;
+    }
+    
+    async buildWeapon() {
+	await this._build();
+
+	if (! this._setWeaponType()) {
+	    return false;
 	}
 
 

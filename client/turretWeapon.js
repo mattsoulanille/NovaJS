@@ -41,7 +41,7 @@ turretWeapon = class extends basicWeapon {
 	
 	if (this.target) {
 	    var position = this.exitPoints[this.exitIndex].position;
-	    this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
+
 
 	    var x_diff = this.target.position[0] - position[0];
 	    var y_diff = this.target.position[1] - position[1];
@@ -49,7 +49,9 @@ turretWeapon = class extends basicWeapon {
 	    
 	    // if there are any blindspots
 	    if (!this.checkBlindspots(directionToTarget)) {
-		
+		// since we are going to fire with the given angle, we need to increment
+		// the exitIndex ourselves
+		this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;		
 		
 		fireAngle = (this.calcFireAngle(position) || directionToTarget);
 		fireAngle += (((Math.random() - 0.5) * 2 * this.properties.accuracy) *

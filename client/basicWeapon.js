@@ -34,6 +34,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 	    this.system = this.source.system;
 	}
 	this.type = "weapons";
+	this.projectiles = [];
     }
 
     
@@ -77,15 +78,25 @@ basicWeapon = class extends loadsResources(inSystem) {
 	}
     }
 
-    
-    buildProjectiles() {
 
-	this.projectiles = [];
-	var burstModifier = 1; // modifier to calculate how many projectiles needed
-	var particleDuration = Math.max(this.properties.trailParticles.lifeMax,
-						    this.properties.hitParticles.life);
+    async getProjectileCount() {
+	var testProj;
+	if (this.projectiles.length === 0) {
+	    testProj = this.buildProjectile();
+	    await testProj.build();
+	}
+	else {
+	    testProj = this.projectiles[0];
+	}
+
 	
-	var durationMilliseconds = (this.properties.duration + particleDuration) * 1000/30;
+	var burstModifier = 1; // modifier to calculate how many projectiles needed
+	//var particleDuration = Math.max(this.properties.trailParticles.lifeMax,
+	//					    this.properties.hitParticles.life);
+	
+	//var durationMilliseconds = (this.properties.duration + particleDuration) * 1000/30;
+
+	var durationMilliseconds = testProj.fireTime * 1000;
 	if (this.doBurstFire) {
 	    burstModifier = ( ((this.reloadMilliseconds) * this.properties.burstCount) /
 			      this.properties.burstReload * 1000/30);
@@ -95,34 +106,44 @@ basicWeapon = class extends loadsResources(inSystem) {
 	// as many projectiles as can be in the air at once as a result of the weapon's
 	// duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
 	
-	var required_projectiles = burstModifier * this.count * (Math.floor(durationMilliseconds / 
-									    (this.reloadMilliseconds)) + 1);
-	
+	return burstModifier * this.count * (Math.floor(durationMilliseconds / 
+							(this.reloadMilliseconds)) + 1);
+
+    }
+
+    buildProjectile() {
+	var proj;
+	switch (this.properties.type) {
+	case "unguided":
+	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    break;
+	case "guided":
+	    proj = new guided(this.buildInfo, this.source.system, this.source);
+	    break;
+	case "turret":
+	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	case "front quadrant":
+	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	default:
+	    // temp
+	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    break;
+	}
+	this.projectiles.push(proj);
+	this.addChild(proj);
+	return proj;
+    }
+    
+    async buildProjectiles() {
+
+	var required_projectiles = await this.getProjectileCount();
 
 	//    var buildInfo = this.buildInfo;  
-	for (var i=0; i < required_projectiles; i++) {
-	    var proj;
-	    switch (this.properties.type) {
-	    case "unguided":
-		proj = new projectile(this.buildInfo, this.source.system, this.source);
-		break;
-	    case "guided":
-		proj = new guided(this.buildInfo, this.source.system, this.source);
-		break;
-	    case "turret":
-		proj = new projectile(this.buildInfo, this.source.system, this.source);
-	    case "front quadrant":
-		proj = new projectile(this.buildInfo, this.source.system, this.source);
-	    default:
-		// temp
-		proj = new projectile(this.buildInfo, this.source.system, this.source);
-		break;
-	    }
-	    this.projectiles.push(proj);
-	    this.addChild(proj);
+	for (var i=this.projectiles.length; i < required_projectiles; i++) {
+	    this.buildProjectile();
 	}
 	
-	return Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
+	await Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
 	
     }
 
