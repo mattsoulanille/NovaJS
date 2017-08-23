@@ -1,7 +1,7 @@
 if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
-    var basicWeapon = require("../server/basicWeaponServer.js");
+    var projectileWeapon = require("../server/projectileWeaponServer.js");
     var turretWeapon = require("../server/turretWeaponServer.js");
     var beamWeapon = require("../server/beamWeaponServer.js");
     var frontQuadrantTurretWeapon = require("../server/frontQuadrantTurretWeaponServer.js");
@@ -35,10 +35,10 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 
 	switch (this.meta.type) {
 	case 'unguided':
-	    this.weapon = new basicWeapon(this.buildInfo, this.source);
+	    this.weapon = new projectileWeapon(this.buildInfo, this.source);
 	    break;
 	case 'guided':
-	    this.weapon = new basicWeapon(this.buildInfo, this.source);
+	    this.weapon = new projectileWeapon(this.buildInfo, this.source);
 	    break;
 	case 'turret':
 	    this.weapon = new turretWeapon(this.buildInfo, this.source);
@@ -50,7 +50,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    this.weapon = new frontQuadrantTurretWeapon(this.buildInfo, this.source);
 	    break;
 	default:
-	    this.weapon = new basicWeapon(this.buildInfo, this.source);
+	    this.weapon = new projectileWeapon(this.buildInfo, this.source);
 	    break;
 	}
 

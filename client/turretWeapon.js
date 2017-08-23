@@ -1,11 +1,11 @@
 if (typeof(module) !== 'undefined') {
-    var basicWeapon = require("../server/basicWeaponServer.js");
+    var projectileWeapon = require("../server/projectileWeaponServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
 }
 
 
-turretWeapon = class extends basicWeapon {
+turretWeapon = class extends projectileWeapon {
 
     constructor(buildInfo, source) {
 	super(buildInfo, source);
