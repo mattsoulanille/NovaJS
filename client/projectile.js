@@ -8,6 +8,8 @@ if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     Promise = require("bluebird");
     var weaponBuilder;
+    var errors = require("./errors.js");
+    var AlliesError = errors.AlliesError;
 }
 
 
@@ -25,6 +27,14 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.maxSubTime = 0;
     }
 
+    get allies() {
+	return new Set([...this.source.allies, this]);
+    }
+
+    set allies(a) {
+	throw new AlliesError("Tried to set allies of a projectile but they are defined implicitly by source");
+    }
+    
     async _build() {
 	await super._build();
 	await this.buildSubs();
@@ -57,6 +67,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.available = true;
     }
 
+    
     async buildSubs() {
 	if (!this.meta.submunitions) {
 	    return;
@@ -134,7 +145,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// this should probably be a separate mixin or class. lots of things do damage.
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes("normal") &&
-	    other !== this.source) {
+	    !this.allies.has(other)) {
+
 	    
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage;

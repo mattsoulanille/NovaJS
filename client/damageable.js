@@ -8,13 +8,23 @@ if (typeof(module) !== 'undefined') {
     var collidable = require("../server/collidableServer.js");
     var _ = require("underscore");
     var Promise = require("bluebird");
-
+    var errors = require("./errors.js");
+    var AlliesError = errors.AlliesError;
 }
 
 damageable = (superclass) => class extends superclass {
 
     constructor() {
 	super(...arguments);
+	try {
+	    this.allies = new Set([this]); // a set of things not to cause harm to.
+	}
+	catch(e) {
+	    // projectile doesn't allow changing of allies
+	    if (!(e instanceof AlliesError)) {
+		throw e;
+	    }
+	}
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.buildInfo.type = "damageable";

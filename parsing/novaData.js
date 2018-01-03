@@ -42,14 +42,18 @@ var novaData = class {
 
     }
 
-    getFunction(prefix, toBuild) {
-	return function(id) {
-	    var resource = this.novaParse.ids.resources[prefix][id];
+    getFunction(resourceType, toBuild) {
+	return function(fullId) {
+	    var index = fullId.lastIndexOf(":");
+	    var prefix = fullId.slice(0, index);
+	    var id = fullId.slice(index + 1);
+
+	    var resource = this.novaParse.ids.getSpace(prefix)[resourceType][id];
 	    if (resource) {
 		return new toBuild(resource);
 	    }
 	    else {
-		throw new Error(id + " not found in novaParse under " + prefix);
+		throw new Error(fullId + " not found in novaParse under " + resourceType);
 	    }
 	}.bind(this);
 

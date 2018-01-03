@@ -26,6 +26,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 	this.doBurstFire = false;
 	this.exitIndex = 0; // index of exitPoint array
 	this.random = Math.random; // Temporary until there is a seeded rng
+
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.id = buildInfo.id;
 	    this.count = buildInfo.count || 1;

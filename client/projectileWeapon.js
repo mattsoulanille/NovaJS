@@ -69,20 +69,21 @@ projectileWeapon = class extends basicWeapon {
     buildProjectile() {
 	var proj;
 	//console.log(this.source.system);
+	var args = [this.buildInfo, this.source.system, this.source];
 	switch (this.properties.type) {
 	case "unguided":
-	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    proj = new projectile(...args);
 	    break;
 	case "guided":
-	    proj = new guided(this.buildInfo, this.source.system, this.source);
+	    proj = new guided(...args);
 	    break;
 	case "turret":
-	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    proj = new projectile(...args);
 	case "front quadrant":
-	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    proj = new projectile(...args);
 	default:
 	    // temp
-	    proj = new projectile(this.buildInfo, this.source.system, this.source);
+	    proj = new projectile(...args);
 	    break;
 	}
 	this.projectiles.push(proj);
