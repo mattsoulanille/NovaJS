@@ -2,7 +2,7 @@ if (typeof(module) !== 'undefined') {
     var sprite = require("../server/spriteServer.js");
     var PIXI = require("../server/pixistub.js");
     var _ = require("underscore");
-    var Promise = require("bluebird");
+    Promise = require("bluebird");
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");

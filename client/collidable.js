@@ -48,7 +48,9 @@ var collidable = (superclass) => class extends superclass {
     }
 
     _addToSystem() {
+	// Not using a getter because I want to make sure that the collision shape gets inserted.
 	this.crash = this.system.crash;
+
 	if (this.built) {
 	    this.buildConvexHulls();
 	    if (!(this.crash.all().includes(this.collisionShape)) ) {
@@ -61,14 +63,14 @@ var collidable = (superclass) => class extends superclass {
 
     async _build() {
 	await super._build();
-	this.collisionSpriteName = "baseImage";
-	this.convexHullData = this.sprites.baseImage.convexHulls;
 	if (typeof(this.system) !== 'undefined') {
 	    this.buildConvexHulls();
 	}
     }
 
     buildConvexHulls() {
+	this.collisionSpriteName = "baseImage";
+	this.convexHullData = this.sprites.baseImage.convexHulls;
 
 	this.collisionShapes = _.map(this.convexHullData, function(hullPoints) {
 	    /*

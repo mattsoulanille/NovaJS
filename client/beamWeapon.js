@@ -4,34 +4,32 @@ if (typeof(module) !== 'undefined') {
     var collidable = require("../server/collidableServer");
     var inSystem = require("./inSystem.js");
     var PIXI = require("../server/pixistub.js");
-    var multiplayer = require("../server/multiplayerServer.js");
-    var loadsResources = require("./loadsResources");
+    var basicWeapon = require("../server/basicWeaponServer.js");
 }
 
 // rewrite
 // and refactor with basicWeapon
-beamWeapon = class extends collidable(loadsResources(inSystem)){
+beamWeapon = class extends collidable(basicWeapon) {
 
     constructor(buildInfo, source) {
 	super(...arguments);
-	this.type = "weapons";
-	this.socket = source.socket;
 	this.container = new PIXI.Container();
-	this.buildInfo = buildInfo;
-	this._firing = false;
-	this.doAutoFire = false;
-	this.ready = false;
-	this.source = source;
+
+	if (this.system) {
+	    // so the inheritance chain works
+	    this.system.container.addChild(this.container);
+	}
+	    
+	//this.type = "weapons";
+	//this.socket = source.socket;
+
+	//this.buildInfo = buildInfo;
 	this.rendering = false;
 	this.built = false;
 	this.visible = false;
 	if (typeof source !== 'undefined') {
+	    // exitPoints go here
 	    this.position = source.position;
-	}
-	if (typeof(buildInfo) !== 'undefined') {
-	    this.id = buildInfo.id;
-	    this.UUID = buildInfo.UUID;
-	    this.multiplayer = new multiplayer(this.socket, this.UUID);
 	}
     }
 
@@ -61,24 +59,17 @@ Else, return false
 */
 
 
-    async build() {
-	
-	this.meta = await this.loadResources(this.type, this.buildInfo.id);
-	this.setProperties();
-	this.graphics = new PIXI.Graphics();
+    async _build() {
+	await super._build.call(this);
 
+	this.graphics = new PIXI.Graphics();
 	this.container.addChild(this.graphics);
 
-	this.source.weapons.all.push(this);
-
-	this.ready = true;
-	this.built = true;
-	
-	if (typeof(this.system) !== 'undefined') {
-	    this._addToSystem();
+	if (this.system) {
+	    this.system.built.render.add(this);
 	}
-	this.multiplayer.on('updateStats', this.updateStats.bind(this));
 
+	this.built = true;
     };
 
     buildConvexHulls() {
@@ -92,21 +83,6 @@ Else, return false
 	this.collisionShape = new this.crash.Polygon(new this.crash.V, collisionPoints, false, this);
     }
 
-    set firing(val) {
-
-	if (val) {
-	    this._firing = true;
-	    this.startFiring();
-	}
-	else {
-	    this._firing = false;
-	    this.stopFiring();
-	}
-    }
-
-    get firing() {
-	return this._firing;
-    }
     
     startFiring(notify = true) {
 	this.graphics.visible = true;
@@ -136,30 +112,7 @@ Else, return false
 	// wait. is it really necessary anymore?
     }
     
-    getStats() {
-	var stats = {};
-	stats.firing = this.firing;
-	return stats;
-    }
 
-    updateStats(stats) {
-	if (typeof stats.firing !== 'undefined') {
-	    if (stats.firing) {
-		this.startFiring(false);
-		this._firing = true;
-	    }
-	    else {
-		this.stopFiring(false);
-		this._firing = false;
-	    }
-	}
-    }
-
-
-    sendStats() {
-	this.multiplayer.emit('updateStats', this.getStats());
-    }
-    
     render(fireAngle = this.source.pointing) {
 	if (this.firing) {
 	    this.graphics.position.x = this.position[0];
@@ -219,7 +172,12 @@ Else, return false
 	
     }
     _addToSystem() {
-	this.system.container.addChild(this.container);
+	
+	if (this.container) {
+	    // To make the inheritance work (since basicWeapon calls _addToSystem)
+	    this.system.container.addChild(this.container);
+	}
+
 	if (this.UUID) {
 	    this.system.multiplayer[this.UUID] = this;
 	}
@@ -244,7 +202,7 @@ Else, return false
     setTarget(target) {
 	this.target = target;
     }
-}
+};
 
     
 if (typeof(module) !== 'undefined') {

@@ -6,7 +6,8 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var UUID = require('uuid/v4');
 var _ = require("underscore");
-var Promise = require("bluebird");
+Promise = require("bluebird");
+
 var fs = require('fs'),
     PNG = require('pngjs').PNG;
 
@@ -354,7 +355,7 @@ var connectFunction = function(client){
 
     //playerShipType = {id: "nova:164"}; // Polaris Raven
     //playerShipType = {id: "nova:176"}; // Krypt Pod
-
+    //playerShipType = {id: "nova:128"}; // shuttle
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

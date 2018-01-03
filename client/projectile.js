@@ -6,8 +6,7 @@ if (typeof(module) !== 'undefined') {
     var movable = require("../server/movableServer.js");
     var spaceObject = require("../server/spaceObjectServer.js");
     var _ = require("underscore");
-    var Promise = require("bluebird");
-
+    Promise = require("bluebird");
     var weaponBuilder;
 }
 
@@ -18,7 +17,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     constructor(buildInfo, system, source) {
 	super(buildInfo, system);
 	this.source = source;
-
+	//console.log(this.sytem);
 	this.type = "weapons"; // that's where the data is. sorry.
 	this.pointing = 0;
 	this.available = false;
@@ -64,14 +63,13 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	}
 
 	if ( (! weaponBuilder) && (typeof(module) !== 'undefined') ) {
-	    // is this insane?
+	    // is this insane? Um, Yes it is. Necessary to avoid some mutual recursion thing I think.
 	    weaponBuilder = require("../server/weaponBuilderServer.js");
 	}
 
 	for (var i = 0; i < this.meta.submunitions.length; i++) {
 	    var subData = this.meta.submunitions[i];
 	    var buildInfo = {id: subData.id};
-	    //debugger;
 	    var sub = await new weaponBuilder(buildInfo, this).buildSub(subData);
 	    if (sub) {
 		this.subs.push(sub);
