@@ -3,7 +3,7 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-[Here's a running example](http://54.208.57.194) (works in modern browsers).
+[Here's a running example](http://54.85.219.14) (works in modern browsers).
 
 ### Project Goals
 * Function as a Nova Engine that can, given Nova files, run EV Nova.
@@ -34,11 +34,12 @@ cd NovaJS/
 ```
 
 Move your Nova Files and Plug-ins to the ```Nova Data``` directory
-###### Using the Mac version of EV Nova:
+###### Make sure you're using the Mac version of EV Nova. Windows EV Nova file formats are currently unsupported, so make sure your Nova files end with `.ndat`
 ```
 cp -r /path/to/EV\ Nova.app/Contents/Resources/Nova\ Files/ ./Nova\ Data/
 mkdir ./Nova\ Data/Plug-ins/
 ```
+###### You can add any plug-ins you like in the Plug-ins directory. Just make sure they're in the Mac format or the Nova Data `.ndat` format if you're using Windows.
 
 Install packages with `npm`
 ```
