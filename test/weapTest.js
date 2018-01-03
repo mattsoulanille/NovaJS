@@ -1,6 +1,7 @@
 var assert = require('assert');
+var chai = require('chai');
 var resourceFork = require('resourceforkjs').resourceFork;
-
+var expect = chai.expect;
 var weap = require('../parsers/weap.js');
 
 
@@ -11,6 +12,7 @@ describe("weap", function() {
     var beamTurret;
     var missile;
     var turret;
+    var nosubs;
     before(function(done) {
 	rf = new resourceFork("./test/files/weap.ndat", false);
 	rf.read().then(function() {
@@ -20,6 +22,7 @@ describe("weap", function() {
 	    missile = new weap(weaps[130]);
 	    turret = new weap(weaps[131]);
 	    beamTurret = new weap(weaps[132]);
+	    nosubs = new weap(weaps[264]);
 	    done();
 	}.bind(this));
     });
@@ -386,6 +389,9 @@ describe("weap", function() {
 	assert.equal(turret.submunitions[0].limit, 32767);
     });
 
+    it("should not include subs if the sub id is 0", function() {
+	expect(nosubs.submunitions).to.be.an('array').that.is.empty;
+    });
 
     it("should parse proxSafety", function() {
 	assert.equal(unguided.proxSafety, 50);
