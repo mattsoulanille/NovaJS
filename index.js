@@ -9,10 +9,12 @@ var nships1 = new rf("./test/Nova\ Ships\ 1.ndat", false);
 var weap = new rf("./test/files/weap.ndat", false);
 var spin = new rf("./test/files/spin.ndat", false);
 var rled = new rf("./test/files/rled.ndat");
+var rez = new rf("./test/Nova\ Data\ 1.rez", false);
 
 ndat4.read();
 weap.read();
 spin.read();
+rez.read();
 
 
 
@@ -32,6 +34,7 @@ np.read().then(function() {
 
 local.context.rf = rf;
 local.context.ndat4 = ndat4;
+local.context.rez = rez;
 local.context.nships1 = nships1;
 local.context.weap = weap;
 local.context.novaParse = novaParse;

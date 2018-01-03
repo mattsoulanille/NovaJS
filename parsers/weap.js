@@ -177,7 +177,7 @@ var weap = class extends base {
 	this.proxHitAll = (this.flags2 & 0x8)>0 || (this.guidance != "guided");
 
 	this.submunitions = [];
-	if (d.getInt16(64) >=0) {
+	if (d.getInt16(64) >0) {
 	    this.submunitions[0] = {};
 	    this.submunitions[0].count = d.getInt16(62);
 	    this.submunitions[0].type = d.getInt16(64);
