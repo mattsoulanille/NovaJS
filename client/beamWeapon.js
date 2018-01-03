@@ -94,6 +94,13 @@ Else, return false
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();
 	}
+
+	// Control which point the beam comes from
+	// This will probably need to be written so that clients are more sure about which place a beam is coming from.
+	this.switchExitInterval = setInterval(function() {
+	    this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
+	}.bind(this), this.reloadMilliseconds);
+	
     }
 
     stopFiring(notify = true) {
@@ -105,6 +112,7 @@ Else, return false
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();
 	}
+	clearInterval(this.switchExitInterval);
     }
 
     show() {
@@ -112,12 +120,20 @@ Else, return false
 	// wait. is it really necessary anymore?
     }
     
-
+    getFirePosition() {
+	var position = this.exitPoints[this.exitIndex].position;
+	if (typeof position == 'undefined') {
+	    position = this.position;
+	}
+	return position;
+    }
+    
     render(fireAngle = this.source.pointing) {
 	if (this.firing) {
-	    this.graphics.position.x = this.position[0];
+	    var position = this.getFirePosition();
+	    this.graphics.position.x = position[0];
 	    //(this.position[0] - stagePosition[0]) + (screenW-194)/2;
-	    this.graphics.position.y = -1 * this.position[1];
+	    this.graphics.position.y = -1 * position[1];
 		//(this.position[1] - stagePosition[1]) + screenH/2;
 	    this.graphics.clear();
 	    this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
@@ -126,16 +142,15 @@ Else, return false
 	    var y = -Math.sin(fireAngle) * this.meta.animation.beamLength;
 	    this.graphics.lineTo(x,y);
 
-	    this.renderCollisionShape(fireAngle);
+	    this.renderCollisionShape(fireAngle, position);
 	}
     }
 
-
-    renderCollisionShape(fireAngle = this.source.pointing) {
-	this.collisionShape.moveTo(...this.position);
+    renderCollisionShape(fireAngle, position) {
+	// so that the server doesn't try to render it
+	this.collisionShape.moveTo(...position);
 	this.collisionShape.setAngle(fireAngle);
     }
-
 
     collideWith(other, res) {
 	//console.log(res);

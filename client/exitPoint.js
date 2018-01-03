@@ -1,6 +1,7 @@
 
 var exitPoint = class {
     constructor(source, offset=[0,0,0], upCompress=[100,100], downCompress=[100,100]) {
+	// Note that upCompress and downCompress for some reason do not play any role into the turn rate of the ship
 	this.source = source;
 	this.offset = offset;
 	this.upCompress = upCompress;
