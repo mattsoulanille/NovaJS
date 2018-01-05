@@ -202,7 +202,7 @@ function startGame() {
     currentSystem.spaceObjects.forEach(function(s) {
         // improve me                                                           
 	if (! (s instanceof projectile)) {
-            s.show()
+            s.show();
         }
     });
 

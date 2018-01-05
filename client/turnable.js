@@ -102,14 +102,12 @@ var turnable = (superclass) => class extends superclass {
 	});
     }
 
-    renderSprite(spr, rotation, imageIndex) {
-	spr.sprite.rotation = rotation;
-	spr.sprite.texture = spr.textures[imageIndex];
-	
-    }
+    // renderSprite(spr, rotation, imageIndex) {
+    // 	super.renderSprite(...arguments);
+    // }
     
     render() {
-	if (this.renderReady && this.visible) {
+	if (this.renderReady) {
 	    var images = this.meta.animation.images;
 
 	    var frameStart = _.map(images, function(image) {return image.imagePurposes.normal.start;});
@@ -150,18 +148,7 @@ var turnable = (superclass) => class extends superclass {
 		this.renderSprite(spr, rotation, imageIndex);
 
 		if (keys[i] === this.collisionSpriteName) {
-		    var newShape = this.collisionShapes[imageIndex];
-		    
-		    if (this.collisionShape !== newShape) {
-			//		    console.log("inserting new collision shape");
-			this.collisionShape.remove();
-			if (! (_.contains(this.crash.all(), newShape)) && newShape ) {
-			    newShape.insert();
-			}
-			this.collisionShape = newShape;
-		    }
-		    
-		    this.collisionShape.setAngle(rotation);
+		    this.renderCollisionSprite(spr, rotation, imageIndex);
 		}
 	    }
 	    // this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.

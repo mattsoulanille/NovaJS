@@ -5,11 +5,12 @@ if (typeof(module) !== 'undefined') {
     var inSystem = require("./inSystem.js");
     var PIXI = require("../server/pixistub.js");
     var basicWeapon = require("../server/basicWeaponServer.js");
+    var renderable = require("./renderable.js");
 }
 
 // rewrite
 // and refactor with basicWeapon
-beamWeapon = class extends collidable(basicWeapon) {
+beamWeapon = class extends collidable(renderable(basicWeapon)) {
 
     constructor(buildInfo, source) {
 	super(...arguments);
@@ -24,9 +25,8 @@ beamWeapon = class extends collidable(basicWeapon) {
 	//this.socket = source.socket;
 
 	//this.buildInfo = buildInfo;
-	this.rendering = false;
+	this._rendering = false;
 	this.built = false;
-	this.visible = false;
 	if (typeof source !== 'undefined') {
 	    // exitPoints go here
 	    this.position = source.position;
@@ -86,8 +86,7 @@ Else, return false
     
     startFiring(notify = true) {
 	this.graphics.visible = true;
-	this.rendering = true;
-	this.visible = true;
+	this._rendering = true;
 	if ( !(this.crash.all().includes(this.collisionShape)) ) {
 	    this.collisionShape.insert();
 	}
@@ -106,8 +105,7 @@ Else, return false
     stopFiring(notify = true) {
 	this.graphics.clear();
 	this.graphics.visible = false;
-	this.rendering = false;
-	this.visible = false;
+	this._rendering = false;
 	this.collisionShape.remove();
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();

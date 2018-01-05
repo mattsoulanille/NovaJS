@@ -8,6 +8,10 @@ if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
     var Crash = require("crash-colliders");
+    var errors = require("./errors.js");
+    var NoSystemError = errors.NoSystemError;
+    var NotBuiltError = errors.NotBuiltError;
+    var NoCollisionShapeError = errors.NoCollisionShapeError;
 }
 
 
@@ -21,35 +25,43 @@ var collidable = (superclass) => class extends superclass {
     collideWith(other) {}; 
     receiveCollision(other) {};
 
-    show() {
-	// Necessary in case show is called twice
-	if (super.show.call(this) && this.crash && ! (this.crash.all().includes(this.collisionShape)) ) {
+    setVisible(v) {
+	super.setVisible(v);
+	if (typeof this.collisionShape === "undefined") {
+	    throw new NoCollisionShapeError("Can't set visible without having a collisionShape");
+	}
+	
+	if (v && !this.crash.all().includes(this.collisionShape)) {
 	    this.collisionShape.insert();
 	}
-
-    }
-
-    hide() {
-	if (typeof(this.collisionShape) !== 'undefined') {
+	else {
 	    this.collisionShape.remove();
-	    //this.debug = false;
 	}
-	super.hide.call(this);
-    }
+    }    
 
+    get crash() {
+	if (!this.system) {
+	    throw new NoSystemError("collidable object wanted crash but had no system.");
+	}
+	return this.system.crash;
+    }
+    set crash(s) {
+	throw new Error("Can't set crash of a collidable. It's determined by the system it's in.");
+    }
+    
     _removeFromSystem() {
 	if (typeof(this.collisionShape) !== 'undefined') {
 	    this.collisionShape.remove();
 //		this.debug = false;
 	}
-	this.crash = undefined;
+	//this.crash = undefined;
 	super._removeFromSystem.call(this);
 
     }
-
+    
     _addToSystem() {
 	// Not using a getter because I want to make sure that the collision shape gets inserted.
-	this.crash = this.system.crash;
+	//this.crash = this.system.crash;
 
 	if (this.built) {
 	    this.buildConvexHulls();
@@ -100,9 +112,25 @@ var collidable = (superclass) => class extends superclass {
 	}
     }
 
+    renderCollisionSprite(spr, rotation, imageIndex) {
+	var newShape = this.collisionShapes[imageIndex];
+	
+	if (this.collisionShape !== newShape) {
+	    this.collisionShape.remove();
+	    if (! this.crash.all().includes(newShape)) {
+		newShape.insert();
+	    }
+	    this.collisionShape = newShape;
+	}
+	if (this.getVisible()) {
+	    this.collisionShape.setAngle(rotation);
+	}
+
+    }
+
     render() {
 	super.render.call(this);
-	if (this.visible) {
+	if (this.getVisible()) {
 	    this.collisionShape.moveTo(...this.position);
 	}
     }

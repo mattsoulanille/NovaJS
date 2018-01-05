@@ -37,7 +37,7 @@ starfield = class extends inSystem {
 		    // temporary? seems weird to have the stars connected to the system
 		    this.source.system.container.addChild(this.container);
 		    this.system.built.render.add(this);
-		    this.rendering = true;
+
 		}.bind(this));
 	}
 	else {

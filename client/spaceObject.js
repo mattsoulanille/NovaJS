@@ -7,10 +7,11 @@ if (typeof(module) !== 'undefined') {
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
     var exitPoint = require("./exitPoint.js");
+    var renderable = require("./renderable.js");
 }
 
 
-var spaceObject = class extends loadsResources(inSystem) {
+var spaceObject = class extends loadsResources(renderable(inSystem)) {
 
     constructor(buildInfo, system, socket) {
 
@@ -24,9 +25,6 @@ var spaceObject = class extends loadsResources(inSystem) {
 	// rendered yet in this frame. Used for
 	// ordering the rendering.
 	this.rendered = false;
-	
-	this.rendering = false; // whether or not to render
-	// is this even used anymore?
 	
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
@@ -44,7 +42,6 @@ var spaceObject = class extends loadsResources(inSystem) {
 
 	this.container = new PIXI.Container(); // Must be before call to set system
 	this.container.visible = false;
-
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
@@ -121,7 +118,6 @@ var spaceObject = class extends loadsResources(inSystem) {
     
     addToSpaceObjects() {
 	this.system.built.spaceObjects.add(this);
-	this.system.built.render.add(this);
 	if (this.buildInfo.multiplayer) {
 	    this.system.built.multiplayer[this.buildInfo.UUID] = this;
 	}
@@ -161,7 +157,7 @@ var spaceObject = class extends loadsResources(inSystem) {
 	    this.container.addChild(s.sprite);
 	}.bind(this));
 	
-	this.hide();
+	//this.hide();
 
 	// Didn't I rewrite the add to system code? Maybe this is unneeded
 	this.system.container.addChild(this.container);
@@ -171,25 +167,11 @@ var spaceObject = class extends loadsResources(inSystem) {
 	return _.map(_.map(_.values(this.sprites), function(x) {return x.sprite;}), toCall, this);
     }
 
-    hide() {
-	this.container.visible = false;
-	this.visible = false;
-	this.rendering = false;
+    renderSprite(spr, rotation, imageIndex) {
+	spr.sprite.rotation = rotation;
+	spr.sprite.texture = spr.textures[imageIndex];
     }
 
-
-    show() {
-	if (this.built) {
-	    this.container.visible = true;
-	    this.visible = true;
-	    this.rendering = true;
-	    
-	    return true;
-	}
-	else {
-	    return false;
-	}
-    }
 
     updateStats(stats) {
 	if (typeof(stats.position) !== 'undefined') {
@@ -197,10 +179,10 @@ var spaceObject = class extends loadsResources(inSystem) {
 	    this.position[1] = stats.position[1];
 	}
 	if (typeof(stats.visible) !== 'undefined') {
-	    if (stats.visible && !this.visible) {
+	    if (stats.visible && !this.getVisible()) {
 		this.show();
 	    }
-	    else if (!stats.visible && this.visible) {
+	    else if (!stats.visible && this.getVisible()) {
 		this.hide();
 	    }
 	}
@@ -213,13 +195,13 @@ var spaceObject = class extends loadsResources(inSystem) {
     getStats() {
 	var stats = {};
 	stats.position = [this.position[0], this.position[1]];
-	stats.visible = this.visible;
+	stats.visible = this.getVisible();
 	//    stats.lastTime = this.lastTime;
 	//    stats.target = this.target;
 	return stats;
     }
 
-
+    
     render() {
 	if (this.renderReady == true) {
 	    // rewrite this please. Put it in playerShip. 
@@ -280,10 +262,6 @@ var spaceObject = class extends loadsResources(inSystem) {
 
         if (this.built) {
             this.system.built.spaceObjects.add(this);
-//            if (this.rendering) {
-            this.system.built.render.add(this);
-
-//            }
         }
 
         this.system.spaceObjects.add(this);

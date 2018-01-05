@@ -206,10 +206,10 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	
 	
 	this.velocity = [0,0];
-	this.hide();
+	this.setVisible(false); // continue rendering but hide the projectile
 	if (this.trailParticles || this.hitParticles) {
-	    // continue rendering
-	    this.rendering = true;
+
+	    //this.setRendering(true);
 
 	    if (this.trailParticles) {
 		this.trailParticles.emit = false;
@@ -219,7 +219,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    }
 	    
 	    setTimeout(function() {
-		this.rendering = false;
+		this.setRendering(false); // stop all rendering for it
 	    }.bind(this), this.particleTime * 1000);
 	}
 

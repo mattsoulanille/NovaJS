@@ -286,12 +286,12 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     show() {
 	this.targetable = true;
-	super.show.call(this);
+	return super.show.call(this);
     }
 
     hide() {
 	this.targetable = false;
-	super.hide.call(this);
+	return super.hide.call(this);
     }
 
     _addToSystem() {

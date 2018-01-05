@@ -55,7 +55,7 @@ system.prototype.render = function() {
 	thing.rendered = false;
     });
     this.built.render.forEach(function(thing) {
-	if ( (!thing.rendered) && (thing.rendering) ) {
+	if ( !thing.rendered ) {
 	    thing.render();
 	}
     });

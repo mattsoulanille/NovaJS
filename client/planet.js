@@ -90,7 +90,7 @@ planet = class extends spaceObject {
     addSpritesToContainer() {
 	_.each(_.map(_.values(this.sprites), function(s) {return s.sprite;}),
 	       function(s) {this.container.addChild(s);}, this);
-	this.hide();
+	//this.hide();
 	this.system.container.addChildAt(this.container, 0);
     }
     

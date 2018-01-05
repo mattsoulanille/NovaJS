@@ -60,9 +60,11 @@ projectileWeapon = class extends basicWeapon {
 	
 	// as many projectiles as can be in the air at once as a result of the weapon's
 	// duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
+
+	// Maximum is 60 projectiles fired per second (1000/60 milliseconds/projectile)
+	this.reloadMilliseconds = Math.max(this.reloadMilliseconds, 1000/60);
 	
-	return burstModifier * this.count * (Math.floor(durationMilliseconds / 
-							(this.reloadMilliseconds)) + 1);
+	return burstModifier * this.count * Math.ceil(durationMilliseconds / this.reloadMilliseconds);
 
     }
 
