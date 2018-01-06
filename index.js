@@ -41,7 +41,7 @@ var listPlayers = function() {
 	formatted[key] = {"ship":p.ship.name};
     });
     return formatted;
-}
+};
 
 Object.defineProperty(local.context, 'list', {set: function(x) {}, get: listPlayers});
 
@@ -51,7 +51,7 @@ var kick = function(UUID) {
     if (_.includes(Object.keys(players), UUID)) {
 	players[UUID].io.disconnect();
     }
-}
+};
 
 local.context.kick = kick;
 
