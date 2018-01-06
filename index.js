@@ -6,7 +6,13 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var UUID = require('uuid/v4');
 var _ = require("underscore");
+var errors = require("./client/errors.js");
+
+
 Promise = require("bluebird");
+
+process.on('unhandledRejection', r => console.log(r));
+// This turns incomprehensible promise errors into real stacktraces
 
 var fs = require('fs'),
     PNG = require('pngjs').PNG;
@@ -112,7 +118,18 @@ var gameloop = function(system) {
     // 	player.render()
     // });
     spaceObject.prototype.time = new Date().getTime();
-    system.render();
+    try {
+	system.render();
+    }
+    catch(e) {
+	// Catch all nova errors since they are usually not game breaking
+	// (if the game starts breaking, look here first)
+	Object.values(errors).forEach(function(ErrorType) {
+	    if (e instanceof ErrorType) {
+		console.warn("Warning: " + e.message);
+	    }
+	});
+    }
     
     
     gameTimeout = setTimeout(function() {gameloop(system);}, 0);

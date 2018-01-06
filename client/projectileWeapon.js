@@ -81,8 +81,10 @@ projectileWeapon = class extends basicWeapon {
 	    break;
 	case "turret":
 	    proj = new projectile(...args);
+	    break;
 	case "front quadrant":
 	    proj = new projectile(...args);
+	    break;
 	default:
 	    // temp
 	    proj = new projectile(...args);

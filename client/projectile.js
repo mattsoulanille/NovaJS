@@ -204,6 +204,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    sub.fire();
 	});
 	
+	this.target = undefined;
 	
 	this.velocity = [0,0];
 	this.setVisible(false); // continue rendering but hide the projectile
@@ -251,7 +252,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    this.hitParticles.destroy();
 	}
 
-	super.destory();
+	super.destroy();
     }
 };
 

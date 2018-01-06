@@ -5,8 +5,6 @@ class spaceObjectServer extends spaceObject {
 
     constructor(buildInfo, system) {
 	super(...arguments);
-	this.spriteContainer = {};
-	this.spriteContainer.destroy = function() {};
     }
 
     

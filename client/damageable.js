@@ -98,12 +98,6 @@ damageable = (superclass) => class extends superclass {
 
 };
 
-// damageable.prototype.destroy = function() {
-    
-//     this.hide();
-    
-
-// }
 if (typeof(module) !== 'undefined') {
     module.exports = damageable;
 }

@@ -316,7 +316,8 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     destroy() {
 	
 	_.each(this.outfits, function(o) {o.destroy();});
-	super.destroy.call(this);
+
+	super.destroy();
     }
 }
 

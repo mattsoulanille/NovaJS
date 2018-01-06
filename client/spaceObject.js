@@ -273,21 +273,29 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	if (this.destroyed) {
             return;
         }
+
+	this.weapons.all.forEach(function(o) {o.destroy();});
+		
 	if (this.multiplayer) {
 	    this.multiplayer.destroy();
 	}
 		
-        this.hide();
+        try {
+	    this.hide();
+	}
+	catch(e) {
+	    // I don't care about errors. I'm destroying it.
+	}
+
         this.system = undefined;
 
         this.container.destroy();
         _.each(this.sprites, function(s) {s.destroy();});
-//	console.log("debug");
         this.destroyed = true;
-        //    delete this; 
+	//super.destroy();
     }
 
-}
+};
 
 spaceObject.prototype.factor = 3/10; // the factor for nova object movement. Seems to be 3/10
 
