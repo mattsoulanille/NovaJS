@@ -174,6 +174,7 @@ Else, return false
     }
 
     _removeFromSystem() {
+	this.system.spaceObjects.delete(this);
 	this.system.container.removeChild(this.container);
 	if (this.UUID && this.system.multiplayer[this.UUID]) {
 	    delete this.system.multiplayer[this.UUID];

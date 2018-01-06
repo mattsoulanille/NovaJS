@@ -25,6 +25,7 @@ describe("destroy", function() {
     var starbridge; // nova:332 mod starbridge
     var viper;
     var firebird;
+    var thunderhead; // for beams
     var ships = [];
     this.timeout(10000);
 
@@ -35,6 +36,14 @@ describe("destroy", function() {
 	await s.build();
 	ships.push(s);
 	return s;
+    };
+
+    var callWeapons = function(f) {
+	ships.forEach(function(ship) {
+	    ship.weapons.all.forEach(function(weap) {
+		f(weap);
+	    });
+	});
     };
     
     before(async function() {
@@ -48,30 +57,41 @@ describe("destroy", function() {
 	starbridge = await makeShip("nova:332");
 	viper = await makeShip("nova:144");
 	firebird = await makeShip("nova:303");
+	thunderhead = await makeShip("nova:157");
 
     });
 
+    
     it("ship weapons' projectiles should be in the system's spaceObjects", function() {
-	ships.forEach(function(ship) {
-	    expect([...sol.spaceObjects]).to.include.members(ship.weapons.all[0].projectiles);
+	callWeapons(function(weap) {
+	    if (typeof weap.projectiles !== "undefined") {
+		expect([...sol.spaceObjects]).to.include.members(weap.projectiles);
+	    }
+	    else {
+		// beam weapons (fix this nonsense. it's strange for weapons to sometimes be in spaceObjects)
+		expect([...sol.spaceObjects]).to.include(weap);
+	    }
 	});
+
     });
 
     it("after destroying the ship, its weapons should no longer be in the system", function() {
 	ships.forEach(function(ship) {
-	ship.destroy();
-	    expect([...sol.spaceObjects]).to.not.have.members(ship.weapons.all[0].projectiles);
+	    ship.destroy();
+	});
+
+	callWeapons(function(weap) {
+	    if (typeof weap.projectiles !== "undefined") {
+		expect([...sol.spaceObjects]).to.not.have.members(weap.projectiles);
+	    }
+	    else {
+		expect([...sol.spaceObjects]).to.not.include(weap);
+	    }
+	    
 	});
 	
 	expect(sol.spaceObjects.size).to.equal(0);
     });
-
-
-
-
-
-
-
 
 
 });
