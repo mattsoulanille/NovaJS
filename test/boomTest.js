@@ -3,8 +3,8 @@ var chai = require('chai');
 var expect = chai.expect;
 var resourceFork = require('resourceforkjs').resourceFork;
 
-var boom = require('../parsers/boom.js');
-
+//var boom = require('../parsers/boom.js');
+var boom = require('../parsers/base.js');
 var PNG = require("pngjs").PNG;
 var fs = require('fs');
 var Promise = require("bluebird");
@@ -17,7 +17,7 @@ describe("boom", function() {
     var slowBoom;
     
     before(async function() {
-	rf = new resourceFork("./test/files/weap.ndat", false);
+	rf = new resourceFork("./test/files/boom.ndat", false);
 	await rf.read();
 	var booms = rf.resources.bööm;
 	firstBoom = new boom(booms[128]);
