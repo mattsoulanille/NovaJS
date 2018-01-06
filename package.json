@@ -1,6 +1,6 @@
 {
   "name": "novaparse",
-  "version": "0.0.14",
+  "version": "0.0.15",
   "description": "An EV Nova file parser for NovaJS",
   "main": "novaParse.js",
   "scripts": {
