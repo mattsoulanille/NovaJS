@@ -1,7 +1,7 @@
 "use strict";
 
 
-
+var boom = require("./parsers/boom.js");
 var rled = require("./parsers/rled.js");
 var shan = require("./parsers/shan.js");
 var ship = require("./parsers/ship.js");
@@ -138,6 +138,9 @@ class novaParse {
 	    var parseFunction = function() {};
 
 	    switch(type) {
+	    case "bööm":
+		parseFunction = boom;
+		break;
 	    case "rlëD":
 		parseFunction = rled;
 		break;
