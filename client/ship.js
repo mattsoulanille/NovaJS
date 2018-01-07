@@ -260,9 +260,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    this.fuel = this.properties.maxFuel;
 	}
 	
-	super.render.call(this);
+	super.render(...arguments);
 	// super hacky bounding box
-	var bound = [50000,50000];
+	var bound = [5000,5000];
 	if (this.position[0] > bound[0]/2) {
 	    this.position[0] -= bound[0];
 	}

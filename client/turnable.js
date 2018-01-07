@@ -106,62 +106,57 @@ var turnable = (superclass) => class extends superclass {
     // 	super.renderSprite(...arguments);
     // }
     
-    render() {
-	if (this.renderReady) {
-	    var images = this.meta.animation.images;
+    render(delta) {
+	var images = this.meta.animation.images;
 
-	    var frameStart = _.map(images, function(image) {return image.imagePurposes.normal.start;});
-	    var frameCount = _.map(images, function(image) {return image.imagePurposes.normal.length;});
-	    // continue here
+	// Maybe preprocess this instead. would be simpler
+	var frameStart = _.map(images, function(image) {return image.imagePurposes.normal.start;});
+	var frameCount = _.map(images, function(image) {return image.imagePurposes.normal.length;});
+	// continue here
+	
+	if (this.turning == "left") {
 	    
-	    if (this.turning == "left") {
-		
-		this.pointing = this.pointing + (this.properties.turnRate * (this.time - this.lastTime) / 1000);
-		//console.log(this.time - this.lastTime);
-		if (this.hasLeftTexture) {
-		    frameStart = _.map(images, function(image) {return image.imagePurposes.left.start;});
-		    frameCount = _.map(images, function(image) {return image.imagePurposes.left.length;});		    
-		}
+	    this.pointing = this.pointing + (this.properties.turnRate * delta / 1000);
+	    if (this.hasLeftTexture) {
+		frameStart = _.map(images, function(image) {return image.imagePurposes.left.start;});
+		frameCount = _.map(images, function(image) {return image.imagePurposes.left.length;});		    
 	    }
-	    else if (this.turning == "right") {
-
-		this.pointing = this.pointing - (this.properties.turnRate * (this.time - this.lastTime) / 1000);
-		// Right != correct in this instance. Right = a direction.
-		if (this.hasRightTexture) {
-		    frameStart = _.map(images, function(image) {return image.imagePurposes.right.start;});
-		    frameCount = _.map(images, function(image) {return image.imagePurposes.right.length;});
-		}
-	    }
-
-	    // makes sure turnable.pointing is in the range [0, 2pi)
-	    this.pointing = (this.pointing + 2*Math.PI) % (2*Math.PI);  
-
-	    var keys = _.keys(this.sprites);
-	    for (var i = 0; i < _.keys(this.sprites).length; i++) {
-		// turnable uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
-		
-		var spr = this.sprites[keys[i]];
-		var imageIndex = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
-		//console.log(imageIndex)
-		var rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
-		
-		this.renderSprite(spr, rotation, imageIndex);
-
-		if (keys[i] === this.collisionSpriteName) {
-		    this.renderCollisionSprite(spr, rotation, imageIndex);
-		}
-	    }
-	    // this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.
+	}
+	else if (this.turning == "right") {
 	    
-	    return super.render.call(this);
+	    this.pointing = this.pointing - (this.properties.turnRate * delta / 1000);
+	    // Right != correct in this instance. Right = a direction.
+	    if (this.hasRightTexture) {
+		frameStart = _.map(images, function(image) {return image.imagePurposes.right.start;});
+		frameCount = _.map(images, function(image) {return image.imagePurposes.right.length;});
+	    }
 	}
-	else {
-	    return false;
+	
+	// makes sure turnable.pointing is in the range [0, 2pi)
+	this.pointing = (this.pointing + 2*Math.PI) % (2*Math.PI);  
+	
+	var keys = _.keys(this.sprites);
+	for (var i = 0; i < _.keys(this.sprites).length; i++) {
+	    // turnable uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
+	    
+	    var spr = this.sprites[keys[i]];
+	    var imageIndex = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
+	    //console.log(imageIndex)
+	    var rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
+	    
+	    this.renderSprite(spr, rotation, imageIndex);
+	    
+	    if (keys[i] === this.collisionSpriteName) {
+		this.renderCollisionSprite(spr, rotation, imageIndex);
+	    }
 	}
+	// this.origionalPointing is the angle the turnable was pointed towards before it was told a different direction to turn.
+	
+	super.render(...arguments);
     }
-
-}
     
+};
+
 if (typeof(module) !== 'undefined') {
     module.exports = turnable;
 }

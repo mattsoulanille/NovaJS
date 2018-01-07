@@ -5,6 +5,6 @@ var guided = require("../client/guided.js");
 // function guidedServer(buildInfo) {
 //     guided.call(this, buildInfo);
 // }
-guidedServer = guided
+guidedServer = guided;
 
 module.exports = guidedServer;

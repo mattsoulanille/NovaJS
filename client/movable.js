@@ -21,6 +21,7 @@ var movable = (superclass) => class extends superclass {
 	super(...arguments); // pass the args to the rest of stuff
 	this.velocity = [0,0];
 	this.delta = 0;
+	this.time = 0;
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.buildInfo.type = "movable";
 	}
@@ -41,24 +42,24 @@ var movable = (superclass) => class extends superclass {
 	return stats;
     }
 
-    render() {
-	if (this.renderReady) {
-
-	    // move this calculation elsewhere for efficiency
-	    this.delta = this.time - this.lastTime;
-	    if (typeof this.lastTime != 'undefined') {
-		this.position[0] += this.velocity[0] * (this.delta)/1000;
-		this.position[1] += this.velocity[1] * (this.delta)/1000;
-	    }
-
-	    this.lastTime = this.time;
-	    //	this.previousMoveTime = this.time
-	    super.render.call(this);
-	    return true;
+    render(delta, time) {
+	if (time) {
+	    this.time = time;
 	}
 	else {
-	    return false;
+	    this.time += delta;
 	}
+
+	this.delta = delta; // for beam weapons and other things
+	if (typeof this.lastTime != 'undefined') {
+	    this.position[0] += this.velocity[0] * delta/1000;
+	    this.position[1] += this.velocity[1] * delta/1000;
+	}
+	
+	this.lastTime = this.time;
+	//	this.previousMoveTime = this.time
+	super.render.call(this);
+	return true;
     }
 }
 

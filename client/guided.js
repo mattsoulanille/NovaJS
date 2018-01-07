@@ -17,7 +17,7 @@ guided = class extends projectile {
 	    this.turnToTarget();
 	}
 
-	super.render.call(this);
+	super.render(...arguments);
     }
 
     setProperties() {

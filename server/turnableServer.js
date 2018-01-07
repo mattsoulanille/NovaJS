@@ -10,10 +10,6 @@ let turnableServer = (superclass) => class extends turnable(superclass) {
     }
 
     renderSprite() {} // don't try to render sprites since there aren't any
-	
-    render() {
-	return super.render.call(this);
-    }
 
 }
 module.exports = turnableServer;

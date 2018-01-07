@@ -1,12 +1,13 @@
 
 
 
-var particleEmitter = class extends inSystem {
+var particleEmitter = class extends renderable(inSystem) {
     constructor(properties, source) {
 	super(...arguments);
 	this.source = source;
 	this.properties = properties;
 	this.container = new PIXI.Container();
+	this.built = true;
 	//space.addChild(this.container);
 
 	// To Do: Make a stationary container. Put everything in it.
@@ -105,26 +106,48 @@ var particleEmitter = class extends inSystem {
 	//this.emitter.updateOwnerPos(0,0);
     }
 
-    render() {
+    show() {
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
-	this.emitter.update(this.source.delta * 0.001);
+	this.render(0);
+	this.emitter.emit = true;
+	super.show();
 	
     }
+    hide() {
+	this.emitter.emit = false;
+	this.emitter.cleanup();
+	this.emitter.update(0.001); // maybe set this to 1?
+	super.hide();
+    }
 
-    set emit(val) {
-	this.emitter.updateOwnerPos(this.source.position[0],
-				    -this.source.position[1]);
-	this.emitter.emit = val;
-	if (val === false) {
+    set emit(v) {
+	if (v) {
+	    this.show();
+	}
+	else {
+	    this.emitter.emit = false;
 	    setTimeout(function() {
-		this.emitter.cleanup();
-		this.emitter.update(0.001);
+		this.hide();
 	    }.bind(this), this.emitter.maxLifetime * 1000);
 	}
     }
     get emit() {
-	return this.emitter.emit;
+	return this.visible;
+    }
+    
+    
+    renderHit() {
+	this.emit = true;
+	this.render(1000/60);
+	this.emit = false;
+    }
+    
+    render(delta) {
+	this.emitter.updateOwnerPos(this.source.position[0],
+				    -this.source.position[1]);
+	this.emitter.update(delta * 0.001);
+	
     }
 
     _addToSystem() {

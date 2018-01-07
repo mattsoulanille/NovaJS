@@ -71,7 +71,7 @@ var statusBar = class extends loadsResources(function() {}) {
 	this.drawShield();
 	this.drawArmor();
 	this.drawEnergy();
-	this.radar.render();
+	this.radar.render(...arguments);
 	if (this.target) {
 	    this.drawTarget();
 	    this.targetContainer.visible = true;

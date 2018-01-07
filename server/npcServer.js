@@ -78,11 +78,6 @@ class npcServer extends npc {
     }
     
 
-    render() {
-	super.render.call(this);
-
-    }
-
     async build() {
 	await super.build();
 	this.setInterval();

@@ -24,12 +24,12 @@ inertialess = class {
 	stats.polarVelocity = this.polarVelocity;
 	return stats;
     }
-    render() {
+    render(delta) {
 	var angle = this.pointing;
 	var change_in_speed = (this.properties.acceleration *
-			       (this.time - this.lastTime) / 1000);
+			       delta / 1000);
 	
-	this.velocity = [Math.cos(angle) * this.polarVelocity, Math.sin(angle) * this.polarVelocity]
+	this.velocity = [Math.cos(angle) * this.polarVelocity, Math.sin(angle) * this.polarVelocity];
 
 	if ((this.accelerating == -1) && (this.polarVelocity > 0)) {
 	    

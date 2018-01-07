@@ -129,7 +129,7 @@ var collidable = (superclass) => class extends superclass {
     }
 
     render() {
-	super.render.call(this);
+	super.render(...arguments);
 	if (this.getVisible()) {
 	    this.collisionShape.moveTo(...this.position);
 	}

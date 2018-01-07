@@ -126,8 +126,9 @@ Else, return false
 	return position;
     }
     
-    render(fireAngle = this.source.pointing) {
-	if (this.firing) {
+    render() {
+    	if (this.firing) {
+	    var fireAngle = this.source.pointing;
 	    var position = this.getFirePosition();
 	    this.graphics.position.x = position[0];
 	    //(this.position[0] - stagePosition[0]) + (screenW-194)/2;
@@ -136,6 +137,7 @@ Else, return false
 	    this.graphics.clear();
 	    this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
 	    this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
+
 	    var x = Math.cos(fireAngle) * this.meta.animation.beamLength;
 	    var y = -Math.sin(fireAngle) * this.meta.animation.beamLength;
 	    this.graphics.lineTo(x,y);

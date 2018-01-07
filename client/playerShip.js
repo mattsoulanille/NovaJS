@@ -173,8 +173,8 @@ class playerShip extends ship {
 	this.container.position.y = screenH/2;
 	
 	
-	super.render.call(this);
-	this.statusBar.render();
+	super.render(...arguments);
+	this.statusBar.render(...arguments);
 	
     }
 

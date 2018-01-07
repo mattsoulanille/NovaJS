@@ -111,15 +111,18 @@ local.context.addNPCs = async function(count) {
 var players = {}; // for repl
 
 var gameTimeout;
-var gameloop = function(system) {
+
+var gameloop = function(system, lastTime = new Date().getTime()) {
     
     // _.each(players, function(player) {
     // 	player.time = new Date().getTime();
     // 	player.render()
     // });
-    spaceObject.prototype.time = new Date().getTime();
+    var time = new Date().getTime();
+    var delta = time - lastTime;
+
     try {
-	system.render();
+	system.render(delta, time);
     }
     catch(e) {
 	// Catch all nova errors since they are usually not game breaking
@@ -132,7 +135,7 @@ var gameloop = function(system) {
     }
     
     
-    gameTimeout = setTimeout(function() {gameloop(system);}, 0);
+    gameTimeout = setTimeout(function() {gameloop(system, time);}, 0);
 };
 
 

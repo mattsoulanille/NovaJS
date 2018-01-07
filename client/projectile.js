@@ -156,18 +156,12 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    //console.log("Projectile hit something");
 	    other.receiveCollision(collision);
 	    if (this.hitParticles) {
-		this.renderHitParticles();
+		this.hitParticles.renderHit();
 	    }
 	    clearTimeout(this.endTimeout);
 	    this.end();
 	}
     
-    }
-
-    renderHitParticles() {
-	this.hitParticles.emit = true;
-	this.hitParticles.render();
-	this.hitParticles.emit = false;
     }
 
     fire(direction, position, velocity, target) {
@@ -229,18 +223,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    this.available = true;
 	}.bind(this), this.additionalTime * 1000);
     }
-    render() {
-	super.render();
-	if (this.trailParticles) {
-	    this.trailParticles.render();
-	    // refactor so you don't use if every render call
-	}
-	if (this.hitParticles) {
-	    // refactor so you don't use if every render call
-	    this.hitParticles.render();
-	}
-	
-
+    render(delta) {
+	super.render(...arguments);
     }
     destroy() {
 	// make a parent child thing for this

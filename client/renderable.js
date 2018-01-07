@@ -7,6 +7,7 @@ if (typeof module !== "undefined") {
 var renderable = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
+	this.rendered = false;
     }
     
     getRendering() {
@@ -48,6 +49,12 @@ var renderable = (superclass) => class extends superclass {
 	this.setVisible(true);
 	this.setRendering(true);
 	this.lastTime = this.time;	
+    }
+    render() {
+	if (this.rendered) {
+	    throw new Error("Object has already been rendered this frame");
+	}
+	this.rendered = true;
     }
 };
 if (typeof module !== "undefined") {

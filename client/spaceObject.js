@@ -21,11 +21,6 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	this.renderReady = false;
 	this.destroyed = false;
 
-	// whether or not the object has been
-	// rendered yet in this frame. Used for
-	// ordering the rendering.
-	this.rendered = false;
-	
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
 	this.position = [0,0];
@@ -128,7 +123,10 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	var images = this.meta.animation.images;
 	var promises = Object.keys(images).map(async function(imageName) {
 	    var imageID = images[imageName].id;
+
+	    // see planetServer.js for the reason I can't change this yet. (it's a stupid one)
 	    var spriteSheet = await this.novaData.spriteSheets.get(imageID);
+	    //var spriteSheet = await this.loadResources("spriteSheets", imageID);
 	    this.sprites[imageName] = new sprite(spriteSheet.textures, spriteSheet.convexHulls);
 
 	}.bind(this));
@@ -203,28 +201,23 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 
     
     render() {
-	if (this.renderReady == true) {
-	    // rewrite this please. Put it in playerShip. 
-	    if (!this.isPlayerShip) {
-		// -194 for the sidebar
-		// System container handles the movement relative to the ship.
-		/*
-		this.container.position.x = 
-		    (this.position[0] - stagePosition[0]) + (screenW-194)/2;
-		this.container.position.y = -1 *
-		    (this.position[1] - stagePosition[1]) + screenH/2;
-		*/
+	// rewrite this please. Put it in playerShip. 
+	if (!this.isPlayerShip) {
+	    // -194 for the sidebar
+	    // System container handles the movement relative to the ship.
+	    /*
+	      this.container.position.x = 
+	      (this.position[0] - stagePosition[0]) + (screenW-194)/2;
+	      this.container.position.y = -1 *
+	      (this.position[1] - stagePosition[1]) + screenH/2;
+	    */
+	    
+	    this.container.position.x = this.position[0];
+	    this.container.position.y = -1 * this.position[1];
+	    
+	}
 
-		this.container.position.x = this.position[0];
-		this.container.position.y = -1 * this.position[1];
-		
-	    }
-	    this.rendered = true;
-	    return true;
-	}
-	else {
-	    return false; // oh no. I'm not ready to render. better not try
-	}
+	super.render(...arguments);
     }
 
 

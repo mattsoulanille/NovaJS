@@ -44,7 +44,7 @@ targetCorners = class extends spaceObject {
 	this.position = target.position;
 	this.callSprites(function(s) {s.texture = this.textures.neutral});
 
-	this.targetTime = this.time;
+	this.timeLeft = 100; //milliseconds
 	this.placeSprites(target, 1);
 	this.other = target;
 	this.show();
@@ -66,19 +66,19 @@ targetCorners = class extends spaceObject {
 
     }
 
-    render() {
+    render(delta, time) {
+	this.time = time;
 	if (this.other) {
 	    if ( (!this.other.rendered) && this.other.visible ) {
 		// seems a bit insane perhaps to be rendering others
 		// necessarry so it tracks correctly
 		// and uses the most up to date position
-		this.other.render();
+		this.other.render(...arguments);
 	    }
 
-	    var time = 100;
-	    var timeLeft = (time - (this.time - this.targetTime));
-	    if (timeLeft < 0) {timeLeft = 0;}
-	    var scale = (timeLeft/20) + 1;
+	    this.timeLeft = this.timeLeft - delta;
+	    if (this.timeLeft < 0) {this.timeLeft = 0;}
+	    var scale = (this.timeLeft/20) + 1;
 	    this.placeSprites(this.other, scale);
 	}
 	super.render.call(this);

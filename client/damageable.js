@@ -72,24 +72,22 @@ damageable = (superclass) => class extends superclass {
 	return stats;
     }
 
-    render() {
+    render(delta) {
 
-	if (typeof(this.lastTime) != 'undefined') {
-	    // Nova shield and armor regen: 1000 pts of regen equals
-	    // 30 points of shield or armor per second
-	    this.shield += this.properties.shieldRecharge * 30/1000 * (this.time - this.lastTime) / 1000;
-	    this.armor += this.properties.armorRecharge * 30/1000 * (this.time - this.lastTime) / 1000;
-	    
-	    if (this.shield > this.properties.shield) {
-		this.shield = this.properties.shield;
-	    }
-	    
-	    if (this.armor > this.properties.armor) {
-		this.armor = this.properties.armor;
-	    }
+	// Nova shield and armor regen: 1000 pts of regen equals
+	// 30 points of shield or armor per second
+	this.shield += this.properties.shieldRecharge * 30/1000 * delta / 1000;
+	this.armor += this.properties.armorRecharge * 30/1000 * delta / 1000;
+	
+	if (this.shield > this.properties.shield) {
+	    this.shield = this.properties.shield;
 	}
 	
-	super.render.call(this);
+	if (this.armor > this.properties.armor) {
+	    this.armor = this.properties.armor;
+	}
+	
+	super.render(...arguments);
     }
 
     onDeath() {

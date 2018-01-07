@@ -121,7 +121,7 @@ starfield = class extends inSystem {
 
 
 
-    render() {
+    render(delta) {
 	this.position = _.map(this.source.position, function(n) {return n});
 	if ((Math.abs(this.position[0] - this.lastPosition[0]) > this.buffer) ||
 	    (Math.abs(this.position[1] - this.lastPosition[1]) > this.buffer)) {
@@ -129,7 +129,7 @@ starfield = class extends inSystem {
 	    this.moveStars();
 	    this.lastPosition = _.map(this.source.position, function(n) {return n});
 	}
-	_.each(this.stars, function(s) {s.render()});
+	//this.stars.forEach(function(s) {s.render(delta);});
 	
     }
     

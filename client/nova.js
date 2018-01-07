@@ -240,10 +240,17 @@ spaceObject.prototype.lastTime = new Date().getTime();
 var animateTimeout;
 var animate = animateSpace;
 var stopRender = false;
+var lastTime = new Date().getTime();
+var time = new Date().getTime();
 function animateSpace() {
     stopRender = false;
     
-    spaceObject.prototype.time = new Date().getTime() + timeDifference;
+
+    lastTime = time;
+    time = new Date().getTime();
+    var delta = time - lastTime;
+    
+    //spaceObject.prototype.time = new Date().getTime() + timeDifference;
 
     // in case the server restarted...
     /*
@@ -251,8 +258,8 @@ function animateSpace() {
 	myShip.render();
     }
     */
-    stars.render();
-    currentSystem.render();
+    stars.render(delta);
+    currentSystem.render(delta, time);
 
     
     

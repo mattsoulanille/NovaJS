@@ -87,16 +87,11 @@ var acceleratable = (superclass) => class extends superclass {
 	super.receiveCollision.call(this, other);
     }
 
-    render() {
+    render(delta) {
 
-	if (this.renderReady) {
-	    this.flightMode.render.call(this);
-	    super.render.call(this);
-	    return true;
-	}
-	else {
-	    return false;
-	}
+	this.flightMode.render.call(this, delta);
+	super.render(...arguments);
+
     }
 }
 

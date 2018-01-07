@@ -7,13 +7,10 @@ class projectileServer extends projectile {
 	super(...arguments);
     }
 
-    build() {
-	return super.build.call(this)
-	    .then(function() {
-		//	    console.log(this.buildInfo.convexHulls.length);
-	    }.bind(this));
-    }
     buildParticles() {
+
+    }
+    buildExplosion() {
 
     }
 }

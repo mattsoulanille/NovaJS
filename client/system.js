@@ -49,14 +49,14 @@ function system() {
 //     });
 // }
 
-system.prototype.render = function() {
+system.prototype.render = function(delta, time) {
     // renderes everything that is built and needs to render
     this.built.render.forEach(function(thing) {
 	thing.rendered = false;
     });
     this.built.render.forEach(function(thing) {
 	if ( !thing.rendered ) {
-	    thing.render();
+	    thing.render(delta, time);
 	}
     });
     this.crash.check();
