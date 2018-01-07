@@ -1,21 +1,44 @@
 {
-  "name": "NovaJS",
-  "version": "0.0.1",
-  "description": "An attempt to recreate EV Nova in the browser",
+  "name": "novajs",
+  "version": "0.5.0",
+  "description": "An implementation of EV Nova in the browser",
+  "main": "index.js",
+  "directories": {
+    "test": "test"
+  },
   "dependencies": {
     "bluebird": "^3.5.1",
     "chai": "^4.1.2",
     "crash-colliders": "^2.0.1",
     "express": "^4.16.2",
-    "jsdom": "^9.12.0",
-    "mocha": "^3.5.3",
-    "novaparse": "0.0.14",
+    "novaparse": "0.0.17",
     "pixi-particles": "^2.1.9",
-    "pixi.js": "^3.0.11",
-    "pngjs": "^2.3.1",
-    "resource-loader": "^1.8.0",
+    "pixi.js": "^4.6.2",
+    "pngjs": "^3.3.1",
     "socket.io": "^2.0.4",
     "underscore": "^1.8.3",
     "uuid": "^3.1.0"
-  }
+  },
+  "devDependencies": {
+    "mocha": "^3.5.3"
+  },
+  "scripts": {
+    "test": "mocha"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mattsoulanille/NovaJS.git"
+  },
+  "keywords": [
+    "EV",
+    "Nova",
+    "escape",
+    "velocity"
+  ],
+  "author": "Matthew Soulanille",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/mattsoulanille/NovaJS/issues"
+  },
+  "homepage": "https://github.com/mattsoulanille/NovaJS#readme"
 }
