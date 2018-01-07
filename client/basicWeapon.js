@@ -66,11 +66,6 @@ basicWeapon = class extends loadsResources(inSystem) {
 	    this.reloadMilliseconds = (this.properties.reload * 1000/30) || 1000/60;
 	}
 	
-	if (typeof this.UUID !== 'undefined') {
-	    this.multiplayer.on('updateStats', this.updateStats.bind(this));
-	}
-
-
     }
 
     // remove this
@@ -85,6 +80,11 @@ basicWeapon = class extends loadsResources(inSystem) {
     
     async build() {
 	await this._build();
+
+	if (typeof this.UUID !== 'undefined') {
+	    this.multiplayer.on('updateStats', this.updateStats.bind(this));
+	}
+
 	this.ready = true;
 	this.source.weapons.all.push(this);
     }

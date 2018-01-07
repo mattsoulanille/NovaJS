@@ -207,10 +207,10 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     
     end() {
 	this.subs.forEach(function(sub) {
-	    sub.fire();
+	    sub.fire(null, null, [0,0]); // only give velocity
 	});
 	
-	this.target = undefined;
+	this.target = null;
 	
 	this.velocity = [0,0];
 	this.hide();
