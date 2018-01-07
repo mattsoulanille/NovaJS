@@ -65,6 +65,7 @@ var inSystem = class {
     }
     
     destory() {
+	this.system = null;
 	this.children.forEach(function(child) {
 	    child.destroy();
 	});

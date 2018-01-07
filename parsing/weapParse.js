@@ -1,4 +1,5 @@
 var baseParse = require("./baseParse.js");
+var explosionParse = require("./explosionParse.js");
 
 var weapParse = class extends baseParse {
     constructor(weap) {
@@ -65,11 +66,7 @@ var weapParse = class extends baseParse {
 	    var boom = weap.idSpace.bööm[weap.explosion];
 	    var spin = boom.idSpace.spïn[boom.graphic];
 	    var rled = spin.idSpace.rlëD[spin.spriteID];
-	    this.explosion = {
-		id : rled.prefix + ":" + rled.id,
-		animationRate : boom.animationRate
-		//sound : boom.sound, // change this when you start parsing sounds
-	    };
+	    this.explosion = new explosionParse(boom);
 	}
 	else {
 	    this.explosion = null;

@@ -38,25 +38,28 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     async _build() {
 	await super._build();
 	await this.buildSubs();
+	await this.buildExplosion();
 	this.buildParticles();
-	this.fireTime = this.properties.duration / 30;
+	this.lifetime = this.properties.duration * 1000 / 30; // milliseconds
 
 	// include 0 so Math.max has a min
 	var additionalTimes = [0];
 	
 	if (this.trailParticles) {
-	    additionalTimes.push(this.trailParticles.emitter.maxLifetime);
+	    additionalTimes.push(this.trailParticles.lifetime);
 	}
 
 	if (this.hitParticles) {
-	    additionalTimes.push(this.hitParticles.emitter.maxLifetime);
+	    additionalTimes.push(this.hitParticles.lifetime);
 	}
 
-	this.particleTime = Math.max(...additionalTimes);
-	
+	if (this.explosion) {
+	    additionalTimes.push(this.explosion.lifetime);
+	}
+
 	if (this.subs.length !== 0) {
 	    var subDurations = this.subs.map(function(sub) {
-		return sub.projectiles[0].fireTime;
+		return sub.projectiles[0].lifetime;
 	    });
 	    var maxSubTime = Math.max(...subDurations);
 	    additionalTimes.push(maxSubTime);
@@ -86,7 +89,6 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 		this.subs.push(sub);
 	    }
 	}
-	
     }
     
 
@@ -100,6 +102,16 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    this.hitParticles = new particleEmitter(this.meta.hitParticles, this);
 	    this.addChild(this.hitParticles);
 	}
+    }
+
+    async buildExplosion() {
+	// just the graphic. Collision explosions are (going to be) handled differently
+	if (this.meta.explosion) {
+	    this.explosion = new explosion(this.meta.explosion);
+	    await this.explosion.build();
+	    this.addChild(this.explosion);
+	}
+	
     }
     
     setMultiplayer() {} // refactor me please
@@ -201,10 +213,13 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.target = undefined;
 	
 	this.velocity = [0,0];
-	this.setVisible(false); // continue rendering but hide the projectile
-	if (this.trailParticles || this.hitParticles) {
+	this.hide();
 
-	    //this.setRendering(true);
+	if (this.explosion) {
+	    this.explosion.explode(this.position);
+	}
+
+	if (this.trailParticles || this.hitParticles) {
 
 	    if (this.trailParticles) {
 		this.trailParticles.emit = false;
@@ -212,16 +227,12 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    if (this.hitParticles) {
 		this.hitParticles.emit = false;
 	    }
-	    
-	    setTimeout(function() {
-		this.setRendering(false); // stop all rendering for it
-	    }.bind(this), this.particleTime * 1000);
 	}
 
 
 	setTimeout(function() {
 	    this.available = true;
-	}.bind(this), this.additionalTime * 1000);
+	}.bind(this), this.additionalTime);
     }
     render(delta) {
 	super.render(...arguments);

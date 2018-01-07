@@ -39,13 +39,13 @@ guided = class extends projectile {
     fire(direction, position, velocity, target) {
 	//var factor = 30/100;
 	this.polarVelocity = this.properties.speed * this.factor;
-	super.fire.call(this, direction, position, velocity, target);
+	super.fire(direction, position, velocity, target);
     }
 
     end() {
 	this.polarVelocity = 0;
 	this.turning = "";
-	super.end.call(this);
+	super.end();
     }
 }
 

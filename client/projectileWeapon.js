@@ -51,7 +51,7 @@ projectileWeapon = class extends basicWeapon {
 	
 	//var durationMilliseconds = (this.properties.duration + particleDuration) * 1000/30;
 
-	var durationMilliseconds = testProj.fireTime * 1000;
+	var durationMilliseconds = testProj.lifetime;
 	if (this.doBurstFire) {
 	    burstModifier = ( ((this.reloadMilliseconds) * this.properties.burstCount) /
 			      this.properties.burstReload * 1000/30);

@@ -10,9 +10,10 @@ class projectileServer extends projectile {
     buildParticles() {
 
     }
-    buildExplosion() {
+    async buildExplosion() {
 
     }
+    buildExplosion() {}
 }
     
 

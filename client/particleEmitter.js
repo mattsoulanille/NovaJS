@@ -36,7 +36,8 @@ var particleEmitter = class extends renderable(inSystem) {
 
 	maxLife *= 1/30;
 	minLife *= 1/30;
-	
+
+	this.lifetime = maxLife * 1000; //milliseconds
 	// renderer is made by pixi.autoDetectRenderer
 	this.texture = renderer.generateTexture(graphics);
 
