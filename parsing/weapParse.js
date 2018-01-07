@@ -60,6 +60,23 @@ var weapParse = class extends baseParse {
 	this.energyCost = 0;
 	this.ammoType = "unlimited"; // unlimited ammo
 
+	// change me when you implement sound.
+	if (weap.explosion >= 128) {
+	    var boom = weap.idSpace.bööm[weap.explosion];
+	    var spin = boom.idSpace.spïn[boom.graphic];
+	    var rled = spin.idSpace.rlëD[spin.spriteID];
+	    this.explosion = {
+		id : rled.prefix + ":" + rled.id,
+		animationRate : boom.animationRate
+		//sound : boom.sound, // change this when you start parsing sounds
+	    };
+	}
+	else {
+	    this.explosion = null;
+	}
+
+
+
 	if (weap.ammoType <= -1000) {
 	    // then it costs energy
 	    this.energyCost = Math.abs(weap.ammoType + 1000) / 10;

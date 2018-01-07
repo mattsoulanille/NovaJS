@@ -4,6 +4,7 @@ var shanParse = require("./shanParse.js");
 var shipParse = require("./shipParse.js");
 var weapParse = require("./weapParse.js");
 
+
 var gettable = class {
     constructor(getFunction) {
 	this.data = {};
@@ -30,13 +31,6 @@ var novaData = class {
     constructor(parsed) {
 	this.novaParse = parsed;
 	this.spriteSheets = new gettable(this.getFunction("rlëD", spriteSheet));
-
-/*
-	this.shans = new gettable(function(id) {
-	    var shan = this.novaParse.ids.resources.shän[id];
-	    return new shanParse(shan);
-	}.bind(this));
-*/
 	this.ships = new gettable(this.getFunction("shïp", shipParse));
 	this.weapons = new gettable(this.getFunction("wëap", weapParse));
 
