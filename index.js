@@ -376,7 +376,8 @@ var connectFunction = function(client){
     //playerShipType = {id: "nova:164"}; // Polaris Raven
     //playerShipType = {id: "nova:176"}; // Krypt Pod
     //playerShipType = {id: "nova:128"}; // shuttle
-    
+    //playerShipType = {id: "nova:199"}; // Starbridge C
+    //playerShipType = {id: "nova:378"}; // Kestrel
     //playerShipType = {id: "nova:157"}; // thunderhead
     //
     playerShipType.UUID = userid;

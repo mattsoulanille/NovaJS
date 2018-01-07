@@ -8,6 +8,7 @@ var particleEmitter = class extends renderable(inSystem) {
 	this.properties = properties;
 	this.container = new PIXI.Container();
 	this.built = true;
+	this.hideTimeout = null;
 	//space.addChild(this.container);
 
 	// To Do: Make a stationary container. Put everything in it.
@@ -116,6 +117,9 @@ var particleEmitter = class extends renderable(inSystem) {
 	
     }
     hide() {
+	if (this.hideTimeout) {
+	    clearTimeout(this.hideTimeout);
+	}
 	this.emitter.emit = false;
 	this.emitter.cleanup();
 	this.emitter.update(0.001); // maybe set this to 1?
@@ -123,12 +127,15 @@ var particleEmitter = class extends renderable(inSystem) {
     }
 
     set emit(v) {
+	if (this.destroyed) {
+	    return;
+	}
 	if (v) {
 	    this.show();
 	}
 	else {
 	    this.emitter.emit = false;
-	    setTimeout(function() {
+	    this.hideTimeout = setTimeout(function() {
 		this.hide();
 	    }.bind(this), this.emitter.maxLifetime * 1000);
 	}
@@ -153,15 +160,20 @@ var particleEmitter = class extends renderable(inSystem) {
 
     _addToSystem() {
 	this.system.container.addChild(this.container);
+	super._addToSystem();
     }
 
 
     _removeFromSystem() {
+	this.hide();
 	this.system.container.removeChild(this.container);
+	super._removeFromSystem();
     }
 
     destroy() {
+	Object.defineProperty(this, "emit", {set:undefined}); // Kill the ability to emit
 	this.emitter.destroy();
+	super.destroy();
     }
     
 };

@@ -56,6 +56,14 @@ var renderable = (superclass) => class extends superclass {
 	}
 	this.rendered = true;
     }
+    destroy() {
+	if (this.system) {
+	    this.hide();
+	}
+	this.destroyed = true;
+    }
+
+    
 };
 if (typeof module !== "undefined") {
     module.exports = renderable;

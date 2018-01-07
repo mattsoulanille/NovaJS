@@ -86,12 +86,12 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	this.name = this.meta.name; // purely cosmetic
     	await this.setProperties();
 	await this.makeSprites();
-	if (this.multiplayer) {
-	    this.setListeners();
-	}
 	this.makeSize();
 	this.addSpritesToContainer();
 	this.addToSpaceObjects();
+	if (this.multiplayer) {
+	    this.setListeners();
+	}
 	this.renderReady = true;
     }
 

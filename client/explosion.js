@@ -54,6 +54,7 @@ var explosion = class extends loadsResources(renderable(inSystem)) {
 	super._addToSystem();
     }
     _removeFromSystem() {
+	this.hide();
 	this.system.container.removeChild(this.container);
 	super._removeFromSystem();
     }
@@ -64,7 +65,6 @@ var explosion = class extends loadsResources(renderable(inSystem)) {
 	}
 	this.container.destroy();
 	super.destroy();
-	this.destroyed = true;
     }
 
 };

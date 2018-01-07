@@ -45,7 +45,7 @@ var inSystem = class {
     set system(sys) {
 
 	if (this.system !== sys) {
-	    if ((this.system !== undefined)) {
+	    if (this.system) {
 		// remove all references of this object from system
 		this._removeFromSystem();
 	    }
@@ -64,7 +64,7 @@ var inSystem = class {
 
     }
     
-    destory() {
+    destroy() {
 	this.system = null;
 	this.children.forEach(function(child) {
 	    child.destroy();
