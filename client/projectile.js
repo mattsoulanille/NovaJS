@@ -66,7 +66,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	}
 	
 	this.additionalTime = Math.max(...additionalTimes);
-	this.fireTime += this.additionalTime;
+	this.lifetime += this.additionalTime;
 	this.available = true;
     }
 
@@ -239,6 +239,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     }
     destroy() {
 	// make a parent child thing for this
+	clearTimeout(this.endTimeout);
 	if (this.trailParticles) {
 	    this.trailParticles.destroy();
 	}
