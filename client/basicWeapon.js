@@ -90,16 +90,6 @@ basicWeapon = class extends loadsResources(inSystem) {
     }
 
 
-    updateStats(stats) {
-	if (stats.firing === true) {
-	    this.startFiring(false);
-	    this._firing = true;
-	}
-	else {
-	    this.stopFiring(false);
-	    this._firing = false;
-	}
-    }
 
     set firing(val) {
 	// high level: Auto fires the weapon if it could fire.
@@ -119,10 +109,26 @@ basicWeapon = class extends loadsResources(inSystem) {
 	return this._firing;
     }
 
+    updateStats(stats) {
+	if (this.doBurstFire) {
+	    this.burstCount = stats.burstCount;
+	}
+	if (stats.firing === true) {
+	    this.startFiring(false);
+	    this._firing = true;
+	}
+	else {
+	    this.stopFiring(false);
+	    this._firing = false;
+	}
+    }
     
     getStats() {
 	var stats = {};
 	stats.firing = this.firing;
+	if (this.doBurstFire) {
+	    stats.burstCount = this.burstCount;
+	}
 	return stats;
     }
 

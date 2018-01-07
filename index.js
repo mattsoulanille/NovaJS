@@ -380,6 +380,8 @@ var connectFunction = function(client){
     //playerShipType = {id: "nova:378"}; // Kestrel
     //playerShipType = {id: "nova:157"}; // thunderhead
     //
+    //playerShipType = {id: "singularity:418"};
+    
     playerShipType.UUID = userid;
 
     var sendSystem = function() {

@@ -149,15 +149,14 @@ projectileWeapon = class extends basicWeapon {
     
     startFiring(notify = true) {
 	// low level. Starts firing if not already. Should not be called by ship.
-	if (this.alreadyFiring) {
-	    this.doAutoFire = true;
-	}
-	else {
-	    this.doAutoFire = true;
-	    this.autoFire();
-	}
+	this.doAutoFire = true;
+
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.sendStats();
+	}
+	
+	if (!this.alreadyFiring) {
+	    this.autoFire();
 	}
 	
     }
