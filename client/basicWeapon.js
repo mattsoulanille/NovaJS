@@ -20,6 +20,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 	this.fireWithoutTarget = true;
 	this._firing = false;
 	this.ready = false;
+	this.built = false;
 	this.source = source;
 	this.doAutoFire = false; // low level
 	this.fireTimeout = undefined;
@@ -58,14 +59,23 @@ basicWeapon = class extends loadsResources(inSystem) {
 	}
 
 	this.setProperties();
+	this.fireSimultaneously = Boolean(this.meta.fireSimultaneously);
 
-	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/60;
+
+	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/30;
 	if ( this.properties.burstCount > 0 ) {
 	    this.doBurstFire = true;
 	    this.burstCount = 0;
 	    this.burstReloadMilliseconds = this.properties.burstReload * 1000/30;
-	    this.reloadMilliseconds = (this.properties.reload * 1000/30) || 1000/60;
+	    this.reloadMilliseconds = (this.properties.reload * 1000/30) || 1000/30;
 	}
+
+	if (this.fireSimultaneously) {
+	    this.reloadMilliseconds = this.properties.reload * 1000 / 30 || 1000 / 30;
+	}
+
+
+	
 	
     }
 
@@ -85,8 +95,9 @@ basicWeapon = class extends loadsResources(inSystem) {
 	if (typeof this.UUID !== 'undefined') {
 	    this.multiplayer.on('updateStats', this.updateStats.bind(this));
 	}
-
+	
 	this.ready = true;
+	this.built = true;
 	this.source.weapons.all.push(this);
     }
 

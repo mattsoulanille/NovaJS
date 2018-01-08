@@ -7,25 +7,26 @@ if (typeof(module) !== 'undefined') {
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
     var basicWeapon = require("../server/basicWeaponServer.js");
+    var renderable = require("./renderable.js");
 }
 
 
-projectileWeapon = class extends basicWeapon {
+projectileWeapon = class extends renderable(basicWeapon) {
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.fireWithoutTarget = true;
-	this.fireTimeout = undefined;
 	this.type = "weapons";
 	this.projectiles = [];
+	this.nextFireTime = 0; // next possible time the weapon can be fired
     }
 
     
     _addToSystem(sys) {
-        this.system.multiplayer[this.UUID] = this;
+	this.system.multiplayer[this.UUID] = this;
     }
 
     _removeFromSystem() {
-        delete this.system.multiplayer[this.UUID];
+	delete this.system.multiplayer[this.UUID];
     }
 
     async _build() {
@@ -62,9 +63,16 @@ projectileWeapon = class extends basicWeapon {
 	// duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
 
 	// Maximum is 60 projectiles fired per second (1000/60 milliseconds/projectile)
-	this.reloadMilliseconds = Math.max(this.reloadMilliseconds, 1000/60);
-	
-	return burstModifier * this.count * Math.ceil(durationMilliseconds / this.reloadMilliseconds);
+	this.reloadMilliseconds = Math.max(this.reloadMilliseconds, 1000/30);
+
+	// This doesn't work perfectly with weapons that fire simultaneously,
+	//  but I'm keeping it for performance conerns
+	var simulModifier = 1;
+	if (this.fireSimultaneously) {
+	    simulModifier = this.count;
+	}
+	return simulModifier * burstModifier * this.count *
+	    Math.ceil(durationMilliseconds / this.reloadMilliseconds);
 
     }
 
@@ -154,11 +162,9 @@ projectileWeapon = class extends basicWeapon {
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.sendStats();
 	}
-	
-	if (!this.alreadyFiring) {
-	    this.autoFire();
+	if (this.system) {
+	    this.show();
 	}
-	
     }
 
     stopFiring(notify = true) {
@@ -167,48 +173,42 @@ projectileWeapon = class extends basicWeapon {
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.sendStats();
 	}
+	if (this.system) {
+	    this.hide();
+	}
     }
-    
-    autoFire() {
-	
-	if (this.doAutoFire) {
-	    
-	    // fire
-	    this.alreadyFiring = true;
-	    if (this.canFire()) {
-		this.fire();
-		this.applyFireCost();
-	    }
-	    else {
-		// Check every 10 milliseconds if I can fire. Probably bad. Probably put it in the
-		// main loop...
-		this.fireTimeout = setTimeout(this.autoFire.bind(this), 10);
-		return;
-	    }
-	    
-	    // fire again after reload time
+    setTarget(target) {
+	this.target = target;
+    }
+
+    render() {
+	super.render(...arguments);
+
+	// if it's rendering, then it's firing.
+	//this.lastFireTime = this.time;
+	if (this.canFire() && (this.time >= this.nextFireTime)) {
+
 	    if (this.doBurstFire) {
-		if (this.burstCount < this.count * this.properties.burstCount - 1) {
-		    this.fireTimeout = setTimeout(_.bind(this.autoFire, this), this.reloadMilliseconds);
+		if (this.burstCount < this.count * this.properties.burstCount) {
 		    this.burstCount ++;
 		}
 		else {
 		    this.burstCount = 0;
-		    this.burstTimeout = setTimeout(this.autoFire.bind(this),
-						   this.burstReloadMilliseconds);
+		    this.nextFireTime += this.burstReloadMilliseconds;
+		    return; // since it burst reloaded
+		}
+	    }
+	    // Maybe move this to the fire function?
+	    if (this.fireSimultaneously) {
+		for (var i = 0; i < this.count; i++) {
+		    this.fire();
 		}
 	    }
 	    else {
-		this.fireTimeout = setTimeout(_.bind(this.autoFire, this), this.reloadMilliseconds);
+		this.fire();
 	    }
+	    this.nextFireTime = this.time + this.reloadMilliseconds;
 	}
-	else {
-	    this.alreadyFiring = false;
-	}
-    }
-    
-    setTarget(target) {
-	this.target = target;
     }
     
     destroy() {
@@ -223,7 +223,7 @@ projectileWeapon = class extends basicWeapon {
 	_.each(this.projectiles, function(proj) {
 	    proj.destroy();
 	});
-	this.destroyed = true;
+	super.destroy();
     }
 }
 if (typeof(module) !== 'undefined') {

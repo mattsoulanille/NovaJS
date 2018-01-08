@@ -8,6 +8,8 @@ var renderable = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
 	this.rendered = false;
+	this.delta = 0;
+	this.time = 0;
     }
     
     getRendering() {
@@ -38,24 +40,23 @@ var renderable = (superclass) => class extends superclass {
 	}
     }
 
-    getVisible() {
-	return this.container.visible;
-    }
-
-    setVisible(v) {
-	this.container.visible = Boolean(v);
-    }
-
     hide() {
-	this.setVisible(false);
 	this.setRendering(false);
     }
     show() {
-	this.setVisible(true);
 	this.setRendering(true);
 	this.lastTime = this.time;	
     }
-    render() {
+    render(delta, time) {
+	this.lastTime = this.time;
+	if (time) {
+	    this.time = time;
+	}
+	else {
+	    this.time += delta;
+	}
+
+	this.delta = delta; // for beam weapons and other things
 	if (this.rendered) {
 	    throw new Error("Object has already been rendered this frame");
 	}

@@ -8,10 +8,11 @@ if (typeof(module) !== 'undefined') {
     var multiplayer = require("../server/multiplayerServer.js");
     var exitPoint = require("./exitPoint.js");
     var renderable = require("./renderable.js");
+    var visible = require("./visible.js");
 }
 
 
-var spaceObject = class extends loadsResources(renderable(inSystem)) {
+var spaceObject = class extends loadsResources(visible(renderable(inSystem))) {
 
     constructor(buildInfo, system, socket) {
 
@@ -35,8 +36,6 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	this.built = false;
 	this.building = false;
 
-	this.container = new PIXI.Container(); // Must be before call to set system
-	this.container.visible = false;
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
@@ -104,6 +103,14 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	}	
     }
 
+    setVisible(v) {
+	var rendered = this.rendered;
+	this.rendered = false;
+	this.render(0); // update all the stuff before showing it
+	this.rendered = rendered;
+    	super.setVisible(v);
+    }
+    
     hide() {
 	// Can't shoot if hidden
 	this.weapons.all.forEach(function(w) {
@@ -194,10 +201,10 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	    this.position[1] = stats.position[1];
 	}
 	if (typeof(stats.visible) !== 'undefined') {
-	    if (stats.visible && !this.getVisible()) {
+	    if (this.built && stats.visible && !this.getVisible()) {
 		this.show();
 	    }
-	    else if (!stats.visible && this.getVisible()) {
+	    else if (this.built && !stats.visible && this.getVisible()) {
 		this.hide();
 	    }
 	}

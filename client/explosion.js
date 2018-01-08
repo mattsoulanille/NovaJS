@@ -1,10 +1,8 @@
 
-var explosion = class extends loadsResources(renderable(inSystem)) {
+var explosion = class extends loadsResources(visible(renderable(inSystem))) {
     constructor(buildInfo) {
 	super();
 	this.destroyed = false; // generalize this
-	this.container = new PIXI.Container();
-	this.container.visible = false;
 	if (typeof buildInfo !== "undefined") {
 	    this.buildInfo = buildInfo;
 	    this.id = buildInfo.id;

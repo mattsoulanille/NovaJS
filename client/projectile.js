@@ -82,7 +82,17 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	}
 
 	for (var i = 0; i < this.meta.submunitions.length; i++) {
-	    var subData = this.meta.submunitions[i];
+	    var subData = Object.assign({}, this.meta.submunitions[i]);
+	    if (subData.id == this.meta.id) {
+		// then we need to use sub limit
+		if (subData.limit > 0) {
+		    subData.limit -= 1;
+		}
+		else {
+		    continue; // to the next one in the loop since we've hit the sub limit
+		}
+	    }
+
 	    var buildInfo = {id: subData.id};
 	    var sub = await new weaponBuilder(buildInfo, this).buildSub(subData);
 	    if (sub) {
@@ -186,7 +196,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	
 	this.available = false;
 	this.pointing = direction;
-	this.position = _.map(position, function(x) {return x});
+	this.position = _.map(position, function(x) {return x;});
 
 	// nova speeds for weapons is in pixels / frame * 100. 3/10 pixels / ms
 	//    var factor = 3/10;

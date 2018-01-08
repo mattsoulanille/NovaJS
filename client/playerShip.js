@@ -205,7 +205,7 @@ class playerShip extends ship {
     
     targetNearest() {
 	var targets = [];
-	this.system.ships.forEach(function(s) {
+	this.system.targetable.forEach(function(s) {
 	    if (s !== this) {
 		targets.push(s);
 	    }

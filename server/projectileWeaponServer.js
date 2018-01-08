@@ -7,13 +7,6 @@ class projectileWeaponServer extends projectileWeapon {
 	super(...arguments);
     }
 
-    build() {
-	return super.build.call(this);
-//	.then(function() {
-
-	    
-//	}.bind(this))
-    }
 
 }
 

@@ -12,7 +12,7 @@ if (typeof(module) !== 'undefined') {
 var weaponBuilder = class extends loadsResources(inSystem) {
     constructor(buildInfo, source) {
 	super(...arguments);
-	this.buildInfo = buildInfo;
+	this.buildInfo = Object.assign({}, buildInfo); // so sub recursion works
 	this.source = source;
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.id = this.buildInfo.id;
@@ -23,7 +23,12 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     }
 
     async _build() {
-	this.meta = await this.loadResources(this.type, this.buildInfo.id);
+	var meta = await this.loadResources(this.type, this.buildInfo.id);
+	this.meta = Object.assign({}, meta);
+	// copy the subs
+	this.meta.submunitions = this.meta.submunitions.map(function(s) {
+	    return Object.assign({}, s);
+	});
     }
     
     _setWeaponType() {
@@ -60,6 +65,12 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     async buildSub(subData) {
 	await this._build();
 
+	// Fix me if you implement multiple submunitions
+	this.meta.submunitions.forEach(function(s) {
+	    s.limit = subData.limit;
+	});
+
+	this.buildInfo.meta = this.meta; // only okay since buildInfo was copied
 	if (! this._setWeaponType()) {
 	    return false;
 	}

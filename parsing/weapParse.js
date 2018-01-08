@@ -60,6 +60,7 @@ var weapParse = class extends baseParse {
 	this.destroyShipWhenFiring = false;
 	this.energyCost = 0;
 	this.ammoType = "unlimited"; // unlimited ammo
+	this.fireSimultaneously = weap.fireSimultaneously;
 
 	// change me when you implement sound.
 	if (weap.explosion >= 128) {

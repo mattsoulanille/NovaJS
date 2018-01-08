@@ -91,7 +91,7 @@ damageable = (superclass) => class extends superclass {
     }
 
     onDeath() {
-	this.hide();
+	//this.hide();
     }
 
 };
