@@ -31,6 +31,7 @@ function system() {
     
     // has uuids as keys
     this.multiplayer = {};
+    this.targetable = new Set();
     this.built = {
 	spaceObjects: new Set(),
 	ships: new Set(),
@@ -78,17 +79,19 @@ system.prototype.build = function() {
 	}
     });
     return Promise.all(promises);
-}
+};
 
 system.prototype.addObjects = function(objects) {
     _.each(objects, function(b) {
 	this.addObject(b);
     }.bind(this));
-}
+};
 
 system.prototype.addObject = function(obj) {
     obj.system = this;
-}
+};
+
+
 
 system.prototype.buildObjects = function(buildInfo) {
     
@@ -97,13 +100,21 @@ system.prototype.buildObjects = function(buildInfo) {
     }.bind(this));
 
     return Promise.all(promises);
-}
+};
 
 system.prototype.buildPlayerShip = function(buildInfo) {
     // builds and sets player ship if UUID === buildInfo.UUID
     if (buildInfo.UUID === UUID) {
 	//seems very hacky
+	if (myShip) {
+	    var oldPos = myShip.position;
+	}
 	myShip = new playerShip(buildInfo, this);
+	if (oldPos) {
+	    myShip.position[0] = oldPos[0];
+	    myShip.position[1] = oldPos[1];
+	}
+	stagePosition = myShip.position;
 
 	if (typeof(stars) !== "undefined") {
 	    stars.attach(myShip);
@@ -113,7 +124,7 @@ system.prototype.buildPlayerShip = function(buildInfo) {
     }
     return false;
 
-}
+};
 
 system.prototype.buildObject = function(buildInfo) {
 
@@ -149,7 +160,7 @@ system.prototype.buildObject = function(buildInfo) {
 	return newObj.build();
     }
     
-}
+};
 
 
 system.prototype.destroyObjects = function(uuids) {
@@ -157,14 +168,38 @@ system.prototype.destroyObjects = function(uuids) {
 	this.destroyObject(uuid);
     }.bind(this));
 
-}
+};
 
 system.prototype.destroyObject = function(uuid) {
     if (uuid in this.multiplayer) {
 	this.multiplayer[uuid].destroy();
     }
 
-}
+};
+
+
+// Replaces an object with a newly created one. For swapping ships
+system.prototype.replaceObject = async function(buildInfo) {
+    if (this.multiplayer.hasOwnProperty(buildInfo.UUID)) {
+	var oldObj = this.multiplayer[buildInfo.UUID];
+	var visible = oldObj.getVisible();
+	var rendering = oldObj.getRendering();
+	var pos = [...oldObj.position];
+
+	this.destroyObject(buildInfo.UUID);
+	await this.buildObject(buildInfo);
+	var newObj = this.multiplayer[buildInfo.UUID];
+
+	// Maybe make some better way of moving the oldObj's properties to the newObj?
+	newObj.setVisible(visible);
+	newObj.setRendering(rendering);
+	newObj.position[0] = pos[0];
+	newObj.position[1] = pos[1];
+    }
+	
+
+
+};
 
 system.prototype.removeObjects = function(uuids) {
     _.each(uuids, function(uuid) {

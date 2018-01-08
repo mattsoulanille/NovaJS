@@ -16,6 +16,11 @@ var renderable = (superclass) => class extends superclass {
 	}
 	return this.system.built.render.has(this);
     }
+
+    _addToRendering() {
+	this.system.built.render.add(this);
+    }
+    
     setRendering(v) {
 
 	if (! this.system) {
@@ -26,7 +31,7 @@ var renderable = (superclass) => class extends superclass {
 	}
 
 	if (v) {
-	    this.system.built.render.add(this);
+	    this._addToRendering();
 	}
 	else {
 	    this.system.built.render.delete(this);

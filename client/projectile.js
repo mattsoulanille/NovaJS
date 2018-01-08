@@ -144,7 +144,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     
     getStats() {
 	var stats = super.getStats.call(this);
-	if (typeof this.target !== "undefined") {
+	if (this.target) {
 	    stats.target = this.target.UUID;
 	}
 	stats.lastTime = this.lastTime;

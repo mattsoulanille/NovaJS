@@ -131,11 +131,14 @@ socket.on('setPlayerShip', function(buildInfo) {
 	myShip.destroy();
     }
     myShip = new playerShip(buildInfo, currentSystem);
+    
     stars.attach(myShip);
     myShip.position = [stagePosition[0], stagePosition[1]];
     stagePosition = myShip.position;
     myShip.build()
-	.then(function() {myShip.show()});
+	.then(function() {
+		myShip.show();
+	}.bind(this));
 });
 
 socket.on('disconnect', function() {
@@ -154,6 +157,13 @@ socket.on('buildObjects', function(buildInfoList) {
 
 socket.on('removeObjects', function(uuids) {
     currentSystem.destroyObjects(uuids);
+});
+
+// this stuff should be in system so it works when there are multiple systems.
+// Each system should have a multiplayer that it can send stuff with.
+
+socket.on('replaceObject', function(buildInfo) {
+    currentSystem.replaceObject(buildInfo);
 });
 
 /*
@@ -244,7 +254,6 @@ var lastTime = new Date().getTime();
 var time = new Date().getTime();
 function animateSpace() {
     stopRender = false;
-    
 
     lastTime = time;
     time = new Date().getTime();

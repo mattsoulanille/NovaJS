@@ -26,6 +26,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 	this.doBurstFire = false;
 	this.exitIndex = 0; // index of exitPoint array
 	this.random = Math.random; // Temporary until there is a seeded rng
+	this.enabled = true; // whether or not the weapon can fire. Used when landing etc.
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.id = buildInfo.id;
@@ -93,7 +94,7 @@ basicWeapon = class extends loadsResources(inSystem) {
 
     set firing(val) {
 	// high level: Auto fires the weapon if it could fire.
-	if (val === true) {
+	if (val && this.enabled) {
 	    // start auto firing
 	    this._firing = true;
 	    this.startFiring();

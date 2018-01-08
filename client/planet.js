@@ -58,9 +58,30 @@ planet = class extends spaceObject {
 	gameControls.onstart("depart", this.depart.bind(this));
     }
 
-//soooo many side effects...
-    land() {
-	/*
+    //soooo many side effects...
+    land(ship) {
+	if (ship.landedOn) {
+	    // then it's already landed somewhere else
+	    throw new error("ship tried to land but it's already landed on " + ship.landedOn);
+	}
+	if (animate === animateSpaceport) {
+	    throw new error("Animate was animateSpaceport when landing");
+	}
+	
+	var max_dist2 = Math.pow( ((this.size[0] + this.size[1]) / 4), 2 );
+	var max_vel2 = 900;
+
+	
+	var shipVel2 = ( Math.pow(ship.velocity[0], 2) + Math.pow(ship.velocity[1], 2));
+	var dist2 = (Math.pow( (this.position[0] - ship.position[0]), 2) +
+		     Math.pow( (this.position[1] - ship.position[1]), 2));
+
+	
+	
+	if (!((shipVel2 <= max_vel2) && (dist2 <= max_dist2))) {
+	    return false;
+	}
+
 	// make sure you can't land in two places at the same time
 	if (animate === animateSpace) {
 	    gameControls.scope = gameControls.scopes.land;
@@ -70,21 +91,24 @@ planet = class extends spaceObject {
 	    //stage.addChild(this.spaceportContainer);
 	    socket.emit('land');
 	}
-	*/
+
+	return true;
     }
 
     depart() {
-	/*
-	if (animate === animateSpaceport) {
-	    gameControls.scope = gameControls.scopes.space;
-	    gameControls.resetEvents();
-	    landed = false;
-	    animate = animateSpace;
-	    requestAnimationFrame(animate);
-	    //stage.addChild(space);
-	    socket.emit('depart');
+	if (animate === animateSpace) {
+	    throw new error("Animate was animateSpace when departing");
 	}
-	*/
+	myShip.depart(this);
+	gameControls.scope = gameControls.scopes.space;
+	gameControls.resetEvents();
+	landed = false;
+	animate = animateSpace;
+	requestAnimationFrame(animate);
+	//stage.addChild(space);
+	socket.emit('depart');
+
+
     }
     
     addSpritesToContainer() {

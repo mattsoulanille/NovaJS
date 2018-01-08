@@ -426,14 +426,13 @@ var connectFunction = function(client){
 	if (shipIDs.includes(id)) {
 	    buildInfo.id = id;
 	    buildInfo.UUID = userid;
-	    myShip.system = null;
 	    myShip.destroy();
 	    await buildShip(buildInfo);
-	    await sendSystem(); // revise me
+	    io.emit("replaceObject", buildInfo);
 
-	    var toEmit = {};
-	    toEmit[myShip.buildInfo.UUID] = myShip.buildInfo;
-	    client.broadcast.emit('buildObjects', toEmit);
+	    // var toEmit = {};
+	    // toEmit[myShip.buildInfo.UUID] = myShip.buildInfo;
+	    // client.broadcast.emit('buildObjects', toEmit);
 	}
 
     };

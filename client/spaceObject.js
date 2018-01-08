@@ -66,7 +66,7 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	this.multiplayer = new multiplayer(this.socket, this.UUID);
     }
 
-    
+
     setListeners() {
 	this.multiplayer.on('updateStats', function(newStats) {
 	    this.updateStats(newStats);
@@ -103,6 +103,23 @@ var spaceObject = class extends loadsResources(renderable(inSystem)) {
 	    this.built = true;
 	}	
     }
+
+    hide() {
+	// Can't shoot if hidden
+	this.weapons.all.forEach(function(w) {
+	    w.enabled = false;
+	    w.firing = false;
+	});
+	super.hide();
+    }
+
+    show() {
+	this.weapons.all.forEach(function(w) {
+	    w.enabled = true;
+	});
+	super.show();
+    }
+    
 
     sendStats() {
 //	var newStats = {};

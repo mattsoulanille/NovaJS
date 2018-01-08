@@ -14,8 +14,7 @@ class playerShip extends ship {
 	this.isPlayerShip = true;
 	this.weapons.primary = [];
 	this.weapons.secondary = [];
-	this.target = undefined;
-	this.planetTarget = undefined;
+	this.planetTarget = null;
 	this.targetIndex = -1;
 	//this.sendTimeout;
 
@@ -29,7 +28,7 @@ class playerShip extends ship {
 	// Is this terrible practice? I'm not sure, but it's definitely insane.	    
 	this.statechange = gameControls.onstatechange(this.statechange.bind(this));
 	this.assignControls(gameControls);
-	this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
+	//this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
 
     }
 
@@ -81,7 +80,7 @@ class playerShip extends ship {
 	_.map(this.weapons.secondary, function(weapon) {weapon.firing = false;});
     }
     resetNav() {
-	this.setPlanetTarget(undefined);
+	this.setPlanetTarget(null);
     }
 
     assignControls(c) {
@@ -130,28 +129,32 @@ class playerShip extends ship {
 	if (state.land) {
 	    var lastPlanet = this.planetTarget;
 	    this.targetNearestPlanet();
-	    if ((typeof this.planetTarget !== 'undefined') && (lastPlanet === this.planetTarget)) {
-		// try to land
-		var p = this.planetTarget;
-		var max_dist = Math.pow( ((p.size[0] + p.size[1]) / 4), 2 );
-		var max_vel = 900;
-		
-		// planets can't move
-		var vel = ( Math.pow(this.velocity[0], 2) + Math.pow(this.velocity[1], 2));
-		var dist = (Math.pow( (this.position[0] - p.position[0]), 2) +
-			    Math.pow( (this.position[1] - p.position[1]), 2));
-		if ((vel <= max_vel) && (dist <= max_dist)) {
-		    _.map(this.weapons.all, function(weapon) {weapon.stopFiring();});
-		    this.land(this.planetTarget);
-		    //		stopRender = true;
-		    return;
-		}
+	    if (this.planetTarget && (lastPlanet === this.planetTarget)) {
+		this.land(this.planetTarget); // tries to land
 	    }
 	}
 	
 	
 	this.updateStats(stats);
 	this.sendStats();
+    }
+
+    land(planet) {
+	if (planet.land(this)) {
+	    this.landedOn = planet;
+	    this.polarVelocity = 0;
+	    this.velocity[0] = this.velocity[1] = 0;
+	    this.setTarget(null);
+	    this.setPlanetTarget(null);
+	    this.hide();
+	}
+    }
+    depart(planet) {
+	this.landedOn = null;
+	this.position[0] = planet.position[0];
+	this.position[1] = planet.position[1];
+	this.pointing = Math.random() * 2*Math.PI;
+	this.show();
     }
     
     updateStats(stats = {}) {
@@ -194,6 +197,9 @@ class playerShip extends ship {
 	if (min !== Infinity) {
 	    return distances[min];
 	}
+	else {
+	    return null;
+	}
     }
 
     
@@ -207,7 +213,7 @@ class playerShip extends ship {
 	
 	var nearest = this.findNearest(targets);
 	
-	if ((typeof nearest !== 'undefined') && (this.target !== nearest)) {
+	if (nearest && (this.target !== nearest)) {
 	    this.targetIndex = Array.from(this.system.ships).indexOf(nearest);
 	    this.setTarget(nearest);
 	}
@@ -224,7 +230,7 @@ class playerShip extends ship {
     setTarget(target) {
 	this.target = target;
 	this.statusBar.setTarget(this.target);
-	super.setTarget.call(this, this.target);
+	super.setTarget(this.target);
     }
 
     setPlanetTarget(planetTarget) {
@@ -233,24 +239,23 @@ class playerShip extends ship {
     }
 
 
-    land(planet) {
-	this.polarVelocity = 0;
-	this.velocity[0] = this.velocity[1] = 0;
-	this.setTarget(undefined);
-	planet.land();
-    }
 
     cycleTarget() {
 	// targetIndex goes from -1 (for no target) to ships.length - 1
-	var targets = Array.from(this.system.built.ships).filter(function(v) {
+	var targets = Array.from(this.system.targetable).filter(function(v) {
 	    return v !== this;
 	}.bind(this));
 
 
 	// loops from -1 to targets.length
 	this.targetIndex = (this.targetIndex + 2) % (targets.length + 1) - 1;
-	// If targetIndex === targets.length, then target is undefined, which is intentional
-	this.setTarget(targets[this.targetIndex]);
+
+	if (targets[this.targetIndex]) {
+	    this.setTarget(targets[this.targetIndex]);
+	}
+	else {
+	    this.setTarget(null);
+	}
 	//    console.log(this.targetIndex)
     }
 
@@ -267,39 +272,38 @@ class playerShip extends ship {
 	this.socket.emit('updateStats', newStats);
 	
     }
-    _addToSystem() {
-        if (this.built) {
-            this.system.built.ships.add(this);
-	    if (typeof(this.sendInterval) === 'undefined') {
+
+    set send(v) {
+	if (v) {
+	    if (!this.sendInterval) {
 		this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
 	    }
-	    // playerShip must be rendered before all others
-	    if (!this.system.built.render.has(this)) {
-		var built = [...this.system.built.render];
-		built.unshift(this);
-		this.system.built.render = new Set(built);
+	}
+	else {
+	    if (this.sendInterval) {
+		clearInterval(this.sendInterval);
+		this.sendInterval = false;
 	    }
-
-        }
-        this.system.ships.add(this);
-
+	}
 	
-        super._addToSystem.call(this);
+    }
+    get send() {
+	return Boolean(this.sendInterval);
+    }
+
+    _addToRendering() {
+	// so it renders first. A bit insane and hacky
+	this.system.built.render = new Set([this,...this.system.built.render]);
+    }
+        
+    _addToSystem() {
+        super._addToSystem();
+	this.send = true;
     }
     _removeFromSystem() {
-	if (typeof this.sendInterval !== 'undefined') {
-	    clearInterval(this.sendTimeout);	    
-	}
-	super._removeFromSystem.call(this);
+	this.send = false;
+	super._removeFromSystem();
     }
-    
-    addToSpaceObjects() {
-	var built = [...this.system.built.render];
-	built.unshift(this);
-	this.system.built.render = new Set(built);
-	super.addToSpaceObjects.call(this);
-    }
-
     
     destroy() {
 	var controlFunctions = [this.firePrimary, this.stopPrimary,
@@ -310,7 +314,7 @@ class playerShip extends ship {
 	controlFunctions.forEach(function(k) {
 	    gameControls.offall(k);
 	});
-	//this.statusBar.destroy();
+	this.statusBar.destroy();
 	super.destroy.call(this);
     }
 }

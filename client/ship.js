@@ -21,8 +21,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.weapons = {};
 	this.weapons.all = [];
 	this.outfits = [];
-	this.target = undefined;
+	this.target = null;
 	this.turningToTarget = false;
+	this.landedOn = null;
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.outfitList = buildInfo.outfits || [];
 	    this.buildInfo.type = "ship";
@@ -182,11 +183,11 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     getStats() {
 	var stats = super.getStats.call(this);
-	if (typeof this.target !== 'undefined') {
+	if (this.target) {
 	    stats.target = this.target.UUID;
 	}
 	else {
-	    stats.target = undefined;
+	    stats.target = null;
 	}
 	stats.turningToTarget = this.turningToTarget;
 	return stats;
@@ -194,7 +195,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 
     turnToTarget() {
-	if (typeof this.target !== 'undefined') {
+	if (this.target) {
 	    var x = this.target.position[0] - this.position[0];
 	    var y = this.target.position[1] - this.position[1];
 	    var direction = (Math.atan2(y,x) + 2*Math.PI) % (2*Math.PI);
@@ -284,16 +285,16 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	
     }
 
-    show() {
-	this.targetable = true;
-	return super.show.call(this);
+    setVisible(v) {
+	if (v) {
+	    this.system.targetable.add(this);	    
+	}
+	else {
+	    this.system.targetable.delete(this);
+	}
+	super.setVisible(v);
     }
-
-    hide() {
-	this.targetable = false;
-	return super.hide.call(this);
-    }
-
+    
     _addToSystem() {
         if (this.built) {
             this.system.built.ships.add(this);
