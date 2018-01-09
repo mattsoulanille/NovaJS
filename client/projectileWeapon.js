@@ -17,7 +17,8 @@ projectileWeapon = class extends renderable(basicWeapon) {
 	this.fireWithoutTarget = true;
 	this.type = "weapons";
 	this.projectiles = [];
-	this.nextFireTime = 0; // next possible time the weapon can be fired
+	this.nextFireTime = 1; // next possible time the weapon can be fired
+	// start at 1 because of renderable.setRendering
     }
 
     
