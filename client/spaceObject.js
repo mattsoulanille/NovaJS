@@ -104,10 +104,6 @@ var spaceObject = class extends loadsResources(visible(renderable(inSystem))) {
     }
 
     setVisible(v) {
-	var rendered = this.rendered;
-	this.rendered = false;
-	this.render(0); // update all the stuff before showing it
-	this.rendered = rendered;
     	super.setVisible(v);
     }
     
@@ -225,23 +221,14 @@ var spaceObject = class extends loadsResources(visible(renderable(inSystem))) {
 
     
     render() {
-	// rewrite this please. Put it in playerShip. 
+	// rewrite this please. Put it in playerShip.
+	super.render(...arguments);
 	if (!this.isPlayerShip) {
-	    // -194 for the sidebar
-	    // System container handles the movement relative to the ship.
-	    /*
-	      this.container.position.x = 
-	      (this.position[0] - stagePosition[0]) + (screenW-194)/2;
-	      this.container.position.y = -1 *
-	      (this.position[1] - stagePosition[1]) + screenH/2;
-	    */
-	    
 	    this.container.position.x = this.position[0];
 	    this.container.position.y = -1 * this.position[1];
-	    
 	}
 
-	super.render(...arguments);
+
     }
 
 

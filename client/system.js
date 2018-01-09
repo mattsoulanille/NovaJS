@@ -55,22 +55,22 @@ system.prototype.render = function(delta, time) {
     this.built.render.forEach(function(thing) {
 	thing.rendered = false;
     });
+
     this.built.render.forEach(function(thing) {
 	if ( !thing.rendered ) {
 	    thing.render(delta, time);
 	}
     });
     this.crash.check();
-    this.renderContainer();
 }
-
+/*
 system.prototype.renderContainer = function() {
     // stagePosition is the player ship's position.
     // this will probably need to be revised to be more clear.
     this.container.position.x = - stagePosition[0] + (screenW - 194) / 2;
     this.container.position.y = stagePosition[1] + screenH / 2;
 }
-
+*/
 system.prototype.build = function() {
     // only builds things that are spaceObjects. Not outfits / weapons.
     var promises = Array.from(this.spaceObjects).map(function(obj) {

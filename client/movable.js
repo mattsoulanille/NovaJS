@@ -41,11 +41,13 @@ var movable = (superclass) => class extends superclass {
     }
 
     render(delta, time) {
+	this.position[0] += this.velocity[0] * delta/1000;
+	this.position[1] += this.velocity[1] * delta/1000;
+
+	// THIS MUST HAPPEN AFTER NEW POSITIONS ARE SET
+	// OTHERWISE, SPACEOBJECT SETS THE CONTAINER TO
+	// THE OLD POSITIONS. DON'T CHANGE THIS!
 	super.render(...arguments);
-	if (typeof this.lastTime != 'undefined') {
-	    this.position[0] += this.velocity[0] * delta/1000;
-	    this.position[1] += this.velocity[1] * delta/1000;
-	}
 	
     }
 };

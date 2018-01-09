@@ -251,33 +251,27 @@ var animateTimeout;
 var animate = animateSpace;
 var stopRender = false;
 var lastTime = new Date().getTime();
-var time = new Date().getTime();
+var time = new Date().getTime();// + timeDifference;
 function animateSpace() {
+    
     stopRender = false;
 
     lastTime = time;
     time = new Date().getTime();
     var delta = time - lastTime;
     
-    //spaceObject.prototype.time = new Date().getTime() + timeDifference;
-
-    // in case the server restarted...
-    /*
-    if (myShip.rendering) {
-	myShip.render();
-    }
-    */
     stars.render(delta);
     currentSystem.render(delta, time);
 
     
     
     //currentSystem.crash.check();
-    
-    renderer.render(space);
     if (!paused) {
-	animateTimeout = setTimeout(requestAnimationFrame( animate ), 0);
+	//animateTimeout = setTimeout(requestAnimationFrame( animate ), 0);
+	requestAnimationFrame( animate );
     }
+
+    renderer.render(space);
 }
 
 var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');

@@ -33,6 +33,11 @@ var renderable = (superclass) => class extends superclass {
 	}
 
 	if (v) {
+	    var rendered = this.rendered;
+	    this.rendered = false;
+	    this.render(0); // update all the stuff before showing it
+	    //this.rendered = rendered;
+	    this.rendered = rendered;
 	    this._addToRendering();
 	}
 	else {

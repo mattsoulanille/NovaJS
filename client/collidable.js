@@ -117,7 +117,7 @@ var collidable = (superclass) => class extends superclass {
 	
 	if (this.collisionShape !== newShape) {
 	    this.collisionShape.remove();
-	    if (! this.crash.all().includes(newShape)) {
+	    if (this.getVisible && !this.crash.all().includes(newShape)) {
 		newShape.insert();
 	    }
 	    this.collisionShape = newShape;

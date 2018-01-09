@@ -172,11 +172,16 @@ class playerShip extends ship {
     
     render() {
 	// -194 for the sidebar
+
 	this.container.position.x = (screenW-194)/2;
 	this.container.position.y = screenH/2;
-	
-	
+
+		
 	super.render(...arguments);
+
+	this.system.container.position.x = - this.position[0] + (screenW - 194) / 2;
+	this.system.container.position.y = this.position[1] + screenH / 2;
+
 	this.statusBar.render(...arguments);
 	
     }

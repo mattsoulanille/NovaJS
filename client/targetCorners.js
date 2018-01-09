@@ -67,7 +67,7 @@ targetCorners = class extends spaceObject {
     }
 
     render(delta, time) {
-	this.time = time;
+	//this.time = time;
 	if (this.other) {
 	    if ( (!this.other.rendered) && this.other.visible ) {
 		// seems a bit insane perhaps to be rendering others
@@ -81,7 +81,8 @@ targetCorners = class extends spaceObject {
 	    var scale = (this.timeLeft/20) + 1;
 	    this.placeSprites(this.other, scale);
 	}
-	super.render.call(this);
+	//super.render.call(this);
+	super.render(delta, time);
     }
     /*
     destroy() {

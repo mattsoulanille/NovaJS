@@ -190,6 +190,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// temporary. Gun points will be implemented later
 	// maybe pass the ship to the projectile... or not
 	// inaccuracy is handled by weapon
+	this.rendered = true; // IS THIS NEEDED?
+
 	this.target = target;
 	this.endTime = this.time + this.properties.duration * 1000/30;
 	this.endTimeout = setTimeout(this.end.bind(this), this.properties.duration * 1000/30);

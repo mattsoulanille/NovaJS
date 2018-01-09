@@ -190,7 +190,12 @@ projectileWeapon = class extends renderable(basicWeapon) {
 
 	    if (this.doBurstFire) {
 		if (this.burstCount < this.count * this.properties.burstCount) {
-		    this.burstCount ++;
+		    if (this.fireSimultaneously) {
+			this.burstCount += this.count;
+		    }
+		    else {
+			this.burstCount ++;
+		    }
 		}
 		else {
 		    this.burstCount = 0;
