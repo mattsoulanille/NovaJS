@@ -22,6 +22,7 @@ var acceleratable = (superclass) => class extends superclass {
 	this.accelerating = false;
 	this.polarVelocity = 0;
 	this.flightMode = new inertial; // default
+	//this.flightMode = new inertialess; // default
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.buildInfo.type = "acceleratable";
 	}
@@ -66,6 +67,8 @@ var acceleratable = (superclass) => class extends superclass {
 	    else {
 		deltaV = other.impact / this.properties.mass;
 	    }
+
+	    deltaV = 0; // Until ship masses are parsed correctly, collisions won't have knockback.
 
 	    var newVelocity = [Math.cos(other.angle) * deltaV + this.velocity[0],
 			       Math.sin(other.angle) * deltaV + this.velocity[1]];
