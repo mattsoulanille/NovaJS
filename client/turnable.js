@@ -140,9 +140,21 @@ var turnable = (superclass) => class extends superclass {
 	    // turnable uses image 0 for [this.pointing - pi/frameCount, this.pointing + pi/frameCount) etc
 	    
 	    var spr = this.sprites[keys[i]];
-	    var imageIndex = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
-	    //console.log(imageIndex)
-	    var rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
+	    //var imageIndex = Math.floor((2.5*Math.PI - this.pointing)%(2*Math.PI) * frameCount[i] / (2*Math.PI)) + frameStart[i];
+	    var start = frameStart[i];
+	    var count = frameCount[i];
+
+	    // Nova files use clock. This uses unit circle
+	    var clock = modPI(-this.pointing + Math.PI / 2);
+
+	    // Split the circle up evenly. Each frame gets part to the left and right
+	    var halfSplitSize = Math.PI / count;
+	    var imageIndex = start + Math.floor(modPI(clock + halfSplitSize) * count / (2*Math.PI));
+
+	    // the 
+	    var rotation = clock - (2*Math.PI*(imageIndex / count));
+
+	    //var rotation = (-1*this.pointing) % (2*Math.PI/frameCount[i]) + (Math.PI/frameCount[i]);  // how much to rotate the image
 	    
 	    this.renderSprite(spr, rotation, imageIndex);
 	    
@@ -155,6 +167,10 @@ var turnable = (superclass) => class extends superclass {
 	super.render(...arguments);
     }
     
+};
+
+var modPI = function(n) {
+    return (n + 2*Math.PI) % (2*Math.PI);
 };
 
 if (typeof(module) !== 'undefined') {
