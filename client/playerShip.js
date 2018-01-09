@@ -14,8 +14,11 @@ class playerShip extends ship {
 	this.isPlayerShip = true;
 	this.weapons.primary = [];
 	this.weapons.secondary = [];
+	this.weapons.currentSecondary = null;
 	this.planetTarget = null;
 	this.targetIndex = -1;
+	this.secondaryIndex = -1;
+	this.firingSecondary = false;
 	//this.sendTimeout;
 
     }
@@ -74,24 +77,60 @@ class playerShip extends ship {
 	_.map(this.weapons.primary, function(weapon) {weapon.firing = false;});
     }
     fireSecondary() {
-	_.map(this.weapons.secondary, function(weapon) {weapon.firing = true;});
+	this.firingSecondary = true;
+	if (this.weapons.currentSecondary) {
+	    this.weapons.currentSecondary.firing = true;
+	}
     }
     stopSecondary() {
-	_.map(this.weapons.secondary, function(weapon) {weapon.firing = false;});
+	this.firingSecondary = false;
+	if (this.weapons.currentSecondary) {
+	    this.weapons.currentSecondary.firing = false;
+	}
     }
+
+    setSecondary(weap) {
+	if (this.weapons.currentSecondary) {
+	    this.weapons.currentSecondary.firing = false;
+	}
+
+	this.weapons.currentSecondary = weap;
+	if (weap) {
+	    weap.firing = this.firingSecondary;
+	}
+	this.statusBar.setSecondary(weap);
+    }
+    
+    cycleSecondary() {
+	this.secondaryIndex = (this.secondaryIndex + 2) % (this.weapons.secondary.length + 1) - 1;
+	if (!this.weapons.secondary[this.secondaryIndex]) {
+	    this.setSecondary(null);
+	}
+	else {
+	    this.setSecondary(this.weapons.secondary[this.secondaryIndex]);
+	}
+    }
+
+    resetSecondary() {
+	this.secondaryIndex = -1;
+	this.setSecondary(null);
+    }
+    
     resetNav() {
 	this.setPlanetTarget(null);
     }
 
     assignControls(c) {
-	//There is no way this is good practice...
+	// There is no way this is good practice...
+	// Looking back on this a year or two later, I have no idea how it works.
 	this.firePrimary = c.onstart("primary", this.firePrimary.bind(this));
-	
 	this.stopPrimary = c.onend("primary", this.stopPrimary.bind(this));
 	
 	this.fireSecondary = c.onstart("secondary", this.fireSecondary.bind(this));
-	
 	this.stopSecondary = c.onend("secondary", this.stopSecondary.bind(this));
+
+	this.cycleSecondary = c.onstart("cycle secondary", this.cycleSecondary.bind(this));
+	this.resetSecondary = c.onstart("reset secondary", this.resetSecondary.bind(this));
 	
 	this.targetNearest = c.onstart("target nearest", this.targetNearest.bind(this));
 	this.cycleTarget = c.onstart("target", this.cycleTarget.bind(this));
@@ -243,7 +282,7 @@ class playerShip extends ship {
 	this.statusBar.setPlanetTarget(this.planetTarget);
     }
 
-
+    
 
     cycleTarget() {
 	// targetIndex goes from -1 (for no target) to ships.length - 1

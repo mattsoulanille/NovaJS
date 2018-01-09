@@ -7,6 +7,8 @@ if (typeof(module) !== 'undefined') {
     var basicWeapon = require("../server/basicWeaponServer.js");
     var renderable = require("./renderable.js");
     var visible = require("./visible.js");
+    var errors = require("./errors.js");
+    var NoSystemError = errors.NoSystemError;
 }
 
 beamWeapon = class extends collidable(visible(basicWeapon)) {
@@ -98,7 +100,15 @@ Else, return false
 
     stopFiring(notify = true) {
 	this.graphics.clear();
-	this.hide();
+	try {
+	    this.hide();
+	}
+	catch(e) {
+	    if (! (e instanceof NoSystemError) ) {
+		throw e;
+	    }
+	}
+
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();
 	}

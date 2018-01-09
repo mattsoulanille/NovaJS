@@ -11,10 +11,17 @@ var statusBar = class extends loadsResources(function() {}) {
 	this.targetContainer = new PIXI.Container();
 	this.lines = new PIXI.Graphics();
 	this.radarContainer = new PIXI.Container();
+	this.weaponsContainer = new PIXI.Container();
+	
+
 	this.container.addChild(this.lines);
 	this.container.addChild(this.targetContainer);
 	this.container.addChild(this.radarContainer);
-	
+	this.container.addChild(this.weaponsContainer);
+
+
+
+	// Is this superfluous?
 	this.children = new Set(); // maybe write a class for children?
 	this.children.add(this.container);
 	this.children.add(this.targetContainer);
@@ -30,9 +37,13 @@ var statusBar = class extends loadsResources(function() {}) {
 
     async build() {
 	this.meta = await this.loadResources(this.type, this.id);
+	this.font = {fontFamily:"Geneva", fontSize:12, fill:this.meta.colors.brightText, align:'center'};
+	this.dimFont = {fontFamily:"Geneva", fontSize:12, fill:this.meta.colors.dimText, align:'center'};
 	this.makeSprites();
 	this.resize(window.innerWidth, window.innerHeight);
 	this.buildTargetText();
+	this.buildWeaponsText();
+
 
 	await this.buildTargetCorners();
 	await this.buildPlanetCorners();
@@ -124,6 +135,28 @@ var statusBar = class extends loadsResources(function() {}) {
 	this.renderTargetText();
     }
 
+    buildWeaponsText() {
+	this.weaponsContainer.position.x = this.meta.dataAreas.weapons.position[0];
+	this.weaponsContainer.position.y = this.meta.dataAreas.weapons.position[1];
+
+	this.text.noWeapon = new PIXI.Text("No Secondary Weapon", this.dimFont);
+	this.text.noWeapon.anchor.x = 0.5;
+	this.text.noWeapon.anchor.y = 0.5;
+	this.text.noWeapon.position.x = this.meta.dataAreas.weapons.size[0] / 2;
+	this.text.noWeapon.position.y = this.meta.dataAreas.weapons.size[1] / 2;;
+
+	this.text.weapon = new PIXI.Text("", this.font);
+	this.text.weapon.anchor.x = 0.5;
+	this.text.weapon.anchor.y = 0.5;
+	this.text.weapon.position.x = this.meta.dataAreas.weapons.size[0] / 2;
+	this.text.weapon.position.y = this.meta.dataAreas.weapons.size[1] / 2;;
+	
+	this.weaponsContainer.addChild(this.text.noWeapon);
+	this.weaponsContainer.addChild(this.text.weapon);
+
+
+    }
+    
     buildTargetText() {
 	this.targetContainer.position.x = this.meta.dataAreas.targeting.position[0];
 	this.targetContainer.position.y = this.meta.dataAreas.targeting.position[1];
@@ -131,8 +164,8 @@ var statusBar = class extends loadsResources(function() {}) {
 	var size = [this.meta.dataAreas.targeting.size[0],
 		    this.meta.dataAreas.targeting.size[1]];
 
-	var font = {font: "12px Geneva", fill:0xFFFFFF, align:'center'};
-	var dimFont = {font: "12px Geneva", fill:0x888888, align:'center'};
+	var font = this.font;
+	var dimFont = this.dimFont;
 
 	this.text.shield = new PIXI.Text('Shield:', dimFont);
 	this.text.shield.anchor.y = 1;
@@ -198,6 +231,18 @@ var statusBar = class extends loadsResources(function() {}) {
 
     }
 
+    setSecondary(secondary) {
+	if (secondary) {
+	    this.text.noWeapon.visible = false;
+	    this.text.weapon.text = secondary.meta.name;
+	    this.text.weapon.visible = true;
+	}
+	else {
+	    this.text.noWeapon.visible = true;
+	    this.text.weapon.visible = false;
+	}
+    }
+    
     setTarget(target) {
 	// Hide old target
 	if (this.targetSprite) {
