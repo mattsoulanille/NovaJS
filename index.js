@@ -207,6 +207,7 @@ var nd; // nova data
 
 // all ships
 var shipIDs;
+var shipNames;
 var startGame = async function() {
     console.log("Reading nova data");
     try {
@@ -225,7 +226,13 @@ var startGame = async function() {
 
 
     shipIDs = Object.keys(np.ids.resources.shïp);
+    shipNames = {};
+    shipIDs.forEach(function(id) {
+	shipNames[np.ids.resources.shïp[id].name] = id;
+    });
+    
     local.context.shipIDs = shipIDs;
+    local.context.shipNames = shipNames;
 
     nd = new novaData(np);
     inSystem.prototype.novaData = nd;
@@ -429,12 +436,14 @@ var connectFunction = function(client){
 	    myShip.destroy();
 	    await buildShip(buildInfo);
 	    io.emit("replaceObject", buildInfo);
-
-	    // var toEmit = {};
-	    // toEmit[myShip.buildInfo.UUID] = myShip.buildInfo;
-	    // client.broadcast.emit('buildObjects', toEmit);
 	}
-
+	else if (shipNames[id]) {
+	    buildInfo.id = shipNames[id];
+	    buildInfo.UUID = userid;
+	    myShip.destroy();
+	    await buildShip(buildInfo);
+	    io.emit("replaceObject", buildInfo);
+	}
     };
 		 
 	
