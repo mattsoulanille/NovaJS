@@ -6,12 +6,13 @@ if (typeof(module) !== 'undefined') {
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
+    var renderable = require("./renderable.js");
 }
 
 
 
 
-basicWeapon = class extends loadsResources(inSystem) {
+basicWeapon = class extends renderable(loadsResources(inSystem)) {
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.socket = source.socket; // necessary for server

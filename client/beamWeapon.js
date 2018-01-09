@@ -6,15 +6,13 @@ if (typeof(module) !== 'undefined') {
     var PIXI = require("../server/pixistub.js");
     var basicWeapon = require("../server/basicWeaponServer.js");
     var renderable = require("./renderable.js");
+    var visible = require("./visible.js");
 }
 
-// rewrite
-// and refactor with basicWeapon
-beamWeapon = class extends collidable(renderable(basicWeapon)) {
+beamWeapon = class extends collidable(visible(basicWeapon)) {
 
     constructor(buildInfo, source) {
 	super(...arguments);
-	this.container = new PIXI.Container();
 
 	if (this.system) {
 	    // so the inheritance chain works
@@ -25,7 +23,6 @@ beamWeapon = class extends collidable(renderable(basicWeapon)) {
 	//this.socket = source.socket;
 
 	//this.buildInfo = buildInfo;
-	this._rendering = false;
 	this.built = false;
 	if (typeof source !== 'undefined') {
 	    // exitPoints go here
@@ -63,12 +60,9 @@ Else, return false
 	await super._build.call(this);
 
 	this.graphics = new PIXI.Graphics();
+	this.graphics.visible = true;
 	this.container.addChild(this.graphics);
-
-	if (this.system) {
-	    this.system.built.render.add(this);
-	}
-
+	
 	this.built = true;
     };
 
@@ -85,38 +79,33 @@ Else, return false
 
     
     startFiring(notify = true) {
-	this.graphics.visible = true;
-	this._rendering = true;
-	if ( !(this.crash.all().includes(this.collisionShape)) ) {
-	    this.collisionShape.insert();
-	}
+	
+	this.show();
+
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();
 	}
 
 	// Control which point the beam comes from
 	// This will probably need to be written so that clients are more sure about which place a beam is coming from.
-	this.switchExitInterval = setInterval(function() {
-	    this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
-	}.bind(this), this.reloadMilliseconds);
+	if (! this.switchExitInterval) {
+	    this.switchExitInterval = setInterval(function() {
+		this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
+	    }.bind(this), this.reloadMilliseconds);
+	}
 	
     }
 
     stopFiring(notify = true) {
 	this.graphics.clear();
-	this.graphics.visible = false;
-	this._rendering = false;
-	this.collisionShape.remove();
+	this.hide();
 	if ((typeof this.UUID !== 'undefined') && notify) {
 	    this.sendStats();
 	}
 	clearInterval(this.switchExitInterval);
+	this.switchExitInterval = null;
     }
 
-    show() {
-	// necessary for inheritance
-	// wait. is it really necessary anymore?
-    }
     
     getFirePosition() {
 	var position = this.exitPoints[this.exitIndex].position;
@@ -125,25 +114,29 @@ Else, return false
 	}
 	return position;
     }
-    
+
+    getFireAngle() {
+	return this.source.pointing;
+    }
+
     render() {
-    	if (this.firing) {
-	    var fireAngle = this.source.pointing;
-	    var position = this.getFirePosition();
-	    this.graphics.position.x = position[0];
-	    //(this.position[0] - stagePosition[0]) + (screenW-194)/2;
-	    this.graphics.position.y = -1 * position[1];
-		//(this.position[1] - stagePosition[1]) + screenH/2;
-	    this.graphics.clear();
-	    this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
-	    this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
 
-	    var x = Math.cos(fireAngle) * this.meta.animation.beamLength;
-	    var y = -Math.sin(fireAngle) * this.meta.animation.beamLength;
-	    this.graphics.lineTo(x,y);
+	var position = this.getFirePosition();
+	var fireAngle = this.getFireAngle(position);
+	this.graphics.position.x = position[0];
+	//(this.position[0] - stagePosition[0]) + (screenW-194)/2;
+	this.graphics.position.y = -1 * position[1];
+	    //(this.position[1] - stagePosition[1]) + screenH/2;
+	this.graphics.clear();
+	this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
+	this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
 
-	    this.renderCollisionShape(fireAngle, position);
-	}
+	var x = Math.cos(fireAngle) * this.meta.animation.beamLength;
+	var y = -Math.sin(fireAngle) * this.meta.animation.beamLength;
+	this.graphics.lineTo(x,y);
+
+	this.renderCollisionShape(fireAngle, position);
+
     }
 
     renderCollisionShape(fireAngle, position) {
@@ -176,14 +169,14 @@ Else, return false
     }
 
     _removeFromSystem() {
-	this.system.spaceObjects.delete(this);
+	//this.system.spaceObjects.delete(this);
 	this.system.container.removeChild(this.container);
 	if (this.UUID && this.system.multiplayer[this.UUID]) {
 	    delete this.system.multiplayer[this.UUID];
 	}
 
-	this.system.built.render.delete(this);
-	super._removeFromSystem.call(this);
+	this.hide();
+	super._removeFromSystem();
 	
 	
     }
@@ -198,20 +191,15 @@ Else, return false
 	    this.system.multiplayer[this.UUID] = this;
 	}
 
-	if (this.built) {
-	    this.system.built.render.add(this);
-	}
-
-	this.system.spaceObjects.add(this);
-	super._addToSystem.call(this);
+	//this.system.spaceObjects.add(this);
+	super._addToSystem();
     }
     
     
     destroy() {
-	this._firing = false;
 	this.stopFiring(false);
 	this.multiplayer.destroy();
-	this.container.destroy();
+	super.destroy();
 
     }
 

@@ -17,7 +17,6 @@ var visible = (superclass) => class extends superclass {
 	this.container.visible = Boolean(v);
     }
 
-
     hide() {
 	this.setVisible(false);
 	super.hide();
@@ -25,6 +24,10 @@ var visible = (superclass) => class extends superclass {
     show() {
 	this.setVisible(true);
 	super.show();
+    }
+    destroy() {
+	this.container.destroy();
+	super.destroy();
     }
 
 };

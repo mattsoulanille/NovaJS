@@ -7,11 +7,10 @@ if (typeof(module) !== 'undefined') {
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
     var basicWeapon = require("../server/basicWeaponServer.js");
-    var renderable = require("./renderable.js");
 }
 
 
-projectileWeapon = class extends renderable(basicWeapon) {
+projectileWeapon = class extends basicWeapon {
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.fireWithoutTarget = true;

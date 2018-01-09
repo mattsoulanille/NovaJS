@@ -4,9 +4,11 @@ if (typeof(module) !== 'undefined') {
     var projectileWeapon = require("../server/projectileWeaponServer.js");
     var turretWeapon = require("../server/turretWeaponServer.js");
     var beamWeapon = require("../server/beamWeaponServer.js");
+    var beamTurret = require("./beamTurret.js");
     var frontQuadrantTurretWeapon = require("../server/frontQuadrantTurretWeaponServer.js");
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
+
 }
 
 var weaponBuilder = class extends loadsResources(inSystem) {
@@ -33,7 +35,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     
     _setWeaponType() {
 
-	if (['point defence', 'bay', 'beam turret', 'point defence beam'].includes(this.meta.type)) {
+	if (['point defence', 'bay', 'point defence beam'].includes(this.meta.type)) {
 	    // temporary
 	    return false;
 	}
@@ -50,6 +52,9 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    break;
 	case 'beam':
 	    this.weapon = new beamWeapon(this.buildInfo, this.source);
+	    break;
+	case 'beam turret':
+	    this.weapon = new beamTurret(this.buildInfo, this.source);
 	    break;
 	case 'front quadrant':
 	    this.weapon = new frontQuadrantTurretWeapon(this.buildInfo, this.source);
