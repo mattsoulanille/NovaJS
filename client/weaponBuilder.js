@@ -6,6 +6,7 @@ if (typeof(module) !== 'undefined') {
     var beamWeapon = require("../server/beamWeaponServer.js");
     var beamTurret = require("./beamTurret.js");
     var frontQuadrantTurretWeapon = require("../server/frontQuadrantTurretWeaponServer.js");
+    var pointDefenseWeapon = require("./pointDefenseWeapon.js");
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
 
@@ -35,7 +36,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     
     _setWeaponType() {
 
-	if (['point defence', 'bay', 'point defence beam'].includes(this.meta.type)) {
+	if (['bay', 'point defense', 'point defense beam'].includes(this.meta.type)) {
 	    // temporary
 	    return false;
 	}

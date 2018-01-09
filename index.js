@@ -121,6 +121,8 @@ var gameloop = function(system, lastTime = new Date().getTime()) {
     var time = new Date().getTime();
     var delta = time - lastTime;
 
+    system.render(delta, time);
+    /*
     try {
 	system.render(delta, time);
     }
@@ -133,7 +135,7 @@ var gameloop = function(system, lastTime = new Date().getTime()) {
 	    }
 	});
     }
-    
+    */
     
     gameTimeout = setTimeout(function() {gameloop(system, time);}, 0);
 };

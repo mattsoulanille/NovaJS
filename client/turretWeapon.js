@@ -8,7 +8,7 @@ if (typeof(module) !== 'undefined') {
 turretWeapon = class extends projectileWeapon {
 
     constructor(buildInfo, source) {
-	super(buildInfo, source);
+	super(...arguments);
 	this.fireWithoutTarget = false;
 	// [front, sides, back]. false means not blind
 	this.blindspots = [false, false, false]; 
