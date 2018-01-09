@@ -47,10 +47,10 @@ var weap = class extends base {
 	    this.guidance = 'rear quadrant';
 	    break;
 	case 9:
-	    this.guidance = 'point defence';
+	    this.guidance = 'point defense';
 	    break;
 	case 10:
-	    this.guidance = 'point defence beam';
+	    this.guidance = 'point defense beam';
 	    break;
 	case 99:
 	    this.guidance = 'bay';
