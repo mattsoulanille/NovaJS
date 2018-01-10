@@ -241,6 +241,7 @@ var spaceObject = class extends loadsResources(visible(renderable(inSystem))) {
     }
     
     _removeFromSystem() {
+	this.hide();
 	this._removeFromContainer();
 	
         if (this.UUID) {
@@ -270,6 +271,29 @@ var spaceObject = class extends loadsResources(visible(renderable(inSystem))) {
 
         this.system.spaceObjects.add(this);
     }
+
+    findNearest(items) {
+	var get_distance = function(a, b) {
+	    return Math.pow((a.position[0] - b.position[0]), 2) +
+		Math.pow((a.position[1] - b.position[1]), 2);
+	};
+	
+	var distances = {};
+	items.forEach(function(t) {
+	    var dist = get_distance(t, this);
+	    distances[dist] = t;
+	}.bind(this));
+	
+	var min = Math.min(...Object.keys(distances));
+	if (min !== Infinity) {
+	    return distances[min];
+	}
+	else {
+	    return null;
+	}
+    }
+
+    
     
 // destroys the object. This is NOT the function to call
 // if you want it to explode.

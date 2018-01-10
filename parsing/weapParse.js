@@ -37,7 +37,6 @@ var weapParse = class extends baseParse {
 	else if (this.type === "bay") {
 	    // set ship type here
 	}
-	
 
 	this.shieldDamage = weap.shieldDamage;
 	this.armorDamage = weap.armorDamage;
@@ -46,6 +45,10 @@ var weapParse = class extends baseParse {
 	this.speed = weap.speed;
 	this.turnRate = weap.turnRate;
 	this.fireGroup = weap.fireGroup; // primary or secondary
+	if (this.type == "point defense" || this.type == "point defense beam") {
+	    this.fireGroup = null;
+	}
+	
 	this.exitType = weap.exitType;
 	this.accuracy = weap.accuracy;
 	this.impact = weap.impact; // knockback force

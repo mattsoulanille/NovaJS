@@ -36,7 +36,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     
     _setWeaponType() {
 
-	if (['bay', 'point defense', 'point defense beam'].includes(this.meta.type)) {
+	if (['bay', 'point defense beam'].includes(this.meta.type)) {
 	    // temporary
 	    return false;
 	}
@@ -56,6 +56,9 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    break;
 	case 'beam turret':
 	    this.weapon = new beamTurret(this.buildInfo, this.source);
+	    break;
+	case 'point defense':
+	    this.weapon = new pointDefenseWeapon(this.buildInfo, this.source);
 	    break;
 	case 'front quadrant':
 	    this.weapon = new frontQuadrantTurretWeapon(this.buildInfo, this.source);

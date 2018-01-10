@@ -16,10 +16,11 @@ if (typeof(module) !== 'undefined') {
 projectile = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
-    constructor(buildInfo, system, source) {
+    constructor(buildInfo, system, source, meta, properties) {
 	super(buildInfo, system);
 	this.source = source;
-	//console.log(this.sytem);
+	this.meta = meta;
+	this.properties = properties;
 	this.type = "weapons"; // that's where the data is. sorry.
 	this.pointing = 0;
 	this.available = false;
@@ -34,6 +35,12 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     set allies(a) {
 	throw new AlliesError("Tried to set allies of a projectile but they are defined implicitly by source");
     }
+
+    // These are already given by the weapon that created the projectile
+    loadResources() {
+	return this.meta;
+    }
+
     
     async _build() {
 	await super._build();
@@ -133,16 +140,17 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     
     _addToSystem() {
 	//console.log("adding proj to system");
-	this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
+	//this.targets = this.system.ships; // Temporary (PD weapons can hit missiles)
         super._addToSystem.call(this);
     }
 
     _removeFromSystem() {
 	//console.log("removing proj from system");
-	this.targets = new Set();
+	//this.targets = new Set();
         super._removeFromSystem.call(this);
     }
-    
+
+
     updateStats(stats) {
 	    super.updateStats.call(this, stats);
 	// if (typeof(stats.endTime) !== 'undefined') {
@@ -162,11 +170,22 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	return stats;
     }
 
+    show() {
+	super.show();
+	if (this.properties.vulnerableTo.includes("point defense")) {
+	    this.system.vulnerableToPD.add(this);
+	}
+    }
+    hide() {
+	super.hide();
+	this.system.vulnerableToPD.delete(this);
+    }
+    
     collideWith(other) {
 	// temporary. will have damage types later
 	// this should probably be a separate mixin or class. lots of things do damage.
 	if (other.properties.vulnerableTo &&
-	    other.properties.vulnerableTo.includes("normal") &&
+	    other.properties.vulnerableTo.includes(this.properties.damageType) &&
 	    !this.allies.has(other)) {
 
 	    

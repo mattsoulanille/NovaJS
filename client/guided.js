@@ -21,7 +21,7 @@ guided = class extends projectile {
     }
 
     setProperties() {
-	this.properties = {inertialess: true};
+	this.properties.inertialess = true;
 	super.setProperties.call(this);
     }
     

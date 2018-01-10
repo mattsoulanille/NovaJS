@@ -15,6 +15,11 @@ function system() {
     this.ships = new Set();
     this.planets = new Set();
     this.npcs = new Set();
+
+    // Contains all projectiles that are currently vulnerable to PD
+    // Not the ones that are not fired yet
+    this.vulnerableToPD = new Set();
+    
     this.crash = new Crash({maxEntries:10});
     this.crash.onCollision(function(a, b, res, cancel) {
 	//console.log(a.data + " collided with " + b.data);
@@ -191,8 +196,13 @@ system.prototype.replaceObject = async function(buildInfo) {
 	var newObj = this.multiplayer[buildInfo.UUID];
 
 	// Maybe make some better way of moving the oldObj's properties to the newObj?
-	newObj.setVisible(visible);
-	newObj.setRendering(rendering);
+	if (visible && rendering) {
+	    newObj.show();
+	}
+	else {
+	    newObj.setVisible(visible);
+	    newObj.setRendering(rendering);
+	}
 	newObj.position[0] = pos[0];
 	newObj.position[1] = pos[1];
     }

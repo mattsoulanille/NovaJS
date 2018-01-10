@@ -60,6 +60,32 @@ basicWeapon = class extends renderable(loadsResources(inSystem)) {
 	}
 
 	this.setProperties();
+	var normalDamageTypes = [
+	    "unguided",
+	    "turret",
+	    "guided",
+	    "freefall bomb",
+	    "rocket",
+	    "front quadrant",
+	    "rear quadrant",
+	    "beam",
+	    "beam turret"
+	];
+
+	var pdDamageTypes = [
+	    "point defense",
+	    "point defense beam"
+	];
+
+	this.properties.damageType = null;
+	if (normalDamageTypes.includes(this.properties.type)) {
+	    this.properties.damageType = "normal";
+	}
+	else if (pdDamageTypes.includes(this.properties.type)) {
+	    this.properties.damageType = "point defense";
+	}
+
+	
 	this.fireSimultaneously = Boolean(this.meta.fireSimultaneously);
 
 

@@ -30,7 +30,7 @@ projectileWeapon = class extends basicWeapon {
     }
 
     async _build() {
-	await super._build.call(this);
+	await super._build();
 	await this.buildProjectiles();
     }
 
@@ -79,7 +79,7 @@ projectileWeapon = class extends basicWeapon {
     buildProjectile() {
 	var proj;
 	//console.log(this.source.system);
-	var args = [this.buildInfo, this.source.system, this.source];
+	var args = [this.buildInfo, this.source.system, this.source, this.meta, this.properties];
 	switch (this.properties.type) {
 	case "unguided":
 	    proj = new projectile(...args);

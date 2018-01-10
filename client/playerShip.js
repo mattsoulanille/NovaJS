@@ -41,11 +41,11 @@ class playerShip extends ship {
 
 	_.each(this.weapons.all, function(weapon) {
 	    
-	    if (weapon.meta.fireGroup === "primary") {
+	    if (weapon.properties.fireGroup === "primary") {
 		this.weapons.primary.push(weapon);
 		
 	    }
-	    else if (weapon.meta.fireGroup === "secondary") {
+	    else if (weapon.properties.fireGroup === "secondary") {
 		this.weapons.secondary.push(weapon);
 		
 	    }
@@ -225,26 +225,6 @@ class playerShip extends ship {
 	
     }
 
-    findNearest(items) {
-	var get_distance = function(a, b) {
-	    return Math.pow((a.position[0] - b.position[0]), 2) +
-		Math.pow((a.position[1] - b.position[1]), 2);
-	};
-	
-	var distances = {};
-	items.forEach(function(t) {
-	    var dist = get_distance(t, this);
-	    distances[dist] = t;
-	}.bind(this));
-	
-	var min = Math.min(...Object.keys(distances));
-	if (min !== Infinity) {
-	    return distances[min];
-	}
-	else {
-	    return null;
-	}
-    }
 
     
     targetNearest() {
