@@ -7,6 +7,13 @@ var ship = class extends base {
     constructor(resource) {
 	super(...arguments);
 	var d = this.data;
+
+	var adj = function(n,a) {
+	    if (n == -1)
+		return null;
+	    return n+a;
+	}
+	
 	this.cargoSpace = d.getInt16(0);
 	this.shield = d.getInt16(2);
 	this.acceleration = d.getInt16(4);
@@ -29,13 +36,30 @@ var ship = class extends base {
 	this.maxGuns = d.getInt16(42);
 	this.maxTurrets = d.getInt16(44);
 	this.techLevel = d.getInt16(46);
+	//???
 	this.cost = d.getInt16(50);
+	//weaps is strange
+	for (var i = 4; i < 8 ; i ++){
+	    this.weapons[i] = {};
+	    this.weapons[i].id = d.getInt16(42+2*i);
+	    this.weapons[i].count = d.getInt16(50+2*i);
+	    this.weapons[i].ammo = d.getInt16(58+2*i);
+	    
+	}
 
-	this.deathDelay = d.getInt16(50);
-	this.armorRecharge = d.getInt16(52);
-	this.breakingUpBoom = d.getInt16(54);
-	this.endBoom = d.getInt16(56);
-	this.displayOrder = d.getInt16(58);
+
+	
+
+	this.deathDelay = d.getInt16(52);
+	this.armorRecharge = d.getInt16(54);
+	this.initialExplosion = adj(d.getInt16(56),128);
+	this.finalExplosion = adj(d.getInt16(58),128);
+	this.finalExplosionSparks = false;
+	if (this.finalExplosion >= 1000) {
+	    this.finalExplosion -= 1000;
+	    this.finalExplosionSparks = true;
+	}
+	this.displayOrder = d.getInt16(60);
 
 	this.mass = d.getInt16(60);
 	this.length = d.getInt16(62);
