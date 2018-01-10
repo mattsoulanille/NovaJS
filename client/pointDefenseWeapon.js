@@ -69,8 +69,7 @@ pointDefenseWeapon = class extends turretWeapon {
 	    // hitTime && hitTime <= something
 	    var lifetime = this.properties.duration / 30;
 	    if (hitTime <= lifetime) {
-		return super.fire();
-
+		return super.fireProjectile(this.addInaccuracy(fireAngle), position);
 	    }
 	}
 	return false;
