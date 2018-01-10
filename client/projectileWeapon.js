@@ -118,6 +118,11 @@ projectileWeapon = class extends basicWeapon {
 	
     }
 
+    addInaccuracy(angle) {
+	return angle +
+	    ((this.random() - 0.5) * 2 * this.properties.accuracy) *
+	    (2 * Math.PI / 360);	
+    }
 
     fire(direction, position, velocity) {
 	// finds an available projectile and fires it
@@ -131,9 +136,8 @@ projectileWeapon = class extends basicWeapon {
 	for (var i=0; i < this.projectiles.length; i++) {
 	    var proj = this.projectiles[i];
 	    if (proj.available) {
-		direction = direction || this.source.pointing +
-		    ((this.random() - 0.5) * 2 * this.properties.accuracy) *
-		    (2 * Math.PI / 360);
+		direction = direction || this.addInaccuracy(this.source.pointing);
+
 		position = position || this.source.position;
 		velocity = velocity || this.source.velocity;
 		proj.fire(direction, position, velocity, this.target);

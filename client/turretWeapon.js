@@ -33,6 +33,7 @@ turretWeapon = class extends projectileWeapon {
 	
     }
 
+    
     fire(defaultFireAngle = 0) {
 	// defaultFireAngle is relative to this.source and is only applied if the
 	// target is in a blindspot (or nonexistant)
@@ -51,14 +52,13 @@ turretWeapon = class extends projectileWeapon {
 	    if (!this.checkBlindspots(directionToTarget)) {
 		// since we are going to fire with the given angle, we need to increment
 		// the exitIndex ourselves
-		this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;		
+		this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
 		
-		fireAngle = (this.calcFireAngle(position) || directionToTarget);
-		fireAngle += (((Math.random() - 0.5) * 2 * this.properties.accuracy) *
-			      (2 * Math.PI / 360));
-		
+		fireAngle = (this.calcFiringSolution(position).fireAngle || directionToTarget);
+		fireAngle = this.addInaccuracy(fireAngle);
+
 		fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
-		return super.fire.call(this, fireAngle, position);
+		return super.fire(fireAngle, position);
 	    }
 	    
 	}
@@ -70,7 +70,7 @@ turretWeapon = class extends projectileWeapon {
 			  (2 * Math.PI / 360));
 	    
 	    fireAngle = (fireAngle + 2*Math.PI) % (2*Math.PI);
-	    return super.fire.call(this, fireAngle);
+	    return super.fire(fireAngle);
 	}
     }
     autoFire() {
@@ -88,7 +88,7 @@ turretWeapon = class extends projectileWeapon {
 		var diff = (a1 - a2 + 2*Math.PI) % (2*Math.PI);
 		return (diff <= maxAngle) || (diff >= (2*Math.PI - maxAngle));
 		
-	    }
+	    };
 	    
 	    // check sides blind spot
 	    var leftSide = (this.source.pointing + Math.PI / 2) % (2*Math.PI);
@@ -118,7 +118,7 @@ turretWeapon = class extends projectileWeapon {
 	
     }
     
-    calcFireAngle(position) {
+    calcFiringSolution(position) {
 	var dx = this.target.position[0] - position[0];
 	var dy = this.target.position[1] - position[1];
 	var dvx = this.target.velocity[0] - this.source.velocity[0];
@@ -148,11 +148,17 @@ turretWeapon = class extends projectileWeapon {
 	    if (hitTime >= 0) {
 		var hitPosition = [dx + dvx * hitTime, dy + dvy * hitTime];
 		fireAngle = (Math.atan2(hitPosition[1], hitPosition[0]) + 2*Math.PI) % (2*Math.PI);
-		return fireAngle;
+		return {fireAngle: fireAngle, hitTime:hitTime};
+	    }
+	    else {
+		return {fireAngle: null, hitTime: null};
 	    }
 	}
+	else {
+	    return {fireAngle: null, hitTime: null};
+	}
     }
-}
+};
 
 if (typeof(module) !== 'undefined') {
     module.exports = turretWeapon;

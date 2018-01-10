@@ -47,6 +47,34 @@ pointDefenseWeapon = class extends turretWeapon {
 	    this.firing = false;
 	}
     }
+    
+    fire() {
+	if (this.target) {
+	    this.exitIndex = (this.exitIndex + 1) % this.exitPoints.length;
+	    var position = this.exitPoints[this.exitIndex].position;
+	    var x_diff = this.target.position[0] - position[0];
+	    var y_diff = this.target.position[1] - position[1];
+	    var directionToTarget = (Math.atan2(y_diff, x_diff) + 2*Math.PI) % (2*Math.PI);
+
+	    if (this.checkBlindspots(directionToTarget)) {
+		// Then it's in a blindspot and we can't fire
+		return false;
+	    }
+	    
+	    var solution = this.calcFiringSolution(position);
+	    var fireAngle = solution.fireAngle;
+	    var hitTime = solution.hitTime;
+
+	    // Only fire if it will hit
+	    // hitTime && hitTime <= something
+	    var lifetime = this.properties.duration / 30;
+	    if (hitTime <= lifetime) {
+		return super.fire();
+
+	    }
+	}
+	return false;
+    }
 
     
     render() {

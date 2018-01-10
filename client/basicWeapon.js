@@ -127,6 +127,7 @@ basicWeapon = class extends renderable(loadsResources(inSystem)) {
 	this.source.weapons.all.push(this);
     }
 
+    
 
 
     set firing(val) {
