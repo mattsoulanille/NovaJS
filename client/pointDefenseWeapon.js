@@ -10,7 +10,7 @@ pointDefenseWeapon = class extends turretWeapon {
 	this._enabled = false;
     }
 
-    findNearest(items) {
+    findNearestValid(items) {
 	var get_distance = function(a, b) {
 	    return Math.pow((a.position[0] - b.position[0]), 2) +
 		Math.pow((a.position[1] - b.position[1]), 2);
@@ -18,8 +18,10 @@ pointDefenseWeapon = class extends turretWeapon {
 	
 	var distances = {};
 	items.forEach(function(t) {
-	    var dist = get_distance(t, this.source);
-	    distances[dist] = t;
+	    if (t.properties.vulnerableTo.includes("point defense")) {
+		var dist = get_distance(t, this.source);
+		distances[dist] = t;
+	    }
 	}.bind(this));
 	
 	var min = Math.min(...Object.keys(distances));
@@ -48,7 +50,7 @@ pointDefenseWeapon = class extends turretWeapon {
 
     
     render() {
-	this.target = this.findNearest(this.system.vulnerableToPD);
+	this.target = this.findNearestValid(this.source.targetedBy);
 	
 	super.render(...arguments);
 	

@@ -38,6 +38,7 @@ var weapParse = class extends baseParse {
 	    // set ship type here
 	}
 
+
 	this.shieldDamage = weap.shieldDamage;
 	this.armorDamage = weap.armorDamage;
 	this.reload = weap.reload;
@@ -54,6 +55,9 @@ var weapParse = class extends baseParse {
 	this.impact = weap.impact; // knockback force
 	this.burstCount = weap.burstCount;
 	this.burstReload = weap.burstReload;
+
+	this.shield = 0;
+	this.armor = weap.durability;
 
 	this.trailParticles = weap.trailParticles;
 	this.hitParticles = weap.hitParticles;

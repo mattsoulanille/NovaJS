@@ -270,19 +270,15 @@ var statusBar = class extends loadsResources(function() {}) {
 	    this.targetSprite.position.y = (size[1] / 2);
 	    this.targetSprite.visible = true;
 
-	    this.targetCorners.target(target);
 
 	}
-	else {
-	    this.targetCorners.hide();
-	}
-
+	this.targetCorners.setTarget(target);
     }
 
 
     setPlanetTarget(planetTarget) {
 	if (planetTarget) {
-	    this.planetCorners.target(planetTarget);
+	    this.planetCorners.setTarget(planetTarget);
 	}
 	else {
 	    this.planetCorners.hide();

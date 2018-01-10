@@ -9,10 +9,11 @@ if (typeof(module) !== 'undefined') {
     var exitPoint = require("./exitPoint.js");
     var renderable = require("./renderable.js");
     var visible = require("./visible.js");
+    var targetable = require("./targetable.js");
 }
 
 
-var spaceObject = class extends loadsResources(visible(renderable(inSystem))) {
+var spaceObject = class extends targetable(loadsResources(visible(renderable(inSystem)))) {
 
     constructor(buildInfo, system, socket) {
 

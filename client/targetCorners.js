@@ -40,14 +40,30 @@ targetCorners = class extends spaceObject {
 	_.each(this.sprites, toCall, this);
     }
 
-    target(target) {
-	this.position = target.position;
-	this.callSprites(function(s) {s.texture = this.textures.neutral});
+    setTarget(target) {
+	if (target) {
+	    this.position = target.position;
+	    this.callSprites(function(s) {s.texture = this.textures.neutral});
+	    
+	    this.timeLeft = 100; //milliseconds
+	    this.placeSprites(target, 1);
+	    this.other = target;
 
-	this.timeLeft = 100; //milliseconds
-	this.placeSprites(target, 1);
-	this.other = target;
-	this.show();
+	    // Using hide() here makes an infinite recursion
+	    this.setVisible(true);
+	    this.setRendering(true);
+	}
+	else {
+	    this.setVisible(false);
+	    try {
+		this.setRendering(false);
+	    }
+	    catch(e) {
+		if (! (e instanceof NoSystemError) ) {
+		    throw e;
+		}
+	    }
+	}
     }
 
     placeSprites(target, scale) {

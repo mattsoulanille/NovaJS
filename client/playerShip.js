@@ -252,9 +252,9 @@ class playerShip extends ship {
     }	
 
     setTarget(target) {
-	this.target = target;
+	super.setTarget(target);
 	this.statusBar.setTarget(this.target);
-	super.setTarget(this.target);
+
     }
 
     setPlanetTarget(planetTarget) {

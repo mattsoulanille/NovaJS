@@ -41,6 +41,12 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	return this.meta;
     }
 
+    setProperties() {
+	super.setProperties();
+	this.properties.shieldRecharge = 0;
+	this.properties.armorRecharge = 0;
+    }
+    
     
     async _build() {
 	await super._build();
@@ -157,7 +163,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// 	this.endTime = stats.endTime
 	// }
 	
-	this.target = this.system.multiplayer[stats.target];
+	//this.target = this.system.multiplayer[stats.target];
     }
     
     getStats() {
@@ -199,7 +205,6 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    if (this.hitParticles) {
 		this.hitParticles.renderHit();
 	    }
-	    clearTimeout(this.endTimeout);
 	    this.end();
 	}
     
@@ -211,7 +216,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// inaccuracy is handled by weapon
 	this.rendered = true; // IS THIS NEEDED?
 
-	this.target = target;
+	this.setTarget(target);
 	this.endTime = this.time + this.properties.duration * 1000/30;
 	this.endTimeout = setTimeout(this.end.bind(this), this.properties.duration * 1000/30);
 	
@@ -236,17 +241,25 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.show();
     }
     
-    end() {
-	this.subs.forEach(function(sub) {
-	    sub.fire(null, null, [0,0]); // only give velocity
-	});
+    end(fireSubs = true, explode = true) {
+
+	if (this.endTimeout) {
+	    clearTimeout(this.endTimeout);
+	}
+	this.endTimeout = null;
+
+	if (fireSubs) {
+	    this.subs.forEach(function(sub) {
+		sub.fire(null, null, [0,0]); // only give velocity
+	    });
+	}
 	
-	this.target = null;
+	this.setTarget(null);
 	
 	this.velocity = [0,0];
 	this.hide();
 
-	if (this.explosion) {
+	if (this.explosion && explode) {
 	    this.explosion.explode(this.position);
 	}
 
@@ -260,11 +273,25 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    }
 	}
 
+	this.armor = this.properties.armor;
 
 	setTimeout(function() {
 	    this.available = true;
 	}.bind(this), this.additionalTime);
     }
+
+    receiveCollision(other) {
+	// Projectiles take damage as 1*armor and 0.5*shield
+	this.armor = this.armor - other.armorDamage - other.shieldDamage / 2;
+	if (this.armor <= 0) {
+	    this.onDeath();
+	}
+    }
+    
+    onDeath() {
+	this.end(false, false); // don't fire subs, don't explode
+    }
+    
     render(delta) {
 	super.render(...arguments);
     }

@@ -21,7 +21,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.weapons = {};
 	this.weapons.all = [];
 	this.outfits = [];
-	this.target = null;
+
 	this.turningToTarget = false;
 	this.landedOn = null;
 	if (typeof(buildInfo) !== 'undefined') {
@@ -279,8 +279,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     }
     setTarget(newTarget) {
-	
-	this.target = newTarget;
+	super.setTarget(newTarget);
 	_.each(this.weapons.all, function(w) {w.setTarget(this.target)}, this);
 	
     }

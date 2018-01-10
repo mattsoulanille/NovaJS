@@ -45,7 +45,7 @@ guided = class extends projectile {
     end() {
 	this.polarVelocity = 0;
 	this.turning = "";
-	super.end();
+	super.end(...arguments);
     }
 }
 

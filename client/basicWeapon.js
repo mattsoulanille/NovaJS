@@ -89,16 +89,15 @@ basicWeapon = class extends renderable(loadsResources(inSystem)) {
 	this.fireSimultaneously = Boolean(this.meta.fireSimultaneously);
 
 
-	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/30;
+	this.reloadMilliseconds = (this.properties.reload * 1000/30 / this.count) || 1000/60;
 	if ( this.properties.burstCount > 0 ) {
 	    this.doBurstFire = true;
 	    this.burstCount = 0;
 	    this.burstReloadMilliseconds = this.properties.burstReload * 1000/30;
-	    this.reloadMilliseconds = (this.properties.reload * 1000/30) || 1000/30;
 	}
 
 	if (this.fireSimultaneously) {
-	    this.reloadMilliseconds = this.properties.reload * 1000 / 30 || 1000 / 30;
+	    this.reloadMilliseconds = this.properties.reload * 1000 / 30 || 1000 / 60;
 	}
 
 

@@ -18,6 +18,8 @@ projectileWeapon = class extends basicWeapon {
 	this.projectiles = [];
 	this.nextFireTime = 1; // next possible time the weapon can be fired
 	// start at 1 because of renderable.setRendering
+	this.fireTimeout = null;
+	//this._justStarted = true;
     }
 
     
@@ -38,8 +40,7 @@ projectileWeapon = class extends basicWeapon {
     async getProjectileCount() {
 	var testProj;
 	if (this.projectiles.length === 0) {
-	    testProj = this.buildProjectile();
-	    await testProj.build();
+	    testProj = await this.buildProjectile();
 	}
 	else {
 	    testProj = this.projectiles[0];
@@ -63,7 +64,7 @@ projectileWeapon = class extends basicWeapon {
 	// duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
 
 	// Maximum is 60 projectiles fired per second (1000/60 milliseconds/projectile)
-	this.reloadMilliseconds = Math.max(this.reloadMilliseconds, 1000/30);
+	this.reloadMilliseconds = Math.max(this.reloadMilliseconds, 1000/60);
 
 	// This doesn't work perfectly with weapons that fire simultaneously,
 	//  but I'm keeping it for performance conerns
@@ -76,7 +77,7 @@ projectileWeapon = class extends basicWeapon {
 
     }
 
-    buildProjectile() {
+    async buildProjectile() {
 	var proj;
 	//console.log(this.source.system);
 	var args = [this.buildInfo, this.source.system, this.source, this.meta, this.properties];
@@ -100,6 +101,7 @@ projectileWeapon = class extends basicWeapon {
 	}
 	this.projectiles.push(proj);
 	this.addChild(proj);
+	await proj.build();
 	return proj;
     }
     
@@ -109,10 +111,10 @@ projectileWeapon = class extends basicWeapon {
 
 	//    var buildInfo = this.buildInfo;  
 	for (var i=this.projectiles.length; i < required_projectiles; i++) {
-	    this.buildProjectile();
+	    await this.buildProjectile();
 	}
 	
-	await Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
+	//await Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
 	
     }
 
@@ -141,6 +143,7 @@ projectileWeapon = class extends basicWeapon {
 	    
 	}
 	console.log("No projectile available");
+	this.buildProjectile();
 	return false;
     }
 
@@ -157,8 +160,10 @@ projectileWeapon = class extends basicWeapon {
     
     startFiring(notify = true) {
 	// low level. Starts firing if not already. Should not be called by ship.
-	this.doAutoFire = true;
-
+	// if (! this.fireTimeout) {
+	//     this._autoFireFunc();
+	// }
+//	this._justStarted = true;
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.sendStats();
 	}
@@ -169,7 +174,6 @@ projectileWeapon = class extends basicWeapon {
 
     stopFiring(notify = true) {
 	// low level. Stops firing
-	this.doAutoFire = false;
 	if (notify && (typeof this.UUID !== 'undefined')) {
 	    this.sendStats();
 	}
@@ -177,10 +181,17 @@ projectileWeapon = class extends basicWeapon {
 	    this.hide();
 	}
     }
+    // _autoFireFunc() {
+    // 	if (this.canFire()) {
+    // 	    this.fire();
+    // 	}
+
+    // }
+    
     setTarget(target) {
 	this.target = target;
     }
-
+    
     render() {
 	super.render(...arguments);
 
@@ -213,6 +224,7 @@ projectileWeapon = class extends basicWeapon {
 		this.fire();
 	    }
 	    this.nextFireTime = this.time + this.reloadMilliseconds;
+
 	}
     }
     
