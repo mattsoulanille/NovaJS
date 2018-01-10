@@ -144,7 +144,7 @@ describe("ship", function() {
     });
 
     it("should parse energy", function() {
-	expect(s1.energy).to.equal(1);
+	expect(s1.energy).to.equal(21);
     });
 
     it("should parse energyRecharge", function() {
@@ -203,7 +203,7 @@ describe("ship", function() {
 		{id:128, 'count':29, 'ammo':30},
 		{id:131, 'count':32, 'ammo':33},
 		{id:134, 'count':35, 'ammo':36},
-		{id:137, 'count':28, 'ammo':39},
+		{id:137, 'count':38, 'ammo':39},
 		{id:140, 'count':41, 'ammo':42},
 		{id:143, 'count':44, 'ammo':45},
 		{id:146, 'count':47, 'ammo':48}		
