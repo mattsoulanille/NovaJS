@@ -95,7 +95,8 @@ var collidable = (superclass) => class extends superclass {
 	    false, this);
 	    */
 	    if (hullPoints === null) {
-		return new this.crash.Point(new this.crash.Vector(0,0),
+		return new this.crash.Circle(new this.crash.Vector(0,0),
+					     1,
 					    false,
 					    this);
 	    }
