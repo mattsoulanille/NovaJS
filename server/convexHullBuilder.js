@@ -55,7 +55,12 @@ convexHullBuilder.prototype.makeConvexHulls = function(alphaMatrix, frames) {
 	// and crash does not like that...
 	var h = hull(points);
 	h.pop();
-	return h;
+	if (h.length !== 0) {
+	    return h;
+	}
+	else {
+	    return [[0,0]]; // in case there were no points given
+	}
     });
 
     return convex_hulls;
