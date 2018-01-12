@@ -59,7 +59,7 @@ convexHullBuilder.prototype.makeConvexHulls = function(alphaMatrix, frames) {
 	    return h;
 	}
 	else {
-	    return [[0,0]]; // in case there were no points given
+	    return null; // since there isn't a convex hull
 	}
     });
 

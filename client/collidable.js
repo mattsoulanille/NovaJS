@@ -83,7 +83,7 @@ var collidable = (superclass) => class extends superclass {
     buildConvexHulls() {
 	this.collisionSpriteName = "baseImage";
 	this.convexHullData = this.sprites.baseImage.convexHulls;
-
+	
 	this.collisionShapes = _.map(this.convexHullData, function(hullPoints) {
 	    /*
 	    // for testing
@@ -94,7 +94,11 @@ var collidable = (superclass) => class extends superclass {
 	    new this.crash.V(10, -10)],
 	    false, this);
 	    */
-
+	    if (hullPoints === null) {
+		return new this.crash.Point(new this.crash.Vector(0,0),
+					    false,
+					    this);
+	    }
 	    return new this.crash.Polygon(new this.crash.Vector(0,0),
 					  _.map(hullPoints, function(point) {
 					      return new this.crash.Vector(point[0], point[1]);
@@ -122,7 +126,7 @@ var collidable = (superclass) => class extends superclass {
 	    }
 	    this.collisionShape = newShape;
 	}
-	if (this.getVisible()) {
+	if (this.getVisible() && this.collisionShape.setAngle) {
 	    this.collisionShape.setAngle(rotation);
 	}
 
