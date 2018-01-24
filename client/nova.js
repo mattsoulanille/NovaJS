@@ -162,7 +162,12 @@ socket.on('removeObjects', function(uuids) {
 // this stuff should be in system so it works when there are multiple systems.
 // Each system should have a multiplayer that it can send stuff with.
 
+socket.on('noSuchShip', function(response) {
+    console.log("no such ship " + response);
+});
+
 socket.on('replaceObject', function(buildInfo) {
+    console.log("replacing object with " + buildInfo.id);
     currentSystem.replaceObject(buildInfo);
 });
 

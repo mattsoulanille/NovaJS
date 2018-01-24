@@ -446,6 +446,9 @@ var connectFunction = function(client){
 	    await buildShip(buildInfo);
 	    io.emit("replaceObject", buildInfo);
 	}
+	else {
+	    client.emit("noSuchShip", id);
+	}
     };
 		 
 	

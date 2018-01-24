@@ -107,13 +107,14 @@ projectileWeapon = class extends basicWeapon {
     
     async buildProjectiles() {
 
-	var required_projectiles = await this.getProjectileCount();
+	//var required_projectiles = await this.getProjectileCount();
+	var required_projectiles = 1;
 
 	//    var buildInfo = this.buildInfo;  
 	for (var i=this.projectiles.length; i < required_projectiles; i++) {
 	    await this.buildProjectile();
 	}
-	
+
 	//await Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
 	
     }
@@ -124,7 +125,7 @@ projectileWeapon = class extends basicWeapon {
 	    (2 * Math.PI / 360);	
     }
 
-    fireProjectile(direction, position, velocity) {
+    async fireProjectile(direction, position, velocity) {
 	for (var i=0; i < this.projectiles.length; i++) {
 	    var proj = this.projectiles[i];
 	    if (proj.available) {
@@ -138,10 +139,9 @@ projectileWeapon = class extends basicWeapon {
 	    }
 	    
 	}
-	console.log("No projectile available");
-	this.buildProjectile();
-	return false;
-
+	//console.log("No projectile available");
+	await this.buildProjectile();
+	this.fireProjectile(direction, position, velocity);
     }
     
     fire(direction, position, velocity) {
