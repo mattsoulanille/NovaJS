@@ -65,10 +65,11 @@ pointDefenseWeapon = class extends turretWeapon {
 	    var fireAngle = solution.fireAngle;
 	    var hitTime = solution.hitTime;
 
+	    // There's a bug here where if there is no firing solution, it still fires a shot
 	    // Only fire if it will hit
 	    // hitTime && hitTime <= something
 	    var lifetime = this.properties.duration / 30;
-	    if (hitTime <= lifetime) {
+	    if (hitTime && (hitTime <= lifetime)) {
 		return super.fireProjectile(this.addInaccuracy(fireAngle), position);
 	    }
 	}
