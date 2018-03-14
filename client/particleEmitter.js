@@ -1,9 +1,8 @@
 
-
-
 var particleEmitter = class extends renderable(inSystem) {
     constructor(properties, source) {
 	super(...arguments);
+	this.factor = 0.5;
 	this.source = source;
 	this.properties = properties;
 	this.container = new PIXI.Container();
@@ -93,7 +92,7 @@ var particleEmitter = class extends renderable(inSystem) {
 	    },
 	    "addAtBack": false,
 	    "spawnType": "burst",
-	    "particlesPerWave": this.properties.number,
+	    "particlesPerWave": this.properties.number * this.factor,
 	    "particleSpacing": 0,
 	    "angleStart": 0
 	};
