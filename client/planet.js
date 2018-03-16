@@ -91,6 +91,9 @@ planet = class extends spaceObject {
 	    spaceportContainer.addChild(ship.statusBar.container);
 	    animate = animateSpaceport;
 
+	    spaceportContainer.visible = true;
+	    space.visible = false;
+	    
 	    socket.emit('land');
 	}
 
@@ -109,6 +112,9 @@ planet = class extends spaceObject {
 	animate = animateSpace;
 	requestAnimationFrame(animate);
 	//stage.addChild(space);
+	spaceportContainer.visible = false;
+	space.visible = true;
+
 	socket.emit('depart');
 
 

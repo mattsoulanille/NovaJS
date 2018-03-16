@@ -39,7 +39,7 @@ var particleEmitter = class extends renderable(inSystem) {
 
 	this.lifetime = maxLife * 1000; //milliseconds
 	// renderer is made by pixi.autoDetectRenderer
-	this.texture = renderer.generateTexture(graphics);
+	this.texture = app.renderer.generateTexture(graphics);
 
 	// 100 is 1 pixel per frame
 	// i don't really know what the correct scaling is

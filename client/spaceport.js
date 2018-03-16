@@ -7,25 +7,14 @@ class spaceport extends menu {
 	this.show();
 
 	this.buttons = {
-	    Outfitter: new button("Outfitter", 120)
+	    Outfitter: new button("Outfitter", 120, {x: 160, y:122}),
+	    Shipyard: new button("Shipyard", 120, {x: 160, y:82})
 	};
 
 	Object.values(this.buttons).forEach(function(b) {
 	    this.container.addChild(b.container);
 	}.bind(this));
 
-
-	// Experimentally Determined D:
-	this.positions = {
-	    Outfitter : {x: 160, y:122}
-
-	};
-
-
-	Object.keys(this.buttons).forEach(function(b) {
-	    this.buttons[b].container.position.x = this.positions[b].x;
-	    this.buttons[b].container.position.y = this.positions[b].y;
-	}.bind(this));
 	
     }
 

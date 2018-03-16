@@ -1,26 +1,39 @@
 //"use strict";
-// create an new instance of a pixi stage
-//var stage = new PIXI.Container(0x000000);
+
+var app = new PIXI.Application({
+    resolution: window.devicePixelRatio || 1,
+    autoResize: true,
+    width: window.innerWidth,
+    height: window.innerHeight
+});
+
+document.body.appendChild(app.view);
+
+
 var spaceportContainer = new PIXI.Container(0x000000);
 var space = new PIXI.Container(0x000000);
+
+app.stage.addChild(space);
+app.stage.addChild(spaceportContainer);
+spaceportContainer.visible = false;
+
 space.displayList = new PIXI.DisplayList();
 
 var landed = false;
 //stage.addChild(space);
 
 
-//var app = new PIXI.Application();
 
 
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10;
 var positionConstant = 1;
 //var screenW = 800, screenH = 600;
-var renderer = PIXI.autoDetectRenderer(screenW, screenH, {
-    resolution: window.devicePixelRatio || 1,
-    autoResize: true
+// var renderer = PIXI.autoDetectRenderer(screenW, screenH, {
+//     resolution: window.devicePixelRatio || 1,
+//     autoResize: true
 
-});
+// });
 
 PIXI.settings.RESOLUTION = window.devicePixelRatio;
 
@@ -29,7 +42,7 @@ window.addEventListener('resize', onResize);
 function onResize(evt) {
     screenH = evt.currentTarget.innerHeight;
     screenW = evt.currentTarget.innerWidth;
-    renderer.resize(screenW,screenH);
+    app.renderer.resize(screenW,screenH);
     //also update the starfield
     stars.resize(screenW, screenH);
     myShip.statusBar.resize(screenW, screenH);
@@ -37,11 +50,6 @@ function onResize(evt) {
 	requestAnimationFrame(animate);
     }
 }
-
-// add the renderer view element to the DOM
-document.body.appendChild(renderer.view);
-
-
 
 window.onbeforeunload = function() {
     //currentSystem.destroy();
@@ -261,6 +269,8 @@ spaceObject.prototype.lastTime = new Date().getTime();
 var animateTimeout;
 var animate = animateSpace;
 var stopRender = false;
+
+// replace this with performance.now()
 var lastTime = new Date().getTime();
 var time = new Date().getTime();// + timeDifference;
 function animateSpace() {
@@ -282,7 +292,7 @@ function animateSpace() {
 	requestAnimationFrame( animate );
     }
 
-    renderer.render(space);
+    //renderer.render(space);
 }
 
 //var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');
@@ -293,7 +303,7 @@ function animateSpaceport() {
     
     
     
-    renderer.render(spaceportContainer);
+    //renderer.render(spaceportContainer);
 }
 
 

@@ -1,6 +1,9 @@
 class button extends visible(function() {}) {
-    constructor (text, size) {
+    constructor (text, size, position = {x:0, y:0}) {
 	super();
+
+	this.container.position.x = position.x;
+	this.container.position.y = position.y;
 	this.size = size;
 	this.height = 25; // Height: An experimentally determined magic number.
 	var base_url = '/objects/menus/';
@@ -32,10 +35,6 @@ class button extends visible(function() {}) {
 
 	    this.left[buttonType].interactive = true;
 	    this.left[buttonType].buttonMode = true;
-
-	    this.left[buttonType].on('click', function() {
-		console.log("clicked");
-	    });
 	    
 	    this.middle[buttonType] =
 		new PIXI.extras.TilingSprite(
@@ -80,9 +79,9 @@ class button extends visible(function() {}) {
 
 	this.container.interactive = true;
 	this.container.buttonMode = true;
-	this.container.on('pointerdown', this.onClick);
-            // .on('pointerup', onButtonUp)
-            // .on('pointerupoutside', onButtonUp)
+	this.container.on('pointerdown', this.onPointerDown.bind(this))
+            .on('pointerup', this.onPointerUp.bind(this))
+            .on('pointerupoutside', this.onPointerUp.bind(this));
             // .on('pointerover', onButtonOver)
             // .on('pointerout', onButtonOut);
 	
@@ -113,16 +112,19 @@ class button extends visible(function() {}) {
 
     setClicked(val) {
 	if (val == 1) {
+	    this.text.style = this.font.clicked;
 	    this.containers.normal.visible = false;
 	    this.containers.clicked.visible = true;
 	    this.containers.grey.visible = false;
 	}
 	else if (val == 0) {
+	    this.text.style = this.font.normal;
 	    this.containers.normal.visible = true;
 	    this.containers.clicked.visible = false;
 	    this.containers.grey.visible = false;
 	}
 	else {
+	    this.text.style = this.font.grey;
 	    this.containers.normal.visible = false;
 	    this.containers.clicked.visible = false;
 	    this.containers.grey.visible = true;
