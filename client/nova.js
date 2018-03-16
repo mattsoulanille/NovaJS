@@ -9,6 +9,9 @@ var landed = false;
 //stage.addChild(space);
 
 
+//var app = new PIXI.Application();
+
+
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10;
 var positionConstant = 1;
@@ -35,10 +38,10 @@ function onResize(evt) {
     }
 }
 
-
-
 // add the renderer view element to the DOM
 document.body.appendChild(renderer.view);
+
+
 
 window.onbeforeunload = function() {
     //currentSystem.destroy();

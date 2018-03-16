@@ -10,18 +10,33 @@ class button extends visible(function() {}) {
 	     'grey': ['leftGreyButton.png', 'middleGreyButton.png', 'rightGreyButton.png']
 	    };
 	
+	// this.sprites = {
+	//     left: new PIXI.Sprite,
+	//     middle: new PIXI.Sprite,
+	//     right: new PIXI.Sprite
+	// };
+
 	this.containers = {};
 	this.left = {};
 	this.right = {};
 	this.middle = {};
 
-	
+
+	// This should use texture switching instead of sprite switching,
+	// but that's tough since PIXI.extras.TilingSprite is used
 	Object.keys(button_urls).forEach(function(buttonType) {
 	    
 	    this.left[buttonType] = new PIXI.Sprite.fromImage(base_url + button_urls[buttonType][0]);
 	    this.left[buttonType].anchor.x = 1;
 	    this.right[buttonType] = new PIXI.Sprite.fromImage(base_url + button_urls[buttonType][2]);
 
+	    this.left[buttonType].interactive = true;
+	    this.left[buttonType].buttonMode = true;
+
+	    this.left[buttonType].on('click', function() {
+		console.log("clicked");
+	    });
+	    
 	    this.middle[buttonType] =
 		new PIXI.extras.TilingSprite(
 		    new PIXI.Texture.fromImage(base_url + button_urls[buttonType][1]),
@@ -55,7 +70,24 @@ class button extends visible(function() {}) {
 	this.containers['normal'].visible = true;
 
 	this.placePieces();
+	// var t = new PIXI.Sprite(this.containers["normal"].generateTexture(renderer));
+	// this.container.addChild(t);
+	
+
+
 	this.show();
+
+
+	this.container.interactive = true;
+	this.container.buttonMode = true;
+	this.container.on('pointerdown', this.onClick);
+            // .on('pointerup', onButtonUp)
+            // .on('pointerupoutside', onButtonUp)
+            // .on('pointerover', onButtonOver)
+            // .on('pointerout', onButtonOut);
+	
+
+
 
 
 	// test graphics
@@ -66,6 +98,36 @@ class button extends visible(function() {}) {
 	// g.lineTo(0,100);
 	// this.container.addChild(g);
     } 
+
+    onPointerDown() {
+	this.setClicked(1);	
+    }
+
+    onPointerUp() {
+	this.setClicked(0);
+    }
+
+    onPointerUpOutside() {
+	this.setClicked(0);
+    }
+
+    setClicked(val) {
+	if (val == 1) {
+	    this.containers.normal.visible = false;
+	    this.containers.clicked.visible = true;
+	    this.containers.grey.visible = false;
+	}
+	else if (val == 0) {
+	    this.containers.normal.visible = true;
+	    this.containers.clicked.visible = false;
+	    this.containers.grey.visible = false;
+	}
+	else {
+	    this.containers.normal.visible = false;
+	    this.containers.clicked.visible = false;
+	    this.containers.grey.visible = true;
+	}
+    }
     
     placePieces() {
 
