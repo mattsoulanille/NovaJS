@@ -1,7 +1,7 @@
 //"use strict";
 // create an new instance of a pixi stage
 //var stage = new PIXI.Container(0x000000);
-var spaceport = new PIXI.Container(0x000000);
+var spaceportContainer = new PIXI.Container(0x000000);
 var space = new PIXI.Container(0x000000);
 space.displayList = new PIXI.DisplayList();
 
@@ -30,6 +30,9 @@ function onResize(evt) {
     //also update the starfield
     stars.resize(screenW, screenH);
     myShip.statusBar.resize(screenW, screenH);
+    if (!paused) {
+	requestAnimationFrame(animate);
+    }
 }
 
 
@@ -41,7 +44,7 @@ window.onbeforeunload = function() {
     //currentSystem.destroy();
     socket.disconnect();
 
-}
+};
 
 var fullscreen = function() {
     if(document.documentElement.requestFullscreen) {
@@ -279,13 +282,15 @@ function animateSpace() {
     renderer.render(space);
 }
 
-var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');
-spaceport.addChild(testSpaceport);
+//var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');
+var testSpaceport = new spaceport({});
+
+spaceportContainer.addChild(testSpaceport.container);
 function animateSpaceport() {
     
     
     
-    renderer.render(spaceport);
+    renderer.render(spaceportContainer);
 }
 
 

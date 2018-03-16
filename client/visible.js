@@ -19,17 +19,22 @@ var visible = (superclass) => class extends superclass {
 
     hide() {
 	this.setVisible(false);
-	super.hide();
+	if (super.hide) {
+	    super.hide();
+	}
     }
     show() {
 	this.setVisible(true);
-	super.show();
+	if (super.show) {
+	    super.show();
+	}
     }
     destroy() {
 	this.container.destroy();
-	super.destroy();
+	if (super.destroy) {
+	    super.destroy();
+	}
     }
-
 };
 
 

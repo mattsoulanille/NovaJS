@@ -87,8 +87,10 @@ planet = class extends spaceObject {
 	    gameControls.scope = gameControls.scopes.land;
 	    gameControls.resetEvents();
 	    landed = true;
+	    // must remember to give it back to the ship afterwards
+	    spaceportContainer.addChild(ship.statusBar.container);
 	    animate = animateSpaceport;
-	    //stage.addChild(this.spaceportContainer);
+
 	    socket.emit('land');
 	}
 
@@ -100,6 +102,7 @@ planet = class extends spaceObject {
 	    throw new error("Animate was animateSpace when departing");
 	}
 	myShip.depart(this);
+	space.addChild(myShip.statusBar.container);
 	gameControls.scope = gameControls.scopes.space;
 	gameControls.resetEvents();
 	landed = false;

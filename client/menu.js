@@ -1,26 +1,34 @@
 // A single menu window
-function menu(buildInfo) {
-    this.buildInfo = buildInfo;
-    this.container = new PIXI.Container();
-    this.container.visible = false;
-//    landed.addChild(this.container);
-    
-    if (typeof this.buildInfo !== 'undefined') {
-	this.background = new PIXI.Sprite.fromImage(this.buildInfo.background);
-	this.container.addChild(this.background);
-	this.text = new PIXI.Text("Placeholder");
+
+class menu extends visible(function() {}) {
+
+    constructor(buildInfo) {
+	super(...arguments);
+	this.buildInfo = buildInfo;
+	
+	if (typeof this.buildInfo !== 'undefined') {
+	    this.background = new PIXI.Sprite.fromImage(this.buildInfo.background);
+	    this.background.anchor.x = 0.5;
+	    this.background.anchor.y = 0.5;
+	    this.container.addChild(this.background);
+	    this.text = new PIXI.Text("Placeholder");
+	}
+	
+	this.subMenus = new Set();
+	this.buttons = new Set();
+	this.show();
     }
 
-    this.buttons = [];
-}
 
 
+    render() {
+	
+    }
 
-menu.prototype.show = function() {
-    this.container.visible = true;
-}
+    destroy() {
+	this.hide();
+	super.destroy();
+    }
 
-menu.prototype.hide = function() {
-    this.container.visible = true;
 }
 

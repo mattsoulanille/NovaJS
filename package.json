@@ -23,7 +23,8 @@
     "mocha": "^3.5.3"
   },
   "scripts": {
-    "test": "mocha"
+      "test": "mocha",
+      "start": "node --trace-warnings index.js"
   },
   "repository": {
     "type": "git",
