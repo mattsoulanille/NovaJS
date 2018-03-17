@@ -17,7 +17,7 @@ var eventable = (superclass) => class extends superclass {
 	}
     }
 
-    _fireEvent(name, args = []) {
+    _emit(name, args = []) {
 	if (this._events.hasOwnProperty(name)) {
 	    this._events[name].forEach(function(toCall) {
 		toCall(...args);

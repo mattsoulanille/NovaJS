@@ -1,9 +1,15 @@
-function outfitter() {
-    
-    
-    
+class outfitter extends menu {
+    constructor() {
+	var buildInfo = {background : "/objects/menus/outfitter.png"};
+	super(buildInfo);
+
+
+
+    }
+
+
+
+
+
+
 }
-
-outfitter.prototype = new menu;
-
-//outfitter.prototype

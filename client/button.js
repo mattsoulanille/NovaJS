@@ -104,7 +104,7 @@ class button extends eventable(visible(function() {})) {
 
     _onPointerUp() {
 	this._onPointerUpOutside();
-	this._fireEvent('press');
+	this._emit('press');
     }
 
     _onPointerUpOutside() {

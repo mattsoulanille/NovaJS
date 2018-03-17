@@ -1,5 +1,5 @@
 class spaceport extends menu {
-    constructor(buildInfo) {
+    constructor(buildInfo) { // buildInfo will contain the url or something...
 	buildInfo.background = "/objects/menus/spaceport.png";
 	super(...arguments);
 	this.container.position.x = (screenW-194)/2;
@@ -15,7 +15,19 @@ class spaceport extends menu {
 	    this.container.addChild(b.container);
 	}.bind(this));
 
+
+
+	// make the other menus
+	this.outfitter = new outfitter();
+	this.container.addChild(this.outfitter.container);
 	
+
+
+	
+	// Assign the buttons so they move through menus
+	this.buttons.Outfitter.on('press', this.outfitter.show.bind(this.outfitter));
+
+	this.show();
     }
 
 
