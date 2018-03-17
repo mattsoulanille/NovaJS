@@ -82,8 +82,7 @@ planet = class extends spaceObject {
 
 	// make sure you can't land in two places at the same time
 	if (animate === animateSpace) {
-	    // This should be done by spaceport
-	    gameControls.scope = "spaceport";
+
 	    gameControls.resetEvents();
 
 	    this.spaceport.bindControls();
@@ -107,7 +106,7 @@ planet = class extends spaceObject {
 	}
 	myShip.depart(this);
 	space.addChild(myShip.statusBar.container);
-	gameControls.scope = myShip.scope; // Revise this
+
 	gameControls.resetEvents();
 	landed = false;
 	animate = animateSpace;

@@ -131,7 +131,7 @@ socket.on('onconnected', function(data) {
 	    stagePosition = myShip.position;
 //	    console.log(data.stats);
 	    //currentSystem.updateStats(data.stats);
-	    gameControls.scope = "playerShip"; // allow the player to control their ship
+	    gameControls.pushScope("playerShip"); // allow the player to control their ship
 	    startGame();
 	    var newStats = {};
 	    newStats[myShip.UUID] = myShip.getStats();

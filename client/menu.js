@@ -1,6 +1,6 @@
 // A single menu window
 
-class menu extends visible(function() {}) {
+class menu extends controllable(visible(function() {})) {
 
     constructor(buildInfo) {
 	super(...arguments);
@@ -22,6 +22,18 @@ class menu extends visible(function() {}) {
     }
 
 
+
+    show() {
+	super.show();
+	this.bindControls();
+    }
+
+    hide() {
+	super.hide();
+	this.unbindControls();
+
+    }
+    
 
     render() {
 	

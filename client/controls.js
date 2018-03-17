@@ -14,26 +14,37 @@ class controls {
 	this.blocked_keys = [37, 38, 39, 40, 32, 9, 17];
 
 	// Events are only fired if the scope they were created in is active
-	this._scope = null;
-	this.scope = null;
+	//this._scope = [null];
+	this.scopes = [null];
 
     }
 
-    set scope(s) {
-	this._scope = s;
+    pushScope(s) {
 	if (!this.eventListenersStart.hasOwnProperty(s)) {
 	    this.eventListenersStart[s] = {};
 	}
 	if (!this.eventListenersEnd.hasOwnProperty(s)) {
 	    this.eventListenersEnd[s] = {};
 	}
+	this.scopes.push(s);
+    }
 
+    popScope() {
+	// always keep at least one scope (the null scope)
+	if (this.scopes.length > 1) {
+	    return this.scopes.pop();
+	}
+	throw new Error("Scope stack underflow");
+    }
+    
+    set scope(s) {
+	throw new Error("Can't set scope directly. Push to the scope stack with pushScope(s).");
     }
 
     get scope() {
-	return this._scope;
+	return this.scopes[this.scopes.length - 1];
     }
-    
+
 
     build() {
 
