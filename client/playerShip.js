@@ -4,7 +4,7 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-class playerShip extends ship {
+class playerShip extends controllable(ship) {
 
     constructor(buildInfo, system) {
 	super(...arguments);
@@ -29,11 +29,7 @@ class playerShip extends ship {
 	await super._build();
 	this.sortWeapons();
 	await this.makeStatusBar();
-	// Is this terrible practice? I'm not sure, but it's definitely insane.	    
-	this.statechange = gameControls.onStateChange(this.scope, this.statechange.bind(this));
-	this.assignControls(gameControls);
-	//this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
-
+	this.bindControls();
     }
 
 
@@ -121,22 +117,26 @@ class playerShip extends ship {
 	this.setPlanetTarget(null);
     }
 
-    assignControls(c) {
-	// Why am I reassigning them?
+    bindControls() {
 
-	this.firePrimary = c.onStart(this.scope, "primary", this.firePrimary.bind(this));
-	this.stopPrimary = c.onEnd(this.scope, "primary", this.stopPrimary.bind(this));
-	
-	this.fireSecondary = c.onStart(this.scope, "secondary", this.fireSecondary.bind(this));
-	this.stopSecondary = c.onEnd(this.scope, "secondary", this.stopSecondary.bind(this));
+	var c = this.controls; // is gameControls as defined in controllable
 
-	this.cycleSecondary = c.onStart(this.scope, "cycle secondary", this.cycleSecondary.bind(this));
-	this.resetSecondary = c.onStart(this.scope, "reset secondary", this.resetSecondary.bind(this));
+	this.boundControls = [
+	    c.onStateChange(this.scope, this.statechange.bind(this)),
+	    c.onStart(this.scope, "primary", this.firePrimary.bind(this)),
+	    c.onEnd(this.scope, "primary", this.stopPrimary.bind(this)),
+	    c.onStart(this.scope, "secondary", this.fireSecondary.bind(this)),
+	    c.onEnd(this.scope, "secondary", this.stopSecondary.bind(this)),
+
+	    c.onStart(this.scope, "cycle secondary", this.cycleSecondary.bind(this)),
+	    c.onStart(this.scope, "reset secondary", this.resetSecondary.bind(this)),
 	
-	this.targetNearest = c.onStart(this.scope, "target nearest", this.targetNearest.bind(this));
-	this.cycleTarget = c.onStart(this.scope, "target", this.cycleTarget.bind(this));
-	this.resetNav = c.onStart(this.scope, "reset nav", this.resetNav.bind(this));
+	    c.onStart(this.scope, "target nearest", this.targetNearest.bind(this)),
+	    c.onStart(this.scope, "target", this.cycleTarget.bind(this)),
+	    c.onStart(this.scope, "reset nav", this.resetNav.bind(this))
+	];
     }
+
     
     statechange(state) {
 	//make this into a builder function and make it 
@@ -331,14 +331,7 @@ class playerShip extends ship {
     }
     
     destroy() {
-	var controlFunctions = [this.firePrimary, this.stopPrimary,
-				this.fireSecondary, this.stopSecondary,
-				this.targetNearest, this.cycleTarget,
-				this.resetNav, this.statechange];
-	
-	controlFunctions.forEach(function(k) {
-	    gameControls.offAll(k);
-	});
+	this.unbindControls();
 	this.statusBar.destroy();
 	super.destroy.call(this);
     }

@@ -40,6 +40,11 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
+	    if (this.buildInfo.hasOwnProperty('position')) {
+		this.position[0] = this.buildInfo.position[0];
+		this.position[1] = this.buildInfo.position[1];
+	    }
+	    
 	    if (typeof this.buildInfo.UUID !== 'undefined') {
 		this.buildInfo.multiplayer = true;
 		this.UUID = this.buildInfo.UUID;

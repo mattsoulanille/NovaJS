@@ -32,13 +32,12 @@ planet = class extends spaceObject {
 	    .then(function() {
 		this.system.built.planets.add(this);
 		this.show();
-		this.assignControls();
 		this.buildSpaceport();
 	    }.bind(this));
     }
 
     buildSpaceport() {
-	this.spaceport = new spaceport({});
+	this.spaceport = new spaceport({}, this.depart.bind(this));
 	spaceportContainer.addChild(this.spaceport.container);
     }
 
@@ -57,19 +56,14 @@ planet = class extends spaceObject {
 	super._removeFromSystem.call(this);
     }
     
-    assignControls() {
-	// Revise this?
-	gameControls.onStart("spaceport", "depart", this.depart.bind(this));
-    }
-
     //soooo many side effects...
     land(ship) {
 	if (ship.landedOn) {
 	    // then it's already landed somewhere else
-	    throw new error("ship tried to land but it's already landed on " + ship.landedOn);
+	    throw new Error("ship tried to land but it's already landed on " + ship.landedOn);
 	}
 	if (animate === animateSpaceport) {
-	    throw new error("Animate was animateSpaceport when landing");
+	    throw new Error("Animate was animateSpaceport when landing");
 	}
 	
 	var max_dist2 = Math.pow( ((this.size[0] + this.size[1]) / 4), 2 );
@@ -91,6 +85,8 @@ planet = class extends spaceObject {
 	    // This should be done by spaceport
 	    gameControls.scope = "spaceport";
 	    gameControls.resetEvents();
+
+	    this.spaceport.bindControls();
 	    landed = true;
 	    // must remember to give it back to the ship afterwards
 	    spaceportContainer.addChild(ship.statusBar.container);
@@ -107,7 +103,7 @@ planet = class extends spaceObject {
 
     depart() {
 	if (animate === animateSpace) {
-	    throw new error("Animate was animateSpace when departing");
+	    throw new Error("Animate was animateSpace when departing");
 	}
 	myShip.depart(this);
 	space.addChild(myShip.statusBar.container);
@@ -120,7 +116,6 @@ planet = class extends spaceObject {
 	this.spaceport.container.visible = false;
 	spaceportContainer.visible = false;
 	space.visible = true;
-
 	socket.emit('depart');
 
 

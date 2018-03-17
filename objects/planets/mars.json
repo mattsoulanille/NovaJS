@@ -1,0 +1,17 @@
+{
+    "id": "nova:158",
+    "name": "Mars",
+    "animation": {
+	"images": {
+	    "baseImage": {
+		"id": "nova:2060",
+		"imagePurposes": {
+		    "normal": {
+			"start": 0,
+			"length": 1
+		    }
+		}
+	    }
+	}
+    }
+}

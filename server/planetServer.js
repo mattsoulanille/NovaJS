@@ -17,8 +17,8 @@ planetServer = class extends planet {
     buildSpaceport() {};
     
     land() {};
+    bindControls() {};
     depart() {};
-    assignControls() {};
 
 }
 module.exports = planetServer;

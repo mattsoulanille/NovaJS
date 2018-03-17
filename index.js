@@ -247,7 +247,7 @@ var startGame = async function() {
     io.on('connection', connectFunction);
 
     app.get('objects/planets/:planet.json', function(req, res) {
-	res.sendFile('Earth.json'); //temporary
+	req.sendFile(res['planet.json']); //temporary
     });
     
     app.param("spriteSheet", function(req, res, next, id) {
@@ -331,8 +331,10 @@ var startGame = async function() {
 	if 
     });
 */
-    //sol.buildObject();
-    var earth = new planet({'id':'earth', 'UUID':UUID(), 'type':'planet'}, sol, io);
+
+    // Note: figure out why you need to include 'type': 'planet'
+    var earth = new planet({'id':'earth', 'UUID':UUID(), 'type': 'planet'}, sol, io);
+    var mars = new planet({'id':'mars', 'UUID':UUID(), 'type':'planet', 'position':[900,600]}, sol, io);
     await sol.build();
     console.log("finished loading");
 
