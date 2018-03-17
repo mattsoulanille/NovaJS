@@ -20,14 +20,12 @@ planet = class extends spaceObject {
 	if (typeof system !== 'undefined') {
 	    system.planets.add(this);
 	}
-	this.makeContainer();
+	this.spaceport = null;
+	//this.makeContainer();
     }
     
-// so the server can make a fake container.
-    makeContainer() {
-	this.spaceportContainer = new PIXI.Container();
-    }
-
+    
+    
     build() {
 	return super.build.call(this)
 	//	.then(this.build)
@@ -35,9 +33,14 @@ planet = class extends spaceObject {
 		this.system.built.planets.add(this);
 		this.show();
 		this.assignControls();
+		this.buildSpaceport();
 	    }.bind(this));
     }
 
+    buildSpaceport() {
+	this.spaceport = new spaceport({});
+	spaceportContainer.addChild(this.spaceport.container);
+    }
 
     _addToSystem() {
 	if (this.built) {
@@ -92,7 +95,7 @@ planet = class extends spaceObject {
 	    // must remember to give it back to the ship afterwards
 	    spaceportContainer.addChild(ship.statusBar.container);
 	    animate = animateSpaceport;
-
+	    this.spaceport.container.visible = true;
 	    spaceportContainer.visible = true;
 	    space.visible = false;
 	    
@@ -114,6 +117,7 @@ planet = class extends spaceObject {
 	animate = animateSpace;
 	requestAnimationFrame(animate);
 	//stage.addChild(space);
+	this.spaceport.container.visible = false;
 	spaceportContainer.visible = false;
 	space.visible = true;
 

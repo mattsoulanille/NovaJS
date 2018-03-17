@@ -265,6 +265,8 @@ var stopRender = false;
 // replace this with performance.now()
 var lastTime = new Date().getTime();
 var time = new Date().getTime();// + timeDifference;
+
+// Revise this to use the pixi ticker
 function animateSpace() {
     
     stopRender = false;
@@ -288,9 +290,9 @@ function animateSpace() {
 }
 
 //var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');
-var testSpaceport = new spaceport({});
+//var testSpaceport = new spaceport({});
 
-spaceportContainer.addChild(testSpaceport.container);
+//spaceportContainer.addChild(testSpaceport.container);
 function animateSpaceport() {
     
     

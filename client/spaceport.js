@@ -21,16 +21,27 @@ class spaceport extends menu {
 	this.outfitter = new outfitter();
 	this.container.addChild(this.outfitter.container);
 	
-
-
 	
 	// Assign the buttons so they move through menus
-	this.buttons.Outfitter.on('press', this.outfitter.show.bind(this.outfitter));
-
-	this.show();
+	this.buttons.Outfitter.on('press', this.showOutfitter.bind(this));
     }
 
+    bindControls() {
+	
+    }
 
+    unbindControls() {
+
+    }
+
+    showOutfitter() {
+	this.outfitter.show();
+    }
+
+    showShipyard() {
+
+    }
+    
     show() {
 	super.show();
 	window.addEventListener('resize', this.onResize.bind(this));
