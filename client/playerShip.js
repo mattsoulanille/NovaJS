@@ -337,7 +337,7 @@ class playerShip extends ship {
 				this.resetNav, this.statechange];
 	
 	controlFunctions.forEach(function(k) {
-	    gameControls.offall(k);
+	    gameControls.offAll(k);
 	});
 	this.statusBar.destroy();
 	super.destroy.call(this);
