@@ -15,6 +15,7 @@
     "pixi-particles": "^2.1.9",
     "pixi.js": "^4.6.2",
     "pngjs": "^3.3.1",
+    "serve-favicon": "^2.4.5",
     "socket.io": "^2.0.4",
     "underscore": "^1.8.3",
     "uuid": "^3.1.0"
@@ -23,8 +24,8 @@
     "mocha": "^3.5.3"
   },
   "scripts": {
-      "test": "mocha",
-      "start": "node --trace-warnings index.js"
+    "test": "mocha",
+    "start": "node --trace-warnings index.js"
   },
   "repository": {
     "type": "git",

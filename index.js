@@ -7,7 +7,7 @@ var io = require('socket.io')(http);
 var UUID = require('uuid/v4');
 var _ = require("underscore");
 var errors = require("./client/errors.js");
-
+var favicon = require("serve-favicon");
 
 Promise = require("bluebird");
 
@@ -194,7 +194,7 @@ app.get('/', function(req, res){
 });
 
 
-
+app.use(favicon(path.join(__dirname, "/favicon.ico")));
 app.use(express.static(__dirname));
 
 
