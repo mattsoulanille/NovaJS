@@ -2,67 +2,99 @@ class controls {
 
     constructor(url) {
 	this.url = url || "/settings/controls.json";
-	//    this.playerShip = playerShip;
-	this.scopes = {};
+
+	this.keybinds = null;
 	this.built = false;
+
+	// eventListenersStart[scope][eventName] = Set()
 	this.eventListenersStart = {};
 	this.eventListenersEnd = {};
-	this.eventListenersStateChange = [];
-	this.activeEvents = {};
+	this.eventListenersStateChange = {};
+	this.keyboardState = {};
 	this.blocked_keys = [37, 38, 39, 40, 32, 9, 17];
+
+	// Events are only fired if the scope they were created in is active
+	this._scope = null;
+	this.scope = null;
+
+    }
+
+    set scope(s) {
+	this._scope = s;
+	if (!this.eventListenersStart.hasOwnProperty(s)) {
+	    this.eventListenersStart[s] = {};
+	}
+	if (!this.eventListenersEnd.hasOwnProperty(s)) {
+	    this.eventListenersEnd[s] = {};
+	}
+
+    }
+
+    get scope() {
+	return this._scope;
     }
     
-    
-    
-    
-
 
     build() {
 
 	return this.loadJson(this.url)
 	    .then(function(data) {
-		this.scopes = data;
+		this.keybinds = data;
 		this.built = true;
-		this.scope = this.scopes.space;
 		
-		
-		Object.values(this.scopes).forEach(function(scope) {
-		    Object.values(scope).forEach(function(event) {
-			this.activeEvents[event] = false;
-		    }.bind(this));
+		Object.values(this.keybinds).forEach(function(event) {
+		    this.keyboardState[event] = false;
 		}.bind(this));
-		
+
+		// Assign event listeners for keypresses
+		// Writes over other listeners...
+		document.onkeydown = this.keydown.bind(this);
+		document.onkeyup = this.keyup.bind(this);
 	    }.bind(this));
+
     }
 
     resetEvents() {
-	Object.keys(this.activeEvents).forEach(function(key) {
-	    this.activeEvents[key] = false;
+	Object.keys(this.keyboardState).forEach(function(key) {
+	    this.keyboardState[key] = false;
 	}.bind(this));
     }
 
     keydown(key) {
-	var controlEvent = this.scope[key.keyCode];
-	
-	if (this.activeEvents[controlEvent] !== true) {
-	    this.activeEvents[controlEvent] = true;
-	    this.callAll(this.eventListenersStart[controlEvent]);
-	    this.statechange();
+	var controlEvents = this.keybinds[key.keyCode];
+
+	if (typeof controlEvents == "undefined") {
+	    return true; // unbound key
 	}
 	
-	
-	if (_.contains(this.blocked_keys, key.keyCode)) {
+	controlEvents.forEach(function(controlEvent) {
+	    if (this.keyboardState[controlEvent] !== true) {
+		this.keyboardState[controlEvent] = true;
+		this.callAll(this.eventListenersStart[this.scope][controlEvent]);
+	    }
+	}.bind(this));
+
+	this.statechange();
+	if (this.blocked_keys.includes(key.keyCode)) {
 	    return false;
 	}
 	else {
 	    return true;
 	}
+
     }
 
     keyup(key) {
-	var controlEvent = this.scope[key.keyCode];
-	this.callAll(this.eventListenersEnd[controlEvent]);
-	this.activeEvents[controlEvent] = false;
+	var controlEvents = this.keybinds[key.keyCode];
+	if (typeof controlEvents == "undefined") {
+	    return; // unbound key
+	}
+
+	controlEvents.forEach(function(controlEvent) {
+	    this.callAll(this.eventListenersEnd[this.scope][controlEvent]);
+	    this.keyboardState[controlEvent] = false;
+	}.bind(this));
+
 	this.statechange();
     }
     
@@ -75,89 +107,81 @@ class controls {
     }
 
     statechange() {
-	var toCall = this.eventListenersStateChange;
-	if (typeof toCall !== "undefined") {
-	    toCall.forEach(function(f) {
-		f(this.activeEvents);
+	if (this.eventListenersStateChange.hasOwnProperty(this.scope)) {
+	    this.eventListenersStateChange[this.scope].forEach(function(f) {
+		f(this.keyboardState);
 	    }.bind(this));
 	}
     }
     
-    onstart(control_event, f) {
-	return this.on(this.eventListenersStart, control_event, f);
+    onStart(scope, control_event, f) {
+	return this._on(scope, this.eventListenersStart, control_event, f);
     }
 
-    onend(control_event, f) {
-	return this.on(this.eventListenersEnd, control_event, f);
+    onEnd(scope, control_event, f) {
+	return this._on(scope, this.eventListenersEnd, control_event, f);
     }
     
-    offstart(control_event, f) {
-	return this.off(this.eventListenersStart, control_event, f);
+    offStart(scope, control_event, f) {
+	return this._off(scope, this.eventListenersStart, control_event, f);
     }
 
-    offend(control_event, f) {
-	return this.off(this.eventListenersEnd, control_event, f);
+    offEnd(scope, control_event, f) {
+	return this._off(scope, this.eventListenersEnd, control_event, f);
     }
-    offall(f) {
-	var removeAll = function(list, f) {
-	    var index = list.indexOf(f);
-	    if (index !== -1) {
-		list.splice(index, 1);
-	    }
-	};
 
-	Object.values(this.eventListenersStart).forEach(function(list) {
-	    removeAll(list, f);
-	}.bind(this));
-	
-	Object.values(this.eventListenersEnd).forEach(function(list) {
-	    removeAll(list, f);
-	}.bind(this));
-	
-	removeAll(this.eventListenersStateChange, f);
+    offAll(f) {
+	var removeFrom = [
+	    ...Array.prototype.concat(...Object.values(this.eventListenersStart).map(Object.values)),
+	    ...Array.prototype.concat(...Object.values(this.eventListenersEnd).map(Object.values)),
+	    ...Object.values(this.eventListenersStateChange)
+	];
+
+	removeFrom.forEach(function(s) {
+	    s.delete(f);
+	});
     }
     
 
-    on(eventListeners, control_event, f) {
-	if (typeof eventListeners[control_event] === "undefined") {
-	    eventListeners[control_event] = [];
+    _on(scope, eventListeners, control_event, f) {
+	if (!eventListeners.hasOwnProperty(scope)) {
+	    eventListeners[scope] = {};
 	}
-	if (!eventListeners[control_event].includes(f)) {
-	    eventListeners[control_event].push(f);
+
+	var inScope = eventListeners[scope];
+	if (!inScope.hasOwnProperty(control_event)) {
+	    inScope[control_event] = new Set();
 	}
+
+	inScope[control_event].add(f);
+
 	return f;
     }
 
-    off(eventListeners, control_event, f) {
-	if (typeof eventListeners[control_event] !== "undefined") {
-	    
-	    var e = eventListeners[control_event];
-	    var index = e.indexOf(f);
-	    if (index !== -1) {
-		e.splice(index, 1);
-	    }
+    _off(scope, eventListeners, control_event, f) {
+	if (eventListeners.hasOwnProperty(scope) &&
+	    eventListeners[scope].hasOwnProperty(control_event)) {
+	    eventListeners[scope][control_event].delete(f);
 	}
     }
     
-    onstatechange(f) {
-	var e = this.eventListenersStateChange;
-	if (!e.includes(f)) {
-	    e.push(f);
+    onStateChange(scope, f) {
+	if (!this.eventListenersStateChange.hasOwnProperty(scope)) {
+	    this.eventListenersStateChange[scope] = new Set();
 	}
+	this.eventListenersStateChange[scope].add(f);
 	return f;
     }
 
-    offstatechange(f) {
-	var e = this.eventListenersStateChange;
-	var index = e.indexOf(f);
-	if (index !== -1) {
-	    e.splice(index, 1);
+    offStateChange(scope, f) {
+	if (this.eventListenersStateChange.hasOwnProperty(scope)) {
+	    this.eventListenersStateChange[scope].delete(f);
 	}
     }
 
     // sets the scope the player is in (landed, space etc);
     setControlScope(controlScope) {
-	this.controlScope = controlScope;
+	this.scope = controlScope;
     }
 
     loadJson(url) {

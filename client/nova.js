@@ -99,7 +99,7 @@ var currentSystem = new system();
 
 var textures = {}; // global texture object that sprites save and load textures from
 var gameControls = new controls(); // global controls
-gameControls.onstart("fullscreen", fullscreen);
+//gameControls.onstart("fullscreen", fullscreen);
 var players = {};
 var myShip;
 var stars;
@@ -131,6 +131,7 @@ socket.on('onconnected', function(data) {
 	    stagePosition = myShip.position;
 //	    console.log(data.stats);
 	    //currentSystem.updateStats(data.stats);
+	    gameControls.scope = "playerShip"; // allow the player to control their ship
 	    startGame();
 	    var newStats = {};
 	    newStats[myShip.UUID] = myShip.getStats();
@@ -194,15 +195,6 @@ socket.on('updateStats', function(stats) {
 
 socket.on('test', function(data) {
     console.log(data);
-});
-
-
-document.onkeydown = gameControls.keydown.bind(gameControls);
-document.onkeyup = gameControls.keyup.bind(gameControls);
-
-gameControls.onstatechange(function() {
-    var newStats = {};
-    
 });
 
 

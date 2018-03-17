@@ -19,6 +19,7 @@ class playerShip extends ship {
 	this.targetIndex = -1;
 	this.secondaryIndex = -1;
 	this.firingSecondary = false;
+	this.scope = "playerShip";
 	//this.sendTimeout;
 
     }
@@ -29,7 +30,7 @@ class playerShip extends ship {
 	this.sortWeapons();
 	await this.makeStatusBar();
 	// Is this terrible practice? I'm not sure, but it's definitely insane.	    
-	this.statechange = gameControls.onstatechange(this.statechange.bind(this));
+	this.statechange = gameControls.onStateChange(this.scope, this.statechange.bind(this));
 	this.assignControls(gameControls);
 	//this.sendInterval = setInterval(this.sendStats.bind(this), 1000);
 
@@ -121,20 +122,20 @@ class playerShip extends ship {
     }
 
     assignControls(c) {
-	// There is no way this is good practice...
-	// Looking back on this a year or two later, I have no idea how it works.
-	this.firePrimary = c.onstart("primary", this.firePrimary.bind(this));
-	this.stopPrimary = c.onend("primary", this.stopPrimary.bind(this));
-	
-	this.fireSecondary = c.onstart("secondary", this.fireSecondary.bind(this));
-	this.stopSecondary = c.onend("secondary", this.stopSecondary.bind(this));
+	// Why am I reassigning them?
 
-	this.cycleSecondary = c.onstart("cycle secondary", this.cycleSecondary.bind(this));
-	this.resetSecondary = c.onstart("reset secondary", this.resetSecondary.bind(this));
+	this.firePrimary = c.onStart(this.scope, "primary", this.firePrimary.bind(this));
+	this.stopPrimary = c.onEnd(this.scope, "primary", this.stopPrimary.bind(this));
 	
-	this.targetNearest = c.onstart("target nearest", this.targetNearest.bind(this));
-	this.cycleTarget = c.onstart("target", this.cycleTarget.bind(this));
-	this.resetNav = c.onstart("reset nav", this.resetNav.bind(this));
+	this.fireSecondary = c.onStart(this.scope, "secondary", this.fireSecondary.bind(this));
+	this.stopSecondary = c.onEnd(this.scope, "secondary", this.stopSecondary.bind(this));
+
+	this.cycleSecondary = c.onStart(this.scope, "cycle secondary", this.cycleSecondary.bind(this));
+	this.resetSecondary = c.onStart(this.scope, "reset secondary", this.resetSecondary.bind(this));
+	
+	this.targetNearest = c.onStart(this.scope, "target nearest", this.targetNearest.bind(this));
+	this.cycleTarget = c.onStart(this.scope, "target", this.cycleTarget.bind(this));
+	this.resetNav = c.onStart(this.scope, "reset nav", this.resetNav.bind(this));
     }
     
     statechange(state) {
