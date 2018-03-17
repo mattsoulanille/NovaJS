@@ -1,4 +1,4 @@
-class button extends visible(function() {}) {
+class button extends eventable(visible(function() {})) {
     constructor (text, size, position = {x:0, y:0}) {
 	super();
 
@@ -24,7 +24,7 @@ class button extends visible(function() {}) {
 	this.right = {};
 	this.middle = {};
 
-
+	
 	// This should use texture switching instead of sprite switching,
 	// but that's tough since PIXI.extras.TilingSprite is used
 	Object.keys(button_urls).forEach(function(buttonType) {
@@ -79,9 +79,9 @@ class button extends visible(function() {}) {
 
 	this.container.interactive = true;
 	this.container.buttonMode = true;
-	this.container.on('pointerdown', this.onPointerDown.bind(this))
-            .on('pointerup', this.onPointerUp.bind(this))
-            .on('pointerupoutside', this.onPointerUp.bind(this));
+	this.container.on('pointerdown', this._onPointerDown.bind(this))
+            .on('pointerup', this._onPointerUp.bind(this))
+            .on('pointerupoutside', this._onPointerUpOutside.bind(this));
             // .on('pointerover', onButtonOver)
             // .on('pointerout', onButtonOut);
 	
@@ -98,15 +98,16 @@ class button extends visible(function() {}) {
 	// this.container.addChild(g);
     } 
 
-    onPointerDown() {
+    _onPointerDown() {
 	this.setClicked(1);	
     }
 
-    onPointerUp() {
-	this.setClicked(0);
+    _onPointerUp() {
+	this._onPointerUpOutside();
+	this._fireEvent('press');
     }
 
-    onPointerUpOutside() {
+    _onPointerUpOutside() {
 	this.setClicked(0);
     }
 
