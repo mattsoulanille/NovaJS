@@ -11,7 +11,8 @@ class shipyard extends menu {
 	this.itemGrid.container.position.y = -153;
 
 	this.buttons = {
-	    Buy : new button("Buy Ship", 65, {x:14, y:126})
+	    Buy : new button("Buy Ship", 80, {x:-20, y:126}),
+	    Done : new button("Done", 80, {x: 100, y:126})
 	};
 
 
@@ -20,6 +21,7 @@ class shipyard extends menu {
 	}.bind(this));
 
 	this.buttons.Buy.on('press', this.buyShip.bind(this));
+	this.buttons.Done.on('press', this.hide.bind(this));
     }
 
 

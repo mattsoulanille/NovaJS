@@ -10,7 +10,8 @@ class spaceport extends menu {
 
 	this.buttons = {
 	    Outfitter: new button("Outfitter", 120, {x: 160, y:116}),
-	    Shipyard: new button("Shipyard", 120, {x: 160, y:74})
+	    Shipyard: new button("Shipyard", 120, {x: 160, y:74}),
+	    Leave: new button("Leave", 120, {x: 160, y:200})
 	};
 
 	Object.values(this.buttons).forEach(function(b) {
@@ -31,6 +32,7 @@ class spaceport extends menu {
 	// Assign the buttons so they move through menus
 	this.buttons.Outfitter.on('press', this.showOutfitter.bind(this));
 	this.buttons.Shipyard.on('press', this.showShipyard.bind(this));
+	this.buttons.Leave.on('press', this.depart.bind(this));
     }
 
     bindControls() {
