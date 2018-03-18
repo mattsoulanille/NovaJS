@@ -22,7 +22,7 @@ class menu extends controllable(visible(function() {})) {
     }
 
 
-
+    
     show() {
 	super.show();
 	this.bindControls();

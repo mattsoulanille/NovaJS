@@ -12,14 +12,21 @@ class shipyard extends menu {
     }
 
 
-    bindControls() {
-	super.bindControls();
-	this.boundControls = [
-	    this.controls.onStart(this.scope, "depart", this.hide.bind(this))
-	];
-	
-    }
+    
     
 
+    bindControls() {
+	super.bindControls();
 
+	var c = {};
+	c.depart = this.hide.bind(this);
+	c.left = this.itemGrid.left.bind(this.itemGrid);
+	c.up = this.itemGrid.up.bind(this.itemGrid);
+	c.right = this.itemGrid.right.bind(this.itemGrid);
+	c.down = this.itemGrid.down.bind(this.itemGrid);
+
+	this.boundControls = Object.keys(c).map(function(k) {
+	    return this.controls.onStart(this.scope, k, c[k]);
+	}.bind(this));
+    }
 }
