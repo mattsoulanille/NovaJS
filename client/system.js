@@ -111,14 +111,14 @@ system.prototype.buildPlayerShip = function(buildInfo) {
     // builds and sets player ship if UUID === buildInfo.UUID
     if (buildInfo.UUID === UUID) {
 	//seems very hacky
-	if (myShip) {
-	    var oldPos = myShip.position;
-	}
+	// if (myShip) {
+	//     var oldPos = myShip.position;
+	// }
 	myShip = new playerShip(buildInfo, this);
-	if (oldPos) {
-	    myShip.position[0] = oldPos[0];
-	    myShip.position[1] = oldPos[1];
-	}
+	// if (oldPos) {
+	//     myShip.position[0] = oldPos[0];
+	//     myShip.position[1] = oldPos[1];
+	// }
 	stagePosition = myShip.position;
 
 	if (typeof(stars) !== "undefined") {

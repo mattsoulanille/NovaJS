@@ -197,9 +197,6 @@ projectileWeapon = class extends basicWeapon {
 
     // }
     
-    setTarget(target) {
-	this.target = target;
-    }
     
     render() {
 	super.render(...arguments);

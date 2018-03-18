@@ -213,9 +213,6 @@ Else, return false
 
     }
 
-    setTarget(target) {
-	this.target = target;
-    }
 };
 
     

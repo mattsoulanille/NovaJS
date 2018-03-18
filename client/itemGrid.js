@@ -2,7 +2,10 @@ class itemGrid {
     constructor(items) {
 	this.container = new PIXI.Container();
 	this.graphics = new PIXI.Graphics();
-	//this.container.addChild(this.graphics);
+
+	// Experimentally Determined
+	this.boxCount = [4, 5];
+	this.boxDimensions = [83, 54];
 	
 	// see the colr resource
 	this.colors = {
@@ -14,13 +17,13 @@ class itemGrid {
 	this.dimStyle = [this.lineWidth, this.colors.dim];
 	this.brightStyle = [this.lineWidth, this.colors.bright];
 	this.font = {
-	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff, align:'center'},
-	    grey:    {fontFamily:"Geneva", fontSize:10, fill:0x262626, align:'center'}
+	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
+		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
+
+	    grey:    {fontFamily:"Geneva", fontSize:10, fill:0x262626,
+		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]}
 	};
 	
-	// Experimentally Determined
-	this.boxCount = [4, 5];
-	this.boxDimensions = [83, 54];
 
 	// Make this be ships or outfits or something in the future.
 	this.items = items;
@@ -72,7 +75,7 @@ class itemGrid {
 
 	    tile.addChild(this.texts[i]);
 	    this.texts[i].position.x = this.boxDimensions[0] / 2;
-	    this.texts[i].position.y = this.boxDimensions[1] * 3/4;
+	    this.texts[i].position.y = this.boxDimensions[1] * 1/2;
 	}
 
 

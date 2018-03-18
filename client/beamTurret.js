@@ -7,6 +7,8 @@ if (typeof(module) !== 'undefined') {
 beamTurret = class extends beamWeapon {
     constructor() {
 	super(...arguments);
+	this._fireFunc = null;
+	this._stopFunc = null;
     }
 
     getFireAngle(position) {
@@ -14,14 +16,36 @@ beamTurret = class extends beamWeapon {
 	var dy = this.target.position[1] - position[1];
 	return Math.atan2(dy, dx);
     }
-    
-    render() {
-	if (this.target) {
-	    // can't fire without a target
-	    super.render();
-	}
+
+    startFiring(notify = true) {
+
+	var stop = super.stopFiring.bind(this, notify);
+	this._stopFunc = function() {
+	    // If we stopped firing, then we need
+	    // to start again if something is targeted
+	    this.onceState("hasTarget", this._fireFunc, true);
+	    stop();
+	}.bind(this);
+
+
+	var fire = super.startFiring.bind(this, notify);
+	this._fireFunc = function() {
+	    // If we started firing, then we need
+	    // to stop again if there is no target
+	    this.onceState("hasTarget", this._stopFunc, false);	    
+	    fire();
+	}.bind(this);
+
+	this.onceState("hasTarget", this._fireFunc, true);
+
     }
 
+    stopFiring(notify = true) {
+	this.offState("hasTarget", this._fireFunc, true);
+	this.offState("hasTarget", this._stopFunc, false);
+	super.stopFiring(notify);
+    }
+    
 };
 
 

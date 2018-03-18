@@ -7,12 +7,13 @@ if (typeof(module) !== 'undefined') {
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
     var renderable = require("./renderable.js");
+    var eventable = require("../libraries/eventable.js");
 }
 
 
 
 
-basicWeapon = class extends renderable(loadsResources(inSystem)) {
+basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.socket = source.socket; // necessary for server
@@ -46,6 +47,17 @@ basicWeapon = class extends renderable(loadsResources(inSystem)) {
 
     }
 
+    setTarget(target) {
+	this.target = target;
+	if (this.target) {
+	    this._setState("hasTarget", true);
+	}
+	else {
+	    this._setState("hasTarget", false);
+	}	
+    }
+
+    
     makeContainer() {} // for beamWeapon. A workaround. Not pretty but simple.
     
     async _build() {
