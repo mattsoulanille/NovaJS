@@ -77,15 +77,20 @@ class controls {
 	if (typeof controlEvents == "undefined") {
 	    return true; // unbound key
 	}
-	
+
+	var stateChange = false;
 	controlEvents.forEach(function(controlEvent) {
 	    if (this.keyboardState[controlEvent] !== true) {
 		this.keyboardState[controlEvent] = true;
 		this.callAll(this.eventListenersStart[this.scope][controlEvent]);
+		stateChange = true;
 	    }
 	}.bind(this));
 
-	this.statechange();
+	if (stateChange) {
+	    this.statechange();
+	}
+
 	if (this.blocked_keys.includes(key.keyCode)) {
 	    return false;
 	}
@@ -100,13 +105,18 @@ class controls {
 	if (typeof controlEvents == "undefined") {
 	    return; // unbound key
 	}
-
+	var stateChange = false;
 	controlEvents.forEach(function(controlEvent) {
-	    this.callAll(this.eventListenersEnd[this.scope][controlEvent]);
-	    this.keyboardState[controlEvent] = false;
+	    if (this.keyboardState[controlEvent] !== false) {
+		this.callAll(this.eventListenersEnd[this.scope][controlEvent]);
+		this.keyboardState[controlEvent] = false;
+		stateChange = true;
+	    }
 	}.bind(this));
 
-	this.statechange();
+	if (stateChange) {
+	    this.statechange();
+	}
     }
     
     callAll(toCall) {

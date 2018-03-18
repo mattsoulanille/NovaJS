@@ -167,6 +167,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
 
     updateStats(stats) {
+	//console.log("updated ship stats");
 	super.updateStats.call(this, stats);
 	if (this.isPlayerShip !== true) {
 	    if (typeof stats.target !== 'undefined') {
