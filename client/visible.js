@@ -10,12 +10,12 @@ var visible = (superclass) => class extends eventable(superclass) {
 	this.container.visible = false;
 
 
-	if (typeof this.buildInfo !== "undefined") {
-	    if (this.buildInfo.show) {
-		this._onceState("built", this.show.bind(this));
+	if (typeof buildInfo !== "undefined") {
+	    if (buildInfo.show) {
+		this.onceState("built", this.show.bind(this));
 	    }
-	    if (this.buildInfo.visible) {
-		this._onceStart("built", this.setVisible.bind(this, true));
+	    if (buildInfo.visible) {
+		this.onceState("built", this.setVisible.bind(this, true));
 	    }
 	}
     }

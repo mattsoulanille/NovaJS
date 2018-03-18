@@ -195,7 +195,10 @@ class playerShip extends controllable(ship) {
 	this.position[1] = planet.position[1];
 	this.pointing = Math.random() * 2*Math.PI;
 	this.show();
-	console.log(this.getVisible());
+    }
+
+    show() {
+	super.show();
     }
     
     updateStats(stats = {}) {
@@ -330,10 +333,15 @@ class playerShip extends controllable(ship) {
 	this.send = false;
 	super._removeFromSystem();
     }
-    //_resetScope() {};
+
     destroy() {
 	try {
 	    this.unbindControls();
+
+	    // Don't remove this scope when unbinding controls since there is going
+	    // to be another ship to control. Fix this probably
+	    this.controls.pushScope(this.scope);
+
 	}
 	catch (e) {
 	    // A ControlScopeError is expected since we're
