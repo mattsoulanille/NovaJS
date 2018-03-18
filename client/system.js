@@ -191,23 +191,16 @@ system.prototype.replaceObject = async function(buildInfo) {
 	var rendering = oldObj.getRendering();
 	var pos = [...oldObj.position];
 
+	buildInfo.show = (visible && rendering);
+	buildInfo.visible = visible;
+	buildInfo.position = pos;
+	
 	this.destroyObject(buildInfo.UUID);
+
 	await this.buildObject(buildInfo);
 	var newObj = this.multiplayer[buildInfo.UUID];
 
-	// Maybe make some better way of moving the oldObj's properties to the newObj?
-	if (visible && rendering) {
-	    newObj.show();
-	}
-	else {
-	    newObj.setVisible(visible);
-	    newObj.setRendering(rendering);
-	}
-	newObj.position[0] = pos[0];
-	newObj.position[1] = pos[1];
     }
-	
-
 
 };
 

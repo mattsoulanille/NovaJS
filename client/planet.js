@@ -105,20 +105,19 @@ planet = class extends spaceObject {
 	if (animate === animateSpace) {
 	    throw new Error("Animate was animateSpace when departing");
 	}
-	myShip.depart(this);
-	space.addChild(myShip.statusBar.container);
-
-	gameControls.resetEvents();
-	landed = false;
-	animate = animateSpace;
-	requestAnimationFrame(animate);
-	//stage.addChild(space);
-	this.spaceport.container.visible = false;
-	spaceportContainer.visible = false;
-	space.visible = true;
-	socket.emit('depart');
-
-
+	myShip.onceState("built", function() {
+	    myShip.depart(this);
+	    space.addChild(myShip.statusBar.container);
+	    gameControls.resetEvents();
+	    landed = false;
+	    animate = animateSpace;
+	    requestAnimationFrame(animate);
+	    //stage.addChild(space);
+	    this.spaceport.container.visible = false;
+	    spaceportContainer.visible = false;
+	    space.visible = true;
+	    socket.emit('depart');
+	}.bind(this));
     }
     
     addSpritesToContainer() {

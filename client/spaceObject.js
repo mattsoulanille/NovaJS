@@ -10,6 +10,7 @@ if (typeof(module) !== 'undefined') {
     var renderable = require("./renderable.js");
     var visible = require("./visible.js");
     var targetable = require("./targetable.js");
+
 }
 
 
@@ -106,6 +107,8 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 	    await this._build();
 	    this.building = false;
 	    this.built = true;
+	    this._emit("built");
+	    this._setState("built", true);
 	}	
     }
 

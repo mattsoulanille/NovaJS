@@ -165,10 +165,7 @@ socket.on('setPlayerShip', function(buildInfo) {
     stars.attach(myShip);
     myShip.position = [stagePosition[0], stagePosition[1]];
     stagePosition = myShip.position;
-    myShip.build()
-	.then(function() {
-		myShip.show();
-	}.bind(this));
+    myShip.build();
 });
 
 socket.on('disconnect', function() {

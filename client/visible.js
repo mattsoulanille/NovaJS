@@ -1,12 +1,23 @@
 if (typeof module !== "undefined") {
     var PIXI = require("../server/pixistub.js");
+    var eventable = require("../libraries/eventable.js");
 }
 
-var visible = (superclass) => class extends superclass {
-    constructor() {
+var visible = (superclass) => class extends eventable(superclass) {
+    constructor(buildInfo) {
 	super(...arguments);
 	this.container = new PIXI.Container(); // Must be before call to set system
 	this.container.visible = false;
+
+
+	if (typeof this.buildInfo !== "undefined") {
+	    if (this.buildInfo.show) {
+		this._onceState("built", this.show.bind(this));
+	    }
+	    if (this.buildInfo.visible) {
+		this._onceStart("built", this.setVisible.bind(this, true));
+	    }
+	}
     }
 
     getVisible() {

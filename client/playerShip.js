@@ -195,6 +195,7 @@ class playerShip extends controllable(ship) {
 	this.position[1] = planet.position[1];
 	this.pointing = Math.random() * 2*Math.PI;
 	this.show();
+	console.log(this.getVisible());
     }
     
     updateStats(stats = {}) {
