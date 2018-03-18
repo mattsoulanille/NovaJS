@@ -2,7 +2,7 @@ class itemGrid {
     constructor() {
 	this.container = new PIXI.Container();
 	this.graphics = new PIXI.Graphics();
-	this.container.addChild(this.graphics);
+	//this.container.addChild(this.graphics);
 	
 	// see the colr resource
 	this.colors = {
@@ -22,6 +22,8 @@ class itemGrid {
 	this.selectionIndex = -1;
 
 	this.scroll = 0;
+
+	this.makeTiles();
     }
 
     left() {
@@ -96,40 +98,66 @@ class itemGrid {
 	this.drawGrid();
     }
 
+
+    makeTiles() {
+
+	this.tileBoarderGraphics = this.items.map(function() {
+	    var g = new PIXI.Graphics();
+	    return g;
+	}.bind(this));
+
+	this.tiles = this.tileBoarderGraphics.map(function(graphic) {
+	    var c = new PIXI.Container();
+	    c.addChild(graphic);
+	    this.container.addChild(c);
+	    c.interactive = true;
+	    return c;
+	}.bind(this));
+
+	for (let i = 0; i < this.tiles.length; i++) {
+	    var tile = this.tiles[i];
+	    tile.on('pointerdown', function() {
+		this.selectionIndex = i;
+		this.drawGrid();
+		//console.log("clicked " + i);
+	    }.bind(this));
+	}
+	
+    }
+    
     drawGrid() {
-	this.graphics.clear();
+	// Hide everything first. Reveal them later
+	this.tiles.forEach(function(t) {
+	    t.visible = false;
+	});
+
 	var start = this.boxCount[0] * this.scroll;
 
 	let selectedPosition = null;
-	
 	for (let i = 0; i < Math.min(this.items.length - start, this.boxCount[0] * this.boxCount[1]); i++) {
 	    var itemIndex = i + start;
 	    let xcount = i % this.boxCount[0];
 	    let ycount = Math.floor(i / this.boxCount[0]);
 
-	    this.graphics.lineStyle(...this.dimStyle);
+	    this.tiles[itemIndex].visible = true;
+	    let g = this.tileBoarderGraphics[itemIndex];
+	    g.clear();
 	    if (itemIndex === this.selectionIndex) {
-		selectedPosition = [xcount * this.boxDimensions[0],
-				    ycount * this.boxDimensions[1]];
+		g.beginFill(0x000000);
+		g.lineStyle(...this.brightStyle);
+		g.drawRect(0, 0, this.boxDimensions[0], this.boxDimensions[1]);
+		// Make sure it is above the others
+		this.container.addChildAt(this.tiles[itemIndex], this.tiles.length - 1);
 	    }
 	    else {
-		this.graphics.drawRect(xcount * this.boxDimensions[0],
-				       ycount * this.boxDimensions[1],
-				       this.boxDimensions[0],
-				       this.boxDimensions[1]);
+		g.beginFill(0x000000);
+		g.lineStyle(...this.dimStyle);
+		g.drawRect(0, 0, this.boxDimensions[0], this.boxDimensions[1]);
 	    }
+	    this.tiles[itemIndex].position.x = xcount * this.boxDimensions[0];
+	    this.tiles[itemIndex].position.y = ycount * this.boxDimensions[1];
 	}
 
-	// Draw selection after drawing normal boxes so it is on top
-	if (selectedPosition !== null) {
-	    this.graphics.lineStyle(...this.brightStyle);
-	    this.graphics.drawRect(selectedPosition[0],
-				   selectedPosition[1],
-				   this.boxDimensions[0],
-				   this.boxDimensions[1]);
-	}
-	
-	
     }
     
 }
