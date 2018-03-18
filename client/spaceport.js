@@ -9,8 +9,8 @@ class spaceport extends menu {
 	this.scope = "spaceport";
 
 	this.buttons = {
-	    Outfitter: new button("Outfitter", 120, {x: 160, y:122}),
-	    Shipyard: new button("Shipyard", 120, {x: 160, y:82})
+	    Outfitter: new button("Outfitter", 120, {x: 160, y:116}),
+	    Shipyard: new button("Shipyard", 120, {x: 160, y:74})
 	};
 
 	Object.values(this.buttons).forEach(function(b) {
@@ -57,12 +57,12 @@ class spaceport extends menu {
     
     show() {
 	super.show();
-//	window.addEventListener('resize', this.onResize.bind(this));
+	//window.addEventListener('resize', this.onResize.bind(this));
     }
 
     hide() {
 	super.hide();
-//	window.removeEventListener('resize', this.onResize.bind(this));
+	//window.removeEventListener('resize', this.onResize.bind(this));
     }
 
 
