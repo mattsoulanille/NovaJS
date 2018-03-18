@@ -105,8 +105,24 @@ var myShip;
 var stars;
 var stagePosition;
 
+// Temporary until there's an actual system for planets knowing
+// what ships they have available.
+var allShipNames;
+function loadJson(url) {
+    return new Promise(function(fulfill, reject) {
+	var loader = new PIXI.loaders.Loader();
+	var data;
+	loader
+	    .add('stuff', url)
+	    .load(function(loader, resource) {
+		data = resource.stuff.data;
+	    })
+	    .onComplete.add(function() {fulfill(data);});
+    });
+}
 
-socket.on('onconnected', function(data) {
+
+socket.on('onconnected', async function(data) {
     UUID = data.id;
     console.log("Connected to server. UUID: "+UUID);
 //    myShip = new playerShip(data.playerShip);
@@ -119,26 +135,25 @@ socket.on('onconnected', function(data) {
     if (data.paused) {
 	pause();
     }
-    currentSystem.setObjects(data.system)
-	.then(stars.build.bind(stars))
-	.then(gameControls.build.bind(gameControls))
-//	.then(myShip.build.bind(myShip))
-	.then(currentSystem.build.bind(currentSystem))
-	.then(function() {
-	    space.addChildAt(currentSystem.container, 0);
-//	    stage.addChildAt(stars.container, 0);
-	    console.log("built objects");
-	    stagePosition = myShip.position;
-//	    console.log(data.stats);
-	    //currentSystem.updateStats(data.stats);
-	    gameControls.pushScope("playerShip"); // allow the player to control their ship
-	    startGame();
-	    var newStats = {};
-	    newStats[myShip.UUID] = myShip.getStats();
-	    //socket.emit('updateStats', newStats);
+    await loadJson("/objects/meta/shipNames.json")
+	.then(function(ships) {
+	    // Temporary
+	    allShipNames = Object.keys(ships);
 	});
-    
-    //players[UUID] = myShip;
+
+    await currentSystem.setObjects(data.system);
+    await stars.build();
+    await gameControls.build();
+    await currentSystem.build();
+
+    space.addChildAt(currentSystem.container, 0);
+    console.log("built objects");
+    stagePosition = myShip.position;
+    gameControls.pushScope("playerShip"); // allow the player to control their ship
+    startGame();
+    var newStats = {};
+    newStats[myShip.UUID] = myShip.getStats();
+
 });
 
 socket.on('setPlayerShip', function(buildInfo) {

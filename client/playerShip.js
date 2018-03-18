@@ -329,9 +329,21 @@ class playerShip extends controllable(ship) {
 	this.send = false;
 	super._removeFromSystem();
     }
-    
+    //_resetScope() {};
     destroy() {
-	this.unbindControls();
+	try {
+	    this.unbindControls();
+	}
+	catch (e) {
+	    // A ControlScopeError is expected since we're
+	    // trying to pop the scope from this object we're
+	    // destroying, which may be destroyed at any time,
+	    // not just when it has the control scope.
+	    // See controllable.js
+	    if (! (e instanceof ControlScopeError) ) {
+		throw e;
+	    }
+	}
 	this.statusBar.destroy();
 	super.destroy.call(this);
     }

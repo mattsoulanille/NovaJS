@@ -246,6 +246,11 @@ var startGame = async function() {
     
     io.on('connection', connectFunction);
 
+    app.get('/objects/meta/shipNames.json', function(req, res) {
+	res.send(JSON.stringify(shipNames));
+    });
+
+    
     app.get('objects/planets/:planet.json', function(req, res) {
 	req.sendFile(res['planet.json']); //temporary
     });

@@ -1,3 +1,4 @@
+var ControlScopeError = class extends Error {};
 var controllable = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
@@ -18,8 +19,14 @@ var controllable = (superclass) => class extends superclass {
 	    this.controls.offAll(f);
 	}.bind(this));
 
-	if (this.controls.popScope() !== this.scope) {
-	    throw new Error("Popped scope did not match this object's scope");
+	this._resetScope();
+    }
+    _resetScope() {
+	if (this.controls.scope !== this.scope) {
+	    throw new ControlScopeError("To be popped scope did not match this object's scope. Not popping");
+	}
+	else {
+	    return this.controls.popScope();
 	}
     }
 
