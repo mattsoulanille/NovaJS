@@ -120,6 +120,7 @@ var particleEmitter = class extends renderable(inSystem) {
 	    clearTimeout(this.hideTimeout);
 	}
 	this.emitter.emit = false;
+	
 	this.emitter.cleanup();
 	this.emitter.update(0.001); // maybe set this to 1?
 	super.hide();
@@ -171,6 +172,9 @@ var particleEmitter = class extends renderable(inSystem) {
 
     destroy() {
 	Object.defineProperty(this, "emit", {set:undefined}); // Kill the ability to emit
+	if (this.hideTimeout) {
+	    clearTimeout(this.hideTimeout);
+	}
 	this.emitter.destroy();
 	super.destroy();
     }

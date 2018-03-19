@@ -59,18 +59,19 @@ class spaceport extends menu {
     
     show() {
 	super.show();
-	//window.addEventListener('resize', this.onResize.bind(this));
+	this.onResize();
+	window.addEventListener('resize', this.onResize.bind(this));
     }
 
     hide() {
 	super.hide();
-	//window.removeEventListener('resize', this.onResize.bind(this));
+	window.removeEventListener('resize', this.onResize.bind(this));
     }
 
 
     onResize(evt) {
-	var height = evt.currentTarget.innerHeight;
-	var width = evt.currentTarget.innerWidth;
+	var height = window.innerHeight;
+	var width = window.innerWidth;
 	this.container.position.x = (width-194) / 2;
 	this.container.position.y = height / 2;
 	if (this.visible) {

@@ -86,12 +86,12 @@ planet = class extends spaceObject {
 
 	    gameControls.resetEvents();
 
-	    this.spaceport.bindControls();
+	    //this.spaceport.bindControls();
 	    landed = true;
 	    // must remember to give it back to the ship afterwards
 	    spaceportContainer.addChild(ship.statusBar.container);
 	    animate = animateSpaceport;
-	    this.spaceport.container.visible = true;
+	    this.spaceport.show();
 	    spaceportContainer.visible = true;
 	    space.visible = false;
 	    
@@ -113,7 +113,7 @@ planet = class extends spaceObject {
 	    animate = animateSpace;
 	    requestAnimationFrame(animate);
 	    //stage.addChild(space);
-	    this.spaceport.container.visible = false;
+	    //this.spaceport.hide(); // done by spaceport.js
 	    spaceportContainer.visible = false;
 	    space.visible = true;
 	    socket.emit('depart');
