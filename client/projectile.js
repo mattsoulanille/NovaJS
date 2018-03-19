@@ -26,6 +26,11 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	this.available = false;
 	this.subs = [];
 	this.maxSubTime = 0;
+	if (typeof this.buildInfo !== "undefined") {
+	    if (!this.buildInfo.hasOwnProperty("subRecursionCounter")) {
+		this.buildInfo.subRecursionCounter = 0;
+	    }
+	}
     }
 
     get allies() {
@@ -96,20 +101,15 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 
 	for (var i = 0; i < this.meta.submunitions.length; i++) {
 	    var subData = Object.assign({}, this.meta.submunitions[i]);
-	    if (subData.id == this.meta.id) {
-		// then we need to use sub limit
-		if (subData.limit > 0) {
-		    subData.limit -= 1;
-		}
-		else {
-		    continue; // to the next one in the loop since we've hit the sub limit
-		}
-	    }
-
 	    var buildInfo = {id: subData.id};
-	    var sub = await new weaponBuilder(buildInfo, this).buildSub(subData);
-	    if (sub) {
-		this.subs.push(sub);
+	    buildInfo.subRecursionCounter = this.buildInfo.subRecursionCounter + 1;
+
+	    // Does not work with mutual recursion.
+	    if ((this.buildInfo.id !== subData.id) || (buildInfo.subRecursionCounter <= subData.limit)) {
+		var sub = await new weaponBuilder(buildInfo, this).buildSub(subData);
+		if (sub) {
+		    this.subs.push(sub);
+		}
 	    }
 	}
     }

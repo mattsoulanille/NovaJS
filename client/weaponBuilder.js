@@ -79,6 +79,8 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    s.limit = subData.limit;
 	});
 
+	
+	
 	this.buildInfo.meta = this.meta; // only okay since buildInfo was copied
 	if (! this._setWeaponType()) {
 	    return false;
