@@ -41,14 +41,14 @@ syncTime.prototype.getDifference = function() {
 
 syncTime.prototype.send = function() {
     for (i=0; i < this.repeat; i++) {
-	var clientTime = new Date().getTime()
+	var clientTime = new Date().getTime();
 	socket.emit('pingTime', {time: clientTime});
     }
 
 }
 
 syncTime.prototype.receive = function(msg) {
-    var time = new Date().getTime()
+    var time = new Date().getTime();
     var pingTime = time - msg.clientTime;
 
     // First half of the trip

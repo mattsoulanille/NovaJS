@@ -217,6 +217,7 @@ var paused = false;
 var pause = function() {
     console.log("Game paused");
     paused = true;
+    app.ticker.remove(animateSpace);
 }
 socket.on('pause', pause);
 
@@ -224,7 +225,8 @@ socket.on('pause', pause);
 var resume = function() {
     paused = false;
     currentSystem.resume();
-    requestAnimationFrame(animate);
+    app.ticker.remove(animateSpace);
+    app.ticker.add(animateSpace);
     console.log("Game resumed");
 }
 socket.on('resume', resume);
@@ -240,7 +242,9 @@ function startGame() {
     });
 
     stars.placeAll();
-    requestAnimationFrame(animate);
+    // Don't have it in the ticker more than once
+    app.ticker.remove(animateSpace);
+    app.ticker.add(animateSpace);
     console.log("Rendering started");
 
 }
@@ -272,22 +276,20 @@ spaceObject.prototype.lastTime = new Date().getTime();
 
 var animateTimeout;
 var animate = animateSpace;
-var stopRender = false;
 
 // replace this with performance.now()
 var lastTime = new Date().getTime();
 var time = new Date().getTime();// + timeDifference;
 
 // Revise this to use the pixi ticker
-function animateSpace() {
+function animateSpace(tick) {
     
-    stopRender = false;
+    var time = app.ticker.lastTime;
+    var delta = app.ticker.elapsedMS;
 
-    lastTime = time;
-    time = new Date().getTime();
-    var delta = time - lastTime;
-    
     stars.render(delta);
+
+    //check this
     currentSystem.render(delta, time);
 
     
@@ -295,16 +297,12 @@ function animateSpace() {
     //currentSystem.crash.check();
     if (!paused) {
 	//animateTimeout = setTimeout(requestAnimationFrame( animate ), 0);
-	requestAnimationFrame( animate );
+	//requestAnimationFrame( animate );
     }
 
     //renderer.render(space);
 }
 
-//var testSpaceport = new PIXI.Sprite.fromImage('/objects/menus/spaceport.png');
-//var testSpaceport = new spaceport({});
-
-//spaceportContainer.addChild(testSpaceport.container);
 function animateSpaceport() {
     
     
