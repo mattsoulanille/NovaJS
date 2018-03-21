@@ -13,20 +13,20 @@ function convexHullBuilder(source, frames) {
     this.frames = frames;
 }
 
-convexHullBuilder.prototype.buildFromSpriteSheet = function() {
+convexHullBuilder.prototype.buildFromSpriteSheet = async function() {
     var alphaMatrix = this.makeAlphaMatrix(this.source);
-    var data = this.makeConvexHulls(alphaMatrix, this.frames);
+    var data = await this.makeConvexHulls(alphaMatrix, this.frames);
     return data;
 };
 
 convexHullBuilder.prototype.build = async function() {
     var alphaMatrix = await this.loadImage();
-    var data = this.makeConvexHulls(alphaMatrix, this.collisionSprite.spriteImageInfo.frames);
+    var data = await this.makeConvexHulls(alphaMatrix, this.collisionSprite.spriteImageInfo.frames);
     return data;
 };
 
 
-convexHullBuilder.prototype.makeConvexHulls = function(alphaMatrix, frames) {
+convexHullBuilder.prototype.makeConvexHulls = async function(alphaMatrix, frames) {
 
     var points_array = _.map(frames, function(v) {
 	//	console.log(v.frame);
@@ -50,21 +50,49 @@ convexHullBuilder.prototype.makeConvexHulls = function(alphaMatrix, frames) {
 
     }.bind(this));
 
-    var convex_hulls = _.map(points_array, function(points) {
-	// the last element is the same as the first,
-	// and crash does not like that...
-	var h = hull(points);
-	h.pop();
-	if (h.length !== 0) {
-	    return h;
-	}
-	else {
-	    return null; // since there isn't a convex hull
-	}
-    });
+    var convexHulls = await this._makeHulls(points_array);
+    return convexHulls;
+};
 
-    return convex_hulls;
-}
+convexHullBuilder.prototype._makeHulls = function(points_array) {
+    return new Promise(function(fulfill, reject) {
+
+	// For the love of god, if, when you're reading this,
+	// there is a reasonable parallel library for node js,
+	// rip this piece of garbage out and replace it.
+	var makeHulls = function(points_array, hulls = []) {
+	    if (points_array.length === 0) {
+		fulfill(hulls);
+	    }
+	    else {
+		let points = points_array.shift();
+		var hull = this.makeConvexHull(points);
+		hulls.push(hull);
+		// To prevent it from blocking the event queue
+		setTimeout(makeHulls.bind(this, points_array, hulls), 0);
+	    }
+	}.bind(this);
+	makeHulls(points_array);
+
+    }.bind(this));
+};
+
+
+
+convexHullBuilder.prototype.makeConvexHull = function(points) {
+    // the last element is the same as the first,
+    // and crash does not like that...
+    var h = hull(points);
+    h.pop();
+    if (h.length !== 0) {
+	return h;
+    }
+    else {
+	return null; // since there isn't a convex hull
+    }
+};
+
+
 
 convexHullBuilder.prototype.makeAlphaMatrix = function(png) {
     var alpha_matrix = [];

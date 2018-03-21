@@ -10,17 +10,14 @@ var gettable = class {
 	this.data = {};
 	this.getFunction = getFunction;
     }
-    getSync(thing) {
+
+    async get(thing) {
 	if (! (thing in this.data) ) {
 	    this.data[thing] = this.getFunction(thing);
 	}
-	
-	return this.data[thing];
-    }
-    async get(thing) {
-	// wraps it in a promise so it looks async
-	// for the in-browser style things
-	return this.getSync(thing);
+
+	// Goes here so it acutally enters the data object while resolving.
+	return await this.data[thing];
     }
 };
 
@@ -37,14 +34,19 @@ var novaData = class {
     }
 
     getFunction(resourceType, toBuild) {
-	return function(fullId) {
+
+	return async function(fullId) {
 	    var index = fullId.lastIndexOf(":");
 	    var prefix = fullId.slice(0, index);
 	    var id = fullId.slice(index + 1);
 
 	    var resource = this.novaParse.ids.getSpace(prefix)[resourceType][id];
 	    if (resource) {
-		return new toBuild(resource);
+		let obj =  new toBuild(resource);
+		if ("build" in obj) {
+		    await obj.build();
+		}
+		return obj;
 	    }
 	    else {
 		throw new Error(fullId + " not found in novaParse under " + resourceType);

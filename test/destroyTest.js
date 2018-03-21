@@ -31,7 +31,7 @@ describe("destroy", function() {
 
     var makeShip = async function(id) {
 	var s = new ship({id:id}, sol, socketStub);
-	s.meta = s.novaData[s.type].getSync(s.buildInfo.id);	
+	s.meta = await s.novaData[s.type].get(s.buildInfo.id);	
 	s.parseDefaultWeaponsSync();
 	await s.build();
 	ships.push(s);

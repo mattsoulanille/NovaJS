@@ -21,8 +21,7 @@ var spriteSheetCache = class extends cache {
 		    // how the heck does this even work?!?!
 		    // PIXI is weird
 		});
-		result.convexHulls = await this.getURL(this.prefix_url + id + "/convexHullsTest.json"); // change me to convexHulls.json after finished rewriting
-
+		result.convexHulls = await this.getURL(this.prefix_url + id + "/convexHulls.json");
 
 		fulfill(result);
 

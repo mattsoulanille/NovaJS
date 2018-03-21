@@ -141,54 +141,6 @@ var gameloop = function(system, lastTime = new Date().getTime()) {
 };
 
 
-//notify clients of
-/*
-setInterval(function() {
-
-
-})
-*/
-
-// setInterval(function() {
-//     console.log(_.map(players, function(p) {return p.position}))
-// }, 5000)
-
-
-//app.get('/', 
-
-global.convexHulls = {};
-local.context.convexHulls = global.convexHulls;
-
-var getConvexHulls = function(url) {
-    //console.log(url);
-    if ( !(global.convexHulls.hasOwnProperty(url)) ) {
-	global.convexHulls[url] = new convexHullBuilder(url).build();
-	//console.log(global.convexHulls)
-    }
-    return global.convexHulls[url];
-};
-
-
-app.get('/objects/:objectType/:jsonUrl/convexHulls.json', function(req, res) {
-
-    var decoded = decodeURI(req.path);
-    var objPath = path.normalize(path.join(decoded, '../').slice(0,-1)).slice(1);
-//    console.log(objPath);
-    getConvexHulls(objPath).then(function(hulls) {
-	res.json({"hulls":hulls});
-    });
-
-});
-/*
-var getConvexHull = function(url) {
-    if ( !(convexHulls.hasOwnProperty(url)) ) {
-	convexHulls[url] = new convexHullBuilder(url).build()
-    }
-
-    return convexHulls[url];
-    
-}
-*/
 app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');
 });
@@ -255,9 +207,9 @@ var startGame = async function() {
 	req.sendFile(res['planet.json']); //temporary
     });
     
-    app.param("spriteSheet", function(req, res, next, id) {
+    app.param("spriteSheet", async function(req, res, next, id) {
 	try {
-	    req.spriteSheet = nd.spriteSheets.getSync(id);
+	    req.spriteSheet = await nd.spriteSheets.get(id);
 	}
 	catch (e) {
 	    if (e.message !== "not found in novaParse") {
@@ -290,9 +242,11 @@ var startGame = async function() {
 
 
 
-    app.get('/objects/spriteSheets/:spriteSheet/convexHullsTest.json', function(req, res) {
+    app.get('/objects/spriteSheets/:spriteSheet/convexHulls.json', function(req, res) {
+	// see app.param("spriteSheet"... above
 	if (req.spriteSheet) {
-	    res.send(req.spriteSheet.convexHulls);
+	    var hulls = req.spriteSheet.convexHulls;
+	    res.send(hulls);
 	}
 	else {
 	    res.status(404).send("not found");
@@ -300,10 +254,10 @@ var startGame = async function() {
 
     });
 
-    app.get('/objects/ships/:ship.json', function(req, res) {
+    app.get('/objects/ships/:ship.json', async function(req, res) {
 	// change this to ships once it works
 	var id = req.params.ship;
-	var s = nd.ships.getSync(id);
+	var s = await nd.ships.get(id);
 	try {
 	    res.send(s);
 	}
@@ -315,10 +269,10 @@ var startGame = async function() {
 	}
     });
 
-    app.get('/objects/weapons/:weapon.json', function(req, res) {
+    app.get('/objects/weapons/:weapon.json', async function(req, res) {
 	var id = req.params.weapon;
 	try {
-	    res.send(nd.weapons.getSync(id));
+	    res.send(await nd.weapons.get(id));
 	}
 	catch (e) {
 	    res.status(404).send("not found");
@@ -423,7 +377,7 @@ var connectFunction = function(client){
 	// a hack to make weapon loading work before I refactor system.
 	// System should have unbuilt things as promises (of their build functions)
 	// at least multiplayer objects should be like that
-	myShip.meta = myShip.novaData[myShip.type].getSync(myShip.buildInfo.id);
+	myShip.meta = await myShip.novaData[myShip.type].get(myShip.buildInfo.id);
 	myShip.parseDefaultWeaponsSync();
 
 	await myShip.build();

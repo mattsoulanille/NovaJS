@@ -70,6 +70,11 @@ var spriteSheet = class extends baseParse {
 
     }
 
+    async build() {
+	let builder = new convexHullBuilder(this.png, this.frameInfo.frames);
+	this.convexHulls = await builder.buildFromSpriteSheet();
+    }
+    
     get png() {
 	// for just in time processing
 	if (!this._png) {
@@ -111,15 +116,7 @@ var spriteSheet = class extends baseParse {
 
 	return this._png;
     }
-    
-    get convexHulls() {
-	// for just in time processing
-	if (!this._convexHulls) {
-	    this._convexHulls = new convexHullBuilder(this.png, this.frameInfo.frames)
-		.buildFromSpriteSheet();
-	}
-	return this._convexHulls;
-    }
+
     
     // for debugging
     write(path) {
