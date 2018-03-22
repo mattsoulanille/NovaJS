@@ -154,6 +154,11 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    orderedSprites.push(this.sprites.glowImage.sprite);
 	    this.sprites.glowImage.sprite.blendMode = PIXI.BLEND_MODES["ADD"];
 	}
+
+	if ("weapImage" in this.sprites) {
+	    orderedSprites.push(this.sprites.weapImage.sprite);
+	    this.sprites.weapImage.sprite.blendMode = PIXI.BLEND_MODES["ADD"];
+	}
 	
 	
 	var spriteList = _.map(_.values(this.sprites), function(s) {return s.sprite;});
@@ -205,6 +210,29 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	}
     }
 
+    blinkFiringAnimation(ms = 16) {
+	if ("weapImage" in this.sprites) {
+	    var hideAfter = !this.sprites.weapImage.sprite.visible;
+	    this.sprites.weapImage.sprite.visible = true;
+	    setTimeout(function() {
+		if (hideAfter) {
+		    this.sprites.weapImage.sprite.visible = false;
+		}
+	    }.bind(this), ms);
+	}
+    }
+
+    manageFireImage() {
+	var show = false;
+	for (let prop in this.weapons.all) {
+	    let weap = this.weapons.all[prop];
+	    if (weap.firing && weap.meta.useFiringAnimation) {
+		show = true;
+		break;
+	    }
+	}
+	this.sprites.weapImage.sprite.visible = show;
+    }
 
     manageLights() {
     
@@ -245,6 +273,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	
 	if ("lightImage" in this.sprites) {
 	    this.manageLights();
+	}
+
+	if ("weapImage" in this.sprites) {
+	    this.manageFireImage();
 	}
 	
 	if (this.turningToTarget) {

@@ -25,6 +25,8 @@ class shipServer extends ship {
 	
     }
 
+    blinkFiringAnimation() {}
+    
     buildDefaultWeapons() {
 	// Would normally parse them too. see above hack and index.js
 
@@ -49,6 +51,8 @@ class shipServer extends ship {
     addSpritesToContainer() {
 	
     }
+
+    manageFireImage() {}
 
     manageLights() {
 

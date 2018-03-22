@@ -68,7 +68,7 @@ planet = class extends spaceObject {
 	}
 	
 	var max_dist2 = Math.pow( ((this.size[0] + this.size[1]) / 4), 2 );
-	var max_vel2 = 900;
+	var max_vel2 = 1800;
 
 	
 	var shipVel2 = ( Math.pow(ship.velocity[0], 2) + Math.pow(ship.velocity[1], 2));

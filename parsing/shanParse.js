@@ -10,7 +10,7 @@ var shanParse = class extends baseParse {
 
 	this.exitPoints = shan.exitPoints;
 	
-	var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage'];
+	var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage', 'weapImage'];
 	for (var index in imageNames) {
 	    var imageName = imageNames[index];
 	    var imageInfo = shan[imageName];

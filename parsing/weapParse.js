@@ -64,6 +64,7 @@ var weapParse = class extends baseParse {
 	
 	this.maxAmmo = weap.maxAmmo;
 
+	this.useFiringAnimation = weap.useFiringAnimation;
 	this.destroyShipWhenFiring = false;
 	this.energyCost = 0;
 	this.ammoType = "unlimited"; // unlimited ammo
