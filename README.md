@@ -5,9 +5,14 @@ An EV Nova data file and plug-in parser built for NovaJS, this project aims to p
 git, npm
 
 ## Installing
-For deployment, [get it from npm](https://www.npmjs.com/package/novaparse). For development, download the repository and run 
+For deployment, [get it from npm](https://www.npmjs.com/package/novaparse) with
 ```
 npm install novaparse
+```
+
+For development, download the repository and run 
+```
+npm install
 ```
 
 ## Usage
