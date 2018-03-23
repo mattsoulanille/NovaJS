@@ -33,6 +33,8 @@ var weapParse = class extends baseParse {
 	    this.animation.beamLength = weap.beamLength;
 	    this.animation.beamWidth = weap.beamWidth;
 	    this.animation.beamColor = weap.beamColor;
+	    this.animation.coronaColor = weap.coronaColor;
+	    this.animation.coronaFalloff = weap.coronaFalloff;	    
 	}
 	else if (this.type === "bay") {
 	    // set ship type here

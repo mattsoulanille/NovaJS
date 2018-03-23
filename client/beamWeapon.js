@@ -129,21 +129,45 @@ Else, return false
 	return this.source.pointing;
     }
 
+    drawBeam(start, end) {
+	this.graphics.position.x = start[0];
+	this.graphics.position.y = -1 * start[1];
+	
+	this.graphics.clear();
+	this.graphics.lineStyle(this.meta.animation.beamWidth+1, this.meta.animation.beamColor);
+
+	this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
+	this.graphics.lineTo(end[0], end[1]);
+
+	// This is still not quite right
+	
+	// Can this be optimized? Does it matter?
+	let magnitude = Math.sqrt(end[0]**2 + end[1]**2);
+	let orthogonal = [-end[1] / magnitude, end[0] / magnitude];
+
+	// Why don't I have a vector class or something less annoying
+	let offset = this.meta.animation.beamWidth / 2 + 1;
+	this.graphics.moveTo(orthogonal[0] * offset, orthogonal[1] * offset);
+	// Corona has width 1
+	this.graphics.lineStyle(1, this.meta.animation.coronaColor);
+	this.graphics.lineTo(end[0] + orthogonal[0]*offset, end[1] + orthogonal[1]*offset);
+
+	this.graphics.moveTo(-orthogonal[0] * offset, -orthogonal[1] * offset);
+	this.graphics.lineStyle(1, this.meta.animation.coronaColor);
+	this.graphics.lineTo(end[0] - orthogonal[0]*offset, end[1] - orthogonal[1]*offset);
+
+    }    
+
     render() {
 
 	var position = this.getFirePosition();
 	var fireAngle = this.getFireAngle(position);
-	this.graphics.position.x = position[0];
-	//(this.position[0] - stagePosition[0]) + (screenW-194)/2;
-	this.graphics.position.y = -1 * position[1];
-	    //(this.position[1] - stagePosition[1]) + screenH/2;
-	this.graphics.clear();
-	this.graphics.lineStyle(this.meta.animation.beamWidth, this.meta.animation.beamColor);
-	this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
 
 	var x = Math.cos(fireAngle) * this.meta.animation.beamLength;
-	var y = -Math.sin(fireAngle) * this.meta.animation.beamLength;
-	this.graphics.lineTo(x,y);
+	var y = Math.sin(fireAngle) * this.meta.animation.beamLength;
+
+	this.drawBeam(position, [x,-y]);
+
 
 	this.renderCollisionShape(fireAngle, position);
 

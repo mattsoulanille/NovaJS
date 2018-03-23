@@ -12,6 +12,7 @@ beamTurret = class extends beamWeapon {
     }
 
     getFireAngle(position) {
+	// Maybe refactor this so you don't plug it into sine and cosine in beamWeapon.js
 	var dx = this.target.position[0] - position[0];
 	var dy = this.target.position[1] - position[1];
 	return Math.atan2(dy, dx);
