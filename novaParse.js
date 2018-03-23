@@ -2,6 +2,7 @@
 
 
 var boom = require("./parsers/boom.js");
+var outf = require("./parsers/outf.js");
 var rled = require("./parsers/rled.js");
 var shan = require("./parsers/shan.js");
 var ship = require("./parsers/ship.js");
@@ -140,6 +141,9 @@ class novaParse {
 	    switch(type) {
 	    case "bööm":
 		parseFunction = boom;
+		break;
+	    case "oütf":
+		parseFunction = outf;
 		break;
 	    case "rlëD":
 		parseFunction = rled;

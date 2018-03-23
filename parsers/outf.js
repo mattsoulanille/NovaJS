@@ -15,11 +15,10 @@ var outf = class extends base {
 	this.functions = [];
 
 	var i = 0;
-	this.functions[i] = {};
-	
+
 	switch (this.modType){
 	case 1:
-	    this.functions[i].weapon = this.modVal;
+	    this.functions[i] = {"weapon" : this.modVal};
 	    break;
 	}
 	
