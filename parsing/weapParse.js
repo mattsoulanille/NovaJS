@@ -40,7 +40,7 @@ var weapParse = class extends baseParse {
 	    // set ship type here
 	}
 
-
+	this.passThroughShields = weap.passThroughShields;
 	this.shieldDamage = weap.shieldDamage;
 	this.armorDamage = weap.armorDamage;
 	this.reload = weap.reload;

@@ -38,18 +38,24 @@ damageable = (superclass) => class extends superclass {
     }
 
     receiveCollision(other) {
-	this.shield -= other.shieldDamage;
-	var minShield = -this.properties.shield * 0.05;
-	if (this.shield < 0) {
-	    if (this.shield < minShield) {
-		this.shield = minShield;
-	    }
+	if (other.passThroughShields) {
 	    this.armor -= other.armorDamage;
 	}
+	else {
+	    this.shield -= other.shieldDamage;
+	    var minShield = -this.properties.shield * 0.05;
+	    if (this.shield < 0) {
+		if (this.shield < minShield) {
+		    this.shield = minShield;
+		}
+		this.armor -= other.armorDamage;
+	    }
+	}
+
 	if (this.armor <= 0) {
 	    this.armor = 0;
 	    this.velocity = [0,0];
-	    this.onDeath();
+	    this.onDeath(); // make this an event
 	}
 	super.receiveCollision.call(this, other);
     }

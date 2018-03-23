@@ -200,6 +200,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    collision.armorDamage = this.properties.armorDamage;
 	    collision.impact = this.properties.impact;
 	    collision.angle = this.pointing;
+	    collision.passThroughShields = this.meta.passThroughShields;
 	    //console.log("Projectile hit something");
 	    other.receiveCollision(collision);
 	    if (this.hitParticles) {
