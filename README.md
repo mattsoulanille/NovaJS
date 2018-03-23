@@ -49,7 +49,7 @@ Plug-ins contained in the same subdirectory stored in ```Plug-ins``` share the s
 
 
 ## Running Tests
-In the parent directory of the repository, run ```mocha```. There should be plenty of failed tests as plenty of the parsing is not yet written.
+In the root directory of the repository, run ```mocha```. There should be plenty of failed tests as plenty of the parsing is not yet written.
 
 ## Contributing
 Feel free to look at the parsers in ```parsers/``` and write your own or add to the existing ones. If you run out of tests, you can write your own, but don't be suprised if I change how data is stored after accepting your pull request.
