@@ -7,7 +7,7 @@ git, npm
 ## Installing
 For deployment, [get it from npm](https://www.npmjs.com/package/novaparse). For development, download the repository and run 
 ```
-npm install
+npm install novaparse
 ```
 
 ## Usage
