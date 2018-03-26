@@ -24,21 +24,49 @@ var shipParse = class extends baseParse {
 	this.turnRate = ship.turnRate;
 
 	this.mass = ship.mass;
-	// temporary. Should replace with
-	// parsing what outfit each weapon
-	// corresponds to and just giving
-	// the ship that outfit.
-	this.weapons = [];
+
+
+	var outfits = {};
+
+	// Put the outfit corresponding to each weapon into the outfit object
+	// Doesn't deal with ammo yet.
 	ship.weapons.forEach(function(weapon) {
 	    if ( (weapon.id >= 128) && (weapon.count > 0) ) {
-		var out = {};
-		out.count = weapon.count;
-		var w = ship.idSpace.wëap[weapon.id];
-		out.id = w.globalID;
-		this.weapons.push(out);
+
+		var weaponID = ship.idSpace.wëap[weapon.id].globalID;
+
+		// Expects this.weaponOutfitMap to have been set in the prototype chain
+		if (weaponID in this.weaponOutfitMap) {
+		    
+		    let outfitID = this.weaponOutfitMap[weaponID]; // A global ID
+		    if (!outfits.hasOwnProperty(outfitID)) {
+			outfits[outfitID] = 0; // the number of outfits of this ID
+		    }
+		    outfits[outfitID] += weapon.count;
+		}
 	    }
 	}.bind(this));
 
+
+	// Do the same for the outfits themselves
+	ship.outfits.forEach(function(outfit) {
+	    if ( (outfit.id >= 128) && (outfit.count > 0) ) {
+		var outfitID = ship.idSpace.oütf[outfit.id].globalID;
+
+		if (!outfits.hasOwnProperty(outfitID)) {
+		    outfits[outfitID] = 0; // the number of outfits of this ID
+		}
+		outfits[outfitID] += outfit.count;
+
+	    }
+
+	}.bind(this));		
+
+
+	this.outfits = Object.keys(outfits).map(function(id) {
+	    return {"id" : id, "count" : outfits[id]};
+	});
+	
 	
 	
     }

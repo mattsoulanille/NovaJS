@@ -7,24 +7,56 @@ class shipServer extends ship {
 
     constructor(buildInfo, system) {
 	super(...arguments);
+	this.bindListeners();
     }
 
     buildTargetImage() {
 	return;
     }
 
-    parseDefaultWeaponsSync() {
-	// to be replaced by system having promises (see comment in index.js)
-	// a hack to make weapon loading work
-	this.buildInfo.weapons = this.meta.weapons.map(function(buildInfo) {
-	    var copy = Object.assign({}, buildInfo);
-	    copy.UUID = UUID();
-	    return copy;
+    bindListeners() {
+	this.multiplayer.onQuery("getOutfits", function() {
+	    return new Promise(function(fulfill, reject) {
+		this.onceState("outfitUUIDSBuilt", async function() {
+		    var outfits = await this.getOutfits();
+		    fulfill(outfits);
+		}.bind(this));
+	    }.bind(this));
+	}.bind(this));
+
+	this.multiplayer.on("setOutfits", async function() {
+	    console.log("setting outfits of the ship is not yet supported");
 	});
 	
-	
+    }
+    
+    setProperties() {
+	super.setProperties();
+	this._makeOutfitUUIDs();
+    }
+    
+    _makeOutfitUUIDs() {
+	var outfits;
+	if (this.buildInfo.hasOwnProperty("outfits")) {
+	    outfits = JSON.parse(JSON.stringify(this.buildInfo.outfits));
+	}
+	else {
+	    outfits = this.properties.outfits;
+	}
+
+	this.properties.outfits = outfits.map(function(o) {
+	    o.UUID = UUID();
+	    return o;
+	});
+
+	this.setState("outfitUUIDSBuilt", true);
     }
 
+    async getOutfits() {
+	return this.properties.outfits;	
+    }
+
+    
     blinkFiringAnimation() {}
     
     buildDefaultWeapons() {

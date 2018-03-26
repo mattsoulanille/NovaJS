@@ -6,9 +6,7 @@ var multiplayerServer = class extends multiplayer {
 	super(...arguments);
 
 	this.broadcaster = function(toEmit) {
-	    if (toEmit.type == "event") {
-		this.socket.broadcast.emit(this.UUID, toEmit);
-	    }
+	    this.socket.broadcast.emit(this.UUID + "event", toEmit);
 	}.bind(this);
 
 	this.socket.on(this.UUID + "event", this.broadcaster);

@@ -9,7 +9,8 @@ if (typeof(module) !== 'undefined') {
     var pointDefenseWeapon = require("./pointDefenseWeapon.js");
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
-
+    var errors = require("../client/errors.js");
+    var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
 }
 
 var weaponBuilder = class extends loadsResources(inSystem) {
@@ -38,7 +39,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 
 	if (['bay', 'point defense beam'].includes(this.meta.type)) {
 	    // temporary
-	    return false;
+	    throw new UnsupportedWeaponTypeError(this.meta.type);
 	}
 
 	switch (this.meta.type) {
@@ -68,7 +69,6 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    break;
 	}
 
-	return true;
     }
 
     async buildSub(subData) {
@@ -116,16 +116,14 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     async buildWeapon() {
 	await this._build();
 
-	if (! this._setWeaponType()) {
-	    return false;
-	}
+	this._setWeaponType();
 
 
 	await this.weapon.build();
 	return this.weapon;
-
     }
-}
+};
+
 if (typeof(module) !== 'undefined') {
     module.exports = weaponBuilder;
 }

@@ -10,6 +10,7 @@ var novaCache = class {
 
 	this.misc = new cache("objects/misc/");
 	this.statusBars = new cache("objects/statusBars/");
+	this.outfits = new cache("objects/outfits/");
     }
 
     // should mirror novaData.js

@@ -1,6 +1,6 @@
 /*
 movable.js
-cHandles any space object that moves
+Handles any space object that moves
 
 
 

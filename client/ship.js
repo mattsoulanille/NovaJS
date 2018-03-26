@@ -9,7 +9,10 @@ if (typeof(module) !== 'undefined') {
     var Promise = require("bluebird");
     var outfit = require("../server/outfitServer.js");
     var weaponBuilder = require("../server/weaponBuilderServer.js");
-    var exitPoint = require("./exitPoint.js");    
+    var exitPoint = require("./exitPoint.js");
+    var errors = require("../client/errors.js");
+    var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
+
 }
 
 ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
@@ -21,11 +24,11 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.weapons = {};
 	this.weapons.all = [];
 	this.outfits = [];
-
+	
 	this.turningToTarget = false;
 	this.landedOn = null;
 	if (typeof(buildInfo) !== 'undefined') {
-	    this.outfitList = buildInfo.outfits || [];
+	    //this.outfitList = buildInfo.outfits || [];
 	    this.buildInfo.type = "ship";
 	}
 
@@ -33,21 +36,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     async _build() {
 	await super._build();
-	//	.then(function() {console.log(this)}.bind(this))
 
-	// some stuff temporarally broken
-	//await this.buildOutfits();
-	//await this.buildTargetImage();
 	this.buildExitPoints();
-	await this.buildDefaultWeapons();
+	await this.buildOutfits();
 
-	// make sure ship properties are sane after loading outfits
-	if (this.properties.maxSpeed < 0) {
-	    this.properties.maxSpeed = 0;
-	}
-	if (this.properties.turnRate < 0) {
-	    this.properties.turnRate = 0;
-	}
 
 	this.energy = this.properties.energy;
 	if (this.system) {
@@ -86,14 +78,22 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	return uuids;
     }
 
-    async buildWeapon(buildInfo) {
-	var newWeapon = await new weaponBuilder(buildInfo, this).buildWeapon();
+    // async buildWeapon(buildInfo) {
+    // 	try {
+    // 	    var newWeapon = await new weaponBuilder(buildInfo, this).buildWeapon();
+    // 	}
+    // 	catch (e) {
+    // 	    if (! (e instanceof UnsupportedWeaponTypeError) ) {
+    // 		throw e;
+    // 	    }
+    // 	}
 	
-	if (newWeapon) {
-	    // temporary for when not all weapon types can be made
-	    this.addChild(newWeapon);
-	}
-    }
+    // 	if (newWeapon) {
+    // 	    // temporary for when not all weapon types can be made
+    // 	    this.addChild(newWeapon);
+    // 	    this.weapons.all.push(newWeapon);
+    // 	}
+    // }
     
     buildDefaultWeapons() {
 	// builds the default weapons that come with the ship
@@ -106,38 +106,60 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     }
     
-    buildOutfits() {
-	// builds outfits to this.outfits from this.outfitList
-	// does not work yet. Still need to parse outfits from novadata
-	this.outfits = [];
+    async buildOutfits() {
+	// Gets outfits from the server and builds them
+
+	this.weapons.all.forEach(function(w) {w.destroy();});
+	this.outfits.forEach(function(o) {o.destroy();});
 	this.weapons.all = [];
 
-	_.each(this.outfitList, function(buildInfo) {
-	    
-	    var o = new outfit(buildInfo);
-	    this.outfits.push(o);
+	this.properties.outfits = await this.getOutfits();
+
+	this.outfits = this.properties.outfits.map(function(buildInfo) {
+	    var o = new outfit(buildInfo, this);
 	    this.addChild(o);
+	    return o;
 	}.bind(this));
 	
-	var outfitPromises = _.map(this.outfits, function(anOutfit) {
-	    //build unbuild outfits
-	    if (anOutfit.ready) {
-		return new Promise(function(fulfill, reject){fulfill();});
-	    }
-	    else {
-		return anOutfit.build(this);
-	    }
-	    //console.log(this);
-	    
+	var outfitPromises = this.outfits.map(function(anOutfit) {
+	    return anOutfit.build();
+	});
+
+	await Promise.all(outfitPromises);
+
+	this.outfits.forEach(function(o) {
+	    o.weapons.forEach(function(w) {
+		this.weapons.all.push(w);
+	    }.bind(this));
 	}.bind(this));
 
-	return Promise.all(outfitPromises);
+	// make sure ship properties are sane after loading outfits
+	if (this.properties.maxSpeed < 0) {
+	    this.properties.maxSpeed = 0;
+	}
+	if (this.properties.turnRate < 0) {
+	    this.properties.turnRate = 0;
+	}
+    }
+
+
+    async setOutfits(outfitList) {
+	// Asks the server to set the ships outfits to outfitList
+	this.multiplayer.emit("setOutfits", outfitList);
     }
 
     setProperties() {
-	super.setProperties.call(this);
+	super.setProperties();
 	this.properties.vulnerableTo = ["normal"];
     }
+
+    getOutfits() {
+	return this.multiplayer.query("getOutfits"); // a promise
+    }
+
+    
+    
+    
     
     addSpritesToContainer() {
 

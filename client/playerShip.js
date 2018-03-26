@@ -27,12 +27,18 @@ class playerShip extends controllable(ship) {
     async _build() {
 
 	await super._build();
-	this.sortWeapons();
 	await this.makeStatusBar();
 	this.bindControls();
     }
 
 
+    async buildOutfits() {
+	this.weapons.primary = [];
+	this.weapons.secondary = [];
+	this.weapons.currentSecondary = null;
+	await super.buildOutfits();
+	this.sortWeapons();	
+    }
 
     sortWeapons() {
 

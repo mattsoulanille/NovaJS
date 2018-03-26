@@ -50,10 +50,10 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     setTarget(target) {
 	this.target = target;
 	if (this.target) {
-	    this._setState("hasTarget", true);
+	    this.setState("hasTarget", true);
 	}
 	else {
-	    this._setState("hasTarget", false);
+	    this.setState("hasTarget", false);
 	}	
     }
 
@@ -112,20 +112,8 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 	    this.reloadMilliseconds = this.properties.reload * 1000 / 30 || 1000 / 60;
 	}
 
-
-	
-	
     }
 
-    // remove this
-    // get system() {
-    // 	return this.source.system;
-    // }
-
-    // set system(s) {
-    // 	// If you're looking for things to make more sane, look here.
-    // 	//throw new Error("Tried to set system of a weapon, but it's just the system of what has the weapon.");
-    // }
     
     async build() {
 	await this._build();
@@ -136,7 +124,9 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 	
 	this.ready = true;
 	this.built = true;
-	this.source.weapons.all.push(this);
+
+	// why is this here it should not be here!
+	// this.source.weapons.all.push(this);
     }
 
     
@@ -192,6 +182,12 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     startFiring() {}
     stopFiring() {}
 
+    destroy() {
+	this.stopFiring(false);
+	if ("multiplayer" in this) {
+	    this.multiplayer.destroy();
+	}
+    }
 };
 
 

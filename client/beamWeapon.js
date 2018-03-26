@@ -231,10 +231,7 @@ Else, return false
     
     
     destroy() {
-	this.stopFiring(false);
-	this.multiplayer.destroy();
 	super.destroy();
-
     }
 
 };

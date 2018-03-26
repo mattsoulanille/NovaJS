@@ -242,11 +242,11 @@ projectileWeapon = class extends basicWeapon {
 	// watch out. this sends stuff over socket.io
 	// wait no it doesn't. I think. 
 	this._firing = false;
-	this.stopFiring(false);
+	super.destroy();
 	_.each(this.projectiles, function(proj) {
 	    proj.destroy();
 	});
-	super.destroy();
+
     }
 }
 if (typeof(module) !== 'undefined') {

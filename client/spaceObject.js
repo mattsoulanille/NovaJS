@@ -90,7 +90,8 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
     async _build() {
 	this.meta = await this.loadResources(this.type, this.buildInfo.id);
 	this.name = this.meta.name; // purely cosmetic
-    	await this.setProperties();
+    	//await this.setProperties();
+	await this.setProperties();
 	await this.makeSprites();
 	this.makeSize();
 	this.addSpritesToContainer();
@@ -107,8 +108,8 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 	    await this._build();
 	    this.building = false;
 	    this.built = true;
-	    this._emit("built");
-	    this._setState("built", true);
+	    this.emit("built");
+	    this.setState("built", true);
 	}	
     }
 

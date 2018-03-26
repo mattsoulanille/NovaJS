@@ -17,11 +17,18 @@ var loadsResources = (superclass) => class extends superclass {
     
     setProperties() {
 	// a modifiable copy of meta.
-	this.properties = this.properties || {};
-	_.each(this.meta, function(value, key) {
-	    this.properties[key] = value;
+	// Why is this the best way to make a copy???!!!
+	var copy = JSON.parse(JSON.stringify(this.meta));
+	if (! ("properties" in this) ) {
+	    this.properties = {};
+	}
+
+	// Don't overwrite already set things
+	// probably should be refactored
+	Object.keys(copy).forEach(function(key) {
+	    this.properties[key] = copy[key];
 	}, this);
-	// revise me
+
     }
 };
 

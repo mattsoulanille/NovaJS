@@ -1,82 +1,73 @@
 if (typeof(module) !== 'undefined') {
     var _ = require("underscore");
     var Promise = require("bluebird");
+    var loadsResources = require("./loadsResources.js");
     var inSystem = require("./inSystem.js");
+    // should make inSystem into a mixin and make a base class
+    // that one can add to the prototype chain of.
+
+    var weaponBuilder = require("../server/weaponBuilderServer.js");
+    var errors = require("../client/errors.js");
+    var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
 }
 
 
-outfit = class extends inSystem {
-    constructor(buildInfo) {
+var outfit = class extends loadsResources(inSystem) {
+    constructor(buildInfo, source) {
 	// source is a ship / object the outfit is equipped to
 	super(...arguments);
+	this.source = source;
 	this.buildInfo = buildInfo;
-	this.ready = false;
-	this.url = 'objects/outfits/';
+	this.built = false;;
+	this.type = "outfits";
 	if (typeof(buildInfo) !== 'undefined') {
-	    this.name = buildInfo.name;
+	    this.id = this.buildInfo.id;
 	    this.count = buildInfo.count || 1;
 	}
 	this.weapons = [];
     }
     
 
-    async build(source) {
-	this.source = source;
-	await this.loadResources();
-	if (this.meta.functions.weapon) {
-	    await this.buildWeapons();
-	}
+    async build() {
+	this.meta = await this.loadResources(this.type, this.id);
+	this.name = this.meta.name; // purely cosmetic. No actual function
+	await this.buildWeapons();
 	this.applyEffects();
-	this.ready = true;
-    }
-
-    loadResources() {
-
-	return new Promise( function(fulfill, reject) {
-	    // fix me to not use jquery
-	    var loader = new PIXI.loaders.Loader();
-	    var meta;
-	    var url = this.url + this.name + ".json";
-	    loader
-		.add('meta', url)
-		.load(function(loader, resource) {
-		    this.meta = resource.meta.data;
-		}.bind(this));
-	    loader.onComplete.add(function() {
-		fulfill();
-	    });
-	    loader.onError.add(reject.bind(this, "Could not get url " + url));
-
-	}.bind(this));
-	
-	
+	this.built = true;
     }
 
     buildWeapons() {
-
-	this.weapons = _.map( this.meta.functions.weapon, function(weaponName) {
-	    var buildInfo = {
-		"name": weaponName,
-		"source": this.source.UUID,
-		"count": this.count
-	    };
-	    if (typeof this.buildInfo.UUIDS !== 'undefined') {
-		buildInfo.UUID = this.buildInfo.UUIDS[buildInfo.name];
-	    }
-	    if (typeof this.buildInfo.socket !== 'undefined') {
-		buildInfo.socket = this.buildInfo.socket;
-	    }
-	    var w = new weapon(buildInfo, this.source);
-	    this.addChild(w);
-	    return w;
+	this.weapons = [];
+	var promises = this.meta.weapons.map(function(buildInfo) {
+	    // TEMPORARY
+	    var copy = JSON.parse(JSON.stringify(buildInfo));
+	    copy.count = this.count;
+	    // copy.UUID = Math.random();
+	    return this.buildWeapon(copy);
 	}.bind(this));
 
-	return Promise.all(_.map( this.weapons, function(weapon) {return weapon.build();}));
-	
+
+
+	return Promise.all(promises);
     }
 
+    async buildWeapon(buildInfo) {
+	try {
+	    var newWeapon = await new weaponBuilder(buildInfo, this.source).buildWeapon();
+	}
+	catch (e) {
+	    if (! (e instanceof UnsupportedWeaponTypeError) ) {
+		throw e;
+	    }
+	}
+	if (newWeapon) {
+	    // temporary for when not all weapon types can be made
+	    this.addChild(newWeapon);
+	    this.weapons.push(newWeapon);
+	}
+    }
+    
     applyEffects() {
-	
 	
 	if (this.meta.functions["speed increase"]) {
 	    this.source.properties.maxSpeed += this.meta.functions["speed increase"] * this.count;
@@ -85,10 +76,10 @@ outfit = class extends inSystem {
     }
 
     destroy() {
-	_.each(this.weapons, function(w) {w.destroy();});
+	this.weapons.forEach(function(w) {w.destroy();});
 	
     }
-}
+};
 
 if (typeof(module) !== 'undefined') {
     module.exports = outfit;

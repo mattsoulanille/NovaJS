@@ -52,7 +52,7 @@ var eventable = (superclass) => class extends superclass {
 	}
     }
 
-    _setState(name, val) {
+    setState(name, val) {
 	// Set the state
 	this._state[name] = val;
 
@@ -67,7 +67,8 @@ var eventable = (superclass) => class extends superclass {
 	}
     }
 
-    _emit(name, args = []) {
+    emit(name) {
+	var args = [...arguments].slice(1);
 	if (this._events.hasOwnProperty(name)) {
 	    this._events[name].forEach(function(toCall) {
 		toCall(...args);

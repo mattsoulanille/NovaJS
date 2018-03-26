@@ -25,23 +25,22 @@ var multiplayer = class {
 	    // Events call functions.
 	    // Secure in that only the actual owner of the UUID
 	    // can cause it to emit events.
-	    if (message.type === "event") {
-		if (message.name in this.events) {
-		    this.events[message.name].forEach(function(toCall) {
-			toCall(message.data);
-		    });
-		}
+	    if (message.name in this.events) {
+		this.events[message.name].forEach(function(toCall) {
+		    toCall(message.data);
+		});
 	    }
+
 	}.bind(this);
 
-	this.queryListener = function(message, socket = this.socket) {
+	this.queryListener = async function(message, socket = this.socket) {
 	    // Queries get responded to
 	    // Anyone can query about any UUID
 	    if (message.UUID === this.UUID) {
 		if (this.queryHandlers.hasOwnProperty(message.name)) {
 		    
 		    // There can only be one 
-		    var response = this.queryHandlers[message.name](message.data);
+		    var response = await this.queryHandlers[message.name](message.data);
 		    var toEmit = {
 			name: message.name,
 			data: response,
@@ -75,7 +74,7 @@ var multiplayer = class {
 	    
 	}.bind(this);
 
-	this.socket.on(this.UUID + "event", this.eventListener.bind(this));
+	this.socket.on(this.UUID + "event", this.eventListener);
 	this._bindQueryListener();
 	
     }
@@ -157,7 +156,6 @@ var multiplayer = class {
 	var toEmit = {};
 	toEmit.name = eventName;
 	toEmit.data = eventData;
-	toEmit.type = "event";
 	this.socket.emit(this.UUID + "event", toEmit);
     }
 
