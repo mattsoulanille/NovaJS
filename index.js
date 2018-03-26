@@ -392,19 +392,13 @@ var connectFunction = function(client){
     var buildShip = async function(buildInfo) {
 	myShip = new ship(buildInfo, currentSystem, client);
 
-	// a hack to make weapon loading work before I refactor system.
-	// System should have unbuilt things as promises (of their build functions)
-	// at least multiplayer objects should be like that
-
-	myShip.meta = await myShip.novaData[myShip.type].get(myShip.buildInfo.id);
-	//myShip.parseDefaultWeaponsSync();
-
 	await myShip.build();
-	_.each(myShip.outfitList, function(outf) {
-	    _.each(outf.UUIDS, function(uuid) {
-		owned_uuids.push(uuid);
-	    });
+	
+	_.each(myShip.outfits, function(outf) {
+	    var uuid = outf.UUID;
+	    owned_uuids.push(uuid);
 	});
+
 	myShip.show();
     //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
     };
@@ -493,28 +487,6 @@ var connectFunction = function(client){
 
 	client.emit('buildObjects', toSend);
     });
-    /*
-    client.on('land', function() {
-	receives ++;
-	client.broadcast.emit('removeObjects', owned_uuids);
-	transmits += playercount - 1;
-	currentSystem.removeObjects(owned_uuids);
-	// make sure this destroys them (it doesn't right now)
-	owned_uuids = [userid];
-    });
-    client.on('depart', function() {
-	playerShipType = shipList[_.random(0,shipList.length-1)];
-	playerShipType.UUID = userid;
-	
-	setShip(playerShipType);
-	receives ++;
-	//client.broadcast.emit('addObjects', [myShip.buildInfo])
-	//var stats = {};
-	//stats[userid] = myShip.getStats();
-	//client.broadcast.emit('updateStats', stats);
-	//transmits += playercount - 1;
-    });
-    */
     client.on('disconnect', function() {
 
 	receives ++;

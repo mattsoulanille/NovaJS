@@ -20,38 +20,33 @@ var outfit = class extends loadsResources(inSystem) {
 	this.buildInfo = buildInfo;
 	this.built = false;;
 	this.type = "outfits";
+	this.UUID = null;
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.id = this.buildInfo.id;
 	    this.count = buildInfo.count || 1;
+	    if (buildInfo.UUID) {
+		this.UUID = buildInfo.UUID;
+	    }
 	}
-	this.weapons = [];
+	this.weapon = null;
     }
     
 
     async build() {
 	this.meta = await this.loadResources(this.type, this.id);
 	this.name = this.meta.name; // purely cosmetic. No actual function
-	await this.buildWeapons();
+	if (this.meta.weapon) {
+	    await this.buildWeapon();
+	}
 	this.applyEffects();
 	this.built = true;
     }
 
-    buildWeapons() {
-	this.weapons = [];
-	var promises = this.meta.weapons.map(function(buildInfo) {
-	    // TEMPORARY
-	    var copy = JSON.parse(JSON.stringify(buildInfo));
-	    copy.count = this.count;
-	    // copy.UUID = Math.random();
-	    return this.buildWeapon(copy);
-	}.bind(this));
+    async buildWeapon() {
+	var buildInfo = JSON.parse(JSON.stringify(this.meta.weapon));
+	buildInfo.count = this.count;
+	buildInfo.UUID = this.UUID;
 
-
-
-	return Promise.all(promises);
-    }
-
-    async buildWeapon(buildInfo) {
 	try {
 	    var newWeapon = await new weaponBuilder(buildInfo, this.source).buildWeapon();
 	}
@@ -59,12 +54,15 @@ var outfit = class extends loadsResources(inSystem) {
 	    if (! (e instanceof UnsupportedWeaponTypeError) ) {
 		throw e;
 	    }
-	}
-	if (newWeapon) {
 	    // temporary for when not all weapon types can be made
-	    this.addChild(newWeapon);
-	    this.weapons.push(newWeapon);
+	    console.log("Unsupported weapon type " + e.message);
+	    return;
 	}
+
+	
+	this.addChild(newWeapon);
+	this.weapon = newWeapon;
+
     }
     
     applyEffects() {
@@ -75,10 +73,9 @@ var outfit = class extends loadsResources(inSystem) {
 	
     }
 
-    destroy() {
-	this.weapons.forEach(function(w) {w.destroy();});
-	
-    }
+    // destroy() {
+    //  // Handled by inSystem
+    // }
 };
 
 if (typeof(module) !== 'undefined') {

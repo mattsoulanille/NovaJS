@@ -36,6 +36,7 @@ class shipServer extends ship {
     }
     
     _makeOutfitUUIDs() {
+	// Assumes no more than 1 weapon per outfit, which is the case in Nova.
 	var outfits;
 	if (this.buildInfo.hasOwnProperty("outfits")) {
 	    outfits = JSON.parse(JSON.stringify(this.buildInfo.outfits));

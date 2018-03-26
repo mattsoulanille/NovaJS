@@ -40,7 +40,6 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.buildExitPoints();
 	await this.buildOutfits();
 
-
 	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
@@ -128,9 +127,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	await Promise.all(outfitPromises);
 
 	this.outfits.forEach(function(o) {
-	    o.weapons.forEach(function(w) {
-		this.weapons.all.push(w);
-	    }.bind(this));
+	    if (o.weapon) {
+		this.weapons.all.push(o.weapon);
+	    }
 	}.bind(this));
 
 	// make sure ship properties are sane after loading outfits

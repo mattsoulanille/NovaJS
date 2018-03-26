@@ -29,17 +29,17 @@ var multiplayerServer = class extends multiplayer {
 	// broadcast to all the clients except this one
 	this._send(eventName, eventData, this.socket.broadcast.emit.bind(this.socket));
     }
-    respond(eventName, eventData) {
-	// send to this client
-	this._send(eventName, eventData, this.socket.emit.bind(this.socket));
-    }
+    // respond(eventName, eventData) {
+    // 	// send to this client
+    // 	this._send(eventName, eventData, this.socket.emit.bind(this.socket));
+    // }
 
-    broadcast(eventName, eventData) {
-	// send to this client and all the others
-	// could use io.broadcast instead
-	this.emit(eventName, eventData);
-	this.respond(eventName, eventData);
-    }
+    // broadcast(eventName, eventData) {
+    // 	// send to this client and all the others
+    // 	// could use io.broadcast instead
+    // 	this.emit(eventName, eventData);
+    // 	this.respond(eventName, eventData);
+    // }
 
     destroy() {
 	super.destroy();
@@ -59,7 +59,11 @@ multiplayerServer.prototype.bindSocket = function(socket) {
     // It handles communication between all instances of multiplayerServer
     // It is gross and terrible
     // It would be better if socket had a way of listening for events regardless of client.
-    
+
+
+    // If multiplayerObject doesn't get destroyed, these start piling up and sending bunches
+    // of extra responses. Make sure to destroy multiplayerObject when it's no longer needed!
+
     socket.on("query", function(message) {
 	this.globalSet.forEach(function(instance) {
 	    instance.queryListener(message, socket);

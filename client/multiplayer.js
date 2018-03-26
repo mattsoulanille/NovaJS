@@ -18,7 +18,8 @@ var multiplayer = class {
 	this.events = {};
 	this.queryHandlers = {}; // functions that respond to a query.
 	this.responseHandlers = {}; // Functions that take a response to fulfill the promise in the query.
-
+	this.queryID = 0;
+	
 	// Yes they need to be defined here beacuse they need to be bound to "this"
 	// because see multiplayerServer.js bindSocket function.
 	this.eventListener = function(message) {
@@ -44,6 +45,7 @@ var multiplayer = class {
 		    var toEmit = {
 			name: message.name,
 			data: response,
+			queryID: message.queryID,
 			//type: "response",
 			UUID: this.UUID
 		    };
@@ -60,15 +62,16 @@ var multiplayer = class {
 	this.responseListener = function(message) {
 	    // Responses fulfill the promises made by queries
 	    if (message.UUID === this.UUID) {
-		if (this.responseHandlers.hasOwnProperty(message.name)) {
-		    this.responseHandlers[message.name].forEach(function(fulfill) {
-			fulfill(message.data);
-		    });
-		    // Erase them since they're done now
-		    this.responseHandlers = new Set();
+		if (this.responseHandlers.hasOwnProperty(message.queryID)) {
+		    var fulfill = this.responseHandlers[message.queryID];
+		    fulfill(message.data);
+
+		    // Remove it since it's done now
+		    delete this.responseHandlers[message.queryID];
 		}
 		else {
-		    throw new Error("no response handler for message " + message.name);
+		    //throw new Error("no response handler for message " + message.name);
+		    console.log("no response handler for message " + message.name);
 		}
 	    }
 	    
@@ -117,21 +120,19 @@ var multiplayer = class {
 	// Server doesn't rebroadcast it.
 
 	// If multiple queries of the same name are made,
-	// the first one to come back is the result for all of them!
+	// the order in which replies are given is guaranteed.
 
 	return new Promise(function(fulfill, reject) {
 	    var toEmit = {};
 	    toEmit.name = name;
 	    toEmit.data = data;
-	    //toEmit.type = "query";
+	    toEmit.queryID = this.queryID;
+	    this.queryID += 1;
 	    // see _bindQueryListener for why the following is needed:
 	    toEmit.UUID = this.UUID;
 	    toEmit.replyTo = this.socket.id;
-
-	    if (! this.responseHandlers.hasOwnProperty(name)) {
-		this.responseHandlers[name] = new Set();
-	    }
-
+	    
+	    
 	    var successFunction = function(data) {
 		clearTimeout(deadline); // we made it
 		fulfill(data);
@@ -140,11 +141,11 @@ var multiplayer = class {
 	    // 10 seconds is the timeout for fulfilling a query
 	    var deadline = setTimeout(function() {
 		// Failed to get a response in time
-		this.responseHandlers[name].delete(successFunction);
+		//delete this.responseHandlers[toEmit.queryID];
 		reject(new Error("Query had no response. Name: " + name));
 	    }.bind(this), 10000);
 	    
-	    this.responseHandlers[name].add(successFunction);
+	    this.responseHandlers[toEmit.queryID] = successFunction;
 	    
 	    this.socket.emit("query", toEmit);
 	}.bind(this));
@@ -162,7 +163,7 @@ var multiplayer = class {
     
     
     destroy() {
-	this.socket.removeAllListeners(this.UUID);
+	this.socket.removeAllListeners(this.UUID + "event");
     }
 
 };

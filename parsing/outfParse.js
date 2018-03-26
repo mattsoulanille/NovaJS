@@ -9,18 +9,22 @@ var outfParse = class extends baseParse {
 	let functions = outf.functions;
 
 	var weapons = {};
+
+	this.weapon = null;
 	functions.forEach(function(f) {
 	    if (f.hasOwnProperty("weapon")) {
-		let globalID = outf.idSpace.wëap[f.weapon].globalID;
-		if (!weapons.hasOwnProperty(globalID)) {
-		    weapons[globalID] = 0;
-		}
-		weapons[globalID] += 1;
-	    }
-	}.bind(this));
+		if (this.weapon === null) {
+		    let globalID = outf.idSpace.wëap[f.weapon].globalID;
 
-	this.weapons = Object.keys(weapons).map(function(id) {
-	    return {"id":id, "count":weapons[id]};
+		    this.weapon = {
+			id: globalID,
+			count: 1
+		    };
+		}
+		else {
+		    throw new Error("Outfit has multiple weapons: " + outf.name);
+		}
+	    }
 	}.bind(this));
 
 

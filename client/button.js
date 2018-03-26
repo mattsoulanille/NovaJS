@@ -86,9 +86,6 @@ class button extends eventable(visible(function() {})) {
             // .on('pointerout', onButtonOut);
 	
 
-
-
-
 	// test graphics
 
 	// var g = new PIXI.Graphics();
@@ -104,7 +101,7 @@ class button extends eventable(visible(function() {})) {
 
     _onPointerUp() {
 	this._onPointerUpOutside();
-	this._emit('press');
+	this.emit('press');
     }
 
     _onPointerUpOutside() {
