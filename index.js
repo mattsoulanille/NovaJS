@@ -189,6 +189,8 @@ var startGame = async function() {
     local.context.shipNames = shipNames;
 
     nd = new novaData(np);
+    //await nd.build();
+    
     inSystem.prototype.novaData = nd;
     console.log("Parsing nova files and setting up cache");
     nd.build();
@@ -276,7 +278,19 @@ var startGame = async function() {
 	}
 	catch (e) {
 	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse") {
+	    if (e.message !== "not found in novaParse under wëap") {
+		throw e;
+	    }
+	}
+    });
+    app.get('/objects/outfits/:outfit.json', async function(req, res) {
+	var id = req.params.outfit;
+	try {
+	    res.send(await nd.outfits.get(id));
+	}
+	catch (e) {
+	    res.status(404).send("not found");
+	    if (e.message !== "not found in novaParse under oütf") {
 		throw e;
 	    }
 	}
@@ -329,9 +343,13 @@ setInterval(function() {
 
 var paused = false;
 var playercount = 0;
+var multiplayer = require("./server/multiplayerServer.js");
 
 local.context.players = players;
 var connectFunction = function(client){
+
+    multiplayer.prototype.bindSocket(client);
+    
     receives ++;
     var userid = UUID();
     var owned_uuids = [userid];
@@ -377,8 +395,9 @@ var connectFunction = function(client){
 	// a hack to make weapon loading work before I refactor system.
 	// System should have unbuilt things as promises (of their build functions)
 	// at least multiplayer objects should be like that
+
 	myShip.meta = await myShip.novaData[myShip.type].get(myShip.buildInfo.id);
-	myShip.parseDefaultWeaponsSync();
+	//myShip.parseDefaultWeaponsSync();
 
 	await myShip.build();
 	_.each(myShip.outfitList, function(outf) {
