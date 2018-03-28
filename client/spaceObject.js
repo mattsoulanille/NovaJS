@@ -23,7 +23,7 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 	this.buildInfo = buildInfo;
 	this.renderReady = false;
 	this.destroyed = false;
-
+	this._destroying = false;
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
 	this.position = [0,0];
@@ -119,10 +119,12 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
     
     hide() {
 	// Can't shoot if hidden
-	this.weapons.all.forEach(function(w) {
-	    w.enabled = false;
-	    w.firing = false;
-	});
+	if (! this._destroying) {
+	    this.weapons.all.forEach(function(w) {
+		w.enabled = false;
+		w.firing = false;
+	    });
+	}
 	super.hide();
     }
 
@@ -254,25 +256,16 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 	this.hide();
 	this._removeFromContainer();
 	
-        if (this.UUID) {
-            delete this.system.multiplayer[this.UUID];
-	    delete this.system.built.multiplayer[this.UUID];
-        }
+        this.system.built.spaceObjects.delete(this);
 
-        if (this.built) {
-            this.system.built.spaceObjects.delete(this);
-            this.system.built.render.delete(this);
-        }
         this.system.spaceObjects.delete(this);
+	super._removeFromSystem();
     }
 
     _addToSystem() {
 	this._addToContainer();
-        if (this.UUID) {
-            this.system.multiplayer[this.UUID] = this;
-	    if (this.built) {
-		this.system.built.multiplayer[this.UUID] = this;
-	    }
+        if (this.UUID && this.built) {
+	    this.system.built.multiplayer[this.UUID] = this;
         }
 
         if (this.built) {
@@ -280,6 +273,7 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
         }
 
         this.system.spaceObjects.add(this);
+	super._addToSystem();
     }
 
     findNearest(items) {
@@ -312,25 +306,21 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
             return;
         }
 
-	this.weapons.all.forEach(function(o) {o.destroy();});
+	this.weapons.all.forEach(function(o) {
+	    if (! o.destroyed) {
+		o.destroy();
+	    }
+	});
 		
 	if (this.multiplayer) {
 	    this.multiplayer.destroy();
 	}
-		
-        try {
-	    this.hide();
-	}
-	catch(e) {
-	    // I don't care about errors. I'm destroying it.
-	}
-
-        this.system = undefined;
-
+	
         this.container.destroy();
         _.each(this.sprites, function(s) {s.destroy();});
-        this.destroyed = true;
-	//super.destroy();
+	this._destroying = true;
+	super.destroy();
+	this.destroyed = true;
     }
 
 };

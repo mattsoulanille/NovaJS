@@ -19,6 +19,7 @@ var multiplayer = class {
 	this.queryHandlers = {}; // functions that respond to a query.
 	this.responseHandlers = {}; // Functions that take a response to fulfill the promise in the query.
 	this.queryID = 0;
+	this.destroyed = false;
 	
 	// Yes they need to be defined here beacuse they need to be bound to "this"
 	// because see multiplayerServer.js bindSocket function.
@@ -163,7 +164,16 @@ var multiplayer = class {
     
     
     destroy() {
-	this.socket.removeAllListeners(this.UUID + "event");
+	this.socket.removeListener(this.UUID + "event", this.eventListener);
+	this.socket.removeListener("query", this.queryListener);
+	this.socket.removeListener("response", this.responseListener);
+	this.destroyed = true;
+
+	// Maybe do something like this for other objects' destroy functions?
+	this.on = this.off = this.onQuery = this.offQuery
+	    = this.query = this.emit = function() {
+	    throw new Error("Tried to call method of destroyed multiplayer object");
+	};
     }
 
 };

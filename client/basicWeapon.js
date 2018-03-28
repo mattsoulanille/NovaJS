@@ -57,6 +57,16 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 	}	
     }
 
+
+    /*
+    _removeFromSystem() {
+	// Write me!
+    }
+    _addToSystem() {
+	// Write me!
+    }
+*/
+
     
     makeContainer() {} // for beamWeapon. A workaround. Not pretty but simple.
     
@@ -183,9 +193,17 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     stopFiring() {}
 
     destroy() {
-	this.stopFiring(false);
-	if ("multiplayer" in this) {
-	    this.multiplayer.destroy();
+	if (! this.destroyed) {
+	    this.stopFiring(false);
+	    this.fire = function() {
+		throw new Error("Called function of destroyed object");
+	    };
+	    
+	    if ("multiplayer" in this) {
+		this.multiplayer.destroy();
+	    }
+	    super.destroy();
+	    //this.destroyed = true;
 	}
     }
 };

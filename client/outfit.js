@@ -73,6 +73,9 @@ var outfit = class extends loadsResources(inSystem) {
 	
     }
 
+    _addToSystem() {}
+    _removeFromSystem() {}
+	
     // destroy() {
     //  // Handled by inSystem
     // }

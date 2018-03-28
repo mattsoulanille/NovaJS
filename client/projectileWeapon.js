@@ -243,9 +243,16 @@ projectileWeapon = class extends basicWeapon {
 	// wait no it doesn't. I think. 
 	this._firing = false;
 	super.destroy();
-	_.each(this.projectiles, function(proj) {
+
+	this.buildProjectile = function() {
+	    throw new Error("Called method of destroyed object");
+	};
+
+	this.projectiles.forEach(function(proj) {
 	    proj.destroy();
 	});
+
+	this.projectiles = null;
 
     }
 }

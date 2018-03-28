@@ -344,7 +344,7 @@ setInterval(function() {
 var paused = false;
 var playercount = 0;
 var multiplayer = require("./server/multiplayerServer.js");
-
+local.context.m = multiplayer.prototype.globalSet;
 local.context.players = players;
 var connectFunction = function(client){
 

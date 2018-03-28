@@ -8,6 +8,7 @@ if (typeof(module) !== 'undefined') {
 var inSystem = class {
     constructor() {
 	this.children = new Set();
+	this.destroyed = false;
     }
 
     addChild(child) {
@@ -31,10 +32,18 @@ var inSystem = class {
     }
     
     _removeFromSystem() {
+        if (this.hasOwnProperty("UUID") && this.UUID) {
+            delete this.system.multiplayer[this.UUID];
+	    delete this.system.built.multiplayer[this.UUID];
+        }
+	this.system.built.render.delete(this);
 
     }
 
     _addToSystem() {
+        if (this.hasOwnProperty("UUID") && this.UUID) {
+            this.system.multiplayer[this.UUID] = this;;
+	}
 	
     }
     
@@ -44,7 +53,7 @@ var inSystem = class {
 
     set system(sys) {
 
-	if (this.system !== sys) {
+	if ((this.system !== sys) && !this.destroyed) {
 	    if (this.system) {
 		// remove all references of this object from system
 		this._removeFromSystem();
@@ -65,10 +74,12 @@ var inSystem = class {
     }
     
     destroy() {
-	this.system = null;
 	this.children.forEach(function(child) {
 	    child.destroy();
 	});
+	if (this.system !== null) {
+	    this.system = null;
+	}
     }
 
     

@@ -35,6 +35,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
 
     async _build() {
+	this.multiplayer.debugSource = this; // for debugging. Remove.
 	await super._build();
 
 	this.buildExitPoints();
@@ -107,7 +108,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     
     async buildOutfits() {
 	// Gets outfits from the server and builds them
-
+	
 	this.weapons.all.forEach(function(w) {w.destroy();});
 	this.outfits.forEach(function(o) {o.destroy();});
 	this.weapons.all = [];
@@ -368,9 +369,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     
     destroy() {
-	
 	_.each(this.outfits, function(o) {o.destroy();});
-
 	super.destroy();
     }
 }

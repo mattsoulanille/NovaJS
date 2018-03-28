@@ -71,6 +71,11 @@ var renderable = (superclass) => class extends superclass {
 	if (this.system) {
 	    this.hide();
 	}
+	super.destroy();
+	this.render = this.hide = this.show = function() {
+	    throw new Error("Called method of destroyed object");
+	};
+
 	this.destroyed = true;
     }
 
