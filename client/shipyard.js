@@ -3,7 +3,7 @@ class shipyard extends menu {
 	var buildInfo = {background : "/objects/menus/shipyard.png"};
 	super(buildInfo);
 	this.scope = "shipyard";
-	this.itemGrid = new itemGrid(allShipNames);
+	this.itemGrid = new itemGrid(allShips);
 	this.container.addChild(this.itemGrid.container);
 
 	this.itemGrid.drawGrid();
@@ -27,7 +27,7 @@ class shipyard extends menu {
 
     buyShip() {
 	// Temporary
-	socket.emit('setShip', this.itemGrid.selection);
+	socket.emit('setShip', this.itemGrid.selection.id);
     }    
 
     bindControls() {

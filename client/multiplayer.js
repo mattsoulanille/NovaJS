@@ -152,12 +152,16 @@ var multiplayer = class {
 	}.bind(this));
     }
 
+    privateEmit(eventName, eventData) {
+	this.emit(eventName, eventData, false);
+    }
     
-    emit(eventName, eventData) {
+    emit(eventName, eventData, rebroadcast = true) {
 	// Gets rebroadcasted to all connected clients
 	var toEmit = {};
 	toEmit.name = eventName;
 	toEmit.data = eventData;
+	toEmit.rebroadcast = rebroadcast;
 	this.socket.emit(this.UUID + "event", toEmit);
     }
 

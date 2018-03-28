@@ -161,7 +161,8 @@ var nd; // nova data
 
 // all ships
 var shipIDs;
-var shipNames;
+var allShips;
+var allOutfits;
 var startGame = async function() {
     console.log("Reading nova data");
     try {
@@ -180,13 +181,22 @@ var startGame = async function() {
 
 
     shipIDs = Object.keys(np.ids.resources.shïp);
-    shipNames = {};
+    allShips = [];
     shipIDs.forEach(function(id) {
-	shipNames[np.ids.resources.shïp[id].name] = id;
+	allShips.push({name : np.ids.resources.shïp[id].name,
+		       id : id});
     });
     
+
+    var outfIDs = Object.keys(np.ids.resources.oütf);
+    allOutfits = [];
+    outfIDs.forEach(function(id) {
+	allOutfits.push({name : np.ids.resources.oütf[id].name,
+		       id : id});
+    });
+    
+    
     local.context.shipIDs = shipIDs;
-    local.context.shipNames = shipNames;
 
     nd = new novaData(np);
     //await nd.build();
@@ -200,8 +210,12 @@ var startGame = async function() {
     
     io.on('connection', connectFunction);
 
-    app.get('/objects/meta/shipNames.json', function(req, res) {
-	res.send(JSON.stringify(shipNames));
+    app.get('/objects/meta/allShips.json', function(req, res) {
+	res.send(JSON.stringify(allShips));
+    });
+
+    app.get('/objects/meta/allOutfits.json', function(req, res) {
+	res.send(JSON.stringify(allOutfits));
     });
 
     

@@ -73,7 +73,7 @@ var novaData = class {
 
 	    var promises = outfit.functions.map(async function(prop) {
 		var weapID = prop.weapon;
-		if (prop.hasOwnProperty("weapon")) {
+		if (prop.hasOwnProperty("weapon") && (weapID >= 128)) {
 		    
 		    try {
 			this.weaponOutfitMap[idSpace.wëap[weapID].globalID] = id;

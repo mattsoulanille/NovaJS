@@ -6,7 +6,9 @@ var multiplayerServer = class extends multiplayer {
 	super(...arguments);
 
 	this.broadcaster = function(toEmit) {
-	    this.socket.broadcast.emit(this.UUID + "event", toEmit);
+	    if (toEmit.rebroadcast) {
+		this.socket.broadcast.emit(this.UUID + "event", toEmit);
+	    }
 	}.bind(this);
 
 	this.socket.on(this.UUID + "event", this.broadcaster);
@@ -22,24 +24,24 @@ var multiplayerServer = class extends multiplayer {
 	var toEmit = {};
 	toEmit.name = eventName;
 	toEmit.data = eventData;
-	sendFunction(this.UUID, toEmit);
+	sendFunction(this.UUID + "event", toEmit);
     }
     
     emit(eventName, eventData) {
 	// broadcast to all the clients except this one
 	this._send(eventName, eventData, this.socket.broadcast.emit.bind(this.socket));
     }
-    // respond(eventName, eventData) {
-    // 	// send to this client
-    // 	this._send(eventName, eventData, this.socket.emit.bind(this.socket));
-    // }
+    respond(eventName, eventData) {
+    	// send to this client
+    	this._send(eventName, eventData, this.socket.emit.bind(this.socket));
+    }
 
-    // broadcast(eventName, eventData) {
-    // 	// send to this client and all the others
-    // 	// could use io.broadcast instead
-    // 	this.emit(eventName, eventData);
-    // 	this.respond(eventName, eventData);
-    // }
+    broadcast(eventName, eventData) {
+    	// send to this client and all the others
+    	// could use io.broadcast instead
+    	this.emit(eventName, eventData);
+    	this.respond(eventName, eventData);
+    }
 
     destroy() {
 	super.destroy();

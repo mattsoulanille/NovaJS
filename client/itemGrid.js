@@ -45,6 +45,7 @@ class itemGrid {
 
     makeTiles() {
 	// should a tile be its own class?
+	// yes.
 	
 	this.tileBoarderGraphics = this.items.map(function() {
 	    var g = new PIXI.Graphics();
@@ -60,11 +61,17 @@ class itemGrid {
 	}.bind(this));
 
 	this.texts = this.items.map(function(item) {
-	    var t = new PIXI.Text(item, this.font.normal);
+	    var t = new PIXI.Text(item.name, this.font.normal);
 	    t.anchor.x = 0.5;
 	    return t;
 	}.bind(this));
-	
+	/*
+	this.counts = this.items.map(function(item) {
+	    var t = new PIXI.text(item, this.font.normal);
+	    t.anchor.x=0.5;
+	    return t;
+	});
+	*/
 	for (let i = 0; i < this.tiles.length; i++) {
 	    var tile = this.tiles[i];
 	    tile.on('pointerdown', function() {

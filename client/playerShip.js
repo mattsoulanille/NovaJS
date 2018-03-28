@@ -40,6 +40,28 @@ class playerShip extends controllable(ship) {
 	this.sortWeapons();	
     }
 
+    addOutfit(newOutfit) {
+	// Temporary and linear time. Bad
+
+	for (let i in this.properties.outfits) {
+	    var o = this.properties.outfits[i];
+	    if (newOutfit.id == o.id) {
+		o.count += newOutfit.count;
+		return this.setOutfits(this.properties.outfits);
+	    }
+	}
+
+	this.properties.outfits.push(newOutfit);
+	return this.setOutfits(this.properties.outfits);
+    }
+    
+
+    async setOutfits(outfitList) {
+	// Asks the server to set the ships outfits to outfitList
+	this.multiplayer.privateEmit("setOutfits", outfitList);
+    }
+
+    
     sortWeapons() {
 
 	_.each(this.weapons.all, function(weapon) {

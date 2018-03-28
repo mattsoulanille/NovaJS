@@ -7,14 +7,14 @@ class shipServer extends ship {
 
     constructor(buildInfo, system) {
 	super(...arguments);
-	this.bindListeners();
+
     }
 
     buildTargetImage() {
 	return;
     }
 
-    bindListeners() {
+    _bindListeners() {
 	this.multiplayer.onQuery("getOutfits", function() {
 	    return new Promise(function(fulfill, reject) {
 		this.onceState("outfitUUIDSBuilt", async function() {
@@ -24,12 +24,17 @@ class shipServer extends ship {
 	    }.bind(this));
 	}.bind(this));
 
-	this.multiplayer.on("setOutfits", async function() {
-	    console.log("setting outfits of the ship is not yet supported");
-	});
-	
+	super._bindListeners();
     }
     
+    async _setOutfitsListener(outfits) {
+	this.properties.outfits = outfits;
+	this.buildInfo.outfits = outfits;
+	this._makeOutfitUUIDs();
+	super._setOutfitsListener(await this.getOutfits());
+	this.multiplayer.broadcast("setOutfits", await this.getOutfits());
+    }
+
     setProperties() {
 	super.setProperties();
 	this._makeOutfitUUIDs();

@@ -99,6 +99,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    weaponBuilder = require("../server/weaponBuilderServer.js");
 	}
 
+
 	for (var i = 0; i < this.meta.submunitions.length; i++) {
 	    var subData = Object.assign({}, this.meta.submunitions[i]);
 	    var buildInfo = {id: subData.id};

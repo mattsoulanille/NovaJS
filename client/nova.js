@@ -107,7 +107,8 @@ var stagePosition;
 
 // Temporary until there's an actual system for planets knowing
 // what ships they have available.
-var allShipNames;
+var allShips;
+var allOutfits;
 function loadJson(url) {
     return new Promise(function(fulfill, reject) {
 	var loader = new PIXI.loaders.Loader();
@@ -135,10 +136,16 @@ socket.on('onconnected', async function(data) {
     if (data.paused) {
 	pause();
     }
-    await loadJson("/objects/meta/shipNames.json")
+    await loadJson("/objects/meta/allShips.json")
 	.then(function(ships) {
 	    // Temporary
-	    allShipNames = Object.keys(ships);
+	    allShips = ships;
+	});
+
+    await loadJson("/objects/meta/allOutfits.json")
+	.then(function(outfits) {
+	    // Temporary
+	    allOutfits = outfits;
 	});
 
     await currentSystem.setObjects(data.system);

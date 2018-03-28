@@ -34,6 +34,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     }
 
+    _bindListeners() {
+	this.multiplayer.on("setOutfits", this._setOutfitsListener.bind(this));
+    }
+    
     async _build() {
 	this.multiplayer.debugSource = this; // for debugging. Remove.
 	await super._build();
@@ -45,6 +49,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	if (this.system) {
 	    this.system.built.ships.add(this);
 	}
+	this._bindListeners();
     }
 
 
@@ -105,16 +110,29 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	return Promise.all(promises);
 
     }
+
+    _setOutfitsListener(outfits) {
+	//this.destroyOutfits();
+	this.properties.outfits = outfits;
+	this.buildInfo.outfits = outfits;
+	this.buildOutfits(outfits);
+    }
     
-    async buildOutfits() {
+    async buildOutfits(outfits) {
 	// Gets outfits from the server and builds them
+	// Or builds outfits given
 	
 	this.weapons.all.forEach(function(w) {w.destroy();});
 	this.outfits.forEach(function(o) {o.destroy();});
 	this.weapons.all = [];
 
-	this.properties.outfits = await this.getOutfits();
-
+	if (typeof outfits == "undefined" ) {
+	    this.properties.outfits = await this.getOutfits();
+	}
+	else {
+	    this.properties.outfits = outfits;
+	}
+	
 	this.outfits = this.properties.outfits.map(function(buildInfo) {
 	    var o = new outfit(buildInfo, this);
 	    this.addChild(o);
@@ -143,10 +161,6 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
 
 
-    async setOutfits(outfitList) {
-	// Asks the server to set the ships outfits to outfitList
-	this.multiplayer.emit("setOutfits", outfitList);
-    }
 
     setProperties() {
 	super.setProperties();
@@ -367,9 +381,12 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
         super._removeFromSystem.call(this);
     }
 
+    destroyOutfits() {
+	_.each(this.outfits, function(o) {o.destroy();});
+    }
     
     destroy() {
-	_.each(this.outfits, function(o) {o.destroy();});
+	this.destroyOutfits();
 	super.destroy();
     }
 }

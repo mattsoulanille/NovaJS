@@ -14,12 +14,14 @@ var outfParse = class extends baseParse {
 	functions.forEach(function(f) {
 	    if (f.hasOwnProperty("weapon")) {
 		if (this.weapon === null) {
-		    let globalID = outf.idSpace.wëap[f.weapon].globalID;
-
-		    this.weapon = {
-			id: globalID,
-			count: 1
-		    };
+		    if (f.weapon >= 128) {
+			let globalID = outf.idSpace.wëap[f.weapon].globalID;
+		    
+			this.weapon = {
+			    id: globalID,
+			    count: 1
+			};
+		    }
 		}
 		else {
 		    throw new Error("Outfit has multiple weapons: " + outf.name);
