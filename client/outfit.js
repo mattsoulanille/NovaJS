@@ -76,6 +76,7 @@ var outfit = class extends loadsResources(inSystem) {
 	    this.source.properties.turnRate +=
 		this.meta.functions["turn rate change"]* 2*Math.PI/120;
 	}
+
 	if (this.meta.functions.hasOwnProperty("shield boost")) {
 	    this.source.properties.shield += this.meta.functions["shield boost"] * this.count;
 	}

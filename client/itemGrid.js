@@ -1,12 +1,18 @@
-class itemGrid {
-    constructor(items) {
-	this.container = new PIXI.Container();
-	this.graphics = new PIXI.Graphics();
-
-	// Experimentally Determined
-	this.boxCount = [4, 5];
+class itemTile extends eventable(function() {}) {
+    constructor(item) {
+	super();
+	this.item = item;
 	this.boxDimensions = [83, 54];
-	
+
+	this.name = this.item.name;
+	this.font = {
+	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
+		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
+
+	    grey:    {fontFamily:"Geneva", fontSize:10, fill:0x262626,
+		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]}
+	};
+
 	// see the colr resource
 	this.colors = {
 	    dim : 0x404040,
@@ -16,14 +22,63 @@ class itemGrid {
 	this.lineWidth = 1;
 	this.dimStyle = [this.lineWidth, this.colors.dim];
 	this.brightStyle = [this.lineWidth, this.colors.bright];
-	this.font = {
-	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
-		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
 
-	    grey:    {fontFamily:"Geneva", fontSize:10, fill:0x262626,
-		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]}
-	};
+
+	this.graphics = new PIXI.Graphics();
 	
+	this.itemText = new PIXI.Text(this.name, this.font.normal);
+	this.itemText.anchor.x = 0.5;
+	this.itemText.position.x = this.boxDimensions[0] / 2;
+	this.itemText.position.y = this.boxDimensions[1] * 1/2;
+
+	this.container = new PIXI.Container();
+	this.container.interactive = true;
+	this.active = false;
+	
+	this.container.on('pointerdown', function() {
+	    //this.active = true;
+	    this.emit("pointerdown", this);
+	}.bind(this));
+
+	this.container.addChild(this.graphics);
+	this.container.addChild(this.itemText);
+
+    }
+
+    draw() {
+	this.graphics.clear();
+	if (this.active) {
+	    this.graphics.lineStyle(...this.brightStyle);
+	}
+	else {
+	    this.graphics.lineStyle(...this.dimStyle);
+	}
+
+	this.graphics.beginFill(0x000000);
+	this.graphics.drawRect(0, 0, this.boxDimensions[0], this.boxDimensions[1]);
+
+    }
+    hide() {
+	this.container.visible = false;
+    }
+    show() {
+	this.container.visible = true;
+    }
+    moveTo(pos) {
+	this.container.position.x = pos[0];
+	this.container.position.y = pos[1];
+    }
+}
+
+
+
+class itemGrid {
+    constructor(items) {
+	this.container = new PIXI.Container();
+
+	// Experimentally Determined
+	this.boxCount = [4, 5];
+	this.boxDimensions = [83, 54];
 
 	// Make this be ships or outfits or something in the future.
 	this.items = items;
@@ -44,54 +99,24 @@ class itemGrid {
     }
 
     makeTiles() {
-	// should a tile be its own class?
-	// yes.
-	
-	this.tileBoarderGraphics = this.items.map(function() {
-	    var g = new PIXI.Graphics();
-	    return g;
+	this.tiles = this.items.map(function(item) {
+	    var tile =  new itemTile(item);
+	    this.container.addChild(tile.container);
+	    tile.on('pointerdown', this._onTileClicked.bind(this));
+	    return tile;
 	}.bind(this));
-
-	this.tiles = this.tileBoarderGraphics.map(function(graphic) {
-	    var c = new PIXI.Container();
-	    c.addChild(graphic);
-	    this.container.addChild(c);
-	    c.interactive = true;
-	    return c;
-	}.bind(this));
-
-	this.texts = this.items.map(function(item) {
-	    var t = new PIXI.Text(item.name, this.font.normal);
-	    t.anchor.x = 0.5;
-	    return t;
-	}.bind(this));
-	/*
-	this.counts = this.items.map(function(item) {
-	    var t = new PIXI.text(item, this.font.normal);
-	    t.anchor.x=0.5;
-	    return t;
-	});
-	*/
-	for (let i = 0; i < this.tiles.length; i++) {
-	    var tile = this.tiles[i];
-	    tile.on('pointerdown', function() {
-		this.selectionIndex = i;
-		this.drawGrid();
-		//console.log("clicked " + i);
-	    }.bind(this));
-
-	    tile.addChild(this.texts[i]);
-	    this.texts[i].position.x = this.boxDimensions[0] / 2;
-	    this.texts[i].position.y = this.boxDimensions[1] * 1/2;
-	}
-
 
     }
 
+    _onTileClicked(tile) {
+	this.selectionIndex = this.tiles.indexOf(tile);
+	this.drawGrid();
+    }
+    
     drawGrid() {
 	// Hide everything first. Reveal them later
 	this.tiles.forEach(function(t) {
-	    t.visible = false;
+	    t.hide();
 	});
 
 	var start = this.boxCount[0] * this.scroll;
@@ -99,26 +124,23 @@ class itemGrid {
 	let selectedPosition = null;
 	for (let i = 0; i < Math.min(this.items.length - start, this.boxCount[0] * this.boxCount[1]); i++) {
 	    var itemIndex = i + start;
+	    var tile = this.tiles[itemIndex];
 	    let xcount = i % this.boxCount[0];
 	    let ycount = Math.floor(i / this.boxCount[0]);
 
-	    this.tiles[itemIndex].visible = true;
-	    let g = this.tileBoarderGraphics[itemIndex];
-	    g.clear();
+
+	    tile.show();
 	    if (itemIndex === this.selectionIndex) {
-		g.beginFill(0x000000);
-		g.lineStyle(...this.brightStyle);
-		g.drawRect(0, 0, this.boxDimensions[0], this.boxDimensions[1]);
+		tile.active = true;
 		// Make sure it is above the others
-		this.container.addChildAt(this.tiles[itemIndex], this.tiles.length - 1);
+		this.container.addChildAt(tile.container, this.tiles.length - 1);
 	    }
 	    else {
-		g.beginFill(0x000000);
-		g.lineStyle(...this.dimStyle);
-		g.drawRect(0, 0, this.boxDimensions[0], this.boxDimensions[1]);
+		tile.active = false;
 	    }
-	    this.tiles[itemIndex].position.x = xcount * this.boxDimensions[0];
-	    this.tiles[itemIndex].position.y = ycount * this.boxDimensions[1];
+	    var pos = [xcount * this.boxDimensions[0], ycount * this.boxDimensions[1]];
+	    tile.moveTo(pos);
+	    tile.draw();
 	}
 
     }
