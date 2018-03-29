@@ -14,7 +14,7 @@ var loadsResources = (superclass) => class extends superclass {
     async loadResources(type, id) {
 	return await(this.novaData[type].get(id));
     }
-    
+
     setProperties() {
 	// a modifiable copy of meta.
 	// Why is this the best way to make a copy???!!!
@@ -23,7 +23,7 @@ var loadsResources = (superclass) => class extends superclass {
 	    this.properties = {};
 	}
 
-	// Don't overwrite already set things
+	// Don't overwrite things that aren't present in copy
 	// probably should be refactored
 	Object.keys(copy).forEach(function(key) {
 	    this.properties[key] = copy[key];

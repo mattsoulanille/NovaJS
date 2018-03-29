@@ -121,7 +121,8 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     async buildOutfits(outfits) {
 	// Gets outfits from the server and builds them
 	// Or builds outfits given
-	
+
+	this.setProperties(); // reset the ship properties since they're changed by outfits
 	this.weapons.all.forEach(function(w) {w.destroy();});
 	this.outfits.forEach(function(o) {o.destroy();});
 	this.weapons.all = [];
