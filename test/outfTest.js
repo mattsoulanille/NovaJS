@@ -10,6 +10,15 @@ describe("outf", function() {
 
     var w1;
     var blank;
+    var armor;
+    var shields;
+    var armorRecharge;
+    var shieldRecharge;
+    var speedIncrease;
+    var accelBoost;
+    var turnRate;
+    var afterburner;
+    
     before(async function() {
 	var rf = new resourceFork("./test/files/outf.ndat", false);
 	await rf.read();
@@ -17,7 +26,14 @@ describe("outf", function() {
 	var outfs = rf.resources.oütf;
 	w1 = new outf(outfs[128]);
 	blank = new outf(outfs[129]);
-
+	armor = new outf(outfs[130]);
+	shields = new outf(outfs[131]);
+	armorRecharge = new outf(outfs[132]);
+	shieldRecharge = new outf(outfs[133]);
+	speedIncrease = new outf(outfs[134]);
+	accelBoost = new outf(outfs[135]);
+	turnRate = new outf(outfs[136]);
+	afterburner = new outf(outfs[137]);
     });
 
     it("should parse outfit functions", function() {
@@ -25,6 +41,41 @@ describe("outf", function() {
 	    {"weapon":142}
 	]);
 	expect(blank.functions).to.deep.equal([]);
+	
+	expect(armor.functions).to.deep.equal([
+	    {"armor boost" : 42}
+	]);
+
+	expect(shields.functions).to.deep.equal([
+	    {"shield boost" : 424}
+	]);
+
+	expect(armorRecharge.functions).to.deep.equal([
+	    {"armor recharge" : 123}
+	]);
+
+	expect(shieldRecharge.functions).to.deep.equal([
+	    {"shield recharge" : 234}
+	]);
+
+	expect(speedIncrease.functions).to.deep.equal([
+	    {"speed increase" : 19}
+	]);
+
+	expect(accelBoost.functions).to.deep.equal([
+	    {"acceleration boost" : 81}
+	]);
+
+	expect(turnRate.functions).to.deep.equal([
+	    {"turn rate change" : 53}
+	]);
+
+	expect(afterburner.functions).to.deep.equal([
+	    {"afterburner" : 144}
+	]);
+
+	
+	
     });
 
 
