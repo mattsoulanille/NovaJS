@@ -111,6 +111,9 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 		if (sub) {
 		    this.subs.push(sub);
 		}
+		else {
+		    console.log("couldn't build sub " + subData);
+		}
 	    }
 	}
     }

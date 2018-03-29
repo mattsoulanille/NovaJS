@@ -82,9 +82,8 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	
 	
 	this.buildInfo.meta = this.meta; // only okay since buildInfo was copied
-	if (! this._setWeaponType()) {
-	    return false;
-	}
+	this._setWeaponType();
+
 
 	// no beam support yet
 	// replace some functions of weapon
