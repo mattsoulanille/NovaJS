@@ -67,9 +67,34 @@ var outfit = class extends loadsResources(inSystem) {
     
     applyEffects() {
 	
-	if (this.meta.functions["speed increase"]) {
+	if (this.meta.functions.hasOwnProperty("speed increase")) {
+	    // check the math here
 	    this.source.properties.maxSpeed += this.meta.functions["speed increase"] * this.count;
 	}
+	if (this.meta.functions.hasOwnProperty("turn rate change") ) {
+	    // requires math
+	    this.source.properties.turnRate +=
+		this.meta.functions["turn rate change"]* 2*Math.PI/120;
+	}
+	if (this.meta.functions.hasOwnProperty("shield boost")) {
+	    this.source.properties.shield += this.meta.functions["shield boost"] * this.count;
+	}
+
+	if (this.meta.functions.hasOwnProperty("armor boost")) {
+	    this.source.properties.armor += this.meta.functions["armor boost"] * this.count;
+	}
+
+	if (this.meta.functions.hasOwnProperty("shield recharge")) {
+	    this.source.properties.shieldRecharge += this.meta.functions["shield recharge"] * this.count;
+	}
+
+	if (this.meta.functions.hasOwnProperty("armor recharge")) {
+	    this.source.properties.armorRecharge += this.meta.functions["armor recharge"] * this.count;
+	}
+	
+	
+
+	    
 	
     }
 

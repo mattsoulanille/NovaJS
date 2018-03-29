@@ -307,10 +307,11 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    this.trailParticles.destroy();
 	}
 
+	
 	if (this.hitParticles) {
 	    this.hitParticles.destroy();
 	}
-
+	this.subs.forEach(function(sub) {sub.destroy();});
 	super.destroy();
     }
 };
