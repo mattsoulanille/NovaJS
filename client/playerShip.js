@@ -54,6 +54,23 @@ class playerShip extends controllable(ship) {
 	this.properties.outfits.push(newOutfit);
 	return this.setOutfits(this.properties.outfits);
     }
+
+    removeOutfit(oldOutfit) {
+	for (let i in this.properties.outfits) {
+	    var o = this.properties.outfits[i];
+	    if (oldOutfit.id == o.id) {
+		o.count -= oldOutfit.count;
+		if (o.count <= 0)  {
+		    // Maybe outfits should be a set? but that's not quite right either.
+		    // Maybe an object.
+		    this.properties.outfits.splice(i, 1);
+		}
+		this.setOutfits(this.properties.outfits);
+		return true;
+	    }
+	}
+	return false;
+    }
     
 
     async setOutfits(outfitList) {

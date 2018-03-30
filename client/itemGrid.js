@@ -10,7 +10,11 @@ class itemTile extends eventable(function() {}) {
 		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
 
 	    grey:    {fontFamily:"Geneva", fontSize:10, fill:0x262626,
-		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]}
+		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
+
+	    count:    {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
+		      align:'right', wordWrap:false, wordWrapWidth:this.boxDimensions[0]}
+
 	};
 
 	// see the colr resource
@@ -31,6 +35,12 @@ class itemTile extends eventable(function() {}) {
 	this.itemText.position.x = this.boxDimensions[0] / 2;
 	this.itemText.position.y = this.boxDimensions[1] * 1/2;
 
+	this.quantity = 0;
+	this.quantityText = new PIXI.Text("", this.font.normal);
+	this.quantityText.anchor.x = 1;
+	this.quantityText.position.x = this.boxDimensions[0] - 2;
+	this.quantityText.position.y = 2;
+	
 	this.container = new PIXI.Container();
 	this.container.interactive = true;
 	this.active = false;
@@ -42,6 +52,7 @@ class itemTile extends eventable(function() {}) {
 
 	this.container.addChild(this.graphics);
 	this.container.addChild(this.itemText);
+	this.container.addChild(this.quantityText);
 
     }
 
@@ -68,6 +79,16 @@ class itemTile extends eventable(function() {}) {
 	this.container.position.x = pos[0];
 	this.container.position.y = pos[1];
     }
+    setQuantity(count) {
+	this.quantity = count;
+	if (this.quantity == 0) {
+	    this.quantityText.text = "";
+	}
+	else {
+	    this.quantityText.text = String(this.quantity);
+	}
+    }
+    
 }
 
 
@@ -99,17 +120,19 @@ class itemGrid {
     }
 
     makeTiles() {
+	this.tilesDict = {};
 	this.tiles = this.items.map(function(item) {
 	    var tile =  new itemTile(item);
 	    this.container.addChild(tile.container);
 	    tile.on('pointerdown', this._onTileClicked.bind(this));
+	    this.tilesDict[item.id] = tile;
 	    return tile;
 	}.bind(this));
 
     }
 
     _onTileClicked(tile) {
-	this.selectionIndex = this.tiles.indexOf(tile);
+	this.selectionIndex = Object.values(this.tiles).indexOf(tile);
 	this.drawGrid();
     }
     
@@ -128,16 +151,17 @@ class itemGrid {
 	    let xcount = i % this.boxCount[0];
 	    let ycount = Math.floor(i / this.boxCount[0]);
 
-
 	    tile.show();
 	    if (itemIndex === this.selectionIndex) {
 		tile.active = true;
 		// Make sure it is above the others
 		this.container.addChildAt(tile.container, this.tiles.length - 1);
 	    }
+
 	    else {
 		tile.active = false;
 	    }
+	    
 	    var pos = [xcount * this.boxDimensions[0], ycount * this.boxDimensions[1]];
 	    tile.moveTo(pos);
 	    tile.draw();
@@ -145,6 +169,25 @@ class itemGrid {
 
     }
 
+    setCounts(items) {
+	// items is a list of objects that have id and count
+	this.tiles.forEach(function(tile) {
+	    tile.setQuantity(0);
+	});
+
+	items.forEach(function(i) {
+	    this.tilesDict[i.id].setQuantity(i.count);
+	}.bind(this));
+    }
+    
+    incrementCount() {
+	
+    }
+
+    decrementCount() {
+
+    }
+    
     left() {
 	if (this.selectionIndex === -1) {
 	    this.selectionIndex = Math.min(this.boxCount[0] * this.boxCount[1],
