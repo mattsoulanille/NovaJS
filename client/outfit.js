@@ -72,9 +72,10 @@ var outfit = class extends loadsResources(inSystem) {
 	    this.source.properties.maxSpeed += this.meta.functions["speed increase"] * this.count;
 	}
 	if (this.meta.functions.hasOwnProperty("turn rate change") ) {
-	    // requires math
+	    // 100 = 30°/second = PI/6
+	    // modifier = PI/600
 	    this.source.properties.turnRate +=
-		this.meta.functions["turn rate change"]* 2*Math.PI/120;
+		this.meta.functions["turn rate change"]* Math.PI/600 * this.count;
 	}
 
 	if (this.meta.functions.hasOwnProperty("shield boost")) {
