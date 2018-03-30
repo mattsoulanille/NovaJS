@@ -29,7 +29,7 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 	this.doBurstFire = false;
 	this.exitIndex = 0; // index of exitPoint array
 	this.random = Math.random; // Temporary until there is a seeded rng
-	this.enabled = true; // whether or not the weapon can fire. Used when landing etc.
+	//this.enabled = true; // whether or not the weapon can fire. Used when landing etc.
 
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.id = buildInfo.id;
@@ -54,7 +54,7 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 	}
 	else {
 	    this.setState("hasTarget", false);
-	}	
+	}
     }
 
 
@@ -72,7 +72,7 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     
     async _build() {
 	this.meta = await this.loadResources(this.type, this.buildInfo.id);
-
+	
 	// assign exitPoints
 	if (this.meta.exitType in this.source.exitPoints) {
 	    this.exitPoints = this.source.exitPoints[this.meta.exitType];
@@ -134,9 +134,8 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 	
 	this.ready = true;
 	this.built = true;
+	this.enabled = true;
 
-	// why is this here it should not be here!
-	// this.source.weapons.all.push(this);
     }
 
     

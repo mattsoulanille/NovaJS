@@ -10,9 +10,9 @@ class beamWeaponServer extends beamWeapon {
 
 //    build() {};
 
-    render() {
-	var fireAngle = this.source.pointing;
-	this.renderCollisionShape(fireAngle, this.getFirePosition());
+
+    drawBeam() {
+
     }
 
     /*

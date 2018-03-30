@@ -37,7 +37,7 @@ var positionConstant = 1;
 
 PIXI.settings.RESOLUTION = window.devicePixelRatio;
 
-window.addEventListener('resize', onResize);
+
 
 function onResize(evt) {
     screenH = evt.currentTarget.innerHeight;
@@ -157,6 +157,7 @@ socket.on('onconnected', async function(data) {
     console.log("built objects");
     stagePosition = myShip.position;
     gameControls.pushScope("playerShip"); // allow the player to control their ship
+    window.addEventListener('resize', onResize);
     startGame();
     var newStats = {};
     newStats[myShip.UUID] = myShip.getStats();

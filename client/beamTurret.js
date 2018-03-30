@@ -11,13 +11,13 @@ beamTurret = class extends beamWeapon {
 	this._stopFunc = null;
     }
 
-    getFireAngle(position) {
-	// Maybe refactor this so you don't plug it into sine and cosine in beamWeapon.js
-	var dx = this.target.position[0] - position[0];
-	var dy = this.target.position[1] - position[1];
-	return Math.atan2(dy, dx);
+    getFireVector(position) {
+	// needed since this is the vector of the beam, not the destination point
+	var start = this.getFirePosition(); 
+	var end = this.target.position;
+	return [end[0] - start[0], end[1] - start[1]];
     }
-
+    
     startFiring(notify = true) {
 
 	var stop = super.stopFiring.bind(this, notify);
@@ -45,6 +45,10 @@ beamTurret = class extends beamWeapon {
 	this.offState("hasTarget", this._fireFunc, true);
 	this.offState("hasTarget", this._stopFunc, false);
 	super.stopFiring(notify);
+    }
+
+    render() {
+	super.render();
     }
     
 };

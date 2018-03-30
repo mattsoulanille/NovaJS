@@ -9,6 +9,8 @@ if (typeof(module) !== 'undefined') {
     var visible = require("./visible.js");
     var errors = require("./errors.js");
     var NoSystemError = errors.NoSystemError;
+    var AlliesError = errors.AlliesError;
+
 }
 
 beamWeapon = class extends collidable(visible(basicWeapon)) {
@@ -125,50 +127,66 @@ Else, return false
 	return position;
     }
 
-    getFireAngle() {
-	return this.source.pointing;
-    }
+    drawBeam(start, beamVector) {
+	// Draws the beam from start to end where the length of the beam
+	// is at most this.meta.animation.beamLength
 
-    drawBeam(start, end) {
-	this.graphics.position.x = start[0];
-	this.graphics.position.y = -1 * start[1];
+	var scaleFactor =
+	    Math.sqrt(beamVector[0] ** 2 + beamVector[1] ** 2)
+	    / this.meta.animation.beamLength;
+	
+	var scaled = [beamVector[0] / scaleFactor, -beamVector[1] / scaleFactor];
+	//var destination = [start[0] + scaled[0], start[1] + scaled[1]];
+	// Should really have a vector class
+	
+//	this.graphics.position.x = start[0];
+//	this.graphics.position.y = -1 * start[1];
+	this.container.position.x = start[0];
+	this.container.position.y = -1 * start[1];
 	
 	this.graphics.clear();
 	this.graphics.lineStyle(this.meta.animation.beamWidth+1, this.meta.animation.beamColor);
 
 	this.graphics.moveTo(0,0); // Position of the beam is handled by moving the PIXI graphics
-	this.graphics.lineTo(end[0], end[1]);
+	this.graphics.lineTo(scaled[0], scaled[1]);
 
 	// This is still not quite right
 	
 	// Can this be optimized? Does it matter?
-	let magnitude = Math.sqrt(end[0]**2 + end[1]**2);
-	let orthogonal = [-end[1] / magnitude, end[0] / magnitude];
+	let magnitude = Math.sqrt(scaled[0]**2 + scaled[1]**2);
+	let orthogonal = [-scaled[1] / magnitude, scaled[0] / magnitude];
 
 	// Why don't I have a vector class or something less annoying
 	let offset = this.meta.animation.beamWidth / 2 + 1;
 	this.graphics.moveTo(orthogonal[0] * offset, orthogonal[1] * offset);
 	// Corona has width 1
 	this.graphics.lineStyle(1, this.meta.animation.coronaColor);
-	this.graphics.lineTo(end[0] + orthogonal[0]*offset, end[1] + orthogonal[1]*offset);
+	this.graphics.lineTo(scaled[0] + orthogonal[0]*offset, scaled[1] + orthogonal[1]*offset);
 
 	this.graphics.moveTo(-orthogonal[0] * offset, -orthogonal[1] * offset);
 	this.graphics.lineStyle(1, this.meta.animation.coronaColor);
-	this.graphics.lineTo(end[0] - orthogonal[0]*offset, end[1] - orthogonal[1]*offset);
+	this.graphics.lineTo(scaled[0] - orthogonal[0]*offset, scaled[1] - orthogonal[1]*offset);
 
     }    
 
+    getFireVector(startPosition) {
+	var fireAngle = this.source.pointing;
+	var x = Math.cos(fireAngle);
+	var y = Math.sin(fireAngle);
+	return [x, y];
+	
+    }
+    
     render() {
 
 	var position = this.getFirePosition();
-	var fireAngle = this.getFireAngle(position);
+	var fireVector = this.getFireVector();
+	
+	this.drawBeam(position, fireVector);
 
-	var x = Math.cos(fireAngle) * this.meta.animation.beamLength;
-	var y = Math.sin(fireAngle) * this.meta.animation.beamLength;
-
-	this.drawBeam(position, [x,-y]);
-
-
+	// Necessary for inheritance
+	var fireAngle = Math.atan2(fireVector[1], fireVector[0]);
+	
 	this.renderCollisionShape(fireAngle, position);
 
     }
@@ -179,14 +197,23 @@ Else, return false
 	this.collisionShape.setAngle(fireAngle);
     }
 
+    get allies() {
+	return new Set([...this.source.allies, this]);
+    }
+
+    set allies(a) {
+	throw new AlliesError("Tried to set allies of a beam weapon but they are defined implicitly by source");
+    }
+
     collideWith(other, res) {
 	//console.log(res);
 	var delta = (other.delta) * 60 / 1000;
 
 	if (other.properties.vulnerableTo &&
-	    other.properties.vulnerableTo.includes("normal") &&
-	    other !== this.source) {
-
+	    other.properties.vulnerableTo.includes(this.properties.damageType) &&
+	    !this.allies.has(other)) {
+	    
+	    
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage * delta;
 	    collision.armorDamage = this.properties.armorDamage * delta;
