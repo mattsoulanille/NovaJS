@@ -18,7 +18,9 @@ describe("outf", function() {
     var accelBoost;
     var turnRate;
     var afterburner;
-    
+    var four;
+    var anotherFour;
+
     before(async function() {
 	var rf = new resourceFork("./test/files/outf.ndat", false);
 	await rf.read();
@@ -34,6 +36,8 @@ describe("outf", function() {
 	accelBoost = new outf(outfs[135]);
 	turnRate = new outf(outfs[136]);
 	afterburner = new outf(outfs[137]);
+	four = new outf(outfs[138]);
+	anotherFour = new outf(outfs[139]);
     });
 
     it("should parse outfit functions", function() {
@@ -74,6 +78,19 @@ describe("outf", function() {
 	    {"afterburner" : 144}
 	]);
 
+	expect(four.functions).to.deep.equal([
+	    {"weapon" : 153},
+	    {"acceleration boost" : 14},
+	    {"armor boost" : 92},
+	    {"shield boost" : 525}
+	]);
+
+	expect(anotherFour.functions).to.deep.equal([
+	    {"shield recharge" : 99},
+	    {"jam 3" : 23},
+	    {"IFF" : true},
+	    {"fuel increase" : 1454}
+	]);
 	
 	
     });
