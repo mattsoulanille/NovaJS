@@ -40,22 +40,27 @@ class playerShip extends controllable(ship) {
 	this.sortWeapons();	
     }
 
-    addOutfit(newOutfit) {
+    addOutfit(newOutfit, send = true) {
 	// Temporary and linear time. Bad
 
 	for (let i in this.properties.outfits) {
 	    var o = this.properties.outfits[i];
 	    if (newOutfit.id == o.id) {
 		o.count += newOutfit.count;
-		return this.setOutfits(this.properties.outfits);
+		if (send) {
+		    this.setOutfits(this.properties.outfits);
+		}
+		return;
 	    }
 	}
 
 	this.properties.outfits.push(newOutfit);
-	return this.setOutfits(this.properties.outfits);
+	if (send) {
+	    this.setOutfits(this.properties.outfits);
+	}
     }
 
-    removeOutfit(oldOutfit) {
+    removeOutfit(oldOutfit, send = true) {
 	for (let i in this.properties.outfits) {
 	    var o = this.properties.outfits[i];
 	    if (oldOutfit.id == o.id) {
@@ -65,7 +70,9 @@ class playerShip extends controllable(ship) {
 		    // Maybe an object.
 		    this.properties.outfits.splice(i, 1);
 		}
-		this.setOutfits(this.properties.outfits);
+		if (send) {
+		    this.setOutfits(this.properties.outfits);
+		}
 		return true;
 	    }
 	}
@@ -73,7 +80,7 @@ class playerShip extends controllable(ship) {
     }
     
 
-    async setOutfits(outfitList) {
+    async setOutfits(outfitList = this.properties.outfits) {
 	// Asks the server to set the ships outfits to outfitList
 	this.multiplayer.privateEmit("setOutfits", outfitList);
     }
@@ -239,6 +246,8 @@ class playerShip extends controllable(ship) {
 	this.position[0] = planet.position[0];
 	this.position[1] = planet.position[1];
 	this.pointing = Math.random() * 2*Math.PI;
+	this.shield = this.properties.shield;
+	this.armor = this.properties.armor;
 	this.show();
     }
 

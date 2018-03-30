@@ -30,13 +30,13 @@ class outfitter extends menu {
 
     buyOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
-	myShip.addOutfit(outfit);
+	myShip.addOutfit(outfit, false);
 	this.itemGrid.setCounts(myShip.properties.outfits);
     }
 
     sellOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
-	myShip.removeOutfit(outfit);
+	myShip.removeOutfit(outfit, false);
 	this.itemGrid.setCounts(myShip.properties.outfits);
 	
     }
@@ -48,7 +48,7 @@ class outfitter extends menu {
     
     depart() {
 	this.hide();
-	myShip.setOutfits(myShip.properties.outfits);
+	myShip.setOutfits();
     }
     
     bindControls() {
