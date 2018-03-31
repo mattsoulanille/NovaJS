@@ -220,6 +220,8 @@ Else, return false
 	    collision.passThroughShields = this.meta.passThroughShields;
 	    // needs improvement for proper tractoring
 	    //collision.impact = this.properties.impact * delta;
+
+	    // fix this
 	    collision.angle = this.pointing;
 	    
 	    //console.log(collision);

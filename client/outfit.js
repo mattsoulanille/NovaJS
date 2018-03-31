@@ -66,32 +66,40 @@ var outfit = class extends loadsResources(inSystem) {
     }
     
     applyEffects() {
-	
-	if (this.meta.functions.hasOwnProperty("speed increase")) {
+
+	var functions = this.meta.functions;
+	var properties = this.source.properties;
+	if (functions.hasOwnProperty("speed increase")) {
 	    // check the math here
-	    this.source.properties.maxSpeed += this.meta.functions["speed increase"] * this.count;
+	    properties.maxSpeed += functions["speed increase"] * this.count;
 	}
-	if (this.meta.functions.hasOwnProperty("turn rate change") ) {
+	if (functions.hasOwnProperty("turn rate change") ) {
 	    // 100 = 30°/second = PI/6
 	    // modifier = PI/600
-	    this.source.properties.turnRate +=
-		this.meta.functions["turn rate change"]* Math.PI/600 * this.count;
+	    properties.turnRate +=
+		functions["turn rate change"]* Math.PI/600 * this.count;
+	}
+	if (functions.hasOwnProperty("acceleration boost")) {
+	    properties.acceleration += functions["acceleration boost"];
+	}
+	if (functions.hasOwnProperty("fuel increase")) {
+	    properties.energy += functions["fuel increase"];
 	}
 
-	if (this.meta.functions.hasOwnProperty("shield boost")) {
-	    this.source.properties.shield += this.meta.functions["shield boost"] * this.count;
+	if (functions.hasOwnProperty("shield boost")) {
+	    properties.shield += functions["shield boost"] * this.count;
 	}
 
-	if (this.meta.functions.hasOwnProperty("armor boost")) {
-	    this.source.properties.armor += this.meta.functions["armor boost"] * this.count;
+	if (functions.hasOwnProperty("armor boost")) {
+	    properties.armor += functions["armor boost"] * this.count;
 	}
 
-	if (this.meta.functions.hasOwnProperty("shield recharge")) {
-	    this.source.properties.shieldRecharge += this.meta.functions["shield recharge"] * this.count;
+	if (functions.hasOwnProperty("shield recharge")) {
+	    properties.shieldRecharge += functions["shield recharge"] * this.count;
 	}
 
-	if (this.meta.functions.hasOwnProperty("armor recharge")) {
-	    this.source.properties.armorRecharge += this.meta.functions["armor recharge"] * this.count;
+	if (functions.hasOwnProperty("armor recharge")) {
+	    properties.armorRecharge += functions["armor recharge"] * this.count;
 	}
 	
 	
