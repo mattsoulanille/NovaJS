@@ -88,7 +88,7 @@ var convexHullBuilder = require("./server/convexHullBuilder.js");
 var path = require('path');
 
 var AI = require("./server/AI.js");
-var npcMaker= new AI(sol);
+var npcMaker;
 
 local.context.npcMaker = npcMaker;
 //npcMaker.makeShip(npcMaker.followAndShoot);
@@ -186,7 +186,8 @@ var startGame = async function() {
 	allShips.push({name : np.ids.resources.shïp[id].name,
 		       id : id});
     });
-    
+
+    npcMaker = new AI(sol, io, shipIDs);
 
     var outfIDs = Object.keys(np.ids.resources.oütf);
     allOutfits = [];

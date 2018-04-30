@@ -10,8 +10,23 @@ var multiplayerServer = class extends multiplayer {
 		this.socket.broadcast.emit(this.UUID + "event", toEmit);
 	    }
 	}.bind(this);
-
 	this.socket.on(this.UUID + "event", this.broadcaster);
+
+	
+	if ("broadcast" in this.socket) {
+	    // Super hacky! Terrible!
+	    // If it doesn't have property "broadcast" then it's the server's io instance
+	    this._broadcastFunction = function() {
+		this.socket.broadcast.emit(...arguments);
+	    };
+	}
+	else {
+	    this._broadcastFunction = function() {
+		this.socket.emit(...arguments);
+	    };
+	}
+
+
 
 	// This contains all the instances of multiplayerServer
 	this.globalSet.add(this);
@@ -29,7 +44,8 @@ var multiplayerServer = class extends multiplayer {
     
     emit(eventName, eventData) {
 	// broadcast to all the clients except this one
-	this._send(eventName, eventData, this.socket.broadcast.emit.bind(this.socket));
+	this._send(eventName, eventData, this._broadcastFunction.bind(this));
+	//this._send(eventName, eventData, this.socket.broadcast.emit.bind(this.socket));
     }
     respond(eventName, eventData) {
     	// send to this client

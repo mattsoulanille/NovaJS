@@ -231,15 +231,18 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 	return stats;
     }
 
-    
-    render() {
-	// rewrite this please. Put it in playerShip.
-	super.render(...arguments);
+    _placeContainer() {
 	if (!this.isPlayerShip) {
 	    this.container.position.x = this.position[0];
 	    this.container.position.y = -1 * this.position[1];
 	}
-
+	
+    }
+    
+    render() {
+	// rewrite this please. Put it in playerShip.
+	super.render(...arguments);
+	this._placeContainer();
 
     }
 

@@ -6,7 +6,6 @@ class spaceObjectServer extends spaceObject {
     constructor(buildInfo, system) {
 	super(...arguments);
     }
-
     
 
     makeSize() {
@@ -23,10 +22,8 @@ class spaceObjectServer extends spaceObject {
     callSprites(call) {
     // also do nothing
     }
+    _placeContainer() {}
     
-    render() {
-	// again, do nothing
-    }
 /*
 spaceObjectServer.prototype.destroy = function() {
     var index;
