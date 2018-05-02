@@ -99,6 +99,8 @@ local.context.killNPCs = function() {
     });
 };
 
+var neuralAI = require("./server/neuralAI.js");
+
 local.context.addNPCs = async function(count, name=null) {
     var newNPCs = [];
     var id = null;
@@ -114,7 +116,7 @@ local.context.addNPCs = async function(count, name=null) {
 	}
     }
     for (var i = 0; i < count; i++) {
-	var newShip = await npcMaker.makeShip(npcMaker.followAndShoot, id);
+	var newShip = await npcMaker.makeShip(neuralAI, id);
 	newNPCs.push(newShip.buildInfo);
     }
     io.emit("buildObjects", newNPCs);

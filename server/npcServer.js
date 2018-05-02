@@ -7,7 +7,7 @@ class npcServer extends npc {
 	this.oldStats = this.getStats();
 	this._controlFunction = function(state) {return state;};
 	//this._delay = 100; // 100 milliseconds
-	this._delay = 5000;
+	this._delay = 1000; // time between calls to controlfunction
 	this.controlInterval = undefined;
     }
 
