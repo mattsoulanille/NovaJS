@@ -113,12 +113,6 @@ class playerShip extends controllable(ship) {
 	return this.statusBar.build();
     }
 
-    receiveCollision(other) {
-	ship.prototype.receiveCollision.call(this, other);
-	this.sendCollision();
-    }
-
-
     firePrimary() {
 	_.map(this.weapons.primary, function(weapon) {weapon.firing = true;});
     }

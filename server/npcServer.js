@@ -141,7 +141,7 @@ class npcServer extends npc {
 */
 	if (different) {
 //	    debugger;
-	    this.sendStats(stats);
+	    this.sendStats();
 	}
     }
 
@@ -155,6 +155,11 @@ class npcServer extends npc {
 	this.io.emit('updateStats', toSend);
     }
     */
+
+    receiveCollision(other) {
+	super.receiveCollision.call(this, other);
+	this.sendCollision();
+    }
 
 
     _respawn() {
@@ -184,10 +189,8 @@ class npcServer extends npc {
 }
 
 npcServer.prototype.sendCollision = _.throttle(function() {
-    var stats = {};
-    stats[this.UUID] = this.getStats();
-    this.multiplayer.emit('updateStats', stats);
-});
+    this.sendStats();
+}, 300);
 
 
 module.exports = npcServer;
