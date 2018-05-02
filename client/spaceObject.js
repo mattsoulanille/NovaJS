@@ -38,7 +38,7 @@ var spaceObject = class extends targetable(loadsResources(visible(renderable(inS
 	this.built = false;
 	this.building = false;
 
-
+	
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.name = buildInfo.name;
 	    if (this.buildInfo.hasOwnProperty('position')) {

@@ -73,7 +73,7 @@ class npcServer extends npc {
     
     getTargets() {
 	return [...this.system.ships].filter(function(a) {
-	    return a !== this;
+	    return (a !== this) && a.getVisible();
 	}.bind(this));
     }
     
@@ -154,8 +154,10 @@ class npcServer extends npc {
 	// make sure to set npcServer.prototype.io
 	this.io.emit('updateStats', toSend);
     }
-*/
-    onDeath() {
+    */
+
+
+    _respawn() {
 	// temporary respawn
 	this.position[0] = Math.random() * 1000 - 500;
 	this.position[1] = Math.random() * 1000 - 500;
@@ -165,13 +167,18 @@ class npcServer extends npc {
 	this.armor = this.properties.armor;
 	this.sendStats();
     }
+    onDeath() {
+	this.hide();
+	this.multiplayer.emit('updateStats', this.getStats());
+	setTimeout(this.destroy.bind(this), 10000); // So the projectiles can continue to exist. A bad way to do this.
+    }
 
     destroy() {
 	if (typeof this.controlInterval !== 'undefined') {
 	    clearInterval(this.controlInterval);
 	}
 	super.destroy.call(this);
-	this.socket.emit("removeObjects", this.UUIDS);
+	this.socket.emit("removeObjects", this.UUIDS); // Is this necessary?
     }
 
 }
@@ -179,7 +186,7 @@ class npcServer extends npc {
 npcServer.prototype.sendCollision = _.throttle(function() {
     var stats = {};
     stats[this.UUID] = this.getStats();
-    this.socket.emit('updateStats', stats);
+    this.multiplayer.emit('updateStats', stats);
 });
 
 

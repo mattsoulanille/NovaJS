@@ -13,9 +13,11 @@ class AI extends inSystem {
 
     }
 
-    async makeShip(controlFunction = function(state) {return state;}) {
+    async makeShip(controlFunction = function(state) {return state;}, id = null) {
 	// controlFunction takes state from npc and returns a new state
-	var id = this.shipIDs[_.random(0, this.shipIDs.length - 1)];
+	if (id == null) {
+	    var id = this.shipIDs[_.random(0, this.shipIDs.length - 1)];
+	}
 	var npcShipType = {
 	    "id":id,
 	    "UUID": UUID()
@@ -40,7 +42,9 @@ class AI extends inSystem {
 	    state.targetIndex = Math.floor(Math.random() * state.targets.length);
 	    state.accelerating = true;
 	    state.turningToTarget = true;
-	    state.firing[0] = Math.random() >= 0.5;
+	    for (let i in state.firing) {
+		state.firing[i] = Math.random() >= 0.5;
+	    }
 	    //console.log("following");
 	    
 	}
@@ -48,7 +52,10 @@ class AI extends inSystem {
 	    state.target = -1;
 	    state.accelerating = false;
 	    state.turning = "";
-	    state.firing[0] = false;
+	    for (let i in state.firing) {
+		state.firing[i] = false;
+	    }
+
 	}
 	return state;
     }

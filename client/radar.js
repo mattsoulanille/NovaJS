@@ -26,6 +26,9 @@ radar.prototype.render = function() {
 
 
 radar.prototype.drawShip = function(s) {
+    if (!s.getVisible()) {
+	return;
+    }
     var color;
     var size;
     if (this.iff) {

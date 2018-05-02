@@ -382,6 +382,14 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
         super._removeFromSystem.call(this);
     }
 
+    async explode() {
+	// Explodes the ship. This happens when it's dead.
+	// Temporary.
+	await new Promise(function(fulfill, reject) {
+	    setTimeout(fulfill, 2000);
+	});
+    }
+
     destroyOutfits() {
 	_.each(this.outfits, function(o) {o.destroy();});
     }

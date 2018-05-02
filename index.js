@@ -99,10 +99,22 @@ local.context.killNPCs = function() {
     });
 };
 
-local.context.addNPCs = async function(count) {
+local.context.addNPCs = async function(count, name=null) {
     var newNPCs = [];
+    var id = null;
+    if (name !== null) {
+	for (let i in allShips) {
+	    if (allShips[i].name == name) {
+		id = allShips[i].id;
+		break;
+	    }
+	}
+	if (id == null) {
+	    throw new Error("Ship name " + name + " not found");
+	}
+    }
     for (var i = 0; i < count; i++) {
-	var newShip = await npcMaker.makeShip(npcMaker.followAndShoot);
+	var newShip = await npcMaker.makeShip(npcMaker.followAndShoot, id);
 	newNPCs.push(newShip.buildInfo);
     }
     io.emit("buildObjects", newNPCs);

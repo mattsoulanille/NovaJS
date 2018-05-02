@@ -9,6 +9,9 @@ class npc extends ship {
 	this.buildInfo.type = "npc";
     }
 
+    // async build() {
+    // 	await super.build();
+    // }
     _addToSystem() {
 	this.system.npcs.add(this);
 	super._addToSystem.call(this);
@@ -17,6 +20,9 @@ class npc extends ship {
     _removeFromSystem() {
 	this.system.npcs.delete(this);
 	super._removeFromSystem.call(this);
+    }
+    onDeath() {
+//	this.hide();
     }
 
 
