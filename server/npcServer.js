@@ -1,11 +1,22 @@
 var npc = require("../client/npc.js");
 var _ = require("underscore");
 
+class blankController {
+    constructor() {
+
+    }
+    nextState(state) {
+	return state;
+    }
+
+}
+
+
 class npcServer extends npc {
     constructor() {
 	super(...arguments);
 	this.oldStats = this.getStats();
-	this._controlFunction = function(state) {return state;};
+	this._controller = new blankController();
 	//this._delay = 100; // 100 milliseconds
 	this._delay = 1000; // time between calls to controlfunction
 	this.controlInterval = undefined;
@@ -83,12 +94,12 @@ class npcServer extends npc {
 	this.setInterval();
     }
 
-    get controlFunction() {
-	return this._controlFunction;
+    get controller() {
+	return this._controller;
     }
 
-    set controlFunction(f) {
-	this._controlFunction = f;
+    set controller(c) {
+	this._controller = c;
 	this.setInterval();
     }
 
@@ -105,7 +116,11 @@ class npcServer extends npc {
 	    clearInterval(this.controlInterval);
 	}
 	if (this.built) {
-	    this.controlInterval = setInterval(function() {this.state = this.controlFunction(this.state);}.bind(this), this.delay);
+	    this.controlInterval = setInterval(function() {
+
+		this.state = this.controller.nextState(this.state);
+
+	    }.bind(this), this.delay);
 	}
     }
 

@@ -116,7 +116,7 @@ local.context.addNPCs = async function(count, name=null) {
 	}
     }
     for (var i = 0; i < count; i++) {
-	var newShip = await npcMaker.makeShip(neuralAI, id);
+	var newShip = await npcMaker.makeShip(new neuralAI(), id);
 	newNPCs.push(newShip.buildInfo);
     }
     io.emit("buildObjects", newNPCs);
