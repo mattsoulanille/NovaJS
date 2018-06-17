@@ -24,16 +24,9 @@ var landed = false;
 
 
 
-
 // create a renderer instance
 var screenW = $(window).width(), screenH = $(window).height() - 10;
 var positionConstant = 1;
-//var screenW = 800, screenH = 600;
-// var renderer = PIXI.autoDetectRenderer(screenW, screenH, {
-//     resolution: window.devicePixelRatio || 1,
-//     autoResize: true
-
-// });
 
 PIXI.settings.RESOLUTION = window.devicePixelRatio;
 
@@ -72,11 +65,6 @@ var fullscreen = function() {
 
 var socket = io(); // same as io.connect()
 
-
-
-
-//var p = PubSub;
-
 var UUID;
 
 var sync = new syncTime(socket);
@@ -93,13 +81,7 @@ var currentSystem = new system();
 
 
 
-
-
-
-
-var textures = {}; // global texture object that sprites save and load textures from
 var gameControls = new controls(); // global controls
-//gameControls.onstart("fullscreen", fullscreen);
 var players = {};
 var myShip;
 var stars;
@@ -299,21 +281,10 @@ function animateSpace(tick) {
 
     //check this
     currentSystem.render(delta, time);
-
     
-    
-    //currentSystem.crash.check();
-    if (!paused) {
-	//animateTimeout = setTimeout(requestAnimationFrame( animate ), 0);
-	//requestAnimationFrame( animate );
-    }
-
-    //renderer.render(space);
 }
 
 function animateSpaceport() {
-    
-    
     
     //renderer.render(spaceportContainer);
 }

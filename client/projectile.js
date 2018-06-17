@@ -31,6 +31,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 		this.buildInfo.subRecursionCounter = 0;
 	    }
 	}
+	this._justFired = false;
     }
 
     get allies() {
@@ -161,6 +162,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     }
 
 
+    // I don't think these stats things ever get called. 
+    // Projectiles are not multiplayer objects.
     updateStats(stats) {
 	    super.updateStats.call(this, stats);
 	// if (typeof(stats.endTime) !== 'undefined') {
@@ -179,6 +182,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	stats.endTime = this.endTime;
 	return stats;
     }
+
 
     show() {
 	super.show();
@@ -216,14 +220,16 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     }
 
     fire(direction, position, velocity, target) {
-	// temporary. Gun points will be implemented later
-	// maybe pass the ship to the projectile... or not
 	// inaccuracy is handled by weapon
 	this.rendered = true; // IS THIS NEEDED?
 
 	this.setTarget(target);
-	this.endTime = this.time + this.properties.duration * 1000/30;
-	this.endTimeout = setTimeout(this.end.bind(this), this.properties.duration * 1000/30);
+
+	// Need to get the current time first. this.time is out of date
+	//this.endTime = this.time + this.properties.duration * 1000/30;
+	this._justFired = true;
+
+	//this.endTimeout = setTimeout(this.end.bind(this), this.properties.duration * 1000/30);
 	
 	this.available = false;
 	this.pointing = direction;
@@ -248,10 +254,10 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     
     end(fireSubs = true, explode = true) {
 
-	if (this.endTimeout) {
-	    clearTimeout(this.endTimeout);
-	}
-	this.endTimeout = null;
+	// if (this.endTimeout) {
+	//     clearTimeout(this.endTimeout);
+	// }
+	// this.endTimeout = null;
 
 	if (fireSubs) {
 	    this.subs.forEach(function(sub) {
@@ -299,10 +305,17 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     
     render(delta) {
 	super.render(...arguments);
+	if (this._justFired) {
+	    this.endTime = this.time + this.properties.duration * 1000/30;
+	    this._justFired = false;
+	}
+	if (this.time > this.endTime) {
+	    this.end();
+	}
     }
     destroy() {
 	// make a parent child thing for this
-	clearTimeout(this.endTimeout);
+	//clearTimeout(this.endTimeout);
 	if (this.trailParticles) {
 	    this.trailParticles.destroy();
 	}

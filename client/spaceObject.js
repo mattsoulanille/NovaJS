@@ -14,7 +14,7 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-var spaceObject = class extends targetable(loadsResources(visible(renderable(inSystem)))) {
+var spaceObject = class extends targetable(loadsResources(renderable(visible(inSystem)))) {
 
     constructor(buildInfo, system, socket) {
 

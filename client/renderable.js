@@ -2,9 +2,10 @@ if (typeof module !== "undefined") {
     var errors = require("./errors.js");
     var NoSystemError = errors.NoSystemError;
     var NotBuiltError = errors.NotBuiltError;
+    var eventable = require("../libraries/eventable.js");
 }
 
-var renderable = (superclass) => class extends superclass {
+var renderable = (superclass) => class extends eventable(superclass) {
     constructor() {
 	super(...arguments);
 	this.rendered = false;
@@ -33,11 +34,10 @@ var renderable = (superclass) => class extends superclass {
 	}
 
 	if (v) {
-	    var rendered = this.rendered;
-	    this.rendered = false;
-	    this.render(0); // update all the stuff before showing it
-	    //this.rendered = rendered;
-	    this.rendered = rendered;
+	    // var rendered = this.rendered;
+	    // this.rendered = false;
+	    // this.render(0); // update all the stuff before showing it
+	    // this.rendered = rendered;
 	    this._addToRendering();
 	}
 	else {
@@ -47,10 +47,19 @@ var renderable = (superclass) => class extends superclass {
 
     hide() {
 	this.setRendering(false);
+	if (super.hide) {
+	    super.hide();
+	}
     }
     show() {
 	this.setRendering(true);
-	this.lastTime = this.time;	
+	this.lastTime = this.time;
+	if (super.show) {
+	    this.once("rendered", super.show.bind(this));
+	    //super.show();
+	    // Don't show it immediately. Show it right after rendering one frame.
+	}
+
     }
     render(delta, time) {
 	this.lastTime = this.time;
@@ -66,6 +75,8 @@ var renderable = (superclass) => class extends superclass {
 	    throw new Error("Object has already been rendered this frame");
 	}
 	this.rendered = true;
+	this.emit("rendered");
+
     }
     destroy() {
 	if (this.system) {
