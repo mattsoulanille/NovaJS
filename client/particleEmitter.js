@@ -152,13 +152,14 @@ var particleEmitter = class extends renderable(inSystem) {
     }
     
     render(delta) {
-	if (environment.framerate > 15) {
-	    this.emitter.frequency = 1 / environment.framerate;
-	}
-	else {
-	    this.emitter.frequency = 0;
-	}
+	// if (environment.framerate > 15) {
+	//     this.emitter.frequency = 1 / environment.framerate;
+	// }
+	// else {
+	//     this.emitter.frequency = 0;
+	// }
 
+	this.emitter.frequency = 1 / environment.framerate;
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
 	this.emitter.update(delta * 0.001);

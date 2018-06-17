@@ -9,6 +9,7 @@ var statusBar = class extends loadsResources(function() {}) {
 	// statusBar is in front of everything
 	this.container.displayGroup = new PIXI.DisplayGroup(100,true);
 	this.targetContainer = new PIXI.Container();
+	this.noTargetContainer = new PIXI.Container();
 	this.lines = new PIXI.Graphics();
 	this.radarContainer = new PIXI.Container();
 	this.weaponsContainer = new PIXI.Container();
@@ -16,6 +17,7 @@ var statusBar = class extends loadsResources(function() {}) {
 
 	this.container.addChild(this.lines);
 	this.container.addChild(this.targetContainer);
+	this.container.addChild(this.noTargetContainer);
 	this.container.addChild(this.radarContainer);
 	this.container.addChild(this.weaponsContainer);
 
@@ -86,9 +88,11 @@ var statusBar = class extends loadsResources(function() {}) {
 	if (this.target) {
 	    this.drawTarget();
 	    this.targetContainer.visible = true;
+	    this.noTargetContainer.visible = false;
 	}
 	else {
 	    this.targetContainer.visible = false;
+	    this.noTargetContainer.visible = true;
 	}
     }
 
@@ -160,6 +164,8 @@ var statusBar = class extends loadsResources(function() {}) {
     buildTargetText() {
 	this.targetContainer.position.x = this.meta.dataAreas.targeting.position[0];
 	this.targetContainer.position.y = this.meta.dataAreas.targeting.position[1];
+	this.noTargetContainer.position.x = this.meta.dataAreas.targeting.position[0];
+	this.noTargetContainer.position.y = this.meta.dataAreas.targeting.position[1];
 
 	var size = [this.meta.dataAreas.targeting.size[0],
 		    this.meta.dataAreas.targeting.size[1]];
@@ -189,12 +195,25 @@ var statusBar = class extends loadsResources(function() {}) {
 
 	this.targetContainer.addChild(this.text.percent);
 
+	var middle = [this.meta.dataAreas.targeting.size[0] / 2,
+		      this.meta.dataAreas.targeting.size[1] / 2 - 15];
+	
 	this.text.noTarget = new PIXI.Text("No Target", dimFont);
-	this.text.noTarget.anchor.y = 1;
-	this.text.noTarget.position.x = 22;
-	this.text.noTarget.position.y = size[1] / 2;
-	// unfinished
+	this.text.noTarget.anchor.x = 0.5;
+	this.text.noTarget.anchor.y = 0.5;
+	this.text.noTarget.position.x = middle[0];
+	this.text.noTarget.position.y = middle[1] - 15;
 
+	this.noTargetContainer.addChild(this.text.noTarget);
+
+	this.text.name = new PIXI.Text("Name Placeholder", font);
+	this.text.name.anchor.x = 0.5;
+	this.text.name.anchor.y = 0.5;
+	this.text.name.position.x = middle[0];
+	this.text.name.position.y = 12;
+
+	this.targetContainer.addChild(this.text.name);
+	
 	this.text.targetImagePlaceholder = new PIXI.Text("No target image", dimFont);
 	this.text.targetImagePlaceholder.anchor.x = 0.5;
 	this.text.targetImagePlaceholder.anchor.y = 0.5;
@@ -253,10 +272,17 @@ var statusBar = class extends loadsResources(function() {}) {
 	this.target = target;
 	if (target) {
 	    if (target.targetImage) {
-		this.targetSprite = target.targetImage.sprite;
+		this.targetSprite = target.targetImage;
 	    }
 	    else {
 		this.targetSprite = this.text.targetImagePlaceholder;
+	    }
+	    if (target.properties.name) {
+		// Cut off anything after and including ";"
+		this.text.name.text = target.properties.name.match(/[^;]*/)[0];
+	    }
+	    else {
+		this.text.name.text = "Name Undefined";
 	    }
 
 	    if ( !(_.contains(this.targetContainer.children, this.targetSprite)) ) {

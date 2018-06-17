@@ -39,12 +39,12 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
     
     async _build() {
-	this.multiplayer.debugSource = this; // for debugging. Remove.
 	await super._build();
+	this.buildTargetImage();
 
 	this.buildExitPoints();
 	await this.buildOutfits();
-
+	
 	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
@@ -71,8 +71,22 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     }
     
     buildTargetImage() {
-	this.targetImage = new targetImage(this.meta.targetImage);
-	return this.targetImage.build();
+	var textureToUse = Math.round(this.meta.animation.images.baseImage.imagePurposes.normal.length
+				      * 2/3);
+
+	this.targetImage = new PIXI.Sprite(this.sprites.baseImage.textures[textureToUse]);
+	this.targetImage.anchor.x = 0.5;
+	this.targetImage.anchor.y = 0.5;
+	var frame = this.targetImage.texture.frame;
+	var longest = Math.max(frame.height, frame.width);
+	if (longest > 90) {
+	    var scale = 90 / longest;
+	}
+	else {
+	    scale = 1;
+	}
+	this.targetImage.scale.x = scale;
+	this.targetImage.scale.y = scale;
     }
 
     get UUIDS() {
