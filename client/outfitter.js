@@ -26,19 +26,21 @@ class outfitter extends menu {
 	this.itemGrid.container.position.x = -373;
 	this.itemGrid.container.position.y = -153;
 	this.itemGrid.setCounts(myShip.properties.outfits);
+	this._modifiedOutfits = false;
     }
 
     buyOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
 	myShip.addOutfit(outfit, false);
 	this.itemGrid.setCounts(myShip.properties.outfits);
+	this._modifiedOutfits = true;
     }
 
     sellOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
 	myShip.removeOutfit(outfit, false);
 	this.itemGrid.setCounts(myShip.properties.outfits);
-	
+	this._modifiedOutfits = true;
     }
     
     show() {
@@ -48,7 +50,10 @@ class outfitter extends menu {
     
     depart() {
 	this.hide();
-	myShip.setOutfits();
+	if (this._modifiedOutfits) {
+	    myShip.setOutfits();
+	}
+	this._modifiedOutfits = false;
     }
     
     bindControls() {
