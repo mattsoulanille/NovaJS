@@ -79,11 +79,11 @@ var particleEmitter = class extends renderable(inSystem) {
 		"max": 0
 	    },
 	    "lifetime": {
-		"min": maxLife,
-		"max": minLife
+		"min": minLife,
+		"max": maxLife
 	    },
 	    "blendMode": "add",
-	    "frequency": 0.01,
+	    "frequency": 0.016,
 	    "emitterLifetime": -1,
 	    "maxParticles": 1000,
 	    "pos": {
@@ -147,15 +147,22 @@ var particleEmitter = class extends renderable(inSystem) {
     
     renderHit() {
 	this.emit = true;
-	this.render(1000/60);
+	this.render(1000 / 60);
 	this.emit = false;
     }
     
     render(delta) {
+	if (environment.framerate > 15) {
+	    this.emitter.frequency = 1 / environment.framerate;
+	}
+	else {
+	    this.emitter.frequency = 0;
+	}
+
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
 	this.emitter.update(delta * 0.001);
-	
+
     }
 
     _addToSystem() {

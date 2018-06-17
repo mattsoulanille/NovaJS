@@ -222,6 +222,13 @@ var resume = function() {
 socket.on('resume', resume);
 
 
+
+var environment = {
+    framerate:60
+};
+
+
+
 function startGame() {
 
     currentSystem.spaceObjects.forEach(function(s) {
@@ -276,6 +283,7 @@ function animateSpace(tick) {
     
     var time = app.ticker.lastTime;
     var delta = app.ticker.elapsedMS;
+    environment.framerate = app.ticker.FPS;
 
     stars.render(delta);
 
