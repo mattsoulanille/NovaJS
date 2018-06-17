@@ -22,6 +22,7 @@ var statusBar = class extends loadsResources(function() {}) {
 	this.container.addChild(this.weaponsContainer);
 
 
+	this.realtimeTargetImage = true;
 
 	// Is this superfluous?
 	this.children = new Set(); // maybe write a class for children?
@@ -49,11 +50,18 @@ var statusBar = class extends loadsResources(function() {}) {
 
 	await this.buildTargetCorners();
 	await this.buildPlanetCorners();
-
 	this.radar = new radar(this.meta, this.source);
 	this.radarContainer.position.x = this.meta.dataAreas.radar.position[0];
 	this.radarContainer.position.y = this.meta.dataAreas.radar.position[1];
 	this.radarContainer.addChild(this.radar.graphics);
+
+	this.renderTextureSprite = new PIXI.Sprite();
+	this.renderTextureSprite.anchor.x = 0.5;
+	this.renderTextureSprite.anchor.y = 0.5;
+	this.renderTextureSprite.position.x = this.meta.dataAreas.targeting.size[0] / 2;
+	this.renderTextureSprite.position.y = this.meta.dataAreas.targeting.size[1] / 2;
+	this.renderTextureSprite.visible = false;
+	this.targetContainer.addChild(this.renderTextureSprite);
     }
 
     makeSprites() {
@@ -137,6 +145,9 @@ var statusBar = class extends loadsResources(function() {}) {
 
     drawTarget() {
 	this.renderTargetText();
+	if (this.realtimeTargetImage) {
+	    this.renderTextureSprite.texture = this.getTargetViewpointFrame();
+	}
     }
 
     buildWeaponsText() {
@@ -261,22 +272,63 @@ var statusBar = class extends loadsResources(function() {}) {
 	    this.text.weapon.visible = false;
 	}
     }
-    
+
+
+    getTargetViewpointFrame() {
+	var size = this.target.size;
+	var renderTexture = PIXI.RenderTexture.create(...size);
+	//renderTexture.frame.x = this.target.container.position.x - (size[0] / 2);
+	//renderTexture.frame.y = this.target.container.position.y - (size[1] / 2);
+	//renderTexture._updateUvs(); // must be called after changing frame
+
+	this.target.container.setTransform();
+	this.target.container.position.x = size[0] / 2;
+	this.target.container.position.y = size[1] / 2;
+	app.renderer.render(this.target.container, renderTexture);
+	return renderTexture;
+
+    }
+
+
     setTarget(target) {
 	// Hide old target
 	if (this.targetSprite) {
 	    this.targetSprite.visible = false;
 	}
+	var size = [this.meta.dataAreas.targeting.size[0],
+		    this.meta.dataAreas.targeting.size[1]];
 
 	// Show new target
 	this.target = target;
 	if (target) {
-	    if (target.targetImage) {
-		this.targetSprite = target.targetImage;
+
+	    if (this.realtimeTargetImage) {
+		var targetDimension = Math.max(...target.size);
+		var scale = 1;
+		if (targetDimension > 90) {
+		    scale = 90 / targetDimension;
+		}
+		this.renderTextureSprite.scale.x = scale;
+		this.renderTextureSprite.scale.y = scale;
+		this.renderTextureSprite.texture = this.getTargetViewpointFrame();
+		this.renderTextureSprite.visible = true;
 	    }
 	    else {
-		this.targetSprite = this.text.targetImagePlaceholder;
+		this.renderTextureSprite.visible = false;
+		if (target.targetImage) {
+		    this.targetSprite = target.targetImage;
+		}
+		else {
+		    this.targetSprite = this.text.targetImagePlaceholder;
+		}
+		if ( !(_.contains(this.targetContainer.children, this.targetSprite)) ) {
+		    this.targetContainer.addChild(this.targetSprite);
+		}
+		this.targetSprite.position.x = (size[0] / 2);
+		this.targetSprite.position.y = (size[1] / 2);
+		this.targetSprite.visible = true;
 	    }
+
 	    if (target.properties.name) {
 		// Cut off anything after and including ";"
 		this.text.name.text = target.properties.name.match(/[^;]*/)[0];
@@ -284,17 +336,6 @@ var statusBar = class extends loadsResources(function() {}) {
 	    else {
 		this.text.name.text = "Name Undefined";
 	    }
-
-	    if ( !(_.contains(this.targetContainer.children, this.targetSprite)) ) {
-		this.targetContainer.addChild(this.targetSprite);
-	    }
-	    var pos = [0,0];
-	    var size = [this.meta.dataAreas.targeting.size[0],
-			this.meta.dataAreas.targeting.size[1]];
-
-	    this.targetSprite.position.x = (size[0] / 2);
-	    this.targetSprite.position.y = (size[1] / 2);
-	    this.targetSprite.visible = true;
 
 
 	}

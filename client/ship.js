@@ -69,11 +69,13 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 	}
     }
+
     
     buildTargetImage() {
 	var textureToUse = Math.round(this.meta.animation.images.baseImage.imagePurposes.normal.length
 				      * 2/3);
 
+	// Is scaled so must be sprite.
 	this.targetImage = new PIXI.Sprite(this.sprites.baseImage.textures[textureToUse]);
 	this.targetImage.anchor.x = 0.5;
 	this.targetImage.anchor.y = 0.5;
