@@ -2,6 +2,7 @@ if (typeof module !== "undefined") {
     var errors = require("./errors.js");
     var NoSystemError = errors.NoSystemError;
     var NotBuiltError = errors.NotBuiltError;
+    var AlreadyRenderedError = errors.AlreadyRenderedError;
     var eventable = require("../libraries/eventable.js");
 }
 
@@ -72,7 +73,7 @@ var renderable = (superclass) => class extends eventable(superclass) {
 
 	this.delta = delta; // for beam weapons and other things
 	if (this.rendered) {
-	    throw new Error("Object has already been rendered this frame");
+	    throw new AlreadyRenderedError("Object has already been rendered this frame");
 	}
 	this.rendered = true;
 	this.emit("rendered");

@@ -5,7 +5,7 @@ var NoSystemError = class extends Error{};
 var NotBuiltError = class extends Error{};
 var NoCollisionShapeError = class extends Error{};
 var UnsupportedWeaponTypeError = class extends Error{};
-
+var AlreadyRenderedError = class extends Error{};
 
 if (typeof(module) !== 'undefined') {
     module.exports = {
@@ -13,6 +13,7 @@ if (typeof(module) !== 'undefined') {
 	NoSystemError,
 	NotBuiltError,
 	NoCollisionShapeError,
-	UnsupportedWeaponTypeError
+	UnsupportedWeaponTypeError,
+	AlreadyRenderedError
     };
 }

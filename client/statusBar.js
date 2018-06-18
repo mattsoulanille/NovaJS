@@ -280,11 +280,13 @@ var statusBar = class extends loadsResources(function() {}) {
 	//renderTexture.frame.x = this.target.container.position.x - (size[0] / 2);
 	//renderTexture.frame.y = this.target.container.position.y - (size[1] / 2);
 	//renderTexture._updateUvs(); // must be called after changing frame
-
-	this.target.container.setTransform();
-	this.target.container.position.x = size[0] / 2;
-	this.target.container.position.y = size[1] / 2;
-	app.renderer.render(this.target.container, renderTexture);
+	
+	var container = this.target.container;
+	
+	container.setTransform();
+	container.position.x = size[0] / 2;
+	container.position.y = size[1] / 2;
+	app.renderer.render(container, renderTexture);
 	return renderTexture;
 
     }
@@ -305,8 +307,9 @@ var statusBar = class extends loadsResources(function() {}) {
 	    if (this.realtimeTargetImage) {
 		var targetDimension = Math.max(...target.size);
 		var scale = 1;
-		if (targetDimension > 90) {
-		    scale = 90 / targetDimension;
+		var maxSize = 110;
+		if (targetDimension > maxSize) {
+		    scale = maxSize / targetDimension;
 		}
 		this.renderTextureSprite.scale.x = scale;
 		this.renderTextureSprite.scale.y = scale;

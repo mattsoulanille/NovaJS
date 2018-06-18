@@ -1,11 +1,17 @@
 var eventable = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
-	this._events = {};
-	this._once = {};
-	this._state = {};
-	this._onceStateFuncs = {};
-	this._stateFuncs = {};
+
+	// In case the object is made eventable multiple times.
+	if (typeof this._has_eventable_defined == 'undefined' &&
+	    !this._has_eventable_defined) {
+	    this._has_eventable_defined = true;
+	    this._events = {};
+	    this._once = {};
+	    this._state = {};
+	    this._onceStateFuncs = {};
+	    this._stateFuncs = {};
+	}
     }
 
     on(name, func) {
