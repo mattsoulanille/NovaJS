@@ -399,19 +399,31 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
         super._removeFromSystem.call(this);
     }
 
+    _smallExplosion() {
+	var pos = [...this.position];
+	pos[0] += Math.random() * this.size[0] - this.size[0] / 2;
+	pos[1] += Math.random() * this.size[1] - this.size[1] / 2;
+	this.initialExplosion.explode(pos);
+    }
+    
     async explode() {
 	// Explodes the ship. This happens when it's dead.
 	// Temporary.
+	var explodeInterval = false;
 	if (this.initialExplosion) {
-	    this.initialExplosion.explode(this.position);
+	    explodeInterval = setInterval(this._smallExplosion.bind(this, this.position), 100);
 	}
-
+	
 	await new Promise(function(fulfill, reject) {
 	    setTimeout(fulfill, 2000);
 	});
 
 	if (this.finalExplosion) {
 	    this.finalExplosion.explode(this.position);
+	}
+
+	if (explodeInterval) {
+	    clearInterval(explodeInterval);
 	}
 
     }

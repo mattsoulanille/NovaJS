@@ -23,6 +23,8 @@ var spriteSheetCache = class extends cache {
 		});
 		result.convexHulls = await this.getURL(this.prefix_url + id + "/convexHulls.json");
 
+		result.frameIDs = Object.keys(frameInfo.frames);
+		
 		fulfill(result);
 
 	    }.bind(this));

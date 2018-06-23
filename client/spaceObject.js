@@ -190,7 +190,7 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	//this.hide();
 
 	// Didn't I rewrite the add to system code? Maybe this is unneeded
-	this.system.container.addChild(this.container);
+	//this.system.container.addChild(this.container);
     }
 
     callSprites(toCall) {

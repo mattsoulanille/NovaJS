@@ -13,45 +13,43 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 	this.building = false;
 	this.time = 0;
 	this.queue = [];
+	this.show();
     }
 
     async build() {
 	if (!this.built && !this.building) {
 	    this.building = true;
 	    this.spriteSheet = await this.loadResources("spriteSheets", this.spriteId);
-	    var expl = new explosionSprite(this.spriteSheet.textures, this.frameTime, this.queue);
-	    this.addChild(expl);
-	    
+	    this.makeNewExplosion();
 	    this.built = true;
 	}
     }
 
+    makeNewExplosion() {
+	var expl = new explosionSprite(this.spriteSheet.textures, this.frameTime, this.queue);
+	this.container.addChild(expl.container);
+	this.addChild(expl);
+
+    }
+    
     explode(pos) {
 	// Write some coordinate translater maybe.
-	var toExplode = this.queue.pop();
+	var toExplode = this.queue.shift();
 	if (!toExplode) {
-	    toExplode = new explosionSprite(this.spriteSheet, this.frameTime, this.queue);
-	    this.addChild(toExplode);
+	    this.makeNewExplosion();
+	    toExplode = this.queue.shift();
 	}
 	toExplode.explode(pos);
     }
 
+    _addToSystem() {
+	super._addToSystem();
+	this.system.container.addChild(this.container);
+    }
+
+    _removeFromSystem() {
+	super._removeFromSystem();
+	this.system.container.removeChild(this.container);
+    }
     
-    destroy() {
-	if (this.destroyed) {
-	    return;
-	}
-	super.destroy();
-    }
-
-    addChild(child) {
-	super.addChild(child);
-	this.container.addChild(child.container);
-    }
-
-    removeChild(child) {
-	super.removeChild(child);
-	this.container.removeChild(child.container);
-    }
-
 };
