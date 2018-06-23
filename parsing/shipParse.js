@@ -83,8 +83,11 @@ var shipParse = class extends baseParse {
 	else {
 	    this.finalExplosion = null;
 	}
-
+	
 	this.deathDelay = ship.deathDelay / 60 * 1000;
+	if (ship.deathDelay >= 60) {
+	    this.largeExplosion = true;
+	}
 	
 	
     }

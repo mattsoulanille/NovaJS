@@ -32,6 +32,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    this.buildInfo.type = "ship";
 	}
 
+
+	// Don't automatically die when the client thinks it has zero armor.
+	// Get confirmation from the server.
+	this.offState("zeroArmor", this._onDeathBound); 
     }
 
     _bindListeners() {
@@ -399,29 +403,48 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
         super._removeFromSystem.call(this);
     }
 
-    _smallExplosion() {
+    _initialExplosion() {
+	var explBox = [this.size[0] / 2, this.size[1] / 2];
 	var pos = [...this.position];
-	pos[0] += Math.random() * this.size[0] - this.size[0] / 2;
-	pos[1] += Math.random() * this.size[1] - this.size[1] / 2;
+	pos[0] += Math.random() * explBox[0] - explBox[0] / 2;
+	pos[1] += Math.random() * explBox[1] - explBox[1] / 2;
 	this.initialExplosion.explode(pos);
     }
-    
+
+    _smallFinalExplosion() {
+	this.finalExplosion.explode(this.position);
+    }
+
+    _largeFinalExplosion() {
+	for (let i = 0; i < 8; i++) {
+	    let offset = this._randomCirclePoint(this.size[0] / 4);
+	    let pos = [this.position[0] + offset[0],
+		       this.position[1] + offset[1]];
+	    let delay = Math.round(Math.random() * 100);
+	    this.finalExplosion.explode(pos, delay);
+	}
+    }
+
     async explode() {
 	// Explodes the ship. This happens when it's dead.
 	// Temporary.
 	var explodeInterval = false;
 	if (this.initialExplosion) {
-	    explodeInterval = setInterval(this._smallExplosion.bind(this, this.position), 100);
+	    explodeInterval = setInterval(this._initialExplosion.bind(this, this.position), 100);
 	}
-	
-	await new Promise(function(fulfill, reject) {
-	    setTimeout(fulfill, 2000);
-	});
+
+	await this.sleep(this.properties.deathDelay);
 
 	if (this.finalExplosion) {
-	    this.finalExplosion.explode(this.position);
+	    if (this.properties.largeExplosion) {
+		this._largeFinalExplosion();
+	    }
+	    else {
+		this._smallFinalExplosion();
+	    }
 	}
 
+	
 	if (explodeInterval) {
 	    clearInterval(explodeInterval);
 	}
@@ -430,13 +453,8 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
     
     async _onDeath() {
-	// Hide all sprites but baseImage
-	for (let name in this.sprites) {
-	    if (name !== "baseImage") {
-		this.sprites[name].sprite.visible = false;
-	    }
-	}
 	await this.explode();
+	this.hide();
 	await super._onDeath(...arguments);
 
     }

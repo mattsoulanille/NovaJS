@@ -81,7 +81,13 @@ var weapParse = class extends baseParse {
 	    this.explosion = null;
 	}
 
-
+	if (weap.explosion128sparks) {
+	    var extraBoom = weap.idSpace.bööm[128];
+	    this.secondaryExplosion = new explosionParse(extraBoom);
+	}
+	else {
+	    this.secondaryExplosion = null;
+	}
 
 	if (weap.ammoType <= -1000) {
 	    // then it costs energy

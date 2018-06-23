@@ -326,6 +326,25 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	this.destroyed = true;
     }
 
+    _randomCirclePoint(rad) {
+	// Rejection Sampling is faster in practice (I think)
+	// see https://stackoverflow.com/questions/5837572/generate-a-random-point-within-a-circle-uniformly
+	var point = [];
+	while (point.length == 0 | (point[0]**2 + point[1]**2 > rad**2)) {
+	    point[0] = Math.random()*2*rad - rad;
+	    point[1] = Math.random()*2*rad - rad;
+	}
+	return point;
+    }
+
+    sleep(ms) {
+	// cheapo hacky async sleep function
+	return new Promise(function(fulfill, reject) {
+	    setTimeout(fulfill, ms);
+	});
+    }
+
+
 };
 
 spaceObject.prototype.factor = 3/10; // the factor for nova object movement. Seems to be 3/10

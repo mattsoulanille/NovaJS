@@ -32,8 +32,13 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 
     }
     
-    explode(pos) {
+    async explode(pos, delay=0) {
 	// Write some coordinate translater maybe.
+	if (delay > 0) { // cheapo delay hack
+	    await new Promise(function(fulfill, reject) {
+		setTimeout(fulfill, delay);
+	    });
+	}
 	var toExplode = this.queue.shift();
 	if (!toExplode) {
 	    this.makeNewExplosion();

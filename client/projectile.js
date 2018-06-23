@@ -137,6 +137,13 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    await this.explosion.build();
 	    this.addChild(this.explosion);
 	}
+
+	if (this.meta.secondaryExplosion) {
+	    this.secondaryExplosion = new explosion(this.meta.secondaryExplosion);
+	    await this.secondaryExplosion.build();
+	    this.addChild(this.secondaryExplosion);
+	}
+
 	
     }
     
@@ -249,7 +256,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	
 	this.show();
     }
-    
+
     end(fireSubs = true, explode = true) {
 
 	// if (this.endTimeout) {
@@ -271,6 +278,9 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	if (this.explosion && explode) {
 	    this.explosion.explode(this.position);
 	}
+	if (this.secondaryExplosion && explode) {
+	    this.doSecondaryExplosion(this.position);
+	}
 
 	if (this.trailParticles || this.hitParticles) {
 
@@ -289,6 +299,16 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	}.bind(this), this.additionalTime);
     }
 
+    doSecondaryExplosion(pos) {
+	var count = Math.round(Math.random() * 5 + 20); // arbitrary
+	for (let i = 0; i < count; i++) {
+	    let offset = this._randomCirclePoint(90);
+	    let explodePoint = [offset[0] + pos[0], offset[1] + pos[1]];
+	    let delay = Math.round(Math.random() * 900);
+	    this.secondaryExplosion.explode(explodePoint, delay);
+	}
+    }
+    
     receiveCollision(other) {
 	// Projectiles take damage as 1*armor and 0.5*shield
 	this.armor = this.armor - other.armorDamage - other.shieldDamage / 2;

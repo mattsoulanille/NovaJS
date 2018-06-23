@@ -22,6 +22,9 @@ class playerShip extends controllable(ship) {
 	this.scope = "playerShip";
 	//this.sendTimeout;
 
+	// Ship removed this. We are responsable for
+	// reporting when playerShip dies.
+	this.onState("zeroArmor", this._onDeathBound);
     }
 
     async _build() {
@@ -338,17 +341,15 @@ class playerShip extends controllable(ship) {
 
     async _onDeath() {
 	// temporary respawn
-	this.sendStats();
+	this.sendStats(); // send that we died
 	await super._onDeath(...arguments);
 	this.respawn();
     }
 
     respawn() {
-	// Show all the sprites again
-	for (let name in this.sprites) {
-	    this.sprites[name].sprite.visible = true;
-	}
-
+	// Set that it has armor again.
+	this.setState("zeroArmor", false);
+	
 	this.position[0] = Math.random() * 1000 - 500;
 	this.position[1] = Math.random() * 1000 - 500;
 	this.velocity[0] = 0;
@@ -358,6 +359,7 @@ class playerShip extends controllable(ship) {
 	//var newStats = {};
 	//newStats[this.UUID] = this.getStats();
 	//this.socket.emit('updateStats', newStats);
+	this.show();
 	this.sendStats();
 
     }

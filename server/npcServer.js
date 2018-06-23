@@ -20,6 +20,10 @@ class npcServer extends npc {
 	//this._delay = 100; // 100 milliseconds
 	this._delay = 1000; // time between calls to controlfunction
 	this.controlInterval = undefined;
+
+	// Ship removed this. Server is responsable for
+	// reporting when npcs die.
+	this.onState("zeroArmor", this._onDeathBound);
     }
 
 
@@ -191,7 +195,17 @@ class npcServer extends npc {
 	//this.hide();
 	//this.multiplayer.emit('updateStats', this.getStats());
 	super.onDeath();
+	this.sendStats();
+	setTimeout(function() {
+	    this.hide();
+
+	}.bind(this), this.properties.deathDelay);
+
 	setTimeout(this.destroy.bind(this), 10000); // So the projectiles can continue to exist. A bad way to do this.
+	
+	
+
+	
     }
 
     destroy() {
