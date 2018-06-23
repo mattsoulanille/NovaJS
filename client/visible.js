@@ -46,6 +46,9 @@ var visible = (superclass) => class extends eventable(superclass) {
 	    super.destroy();
 	}
     }
+
+
+    
 };
 
 

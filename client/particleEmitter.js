@@ -108,6 +108,9 @@ var particleEmitter = class extends renderable(inSystem) {
     }
 
     show() {
+	if (this.hideTimeout) {
+	    clearTimeout(this.hideTimeout);
+	}
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
 	this.render(0);

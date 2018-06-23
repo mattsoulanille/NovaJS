@@ -188,8 +188,9 @@ class npcServer extends npc {
 	this.sendStats();
     }
     onDeath() {
-	this.hide();
-	this.multiplayer.emit('updateStats', this.getStats());
+	//this.hide();
+	//this.multiplayer.emit('updateStats', this.getStats());
+	super.onDeath();
 	setTimeout(this.destroy.bind(this), 10000); // So the projectiles can continue to exist. A bad way to do this.
     }
 

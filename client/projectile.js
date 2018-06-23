@@ -72,9 +72,6 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	    additionalTimes.push(this.hitParticles.lifetime);
 	}
 
-	if (this.explosion) {
-	    additionalTimes.push(this.explosion.lifetime);
-	}
 
 	if (this.subs.length !== 0) {
 	    var subDurations = this.subs.map(function(sub) {

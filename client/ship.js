@@ -44,7 +44,8 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 	this.buildExitPoints();
 	await this.buildOutfits();
-	
+	await this.buildExplosion();
+
 	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
@@ -91,6 +92,22 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.targetImage.scale.y = scale;
     }
 
+    async buildExplosion() {
+	if (this.properties.initialExplosion) {
+	    this.initialExplosion = new explosion(this.properties.initialExplosion);
+	    await this.initialExplosion.build();
+	    this.addChild(this.initialExplosion);
+	}
+	
+	if (this.properties.finalExplosion) {
+	    this.finalExplosion = new explosion(this.properties.finalExplosion);
+	    await this.finalExplosion.build();
+	    this.addChild(this.finalExplosion);
+	}
+	
+	
+    }
+    
     get UUIDS() {
 	var uuids = super.UUIDS;
 	this.weapons.all.forEach(function(weap) {
@@ -99,22 +116,6 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	return uuids;
     }
 
-    // async buildWeapon(buildInfo) {
-    // 	try {
-    // 	    var newWeapon = await new weaponBuilder(buildInfo, this).buildWeapon();
-    // 	}
-    // 	catch (e) {
-    // 	    if (! (e instanceof UnsupportedWeaponTypeError) ) {
-    // 		throw e;
-    // 	    }
-    // 	}
-	
-    // 	if (newWeapon) {
-    // 	    // temporary for when not all weapon types can be made
-    // 	    this.addChild(newWeapon);
-    // 	    this.weapons.all.push(newWeapon);
-    // 	}
-    // }
     
     buildDefaultWeapons() {
 	// builds the default weapons that come with the ship
@@ -401,9 +402,31 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     async explode() {
 	// Explodes the ship. This happens when it's dead.
 	// Temporary.
+	if (this.initialExplosion) {
+	    this.initialExplosion.explode(this.position);
+	}
+
 	await new Promise(function(fulfill, reject) {
 	    setTimeout(fulfill, 2000);
 	});
+
+	if (this.finalExplosion) {
+	    this.finalExplosion.explode(this.position);
+	}
+
+    }
+
+    
+    async _onDeath() {
+	// Hide all sprites but baseImage
+	for (let name in this.sprites) {
+	    if (name !== "baseImage") {
+		this.sprites[name].sprite.visible = false;
+	    }
+	}
+	await this.explode();
+	await super._onDeath(...arguments);
+
     }
 
     destroyOutfits() {

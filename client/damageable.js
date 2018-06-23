@@ -29,6 +29,7 @@ damageable = (superclass) => class extends superclass {
 	if (typeof(buildInfo) !== 'undefined') {
 	    this.buildInfo.type = "damageable";
 	}
+	this.dying = false;
     }
 
     setProperties() {
@@ -54,7 +55,7 @@ damageable = (superclass) => class extends superclass {
 
 	if (this.armor <= 0) {
 	    this.armor = 0;
-	    this.velocity = [0,0];
+	    //this.velocity = [0,0];
 	    this.onDeath(); // make this an event
 	}
 	super.receiveCollision.call(this, other);
@@ -96,8 +97,16 @@ damageable = (superclass) => class extends superclass {
 	super.render(...arguments);
     }
 
-    onDeath() {
-	//this.hide();
+
+    async _onDeath() {
+	this.dying = false; // it died.
+    }
+
+    async onDeath() {
+	if (!this.dying) {
+	    this.dying = true;
+	    await this._onDeath();
+	}
     }
 
 };

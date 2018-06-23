@@ -75,8 +75,6 @@ var weapParse = class extends baseParse {
 	// change me when you implement sound.
 	if (weap.explosion >= 128) {
 	    var boom = weap.idSpace.bööm[weap.explosion];
-	    var spin = boom.idSpace.spïn[boom.graphic];
-	    var rled = spin.idSpace.rlëD[spin.spriteID];
 	    this.explosion = new explosionParse(boom);
 	}
 	else {

@@ -35,6 +35,8 @@ class shipServer extends ship {
 	this.multiplayer.broadcast("setOutfits", await this.getOutfits());
     }
 
+    async buildExplosion() {};
+    
     setProperties() {
 	super.setProperties();
 	this._makeOutfitUUIDs();

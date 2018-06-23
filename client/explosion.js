@@ -1,5 +1,5 @@
 
-var explosion = class extends loadsResources(visible(renderable(inSystem))) {
+var explosion = class extends loadsResources(visible(inSystem)) {
     constructor(buildInfo) {
 	super();
 	this.destroyed = false; // generalize this
@@ -12,57 +12,46 @@ var explosion = class extends loadsResources(visible(renderable(inSystem))) {
 	this.built = false;
 	this.building = false;
 	this.time = 0;
+	this.queue = [];
     }
 
     async build() {
 	if (!this.built && !this.building) {
 	    this.building = true;
-	    var spriteSheet = await this.loadResources("spriteSheets", this.spriteId);
-	    this.sprite = new sprite(spriteSheet.textures);
-	    this.sprite.sprite.blendMode = PIXI.BLEND_MODES.ADD;
-	    var frameCount = this.sprite.textures.length;
-	    this.lifetime = this.frameTime * frameCount;
-	    this.container.addChild(this.sprite.sprite);
+	    this.spriteSheet = await this.loadResources("spriteSheets", this.spriteId);
+	    var expl = new explosionSprite(this.spriteSheet.textures, this.frameTime, this.queue);
+	    this.addChild(expl);
+	    
 	    this.built = true;
 	}
     }
 
     explode(pos) {
 	// Write some coordinate translater maybe.
-	this.container.position.x = pos[0];
-	this.container.position.y = -pos[1];
-	this.time = 0;
-	this.show();
-
-    }
-    render(delta) {
-	this.time += delta;
-	var frame = Math.floor(this.time / this.frameTime);
-	if (frame < this.sprite.textures.length) {
-	    this.sprite.sprite.texture = this.sprite.textures[frame];
+	var toExplode = this.queue.pop();
+	if (!toExplode) {
+	    toExplode = new explosionSprite(this.spriteSheet, this.frameTime, this.queue);
+	    this.addChild(toExplode);
 	}
-	else {
-	    this.hide();
-	}
-	
+	toExplode.explode(pos);
     }
 
-    _addToSystem() {
-	this.system.container.addChild(this.container);
-	super._addToSystem();
-    }
-    _removeFromSystem() {
-	this.hide();
-	this.system.container.removeChild(this.container);
-	super._removeFromSystem();
-    }
     
     destroy() {
 	if (this.destroyed) {
 	    return;
 	}
-	this.container.destroy();
 	super.destroy();
+    }
+
+    addChild(child) {
+	super.addChild(child);
+	this.container.addChild(child.container);
+    }
+
+    removeChild(child) {
+	super.removeChild(child);
+	this.container.removeChild(child.container);
     }
 
 };

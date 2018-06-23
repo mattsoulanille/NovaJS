@@ -336,20 +336,32 @@ class playerShip extends controllable(ship) {
 	//    console.log(this.targetIndex)
     }
 
-    onDeath() {
+    async _onDeath() {
 	// temporary respawn
+	this.sendStats();
+	await super._onDeath(...arguments);
+	this.respawn();
+    }
+
+    respawn() {
+	// Show all the sprites again
+	for (let name in this.sprites) {
+	    this.sprites[name].sprite.visible = true;
+	}
+
 	this.position[0] = Math.random() * 1000 - 500;
 	this.position[1] = Math.random() * 1000 - 500;
 	this.velocity[0] = 0;
 	this.velocity[1] = 0;
 	this.shield = this.properties.shield;
 	this.armor = this.properties.armor;
-	var newStats = {};
-	newStats[this.UUID] = this.getStats();
-	this.socket.emit('updateStats', newStats);
-	
-    }
+	//var newStats = {};
+	//newStats[this.UUID] = this.getStats();
+	//this.socket.emit('updateStats', newStats);
+	this.sendStats();
 
+    }
+    
     set send(v) {
 	if (v) {
 	    if (!this.sendInterval) {

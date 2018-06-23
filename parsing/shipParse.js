@@ -1,6 +1,6 @@
-
 var shanParse = require("./shanParse.js");
 var baseParse = require("./baseParse.js");
+var explosionParse = require("./explosionParse.js");
 var shipParse = class extends baseParse {
     constructor(ship) {
 	super(...arguments);
@@ -67,6 +67,24 @@ var shipParse = class extends baseParse {
 	    return {"id" : id, "count" : outfits[id]};
 	});
 	
+
+	if (ship.initialExplosion >= 128) {
+	    let boom = ship.idSpace.bööm[ship.initialExplosion];
+	    this.initialExplosion = new explosionParse(boom);
+	}
+	else {
+	    this.initialExplosion = null;
+	}
+	
+	if (ship.finalExplosion >= 128) {
+	    let boom = ship.idSpace.bööm[ship.finalExplosion];
+	    this.finalExplosion = new explosionParse(boom);
+	}
+	else {
+	    this.finalExplosion = null;
+	}
+
+	this.deathDelay = ship.deathDelay / 60 * 1000;
 	
 	
     }

@@ -21,9 +21,6 @@ class npc extends ship {
 	this.system.npcs.delete(this);
 	super._removeFromSystem.call(this);
     }
-    onDeath() {
-//	this.hide();
-    }
 
 
 }
