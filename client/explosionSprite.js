@@ -1,5 +1,5 @@
 class explosionSprite extends visible(renderable(inSystem)) {
-    constructor(textures, frameTime, queue) {
+    constructor(textures, frameTime, enqueue) {
 	super();
 	//var textures = frameIDs.map(function(t) { return new PIXI.Texture.fromFrame(t); });
 	
@@ -11,8 +11,8 @@ class explosionSprite extends visible(renderable(inSystem)) {
 	var frameCount = this.sprite.textures.length;
 	this.lifetime = this.frameTime * frameCount;
 
-	this.queue = queue; // parent's queue of ready explosionSprites
-	this.queue.push(this);
+	this.enqueue = enqueue; // The enqueue function to call when it's ready again.
+	
 	this.built = true;
     }
 
@@ -31,7 +31,7 @@ class explosionSprite extends visible(renderable(inSystem)) {
 	}
 	else {
 	    this.hide();
-	    this.queue.push(this); // It's ready again
+	    this.enqueue(this); // it's ready again
 	}
     }
 

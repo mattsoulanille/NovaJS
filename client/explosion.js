@@ -12,7 +12,7 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 	this.built = false;
 	this.building = false;
 	this.time = 0;
-	this.queue = [];
+	this.queue = new factoryQueue(this.makeNewExplosion.bind(this));
 	this.show();
     }
 
@@ -25,11 +25,11 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 	}
     }
 
-    makeNewExplosion() {
-	var expl = new explosionSprite(this.spriteSheet.textures, this.frameTime, this.queue);
+    makeNewExplosion(enqueue) {
+	var expl = new explosionSprite(this.spriteSheet.textures, this.frameTime, enqueue);
 	this.container.addChild(expl.container);
 	this.addChild(expl);
-
+	return expl;
     }
     
     async explode(pos, delay=0) {
@@ -39,11 +39,7 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 		setTimeout(fulfill, delay);
 	    });
 	}
-	var toExplode = this.queue.shift();
-	if (!toExplode) {
-	    this.makeNewExplosion();
-	    toExplode = this.queue.shift();
-	}
+	var toExplode = await this.queue.get();
 	toExplode.explode(pos);
     }
 
