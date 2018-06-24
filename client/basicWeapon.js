@@ -1,8 +1,5 @@
 if (typeof(module) !== 'undefined') {
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var projectile = require("../server/projectileServer.js");
-    var guided = require("../server/guidedServer.js");
+    //var Promise = require("bluebird");
     var inSystem = require("./inSystem.js");
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");

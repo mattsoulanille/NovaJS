@@ -7,6 +7,7 @@ if (typeof(module) !== 'undefined') {
     var loadsResources = require("./loadsResources.js");
     var multiplayer = require("../server/multiplayerServer.js");
     var basicWeapon = require("../server/basicWeaponServer.js");
+    var factoryQueue = require("../libraries/factoryQueue.js");
 }
 
 
@@ -15,7 +16,7 @@ projectileWeapon = class extends basicWeapon {
 	super(...arguments);
 	this.fireWithoutTarget = true;
 	this.type = "weapons";
-	this.projectiles = [];
+	this.projectileQueue = new factoryQueue(this.buildProjectile.bind(this));
 	this.nextFireTime = 1; // next possible time the weapon can be fired
 	// start at 1 because of renderable.setRendering
 	this.fireTimeout = null;
@@ -33,54 +34,14 @@ projectileWeapon = class extends basicWeapon {
 
     async _build() {
 	await super._build();
-	await this.buildProjectiles();
     }
 
 
-    async getProjectileCount() {
-	var testProj;
-	if (this.projectiles.length === 0) {
-	    testProj = await this.buildProjectile();
-	}
-	else {
-	    testProj = this.projectiles[0];
-	}
-
-	
-	var burstModifier = 1; // modifier to calculate how many projectiles needed
-	//var particleDuration = Math.max(this.properties.trailParticles.lifeMax,
-	//					    this.properties.hitParticles.life);
-	
-	//var durationMilliseconds = (this.properties.duration + particleDuration) * 1000/30;
-
-	var durationMilliseconds = testProj.lifetime;
-	if (this.doBurstFire) {
-	    burstModifier = ( ((this.reloadMilliseconds) * this.properties.burstCount) /
-			      this.properties.burstReload * 1000/30);
-	    if (burstModifier > 1) {burstModifier = 1;}
-	}
-	
-	// as many projectiles as can be in the air at once as a result of the weapon's
-	// duration and reload times. if reload == 0, then it's one nova tick (1/30 sec)
-
-	// Maximum is 60 projectiles fired per second (1000/60 milliseconds/projectile)
-	this.reloadMilliseconds = Math.max(this.reloadMilliseconds, 1000/60);
-
-	// This doesn't work perfectly with weapons that fire simultaneously,
-	//  but I'm keeping it for performance conerns
-	var simulModifier = 1;
-	if (this.fireSimultaneously) {
-	    simulModifier = this.count;
-	}
-	return simulModifier * burstModifier * this.count *
-	    Math.ceil(durationMilliseconds / this.reloadMilliseconds);
-
-    }
-
-    async buildProjectile() {
+    async buildProjectile(enqueue) {
 	var proj;
 	//console.log(this.source.system);
-	var args = [this.buildInfo, this.source.system, this.source, this.meta, this.properties];
+	var args = [this.buildInfo, this.source.system, this.source,
+		    this.meta, this.properties, enqueue];
 	switch (this.properties.type) {
 	case "unguided":
 	    proj = new projectile(...args);
@@ -99,26 +60,12 @@ projectileWeapon = class extends basicWeapon {
 	    proj = new projectile(...args);
 	    break;
 	}
-	this.projectiles.push(proj);
-	this.addChild(proj);
+	//this.projectiles.push(proj);
 	await proj.build();
+	this.addChild(proj);
 	return proj;
     }
     
-    async buildProjectiles() {
-
-	//var required_projectiles = await this.getProjectileCount();
-	var required_projectiles = 1;
-
-	//    var buildInfo = this.buildInfo;  
-	for (var i=this.projectiles.length; i < required_projectiles; i++) {
-	    await this.buildProjectile();
-	}
-
-	//await Promise.all(_.map( this.projectiles, function(projectile) {return projectile.build()} ));
-	
-    }
-
     addInaccuracy(angle) {
 	return angle +
 	    ((this.random() - 0.5) * 2 * this.properties.accuracy) *
@@ -126,22 +73,13 @@ projectileWeapon = class extends basicWeapon {
     }
 
     async fireProjectile(direction, position, velocity) {
-	for (var i=0; i < this.projectiles.length; i++) {
-	    var proj = this.projectiles[i];
-	    if (proj.available) {
-		direction = direction || this.addInaccuracy(this.source.pointing);
+	var proj = await this.projectileQueue.dequeue();
+	direction = direction || this.addInaccuracy(this.source.pointing);
 
-		position = position || this.source.position;
-		velocity = velocity || this.source.velocity;
-		proj.fire(direction, position, velocity, this.target);
+	position = position || this.source.position;
+	velocity = velocity || this.source.velocity;
+	return proj.fire(direction, position, velocity, this.target);
 		
-		return true;
-	    }
-	    
-	}
-	//console.log("No projectile available");
-	await this.buildProjectile();
-	this.fireProjectile(direction, position, velocity);
     }
     
     fire(direction, position, velocity) {
@@ -248,12 +186,7 @@ projectileWeapon = class extends basicWeapon {
 	    throw new Error("Called method of destroyed object");
 	};
 
-	this.projectiles.forEach(function(proj) {
-	    proj.destroy();
-	});
-
-	this.projectiles = null;
-
+	this.projectileQueue.destroy(); // destroys all projectiles
     }
 }
 if (typeof(module) !== 'undefined') {

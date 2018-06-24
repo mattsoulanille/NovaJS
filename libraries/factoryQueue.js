@@ -22,6 +22,17 @@ factoryQueue = class {
 	    return await this.buildFunction(this.queue.enqueue.bind(this.queue));
 	}
     }
+
+    destroy() {
+	for (let item = this.queue.dequeue(); item != null; item = this.queue.dequeue()) {
+	    item.destroy();
+	}
+	this.get = this.dequeue = function() {
+	    throw new Error("Called method of destroyed factoryQueue");
+	};
+    }
+
+    
 }
 
 if (typeof module !== "undefined") {

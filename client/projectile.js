@@ -16,11 +16,12 @@ if (typeof(module) !== 'undefined') {
 projectile = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
-    constructor(buildInfo, system, source, meta, properties) {
+    constructor(buildInfo, system, source, meta, properties, enqueue) {
 	super(buildInfo, system);
 	this.source = source;
 	this.meta = meta;
 	this.properties = properties;
+	this.enqueue = enqueue;
 	this.type = "weapons"; // that's where the data is. sorry.
 	this.pointing = 0;
 	this.available = false;
@@ -296,6 +297,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 
 	setTimeout(function() {
 	    this.available = true;
+	    this.enqueue(this);
 	}.bind(this), this.additionalTime);
     }
 
