@@ -23,7 +23,7 @@ projectileWeapon = class extends basicWeapon {
 	//this._justStarted = true;
     }
 
-    
+/*    
     _addToSystem(sys) {
 	this.system.multiplayer[this.UUID] = this;
     }
@@ -31,11 +31,7 @@ projectileWeapon = class extends basicWeapon {
     _removeFromSystem() {
 	delete this.system.multiplayer[this.UUID];
     }
-
-    async _build() {
-	await super._build();
-    }
-
+*/
 
     async buildProjectile(enqueue) {
 	var proj;

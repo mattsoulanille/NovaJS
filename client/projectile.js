@@ -6,7 +6,7 @@ if (typeof(module) !== 'undefined') {
     var movable = require("../server/movableServer.js");
     var spaceObject = require("../server/spaceObjectServer.js");
     var _ = require("underscore");
-    Promise = require("bluebird");
+    var Promise = require("bluebird"); // for Promise.map
     var weaponBuilder;
     var errors = require("./errors.js");
     var AlliesError = errors.AlliesError;
@@ -76,8 +76,8 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	// no need to add explosion time because multiple explosions can be constructed.
 
 	if (this.subs.length !== 0) {
-	    var subDurations = this.subs.map(function(sub) {
-		return sub.projectiles[0].lifetime;
+	    var subDurations = await Promise.map(this.subs, async function(sub) {
+		return (await sub.projectileQueue.peek()).lifetime;
 	    });
 	    var maxSubTime = Math.max(...subDurations);
 	    additionalTimes.push(maxSubTime);

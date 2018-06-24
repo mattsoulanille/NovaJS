@@ -33,7 +33,15 @@ Queue = class {
 	}
 
     }
-}
+    peek() {
+	if (this.length == 0) {
+	    return null;
+	}
+	else {
+	    return this.queue[this._offset];
+	}
+    }
+};
 
 if (typeof module !== "undefined") {
     module.exports = Queue;

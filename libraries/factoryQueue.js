@@ -14,6 +14,18 @@ factoryQueue = class {
 	return this.dequeue();
     }
 
+    async peek() {
+	if (this.queue.length === 0) {
+	    this.enqueue(await this.buildFunction(this.queue.enqueue.bind(this.queue)));
+	}
+	return this.queue.peek;
+    }
+
+    enqueue(item) {
+	// usually never used
+	this.queue.enqueue(item);
+    }
+    
     async dequeue() {
 	if (this.queue.length > 0) {
 	    return this.queue.dequeue();

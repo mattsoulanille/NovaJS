@@ -98,9 +98,8 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	var fire = this.weapon.fire;
 	this.weapon.fire = function(direction, position, velocity) {
 
-	    //for (var i = 0; i < this.projectiles.length; i++) {
 	    for (var i = 0; i < subData.count; i++) {
-		var proj = this.projectiles[i];
+		var proj = this.projectileQueue.dequeue();
 		var offset = (Math.random() - 0.5) * 2 * subData.theta * 2*Math.PI / 360;
 		direction = this.source.pointing + offset;
 		position = position || this.source.position;

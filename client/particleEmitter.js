@@ -183,6 +183,9 @@ var particleEmitter = class extends renderable(inSystem) {
 
     destroy() {
 	Object.defineProperty(this, "emit", {set:undefined}); // Kill the ability to emit
+	this.renderHit = this.render = function() {
+	    throw new Error("Tried to use destroyed particleEmitter");
+	};
 	if (this.hideTimeout) {
 	    clearTimeout(this.hideTimeout);
 	}
