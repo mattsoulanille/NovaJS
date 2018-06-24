@@ -100,6 +100,7 @@ local.context.killNPCs = function() {
 };
 
 var neuralAI = require("./server/neuralAI.js");
+var escort = require("./server/escortServer.js");
 
 local.context.addNPCs = async function(count, name=null) {
     var newNPCs = [];
@@ -120,6 +121,31 @@ local.context.addNPCs = async function(count, name=null) {
 	newNPCs.push(newShip.buildInfo);
     }
     io.emit("buildObjects", newNPCs);
+};
+
+local.context.addEscort = async function(master, name=null) {
+    var id = null;
+    if (name !== null) {
+	for (let i in allShips) {
+	    if (allShips[i].name == name) {
+		id = allShips[i].id;
+		break;
+	    }
+	}
+
+    }
+    if (id == null) {
+	throw new Error("Ship name " + name + " not found");
+    }
+
+    var buildInfo = {
+	id : id,
+	master : master
+    };
+    var newEscort = new escort(buildInfo);
+	
+
+    
 };
 
 var players = {}; // for repl

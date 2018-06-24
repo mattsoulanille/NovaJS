@@ -24,7 +24,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.weapons = {};
 	this.weapons.all = [];
 	this.outfits = [];
-	
+	this.escorts = {};
+	this.escorts.all = [];
+
 	this.turningToTarget = false;
 	this.landedOn = null;
 	if (typeof(buildInfo) !== 'undefined') {

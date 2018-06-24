@@ -1,4 +1,5 @@
 //"use strict";
+const SPACE_DIM = [7000, 7000]; // dimensions of every system
 
 var app = new PIXI.Application({
     resolution: window.devicePixelRatio || 1,
@@ -36,8 +37,7 @@ function onResize(evt) {
     screenH = evt.currentTarget.innerHeight;
     screenW = evt.currentTarget.innerWidth;
     app.renderer.resize(screenW,screenH);
-    //also update the starfield
-    stars.resize(screenW, screenH);
+
     myShip.statusBar.resize(screenW, screenH);
     if (!paused) {
 	requestAnimationFrame(animate);
@@ -111,7 +111,7 @@ socket.on('onconnected', async function(data) {
 //    myShip = new playerShip(data.playerShip);
 
     if (typeof stars === 'undefined') {
-	stars = new starfield(myShip, 40);
+	stars = new starfield(myShip);
     }
 
 
@@ -238,7 +238,6 @@ function startGame() {
         }
     });
 
-    stars.placeAll();
     // Don't have it in the ticker more than once
     app.ticker.remove(animateSpace);
     app.ticker.add(animateSpace);
@@ -285,7 +284,6 @@ function animateSpace(tick) {
     var delta = app.ticker.elapsedMS;
     environment.framerate = app.ticker.FPS;
 
-    stars.render(delta);
 
     //check this
     currentSystem.render(delta, time);

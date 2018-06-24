@@ -3,7 +3,8 @@ if (typeof(module) !== 'undefined') {
 }
 
 
-class npc extends ship {
+//class npc extends ship {
+var npc = class extends ship {
     constructor() {
 	super(...arguments);
 	this.buildInfo.type = "npc";

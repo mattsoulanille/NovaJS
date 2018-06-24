@@ -1,11 +1,10 @@
 
 
-var star = class extends movable(spaceObject) {
+var star = class extends spaceObject {
 
     constructor(source, starContainer, system, id = "nova:700") {
 	super({}, system);
 	
-	this.velocityFactor = 0;
 	this.attach(source);
 	this.meta = {};
 	this.meta.imageAssetsFiles = {"star": this.name + ".json"};
@@ -13,6 +12,8 @@ var star = class extends movable(spaceObject) {
 	this.available = false;
 	starContainer.addChild(this.container);
 	this.built = false;
+	// x, y, and an approximation for z
+	this.realPosition = [0, 0, 0];
     }
     
     //star.prototype.meta = {}
@@ -49,7 +50,7 @@ var star = class extends movable(spaceObject) {
     
     randomize() {
 	this.chooseRandomTexture();
-	this.velocityFactor = Math.random() / 2;
+	this.realPosition[2] = Math.random() / 2;
     }
 
     chooseRandomTexture() {
@@ -64,8 +65,9 @@ var star = class extends movable(spaceObject) {
 
 
     render() {
-	this.velocity[0] = this.source.velocity[0] * this.velocityFactor;
-	this.velocity[1] = this.source.velocity[1] * this.velocityFactor;
+	this.position[0] = this.realPosition[0] + this.source.position[0] * this.realPosition[2];
+	this.position[1] = this.realPosition[1] + this.source.position[1] * this.realPosition[2];
+	
 	super.render(...arguments);
     }
 };

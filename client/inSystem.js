@@ -42,7 +42,7 @@ var inSystem = class {
 
     _addToSystem() {
         if (this.hasOwnProperty("UUID") && this.UUID) {
-            this.system.multiplayer[this.UUID] = this;;
+            this.system.multiplayer[this.UUID] = this;
 	}
 	
     }
