@@ -10,18 +10,18 @@
     "bluebird": "^3.5.1",
     "chai": "^4.1.2",
     "crash-colliders": "^2.0.1",
-    "express": "^4.16.2",
-    "novaparse": "0.0.22",
+    "express": "^4.16.3",
+    "novaparse": "^0.0.24",
     "pixi-particles": "^2.1.9",
-    "pixi.js": "^4.6.2",
-    "pngjs": "^3.3.1",
-    "serve-favicon": "^2.4.5",
-    "socket.io": "^2.0.4",
-    "underscore": "^1.8.3",
-    "uuid": "^3.1.0"
+    "pixi.js": "^4.8.1",
+    "pngjs": "^3.3.3",
+    "serve-favicon": "^2.5.0",
+    "socket.io": "^2.1.1",
+    "underscore": "^1.9.1",
+    "uuid": "^3.2.1"
   },
   "devDependencies": {
-    "mocha": "^3.5.3"
+    "mocha": "^5.2.0"
   },
   "scripts": {
     "test": "mocha",
