@@ -1,7 +1,7 @@
-if (typeof module !== "undefined") {
-    var PIXI = require("../server/pixistub.js");
-    var eventable = require("../libraries/eventable.js");
-}
+
+var PIXI = require("../server/pixistub.js");
+var eventable = require("../libraries/eventable.js");
+
 
 var visible = (superclass) => class extends eventable(superclass) {
     constructor(buildInfo) {
@@ -46,14 +46,7 @@ var visible = (superclass) => class extends eventable(superclass) {
 	    super.destroy();
 	}
     }
-
-
-    
 };
 
+module.exports = visible;
 
-
-
-if (typeof module !== "undefined") {
-    module.exports = visible;
-}

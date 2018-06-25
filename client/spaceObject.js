@@ -1,17 +1,14 @@
-if (typeof(module) !== 'undefined') {
-    var sprite = require("../server/spriteServer.js");
-    var PIXI = require("../server/pixistub.js");
-    var _ = require("underscore");
-    Promise = require("bluebird");
-    var inSystem = require("./inSystem.js");
-    var loadsResources = require("./loadsResources.js");
-    var multiplayer = require("../server/multiplayerServer.js");
-    var exitPoint = require("./exitPoint.js");
-    var renderable = require("./renderable.js");
-    var visible = require("./visible.js");
-    var targetable = require("./targetable.js");
-
-}
+var sprite = require("../server/spriteServer.js");
+var PIXI = require("../server/pixistub.js");
+var _ = require("underscore");
+//Promise = require("bluebird");
+var inSystem = require("./inSystem.js");
+var loadsResources = require("./loadsResources.js");
+var multiplayer = require("../server/multiplayerServer.js");
+var exitPoint = require("./exitPoint.js");
+var renderable = require("./renderable.js");
+var visible = require("./visible.js");
+var targetable = require("./targetable.js");
 
 
 var spaceObject = class extends targetable(loadsResources(renderable(visible(inSystem)))) {
@@ -349,7 +346,5 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 
 spaceObject.prototype.factor = 3/10; // the factor for nova object movement. Seems to be 3/10
 
-if (typeof(module) !== 'undefined') {
-    module.exports = spaceObject;
-}
+module.exports = spaceObject;
 

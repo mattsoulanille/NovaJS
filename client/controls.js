@@ -219,3 +219,4 @@ class controls {
     }
     
 };
+module.exports = controls;

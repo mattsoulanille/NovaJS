@@ -1,3 +1,5 @@
+var visible = require("./visible.js");
+
 class messages extends visible(function() {}) {
     constructor(dimensions) {
 	super();
@@ -21,3 +23,5 @@ class messages extends visible(function() {}) {
 
 
 };
+
+module.exports = visible;

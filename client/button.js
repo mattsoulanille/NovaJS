@@ -1,3 +1,6 @@
+var eventable = require("../libraries/eventable.js");
+var visible = require("./visible.js");
+
 class button extends eventable(visible(function() {})) {
     constructor (text, size, position = {x:0, y:0}) {
 	super();
@@ -150,3 +153,4 @@ class button extends eventable(visible(function() {})) {
 
     }
 }
+module.exports = button;

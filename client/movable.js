@@ -3,17 +3,9 @@ movable.js
 Handles any space object that moves
 
 
-
 */
 
-
-if (typeof(module) !== 'undefined') {
-    var spaceObject = require("../server/spaceObjectServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-
-}
-
+//var Promise = require("bluebird");
 
 //let movable = function(superclass) { return class extends superclass {
 var movable = (superclass) => class extends superclass {
@@ -52,8 +44,5 @@ var movable = (superclass) => class extends superclass {
     }
 };
 
+module.exports = movable;
 
-
-if (typeof(module) !== 'undefined') {
-    module.exports = movable;
-}

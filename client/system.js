@@ -1,13 +1,13 @@
-if (typeof(module) !== 'undefined') {
-    module.exports = system;
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var spaceObject = require("../server/spaceObjectServer.js");
-    var planet = require("../server/planetServer.js");
-    var ship = require("../server/shipServer.js");
-    var Crash = require("crash-colliders");
-}
-
+module.exports = system;
+var _ = require("underscore");
+var Promise = require("bluebird");
+var spaceObject = require("../server/spaceObjectServer.js");
+var planet = require("../server/planetServer.js");
+var ship = require("../server/shipServer.js");
+var playerShip = require("../server/playerShipServer.js");
+var Crash = require("crash-colliders");
+var npc = require("../server/npcServer.js");
+var PIXI = require("../server/pixistub.js");
 
 function system() {
     this.container = new PIXI.Container();
@@ -109,23 +109,23 @@ system.prototype.buildObjects = function(buildInfo) {
 
 system.prototype.buildPlayerShip = function(buildInfo) {
     // builds and sets player ship if UUID === buildInfo.UUID
-    if (buildInfo.UUID === UUID) {
+    if (buildInfo.UUID === global.UUID) {
 	//seems very hacky
-	// if (myShip) {
-	//     var oldPos = myShip.position;
+	// if (global.myShip) {
+	//     var oldPos = global.myShip.position;
 	// }
-	myShip = new playerShip(buildInfo, this);
+	global.myShip = new playerShip(buildInfo, this);
 	// if (oldPos) {
-	//     myShip.position[0] = oldPos[0];
-	//     myShip.position[1] = oldPos[1];
+	//     global.myShip.position[0] = oldPos[0];
+	//     global.myShip.position[1] = oldPos[1];
 	// }
-	stagePosition = myShip.position;
+	global.stagePosition = global.myShip.position;
 
-	if (typeof(stars) !== "undefined") {
-	    stars.attach(myShip);
+	if (typeof(global.stars) !== "undefined") {
+	    global.stars.attach(global.myShip);
 	}
 	
-	return myShip;
+	return global.myShip;
     }
     return false;
 
@@ -221,7 +221,7 @@ system.prototype.removeObject = function(uuid) {
 system.prototype.setObjects = function(buildInfo) {
     _.each(this.multiplayer, function(obj, uuid) {
 	if ( (typeof buildInfo !== 'undefined') && (! (uuid in buildInfo))) {
-            if (obj == myShip) {
+            if (obj == global.myShip) {
                 console.log("Server claims player's ship does not exist");
 		this.removeObject(uuid);
 		obj.destroy();

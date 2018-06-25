@@ -1,10 +1,12 @@
 /*
 More of a dust field, really.
 */
+var star = require("./star.js");
+var inSystem = require("./inSystem.js");
 
-starfield = class extends inSystem {
+var starfield = class extends inSystem {
 
-    constructor(source, density=0.00005, dimensions=SPACE_DIM, starname="star") {
+    constructor(source, dimensions, density=0.00005, starname="star") {
 	super(...arguments);
 
 	this.density = density; // stars per square unit
@@ -96,4 +98,5 @@ starfield = class extends inSystem {
 	*/
 	
     }
-}
+};
+module.exports = starfield;

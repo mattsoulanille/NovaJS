@@ -1,4 +1,5 @@
-
+var cache = require("./cache.js");
+var spriteSheetCache = require("./spriteSheetCache.js");
 var novaCache = class {
     constructor() {
 	
@@ -38,3 +39,4 @@ var novaCache = class {
     */
 
 };
+module.exports = novaCache;

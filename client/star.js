@@ -1,5 +1,5 @@
-
-
+var spaceObject = require("./spaceObject.js");
+var _ = require("underscore");
 var star = class extends spaceObject {
 
     constructor(source, starContainer, system, id = "nova:700") {
@@ -71,3 +71,4 @@ var star = class extends spaceObject {
 	super.render(...arguments);
     }
 };
+module.exports = star;

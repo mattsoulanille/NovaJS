@@ -1,17 +1,12 @@
-if (typeof(module) !== 'undefined') {
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var projectile = require("../server/projectileServer.js");
-    var guided = require("../server/guidedServer.js");
-    var inSystem = require("./inSystem.js");
-    var loadsResources = require("./loadsResources.js");
-    var multiplayer = require("../server/multiplayerServer.js");
-    var basicWeapon = require("../server/basicWeaponServer.js");
-    var factoryQueue = require("../libraries/factoryQueue.js");
-}
 
+//var Promise = require("bluebird");
+var projectile = require("../server/projectileServer.js");
+var guided = require("../server/guidedServer.js");
+var inSystem = require("./inSystem.js");
+var basicWeapon = require("../server/basicWeaponServer.js");
+var factoryQueue = require("../libraries/factoryQueue.js");
 
-projectileWeapon = class extends basicWeapon {
+var projectileWeapon = class extends basicWeapon {
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.fireWithoutTarget = true;
@@ -22,16 +17,6 @@ projectileWeapon = class extends basicWeapon {
 	this.fireTimeout = null;
 	//this._justStarted = true;
     }
-
-/*    
-    _addToSystem(sys) {
-	this.system.multiplayer[this.UUID] = this;
-    }
-
-    _removeFromSystem() {
-	delete this.system.multiplayer[this.UUID];
-    }
-*/
 
     async buildProjectile(enqueue) {
 	var proj;
@@ -184,7 +169,7 @@ projectileWeapon = class extends basicWeapon {
 
 	this.projectileQueue.destroy(); // destroys all projectiles
     }
-}
-if (typeof(module) !== 'undefined') {
-    module.exports = projectileWeapon;
-}
+};
+
+module.exports = projectileWeapon;
+

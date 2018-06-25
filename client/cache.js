@@ -1,8 +1,4 @@
-if (typeof(module) !== 'undefined') {
-    var PIXI = require("../server/pixistub.js");
-}
-
-
+var PIXI = require("pixi.js");
 
 var cache = class {
     
@@ -10,8 +6,6 @@ var cache = class {
 	this.prefix_url = prefix_url;
 	this.cached = {};
     }
-
-
 
     getURL(url) {
 	return new Promise(function(fulfill, reject) {
@@ -32,7 +26,6 @@ var cache = class {
 	}.bind(this));
     }
 
-
     get(id) {
 	if ( !(this.cached[id]) ) {
 	    this.cached[id] = this.getURL(this.prefix_url + id + ".json");
@@ -47,12 +40,7 @@ var cache = class {
 
 	return this.cached[id];
     }
-    
-
-
-
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = cache;
-}
+module.exports = cache;
+

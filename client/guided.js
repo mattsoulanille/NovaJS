@@ -1,9 +1,6 @@
-if (typeof(module) !== 'undefined') {
-    var projectile = require("../server/projectileServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
 
-}
+var projectile = require("../server/projectileServer.js");
+//var Promise = require("bluebird");
 
 
 guided = class extends projectile {
@@ -95,8 +92,7 @@ guided = class extends projectile {
 	}
     }
 
-}
+};
 
-if (typeof(module) !== 'undefined') {
-    module.exports = guided;
-}
+module.exports = guided;
+

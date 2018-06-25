@@ -12,11 +12,13 @@
     "crash-colliders": "^2.0.1",
     "express": "^4.16.3",
     "novaparse": "^0.0.24",
+    "pixi-display": "^1.1.1",
     "pixi-particles": "^2.1.9",
     "pixi.js": "^4.8.1",
     "pngjs": "^3.3.3",
     "serve-favicon": "^2.5.0",
     "socket.io": "^2.1.1",
+    "socket.io-client": "^2.1.1",
     "underscore": "^1.9.1",
     "uuid": "^3.2.1"
   },
@@ -24,8 +26,9 @@
     "mocha": "^5.2.0"
   },
   "scripts": {
-    "test": "mocha",
-    "start": "node --trace-warnings index.js"
+    "build": "browserify browser.js -o static/bundle.js",
+    "watch": "watchify browser.js -o static/bundle.js --debug --verbose",
+    "test": "mocha"
   },
   "repository": {
     "type": "git",
@@ -42,5 +45,41 @@
   "bugs": {
     "url": "https://github.com/mattsoulanille/NovaJS/issues"
   },
-  "homepage": "https://github.com/mattsoulanille/NovaJS#readme"
+  "homepage": "https://github.com/mattsoulanille/NovaJS#readme",
+  "browser": {
+    "./server/acceleratableServer.js": "./client/acceleratable.js",
+    "./server/basicWeaponServer.js": "./client/basicWeapon.js",
+    "./server/beamWeaponServer.js": "./client/beamWeapon.js",
+    "./server/collidableServer.js": "./client/collidable.js",
+    "./server/damageableServer.js": "./client/damageable.js",
+    "./server/escortServer.js": "./client/escort.js",
+    "./server/frontQuadrantTurretWeaponServer.js": "./client/frontQuadrantTurretWeapon.js",
+    "./server/guidedServer.js": "./client/guided.js",
+    "./server/inertialServer.js": "./client/inertial.js",
+    "./server/inertialessServer.js": "./client/inertialess.js",
+    "./server/movableServer.js": "./client/movable.js",
+    "./server/multiplayerServer.js": "./client/multiplayer.js",
+    "./server/npcServer.js": "./client/npc.js",
+    "./server/outfitServer.js": "./client/outfit.js",
+    "./server/planetServer.js": "./client/planet.js",
+    "./server/pointDefenseBeamServer.js": "./client/pointDefenseBeam.js",
+    "./server/projectileServer.js": "./client/projectile.js",
+    "./server/projectileWeaponServer.js": "./client/projectileWeapon.js",
+    "./server/shipServer.js": "./client/ship.js",
+    "./server/spaceObjectServer.js": "./client/spaceObject.js",
+    "./server/spriteServer.js": "./client/sprite.js",
+    "./server/turnableServer.js": "./client/turnable.js",
+    "./server/turretWeaponServer.js": "./client/turretWeapon.js",
+    "./server/weaponBuilderServer.js": "./client/weaponBuilder.js",
+    "./server/bayWeaponServer.js": "./client/bayWeapon.js",
+    "./server/beamTurretServer.js": "./client/beamTurret.js",
+    "./server/loadsResourcesServer.js": "./client/loadsResources.js",
+    "./server/novaCacheServer.js": "./client/novaCache.js",
+    "./server/pointDefenseWeaponServer.js": "./client/pointDefenseWeapon.js",
+    "./server/renderableServer.js": "./client/renderable.js",
+    "./server/systemServer.js": "./client/system.js",
+    "./server/playerShipServer.js": "./client/playerShip.js",
+    "./server/particleEmitterServer.js": "./client/particleEmitter.js",
+    "./server/pixistub.js": "pixi.js"
+  }
 }

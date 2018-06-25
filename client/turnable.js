@@ -1,8 +1,5 @@
-if (typeof(module) !== 'undefined') {
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-}
-
+var _ = require("underscore");
+//var Promise = require("bluebird");
 
 var turnable = (superclass) => class extends superclass {
 
@@ -173,6 +170,5 @@ var modPI = function(n) {
     return (n + 2*Math.PI) % (2*Math.PI);
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = turnable;
-}
+module.exports = turnable;
+

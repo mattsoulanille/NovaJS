@@ -1,8 +1,7 @@
-if (typeof(module) !== 'undefined') {
-    var turretWeapon = require("../server/turretWeaponServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-}
+
+var turretWeapon = require("../server/turretWeaponServer.js");
+//var Promise = require("bluebird");
+
 
 frontQuadrantTurretWeapon = class extends turretWeapon {
 
@@ -22,6 +21,6 @@ frontQuadrantTurretWeapon = class extends turretWeapon {
     }
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = frontQuadrantTurretWeapon;
-}
+
+module.exports = frontQuadrantTurretWeapon;
+

@@ -6,14 +6,15 @@ var NotBuiltError = class extends Error{};
 var NoCollisionShapeError = class extends Error{};
 var UnsupportedWeaponTypeError = class extends Error{};
 var AlreadyRenderedError = class extends Error{};
+var ControlScopeError = class extends Error {};
 
-if (typeof(module) !== 'undefined') {
-    module.exports = {
-	AlliesError,
-	NoSystemError,
-	NotBuiltError,
-	NoCollisionShapeError,
-	UnsupportedWeaponTypeError,
-	AlreadyRenderedError
-    };
-}
+module.exports = {
+    AlliesError,
+    NoSystemError,
+    NotBuiltError,
+    NoCollisionShapeError,
+    UnsupportedWeaponTypeError,
+    AlreadyRenderedError,
+    ControlScopeError
+};
+

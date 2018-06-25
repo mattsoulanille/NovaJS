@@ -1,3 +1,8 @@
+var visible = require("./visible.js");
+var renderable = require("./renderable.js");
+var inSystem = require("./inSystem.js");
+var sprite = require("./sprite.js");
+
 class explosionSprite extends visible(renderable(inSystem)) {
     constructor(textures, frameTime, enqueue) {
 	super();
@@ -36,3 +41,5 @@ class explosionSprite extends visible(renderable(inSystem)) {
     }
 
 };
+
+module.exports = explosionSprite;

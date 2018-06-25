@@ -1,9 +1,12 @@
-var ControlScopeError = class extends Error {};
+var errors = require("../client/errors.js");
+var ControlScopeError = errors.ControlScopeError;
+
+
 var controllable = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
 	this.boundControls = [];
-	this.controls = gameControls;
+	this.controls = global.gameControls;
 	this.scope = null;
     }
 
@@ -31,3 +34,5 @@ var controllable = (superclass) => class extends superclass {
     }
 
 };
+
+module.exports = controllable;

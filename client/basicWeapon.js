@@ -1,11 +1,11 @@
-if (typeof(module) !== 'undefined') {
-    //var Promise = require("bluebird");
-    var inSystem = require("./inSystem.js");
-    var loadsResources = require("./loadsResources.js");
-    var multiplayer = require("../server/multiplayerServer.js");
-    var renderable = require("./renderable.js");
-    var eventable = require("../libraries/eventable.js");
-}
+
+//var Promise = require("bluebird");
+var inSystem = require("./inSystem.js");
+var loadsResources = require("./loadsResources.js");
+var multiplayer = require("../server/multiplayerServer.js");
+var renderable = require("./renderable.js");
+var eventable = require("../libraries/eventable.js");
+
 
 
 
@@ -205,6 +205,6 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
 };
 
 
-if (typeof(module) !== 'undefined') {
-    module.exports = basicWeapon;
-}
+
+module.exports = basicWeapon;
+

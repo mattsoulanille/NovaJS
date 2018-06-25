@@ -1,3 +1,4 @@
+var eventable = require("../libraries/eventable.js");
 class itemTile extends eventable(function() {}) {
     constructor(item) {
 	super();
@@ -257,5 +258,4 @@ class itemGrid {
     
 }
 
-
-
+module.exports = itemGrid;

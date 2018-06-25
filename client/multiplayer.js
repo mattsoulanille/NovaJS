@@ -182,6 +182,6 @@ var multiplayer = class {
 
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = multiplayer;
-}
+
+module.exports = multiplayer;
+

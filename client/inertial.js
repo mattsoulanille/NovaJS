@@ -5,13 +5,9 @@ mixin
 
 */
 
-if (typeof(module) !== 'undefined') {
-    var acceleratable = require("../server/acceleratableServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-}
 
-
+var acceleratable = require("../server/acceleratableServer.js");
+//var Promise = require("bluebird");
 
 inertial = class {
     constructor() {
@@ -56,6 +52,5 @@ inertial = class {
     }
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = inertial;
-}
+module.exports = inertial;
+

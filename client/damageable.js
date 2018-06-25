@@ -4,13 +4,12 @@ Anything that can be damaged
 mixin
 */
 
-if (typeof(module) !== 'undefined') {
-    var collidable = require("../server/collidableServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var errors = require("./errors.js");
-    var AlliesError = errors.AlliesError;
-}
+
+var collidable = require("../server/collidableServer.js");
+//var Promise = require("bluebird");
+var errors = require("./errors.js");
+var AlliesError = errors.AlliesError;
+
 
 damageable = (superclass) => class extends superclass {
 
@@ -122,6 +121,4 @@ damageable = (superclass) => class extends superclass {
 
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = damageable;
-}
+module.exports = damageable;

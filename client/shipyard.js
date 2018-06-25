@@ -1,9 +1,13 @@
+var menu = require("./menu.js");
+var button = require("./button.js");
+var itemGrid = require("./itemGrid.js");
+
 class shipyard extends menu {
     constructor() {
 	var buildInfo = {background : "/objects/menus/shipyard.png"};
 	super(buildInfo);
 	this.scope = "shipyard";
-	this.itemGrid = new itemGrid(allShips);
+	this.itemGrid = new itemGrid(global.allShips);
 	this.container.addChild(this.itemGrid.container);
 
 	this.itemGrid.drawGrid();
@@ -27,7 +31,7 @@ class shipyard extends menu {
 
     buyShip() {
 	// Temporary
-	socket.emit('setShip', this.itemGrid.selection.id);
+	this.socket.emit('setShip', this.itemGrid.selection.id);
     }    
 
     bindControls() {
@@ -47,3 +51,4 @@ class shipyard extends menu {
 	}.bind(this));
     }
 }
+module.exports = shipyard;

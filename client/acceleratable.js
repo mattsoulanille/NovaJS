@@ -6,12 +6,11 @@ mixin
 
 
 */
-if (typeof(module) !== 'undefined') {
-    var inertialess = require("../server/inertialessServer.js");
-    var inertial = require("../server/inertialServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-}
+
+var inertialess = require("../server/inertialessServer.js");
+var inertial = require("../server/inertialServer.js");
+//var Promise = require("bluebird");
+
 
 
 var acceleratable = (superclass) => class extends superclass {
@@ -96,8 +95,8 @@ var acceleratable = (superclass) => class extends superclass {
 	super.render(...arguments);
 
     }
-}
+};
 
-if (typeof(module) !== 'undefined') {
-    module.exports = acceleratable;
-}
+
+module.exports = acceleratable;
+

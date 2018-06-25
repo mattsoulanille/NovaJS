@@ -1,4 +1,4 @@
-
+var cache = require("./cache.js");
 var spriteSheetCache = class extends cache {
 
     constructor() {
@@ -34,3 +34,4 @@ var spriteSheetCache = class extends cache {
     }
 
 };
+module.exports = spriteSheetCache;

@@ -37,7 +37,5 @@ var targetable = (superclass) => class extends superclass {
 
 };
 
+module.exports = targetable;
 
-if (typeof module !== "undefined") {
-    module.exports = targetable;
-}
