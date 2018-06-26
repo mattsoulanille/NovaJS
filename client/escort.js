@@ -1,6 +1,4 @@
-if (typeof(module) !== 'undefined') {
-    var npc = require("../server/npcServer.js");
-}
+var npc = require("../server/npcServer.js");
 
 class escort extends npc {
     constructor(buildInfo) {
@@ -70,6 +68,5 @@ class escort extends npc {
 
 }
 
-if (typeof(module) !== 'undefined') {
-    module.exports = escort;
-}
+module.exports = escort;
+

@@ -1,3 +1,11 @@
+var targetCorners = require("./targetCorners.js");
+var radar = require("./radar.js");
+var PIXI = require("pixi.js");
+
+
+
+
+var loadsResources = require("./loadsResources.js");
 var statusBar = class extends loadsResources(function() {}) {
     constructor(id, player) {
 	super(...arguments);
@@ -71,7 +79,7 @@ var statusBar = class extends loadsResources(function() {}) {
 	this.sprites['baseImage'] = baseImage;
 
 	this.container.addChildAt(this.sprites['baseImage'], 0);
-	space.addChild(this.container); // careful with these globals
+	global.space.addChild(this.container); // careful with these globals
 
 	this.renderReady = true; 
 	// how do I make sure baseImage is loaded? do I need to use
@@ -286,7 +294,7 @@ var statusBar = class extends loadsResources(function() {}) {
 	container.setTransform();
 	container.position.x = size[0] / 2;
 	container.position.y = size[1] / 2;
-	app.renderer.render(container, renderTexture);
+	global.app.renderer.render(container, renderTexture);
 	return renderTexture;
 
     }
@@ -364,3 +372,4 @@ var statusBar = class extends loadsResources(function() {}) {
 	
     }
 };
+module.exports = statusBar;

@@ -3,15 +3,20 @@ if (typeof module !== "undefined") {
 }
 
 factoryQueue = class {
-    constructor(buildFunction) {
+    constructor(buildFunction, minInQueue=0) {
 	// buildFunction is a function that builds a new
 	// instance of the object in the queue
+	// minInQueue is the number below which the queue will start
+	// building more items. It doesn't work yet.
 	this.buildFunction = buildFunction;
 	this.queue = new Queue;
     }
 
-    get() {
-	return this.dequeue();
+    async prebuild(n) {
+	// prebuild n many items
+	for (let i = 0; i < n; i++) {
+	    this.enqueue(await this.buildFunction(this.queue.enqueue.bind(this.queue)));
+	}
     }
 
     async peek() {
@@ -26,6 +31,10 @@ factoryQueue = class {
 	this.queue.enqueue(item);
     }
     
+    get() {
+	return this.dequeue();
+    }
+
     async dequeue() {
 	if (this.queue.length > 0) {
 	    return this.queue.dequeue();

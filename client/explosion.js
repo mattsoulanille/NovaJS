@@ -1,4 +1,7 @@
-
+var visible = require("./visible.js");
+var loadsResources = require("./loadsResources.js");
+var inSystem = require("./inSystem.js");
+var explosionSprite = require("./explosionSprite.js");
 var explosion = class extends loadsResources(visible(inSystem)) {
     constructor(buildInfo) {
 	super();
@@ -54,3 +57,5 @@ var explosion = class extends loadsResources(visible(inSystem)) {
     }
     
 };
+
+module.exports = explosion;

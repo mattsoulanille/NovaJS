@@ -1,4 +1,6 @@
 // A single menu window
+var controllable = require("./controllable.js");
+var visible = require("./visible.js");
 
 class menu extends controllable(visible(function() {})) {
 
@@ -46,3 +48,4 @@ class menu extends controllable(visible(function() {})) {
 
 }
 
+module.exports = menu;

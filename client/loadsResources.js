@@ -1,10 +1,3 @@
-
-if (typeof module !== 'undefined') {
-    var _ = require("underscore");
-
-}
-
-
 var loadsResources = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
@@ -32,9 +25,5 @@ var loadsResources = (superclass) => class extends superclass {
     }
 };
 
+module.exports = loadsResources;
 
-
-if (typeof module !== 'undefined') {
-
-    module.exports = loadsResources;
-}

@@ -1,16 +1,12 @@
-if (typeof(module) !== 'undefined') {
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var loadsResources = require("./loadsResources.js");
-    var inSystem = require("./inSystem.js");
-    // should make inSystem into a mixin and make a base class
-    // that one can add to the prototype chain of.
+//var Promise = require("bluebird");
+var loadsResources = require("./loadsResources.js");
+var inSystem = require("./inSystem.js");
+// should make inSystem into a mixin and make a base class
+// that one can add to the prototype chain of.
 
-    var weaponBuilder = require("../server/weaponBuilderServer.js");
-    var errors = require("../client/errors.js");
-    var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
-}
-
+var weaponBuilder = require("../server/weaponBuilderServer.js");
+var errors = require("../client/errors.js");
+var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
 
 var outfit = class extends loadsResources(inSystem) {
     constructor(buildInfo, source) {
@@ -116,6 +112,5 @@ var outfit = class extends loadsResources(inSystem) {
     // }
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = outfit;
-}
+module.exports = outfit;
+

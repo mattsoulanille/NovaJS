@@ -1,8 +1,10 @@
-if (typeof(module) !== 'undefined') {
-    module.exports = playerShip;
-    ship = require("./ship.js");
-}
-
+var _ = require("underscore");
+var ship = require("./ship.js");
+var controllable = require("./controllable.js");
+var explosion = require("./explosion.js");
+var statusBar = require("./statusBar.js");
+var errors = require("../client/errors.js");
+var ControlScopeError = errors.ControlScopeError;
 
 class playerShip extends controllable(ship) {
 
@@ -257,25 +259,25 @@ class playerShip extends controllable(ship) {
     }
 
     _addToContainer() {
-	space.addChild(this.container);
+	global.space.addChild(this.container);
     }
 
     _removeFromContainer() {
-	space.removeChild(this.container);
+	global.space.removeChild(this.container);
     }
 
     
     render() {
 	// -194 for the sidebar
 
-	this.container.position.x = (screenW-194)/2;
-	this.container.position.y = screenH/2;
 
-		
+	this.container.position.x = (global.screenW - 194) / 2;
+	this.container.position.y = global.screenH/2;
+
 	super.render(...arguments);
 
-	this.system.container.position.x = - this.position[0] + (screenW - 194) / 2;
-	this.system.container.position.y = this.position[1] + screenH / 2;
+	this.system.container.position.x = - this.position[0] + (global.screenW - 194) / 2;
+	this.system.container.position.y = this.position[1] + global.screenH / 2;
 
 	this.statusBar.render(...arguments);
 	
@@ -430,3 +432,4 @@ playerShip.prototype.sendCollision = _.throttle(function() {
     this.socket.emit('updateStats', stats);
     
 }, 100);
+module.exports = playerShip;

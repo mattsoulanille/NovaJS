@@ -1,19 +1,18 @@
-if (typeof(module) !== 'undefined') {
-    var acceleratable = require("../server/acceleratableServer.js");
-    var turnable = require("../server/turnableServer.js");
-    var damageable = require("../server/damageableServer.js");
-    var collidable = require("../server/collidableServer.js");
-    var movable = require("../server/movableServer.js");
-    var spaceObject = require("../server/spaceObjectServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var outfit = require("../server/outfitServer.js");
-    var weaponBuilder = require("../server/weaponBuilderServer.js");
-    var exitPoint = require("./exitPoint.js");
-    var errors = require("../client/errors.js");
-    var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
-
-}
+var acceleratable = require("../server/acceleratableServer.js");
+var turnable = require("../server/turnableServer.js");
+var damageable = require("../server/damageableServer.js");
+var collidable = require("../server/collidableServer.js");
+var movable = require("../server/movableServer.js");
+var spaceObject = require("../server/spaceObjectServer.js");
+var _ = require("underscore");
+//var Promise = require("bluebird");
+var outfit = require("../server/outfitServer.js");
+var weaponBuilder = require("../server/weaponBuilderServer.js");
+var exitPoint = require("./exitPoint.js");
+var errors = require("../client/errors.js");
+var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
+var explosion = require("./explosion.js");
+var PIXI = require("../server/pixistub.js");
 
 ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
     constructor(buildInfo, system) {

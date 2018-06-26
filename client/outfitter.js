@@ -1,3 +1,7 @@
+var menu = require("./menu.js");
+var button = require("./button.js");
+var itemGrid = require("./itemGrid.js");
+
 class outfitter extends menu {
     constructor() {
 	var buildInfo = {background : "/objects/menus/outfitter.png"};
@@ -19,39 +23,39 @@ class outfitter extends menu {
 	this.buttons.Sell.on('press', this.sellOutfit.bind(this));
 	this.buttons.Done.on('press', this.depart.bind(this));
 	
-	this.itemGrid = new itemGrid(allOutfits);
+	this.itemGrid = new itemGrid(global.allOutfits);
 	this.container.addChild(this.itemGrid.container);
 
 	this.itemGrid.drawGrid();
 	this.itemGrid.container.position.x = -373;
 	this.itemGrid.container.position.y = -153;
-	this.itemGrid.setCounts(myShip.properties.outfits);
+	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = false;
     }
 
     buyOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
-	myShip.addOutfit(outfit, false);
-	this.itemGrid.setCounts(myShip.properties.outfits);
+	global.myShip.addOutfit(outfit, false);
+	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = true;
     }
 
     sellOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
-	myShip.removeOutfit(outfit, false);
-	this.itemGrid.setCounts(myShip.properties.outfits);
+	global.myShip.removeOutfit(outfit, false);
+	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = true;
     }
     
     show() {
-	this.itemGrid.setCounts(myShip.properties.outfits);
+	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	super.show();
     }
     
     depart() {
 	this.hide();
 	if (this._modifiedOutfits) {
-	    myShip.setOutfits();
+	    global.myShip.setOutfits();
 	}
 	this._modifiedOutfits = false;
     }
@@ -74,7 +78,5 @@ class outfitter extends menu {
 
 	
     }
-    
-
-
 }
+module.exports = outfitter;

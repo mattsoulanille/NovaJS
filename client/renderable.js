@@ -1,10 +1,9 @@
-if (typeof module !== "undefined") {
-    var errors = require("./errors.js");
-    var NoSystemError = errors.NoSystemError;
-    var NotBuiltError = errors.NotBuiltError;
-    var AlreadyRenderedError = errors.AlreadyRenderedError;
-    var eventable = require("../libraries/eventable.js");
-}
+var errors = require("./errors.js");
+var NoSystemError = errors.NoSystemError;
+var NotBuiltError = errors.NotBuiltError;
+var AlreadyRenderedError = errors.AlreadyRenderedError;
+var eventable = require("../libraries/eventable.js");
+
 
 var renderable = (superclass) => class extends eventable(superclass) {
     constructor() {
@@ -93,6 +92,6 @@ var renderable = (superclass) => class extends eventable(superclass) {
 
     
 };
-if (typeof module !== "undefined") {
-    module.exports = renderable;
-}
+
+module.exports = renderable;
+

@@ -46,7 +46,5 @@ var exitPoint = class {
     }
 };
 
+module.exports = exitPoint;
 
-if (typeof module !== 'undefined') {
-    module.exports = exitPoint;
-}

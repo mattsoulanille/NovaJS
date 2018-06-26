@@ -1,17 +1,16 @@
-if (typeof(module) !== 'undefined') {
-//    var _ = require("underscore");
-    //    var Promise = require("bluebird");
-    var collidable = require("../server/collidableServer");
-    var inSystem = require("./inSystem.js");
-    var PIXI = require("../server/pixistub.js");
-    var basicWeapon = require("../server/basicWeaponServer.js");
-    var renderable = require("./renderable.js");
-    var visible = require("./visible.js");
-    var errors = require("./errors.js");
-    var NoSystemError = errors.NoSystemError;
-    var AlliesError = errors.AlliesError;
 
-}
+//    var Promise = require("bluebird");
+var collidable = require("../server/collidableServer.js");
+var inSystem = require("./inSystem.js");
+var PIXI = require("../server/pixistub.js");
+var basicWeapon = require("../server/basicWeaponServer.js");
+var renderable = require("./renderable.js");
+var visible = require("./visible.js");
+var errors = require("./errors.js");
+var NoSystemError = errors.NoSystemError;
+var AlliesError = errors.AlliesError;
+
+
 
 beamWeapon = class extends collidable(visible(basicWeapon)) {
 
@@ -266,9 +265,7 @@ Else, return false
 
 };
 
-    
-if (typeof(module) !== 'undefined') {
-    module.exports = beamWeapon;
-}
+module.exports = beamWeapon;
+
 
     

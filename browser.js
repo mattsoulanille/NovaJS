@@ -1,24 +1,42 @@
 //"use strict";
 const SPACE_DIM = [7000, 7000]; // dimensions of every system
 
-var app = new PIXI.Application({
+const PIXI = require("pixi.js");
+require("pixi-display");
+const socket = require("socket.io-client")();
+const novaCache = require("./client/novaCache.js");
+const inSystem = require("./client/inSystem.js");
+const statusBar = require("./client/statusBar.js");
+const system = require("./client/system.js");
+const controls = require("./client/controls.js");
+const spaceObject = require("./client/spaceObject.js");
+const basicWeapon = require("./client/basicWeapon.js");
+const beamWeapon = require("./client/beamWeapon.js");
+const projectile = require("./client/projectile.js");
+const playerShip = require("./client/playerShip.js");
+const starfield = require("./client/starfield.js");
+const menu = require("./client/menu.js");
+//const system = require("./server/systemServer.js");
+
+
+global.app = new PIXI.Application({
     resolution: window.devicePixelRatio || 1,
     autoResize: true,
     width: window.innerWidth,
     height: window.innerHeight
 });
 
-document.body.appendChild(app.view);
+document.body.appendChild(global.app.view);
 
 
-var spaceportContainer = new PIXI.Container(0x000000);
-var space = new PIXI.Container(0x000000);
+global.spaceportContainer = new PIXI.Container(0x000000);
+global.space = new PIXI.Container(0x000000);
 
-app.stage.addChild(space);
-app.stage.addChild(spaceportContainer);
-spaceportContainer.visible = false;
+global.app.stage.addChild(global.space);
+global.app.stage.addChild(global.spaceportContainer);
+global.spaceportContainer.visible = false;
 
-space.displayList = new PIXI.DisplayList();
+global.space.displayList = new PIXI.DisplayList();
 
 var landed = false;
 //stage.addChild(space);
@@ -26,21 +44,23 @@ var landed = false;
 
 
 // create a renderer instance
-var screenW = $(window).width(), screenH = $(window).height() - 10;
+//var screenW = window.innerWidth, screenH = window.innerHeight - 10;
 var positionConstant = 1;
 
 PIXI.settings.RESOLUTION = window.devicePixelRatio;
 
-
-
+var pos = global.app.stage.getBounds(true);
+global.screenW = window.innerWidth;
+global.screenH = window.innerHeight;
 function onResize(evt) {
-    screenH = evt.currentTarget.innerHeight;
-    screenW = evt.currentTarget.innerWidth;
-    app.renderer.resize(screenW,screenH);
+    global.screenH = evt.currentTarget.innerHeight;
+    global.screenW = evt.currentTarget.innerWidth;
+    global.app.renderer.resize(global.screenW,global.screenH);
 
-    myShip.statusBar.resize(screenW, screenH);
+    global.stars.resize(global.screenW, global.screenH);
+    global.myShip.statusBar.resize(global.screenW, global.screenH);
     if (!paused) {
-	requestAnimationFrame(animate);
+	requestAnimationFrame(global.animate);
     }
 }
 
@@ -50,7 +70,7 @@ window.onbeforeunload = function() {
 
 };
 
-var fullscreen = function() {
+global.fullscreen = function() {
     if(document.documentElement.requestFullscreen) {
 	document.documentElement.requestFullscreen();
     } else if(document.documentElement.mozRequestFullScreen) {
@@ -62,12 +82,9 @@ var fullscreen = function() {
     }
 };
 
+global.UUID;
 
-var socket = io(); // same as io.connect()
-
-var UUID;
-
-var sync = new syncTime(socket);
+//var sync = new syncTime(socket);
 
 
 // caches nova data that is loaded from the server
@@ -77,20 +94,18 @@ statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResoure
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
-var currentSystem = new system();
+global.currentSystem = new system();
 
 
 
-var gameControls = new controls(); // global controls
+global.gameControls = new controls(); // global controls
 var players = {};
-var myShip;
-var stars;
-var stagePosition;
+
 
 // Temporary until there's an actual system for planets knowing
 // what ships they have available.
-var allShips;
-var allOutfits;
+
+
 function loadJson(url) {
     return new Promise(function(fulfill, reject) {
 	var loader = new PIXI.loaders.Loader();
@@ -106,12 +121,12 @@ function loadJson(url) {
 
 
 socket.on('onconnected', async function(data) {
-    UUID = data.id;
-    console.log("Connected to server. UUID: "+UUID);
-//    myShip = new playerShip(data.playerShip);
+    global.UUID = data.id;
+    console.log("Connected to server. UUID: "+global.UUID);
+    //global.myShip = new playerShip(data.playerShip);
 
-    if (typeof stars === 'undefined') {
-	stars = new starfield(myShip);
+    if (typeof global.stars === 'undefined') {
+	global.stars = new starfield(global.myShip, SPACE_DIM);
     }
 
 
@@ -121,59 +136,59 @@ socket.on('onconnected', async function(data) {
     await loadJson("/objects/meta/allShips.json")
 	.then(function(ships) {
 	    // Temporary
-	    allShips = ships;
+	    global.allShips = ships;
 	});
 
     await loadJson("/objects/meta/allOutfits.json")
 	.then(function(outfits) {
 	    // Temporary
-	    allOutfits = outfits;
+	    global.allOutfits = outfits;
 	});
 
-    await currentSystem.setObjects(data.system);
-    await stars.build();
-    await gameControls.build();
-    await currentSystem.build();
+    await global.currentSystem.setObjects(data.system);
+    await global.stars.build();
+    await global.gameControls.build();
+    await global.currentSystem.build();
 
-    space.addChildAt(currentSystem.container, 0);
+    global.space.addChildAt(global.currentSystem.container, 0);
     console.log("built objects");
-    stagePosition = myShip.position;
-    gameControls.pushScope("playerShip"); // allow the player to control their ship
+    global.stagePosition = global.myShip.position;
+    global.gameControls.pushScope("playerShip"); // allow the player to control their ship
     window.addEventListener('resize', onResize);
     startGame();
     var newStats = {};
-    newStats[myShip.UUID] = myShip.getStats();
+    newStats[global.myShip.UUID] = global.myShip.getStats();
 
 });
 
 socket.on('setPlayerShip', function(buildInfo) {
-    if (myShip) {
-	myShip.destroy();
+    if (global.myShip) {
+	global.myShip.destroy();
     }
-    myShip = new playerShip(buildInfo, currentSystem);
+    global.myShip = new playerShip(buildInfo, global.currentSystem);
     
-    stars.attach(myShip);
-    myShip.position = [stagePosition[0], stagePosition[1]];
-    stagePosition = myShip.position;
-    myShip.build();
+    global.stars.attach(global.myShip);
+    global.myShip.position = [global.stagePosition[0], global.stagePosition[1]];
+    global.stagePosition = global.myShip.position;
+    global.myShip.build();
 });
 
 socket.on('disconnect', function() {
     console.log("disconnected");
 //    players = {};
-    UUID = undefined;
+    global.UUID = undefined;
 });
 
 
 
 socket.on('buildObjects', function(buildInfoList) {
     console.log("adding objects ", buildInfoList);
-    currentSystem.buildObjects(buildInfoList);
-    //currentSystem.build()
+    global.currentSystem.buildObjects(buildInfoList);
+    //global.currentSystem.build()
 });
 
 socket.on('removeObjects', function(uuids) {
-    currentSystem.destroyObjects(uuids);
+    global.currentSystem.destroyObjects(uuids);
 });
 
 // this stuff should be in system so it works when there are multiple systems.
@@ -185,13 +200,13 @@ socket.on('noSuchShip', function(response) {
 
 socket.on('replaceObject', function(buildInfo) {
     console.log("replacing object with " + buildInfo.id);
-    currentSystem.replaceObject(buildInfo);
+    global.currentSystem.replaceObject(buildInfo);
 });
 
 /*
 socket.on('updateStats', function(stats) {
     //    console.log(stats);
-    currentSystem.updateStats(stats);
+    global.currentSystem.updateStats(stats);
 });
 */
 
@@ -207,31 +222,29 @@ var paused = false;
 var pause = function() {
     console.log("Game paused");
     paused = true;
-    app.ticker.remove(animateSpace);
+    global.app.ticker.remove(global.animateSpace);
 }
 socket.on('pause', pause);
 
 
 var resume = function() {
     paused = false;
-    currentSystem.resume();
-    app.ticker.remove(animateSpace);
-    app.ticker.add(animateSpace);
+    global.currentSystem.resume();
+    global.app.ticker.remove(global.animateSpace);
+    global.app.ticker.add(global.animateSpace);
     console.log("Game resumed");
 }
 socket.on('resume', resume);
 
 
 
-var environment = {
-    framerate:60
-};
+global.framerate = 60;
 
 
 
 function startGame() {
 
-    currentSystem.spaceObjects.forEach(function(s) {
+    global.currentSystem.spaceObjects.forEach(function(s) {
         // improve me                                                           
 	if (! (s instanceof projectile)) {
             s.show();
@@ -239,8 +252,8 @@ function startGame() {
     });
 
     // Don't have it in the ticker more than once
-    app.ticker.remove(animateSpace);
-    app.ticker.add(animateSpace);
+    global.app.ticker.remove(global.animateSpace);
+    global.app.ticker.add(global.animateSpace);
     console.log("Rendering started");
 
 }
@@ -250,15 +263,17 @@ function startGame() {
 // the time difference between the server and client clocks
 // NOT the ping time.
 var timeDifference = 0;
-
+/*
 var getTimeUntilSuccess = function() {
     return sync.getDifference().then(function(d) {
 	timeDifference = d;
 	console.log("Time Difference: ",timeDifference);
     }, function() {setTimeout(getTimeUntilSuccess, 10000)}); // don't ddos the server
 }
+*/
 
-setTimeout(getTimeUntilSuccess, 2000);
+//setTimeout(getTimeUntilSuccess, 2000);
+
 //setInterval(function() {sync.getDifference().then(function(d) {timeDifference = d})},10000);
 //var syncClocksTimer = setInterval(function() {sync.getDifference()
 //					      .then(function(d) {timeDifference = d})}, 120000);
@@ -268,32 +283,32 @@ system.prototype.socket = socket;
 basicWeapon.prototype.socket = socket;
 spaceObject.prototype.socket = socket;
 beamWeapon.prototype.socket = socket;
+menu.prototype.socket = socket;
 spaceObject.prototype.lastTime = new Date().getTime();
 
 var animateTimeout;
-var animate = animateSpace;
+global.animateSpace = function(tick) {
+    
+    var time = global.app.ticker.lastTime;
+    var delta = global.app.ticker.elapsedMS;
+    global.framerate = global.app.ticker.FPS;
+
+
+    //check this
+    global.currentSystem.render(delta, time);
+};
+
+global.animateSpaceport = function() {
+    
+    //renderer.render(global.spaceportContainer);
+};
+
+global.animate = global.animateSpace;
 
 // replace this with performance.now()
 var lastTime = new Date().getTime();
 var time = new Date().getTime();// + timeDifference;
 
-// Revise this to use the pixi ticker
-function animateSpace(tick) {
-    
-    var time = app.ticker.lastTime;
-    var delta = app.ticker.elapsedMS;
-    environment.framerate = app.ticker.FPS;
-
-
-    //check this
-    currentSystem.render(delta, time);
-    
-}
-
-function animateSpaceport() {
-    
-    //renderer.render(spaceportContainer);
-}
 
 
 

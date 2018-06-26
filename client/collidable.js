@@ -3,16 +3,14 @@ Anything that can have collisions (with projectiles etc)
 Mixin
 */
 
-if (typeof(module) !== 'undefined') {
-    var movable = require("../server/movableServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var Crash = require("crash-colliders");
-    var errors = require("./errors.js");
-    var NoSystemError = errors.NoSystemError;
-    var NotBuiltError = errors.NotBuiltError;
-    var NoCollisionShapeError = errors.NoCollisionShapeError;
-}
+var movable = require("../server/movableServer.js");
+//var Promise = require("bluebird");
+var Crash = require("crash-colliders");
+var errors = require("./errors.js");
+var NoSystemError = errors.NoSystemError;
+var NotBuiltError = errors.NotBuiltError;
+var NoCollisionShapeError = errors.NoCollisionShapeError;
+
 
 
 var collidable = (superclass) => class extends superclass {
@@ -84,7 +82,7 @@ var collidable = (superclass) => class extends superclass {
 	this.collisionSpriteName = "baseImage";
 	this.convexHullData = this.sprites.baseImage.convexHulls;
 	
-	this.collisionShapes = _.map(this.convexHullData, function(hullPoints) {
+	this.collisionShapes = this.convexHullData.map(function(hullPoints) {
 	    /*
 	    // for testing
 	    return new this.crash.Polygon(new this.crash.V,
@@ -101,7 +99,7 @@ var collidable = (superclass) => class extends superclass {
 					    this);
 	    }
 	    return new this.crash.Polygon(new this.crash.Vector(0,0),
-					  _.map(hullPoints, function(point) {
+					  hullPoints.map(function(point) {
 					      return new this.crash.Vector(point[0], point[1]);
 					  }.bind(this)), false, this);
 
@@ -141,7 +139,5 @@ var collidable = (superclass) => class extends superclass {
     }
 };
 
+module.exports = collidable;
 
-if (typeof(module) !== 'undefined') {
-    module.exports = collidable;
-}

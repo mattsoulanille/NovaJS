@@ -1,12 +1,9 @@
-if (typeof(module) !== 'undefined') {
-    var spaceObject = require("../server/spaceObjectServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
+var spaceObject = require("../server/spaceObjectServer.js");
+var _ = require("underscore");
+var spaceport = require("./spaceport.js");
+//var Promise = require("bluebird");
 
-}
-
-
-planet = class extends spaceObject {
+var planet = class extends spaceObject {
 
     constructor(buildInfo, system) {
 	super(...arguments);
@@ -39,7 +36,7 @@ planet = class extends spaceObject {
     
     buildSpaceport() {
 	this.spaceport = new spaceport({}, this.depart.bind(this));
-	spaceportContainer.addChild(this.spaceport.container);
+	global.spaceportContainer.addChild(this.spaceport.container);
     }
 
     _addToSystem() {
@@ -63,7 +60,7 @@ planet = class extends spaceObject {
 	    // then it's already landed somewhere else
 	    throw new Error("ship tried to land but it's already landed on " + ship.landedOn);
 	}
-	if (animate === animateSpaceport) {
+	if (global.animate === global.animateSpaceport) {
 	    throw new Error("Animate was animateSpaceport when landing");
 	}
 	
@@ -87,15 +84,15 @@ planet = class extends spaceObject {
 	    gameControls.resetEvents();
 
 	    //this.spaceport.bindControls();
-	    landed = true;
+	    global.landed = true;
 	    // must remember to give it back to the ship afterwards
-	    spaceportContainer.addChild(ship.statusBar.container);
+	    global.spaceportContainer.addChild(ship.statusBar.container);
 	    animate = animateSpaceport;
 	    this.spaceport.show();
-	    spaceportContainer.visible = true;
-	    space.visible = false;
+	    global.spaceportContainer.visible = true;
+	    global.space.visible = false;
 	    
-	    socket.emit('land');
+	    this.socket.emit('land');
 	}
 
 	return true;
@@ -107,16 +104,16 @@ planet = class extends spaceObject {
 	}
 	myShip.onceState("built", function() {
 	    myShip.depart(this);
-	    space.addChild(myShip.statusBar.container);
+	    global.space.addChild(myShip.statusBar.container);
 	    gameControls.resetEvents();
-	    landed = false;
+	    global.landed = false;
 	    animate = animateSpace;
 	    requestAnimationFrame(animate);
 	    //stage.addChild(space);
 	    //this.spaceport.hide(); // done by spaceport.js
-	    spaceportContainer.visible = false;
-	    space.visible = true;
-	    socket.emit('depart');
+	    global.spaceportContainer.visible = false;
+	    global.space.visible = true;
+	    this.socket.emit('depart');
 	}.bind(this));
     }
     
@@ -127,7 +124,7 @@ planet = class extends spaceObject {
 	this.system.container.addChildAt(this.container, 0);
     }
     
-}
-if (typeof(module) !== 'undefined') {
-    module.exports = planet;
-}
+};
+
+module.exports = planet;
+

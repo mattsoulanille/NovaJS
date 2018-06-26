@@ -1,5 +1,11 @@
+var renderable = require("./renderable.js");
+var visible = require("./visible.js");
+var inSystem = require("./inSystem.js");
+var PIXI = require("pixi.js");
+var errors = require("./errors.js");
+var AlreadyRenderedError = errors.AlreadyRenderedError;
 
-radar = class extends renderable(visible(inSystem)) {
+class radar extends renderable(visible(inSystem)) {
     constructor(meta, source, iff, density) {
 	super();
 	this.meta = meta;
@@ -94,3 +100,4 @@ radar = class extends renderable(visible(inSystem)) {
 	}
     }
 };
+module.exports = radar;

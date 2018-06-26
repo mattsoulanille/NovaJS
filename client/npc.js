@@ -1,7 +1,4 @@
-if (typeof(module) !== 'undefined') {
-    var ship = require("../server/shipServer.js");
-}
-
+var ship = require("../server/shipServer.js");
 
 //class npc extends ship {
 var npc = class extends ship {
@@ -24,9 +21,6 @@ var npc = class extends ship {
     }
 
 
-}
+};
 
-if (typeof(module) !== 'undefined') {
-    module.exports = npc;
-}
-
+module.exports = npc;

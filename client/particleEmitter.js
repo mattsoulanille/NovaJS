@@ -1,3 +1,7 @@
+var renderable = require("./renderable.js");
+var inSystem = require("./inSystem.js");
+var PIXI = require("pixi.js");
+require("pixi-particles");
 
 var particleEmitter = class extends renderable(inSystem) {
     constructor(properties, source) {
@@ -39,7 +43,7 @@ var particleEmitter = class extends renderable(inSystem) {
 
 	this.lifetime = maxLife * 1000; //milliseconds
 	// renderer is made by pixi.autoDetectRenderer
-	this.texture = app.renderer.generateTexture(graphics);
+	this.texture = global.app.renderer.generateTexture(graphics);
 
 	// 100 is 1 pixel per frame
 	// i don't really know what the correct scaling is
@@ -162,7 +166,7 @@ var particleEmitter = class extends renderable(inSystem) {
 	//     this.emitter.frequency = 0;
 	// }
 
-	this.emitter.frequency = 1 / environment.framerate;
+	this.emitter.frequency = 1 / global.framerate;
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
 	this.emitter.update(delta * 0.001);
@@ -192,5 +196,6 @@ var particleEmitter = class extends renderable(inSystem) {
 	this.emitter.destroy();
 	super.destroy();
     }
-    
 };
+
+module.exports = particleEmitter;

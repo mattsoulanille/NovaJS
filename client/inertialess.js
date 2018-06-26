@@ -4,11 +4,8 @@ inertialess.js
 Handles things that navigate without inertia
 
 */
-if (typeof(module) !== 'undefined') {
-    var acceleratable = require("../server/acceleratableServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-}
+var acceleratable = require("../server/acceleratableServer.js");
+//var Promise = require("bluebird");
 
 inertialess = class {
     // a bunch of helper functions for acceleratable
@@ -49,7 +46,7 @@ inertialess = class {
 	}
     }
 
-}
-if (typeof(module) !== 'undefined') {
-    module.exports = inertialess;
-}
+};
+
+module.exports = inertialess;
+

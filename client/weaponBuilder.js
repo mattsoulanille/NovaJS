@@ -1,18 +1,17 @@
-if (typeof(module) !== 'undefined') {
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-    var projectileWeapon = require("../server/projectileWeaponServer.js");
-    var turretWeapon = require("../server/turretWeaponServer.js");
-    var beamWeapon = require("../server/beamWeaponServer.js");
-    var beamTurret = require("./beamTurret.js");
-    var frontQuadrantTurretWeapon = require("../server/frontQuadrantTurretWeaponServer.js");
-    var pointDefenseWeapon = require("./pointDefenseWeapon.js");
-    var pointDefenseBeam = require("../server/pointDefenseBeamServer.js");
-    var inSystem = require("./inSystem.js");
-    var loadsResources = require("./loadsResources.js");
-    var errors = require("../client/errors.js");
-    var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
-}
+
+//var Promise = require("bluebird");
+var projectileWeapon = require("../server/projectileWeaponServer.js");
+var turretWeapon = require("../server/turretWeaponServer.js");
+var beamWeapon = require("../server/beamWeaponServer.js");
+var beamTurret = require("./beamTurret.js");
+var frontQuadrantTurretWeapon = require("../server/frontQuadrantTurretWeaponServer.js");
+var pointDefenseWeapon = require("./pointDefenseWeapon.js");
+var pointDefenseBeam = require("../server/pointDefenseBeamServer.js");
+var inSystem = require("./inSystem.js");
+var loadsResources = require("./loadsResources.js");
+var errors = require("../client/errors.js");
+var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
+
 
 var weaponBuilder = class extends loadsResources(inSystem) {
     constructor(buildInfo, source) {
@@ -126,6 +125,6 @@ var weaponBuilder = class extends loadsResources(inSystem) {
     }
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = weaponBuilder;
-}
+
+module.exports = weaponBuilder;
+

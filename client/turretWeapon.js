@@ -1,9 +1,7 @@
-if (typeof(module) !== 'undefined') {
-    var projectileWeapon = require("../server/projectileWeaponServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird");
-}
 
+var projectileWeapon = require("../server/projectileWeaponServer.js");
+var _ = require("underscore");
+//var Promise = require("bluebird");
 
 turretWeapon = class extends projectileWeapon {
 
@@ -160,6 +158,4 @@ turretWeapon = class extends projectileWeapon {
     }
 };
 
-if (typeof(module) !== 'undefined') {
-    module.exports = turretWeapon;
-}
+module.exports = turretWeapon;

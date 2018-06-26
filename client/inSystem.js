@@ -1,10 +1,3 @@
-
-
-if (typeof(module) !== 'undefined') {
-//    var Promise = require("bluebird");
-
-}
-
 var inSystem = class {
     constructor() {
 	this.children = new Set();
@@ -83,12 +76,8 @@ var inSystem = class {
     }
 
     
-}
+};
+
+module.exports = inSystem;
 
 
-
-
-if (typeof(module) !== 'undefined') {
-    module.exports = inSystem;
-
-}

@@ -1,10 +1,6 @@
-if (typeof(module) !== 'undefined') {
-    var beamWeapon = require("../server/beamWeaponServer.js");
-    var beamTurret = require("./beamTurret.js");
-}
+var beamWeapon = require("../server/beamWeaponServer.js");
 
-
-pointDefenseBeam = class extends beamWeapon {
+var pointDefenseBeam = class extends beamWeapon {
     constructor() {
 	super(...arguments);
 	this._enabled = false;
@@ -81,10 +77,5 @@ pointDefenseBeam = class extends beamWeapon {
     }
 
 };
+module.exports = pointDefenseBeam;
 
-
-
-
-if (typeof(module) !== 'undefined') {
-    module.exports = pointDefenseBeam;
-}

@@ -1,19 +1,18 @@
-if (typeof(module) !== 'undefined') {
-    var acceleratable = require("../server/acceleratableServer.js");
-    var turnable = require("../server/turnableServer.js");
-    var damageable = require("../server/damageableServer.js");
-    var collidable = require("../server/collidableServer.js");
-    var movable = require("../server/movableServer.js");
-    var spaceObject = require("../server/spaceObjectServer.js");
-    var _ = require("underscore");
-    var Promise = require("bluebird"); // for Promise.map
-    var weaponBuilder;
-    var errors = require("./errors.js");
-    var AlliesError = errors.AlliesError;
-}
+var acceleratable = require("../server/acceleratableServer.js");
+var turnable = require("../server/turnableServer.js");
+var damageable = require("../server/damageableServer.js");
+var collidable = require("../server/collidableServer.js");
+var movable = require("../server/movableServer.js");
+var spaceObject = require("../server/spaceObjectServer.js");
+var Promise = require("bluebird"); // for Promise.map
+var weaponBuilder;
+var errors = require("./errors.js");
+var AlliesError = errors.AlliesError;
+var explosion = require("./explosion.js");
+var particleEmitter = require("../server/particleEmitterServer.js");
 
 
-projectile = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
+var projectile = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
     // projectile != weapon since weapon will include beams and bays (launched ships)
     // one single projectile. Usually created en masse by a weapon.
     constructor(buildInfo, system, source, meta, properties, enqueue) {
@@ -239,7 +238,7 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
 	
 	this.available = false;
 	this.pointing = direction;
-	this.position = _.map(position, function(x) {return x;});
+	this.position = position.map(function(x) {return x;});
 
 	// nova speeds for weapons is in pixels / frame * 100. 3/10 pixels / ms
 	//    var factor = 3/10;
@@ -349,7 +348,5 @@ projectile = class extends acceleratable(turnable(damageable(collidable(movable(
     }
 };
 
+module.exports = projectile;
 
-if (typeof(module) !== 'undefined') {
-    module.exports = projectile;
-}

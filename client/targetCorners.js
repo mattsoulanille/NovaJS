@@ -1,4 +1,10 @@
-targetCorners = class extends spaceObject {
+var spaceObject = require("./spaceObject.js");
+var _ = require("underscore");
+var errors = require("../client/errors.js");
+var NoSystemError = errors.NoSystemError;
+var PIXI = require("../server/pixistub.js");
+
+var targetCorners = class extends spaceObject {
 
     constructor(system, id = "targetCorners") {
 	super({"id": id}, system);
@@ -18,11 +24,6 @@ targetCorners = class extends spaceObject {
 	this.sprites.bottomLeft = new PIXI.Sprite();
 	this.sprites.bottomRight = new PIXI.Sprite();
 
-	_.each(this.sprites, function(spr) {
-	    // spr.anchor.x = 0.5;
-	    // spr.anchor.y = 0.5;
-	    
-	}, this);
 
 	this.sprites.bottomLeft.rotation = Math.PI * 3/2;
 	this.sprites.bottomRight.rotation = Math.PI;
@@ -108,3 +109,4 @@ targetCorners = class extends spaceObject {
     */
     
 };
+module.exports = targetCorners;

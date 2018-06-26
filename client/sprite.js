@@ -1,7 +1,4 @@
-if (typeof(module) !== 'undefined') {
-    var PIXI = require("../server/pixistub.js");
-}
-
+var PIXI = require("../server/pixistub.js");
 
 var sprite = class {
     constructor(textures, convexHulls) {
@@ -21,8 +18,5 @@ var sprite = class {
 sprite.prototype.destroy = function() {
     this.sprite.destroy();
 };
+module.exports = sprite;
 
-
-if (typeof(module) !== 'undefined') {
-    module.exports = sprite;
-}

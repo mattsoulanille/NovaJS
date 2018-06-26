@@ -1,10 +1,15 @@
+var menu = require("./menu.js");
+var button = require("./button.js");
+var outfitter = require("./outfitter.js");
+var shipyard = require("./shipyard.js");
+
 class spaceport extends menu {
     constructor(buildInfo, departCallback) { // buildInfo will contain the url or something...
 	buildInfo.background = "/objects/menus/spaceport.png";
 	super(buildInfo);
 	this.departCallback = departCallback;
-	this.container.position.x = (screenW-194)/2;
-	this.container.position.y = screenH/2;
+	this.container.position.x = (global.screenW-194)/2;
+	this.container.position.y = global.screenH/2;
 
 	this.scope = "spaceport";
 
@@ -74,10 +79,8 @@ class spaceport extends menu {
 	var width = window.innerWidth;
 	this.container.position.x = (width-194) / 2;
 	this.container.position.y = height / 2;
-	if (this.visible) {
-	    requestAnimationFrame(animate);// BAD BAD BAD
-	}
     }
 
 
 }
+module.exports = spaceport;
