@@ -57,6 +57,7 @@ function onResize(evt) {
     global.screenW = evt.currentTarget.innerWidth;
     global.app.renderer.resize(global.screenW,global.screenH);
 
+    global.stars.resize(global.screenW, global.screenH);
     global.myShip.statusBar.resize(global.screenW, global.screenH);
     if (!paused) {
 	requestAnimationFrame(global.animate);
@@ -69,7 +70,7 @@ window.onbeforeunload = function() {
 
 };
 
-var fullscreen = function() {
+global.fullscreen = function() {
     if(document.documentElement.requestFullscreen) {
 	document.documentElement.requestFullscreen();
     } else if(document.documentElement.mozRequestFullScreen) {

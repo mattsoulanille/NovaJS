@@ -83,9 +83,13 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	}
 	return uuids;
     }
+
+    async _loadMeta() {
+	this.meta = await this.loadResources(this.type, this.buildInfo.id);
+    }
     
     async _build() {
-	this.meta = await this.loadResources(this.type, this.buildInfo.id);
+	await this._loadMeta();
 	this.name = this.meta.name; // purely cosmetic
     	//await this.setProperties();
 	await this.setProperties();
