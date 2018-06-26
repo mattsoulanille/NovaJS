@@ -18,6 +18,12 @@ var projectileWeapon = class extends basicWeapon {
 	//this._justStarted = true;
     }
 
+    async _build() {
+	await super._build(...arguments);
+	// build one projectile so the texture is in the cache
+	this.projectileQueue.prebuild(1); 
+    }
+    
     async buildProjectile(enqueue) {
 	var proj;
 	//console.log(this.source.system);
