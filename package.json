@@ -20,6 +20,7 @@
     "serve-favicon": "^2.5.0",
     "socket.io": "^2.1.1",
     "socket.io-client": "^2.1.1",
+    "uglifyify": "^5.0.1",
     "underscore": "^1.9.1",
     "uuid": "^3.2.1"
   },
@@ -27,7 +28,7 @@
     "mocha": "^5.2.0"
   },
   "scripts": {
-    "build": "browserify browser.js -o static/bundle.js",
+    "build": "browserify -g uglifyify browser.js | uglifyjs -c > static/bundle.js",
     "watch": "watchify browser.js -o static/bundle.js --debug --verbose",
     "run": "node index.js",
     "test": "mocha"
