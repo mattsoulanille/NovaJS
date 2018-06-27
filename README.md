@@ -20,7 +20,8 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 ### Prerequisites
 
 [node.js](https://nodejs.org/),
-[npm](https://www.npmjs.com/)
+[npm](https://www.npmjs.com/),
+[browserify](http://browserify.org/)
 
 ### Installing
 
