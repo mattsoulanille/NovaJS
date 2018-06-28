@@ -23,7 +23,7 @@ inertialess = class {
     }
     render(delta) {
 	var angle = this.pointing;
-	var change_in_speed = (this.properties.acceleration *
+	var change_in_speed = (this.acceleration *
 			       delta / 1000);
 	
 	this.velocity = [Math.cos(angle) * this.polarVelocity, Math.sin(angle) * this.polarVelocity];
@@ -36,11 +36,11 @@ inertialess = class {
 	    }
 	    
 	}
-	else if ((this.accelerating == 1) && (this.polarVelocity < this.properties.maxSpeed)) {
+	else if ((this.accelerating == 1) && (this.polarVelocity < this.maxSpeed)) {
 	    
 	    this.polarVelocity += change_in_speed;
-	    if (this.polarVelocity > this.properties.maxSpeed) {
-		this.polarVelocity = this.properties.maxSpeed;
+	    if (this.polarVelocity > this.maxSpeed) {
+		this.polarVelocity = this.maxSpeed;
 	    }
 	    
 	}

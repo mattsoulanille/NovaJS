@@ -216,6 +216,8 @@ Else, return false
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage * delta;
 	    collision.armorDamage = this.properties.armorDamage * delta;
+	    collision.ionizationDamage = this.properties.ionizationDamage * delta;
+	    collision.ionizationColor = this.properties.ionizationColor;
 	    collision.passThroughShields = this.meta.passThroughShields;
 	    // needs improvement for proper tractoring
 	    //collision.impact = this.properties.impact * delta;

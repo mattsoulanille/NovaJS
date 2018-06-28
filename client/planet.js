@@ -73,6 +73,9 @@ var planet = class extends spaceObject {
 		     Math.pow( (this.position[1] - ship.position[1]), 2));
 
 	
+	if (ship.dying) {
+	    return false;
+	}
 	
 	if (!((shipVel2 <= max_vel2) && (dist2 <= max_dist2))) {
 	    return false;

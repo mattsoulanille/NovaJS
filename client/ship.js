@@ -13,8 +13,9 @@ var errors = require("../client/errors.js");
 var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
 var explosion = require("./explosion.js");
 var PIXI = require("../server/pixistub.js");
+var ionizable = require("../server/ionizableServer.js");
 
-ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
+ship = class extends ionizable(acceleratable(turnable(damageable(collidable(movable(spaceObject)))))) {
     constructor(buildInfo, system) {
 	super(...arguments);
 	//this.url = 'objects/ships/';
@@ -25,7 +26,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.outfits = [];
 	this.escorts = {};
 	this.escorts.all = [];
-
+	
 	this.turningToTarget = false;
 	this.landedOn = null;
 	if (typeof(buildInfo) !== 'undefined') {
@@ -203,7 +204,8 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	// adds sprites to the container in the correct order to have proper
 	// layering of engine, ship, lights etc.
 	// Also set the correct blend mode
-	var orderedSprites = [this.sprites.baseImage.sprite];
+	//var orderedSprites = [this.sprites.baseImage.sprite];
+	var orderedSprites = [];
 	if ("lightImage" in this.sprites) {
 	    orderedSprites.push(this.sprites.lightImage.sprite);
 	    this.sprites.lightImage.sprite.blendMode = PIXI.BLEND_MODES["ADD"];
@@ -224,8 +226,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	
 	//sprites that have no specified order
 	var without =  _.difference(spriteList, orderedSprites);
-	//console.log(without)
-	_.each(without, function(x) {this.container.addChild(x);}, this);
+
+	// It just so happens that all the sprites without order are solid (blendmode overlay)
+	_.each(without, function(x) {this.solidContainer.addChild(x);}, this);
+
 	_.each(orderedSprites, function(x) {this.container.addChild(x);}, this);
 	//this.system.container.addChild(this.container);
     }

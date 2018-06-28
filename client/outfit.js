@@ -97,6 +97,16 @@ var outfit = class extends loadsResources(inSystem) {
 	if (functions.hasOwnProperty("armor recharge")) {
 	    properties.armorRecharge += functions["armor recharge"] * this.count;
 	}
+
+	if (functions.hasOwnProperty("ion absorber")) {
+	    properties.ionization += functions["ion absorber"] * this.count;
+	}
+
+	if (functions.hasOwnProperty("ion dissipater")) {
+	    properties.deionize += functions["ion dissipater"] * this.count;
+	}
+
+	
 	
 	
 

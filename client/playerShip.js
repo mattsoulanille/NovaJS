@@ -247,6 +247,7 @@ class playerShip extends controllable(ship) {
 	this.pointing = Math.random() * 2*Math.PI;
 	this.shield = this.properties.shield;
 	this.armor = this.properties.armor;
+	this.ionization = 0;
 	this.show();
     }
 
@@ -358,6 +359,7 @@ class playerShip extends controllable(ship) {
 	this.velocity[1] = 0;
 	this.shield = this.properties.shield;
 	this.armor = this.properties.armor;
+	this.ionization = 0;
 	//var newStats = {};
 	//newStats[this.UUID] = this.getStats();
 	//this.socket.emit('updateStats', newStats);

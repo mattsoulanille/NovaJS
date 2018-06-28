@@ -201,7 +201,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
     }
     
     collideWith(other) {
-	// temporary. will have damage types later
+
 	// this should probably be a separate mixin or class. lots of things do damage.
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes(this.properties.damageType) &&
@@ -211,6 +211,8 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage;
 	    collision.armorDamage = this.properties.armorDamage;
+	    collision.ionizationDamage = this.properties.ionizationDamage;
+	    collision.ionizationColor = this.properties.ionizationColor;
 	    collision.impact = this.properties.impact;
 	    collision.angle = this.pointing;
 	    collision.passThroughShields = this.meta.passThroughShields;

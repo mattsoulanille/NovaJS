@@ -47,6 +47,7 @@ var acceleratable = (superclass) => class extends superclass {
 	// possibly redundant
 	this.properties.acceleration = this.meta.acceleration;
 	this.properties.maxSpeed = this.meta.speed;
+
 	if (!this.properties.inertialess) {
 	    this.properties.inertialess = false; // TEMPORARY. FIX ME
 	}
@@ -55,6 +56,30 @@ var acceleratable = (superclass) => class extends superclass {
 	}
     }
 
+    _getAcceleration() {
+	return this.properties.acceleration;
+    }
+
+    get acceleration() {
+	return this._getAcceleration();
+    }
+
+    set acceleration(s) {
+	throw new Error("Can't set acceleration. Set properties.acceleration instead.");
+    }
+
+    _getMaxSpeed() {
+	return this.properties.maxSpeed;
+    }
+
+    get maxSpeed() {
+	return this._getMaxSpeed();
+    }
+
+    set maxSpeed(s) {
+	throw new Error("Can't set maxSpeed. Set properties.maxSpeed instead.");
+    }
+    
     receiveCollision(other) {
 
 	if (other.impact > 0) {
@@ -91,7 +116,7 @@ var acceleratable = (superclass) => class extends superclass {
 
     render(delta) {
 
-	this.flightMode.render.call(this, delta);
+	this.flightMode.render.call(this, delta); // This is wackadoo. Revise it
 	super.render(...arguments);
 
     }
