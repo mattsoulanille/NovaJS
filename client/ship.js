@@ -15,6 +15,9 @@ var explosion = require("./explosion.js");
 var PIXI = require("../server/pixistub.js");
 var ionizable = require("../server/ionizableServer.js");
 
+const AFTERBURNER_ACCEL_FACTOR = 1.6;
+const AFTERBURNER_SPEED_FACTOR = 1.4;
+
 ship = class extends ionizable(acceleratable(turnable(damageable(collidable(movable(spaceObject)))))) {
     constructor(buildInfo, system) {
 	super(...arguments);
@@ -37,12 +40,26 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 
 	// Don't automatically die when the client thinks it has zero armor.
 	// Get confirmation from the server.
-	this.offState("zeroArmor", this._onDeathBound); 
+	this.offState("zeroArmor", this._onDeathBound);
+	this.usingAfterburner = false;
     }
 
     _bindListeners() {
 	this.multiplayer.on("setOutfits", this._setOutfitsListener.bind(this));
     }
+
+
+    // set usingAfterburner(v) {
+    // 	if (typeof v === "undefined") {
+    // 	    throw new Error("got it");
+    // 	}
+    // 	this._usingAfterburner = v;
+    // }
+    // get usingAfterburner() {
+    // 	return this._usingAfterburner;
+    // }
+
+
     
     async _build() {
 	await super._build();
@@ -189,16 +206,31 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
     setProperties() {
 	super.setProperties();
 	this.properties.vulnerableTo = ["normal"];
+	this.properties.afterburnerFuel = null;
+    }
+
+    _getAcceleration() {
+	if (this.getState("afterburner")) {
+	    return super._getAcceleration() * AFTERBURNER_ACCEL_FACTOR;
+	}
+	else {
+	    return super._getAcceleration();
+	}
+    }
+    _getMaxSpeed() {
+	if (this.getState("afterburner")) {
+	    return super._getMaxSpeed() * AFTERBURNER_SPEED_FACTOR;
+	}
+	else {
+	    return super._getMaxSpeed();
+	}
     }
 
     getOutfits() {
 	return this.multiplayer.query("getOutfits"); // a promise
     }
 
-    
-    
-    
-    
+        
     addSpritesToContainer() {
 
 	// adds sprites to the container in the correct order to have proper
@@ -248,6 +280,9 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	if (typeof stats.turningToTarget !== 'undefined') {
 	    this.turningToTarget = stats.turningToTarget;
 	}
+	if (typeof stats.usingAfterburner !== "undefined") {
+	    this.usingAfterburner = stats.usingAfterburner;
+	}
     }
 
     getStats() {
@@ -259,6 +294,7 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	    stats.target = null;
 	}
 	stats.turningToTarget = this.turningToTarget;
+	stats.usingAfterburner = this.usingAfterburner;
 	return stats;
     }
 
@@ -326,8 +362,28 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	    this.sprites.glowImage.sprite.alpha = 0;
 	}
     }
+
+    doAfterburnerFuelDrain(delta) {
+	// Note that afterburners can have different fuel drains
+	// depending on which outfit provides them.
+	// afterburnerFuel is in units / second
+	if (this.properties.afterburnerFuel == null) {
+	    // No afterburner
+ 	    return false;
+	}
+
+	var cost = (this.properties.afterburnerFuel / 1000) * delta;
+	if (this.energy < cost) {
+	    return false;
+	}
+	else {
+	    this.energy -= cost;
+	    return true;
+	}
+	
+    }
     
-    render() {
+    render(delta) {
 	// maybe revise this to be a set of functions that are all called when rendering
 	// so you don't have to do 'if' every time you render
 	if ("glowImage" in this.sprites) {
@@ -355,6 +411,17 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	}
 	if (this.fuel > this.properties.maxFuel) {
 	    this.fuel = this.properties.maxFuel;
+	}
+
+	if (this.usingAfterburner) {
+	    let canAfford = this.doAfterburnerFuelDrain(delta);
+	    this.setState("afterburner", canAfford);
+	    if (canAfford) {
+		this.accelerating = 1;
+	    }
+	}
+	else {
+	    this.setState("afterburner", false);
 	}
 	
 	super.render(...arguments);

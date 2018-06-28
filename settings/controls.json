@@ -28,6 +28,7 @@
     "86":["hold posiiton"],
     "87":["cycle secondary"],
     "89":["hail"],
+    "90":["afterburner"],
     "192":["reset nav"]
 
 }

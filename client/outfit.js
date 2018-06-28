@@ -106,7 +106,17 @@ var outfit = class extends loadsResources(inSystem) {
 	    properties.deionize += functions["ion dissipater"] * this.count;
 	}
 
-	
+	if (functions.hasOwnProperty("afterburner")) {
+	    // Use the most efficient afterburner
+	    if (properties.afterburnerFuel === null) {
+		properties.afterburnerFuel = Math.max(0, functions["afterburner"]);
+	    }
+	    else {
+		properties.afterburnerFuel = Math.max(0, Math.min(properties.afterburnerFuel,
+								  functions["afterburner"]));
+	    }
+
+	}
 	
 	
 

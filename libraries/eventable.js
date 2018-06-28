@@ -106,9 +106,9 @@ var eventable = (superclass) => class extends superclass {
 		toCall();
 	    });
 	}
-
-	
-	
+    }
+    getState(name) {
+	return this._state[name];
     }
 
     emit(name) {
