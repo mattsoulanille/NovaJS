@@ -117,7 +117,10 @@ var outfit = class extends loadsResources(inSystem) {
 	    }
 
 	}
-	
+
+	if (functions.hasOwnProperty("fuel scoop")) {
+	    properties.energyRecharge += functions["fuel scoop"];
+	}
 	
 
 	    

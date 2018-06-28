@@ -37,6 +37,9 @@ var outfParse = class extends baseParse {
 		if (key !== "weapon") {
 		    this.functions[key] = a[key];
 		}
+		if (key == "fuel scoop") {
+		    this.functions[key] = 1 / a[key]; // units / frame instead of frames / unit
+		}
 	    }.bind(this));
 	}.bind(this));	
     }

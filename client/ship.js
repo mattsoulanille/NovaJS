@@ -403,14 +403,9 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	}
 	
 	
-	if (this.properties.fuelRecharge) {
-	    // Fuel recharge is in frames / unit, so recharge ^ -1 = units / frame
-	    // 30 nova frames / second
-	    // 30 frames/sec * x units / frame = x units / sec
-	    this.fuel += (30 / this.properties.fuelRecharge) * (this.time - this.lastTime) / 1000;
-	}
-	if (this.fuel > this.properties.maxFuel) {
-	    this.fuel = this.properties.maxFuel;
+	if (this.properties.energyRecharge) {
+	    this.energy = Math.min(this.properties.energy,
+				   this.energy + this.properties.energyRecharge * 60/1000 * delta);
 	}
 
 	if (this.usingAfterburner) {

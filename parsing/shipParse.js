@@ -15,7 +15,7 @@ var shipParse = class extends baseParse {
 	this.armor = ship.armor;
 	this.armorRecharge = ship.armorRecharge;
 	this.energy = ship.energy;
-	this.energyRecharge = ship.energyRecharge;
+	this.energyRecharge = 1 / ship.energyRecharge; // units / frame instead of frames / unit
 	this.ionization = ship.ionization;
 	this.deionize = ship.deionize;
 
