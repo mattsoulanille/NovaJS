@@ -122,8 +122,7 @@ class PICTParse {
 		break;
 	    case directBitsRect:
 		this.log("Got Opcode directBitsRect");
-		//return this.parseDirectBitsRect();
-		result = this.parseDirectBitsRect();
+		return this.parseDirectBitsRect();
 		break;
 	    case longComment:
 		this.log("Got Opcode longComment");
@@ -142,7 +141,6 @@ class PICTParse {
 		throw new Error("Unsupported Opcode: 0x" + op.toString(16) + " at position " + this.pos);
 	    }
 	}
-	return result;
 	throw new Error("Did not get a picture");
     }
     

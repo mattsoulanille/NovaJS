@@ -9,7 +9,12 @@ class pict extends base {
     constructor(resource) {
 	super(...arguments);
 	var d = resource.data;
-	var PICT = new PICTParse(d);
+	try {
+	    var PICT = new PICTParse(d);
+	}
+	catch (e) {
+	    throw new Error("PICT id " + this.id + " failed to parse: " + e.message);
+	}
 	//PICT.PNG.pack().pipe(fs.createWriteStream("out" + this.id + ".png"));
 	this.png = PICT.PNG;
     }
