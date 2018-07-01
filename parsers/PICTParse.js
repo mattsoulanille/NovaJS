@@ -22,6 +22,11 @@
 // SOFTWARE.
 //
 
+// (1) Adapted from https://github.com/dmaulikr/OpenNova/blob/master/ResourceKit/ResourceFork/Parsers/RKPictureResourceParser.m
+
+// (2) Also see http://mirrors.apple2.org.za/apple.cabi.net/Graphics/PICT.and_QT.INFO/PICT.file.format.TI.txt
+
+
 "use strict";
 var PNG = require("pngjs").PNG;
 const wordSize = 2; // 2 bytes
@@ -105,13 +110,13 @@ class PICTParse {
     }
 
     runOpcodes() {
+	var result;
 	while (this.pos < this.d.byteLength) {
 	    var op = this.readOpcode();
 
 	    if (op == eof) {
 		break;
 	    }
-
 	    switch(op) {
 	    case clipRegion:
 		this.log("Got Opcode clipRegion");
@@ -119,7 +124,8 @@ class PICTParse {
 		break;
 	    case directBitsRect:
 		this.log("Got Opcode directBitsRect");
-		return this.parseDirectBitsRect();
+		//return this.parseDirectBitsRect();
+		result = this.parseDirectBitsRect();
 		break;
 	    case longComment:
 		this.log("Got Opcode longComment");
@@ -138,6 +144,7 @@ class PICTParse {
 		throw new Error("Unsupported Opcode: 0x" + op.toString(16) + " at position " + this.pos);
 	    }
 	}
+	return result;
 	throw new Error("Did not get a picture");
     }
     
@@ -150,7 +157,7 @@ class PICTParse {
 	return data;
     };
     readData(len) {
-	var data = new DataView(this.d.buffer, this.pos, len);
+	var data = new DataView(this.d.buffer, this.d.byteOffset + this.pos, len);
 	this.pos += len;
 	return data;
     };
@@ -160,54 +167,45 @@ class PICTParse {
 	var result = []; // uint8_t
 	var pos = 0;
 	var length = data.byteLength;
-
+	this.log("Length: " + length);
+	//this.log("ValueSize: " + valueSize);
 	if (valueSize > 4) {
 	    throw new Error("valueSize too large. Must be <= 4 but got " + valueSize);
 	}
 
 	var run;
 	while (pos < length) {
-	    //try {
-
 	    var count = data.getUint8(pos);
 	    pos ++;
 	    this.log("count: " + count);
-	    this.log("ByteLength: " + length);
-	    this.log("Pos: " + pos);
+	    //this.log("ByteLength: " + length);
+	    //this.log("Pos: " + pos);
 
-	    if ((count >= 0) && (count < 128)) {
+	    if (count < 128) {
 		run = (1 + count) * valueSize;
-		this.log("Run: " + run);
 		for (let i = 0; i < run; i++) {
-		    //console.log(pos);
-		    result.push(data.getUint8(pos));
-		    pos ++;
+		    result.push(data.getUint8(pos + i));
 		}
+		pos += run;
 	    }
 
-	    else if (count >= 128) {
+	    else {
 		// Expand the repeat compression
-		run = 256 - count + 1;
+		run = 256 - count;
 		var val = [];
 		for (let i = 0; i < valueSize; i++) {
-		    val.push(data.getUint8(pos));
-		    pos ++;
+		    val.push(data.getUint8(pos + i));
 		}
-		for (let i = 0; i < run; i++) {
+		pos += valueSize;
+		for (let i = 0; i <= run; i++) {
 		    result = result.concat(val);
 		}
 	    }
 
-	    else {
-		throw new Error("Impossible to get here.");
-	    }
-//	    }
-//	    catch (e) {
-
-//	    }
 	}
+	
 	return result;
-    };
+};
     
     parseDirectBitsRect() {
 	var px = this.parsePixMap();
@@ -236,10 +234,10 @@ class PICTParse {
 	var packedBytesCount = 0;
 	this.log(px);
 	for (let scanline = 0; scanline < sourceRect.height; scanline++) {
-	    // Narrow pictures don't use the pack bits compression. Not certain what the deciding factor
-	    // for such a thing is, but low numbers of rowBytes seem to be the cause. Setting this to then
-	    // highest value found that doesn't have compression.
-	    if (px.rowBytes <= 4) {
+	    // Narrow pictures don't use the pack bits compression. 
+	    // See (2) Table 5
+	    // Below 8 bits, it is uncompressed.
+	    if (px.rowBytes < 8) {
 		// gets px.rowBytes number of bytes from d
 		// Then, puts sourceRect.width * 2 of them in 'raw'
 		var data = this.readDataUint8(px.rowBytes);
@@ -253,11 +251,10 @@ class PICTParse {
 		    packedBytesCount = this.readByte();
 		}
 
-		this.log("PackedBytesCount: " + packedBytesCount);
 		//packedBytesCount = this.readByte() + 300;
 
 		var encodedScanLine = this.readData(packedBytesCount);
-		this.log(encodedScanLine);
+		//this.log(encodedScanLine);
 		var decodedScanLine = [];
 		if (px.packType === 3) {
 		    decodedScanLine = this.packBitsDecode(2, encodedScanLine);
@@ -359,7 +356,7 @@ class PICTParse {
     parsePixMap() {
 	return {
 	    baseAddress: this.reaDWord(),
-	    rowBytes: this.readWord() & 0x7FFF,
+	    rowBytes: (this.readWord() & 0x7FFF) >>> 0,
 
 	    bounds: this.readWHRect(),
 
@@ -430,7 +427,7 @@ class PICTParse {
 	this.pos += length;
     }
     log(text) {
-	console.log(text);
+	//console.log(text);
     }
 };
 

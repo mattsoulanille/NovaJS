@@ -4,10 +4,6 @@ var fs = require("fs");
 
 var base = require("./base.js");
 
-// Adapted from https://github.com/dmaulikr/OpenNova/blob/master/ResourceKit/ResourceFork/Parsers/RKPictureResourceParser.m
-
-// Also see http://mirrors.apple2.org.za/apple.cabi.net/Graphics/PICT.and_QT.INFO/PICT.file.format.TI.txt
-
 var PICTParse = require("./PICTParse.js");
 class pict extends base {
     constructor(resource) {
