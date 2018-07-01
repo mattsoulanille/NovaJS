@@ -10,7 +10,8 @@ class pict extends base {
 	super(...arguments);
 	var d = resource.data;
 	var PICT = new PICTParse(d);
-	PICT.PNG.pack().pipe(fs.createWriteStream("out" + this.id + ".png"));
+	//PICT.PNG.pack().pipe(fs.createWriteStream("out" + this.id + ".png"));
+	this.png = PICT.PNG;
     }
 };
 
