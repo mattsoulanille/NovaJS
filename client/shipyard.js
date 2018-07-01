@@ -4,7 +4,7 @@ var itemGrid = require("./itemGrid.js");
 
 class shipyard extends menu {
     constructor() {
-	var buildInfo = {background : "/objects/menus/shipyard.png"};
+	var buildInfo = {background : "/objects/picts/nova:8501.png"};
 	super(buildInfo);
 	this.scope = "shipyard";
 	this.itemGrid = new itemGrid(global.allShips);

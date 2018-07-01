@@ -9,11 +9,11 @@ class button extends eventable(visible(function() {})) {
 	this.container.position.y = position.y;
 	this.size = size;
 	this.height = 25; // Height: An experimentally determined magic number.
-	var base_url = '/objects/menus/';
+	var base_url = '/objects/picts/';
 	var button_urls =
-	    {'normal': ['leftButton.png', 'middleButton.png', 'rightButton.png'],
-	     'clicked': ['leftClickedButton.png', 'middleClickedButton.png', 'rightClickedButton.png'],
-	     'grey': ['leftGreyButton.png', 'middleGreyButton.png', 'rightGreyButton.png']
+	    {'normal': ['nova:7500.png', 'nova:7501.png', 'nova:7502.png'],
+	     'clicked': ['nova:7503.png', 'nova:7504.png', 'nova:7505.png'],
+	     'grey': ['nova:7506.png', 'nova:7507.png', 'nova:7508.png']
 	    };
 	
 	// this.sprites = {

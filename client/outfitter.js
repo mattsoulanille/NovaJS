@@ -4,7 +4,7 @@ var itemGrid = require("./itemGrid.js");
 
 class outfitter extends menu {
     constructor() {
-	var buildInfo = {background : "/objects/menus/outfitter.png"};
+	var buildInfo = {background : "/objects/picts/nova:8502.png"};
 	super(buildInfo);
 	this.scope = "outfitter";
 

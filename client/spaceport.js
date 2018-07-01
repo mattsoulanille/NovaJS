@@ -5,7 +5,7 @@ var shipyard = require("./shipyard.js");
 
 class spaceport extends menu {
     constructor(buildInfo, departCallback) { // buildInfo will contain the url or something...
-	buildInfo.background = "/objects/menus/spaceport.png";
+	buildInfo.background = "/objects/picts/nova:8500.png";
 	super(buildInfo);
 	this.departCallback = departCallback;
 	this.container.position.x = (global.screenW-194)/2;
