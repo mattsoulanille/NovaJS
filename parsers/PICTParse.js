@@ -52,8 +52,6 @@ class PICTParse {
 	this.d = dataView;
 	this.pos = 0;
 
-
-
 	// first two bytes are unused
 	this.pos += 2; 
 
@@ -167,8 +165,6 @@ class PICTParse {
 	var result = []; // uint8_t
 	var pos = 0;
 	var length = data.byteLength;
-	this.log("Length: " + length);
-	//this.log("ValueSize: " + valueSize);
 	if (valueSize > 4) {
 	    throw new Error("valueSize too large. Must be <= 4 but got " + valueSize);
 	}
@@ -178,8 +174,6 @@ class PICTParse {
 	    var count = data.getUint8(pos);
 	    pos ++;
 	    this.log("count: " + count);
-	    //this.log("ByteLength: " + length);
-	    //this.log("Pos: " + pos);
 
 	    if (count < 128) {
 		run = (1 + count) * valueSize;
@@ -251,10 +245,7 @@ class PICTParse {
 		    packedBytesCount = this.readByte();
 		}
 
-		//packedBytesCount = this.readByte() + 300;
-
 		var encodedScanLine = this.readData(packedBytesCount);
-		//this.log(encodedScanLine);
 		var decodedScanLine = [];
 		if (px.packType === 3) {
 		    decodedScanLine = this.packBitsDecode(2, encodedScanLine);
