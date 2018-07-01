@@ -4,7 +4,7 @@ var shanParse = require("./shanParse.js");
 var shipParse = require("./shipParse.js");
 var weapParse = require("./weapParse.js");
 var outfParse = require("./outfParse.js");
-
+var pictParse = require("./pictParse.js");
 
 var gettable = class {
     constructor(getFunction) {
@@ -30,7 +30,7 @@ var novaData = class {
 	this.spriteSheets = new gettable(this.getFunction("rlëD", spriteSheet));
 	this.outfits = new gettable(this.getFunction("oütf", outfParse));
 	this.weapons = new gettable(this.getFunction("wëap", weapParse));
-	
+	this.picts = new gettable(this.getFunction("PICT", pictParse));
     }
 
     getFunction(resourceType, toBuild) {

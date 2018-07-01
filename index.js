@@ -259,9 +259,16 @@ var startGame = async function() {
 	res.send(JSON.stringify(allOutfits));
     });
 
-    
     app.get('objects/planets/:planet.json', function(req, res) {
 	req.sendFile(res['planet.json']); //temporary
+    });
+
+
+    app.get('/objects/picts/:image.png', async function(req, res) {
+	var id = req.params.image;
+	var pict = await nd.picts.get(id);
+	var buf = PNG.sync.write(pict.png);
+	res.send(buf);
     });
     
     app.param("spriteSheet", async function(req, res, next, id) {
@@ -275,7 +282,7 @@ var startGame = async function() {
 	}
 	next();
     });
-    
+
     app.get('/objects/spriteSheets/:spriteSheet/image.png', function(req, res) {
 	if (req.spriteSheet) {
 	    var buf = PNG.sync.write(req.spriteSheet.png);
@@ -298,7 +305,6 @@ var startGame = async function() {
     });
 
 
-
     app.get('/objects/spriteSheets/:spriteSheet/convexHulls.json', function(req, res) {
 	// see app.param("spriteSheet"... above
 	if (req.spriteSheet) {
@@ -312,7 +318,6 @@ var startGame = async function() {
     });
 
     app.get('/objects/ships/:ship.json', async function(req, res) {
-	// change this to ships once it works
 	var id = req.params.ship;
 	var s = await nd.ships.get(id);
 	try {

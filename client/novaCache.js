@@ -1,5 +1,6 @@
 var cache = require("./cache.js");
 var spriteSheetCache = require("./spriteSheetCache.js");
+var pictCache = require("./pictCache.js");
 var novaCache = class {
     constructor() {
 	
@@ -12,6 +13,7 @@ var novaCache = class {
 	this.misc = new cache("objects/misc/");
 	this.statusBars = new cache("objects/statusBars/");
 	this.outfits = new cache("objects/outfits/");
+	this.picts = new pictCache("objects/picts/");
     }
 
     // should mirror novaData.js

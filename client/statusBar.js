@@ -10,6 +10,7 @@ var statusBar = class extends loadsResources(function() {}) {
     constructor(id, player) {
 	super(...arguments);
 	this.type = 'statusBars';
+	//this.type = 'picts';
 	this.id = id;
 	this.ready = false;
 	this.sprites = {};
@@ -74,7 +75,7 @@ var statusBar = class extends loadsResources(function() {}) {
 
     makeSprites() {
 	// revise this when you can parse PICT
-	var baseImageURL = "objects/statusBars/" + this.meta.animation.pictures.statusBar;
+	var baseImageURL = "objects/picts/" + this.meta.animation.pictures.statusBar;
 	var baseImage = PIXI.Sprite.fromImage(baseImageURL);
 	this.sprites['baseImage'] = baseImage;
 
