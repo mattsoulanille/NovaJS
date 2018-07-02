@@ -1,9 +1,12 @@
 var eventable = require("../libraries/eventable.js");
-class itemTile extends eventable(function() {}) {
+var loadsResources = require("./loadsResources.js");
+var PIXI = require("../server/pixistub.js");
+class itemTile extends eventable(loadsResources(function() {})) {
     constructor(item) {
 	super();
 	this.item = item;
 	this.boxDimensions = [83, 54];
+	this.middle = this.boxDimensions.map(function(x) {return x / 2;});
 
 	this.name = this.item.name;
 	this.font = {
@@ -28,13 +31,13 @@ class itemTile extends eventable(function() {}) {
 	this.dimStyle = [this.lineWidth, this.colors.dim];
 	this.brightStyle = [this.lineWidth, this.colors.bright];
 
-
+	
 	this.graphics = new PIXI.Graphics();
 	
-	this.itemText = new PIXI.Text(this.name, this.font.normal);
-	this.itemText.anchor.x = 0.5;
-	this.itemText.position.x = this.boxDimensions[0] / 2;
-	this.itemText.position.y = this.boxDimensions[1] * 1/2;
+	this.nameText = new PIXI.Text(this.name, this.font.normal);
+	this.nameText.anchor.x = 0.5;
+	this.nameText.position.x = this.middle[0];
+	this.nameText.position.y = this.boxDimensions[1] * 0.5;
 
 	this.quantity = 0;
 	this.quantityText = new PIXI.Text("", this.font.normal);
@@ -52,9 +55,27 @@ class itemTile extends eventable(function() {}) {
 	}.bind(this));
 
 	this.container.addChild(this.graphics);
-	this.container.addChild(this.itemText);
+	this.container.addChild(this.nameText);
 	this.container.addChild(this.quantityText);
 
+	this.build();
+	
+    }
+    async build() {
+	if (this.item.pictID) {
+	    var pict = await this.novaData["picts"].get(this.item.pictID);
+	    this.smallPict = new PIXI.Sprite.from(pict);
+	    this.largePict = new PIXI.Sprite.from(pict); // for outfitter.js, shipyard.js
+	    this.smallPict.anchor.x = 0.5;
+	    this.smallPict.position.x = this.middle[0];
+	    this.smallPict.position.y = 1;
+
+	    var scale = 0.3;
+	    this.smallPict.scale.x = scale;
+	    this.smallPict.scale.y = scale;
+
+	    this.container.addChildAt(this.smallPict, 1);
+	}
     }
 
     draw() {

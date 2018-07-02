@@ -63,6 +63,7 @@ var npc = require("./server/npcServer.js");
 //npc.prototype.io = io;
 var spaceObject = require("./server/spaceObjectServer");
 var inSystem = require("./client/inSystem");
+var resourcesPrototypeHolder = require("./client/resourcesPrototypeHolder.js");
 //spaceObject.prototype.socket = io;
 var beamWeapon = require("./server/beamWeaponServer");
 beamWeapon.prototype.socket = io;
@@ -228,21 +229,28 @@ var startGame = async function() {
     });
 
     npcMaker = new AI(sol, io, shipIDs);
+    nd = new novaData(np);
 
     var outfIDs = Object.keys(np.ids.resources.oütf);
     allOutfits = [];
-    outfIDs.forEach(function(id) {
-	allOutfits.push({name : np.ids.resources.oütf[id].name,
-		       id : id});
-    });
-    
+    for (var i in outfIDs) {
+	let id = outfIDs[i];
+	var globalID = np.ids.resources.oütf[id].globalID;
+	try {
+	    allOutfits.push(await nd.outfits.get(globalID));
+	}
+	catch(e) {
+	    // These errors should really be more specific (change this)
+	}
+    }
     
     local.context.shipIDs = shipIDs;
 
-    nd = new novaData(np);
+
     //await nd.build();
     
     inSystem.prototype.novaData = nd;
+    resourcesPrototypeHolder.novaData = nd;
     console.log("Parsing nova files and setting up cache");
     nd.build();
     local.context.nd = nd;

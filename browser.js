@@ -7,6 +7,7 @@ const socket = require("socket.io-client")();
 const novaCache = require("./client/novaCache.js");
 const inSystem = require("./client/inSystem.js");
 const statusBar = require("./client/statusBar.js");
+const resourcesPrototypeHolder = require("./client/resourcesPrototypeHolder.js");
 const system = require("./client/system.js");
 const controls = require("./client/controls.js");
 const spaceObject = require("./client/spaceObject.js");
@@ -89,8 +90,10 @@ global.UUID;
 
 // caches nova data that is loaded from the server
 var nc = new novaCache();
-inSystem.prototype.novaData = nc; // is this bad practice?
-statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResourecs's prototype chain
+//inSystem.prototype.novaData = nc; // is this bad practice?
+//statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResourecs's prototype chain
+resourcesPrototypeHolder.prototype.novaData = nc;
+
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;

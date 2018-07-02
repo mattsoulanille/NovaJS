@@ -41,7 +41,10 @@ var outfParse = class extends baseParse {
 		    this.functions[key] = 1 / a[key]; // units / frame instead of frames / unit
 		}
 	    }.bind(this));
-	}.bind(this));	
+	}.bind(this));
+	
+	this.pictID = outf.idSpace.PICT[outf.pictID].globalID;
+
     }
 };
 

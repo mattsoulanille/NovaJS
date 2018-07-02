@@ -1,7 +1,11 @@
+var resourcesPrototypeHolder = require("./resourcesPrototypeHolder");
 var loadsResources = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
+	if (! this.novaData) {
+	    this.novaData = resourcesPrototypeHolder.prototype.novaData;
 	}
+    }
     
     
     async loadResources(type, id) {
