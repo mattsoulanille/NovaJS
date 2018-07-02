@@ -26,6 +26,7 @@ describe("novaParse", function() {
     });
 
     it("should assign the right global id to each resource", function() {
+	debugger;
 	expect(np.ids.resources.wëap['nova:128'].globalID).to.equal("nova:128");
 	expect(np.ids.resources.wëap['nova:129'].globalID).to.equal("nova:129");
 	expect(np.ids.resources.wëap['Plugin 2:150'].globalID).to.equal("Plugin 2:150");

@@ -165,9 +165,9 @@ class novaParse {
 		break;
 	    }
 	    parsed[type] = resArray.map(function(item) {
-
-		return new parseFunction(item);
-
+		return function() {
+		    return new parseFunction(item);
+		};
 	    });
 
 	}.bind(this));

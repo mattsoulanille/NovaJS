@@ -26,7 +26,6 @@ describe("boom", function() {
     });
 
     it("should parse animation rate", function() {
-	debugger;
 	expect(firstBoom.animationRate).to.equal(100);
 	expect(silentBoom.animationRate).to.equal(79);
 	expect(slowBoom.animationRate).to.equal(23);
