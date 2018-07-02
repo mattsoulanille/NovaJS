@@ -10,8 +10,11 @@ var outf = class extends base {
 	this.displayWeight = d.getInt16(0);
 	this.mass = d.getInt16(2);
 	this.techLevel = d.getInt16(4);
-	// this.modType = d.getInt16(6);
-	// this.modVal = d.getInt16(8);
+	
+	this.max = d.getInt16(10);
+	this.pictID = this.id - 128 + 6000;
+
+
 	this.functions = [];
 
 	var modPositions = [6, 18, 22, 26];

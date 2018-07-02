@@ -92,9 +92,18 @@ describe("outf", function() {
 	    {"fuel increase" : 1454}
 	]);
 	
-	
     });
-
+    it("should parse maximum allowed", function() {
+	expect(w1.max).to.equal(12);
+	expect(blank.max).to.equal(999);
+	expect(armor.max).to.equal(124);
+	expect(shields.max).to.equal(337);
+	expect(armorRecharge.max).to.equal(32767);
+    });
+    it("should calculate pictID", function() {
+	expect(w1.pictID).to.equal(6000);
+	expect(anotherFour.pictID).to.equal(6011);
+    });
 
 
 
