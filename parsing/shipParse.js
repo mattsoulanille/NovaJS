@@ -24,7 +24,7 @@ var shipParse = class extends baseParse {
 	this.turnRate = ship.turnRate;
 
 	this.mass = ship.mass;
-
+	
 
 	var outfits = {};
 

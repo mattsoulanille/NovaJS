@@ -1,6 +1,7 @@
 var menu = require("./menu.js");
 var button = require("./button.js");
 var itemGrid = require("./itemGrid.js");
+var PIXI = require("../server/pixistub.js");
 
 class outfitter extends menu {
     constructor() {
@@ -31,6 +32,15 @@ class outfitter extends menu {
 	this.itemGrid.container.position.y = -153;
 	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = false;
+	this.itemGrid.on("tileSelected", this.setOutfitPicture.bind(this));
+	
+	this.pictContainer = new PIXI.Container();
+	this.pictContainer.position.x = 174;
+	this.pictContainer.position.y = -152.5;
+	this.pictContainer.scale.x = 1;
+	this.pictContainer.scale.y = 1;
+	this.container.addChild(this.pictContainer);
+
     }
 
     buyOutfit() {
@@ -45,6 +55,14 @@ class outfitter extends menu {
 	global.myShip.removeOutfit(outfit, false);
 	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = true;
+    }
+
+    setOutfitPicture(outfitTile) {
+	this.pictContainer.children = []; // is this legal?
+	if (outfitTile.largePict) {
+
+	    this.pictContainer.addChild(outfitTile.largePict);
+	}
     }
     
     show() {

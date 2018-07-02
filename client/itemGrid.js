@@ -1,6 +1,7 @@
 var eventable = require("../libraries/eventable.js");
 var loadsResources = require("./loadsResources.js");
 var PIXI = require("../server/pixistub.js");
+
 class itemTile extends eventable(loadsResources(function() {})) {
     constructor(item) {
 	super();
@@ -58,10 +59,15 @@ class itemTile extends eventable(loadsResources(function() {})) {
 	this.container.addChild(this.nameText);
 	this.container.addChild(this.quantityText);
 
-	this.build();
+	//this.build(); // Too laggy
 	
     }
+    /*
     async build() {
+	if (this.built | this.building) {
+	    return;
+	}
+	this.building = true;
 	if (this.item.pictID) {
 	    var pict = await this.novaData["picts"].get(this.item.pictID);
 	    this.smallPict = new PIXI.Sprite.from(pict);
@@ -76,8 +82,30 @@ class itemTile extends eventable(loadsResources(function() {})) {
 
 	    this.container.addChildAt(this.smallPict, 1);
 	}
+	this.built = true;
     }
+    */
+    build() {
+	if (this.built) {
+	    return;
+	}
 
+	if (this.item.pictID) {
+	    var url = "/objects/picts/" + this.item.pictID + ".png";
+	    this.smallPict = new PIXI.Sprite.fromImage(url);
+	    this.largePict = new PIXI.Sprite.fromImage(url);
+	    this.smallPict.anchor.x = 0.5;
+	    this.smallPict.position.x = this.middle[0];
+	    this.smallPict.position.y = 1;
+
+	    var scale = 0.15;
+	    this.smallPict.scale.x = scale;
+	    this.smallPict.scale.y = scale;
+
+	    this.container.addChildAt(this.smallPict, 1);
+	}
+	this.built = true;
+    }
     draw() {
 	this.graphics.clear();
 	if (this.active) {
@@ -96,6 +124,7 @@ class itemTile extends eventable(loadsResources(function() {})) {
     }
     show() {
 	this.container.visible = true;
+	this.build(); // Builds if not already built
     }
     moveTo(pos) {
 	this.container.position.x = pos[0];
@@ -115,8 +144,9 @@ class itemTile extends eventable(loadsResources(function() {})) {
 
 
 
-class itemGrid {
+class itemGrid extends eventable(function() {}) {
     constructor(items) {
+	super();
 	this.container = new PIXI.Container();
 
 	// Experimentally Determined
@@ -164,6 +194,7 @@ class itemGrid {
 	    t.hide();
 	});
 
+
 	var start = this.boxCount[0] * this.scroll;
 
 	let selectedPosition = null;
@@ -176,6 +207,9 @@ class itemGrid {
 	    tile.show();
 	    if (itemIndex === this.selectionIndex) {
 		tile.active = true;
+		// send which one is selected
+		this.emit("tileSelected", tile);
+
 		// Make sure it is above the others
 		this.container.addChildAt(tile.container, this.tiles.length - 1);
 	    }
@@ -188,6 +222,7 @@ class itemGrid {
 	    tile.moveTo(pos);
 	    tile.draw();
 	}
+
 
     }
 
