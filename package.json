@@ -21,7 +21,8 @@
   "homepage": "https://github.com/mattsoulanille/NovaParse#readme",
   "dependencies": {
     "pngjs": "^3.3.3",
-    "resourceforkjs": "^0.0.5"
+    "resourceforkjs": "^0.0.5",
+    "stringview": "^2.0.1"
   },
   "devDependencies": {
     "mocha": "^5.2.0",

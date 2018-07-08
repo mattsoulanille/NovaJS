@@ -9,6 +9,7 @@ var ship = require("./parsers/ship.js");
 var spin = require("./parsers/spin.js");
 var weap = require("./parsers/weap.js");
 var pict = require("./parsers/pict.js");
+var desc = require("./parsers/desc.js");
 var idSpace = require("./idSpace.js");
 var fs = require("fs");
 var path = require('path');
@@ -162,6 +163,9 @@ class novaParse {
 		break;
 	    case "PICT":
 		parseFunction = pict;
+		break;
+	    case "dësc":
+		parseFunction = desc;
 		break;
 	    }
 	    parsed[type] = resArray.map(function(item) {
