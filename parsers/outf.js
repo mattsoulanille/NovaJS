@@ -13,6 +13,7 @@ var outf = class extends base {
 	
 	this.max = d.getInt16(10);
 	this.pictID = this.id - 128 + 6000;
+	this.descID = this.id - 128 + 3000;
 
 
 	this.functions = [];

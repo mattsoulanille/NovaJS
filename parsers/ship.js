@@ -23,6 +23,8 @@ var ship = class extends base {
 	this.freeSpace = d.getInt16(12);
 	this.armor = d.getInt16(14);
 	this.shieldRecharge = d.getInt16(16);
+	this.pictID = this.id - 128 + 5000;
+	this.descID = this.id - 128 + 13000;
 
 	//stock weapons
 	this.weapons = [];
