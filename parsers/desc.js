@@ -1,5 +1,5 @@
 "use strict";
-require("StringView");
+require("stringview");
 const base = require("./base.js");
 
 class desc extends base {
