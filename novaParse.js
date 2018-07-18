@@ -14,7 +14,7 @@ var idSpace = require("./idSpace.js");
 var fs = require("fs");
 var path = require('path');
 var rf = require("resourceforkjs").resourceFork;
-
+var parsedObject = require("./parsedObject.js");
 
 class novaParse {
     constructor(path) {
@@ -169,8 +169,12 @@ class novaParse {
 		break;
 	    }
 	    parsed[type] = resArray.map(function(item) {
-		return function() {
-		    return new parseFunction(item);
+		// function necessary so no reference to parsedObject so no cacheing
+		return function() {	
+		    return new parsedObject(function() {
+			return new parseFunction(item);
+		    }.bind(this));
+		    //return new parseFunction(item);
 		};
 	    });
 
