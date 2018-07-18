@@ -10,6 +10,7 @@ class itemTile extends eventable(loadsResources(function() {})) {
 	this.middle = this.boxDimensions.map(function(x) {return x / 2;});
 
 	this.name = this.item.name;
+	this.desc = this.item.desc;
 	this.font = {
 	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
 		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},

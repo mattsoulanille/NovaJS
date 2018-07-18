@@ -8,6 +8,20 @@ var shipParse = class extends baseParse {
 	this.shanID = this.id;
 	this.prefix = ship.prefix;
 
+	try {
+	    this.pictID = ship.idSpace.PICT[ship.pictID].globalID;
+	}
+	catch(e) {
+
+	}
+
+	try {
+	    this.desc = ship.idSpace.dësc[ship.descID].string;
+	}
+	catch(e) {
+	    this.desc = "Parsing desc failed: " + e.message;
+	}
+
 	this.animation = new shanParse(ship.idSpace.shän[ship.id]);
 	
 	this.shield = ship.shield;

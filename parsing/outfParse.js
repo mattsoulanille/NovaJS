@@ -42,9 +42,24 @@ var outfParse = class extends baseParse {
 		}
 	    }.bind(this));
 	}.bind(this));
-	
-	this.pictID = outf.idSpace.PICT[outf.pictID].globalID;
 
+
+	// Put these in try-catch blocks
+	// but first, make custom errors for novaParse
+	// Also, have placeholders.
+	try {
+	    this.pictID = outf.idSpace.PICT[outf.pictID].globalID;
+	}
+	catch(e) {
+	}
+	try {
+	    this.desc = outf.idSpace.dësc[outf.descID].string;
+	}
+	catch(e) {
+	    this.desc = "Parsing desc failed: " + e.message;
+	}
+
+	
     }
 };
 

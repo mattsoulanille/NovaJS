@@ -41,6 +41,28 @@ class outfitter extends menu {
 	this.pictContainer.scale.y = 1;
 	this.container.addChild(this.pictContainer);
 
+
+	// Refactor this
+	var descWidth = 190;
+	this.font = {
+	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
+		      align:'left', wordWrap:true, wordWrapWidth: descWidth},
+
+	    grey:    {fontFamily:"Geneva", fontSize:10, fill:0x262626,
+		      align:'left', wordWrap:true, wordWrapWidth:descWidth},
+
+	    count:    {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
+		       align:'right', wordWrap:false, wordWrapWidth:descWidth}
+
+	};
+
+	this.descriptionText = new PIXI.Text("", this.font.normal);
+	this.descriptionText.position.x = -27;
+	this.descriptionText.position.y = -150;
+	this.container.addChild(this.descriptionText);
+	this.itemGrid.on("tileSelected", this.setDescription.bind(this));
+
+
     }
 
     buyOutfit() {
@@ -63,6 +85,10 @@ class outfitter extends menu {
 
 	    this.pictContainer.addChild(outfitTile.largePict);
 	}
+    }
+
+    setDescription(outfitTile) {
+	this.descriptionText.text = outfitTile.desc;
     }
     
     show() {

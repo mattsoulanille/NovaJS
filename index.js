@@ -91,7 +91,7 @@ var path = require('path');
 var AI = require("./server/AI.js");
 var npcMaker;
 
-local.context.npcMaker = npcMaker;
+
 //npcMaker.makeShip(npcMaker.followAndShoot);
 
 local.context.killNPCs = function() {
@@ -221,15 +221,25 @@ var startGame = async function() {
     }
 
 
+    npcMaker = new AI(sol, io, shipIDs);
+    local.context.npcMaker = npcMaker;
+    nd = new novaData(np);
+    await nd.build();
+
     shipIDs = Object.keys(np.ids.resources.shïp);
     allShips = [];
-    shipIDs.forEach(function(id) {
-	allShips.push({name : np.ids.resources.shïp[id].name,
-		       id : id});
-    });
+    
+    for (var i in shipIDs) {
+	let id = shipIDs[i];
+	var globalID = np.ids.resources.shïp[id].globalID;
+	try {
+	    allShips.push(await nd.ships.get(globalID));
+	}
+	catch(e) {
+	    // These errors should really be more specific (change this)
+	}
+    }
 
-    npcMaker = new AI(sol, io, shipIDs);
-    nd = new novaData(np);
 
     var outfIDs = Object.keys(np.ids.resources.oütf);
     allOutfits = [];
@@ -243,16 +253,16 @@ var startGame = async function() {
 	    // These errors should really be more specific (change this)
 	}
     }
-    
+
+    local.context.allShips = allShips;
+    local.context.allOutfits = allOutfits;
     local.context.shipIDs = shipIDs;
 
 
-    //await nd.build();
     
     inSystem.prototype.novaData = nd;
     resourcesPrototypeHolder.novaData = nd;
     console.log("Parsing nova files and setting up cache");
-    nd.build();
     local.context.nd = nd;
 
     

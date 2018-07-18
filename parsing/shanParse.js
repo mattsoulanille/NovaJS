@@ -22,8 +22,9 @@ var shanParse = class extends baseParse {
 	    // get the rled from novadata
 	    var rled = shan.idSpace['rlëD'][imageInfo.ID];
 
-	    this.images[imageName] = { id: rled.prefix + ":" + rled.id,
-					         imagePurposes: {} };
+	    //this.images[imageName] = { id: rled.prefix + ":" + rled.id,
+	    this.images[imageName] = { id: rled.globalID,
+				       imagePurposes: {} };
 
 
 	    var imagePurposes = this.images[imageName].imagePurposes;
