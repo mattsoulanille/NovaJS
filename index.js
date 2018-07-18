@@ -285,9 +285,19 @@ var startGame = async function() {
 
     app.get('/objects/picts/:image.png', async function(req, res) {
 	var id = req.params.image;
-	var pict = await nd.picts.get(id);
-	var buf = PNG.sync.write(pict.png);
-	res.send(buf);
+	try {
+	    var pict = await nd.picts.get(id);
+	    var buf = PNG.sync.write(pict.png);
+	    res.send(buf);
+	    return;
+	}
+	catch (e) {
+	    console.log("Pict failed to parse: " + e);
+	}
+
+	// Otherwise, send the default pict
+	res.sendFile(path.join(__dirname, "/objects/defaults/PICT.png"));
+
     });
     
     app.param("spriteSheet", async function(req, res, next, id) {
