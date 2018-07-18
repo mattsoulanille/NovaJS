@@ -221,12 +221,13 @@ var startGame = async function() {
     }
 
 
+
+    shipIDs = Object.keys(np.ids.resources.shïp);
     npcMaker = new AI(sol, io, shipIDs);
     local.context.npcMaker = npcMaker;
     nd = new novaData(np);
     await nd.build();
 
-    shipIDs = Object.keys(np.ids.resources.shïp);
     allShips = [];
     
     for (var i in shipIDs) {
