@@ -12,7 +12,7 @@ var shipParse = class extends baseParse {
 	    this.pictID = ship.idSpace.PICT[ship.pictID].globalID;
 	}
 	catch(e) {
-
+	    console.log(e);
 	}
 
 	try {

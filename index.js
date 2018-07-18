@@ -1,5 +1,4 @@
 //"use strict";
-var port = 8000;
 var express = require('express');
 var app = express();
 var http = require('http').Server(app);
@@ -18,8 +17,11 @@ var fs = require('fs'),
     PNG = require('pngjs').PNG;
 
 var repl = require("repl");
-
 var local = repl.start();
+
+const settings = JSON.parse(fs.readFileSync("./settings/server.json"));
+const port = settings.port;
+
 
 local.context.io = io;
 
