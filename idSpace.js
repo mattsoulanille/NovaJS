@@ -79,6 +79,7 @@ var idSpace = class {
 		    resource.globalID = globalID;
 		    resource.idSpace = idSpace;
 		    resource.prefix = prefix;
+		    resource.id = id;
 		    return resource;
 		}.bind(this);
 	    }.bind(this));
