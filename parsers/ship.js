@@ -8,11 +8,14 @@ var ship = class extends base {
 	super(...arguments);
 	var d = this.data;
 
+	this.pictID = this.id - 128 + 5000;
+	
+
 	var adj = function(n,a) {
 	    if (n == -1)
 		return null;
 	    return n+a;
-	}
+	};
 	
 	this.cargoSpace = d.getInt16(0);
 	this.shield = d.getInt16(2);
@@ -23,7 +26,7 @@ var ship = class extends base {
 	this.freeSpace = d.getInt16(12);
 	this.armor = d.getInt16(14);
 	this.shieldRecharge = d.getInt16(16);
-	this.pictID = this.id - 128 + 5000;
+
 	this.descID = this.id - 128 + 13000;
 
 	//stock weapons

@@ -1,25 +1,32 @@
 "use strict";
 
 
-var boom = require("./parsers/boom.js");
-var outf = require("./parsers/outf.js");
-var rled = require("./parsers/rled.js");
-var shan = require("./parsers/shan.js");
-var ship = require("./parsers/ship.js");
-var spin = require("./parsers/spin.js");
-var weap = require("./parsers/weap.js");
-var pict = require("./parsers/pict.js");
-var desc = require("./parsers/desc.js");
-var idSpace = require("./idSpace.js");
-var fs = require("fs");
-var path = require('path');
-var rf = require("resourceforkjs").resourceFork;
-var parsedObject = require("./parsedObject.js");
+const boom = require("./parsers/boom.js");
+const outf = require("./parsers/outf.js");
+const rled = require("./parsers/rled.js");
+const shan = require("./parsers/shan.js");
+//const ship = require("./parsers/ship.js");
+const shipParserMaker = require("./shipPictProxy.js");
+const spin = require("./parsers/spin.js");
+const weap = require("./parsers/weap.js");
+const pict = require("./parsers/pict.js");
+const desc = require("./parsers/desc.js");
+const idSpace = require("./idSpace.js");
+const fs = require("fs");
+const path = require('path');
+const rf = require("resourceforkjs").resourceFork;
+const parsedObject = require("./parsedObject.js");
 
 class novaParse {
     constructor(path) {
 	this.path = path;
 	this.ids = new idSpace();
+
+	// Ships with the same baseImage are given the same pict id
+	// if they don't have their own. I don't know why they didn't
+	// just add another field to ship.
+	this._shipBaseImagePictMap = {};
+	this.shipParser = shipParserMaker(this);
     }
 
     readdir(path) {
@@ -65,6 +72,8 @@ class novaParse {
 	this.novaPlugins = await this.readdir(path.join(this.path, "Plug-ins"));
 	await this.readNovaFiles(this.novaFiles);
 	await this.readPlugins(this.novaPlugins);
+
+	this.makeShipBaseImagePictMap();
 	return;
     }
 
@@ -91,7 +100,6 @@ class novaParse {
 	// these may overwrite the same data in nova files
 	// so they must be read in order
 	for (var pluginIndex in novaPlugins) {
-	    //return Promise.all(novaPlugins.map(async function(idPrefix) {
 	    var idPrefix = novaPlugins[pluginIndex];
 	    var pathTo = path.join(this.path, "Plug-ins", idPrefix);
 	    var idSpace = this.ids.getSpace(idPrefix);
@@ -132,6 +140,42 @@ class novaParse {
 	
     }
     
+    makeShipBaseImagePictMap() {
+	
+	var map = this._shipBaseImagePictMap;
+	for (let shipID in this.ids.resources.shïp) {
+	    var currentShip = this.ids.resources.shïp[shipID];
+	    
+	    var p = currentShip.idSpace.PICT[currentShip.id - 128 + 5000];
+
+	    if (typeof p !== "undefined") {
+		var shan, baseImageLocalID, baseImageGlobalID;
+
+		try {
+		    shan = currentShip.idSpace.shän[currentShip.id];
+		}
+		catch (e) {
+		    e.message = "No shan found for ship id " + currentShip.globalID + " : " + e.message;
+		    throw e;
+		}
+		try {
+		    baseImageLocalID = shan.baseImage.ID;
+		}
+		catch (e) {
+		    e.message = "No baseImage found for shan id " + shan.globalID + " : " + e.message;
+		    throw e;
+		}
+		try {
+		    baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID].globalID;
+		}
+		catch (e) {
+		    e.message = "No rled found for baseImage localID " + baseImageLocalID + " : " + e.message;
+		}
+		
+		map[baseImageGlobalID] = currentShip.id - 128 + 5000;
+	    }
+	}
+    }
     
     parse(resources) {
 	var parsed = {};
@@ -153,7 +197,7 @@ class novaParse {
 		parseFunction = shan;
 		break;
 	    case "shïp":
-		parseFunction = ship;
+		parseFunction = this.shipParser;
 		break;
 	    case "spïn":
 		parseFunction = spin;
@@ -181,14 +225,6 @@ class novaParse {
 	}.bind(this));
 	return parsed;
     }
-
-
-
-
-
-
-
-    
 }
 
 

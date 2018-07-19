@@ -23,6 +23,7 @@ const getProxy = {
 	else {
 	    if (! target._cached) {
 		target._cached = target._get();
+		target._cached.idSpace = Reflect.get(target, "idSpace", receiver);
 	    }
 	    return Reflect.get(target._cached, prop, receiver);
 	}
