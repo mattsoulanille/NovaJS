@@ -411,26 +411,14 @@ var startGame = async function() {
 
 };
 local.context.startGame = startGame;
-startGame();//.then(function() {}, function(err) {console.log(err)});
-    
+startGame();
 
 
 
 
 
 
-var receives = 0;
-transmits = 0;
-local.context.transmits = transmits;
-// debugging socket.io io
-/*
-setInterval(function() {
-    console.log("Transmits: ",transmits);
-    transmits = 0;
-    console.log("Receives: ", receives);
-    receives = 0;
-}, 1000);
-*/
+
 
 var paused = false;
 var playercount = 0;
@@ -441,7 +429,6 @@ var connectFunction = function(client){
 
     multiplayer.prototype.bindSocket(client);
     
-    receives ++;
     var userid = UUID();
     var owned_uuids = [userid];
     var currentSystem = sol;
@@ -475,7 +462,6 @@ var connectFunction = function(client){
 	    "stats": _.omit(currentSystem.getStats(), userid),
 	    "paused": paused
 	});
-	transmits ++;
     };
     
     var myShip;
@@ -538,26 +524,20 @@ var connectFunction = function(client){
     players[userid] = {"ship":myShip,"io":client};
     playercount = _.keys(players).length;
     console.log('a user connected. ' + playercount + " playing.");
-    client.on('updateProjectiles', function(stats) {
-	receives ++;
-    });
 
     
     client.on("test", function(data) {
-	receives ++;
 	console.log("test:");
 	console.log(data);
     });
     
 
     client.on('pingTime', function(msg) {
-	receives ++;
     	var response = {};
     	if (msg.hasOwnProperty('time')) {
     	    response.clientTime = msg.time;
     	    response.serverTime = new Date().getTime();
     	    client.emit('pongTime', response);
-	    transmits ++;
 //	    console.log(msg);
 	    
 
@@ -580,9 +560,7 @@ var connectFunction = function(client){
     });
     client.on('disconnect', function() {
 
-	receives ++;
 	client.broadcast.emit('removeObjects', owned_uuids);
-	transmits += playercount - 1;
 
 	currentSystem.destroyObjects(owned_uuids);
 	console.log("disconnected");
@@ -591,18 +569,14 @@ var connectFunction = function(client){
 	console.log('a user disconnected. ' + _.keys(players).length + " playing.");
     });
     client.on('pause', function() {
-	receives ++;
 	paused = true;
 	clearTimeout(gameTimeout);
 	//	client.broadcast.emit('pause');
 	io.emit('pause', {for:'everyone'});
-	transmits += playercount;
     });
     client.on('resume', function() {
-	receives ++;
 	paused = false;
 	io.emit('resume', {for:'everyone'});
-	transmits += playercount;
 	sol.resume();
 //	gameTimeout = setTimeout(function() {gameloop(system)}, 0);
     });
