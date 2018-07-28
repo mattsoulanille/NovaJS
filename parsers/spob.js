@@ -18,7 +18,8 @@ var spob = class extends base {
 	    d.getInt16(18)
 	];
 	this.government = d.getInt16(20);
-	
+	this.landingPictID = d.getUint16(24);
+	this.landingDescID = this.id;
     }
 };
 

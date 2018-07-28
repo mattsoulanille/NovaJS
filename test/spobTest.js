@@ -40,5 +40,16 @@ describe("outf", function() {
 	expect(p1.techLevel).to.equal(72);
 	expect(p2.techLevel).to.equal(15000);
     });
+
+    it("should parse landingPictID", function() {
+	expect(p1.landingPictID).to.equal(10003);
+	expect(p2.landingPictID).to.equal(10042);
+
+    });
+
+    it("should set landingDescID", function() {
+	expect(p1.landingDescID).to.equal(128);
+	expect(p2.landingDescID).to.equal(129);
+    });
     
 });
