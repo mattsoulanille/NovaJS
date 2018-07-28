@@ -105,6 +105,26 @@ describe("outf", function() {
 	expect(anotherFour.pictID).to.equal(6011);
     });
 
+    it("should parse mass", function() {
+	expect(w1.mass).to.equal(12);
+	expect(armor.mass).to.equal(5);
+	expect(shields.mass).to.equal(1221);
+    });
 
+    it("should parse cost", function() {
+	expect(w1.cost).to.equal(1312);
+	expect(blank.cost).to.equal(0);
+	expect(armor.cost).to.equal(9404);
+	expect(shields.cost).to.equal(12345);
+	expect(armorRecharge.cost).to.equal(1234567);
+	expect(shieldRecharge.cost).to.equal(-534);
 
+    });
+
+    it("should parse displayWeight", function() {
+	expect(w1.displayWeight).to.equal(14);
+	expect(blank.displayWeight).to.equal(0);
+	expect(armor.displayWeight).to.equal(423);
+
+    });
 });

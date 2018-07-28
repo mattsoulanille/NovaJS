@@ -15,9 +15,11 @@ var outf = class extends base {
 	this.pictID = this.id - 128 + 6000;
 	this.descID = this.id - 128 + 3000;
 
+	this.cost = d.getInt32(14);
+	
+
 
 	this.functions = [];
-
 	var modPositions = [6, 18, 22, 26];
 	
 	for (var i in modPositions) {
