@@ -6,7 +6,7 @@ var pictParse = require("./parsers/pict.js");
 var descParse = require("./parsers/desc.js");
 
 var outfParse = require("./parsers/outf.js");
-
+var spobParse = require("./parsers/spob.js");
 
 /*
 var ndat4 = new rf("./test/Nova\ Data\ 4.ndat", false);
@@ -19,6 +19,7 @@ var rez = new rf("./test/Nova\ Data\ 1.rez", false);
 //var pict = new rf("./test/files/pict.ndat", false);
 var desc = new rf("./test/files/desc.ndat", false);
 var outf = new rf("./test/files/outf.ndat", false);
+var spob = new rf("./test/files/spob.ndat", false);
 /*
 ndat4.read();
 weap.read();
@@ -64,4 +65,11 @@ outf.read().then(function() {
     local.context.o4 = new outfParse(outf.resources.oütf[131]);
     local.context.o5 = new outfParse(outf.resources.oütf[132]);
 });
+spob.read().then(function() {
+    local.context.spob = spob;
+    local.context.s1 = new spobParse(spob.resources.spöb[128]);
+    local.context.s2 = new spobParse(spob.resources.spöb[129]);
+});
+
+
 //local.context.spin = spin;

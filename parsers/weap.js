@@ -63,7 +63,7 @@ var weap = class extends base {
 	    }else{
 		return n;
 	    }
-	}
+	};
 
 	this.speed = d.getInt16(10);
 
