@@ -11,6 +11,7 @@ const spin = require("./parsers/spin.js");
 const weap = require("./parsers/weap.js");
 const pict = require("./parsers/pict.js");
 const desc = require("./parsers/desc.js");
+const spob = require("./parsers/spob.js");
 const idSpace = require("./idSpace.js");
 const fs = require("fs");
 const path = require('path');
@@ -211,7 +212,10 @@ class novaParse {
 	    case "dësc":
 		parseFunction = desc;
 		break;
-	    }
+	    case "spöb":
+		parseFunction = spob;
+		break;
+	    }	    
 	    parsed[type] = resArray.map(function(item) {
 		// function necessary so no reference to parsedObject so no cacheing
 		return function() {	
