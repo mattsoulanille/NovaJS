@@ -8,6 +8,9 @@ var spob = class extends base {
 	var d = resource.data;
 	this.position = [d.getInt16(0), d.getInt16(2)];
 	this.graphic = d.getInt16(4) + 2000;
+	if (this.graphic > 2058) {
+	    this.graphic -= 1;
+	}
 	this.flags = d.getUint32(6);
 
 	this.tribute = d.getInt16(10);

@@ -27,7 +27,7 @@ describe("outf", function() {
 
     it("should parse graphic", function() {
 	expect(p1.graphic).to.equal(2042);
-	expect(p2.graphic).to.equal(2022);
+	expect(p2.graphic).to.equal(2060);
     });
     
     it("should parse government", function() {
