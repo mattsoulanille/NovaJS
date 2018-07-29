@@ -26,8 +26,8 @@ describe("outf", function() {
     });
 
     it("should parse graphic", function() {
-	expect(p1.graphic).to.equal(42);
-	expect(p2.graphic).to.equal(22);
+	expect(p1.graphic).to.equal(2042);
+	expect(p2.graphic).to.equal(2022);
     });
     
     it("should parse government", function() {
