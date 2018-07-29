@@ -11,6 +11,7 @@ class itemTile extends eventable(loadsResources(function() {})) {
 
 	this.name = this.item.name;
 	this.desc = this.item.desc;
+	
 	this.font = {
 	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
 		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
@@ -63,29 +64,6 @@ class itemTile extends eventable(loadsResources(function() {})) {
 	//this.build(); // Too laggy
 	
     }
-    /*
-    async build() {
-	if (this.built | this.building) {
-	    return;
-	}
-	this.building = true;
-	if (this.item.pictID) {
-	    var pict = await this.novaData["picts"].get(this.item.pictID);
-	    this.smallPict = new PIXI.Sprite.from(pict);
-	    this.largePict = new PIXI.Sprite.from(pict); // for outfitter.js, shipyard.js
-	    this.smallPict.anchor.x = 0.5;
-	    this.smallPict.position.x = this.middle[0];
-	    this.smallPict.position.y = 1;
-
-	    var scale = 0.3;
-	    this.smallPict.scale.x = scale;
-	    this.smallPict.scale.y = scale;
-
-	    this.container.addChildAt(this.smallPict, 1);
-	}
-	this.built = true;
-    }
-    */
     build() {
 	if (this.built) {
 	    return;
@@ -155,7 +133,12 @@ class itemGrid extends eventable(function() {}) {
 	this.boxDimensions = [83, 54];
 
 	// Make this be ships or outfits or something in the future.
-	this.items = items;
+	this.items = items.slice(); // won't need to slice once the planet gives an array of only the outfits / ships it actually has
+	this.items.sort(function(a,b) {
+	    return a.displayWeight - b.displayWeight;
+	    //return Math.random() - 0.5;
+	});
+
 	this.selectionIndex = -1;
 
 	this.scroll = 0;
@@ -166,7 +149,7 @@ class itemGrid extends eventable(function() {}) {
     get selection() {
 	return this.items[this.selectionIndex];
     }
-
+    
     set selection(item) {
 	this.selectionIndex = this.items.indexOf(item);
 	this.drawGrid();
@@ -181,7 +164,6 @@ class itemGrid extends eventable(function() {}) {
 	    this.tilesDict[item.id] = tile;
 	    return tile;
 	}.bind(this));
-
     }
 
     _onTileClicked(tile) {

@@ -35,7 +35,7 @@ var planet = class extends spaceObject {
 
     
     buildSpaceport() {
-	this.spaceport = new spaceport({}, this.depart.bind(this));
+	this.spaceport = new spaceport(this.buildInfo, this.depart.bind(this));
 	global.spaceportContainer.addChild(this.spaceport.container);
     }
 

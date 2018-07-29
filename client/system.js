@@ -157,6 +157,9 @@ system.prototype.buildObject = function(buildInfo) {
 	    break;
 	case "npc":
 	    newObj = new npc(buildInfo, this);
+	    break;
+	default:
+	    throw new Error("Asked to build object of type " + type);
 	}
     }
     

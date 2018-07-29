@@ -2,6 +2,7 @@ var menu = require("./menu.js");
 var button = require("./button.js");
 var outfitter = require("./outfitter.js");
 var shipyard = require("./shipyard.js");
+var PIXI = require("../server/pixistub.js");
 
 class spaceport extends menu {
     constructor(buildInfo, departCallback) { // buildInfo will contain the url or something...
@@ -12,6 +13,7 @@ class spaceport extends menu {
 	this.container.position.y = global.screenH/2;
 
 	this.scope = "spaceport";
+	this.text = {};
 
 	this.buttons = {
 	    Outfitter: new button("Outfitter", 120, {x: 160, y:116}),
@@ -23,8 +25,33 @@ class spaceport extends menu {
 	    this.container.addChild(b.container);
 	}.bind(this));
 
+	// make the spaceport pict
+	var url = "/objects/picts/" + this.buildInfo.landingPictID + ".png";
+	this.spaceportPict = new PIXI.Sprite.fromImage(url);
+	this.spaceportPict.position.x = -306;
+	this.spaceportPict.position.y = -256;
+	this.container.addChild(this.spaceportPict);
 
 
+	// Make the planet title
+	this.font = {
+	    title: {fontFamily:"Geneva", fontSize:18, fill:0xffffff,
+		    align:'center'},
+	    desc:  {fontFamily:"Geneva", fontSize:9, fill:0xffffff,
+		      align:'left', wordWrap:true, wordWrapWidth:301}
+
+	};
+	this.text.title = new PIXI.Text(this.buildInfo.name, this.font.title);
+	this.text.title.position.x = -24;
+	this.text.title.position.y = 39;
+	this.container.addChild(this.text.title);
+
+	this.text.desc = new PIXI.Text(this.buildInfo.landingDesc, this.font.desc);
+	this.text.desc.position.x = -149;
+	this.text.desc.position.y = 70;
+	this.container.addChild(this.text.desc);
+				       
+	
 	// make the other menus
 	this.outfitter = new outfitter();
 	this.container.addChild(this.outfitter.container);

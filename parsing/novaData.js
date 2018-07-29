@@ -5,6 +5,7 @@ var shipParse = require("./shipParse.js");
 var weapParse = require("./weapParse.js");
 var outfParse = require("./outfParse.js");
 var pictParse = require("./pictParse.js");
+var planetParse = require("./planetParse.js");
 
 var gettable = class {
     constructor(getFunction) {
@@ -31,6 +32,7 @@ var novaData = class {
 	this.outfits = new gettable(this.getFunction("oütf", outfParse));
 	this.weapons = new gettable(this.getFunction("wëap", weapParse));
 	this.picts = new gettable(this.getFunction("PICT", pictParse));
+	this.planets = new gettable(this.getFunction("spöb", planetParse));
     }
 
     getFunction(resourceType, toBuild) {

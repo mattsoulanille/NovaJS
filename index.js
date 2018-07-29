@@ -280,9 +280,10 @@ var startGame = async function() {
 	res.send(JSON.stringify(allOutfits));
     });
 
-    app.get('objects/planets/:planet.json', function(req, res) {
-	req.sendFile(res['planet.json']); //temporary
-    });
+
+    // app.get('objects/planets/:planet.json', function(req, res) {
+    // 	req.sendFile(res['planet.json']); //temporary
+    // });
 
 
     app.get('/objects/picts/:image.png', async function(req, res) {
@@ -386,19 +387,38 @@ var startGame = async function() {
 	    }
 	}
     });
-
-
-/*
-    app.get('objects/ships/:shipID', function(req, res) {
-	// returns ship blueprint from which a ship can be made
-	// Not a ship object.
-	if 
+    app.get('/objects/planets/:planet.json', async function(req, res) {
+	var id = req.params.planet;
+	try {
+	    res.send(await nd.planets.get(id));
+	}
+	catch (e) {
+	    res.status(404).send("not found");
+	    if (e.message !== "not found in novaParse under oütf") {
+		throw e;
+	    }
+	}
     });
-*/
+
+
 
     // Note: figure out why you need to include 'type': 'planet'
-    var earth = new planet({'id':'earth', 'UUID':UUID(), 'type': 'planet'}, sol, io);
-    var mars = new planet({'id':'mars', 'UUID':UUID(), 'type':'planet', 'position':[900,600]}, sol, io);
+    //var earth = new planet({'id':'earth', 'UUID':UUID(), 'type': 'planet'}, sol, io);
+    //var mars = new planet({'id':'mars', 'UUID':UUID(), 'type':'planet', 'position':[900,600]}, sol, io);
+    var earthData = await nd.planets.get("nova:128");
+    var marsData = await nd.planets.get("nova:158");
+    var jupiterData = await nd.planets.get("nova:159");
+    var europaData = await nd.planets.get("nova:160");
+
+    earthData.UUID = UUID();
+    marsData.UUID = UUID();
+    jupiterData.UUID = UUID();
+    europaData.UUID = UUID();
+    var earth = new planet(earthData, sol, io);
+    var mars = new planet(marsData, sol, io);
+    var jupiter = new planet(jupiterData, sol, io);
+    var europa = new planet(europaData, sol, io);
+    
     await sol.build();
     console.log("finished loading");
 

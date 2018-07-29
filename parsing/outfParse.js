@@ -59,7 +59,15 @@ var outfParse = class extends baseParse {
 	    this.desc = "Parsing desc failed: " + e.message;
 	}
 
-	
+	this.mass = outf.mass;
+	this.price = outf.cost;
+	if (this.displayWeight > 0) {
+	    this.displayWeight = outf.displayWeight;
+	}
+	else {
+	    this.displayWeight = outf.id;
+	}
+	this.max = outf.max;
     }
 };
 

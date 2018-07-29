@@ -6,7 +6,6 @@ var shipParse = class extends baseParse {
 	super(...arguments);
 	
 	this.shanID = this.id;
-	this.prefix = ship.prefix;
 
 	try {
 	    this.pictID = ship.idSpace.PICT[ship.pictID].globalID;
@@ -102,7 +101,8 @@ var shipParse = class extends baseParse {
 	if (ship.deathDelay >= 60) {
 	    this.largeExplosion = true;
 	}
-	
+
+	this.displayWeight = ship.id; // FIX ME ONCE DISPLAYWEIGHT IS PARSED
 	
     }
 };

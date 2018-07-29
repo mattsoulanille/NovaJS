@@ -1,3 +1,4 @@
+var stringFormat = require("./stringFormat.js");
 var menu = require("./menu.js");
 var button = require("./button.js");
 var itemGrid = require("./itemGrid.js");
@@ -32,7 +33,6 @@ class outfitter extends menu {
 	this.itemGrid.container.position.y = -153;
 	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = false;
-	this.itemGrid.on("tileSelected", this.setOutfitPicture.bind(this));
 	
 	this.pictContainer = new PIXI.Container();
 	this.pictContainer.position.x = 174;
@@ -56,11 +56,53 @@ class outfitter extends menu {
 
 	};
 
-	this.descriptionText = new PIXI.Text("", this.font.normal);
-	this.descriptionText.position.x = -27;
-	this.descriptionText.position.y = -150;
-	this.container.addChild(this.descriptionText);
-	this.itemGrid.on("tileSelected", this.setDescription.bind(this));
+	this.text = {};
+	this.text.description = new PIXI.Text("", this.font.normal);
+	this.text.description.position.x = -27;
+	this.text.description.position.y = -150;
+
+
+
+	this.text.itemPrice = new PIXI.Text("Item Price:", this.font.normal);
+	this.text.itemPrice.position.x = 234;
+	this.text.itemPrice.position.y = 58;
+	this.text.price = new PIXI.Text("5,000 cr", this.font.normal);
+	this.text.price.position.x = 300;
+	this.text.price.position.y = 58;
+	
+	this.text.youHave = new PIXI.Text("You Have:", this.font.normal);
+	this.text.youHave.position.x = 234;
+	this.text.youHave.position.y = 70;
+	this.text.count = new PIXI.Text("4", this.font.normal);
+	this.text.count.position.x = 300;
+	this.text.count.position.y = 70;
+	
+	this.text.itemMass = new PIXI.Text("Item Mass:", this.font.normal);
+	this.text.itemMass.position.x = 234;
+	this.text.itemMass.position.y = 94;
+	this.text.mass = new PIXI.Text("3", this.font.normal);
+	this.text.mass.position.x = 300;
+	this.text.mass.position.y = 94;
+
+	this.text.availableMass = new PIXI.Text("Available:", this.font.normal);
+	this.text.availableMass.position.x = 234;
+	this.text.availableMass.position.y = 106;
+	this.text.freeMass = new PIXI.Text("130", this.font.normal);
+	this.text.freeMass.position.x = 300;
+	this.text.freeMass.position.y = 106;
+
+
+	this.itemGrid.on("tileSelected", this.setOutfitSelected.bind(this));
+
+	
+	
+	//Object.values(this.text).forEach(this.container.addChild);
+	Object.values(this.text).forEach(function(t) {
+	    this.container.addChild(t);
+	}.bind(this));
+	
+
+
 
 
     }
@@ -79,18 +121,36 @@ class outfitter extends menu {
 	this._modifiedOutfits = true;
     }
 
-    setOutfitPicture(outfitTile) {
+    setOutfitSelected(outfitTile) {
+	// Set Picture
 	this.pictContainer.children = []; // is this legal?
 	if (outfitTile.largePict) {
 
 	    this.pictContainer.addChild(outfitTile.largePict);
 	}
+
+	// Set Description
+	this.text.description.text = outfitTile.desc;
+
+	// Set price text
+	this.text.price.text = stringFormat.formatPrice(outfitTile.item.price);
+
+	if (outfitTile.item.mass > 0) {
+	    // Set mass text
+	    this.text.mass.text = outfitTile.item.mass + " tons";
+	    this.text.mass.visible = true;
+	    this.text.itemMass.visible = true;
+	    this.text.availableMass.visible = true;
+	    this.text.freeMass.visible = true;
+	}
+	else {
+	    this.text.mass.visible = false;
+	    this.text.itemMass.visible = false;
+	    this.text.availableMass.visible = false;
+	    this.text.freeMass.visible = false;
+	}	
     }
 
-    setDescription(outfitTile) {
-	this.descriptionText.text = outfitTile.desc;
-    }
-    
     show() {
 	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	super.show();
