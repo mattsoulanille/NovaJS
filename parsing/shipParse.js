@@ -6,6 +6,7 @@ var shipParse = class extends baseParse {
 	super(...arguments);
 	
 	this.shanID = this.id;
+	this.initialFreeMass = ship.freeSpace;
 
 	try {
 	    this.pictID = ship.idSpace.PICT[ship.pictID].globalID;

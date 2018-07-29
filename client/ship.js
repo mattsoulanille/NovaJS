@@ -64,11 +64,13 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
     async _build() {
 	await super._build();
 	this.buildTargetImage();
-
+	
 	this.buildExitPoints();
 	await this.buildOutfits();
+	this.setFreeMass();
+	this.checkMass(this.outfits);
 	await this.buildExplosion();
-
+	
 	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
@@ -76,7 +78,32 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	this._bindListeners();
     }
 
+    setFreeMass() {
+	// Calculate free mass from default outfits and extra free mass
+	var outfitMass = this.outfits.map(function(outf) {
+	    if (outf.meta.mass) {
+		return outf.meta.mass * outf.count;
+	    }
+	    else {
+		return 0;
+	    }
+	}).reduce(function(a, b) {return a + b;}, 0);
+	this.meta.freeMass = this.meta.initialFreeMass + outfitMass;
+    }
 
+    checkMass(outfits) {
+	var outfitMass = this.outfits.map(function(outf) {
+	    if (outf.meta.mass) {
+		return outf.meta.mass * outf.count;
+	    }
+	    else {
+		return 0;
+	    }
+	}).reduce(function(a, b) {return a + b;}, 0);
+
+	this.properties.freeMass = this.meta.freeMass - outfitMass;
+    }
+    
     buildExitPoints() {
 	for (var name in this.meta.animation.exitPoints) {
 	    if (name === 'upCompress' || name === 'downCompress') {
@@ -199,6 +226,8 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	if (this.properties.turnRate < 0) {
 	    this.properties.turnRate = 0;
 	}
+
+	this.checkMass(this.outfits);
     }
 
 

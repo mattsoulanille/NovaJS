@@ -87,7 +87,8 @@ class outfitter extends menu {
 	this.text.availableMass = new PIXI.Text("Available:", this.font.normal);
 	this.text.availableMass.position.x = 234;
 	this.text.availableMass.position.y = 106;
-	this.text.freeMass = new PIXI.Text("130", this.font.normal);
+	this.text.freeMass = new PIXI.Text("", this.font.normal);
+	this.setFreeMassText();
 	this.text.freeMass.position.x = 300;
 	this.text.freeMass.position.y = 106;
 
@@ -100,23 +101,26 @@ class outfitter extends menu {
 	Object.values(this.text).forEach(function(t) {
 	    this.container.addChild(t);
 	}.bind(this));
-	
-
-
-
-
     }
 
     buyOutfit() {
-	var outfit = {id: this.itemGrid.selection.id, count:1};
-	global.myShip.addOutfit(outfit, false);
-	this.itemGrid.setCounts(global.myShip.properties.outfits);
-	this._modifiedOutfits = true;
+	var mass = this.itemGrid.selection.mass;
+	if (mass <= global.myShip.properties.freeMass) {
+	    var outfit = {id: this.itemGrid.selection.id, count:1};
+	    global.myShip.addOutfit(outfit, false);
+	    global.myShip.properties.freeMass -= mass;
+	    this.setFreeMassText();
+	    this.itemGrid.setCounts(global.myShip.properties.outfits);
+	    this._modifiedOutfits = true;
+	}
     }
 
     sellOutfit() {
 	var outfit = {id: this.itemGrid.selection.id, count:1};
-	global.myShip.removeOutfit(outfit, false);
+	if (global.myShip.removeOutfit(outfit, false)) {
+	    global.myShip.properties.freeMass += this.itemGrid.selection.mass;	    
+	}
+	this.setFreeMassText();
 	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = true;
     }
@@ -134,10 +138,11 @@ class outfitter extends menu {
 
 	// Set price text
 	this.text.price.text = stringFormat.formatPrice(outfitTile.item.price);
-
+	
 	if (outfitTile.item.mass > 0) {
 	    // Set mass text
 	    this.text.mass.text = outfitTile.item.mass + " tons";
+	    this.setFreeMassText();
 	    this.text.mass.visible = true;
 	    this.text.itemMass.visible = true;
 	    this.text.availableMass.visible = true;
@@ -151,8 +156,13 @@ class outfitter extends menu {
 	}	
     }
 
+    setFreeMassText() {
+	this.text.freeMass.text = stringFormat.formatMass(global.myShip.properties.freeMass);
+    }
+
     show() {
 	this.itemGrid.setCounts(global.myShip.properties.outfits);
+	this.setFreeMassText();
 	super.show();
     }
     

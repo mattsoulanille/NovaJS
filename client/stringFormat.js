@@ -13,3 +13,7 @@ module.exports.formatPrice = function(p) {
 	return addCommas(p) + " cr";
     }
 };
+
+module.exports.formatMass = function(p) {
+    return p.toLocaleString() + " tons";
+};
