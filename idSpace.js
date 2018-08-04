@@ -78,6 +78,7 @@ var idSpace = class {
 		    var resource = resourceGetFunction();
 		    resource.globalID = globalID;
 		    resource.idSpace = idSpace;
+		    resource.globalSpace = this.resources;
 		    resource.prefix = prefix;
 		    resource.id = id;
 		    return resource;

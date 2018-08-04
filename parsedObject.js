@@ -16,6 +16,7 @@ const getProxy = {
     get: function(target, prop, receiver) {
 	if (prop === "globalID" ||
 	    prop === "idSpace" ||
+	    prop === "globalSpace" ||
 	    prop === "prefix" ||
 	    prop === "id") {
 	    return Reflect.get(...arguments);
