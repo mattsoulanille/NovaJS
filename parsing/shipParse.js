@@ -6,7 +6,6 @@ var shipParse = class extends baseParse {
 	super(...arguments);
 	
 	this.shanID = this.id;
-	this.initialFreeMass = ship.freeSpace;
 
 	try {
 	    this.pictID = ship.idSpace.PICT[ship.pictID].globalID;
@@ -39,7 +38,6 @@ var shipParse = class extends baseParse {
 
 	this.mass = ship.mass;
 	
-
 	var outfits = {};
 
 	// Put the outfit corresponding to each weapon into the outfit object
@@ -76,10 +74,21 @@ var shipParse = class extends baseParse {
 
 	}.bind(this));		
 
-
+	// Why is this done?
 	this.outfits = Object.keys(outfits).map(function(id) {
 	    return {"id" : id, "count" : outfits[id]};
 	});
+
+	// Calculate the free mass of the ship from the
+	// initial free mass and the stock outfits.
+	this.freeMass = ship.freeSpace;
+	for (let index in this.outfits) {
+	    var outfitID = this.outfits[index].id;
+	    var outfit = ship.globalSpace.oütf[outfitID];
+	    var count = this.outfits[index].count;
+	    this.freeMass += outfit.mass * count;
+	}
+
 	
 
 	if (ship.initialExplosion >= 128) {

@@ -67,7 +67,6 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	
 	this.buildExitPoints();
 	await this.buildOutfits();
-	this.setFreeMass();
 	this.checkMass(this.outfits);
 	await this.buildExplosion();
 	
@@ -76,19 +75,6 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	    this.system.built.ships.add(this);
 	}
 	this._bindListeners();
-    }
-
-    setFreeMass() {
-	// Calculate free mass from default outfits and extra free mass
-	var outfitMass = this.outfits.map(function(outf) {
-	    if (outf.meta.mass) {
-		return outf.meta.mass * outf.count;
-	    }
-	    else {
-		return 0;
-	    }
-	}).reduce(function(a, b) {return a + b;}, 0);
-	this.meta.freeMass = this.meta.initialFreeMass + outfitMass;
     }
 
     checkMass(outfits) {
