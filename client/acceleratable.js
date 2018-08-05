@@ -80,7 +80,7 @@ var acceleratable = (superclass) => class extends superclass {
 	throw new Error("Can't set maxSpeed. Set properties.maxSpeed instead.");
     }
     
-    receiveCollision(other) {
+    _receiveCollision(other) {
 
 	if (other.impact > 0) {
 	    var deltaV;
@@ -111,7 +111,7 @@ var acceleratable = (superclass) => class extends superclass {
 	    this.velocity[1] = newVelocity[1];    
 	    
 	}
-	super.receiveCollision.call(this, other);
+	super._receiveCollision(other);
     }
 
     render(delta) {

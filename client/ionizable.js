@@ -39,7 +39,7 @@ var ionizable = (superclass) => class extends superclass {
 
     
 
-    receiveCollision(other) {
+    _receiveCollision(other) {
 	if (other.ionizationDamage) {
 	    this.ionization = Math.min(this.ionization + other.ionizationDamage,
 				       this.properties.ionization);
@@ -47,7 +47,7 @@ var ionizable = (superclass) => class extends superclass {
 		this.setColor(other.ionizationColor);
 	    }
 	}
-	super.receiveCollision(other);
+	super._receiveCollision(other);
     }
 
 

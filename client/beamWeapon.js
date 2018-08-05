@@ -204,7 +204,7 @@ Else, return false
 	throw new AlliesError("Tried to set allies of a beam weapon but they are defined implicitly by source");
     }
 
-    collideWith(other, res) {
+    _collideWith(other, res) {
 	//console.log(res);
 	var delta = (other.delta) * 60 / 1000;
 
@@ -230,7 +230,7 @@ Else, return false
 	}
     }
 
-    receiveCollision(collision) { // maybe do beam clipping here?
+    _receiveCollision(collision) { // maybe do beam clipping here?
     }
 
     _removeFromSystem() {

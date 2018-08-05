@@ -40,7 +40,7 @@ damageable = (superclass) => class extends superclass {
 	this.armor = this.properties.armor;
     }
 
-    receiveCollision(other) {
+    _receiveCollision(other) {
 	if (other.passThroughShields) {
 	    this.armor -= other.armorDamage;
 	}
@@ -61,7 +61,7 @@ damageable = (superclass) => class extends superclass {
 	    //this.onDeath(); // make this an event
 	    this.setState("zeroArmor", true);
 	}
-	super.receiveCollision.call(this, other);
+	super._receiveCollision(other);
     }
 
     updateStats(stats) {

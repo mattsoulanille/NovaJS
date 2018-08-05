@@ -175,8 +175,8 @@ class npcServer extends npc {
     }
     */
 
-    receiveCollision(other) {
-	super.receiveCollision.call(this, other);
+    _receiveCollision(other) {
+	super._receiveCollision(other);
 	this.sendCollision();
     }
 

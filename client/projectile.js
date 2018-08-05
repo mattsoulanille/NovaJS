@@ -200,7 +200,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	this.system.vulnerableToPD.delete(this);
     }
     
-    collideWith(other) {
+    _collideWith(other) {
 
 	// this should probably be a separate mixin or class. lots of things do damage.
 	if (other.properties.vulnerableTo &&
@@ -312,7 +312,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	}
     }
     
-    receiveCollision(other) {
+    _receiveCollision(other) {
 	// Projectiles take damage as 1*armor and 0.5*shield
 	this.armor = this.armor - other.armorDamage - other.shieldDamage / 2;
 	if (this.armor <= 0) {

@@ -20,8 +20,29 @@ var collidable = (superclass) => class extends superclass {
 	//this.debug = true; // delete me
     }
 
-    collideWith(other) {}; 
-    receiveCollision(other) {};
+    // Don't try to collide if you've been destroyed
+    _collideWith(other) {
+	if (super._collideWith) {
+	    super._collideWith(other);
+	}
+    };
+    collideWith(other) {
+	if (! (this.destroyed || this._destroying)) {
+	    this._collideWith(other);
+	}
+    };
+
+    // Don't accept collisions if you've been destroyed
+    _receiveCollision(other) {
+	if (super._receiveCollision) {
+	    super._receiveCollision(other);
+	}
+    };
+    receiveCollision(other) {
+	if (! (this.destroyed || this._destroying)) {
+	    this._receiveCollision(other);
+	}
+    };
 
     setVisible(v) {
 	super.setVisible(v);
