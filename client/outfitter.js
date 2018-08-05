@@ -31,7 +31,6 @@ class outfitter extends menu {
 	this.itemGrid.drawGrid();
 	this.itemGrid.container.position.x = -373;
 	this.itemGrid.container.position.y = -153;
-	this.itemGrid.setCounts(global.myShip.properties.outfits);
 	this._modifiedOutfits = false;
 	
 	this.pictContainer = new PIXI.Container();
@@ -88,7 +87,6 @@ class outfitter extends menu {
 	this.text.availableMass.position.x = 234;
 	this.text.availableMass.position.y = 106;
 	this.text.freeMass = new PIXI.Text("", this.font.normal);
-	this.setFreeMassText();
 	this.text.freeMass.position.x = 300;
 	this.text.freeMass.position.y = 106;
 
