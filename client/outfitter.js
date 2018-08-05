@@ -72,7 +72,7 @@ class outfitter extends menu {
 	this.text.youHave = new PIXI.Text("You Have:", this.font.normal);
 	this.text.youHave.position.x = 234;
 	this.text.youHave.position.y = 70;
-	this.text.count = new PIXI.Text("4", this.font.normal);
+	this.text.count = new PIXI.Text("∞ cr", this.font.normal);
 	this.text.count.position.x = 300;
 	this.text.count.position.y = 70;
 	
