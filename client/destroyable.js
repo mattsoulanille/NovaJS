@@ -27,6 +27,16 @@ var destroyable = (superclass) => class extends superclass {
 		console.warn("Didn't call _destroy of destroyable");
 	    }
 	}
+
+	// Overwrite all functions of the object
+	Object.keys(this).forEach(function(k) {
+	    if (typeof this[k] == "function") {
+		this[k] = function() {
+		    console.warn("Tried to call function of destroyed object!");
+		    return false;
+		};
+	    }
+	}.bind(this));
 	this.destroyed = true;
 	this._destroying = false;
 	return true;
