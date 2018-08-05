@@ -1,8 +1,9 @@
 // A single menu window
 var controllable = require("./controllable.js");
 var visible = require("./visible.js");
+var destroyable = require("./destroyable.js");
 
-class menu extends controllable(visible(function() {})) {
+class menu extends controllable(visible(destroyable(function() {}))) {
 
     constructor(buildInfo) {
 	super(...arguments);
@@ -22,8 +23,6 @@ class menu extends controllable(visible(function() {})) {
 	this.buttons = new Set();
 
     }
-
-
     
     show() {
 	super.show();
@@ -36,14 +35,13 @@ class menu extends controllable(visible(function() {})) {
 
     }
     
-
     render() {
 	
     }
 
-    destroy() {
+    _destroy() {
 	this.hide();
-	super.destroy();
+	super._destroy();
     }
 
 }

@@ -334,19 +334,18 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	    this.end();
 	}
     }
-    destroy() {
+    _destroy() {
 	// make a parent child thing for this
 	//clearTimeout(this.endTimeout);
 	if (this.trailParticles) {
 	    this.trailParticles.destroy();
 	}
-
 	
 	if (this.hitParticles) {
 	    this.hitParticles.destroy();
 	}
 	this.subs.forEach(function(sub) {sub.destroy();});
-	super.destroy();
+	super._destroy();
     }
 };
 

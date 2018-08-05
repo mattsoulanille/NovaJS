@@ -159,21 +159,18 @@ var projectileWeapon = class extends basicWeapon {
 	}
     }
     
-    destroy() {
-	if (this.destroyed) {
-	    return;
-	}
-
+    _destroy() {
 	// watch out. this sends stuff over socket.io
 	// wait no it doesn't. I think. 
 	this._firing = false;
-	super.destroy();
+
 
 	this.buildProjectile = function() {
 	    throw new Error("Called method of destroyed object");
 	};
 
 	this.projectileQueue.destroy(); // destroys all projectiles
+	super._destroy();
     }
 };
 

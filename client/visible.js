@@ -1,9 +1,9 @@
-
+var destroyable = require("./destroyable.js");
 var PIXI = require("../server/pixistub.js");
 var eventable = require("../libraries/eventable.js");
 
 
-var visible = (superclass) => class extends eventable(superclass) {
+var visible = (superclass) => class extends destroyable(eventable(superclass)) {
     constructor(buildInfo) {
 	super(...arguments);
 	this.container = new PIXI.Container(); // Must be before call to set system
@@ -40,11 +40,9 @@ var visible = (superclass) => class extends eventable(superclass) {
 	    super.show();
 	}
     }
-    destroy() {
+    _destroy() {
 	this.container.destroy();
-	if (super.destroy) {
-	    super.destroy();
-	}
+	super._destroy();
     }
 };
 

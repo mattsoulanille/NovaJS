@@ -9,9 +9,9 @@ var exitPoint = require("./exitPoint.js");
 var renderable = require("./renderable.js");
 var visible = require("./visible.js");
 var targetable = require("./targetable.js");
+var destroyable = require("./destroyable.js");
 
-
-var spaceObject = class extends targetable(loadsResources(renderable(visible(inSystem)))) {
+var spaceObject = class extends destroyable(targetable(loadsResources(renderable(visible(inSystem))))) {
 
     constructor(buildInfo, system, socket) {
 
@@ -19,8 +19,6 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	this.socket = socket || this.socket;
 	this.buildInfo = buildInfo;
 	this.renderReady = false;
-	this.destroyed = false;
-	this._destroying = false;
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
 	this.position = [0,0];
@@ -302,14 +300,9 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
     }
 
     
-    
-// destroys the object. This is NOT the function to call
-// if you want it to explode.
-    destroy() {
-	if (this.destroyed) {
-            return;
-        }
-
+    // destroys the object. This is NOT the function to call
+    // if you want it to explode.
+    _destroy() {
 	this.weapons.all.forEach(function(o) {
 	    if (! o.destroyed) {
 		o.destroy();
@@ -322,9 +315,8 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	
         this.container.destroy();
         _.each(this.sprites, function(s) {s.destroy();});
-	this._destroying = true;
-	super.destroy();
-	this.destroyed = true;
+
+	super._destroy();
     }
 
     _randomCirclePoint(rad) {

@@ -14,9 +14,9 @@ var sprite = class {
 	}
 	
     }
-};
-sprite.prototype.destroy = function() {
-    this.sprite.destroy();
+    destroy() {
+	this.sprite.destroy();
+    }
 };
 module.exports = sprite;
 

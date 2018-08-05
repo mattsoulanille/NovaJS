@@ -208,11 +208,11 @@ class npcServer extends npc {
 	
     }
 
-    destroy() {
+    _destroy() {
 	if (typeof this.controlInterval !== 'undefined') {
 	    clearInterval(this.controlInterval);
 	}
-	super.destroy.call(this);
+	super._destroy(this);
 	this.socket.emit("removeObjects", this.UUIDS); // Is this necessary?
     }
 

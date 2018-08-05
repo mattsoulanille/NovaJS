@@ -1,12 +1,12 @@
 var targetCorners = require("./targetCorners.js");
 var radar = require("./radar.js");
 var PIXI = require("pixi.js");
-
+var destroyable = require("./destroyable.js");
 
 
 
 var loadsResources = require("./loadsResources.js");
-var statusBar = class extends loadsResources(function() {}) {
+var statusBar = class extends loadsResources(destroyable(function() {})) {
     constructor(id, player) {
 	super(...arguments);
 	this.type = 'statusBars';
@@ -366,11 +366,11 @@ var statusBar = class extends loadsResources(function() {}) {
     }
 
 
-    destroy() {
+    _destroy() {
 	this.children.forEach(function(child) {
 	    child.destroy();
 	});
-	
+	super._destroy();	
     }
 };
 module.exports = statusBar;

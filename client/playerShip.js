@@ -413,7 +413,7 @@ class playerShip extends controllable(ship) {
 	super._removeFromSystem();
     }
 
-    destroy() {
+    _destroy() {
 	try {
 	    this.unbindControls();
 
@@ -433,7 +433,7 @@ class playerShip extends controllable(ship) {
 	    }
 	}
 	this.statusBar.destroy();
-	super.destroy.call(this);
+	super._destroy();
     }
 }
 

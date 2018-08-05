@@ -9,13 +9,11 @@ var eventable = require("../libraries/eventable.js");
 
 
 
-
 basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     constructor(buildInfo, source) {
 	super(...arguments);
 	this.socket = source.socket; // necessary for server
 	this.buildInfo = buildInfo;
-	this.destroyed = false;
 	this.fireWithoutTarget = true;
 	this._firing = false;
 	this.ready = false;
@@ -188,19 +186,16 @@ basicWeapon = class extends eventable(renderable(loadsResources(inSystem))) {
     startFiring() {}
     stopFiring() {}
 
-    destroy() {
-	if (! this.destroyed) {
-	    this.stopFiring(false);
-	    this.fire = function() {
-		throw new Error("Called function of destroyed object");
-	    };
-	    
-	    if ("multiplayer" in this) {
-		this.multiplayer.destroy();
-	    }
-	    super.destroy();
-	    //this.destroyed = true;
+    _destroy() {
+	this.stopFiring(false);
+	this.fire = function() {
+	    throw new Error("Called function of destroyed object");
+	};
+	
+	if ("multiplayer" in this) {
+	    this.multiplayer.destroy();
 	}
+	super._destroy();
     }
 };
 

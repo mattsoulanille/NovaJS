@@ -261,8 +261,8 @@ Else, return false
     }
     
     
-    destroy() {
-	super.destroy();
+    _destroy() {
+	super._destroy();
     }
 
 };

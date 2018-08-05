@@ -545,11 +545,11 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	_.each(this.outfits, function(o) {o.destroy();});
     }
     
-    destroy() {
+    _destroy() {
 	this.destroyOutfits();
-	super.destroy();
+	super._destroy();
     }
-}
+};
 
 
 

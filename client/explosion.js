@@ -5,7 +5,6 @@ var explosionSprite = require("./explosionSprite.js");
 var explosion = class extends loadsResources(visible(inSystem)) {
     constructor(buildInfo) {
 	super();
-	this.destroyed = false; // generalize this
 	if (typeof buildInfo !== "undefined") {
 	    this.buildInfo = buildInfo;
 	    this.id = buildInfo.id;
@@ -55,7 +54,6 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 	super._removeFromSystem();
 	this.system.container.removeChild(this.container);
     }
-    
 };
 
 module.exports = explosion;
