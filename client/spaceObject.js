@@ -93,6 +93,7 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 	await this.setProperties();
 	await this.makeSprites();
 	this.makeSize();
+	
 	this.addSpritesToContainer();
 	this.addToSpaceObjects();
 	if (this.multiplayer) {

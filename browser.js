@@ -131,7 +131,7 @@ socket.on('onconnected', async function(data) {
     if (typeof global.stars === 'undefined') {
 	global.stars = new starfield(global.myShip, SPACE_DIM);
     }
-
+    
 
     if (data.paused) {
 	pause();

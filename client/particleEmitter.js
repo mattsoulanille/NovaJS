@@ -11,7 +11,8 @@ var particleEmitter = class extends renderable(inSystem) {
 	this.properties = properties;
 	this.container = new PIXI.Container();
 	this.built = true;
-	this.hideTimeout = null;
+	//this.hideTimeout = null;
+	this._justStopped = false;
 	//space.addChild(this.container);
 
 	// To Do: Make a stationary container. Put everything in it.
@@ -112,20 +113,21 @@ var particleEmitter = class extends renderable(inSystem) {
     }
 
     show() {
-	if (this.hideTimeout) {
-	    clearTimeout(this.hideTimeout);
-	}
+	// if (this.hideTimeout) {
+	//     clearTimeout(this.hideTimeout);
+	// }
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
-	this.render(0);
+	this._renderParticles(0);
 	this.emitter.emit = true;
+	this._waitingToStop = false;
 	super.show();
 	
     }
     hide() {
-	if (this.hideTimeout) {
-	    clearTimeout(this.hideTimeout);
-	}
+	// if (this.hideTimeout) {
+	//     clearTimeout(this.hideTimeout);
+	// }
 	this.emitter.emit = false;
 	
 	this.emitter.cleanup();
@@ -133,7 +135,7 @@ var particleEmitter = class extends renderable(inSystem) {
 	super.hide();
     }
 
-    set emit(v) {
+    set emitParticles(v) {
 	if (this.destroyed) {
 	    console.warn("Tried to emit particles on destroyed particle emitter");
 	    return;
@@ -143,34 +145,43 @@ var particleEmitter = class extends renderable(inSystem) {
 	}
 	else {
 	    this.emitter.emit = false;
-	    this.hideTimeout = setTimeout(function() {
-		this.hide();
-	    }.bind(this), this.emitter.maxLifetime * 1000);
+	    this._justStopped = true;
+	    // this.hideTimeout = setTimeout(function() {
+	    // 	this.hide();
+	    // }.bind(this), this.emitter.maxLifetime * 1000);
 	}
     }
-    get emit() {
+    get emitParticles() {
 	return this.visible;
     }
     
     
     renderHit() {
-	this.emit = true;
-	this.render(1000 / 60);
-	this.emit = false;
+	this.emitParticles = true;
+	this._renderParticles(1000 / 60);
+	this.emitParticles = false;
     }
-    
-    render(delta) {
-	// if (environment.framerate > 15) {
-	//     this.emitter.frequency = 1 / environment.framerate;
-	// }
-	// else {
-	//     this.emitter.frequency = 0;
-	// }
 
+    _renderParticles(delta) {
 	this.emitter.frequency = 1 / global.framerate;
 	this.emitter.updateOwnerPos(this.source.position[0],
 				    -this.source.position[1]);
 	this.emitter.update(delta * 0.001);
+    }
+    
+    render(delta) {
+	// Refactor with projectile.js
+	super.render(...arguments);
+	if (this._justStopped) {
+	    this.hideTime = this.time + this.emitter.maxLifetime * 1000;
+	    this._justStopped = false;
+	    this._waitingToStop = true;
+	}
+	if (this._waitingToStop & this.hideTime < this.time) {
+	    this.hide();
+	    return;
+	}
+	this._renderParticles(delta);
 
     }
 
@@ -187,13 +198,13 @@ var particleEmitter = class extends renderable(inSystem) {
     }
 
     _destroy() {
-	Object.defineProperty(this, "emit", {set:undefined}); // Kill the ability to emit
+	Object.defineProperty(this, "emitParticles", {set:undefined}); // Kill the ability to emit
 	this.renderHit = this.render = function() {
 	    throw new Error("Tried to use destroyed particleEmitter");
 	};
-	if (this.hideTimeout) {
-	    clearTimeout(this.hideTimeout);
-	}
+	// if (this.hideTimeout) {
+	//     clearTimeout(this.hideTimeout);
+	// }
 	this.emitter.destroy();
 	super._destroy();
     }

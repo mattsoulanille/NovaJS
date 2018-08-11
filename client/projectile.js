@@ -253,7 +253,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 			 Math.sin(direction) * this.properties.speed * this.factor  + velocity[1]];
 
 	if (this.trailParticles) {
-	    this.trailParticles.emit = true;
+	    this.trailParticles.emitParticles = true;
 	}
 	
 	this.show();
@@ -287,10 +287,10 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	if (this.trailParticles || this.hitParticles) {
 
 	    if (this.trailParticles) {
-		this.trailParticles.emit = false;
+		this.trailParticles.emitParticles = false;
 	    }
 	    if (this.hitParticles) {
-		this.hitParticles.emit = false;
+		this.hitParticles.emitParticles = false;
 	    }
 	}
 

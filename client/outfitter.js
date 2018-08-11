@@ -102,6 +102,7 @@ class outfitter extends menu {
     }
 
     buyOutfit() {
+
 	var mass = this.itemGrid.selection.mass;
 	if (mass <= global.myShip.properties.freeMass) {
 	    var outfit = {id: this.itemGrid.selection.id, count:1};
