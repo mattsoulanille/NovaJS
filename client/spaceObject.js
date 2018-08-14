@@ -10,6 +10,7 @@ var renderable = require("./renderable.js");
 var visible = require("./visible.js");
 var targetable = require("./targetable.js");
 var destroyable = require("./destroyable.js");
+var position = require("./position.js");
 
 var spaceObject = class extends destroyable(targetable(loadsResources(renderable(visible(inSystem))))) {
 
@@ -21,7 +22,8 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 	this.renderReady = false;
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
-	this.position = [0,0];
+	this.position = new position(0, 0);
+	//this.position = [0,0];
 	// planets can have weapons
 	// this also means projectiles can have weapons :P
 	this.weapons = {};
@@ -233,9 +235,11 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 
     _placeContainer() {
 	if (!this.isPlayerShip) {
-	    this.container.position.x = this.position[0];
-	    this.container.position.y = -1 * this.position[1];
+	    var stagePosition = this.position.getStagePosition();
+	    this.container.position.x = stagePosition[0];
+	    this.container.position.y = stagePosition[1];
 	}
+	
 	
     }
     
@@ -280,14 +284,10 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
     }
 
     findNearest(items) {
-	var get_distance = function(a, b) {
-	    return Math.pow((a.position[0] - b.position[0]), 2) +
-		Math.pow((a.position[1] - b.position[1]), 2);
-	};
 	
 	var distances = {};
 	items.forEach(function(t) {
-	    var dist = get_distance(t, this);
+	    var dist = this.position.distanceSquared(t.position);
 	    distances[dist] = t;
 	}.bind(this));
 	

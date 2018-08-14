@@ -316,10 +316,7 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 
     turnToTarget() {
 	if (this.target) {
-	    var x = this.target.position[0] - this.position[0];
-	    var y = this.target.position[1] - this.position[1];
-	    var direction = (Math.atan2(y,x) + 2*Math.PI) % (2*Math.PI);
-	    
+	    var direction = this.position.angle(this.target.position);
 	    this.turnTo(direction);
 	}
     }
@@ -435,21 +432,6 @@ ship = class extends ionizable(acceleratable(turnable(damageable(collidable(mova
 	}
 	
 	super.render(...arguments);
-	// super hacky bounding box
-	var bound = [7000,7000];
-	if (this.position[0] > bound[0]/2) {
-	    this.position[0] -= bound[0];
-	}
-	if (this.position[0] < -bound[0]/2) {
-	    this.position[0] += bound[0];
-	}
-	if (this.position[1] > bound[1]/2) {
-	    this.position[1] -= bound[1];
-	}
-	if (this.position[1] < -bound[1]/2) {
-	    this.position[1] += bound[1];
-	}
-
     }
     setTarget(newTarget) {
 	super.setTarget(newTarget);

@@ -240,7 +240,8 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	
 	this.available = false;
 	this.pointing = direction;
-	this.position = position.map(function(x) {return x;});
+	this.position[0] = position[0];
+	this.position[1] = position[1];
 
 	// nova speeds for weapons is in pixels / frame * 100. 3/10 pixels / ms
 	//    var factor = 3/10;

@@ -167,7 +167,7 @@ var starfield = class extends renderable(visible(inSystem)) {
 	    s.rendered = false;
 	    s.render(delta);
 	});
-
     }
+
 };
 module.exports = starfield;

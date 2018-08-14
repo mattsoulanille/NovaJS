@@ -2,12 +2,14 @@ var renderable = require("./renderable.js");
 var inSystem = require("./inSystem.js");
 var PIXI = require("pixi.js");
 require("pixi-particles");
+const position = require("./position.js");
 
 var particleEmitter = class extends renderable(inSystem) {
     constructor(properties, source) {
 	super(...arguments);
 	this.factor = 0.5;
 	this.source = source;
+	this.position = new position(0,0);
 	this.properties = properties;
 	this.container = new PIXI.Container();
 	this.built = true;
@@ -116,8 +118,8 @@ var particleEmitter = class extends renderable(inSystem) {
 	// if (this.hideTimeout) {
 	//     clearTimeout(this.hideTimeout);
 	// }
-	this.emitter.updateOwnerPos(this.source.position[0],
-				    -this.source.position[1]);
+	this._setPositionFromSource();
+	this.emitter.updateOwnerPos(...this.position.getStagePosition());
 	this._renderParticles(0);
 	this.emitter.emit = true;
 	this._waitingToStop = false;
@@ -164,11 +166,14 @@ var particleEmitter = class extends renderable(inSystem) {
 
     _renderParticles(delta) {
 	this.emitter.frequency = 1 / global.framerate;
-	this.emitter.updateOwnerPos(this.source.position[0],
-				    -this.source.position[1]);
+	this._setPositionFromSource();
+	this.emitter.updateOwnerPos(...this.position.getStagePosition());
 	this.emitter.update(delta * 0.001);
     }
-    
+    _setPositionFromSource() {
+	this.position[0] = this.source.position[0];
+	this.position[1] = this.source.position[1];
+    }
     render(delta) {
 	// Refactor with projectile.js
 	super.render(...arguments);
