@@ -6,7 +6,7 @@ var resourceFork = require('resourceforkjs').resourceFork;
 
 var spob = require("../parsers/spob.js");
 
-describe("outf", function() {
+describe("spob", function() {
 
     var p1;
     var p2;

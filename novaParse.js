@@ -12,6 +12,7 @@ const weap = require("./parsers/weap.js");
 const pict = require("./parsers/pict.js");
 const desc = require("./parsers/desc.js");
 const spob = require("./parsers/spob.js");
+const syst = require("./parsers/syst.js");
 const idSpace = require("./idSpace.js");
 const fs = require("fs");
 const path = require('path');
@@ -214,6 +215,9 @@ class novaParse {
 		break;
 	    case "spöb":
 		parseFunction = spob;
+		break;
+	    case "sÿst":
+		parseFunction = syst;
 		break;
 	    }	    
 	    parsed[type] = resArray.map(function(item) {
