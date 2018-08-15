@@ -74,6 +74,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 
 	// no need to add explosion time because multiple explosions can be constructed.
 
+	/*
 	if (this.subs.length !== 0) {
 	    var subDurations = await Promise.map(this.subs, async function(sub) {
 		return (await sub.projectileQueue.peek()).lifetime;
@@ -81,7 +82,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	    var maxSubTime = Math.max(...subDurations);
 	    additionalTimes.push(maxSubTime);
 	}
-	
+	*/
 	this.additionalTime = Math.max(...additionalTimes);
 	this.lifetime += this.additionalTime;
 	this.available = true;

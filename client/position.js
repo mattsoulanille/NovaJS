@@ -47,8 +47,8 @@ class position extends vector {
     }
 
     delta(other) {
-	return [centerMod(other[0] - this[0], SYST_DIMS[0]),
-		centerMod(other[1] - this[1], SYST_DIMS[1])];
+	return new position(centerMod(other[0] - this[0], SYST_DIMS[0]),
+			    centerMod(other[1] - this[1], SYST_DIMS[1]));
     }
     
     distanceSquared(other) {

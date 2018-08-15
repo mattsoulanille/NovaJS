@@ -25,6 +25,7 @@ class vector {
 	yield this.x;
 	yield this.y;
     }
+
 };
 
 module.exports = vector;

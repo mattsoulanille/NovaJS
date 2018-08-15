@@ -15,14 +15,8 @@ damageable = (superclass) => class extends superclass {
 
     constructor() {
 	super(...arguments);
-	try {
+	if (! ("allies" in this)) {
 	    this.allies = new Set([this]); // a set of things not to cause harm to.
-	}
-	catch(e) {
-	    // projectile doesn't allow changing of allies
-	    if (!(e instanceof AlliesError)) {
-		throw e;
-	    }
 	}
 
 	if (typeof(buildInfo) !== 'undefined') {

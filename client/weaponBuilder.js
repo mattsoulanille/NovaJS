@@ -82,7 +82,7 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	    s.limit = subData.limit;
 	});
 
-	
+
 	
 	this.buildInfo.meta = this.meta; // only okay since buildInfo was copied
 	this._setWeaponType();
@@ -98,7 +98,6 @@ var weaponBuilder = class extends loadsResources(inSystem) {
 	this.weapon.fire = function(direction, position, velocity) {
 
 	    for (var i = 0; i < subData.count; i++) {
-		var proj = this.projectileQueue.dequeue();
 		var offset = (Math.random() - 0.5) * 2 * subData.theta * 2*Math.PI / 360;
 		direction = this.source.pointing + offset;
 		position = position || this.source.position;
