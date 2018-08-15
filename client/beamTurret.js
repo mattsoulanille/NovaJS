@@ -13,7 +13,8 @@ beamTurret = class extends beamWeapon {
 	// needed since this is the vector of the beam, not the destination point
 	var start = this.getFirePosition(); 
 	var end = this.target.position;
-	return [end[0] - start[0], end[1] - start[1]];
+	
+	return start.delta(end);
     }
     
     startFiring(notify = true) {

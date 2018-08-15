@@ -1,4 +1,4 @@
-
+var position = require("./position.js");
 var exitPoint = class {
     constructor(source, offset=[0,0,0], upCompress=[100,100], downCompress=[100,100]) {
 	// Note that upCompress and downCompress for some reason do not play any role into the turn rate of the ship
@@ -28,8 +28,8 @@ var exitPoint = class {
 	// z offset
 	rotated[1] += this.offset[2];
 
-	return [rotated[0] + this.source.position[0],
-		rotated[1] + this.source.position[1]];
+	return new position(rotated[0] + this.source.position[0],
+			    rotated[1] + this.source.position[1]);
     }
 
     set position(pos) {
