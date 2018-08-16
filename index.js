@@ -81,8 +81,7 @@ var planet = require("./server/planetServer");
 var system = require("./server/systemServer.js");
 var collidable = require("./server/collidableServer.js");
 var medium_blaster = new outfit("Medium Blaster", 1);
-var sol = new system();
-local.context.sol = sol;
+var sol;
 Object.defineProperty(local.context, 'ships', {set: function() {}, get: function() {
     return Array.from(sol.ships);
 }});
@@ -225,10 +224,20 @@ var startGame = async function() {
 
 
     shipIDs = Object.keys(np.ids.resources.shïp);
-    npcMaker = new AI(sol, io, shipIDs);
-    local.context.npcMaker = npcMaker;
     nd = new novaData(np);
     await nd.build();
+    inSystem.prototype.novaData = nd;
+    resourcesPrototypeHolder.prototype.novaData = nd;
+    resourcesPrototypeHolder.prototype.socket = io;
+
+    sol = new system({id:"nova:130"});
+    local.context.sol = sol;
+
+    var tichel = new system({id: "nova:129"});
+    local.context.tichel = tichel;
+
+    npcMaker = new AI(sol, io, shipIDs);
+    local.context.npcMaker = npcMaker;
 
     allShips = [];
     
@@ -263,8 +272,6 @@ var startGame = async function() {
 
 
     
-    inSystem.prototype.novaData = nd;
-    resourcesPrototypeHolder.novaData = nd;
     console.log("Parsing nova files and setting up cache");
     local.context.nd = nd;
 
@@ -394,7 +401,19 @@ var startGame = async function() {
 	}
 	catch (e) {
 	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse under oütf") {
+	    if (e.message !== "not found in novaParse under spöb") {
+		throw e;
+	    }
+	}
+    });
+    app.get('/objects/systems/:system.json', async function(req, res) {
+	var id = req.params.system;
+	try {
+	    res.send(await nd.systems.get(id));
+	}
+	catch (e) {
+	    res.status(404).send("not found");
+	    if (e.message !== "not found in novaParse under sÿst") {
 		throw e;
 	    }
 	}
@@ -403,21 +422,23 @@ var startGame = async function() {
 
 
     // Note: figure out why you need to include 'type': 'planet'
+    // It's cause system needs to know what type you're building? IDK.
     //var earth = new planet({'id':'earth', 'UUID':UUID(), 'type': 'planet'}, sol, io);
     //var mars = new planet({'id':'mars', 'UUID':UUID(), 'type':'planet', 'position':[900,600]}, sol, io);
-    var earthData = await nd.planets.get("nova:128");
-    var marsData = await nd.planets.get("nova:158");
-    var jupiterData = await nd.planets.get("nova:159");
-    var europaData = await nd.planets.get("nova:160");
+    // var earthData = await nd.planets.get("nova:128");
+    // var marsData = await nd.planets.get("nova:158");
+    // var jupiterData = await nd.planets.get("nova:159");
+    // var europaData = await nd.planets.get("nova:160");
 
-    earthData.UUID = UUID();
-    marsData.UUID = UUID();
-    jupiterData.UUID = UUID();
-    europaData.UUID = UUID();
-    var earth = new planet(earthData, sol, io);
-    var mars = new planet(marsData, sol, io);
-    var jupiter = new planet(jupiterData, sol, io);
-    var europa = new planet(europaData, sol, io);
+    // earthData.UUID = UUID();
+    // marsData.UUID = UUID();
+    // jupiterData.UUID = UUID();
+    // europaData.UUID = UUID();
+
+    // var earth = new planet(earthData, sol);
+    // var mars = new planet(marsData, sol, io);
+    // var jupiter = new planet(jupiterData, sol, io);
+    // var europa = new planet(europaData, sol, io);
     
     await sol.build();
     console.log("finished loading");
@@ -445,9 +466,9 @@ var playercount = 0;
 var multiplayer = require("./server/multiplayerServer.js");
 local.context.m = multiplayer.prototype.globalSet;
 local.context.players = players;
-var connectFunction = function(client){
+var connectFunction = function(socket){
 
-    multiplayer.prototype.bindSocket(client);
+    multiplayer.prototype.bindSocket(socket);
     
     var userid = UUID();
     var owned_uuids = [userid];
@@ -475,10 +496,11 @@ var connectFunction = function(client){
 	//console.log(currentSystem.getObjects())
 	//testSystem[userid] = myShip.buildInfo; // for testing missing objects
 
-	client.emit('onconnected', {
+	socket.emit('onconnected', {
 	    "playerShip":myShip.buildInfo,
 	    "id": userid,
-	    "system": currentSystem.getObjects(),
+	    "system": currentSystem.buildInfo,
+	    "systemObjects": currentSystem.getObjects(),
 	    "stats": _.omit(currentSystem.getStats(), userid),
 	    "paused": paused
 	});
@@ -487,7 +509,7 @@ var connectFunction = function(client){
     var myShip;
 
     var buildShip = async function(buildInfo) {
-	myShip = new ship(buildInfo, currentSystem, client);
+	myShip = new ship(buildInfo, currentSystem, socket);
 
 	await myShip.build();
 	
@@ -518,7 +540,7 @@ var connectFunction = function(client){
 	    io.emit("replaceObject", buildInfo);
 	}
 	else {
-	    client.emit("noSuchShip", id);
+	    socket.emit("noSuchShip", id);
 	}
     };
 		 
@@ -529,10 +551,10 @@ var connectFunction = function(client){
 	.then(function() {
 	    var toEmit = {};
 	    toEmit[myShip.buildInfo.UUID] = myShip.buildInfo;
-	    client.broadcast.emit('buildObjects', toEmit);
+	    socket.broadcast.emit('buildObjects', toEmit);
 	});
     
-    client.on('setShip', function(id) {
+    socket.on('setShip', function(id) {
 	    setShip(id);
     });
 //    console.log(owned_uuids);
@@ -541,30 +563,30 @@ var connectFunction = function(client){
 
 
 
-    players[userid] = {"ship":myShip,"io":client};
+    players[userid] = {"ship":myShip,"io":socket};
     playercount = _.keys(players).length;
     console.log('a user connected. ' + playercount + " playing.");
 
     
-    client.on("test", function(data) {
+    socket.on("test", function(data) {
 	console.log("test:");
 	console.log(data);
     });
     
 
-    client.on('pingTime', function(msg) {
+    socket.on('pingTime', function(msg) {
     	var response = {};
     	if (msg.hasOwnProperty('time')) {
-    	    response.clientTime = msg.time;
+    	    response.socketTime = msg.time;
     	    response.serverTime = new Date().getTime();
-    	    client.emit('pongTime', response);
+    	    socket.emit('pongTime', response);
 //	    console.log(msg);
 	    
 
     	}
     });
 
-    client.on('getMissingObjects', function(missing) {
+    socket.on('getMissingObjects', function(missing) {
 	var toSend = {};
 	_.each(missing, function(uuid) {
 	    if (currentSystem.multiplayer.hasOwnProperty(uuid)) {
@@ -576,11 +598,11 @@ var connectFunction = function(client){
 	    }
 	});
 
-	client.emit('buildObjects', toSend);
+	socket.emit('buildObjects', toSend);
     });
-    client.on('disconnect', function() {
+    socket.on('disconnect', function() {
 
-	client.broadcast.emit('removeObjects', owned_uuids);
+	socket.broadcast.emit('removeObjects', owned_uuids);
 
 	currentSystem.destroyObjects(owned_uuids);
 	console.log("disconnected");
@@ -588,14 +610,14 @@ var connectFunction = function(client){
 	delete players[userid];
 	console.log('a user disconnected. ' + _.keys(players).length + " playing.");
     });
-    client.on('pause', function() {
+    socket.on('pause', function() {
 	paused = true;
 	clearTimeout(gameTimeout);
-	//	client.broadcast.emit('pause');
+	//	socket.broadcast.emit('pause');
 	io.emit('pause', {for:'everyone'});
     });
-    client.on('resume', function() {
-	paused = false;
+    socket.on('resume', function() {
+	palused = false;
 	io.emit('resume', {for:'everyone'});
 	sol.resume();
 //	gameTimeout = setTimeout(function() {gameloop(system)}, 0);

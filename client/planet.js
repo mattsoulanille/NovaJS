@@ -23,19 +23,18 @@ var planet = class extends spaceObject {
     
     
     
-    build() {
-	return super.build.call(this)
-	//	.then(this.build)
-	    .then(function() {
-		this.system.built.planets.add(this);
-		this.show();
-		this.buildSpaceport();
-	    }.bind(this));
+    async build() {
+	await super.build();
+	this.system.built.planets.add(this);
+	this.show();
+	this.buildSpaceport();
+	this.position[0] = this.meta.position[0];
+	this.position[1] = this.meta.position[1];
     }
 
     
     buildSpaceport() {
-	this.spaceport = new spaceport(this.buildInfo, this.depart.bind(this));
+	this.spaceport = new spaceport(this.meta, this.depart.bind(this));
 	global.spaceportContainer.addChild(this.spaceport.container);
     }
 

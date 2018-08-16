@@ -11,7 +11,7 @@
     "chai": "^4.1.2",
     "crash-colliders": "^2.0.1",
     "express": "^4.16.3",
-    "novaparse": "^0.0.41",
+    "novaparse": "^0.0.42",
     "paralleljs": "^0.2.1",
     "pixi-display": "^1.1.1",
     "pixi-particles": "^2.1.9",

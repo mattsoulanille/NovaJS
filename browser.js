@@ -97,7 +97,7 @@ resourcesPrototypeHolder.prototype.novaData = nc;
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
-global.currentSystem = new system();
+//global.currentSystem = new system();
 
 
 
@@ -147,8 +147,9 @@ socket.on('onconnected', async function(data) {
 	    // Temporary
 	    global.allOutfits = outfits;
 	});
-
-    await global.currentSystem.setObjects(data.system);
+    global.currentSystem = new system(data.system);
+    
+    await global.currentSystem.setObjects(data.systemObjects);
     await global.stars.build();
     await global.gameControls.build();
     await global.currentSystem.build();

@@ -9,7 +9,8 @@ var novaCache = class {
 	this.spriteSheets = new spriteSheetCache("objects/spriteSheets/");
 	this.weapons = new cache("objects/weapons/");
 	this.planets = new cache("objects/planets/");
-
+	this.systems = new cache("objects/systems/");
+	
 	this.misc = new cache("objects/misc/");
 	this.statusBars = new cache("objects/statusBars/");
 	this.outfits = new cache("objects/outfits/");

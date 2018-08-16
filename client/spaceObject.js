@@ -11,11 +11,12 @@ var visible = require("./visible.js");
 var targetable = require("./targetable.js");
 var destroyable = require("./destroyable.js");
 var position = require("./position.js");
+var buildable = require("./buildable.js");
 
-var spaceObject = class extends destroyable(targetable(loadsResources(renderable(visible(inSystem))))) {
+var spaceObject = class extends destroyable(targetable(loadsResources(renderable(visible(buildable(inSystem)))))) {
 
     constructor(buildInfo, system, socket) {
-
+	// Socket must be known at build time so setMultiplayer works
 	super(...arguments);
 	this.socket = socket || this.socket;
 	this.buildInfo = buildInfo;
@@ -32,8 +33,6 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 	this.sprites = {};
 
 	this.size = [];
-	this.built = false;
-	this.building = false;
 
 	
 	if (typeof(buildInfo) !== 'undefined') {
@@ -102,17 +101,6 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 	    this.setListeners();
 	}
 	this.renderReady = true;
-    }
-
-    async build() {
-	if (!this.building && !this.built) {
-	    this.building = true;
-	    await this._build();
-	    this.building = false;
-	    this.built = true;
-	    this.emit("built");
-	    this.setState("built", true);
-	}	
     }
 
     setVisible(v) {

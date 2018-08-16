@@ -5,6 +5,9 @@ var loadsResources = (superclass) => class extends superclass {
 	if (! this.novaData) {
 	    this.novaData = resourcesPrototypeHolder.prototype.novaData;
 	}
+	if (! this.socket) {
+	    this.socket = resourcesPrototypeHolder.prototype.socket;
+	}
     }
     
     
