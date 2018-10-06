@@ -1,0 +1,93 @@
+\documentclass{article}
+\usepackage{xspace, hyperref}
+\newcommand{\gameData}{\emph{gameData}\xspace}
+
+\title{NovaJS Design}
+
+
+
+\begin{document}
+\maketitle
+
+\section{Purpose of this Document}
+This design document aims to specify every design choice in the NovaJS project and define all interfaces between pieces of the project.
+
+\section{Accessing Game Data}
+
+There is a universal interface, used on both the client and the server, for accessing game data.
+\subsection{Game Data Interface}
+
+All game data is accessed from a single object hereafter referred to as \gameData. \gameData has the following data types as fields: \textbf{outfits}, \textbf{picts}, \textbf{planets}, \textbf{spriteSheets}, \textbf{systems}, and \textbf{weapons}. Each data type field has a \textbf{.get} method which takes a string ID of a resource in the field and returns a promise that resolves to the resource corresponding to the ID.\\
+
+The format of each resource is described below. Resources do not have circular references and can be sent over SocketIO.
+\subsubsection{Common Fields}
+Every resource has the following fields:
+\begin{itemize}
+\item{\textbf{id}}: The unique global ID of the resource. Same as the ID used to \textbf{.get} it.
+\item{\textbf{name}}: The name corresponding to the resource. Only used for player interaction.
+
+\end{itemize}
+
+\subsubsection{Outfit}
+An \textbf{outfit} is anything that can be attached to a ship. It has the following fields in addition to the default ones:
+\begin{itemize}
+\item{\textbf{functions}}: An object whose keys are the general functions an outfit performs and whose values are parameters for those functions. See \href{outfit-functions}{3} for details.
+\item{\textbf{weapon}}: An object specifying the weapon (if any) that the outfit has. Specifies the global ID under \textbf{id} and the quantity of the corresponding weapon under \textbf{count}.
+\item{\textbf{pictID}}: The global ID of the picture to use in the outfitter.
+\item{\textbf{desc}}: The text description of the outfit.
+\item{\textbf{mass}}: The mass of the outfit (see \href{outfitter}{Outfitter}).
+\item{\textbf{price}}: The price of the outfit (see \href{outfitter}{Outfitter}).
+\item{\textbf{displayWeight}}: Determines the order in which the outfit is shown in the \href{outfitter}{Outfitter}.
+\item{\textbf{max}}: The maximum number that can be on a single ship.
+\end{itemize}
+
+\subsubsection{Pict}
+A \textbf{pict} stores a single picture. It has a field \textbf{png} that is a buffer containing the data of the picture in PNG format.
+
+\subsubsection{Planet}
+A \textbf{planet} is a stationary stellar object. Space stations fall under this category. A \textbf{planet} has the following fields in addition to the default ones:
+\begin{itemize}
+\item{\textbf{type}}: A field containing the value \textbf{``planet''} specifying that this object is a planet (maybe change this).
+\item{\textbf{position}}: A list specifying the $[x,y]$ position of the planet.
+\item{\textbf{landingPictID}}: The global ID of the picture to show when a player lands.
+\item{\textbf{landingDesc}}: The text description to show when the player lands.
+\item{\textbf{animation}}: An object specifying the spritesheet to use for the planet (and how to use it? Revise this)
+\end{itemize}
+
+\subsubsection{SpriteSheetData (TODO)}
+A \textbf{spriteSheetData} resource encodes data about the contents of a \textbf{spriteSheet} including frame boundaries and collision convex hulls for each image.
+
+\subsubsection{SpriteSheet}
+A \textbf{spriteSheet} resource is identical to a \textbf{pict} resource, however, it exists within a different id scope (\textbf{spriteSheets} instead of \textbf{picts}).
+
+\subsubsection{Systems}
+A \textbf{system} resource describes the contents of a system. It includes the following fields:
+\begin{itemize}
+\item{\textbf{position}}: The $[x,y]$ position of the system on the star map.
+\item{\textbf{links}}: A list of the global IDs of \textbf{systems} that this system has a link to.
+\item{\textbf{planets}} A list of the global IDs of \textbf{planets} contained in the system.
+\end{itemize}
+
+
+
+
+
+% \begin{itemize}
+% \item{outfits}: 
+% \item{picts}
+% \item{planets}
+% \item{spriteSheets}
+% \item{systems}
+% \item{weapons}
+
+  
+
+
+
+
+\section{Outfit Functions} \label{outfit-functions}
+
+\section{Outfitter} \label{outfitter}
+
+
+\end{document}
