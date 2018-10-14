@@ -2,22 +2,25 @@ var baseParse = require("./baseParse.js");
 var weapParse = require("./weapParse.js");
 
 var outfParse = class extends baseParse {
-    constructor(outf) {
+    constructor() {
 	super(...arguments);
+    }
 
-	this.name = outf.name;
+    async parse(outf) {
+	var out = await super.parse(outf);
+
 	let functions = outf.functions;
 
 	var weapons = {};
 
-	this.weapon = null;
+	out.weapon = null;
 	functions.forEach(function(f) {
 	    if (f.hasOwnProperty("weapon")) {
-		if (this.weapon === null) {
+		if (out.weapon === null) {
 		    if (f.weapon >= 128) {
 			let globalID = outf.idSpace.wëap[f.weapon].globalID;
 		    
-			this.weapon = {
+			out.weapon = {
 			    id: globalID,
 			    count: 1
 			};
@@ -30,15 +33,15 @@ var outfParse = class extends baseParse {
 	}.bind(this));
 
 
-	this.functions = {};
+	out.functions = {};
 
 	functions.forEach(function(a) {
 	    Object.keys(a).forEach(function(key) {
 		if (key !== "weapon") {
-		    this.functions[key] = a[key];
+		    out.functions[key] = a[key];
 		}
 		if (key == "fuel scoop") {
-		    this.functions[key] = 1 / a[key]; // units / frame instead of frames / unit
+		    out.functions[key] = 1 / a[key]; // units / frame instead of frames / unit
 		}
 	    }.bind(this));
 	}.bind(this));
@@ -48,26 +51,29 @@ var outfParse = class extends baseParse {
 	// but first, make custom errors for novaParse
 	// Also, have placeholders.
 	try {
-	    this.pictID = outf.idSpace.PICT[outf.pictID].globalID;
+	    out.pictID = outf.idSpace.PICT[outf.pictID].globalID;
 	}
 	catch(e) {
 	}
 	try {
-	    this.desc = outf.idSpace.dësc[outf.descID].string;
+	    out.desc = outf.idSpace.dësc[outf.descID].string;
 	}
 	catch(e) {
-	    this.desc = "Parsing desc failed: " + e.message;
+	    out.desc = "Parsing desc failed: " + e.message;
 	}
 
-	this.mass = outf.mass;
-	this.price = outf.cost;
-	if (this.displayWeight > 0) {
-	    this.displayWeight = outf.displayWeight;
+	out.mass = outf.mass;
+	out.price = outf.cost;
+	if (out.displayWeight > 0) {
+	    out.displayWeight = outf.displayWeight;
 	}
 	else {
-	    this.displayWeight = outf.id;
+	    out.displayWeight = outf.id;
 	}
-	this.max = outf.max;
+	out.max = outf.max;
+
+
+	return out;
     }
 };
 

@@ -1,10 +1,14 @@
 
-var baseParse = class {
-    constructor(resource) {
-	this.id = resource.globalID;
-	this.name = resource.name;
-	this.prefix = resource.prefix;
+class baseParse {
+    constructor() {}
+
+    parse(resource) {
+	var out = {};
+	out.id = resource.globalID;
+	out.name = resource.name;
+	out.prefix = resource.prefix;
+	return out;
     }
-}
+};
 
 module.exports = baseParse;

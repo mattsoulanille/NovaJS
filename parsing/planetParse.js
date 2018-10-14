@@ -2,27 +2,29 @@ const baseParse = require("./baseParse.js");
 
 
 class planetParse extends baseParse {
-    constructor(planet) {
+    constructor() {
 	super(...arguments);
+    }
+    async parse(planet) {
+	var out = await super.parse(planet);
 
-	this.type = "planet"; // system needs to know what to build
-	this.name = planet.name;
-	this.position = [planet.position[0], -planet.position[1]];
+	out.type = "planet"; // system needs to know what to build
+	out.position = [planet.position[0], -planet.position[1]];
 	try {
-	    this.landingPictID = planet.idSpace.PICT[planet.landingPictID].globalID;
+	    out.landingPictID = planet.idSpace.PICT[planet.landingPictID].globalID;
 	}
 	catch(e) {
 	    console.log("Parsing pict failed: " + e.message);
 	}
 
 	try {
-	    this.landingDesc = planet.idSpace.dësc[planet.landingDescID].string;
+	    out.landingDesc = planet.idSpace.dësc[planet.landingDescID].string;
 	}
 	catch(e) {
-	    this.desc = "Parsing desc failed: " + e.message;
+	    out.desc = "Parsing desc failed: " + e.message;
 	}
 
-	this.animation = {
+	out.animation = {
 	    images: {
 		baseImage: {
 		    id: planet.idSpace['rlëD'][planet.graphic].globalID,
@@ -35,6 +37,8 @@ class planetParse extends baseParse {
 		}
 	    }
 	};
+
+	return out;
     }
 }
 

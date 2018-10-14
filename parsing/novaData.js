@@ -1,62 +1,50 @@
 
-var spriteSheet = require("./spriteSheet.js");
-var shanParse = require("./shanParse.js");
-var shipParse = require("./shipParse.js");
-var weapParse = require("./weapParse.js");
-var outfParse = require("./outfParse.js");
-var pictParse = require("./pictParse.js");
-var planetParse = require("./planetParse.js");
-var systemParse = require("./systemParse.js");
-
-var gettable = class {
-    constructor(getFunction) {
-	this.data = {};
-	this.getFunction = getFunction;
-    }
-
-    async get(thing) {
-	if (! (thing in this.data) ) {
-	    this.data[thing] = this.getFunction(thing);
-	}
-
-	return await this.data[thing];
-    }
-};
+const spriteSheet = require("./spriteSheet.js");
+const shanParse = require("./shanParse.js");
+const shipParse = require("./shipParse.js");
+const weapParse = require("./weapParse.js");
+const outfParse = require("./outfParse.js");
+const pictParse = require("./pictParse.js");
+const planetParse = require("./planetParse.js");
+const systemParse = require("./systemParse.js");
+const gettable = require("../libraries/gettable.js");
 
 
-// should mirror novaCache.js
-
-var novaData = class {
+class novaData {
     constructor(parsed) {
 	this.novaParse = parsed;
-	this.spriteSheets = new gettable(this.getFunction("rlëD", spriteSheet));
-	this.outfits = new gettable(this.getFunction("oütf", outfParse));
-	this.weapons = new gettable(this.getFunction("wëap", weapParse));
-	this.picts = new gettable(this.getFunction("PICT", pictParse));
-	this.planets = new gettable(this.getFunction("spöb", planetParse));
-	this.systems = new gettable(this.getFunction("sÿst", systemParse));
+	this.parsers = {
+	    spriteSheet : new spriteSheet(),
+	    outfParse : new outfParse(),
+	    weapParse : new weapParse(),
+	    pictParse : new pictParse(),
+	    planetParse : new planetParse(),
+	    systemParse : new systemParse()
+	};
+
+	//this.spriteSheetImages = new gettable(
+	this.spriteSheets = new gettable(this.getFunction("rlëD", this.parsers.spriteSheet));
+	this.outfits = new gettable(this.getFunction("oütf", this.parsers.outfParse));
+	this.weapons = new gettable(this.getFunction("wëap", this.parsers.weapParse));
+	this.picts = new gettable(this.getFunction("PICT", this.parsers.pictParse));
+	this.planets = new gettable(this.getFunction("spöb", this.parsers.planetParse));
+	this.systems = new gettable(this.getFunction("sÿst", this.parsers.systemParse));
     }
 
-    getFunction(resourceType, toBuild) {
-
-	return async function(fullId) {
-	    var index = fullId.lastIndexOf(":");
-	    var prefix = fullId.slice(0, index);
-	    var id = fullId.slice(index + 1);
+    getFunction(resourceType, parser) {
+	return async function(globalID) {
+	    var index = globalID.lastIndexOf(":");
+	    var prefix = globalID.slice(0, index);
+	    var id = globalID.slice(index + 1);
 
 	    var resource = this.novaParse.ids.getSpace(prefix)[resourceType][id];
 	    if (resource) {
-		let obj =  new toBuild(resource);
-		if ("build" in obj) {
-		    await obj.build();
-		}
-		return obj;
+		return await parser.parse(resource);
 	    }
 	    else {
-		throw new Error(fullId + " not found in novaParse under " + resourceType);
+		throw new Error(globalID + " not found in novaParse under " + resourceType);
 	    }
 	}.bind(this);
-
     }
 
     async build() {
