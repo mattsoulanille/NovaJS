@@ -90,8 +90,8 @@ class novaData {
 
 
 	await Promise.all(promises);
-	shipParse.prototype.weaponOutfitMap = this.weaponOutfitMap;
-	this.ships = new gettable(this.getFunction("shïp", shipParse));
+	this.parsers.shipParse = new shipParse(this.weaponOutfitMap);
+	this.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
     }
 };
 
