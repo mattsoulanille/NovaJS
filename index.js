@@ -146,10 +146,8 @@ local.context.addEscort = async function(master, name=null) {
 	master : master
     };
     var newEscort = new escort(buildInfo);
-	
-
-    
 };
+
 
 var players = {}; // for repl
 
@@ -165,21 +163,6 @@ var gameloop = function(system, lastTime = new Date().getTime()) {
     var delta = time - lastTime;
 
     system.render(delta, time);
-    /*
-    try {
-	system.render(delta, time);
-    }
-    catch(e) {
-	// Catch all nova errors since they are usually not game breaking
-	// (if the game starts breaking, look here first)
-	Object.values(errors).forEach(function(ErrorType) {
-	    if (e instanceof ErrorType) {
-		console.warn("Warning: " + e.message);
-	    }
-	});
-    }
-    */
-    
     gameTimeout = setTimeout(function() {gameloop(system, time);}, 0);
 };
 
@@ -297,136 +280,7 @@ var startGame = async function() {
 	res.send(JSON.stringify(allOutfits));
     });
 
-    app.param("spriteSheet", async function(req, res, next, id) {
-	try {
-	    req.spriteSheet = await nd.spriteSheets.get(id);
-	}
-	catch (e) {
-	    if (e.message !== "not found in novaParse") {
-		throw e;
-	    }
-	}
-	next();
-    });
 
-    app.get('/objects/spriteSheets/:spriteSheet/image.png', function(req, res) {
-	if (req.spriteSheet) {
-	    var buf = req.spriteSheet.png;
-	    res.send(buf);
-	}
-	else {
-	    res.status(404).send("not found");
-	}
-
-    });
-
-    app.get('/objects/spriteSheets/:spriteSheet/frameInfo.json', function(req, res) {
-	if (req.spriteSheet) {
-	    res.send(req.spriteSheet.frameInfo);
-	}
-	else {
-	    res.status(404).send("not found");
-	}
-
-    });
-
-
-    app.get('/objects/spriteSheets/:spriteSheet/convexHulls.json', function(req, res) {
-	// see app.param("spriteSheet"... above
-	if (req.spriteSheet) {
-	    var hulls = req.spriteSheet.convexHulls;
-	    res.send(hulls);
-	}
-	else {
-	    res.status(404).send("not found");
-	}
-
-    });
-
-    app.get('/objects/ships/:ship.json', async function(req, res) {
-	var id = req.params.ship;
-	var s = await nd.ships.get(id);
-	try {
-	    res.send(s);
-	}
-	catch (e) {
-	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse") {
-		throw e;
-	    }
-	}
-    });
-
-    app.get('/objects/weapons/:weapon.json', async function(req, res) {
-	var id = req.params.weapon;
-	try {
-	    res.send(await nd.weapons.get(id));
-	}
-	catch (e) {
-	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse under wëap") {
-		throw e;
-	    }
-	}
-    });
-    app.get('/objects/outfits/:outfit.json', async function(req, res) {
-	var id = req.params.outfit;
-	try {
-	    res.send(await nd.outfits.get(id));
-	}
-	catch (e) {
-	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse under oütf") {
-		throw e;
-	    }
-	}
-    });
-    app.get('/objects/planets/:planet.json', async function(req, res) {
-	var id = req.params.planet;
-	try {
-	    res.send(await nd.planets.get(id));
-	}
-	catch (e) {
-	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse under spöb") {
-		throw e;
-	    }
-	}
-    });
-    app.get('/objects/systems/:system.json', async function(req, res) {
-	var id = req.params.system;
-	try {
-	    res.send(await nd.systems.get(id));
-	}
-	catch (e) {
-	    res.status(404).send("not found");
-	    if (e.message !== "not found in novaParse under sÿst") {
-		throw e;
-	    }
-	}
-    });
-
-
-
-    // Note: figure out why you need to include 'type': 'planet'
-    // It's cause system needs to know what type you're building? IDK.
-    //var earth = new planet({'id':'earth', 'UUID':UUID(), 'type': 'planet'}, sol, io);
-    //var mars = new planet({'id':'mars', 'UUID':UUID(), 'type':'planet', 'position':[900,600]}, sol, io);
-    // var earthData = await nd.planets.get("nova:128");
-    // var marsData = await nd.planets.get("nova:158");
-    // var jupiterData = await nd.planets.get("nova:159");
-    // var europaData = await nd.planets.get("nova:160");
-
-    // earthData.UUID = UUID();
-    // marsData.UUID = UUID();
-    // jupiterData.UUID = UUID();
-    // europaData.UUID = UUID();
-
-    // var earth = new planet(earthData, sol);
-    // var mars = new planet(marsData, sol, io);
-    // var jupiter = new planet(jupiterData, sol, io);
-    // var europa = new planet(europaData, sol, io);
-    
     await sol.build();
     console.log("finished loading");
 
@@ -440,13 +294,6 @@ var startGame = async function() {
 };
 local.context.startGame = startGame;
 startGame();
-
-
-
-
-
-
-
 
 var paused = false;
 var playercount = 0;
