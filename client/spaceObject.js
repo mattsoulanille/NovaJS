@@ -12,8 +12,9 @@ var targetable = require("./targetable.js");
 var destroyable = require("./destroyable.js");
 var position = require("./position.js");
 var buildable = require("./buildable.js");
+var placeable = require("../server/placeableServer.js");
 
-var spaceObject = class extends destroyable(targetable(loadsResources(renderable(visible(buildable(inSystem)))))) {
+var spaceObject = class extends placeable(destroyable(targetable(loadsResources(renderable(visible(buildable(inSystem))))))) {
 
     constructor(buildInfo, system, socket) {
 	// Socket must be known at build time so setMultiplayer works
@@ -101,6 +102,7 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 	    this.setListeners();
 	}
 	this.renderReady = true;
+	await super._build();
     }
 
     setVisible(v) {
@@ -144,12 +146,14 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 
 	var images = this.meta.animation.images;
 	var promises = Object.keys(images).map(async function(imageName) {
-	    var imageID = images[imageName].id;
+	    var spriteSheetID = images[imageName].id;
 
 	    // see planetServer.js for the reason I can't change this yet. (it's a stupid one)
-	    var spriteSheet = await this.novaData.spriteSheets.get(imageID);
+	    //var spriteSheet = await this.novaData.spriteSheets.get(imageID);
 	    //var spriteSheet = await this.loadResources("spriteSheets", imageID);
-	    this.sprites[imageName] = new sprite(spriteSheet.textures, spriteSheet.convexHulls);
+	    
+	    this.sprites[imageName] = new sprite(spriteSheetID);
+	    await this.sprites[imageName].build();
 
 	}.bind(this));
 
@@ -221,32 +225,6 @@ var spaceObject = class extends destroyable(targetable(loadsResources(renderable
 	return stats;
     }
 
-    _placeContainer() {
-	if (!this.isPlayerShip) {
-	    var stagePosition = this.position.getStagePosition();
-	    this.container.position.x = stagePosition[0];
-	    this.container.position.y = stagePosition[1];
-	}
-	
-	
-    }
-    
-    render() {
-	// rewrite this please. Put it in playerShip.
-	super.render(...arguments);
-	this._placeContainer();
-
-    }
-
-
-    _addToContainer() {
-	this.system.container.addChild(this.container);
-    }
-
-    _removeFromContainer() {
-	this.system.container.removeChild(this.container);
-    }
-    
     _removeFromSystem() {
 	this.hide();
 	this._removeFromContainer();

@@ -2,8 +2,8 @@ var resourcesPrototypeHolder = require("./resourcesPrototypeHolder");
 var loadsResources = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
-	if (! this.novaData) {
-	    this.novaData = resourcesPrototypeHolder.prototype.novaData;
+	if (! this.data) {
+	    this.data = resourcesPrototypeHolder.prototype.data;
 	}
 	if (! this.socket) {
 	    this.socket = resourcesPrototypeHolder.prototype.socket;
@@ -12,7 +12,7 @@ var loadsResources = (superclass) => class extends superclass {
     
     
     async loadResources(type, id) {
-	return await(this.novaData[type].get(id));
+	return await(this.data[type].get(id));
     }
 
     setProperties() {

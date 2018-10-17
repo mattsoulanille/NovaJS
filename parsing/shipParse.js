@@ -26,7 +26,8 @@ class shipParse extends baseParse {
 	    out.desc = "Parsing desc failed: " + e.message;
 	}
 
-	out.animation = new shanParse(ship.idSpace.shän[ship.id]);
+	var sp = new shanParse();
+	out.animation = await sp.parse(ship.idSpace.shän[ship.id]);
 	
 	out.shield = ship.shield;
 	out.shieldRecharge = ship.shieldRecharge;

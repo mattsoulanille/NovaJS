@@ -28,6 +28,24 @@ var visible = (superclass) => class extends destroyable(eventable(superclass)) {
 	this.container.visible = Boolean(v);
     }
 
+    _addToSystem() {
+	super._addToSystem();
+	//this._addToContainer();
+    }
+
+    _removeFromSystem() {
+	super._removeFromSystem();
+	//super._removeFromContainer();
+    }
+
+    _addToContainer() {
+	this.system.container.addChild(this.container);
+    }
+
+    _removeFromContainer() {
+	this.system.container.removeChild(this.container);
+    }
+    
     hide() {
 	this.setVisible(false);
 	if (super.hide) {

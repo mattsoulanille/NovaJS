@@ -1,4 +1,3 @@
-
 var destroyable = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);

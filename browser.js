@@ -5,6 +5,7 @@ const PIXI = require("pixi.js");
 require("pixi-display");
 const socket = require("socket.io-client")();
 const novaCache = require("./client/novaCache.js");
+const gameData = require("./client/gameData.js");
 const inSystem = require("./client/inSystem.js");
 const statusBar = require("./client/statusBar.js");
 const resourcesPrototypeHolder = require("./client/resourcesPrototypeHolder.js");
@@ -90,9 +91,11 @@ global.UUID;
 
 // caches nova data that is loaded from the server
 var nc = new novaCache();
+global.gd = new gameData();
 //inSystem.prototype.novaData = nc; // is this bad practice?
 //statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResourecs's prototype chain
 resourcesPrototypeHolder.prototype.novaData = nc;
+resourcesPrototypeHolder.prototype.data = global.gd.data;
 
 
 // global system variable; eventually will become a syst (like sol or wolf 359).

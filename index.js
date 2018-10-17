@@ -10,7 +10,7 @@ var favicon = require("serve-favicon");
 
 Promise = require("bluebird");
 
-process.on('unhandledRejection', r => console.log(r));
+//process.on('unhandledRejection', r => console.log(r));
 // This turns incomprehensible promise errors into real stacktraces
 
 var fs = require('fs'),
@@ -60,6 +60,7 @@ local.context.kick = kick;
 // parses nova files + plug-ins
 var novaParse = require("novaparse");
 var novaData = require("./parsing/novaData");
+var gameData = require("./server/gameDataServer.js");
 
 var npc = require("./server/npcServer.js");
 //npc.prototype.io = io;
@@ -199,6 +200,7 @@ app.use(express.static(__dirname));
 //
 var np = new novaParse("./Nova\ Data");
 var nd; // nova data
+var gd; // game data
 //var nc; // nova cache (not actually a cache. just
 
 // all ships
@@ -230,6 +232,14 @@ var startGame = async function() {
     resourcesPrototypeHolder.prototype.novaData = nd;
     resourcesPrototypeHolder.prototype.socket = io;
 
+    
+
+    gd = new gameData(app, nd);
+    resourcesPrototypeHolder.prototype.data = gd.data;
+
+    local.context.gd = gd;
+
+    
     sol = new system({id:"nova:130"});
     local.context.sol = sol;
 
@@ -297,7 +307,7 @@ var startGame = async function() {
 	var id = req.params.image;
 	try {
 	    var pict = await nd.picts.get(id);
-	    var buf = PNG.sync.write(pict.png);
+	    var buf = pict.png;
 	    res.send(buf);
 	    return;
 	}
@@ -324,7 +334,7 @@ var startGame = async function() {
 
     app.get('/objects/spriteSheets/:spriteSheet/image.png', function(req, res) {
 	if (req.spriteSheet) {
-	    var buf = PNG.sync.write(req.spriteSheet.png);
+	    var buf = req.spriteSheet.png;
 	    res.send(buf);
 	}
 	else {

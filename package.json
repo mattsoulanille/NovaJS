@@ -88,6 +88,7 @@
     "./server/playerShipServer.js": "./client/playerShip.js",
     "./server/particleEmitterServer.js": "./client/particleEmitter.js",
     "./server/pixistub.js": "pixi.js",
-    "./server/ionizableServer.js": "./client/ionizable.js"
+    "./server/ionizableServer.js": "./client/ionizable.js",
+    "./server/placeableServer.js": "./client/placeable.js"
   }
 }

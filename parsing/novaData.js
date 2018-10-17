@@ -1,5 +1,5 @@
 
-const spriteSheet = require("./spriteSheet.js");
+const spriteSheetAndImageParse = require("./spriteSheetAndImageParse.js");
 const shanParse = require("./shanParse.js");
 const shipParse = require("./shipParse.js");
 const weapParse = require("./weapParse.js");
@@ -14,7 +14,7 @@ class novaData {
     constructor(parsed) {
 	this.novaParse = parsed;
 	this.parsers = {
-	    spriteSheet : new spriteSheet(),
+	    spriteSheetAndImageParse : new spriteSheetAndImageParse(),
 	    outfParse : new outfParse(),
 	    weapParse : new weapParse(),
 	    pictParse : new pictParse(),
@@ -22,8 +22,22 @@ class novaData {
 	    systemParse : new systemParse()
 	};
 
-	//this.spriteSheetImages = new gettable(
-	this.spriteSheets = new gettable(this.getFunction("rlëD", this.parsers.spriteSheet));
+	this._spriteSheetAndImages = new gettable(
+	    this.getFunction("rlëD", this.parsers.spriteSheetAndImageParse));
+	
+	this.spriteSheets = new gettable(async function(globalID) {
+	    return (await this._spriteSheetAndImages.get(globalID)).spriteSheet;
+	}.bind(this));
+
+	this.spriteSheetImages = new gettable(async function(globalID) {
+	    return (await this._spriteSheetAndImages.get(globalID)).png;
+	}.bind(this));
+
+	this.spriteSheetFrames = new gettable(async function(globalID) {
+	    return (await this._spriteSheetAndImages.get(globalID)).frameInfo;
+	}.bind(this));
+
+
 	this.outfits = new gettable(this.getFunction("oütf", this.parsers.outfParse));
 	this.weapons = new gettable(this.getFunction("wëap", this.parsers.weapParse));
 	this.picts = new gettable(this.getFunction("PICT", this.parsers.pictParse));
@@ -49,10 +63,11 @@ class novaData {
 
     async build() {
 	await this.buildWeaponOutfitMap();
-	
+	this.parsers.shipParse = new shipParse(this.weaponOutfitMap);
+	this.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
     }
 
-    async buildWeaponOutfitMap() {
+    buildWeaponOutfitMap() { // returns a promise
 	// Nova ships are given weapons instead of outfits.
 	// Figure out which outfits those weapons correspond to.
 	// Doesn't work well if one outfit is two weapons.
@@ -89,9 +104,7 @@ class novaData {
 	}.bind(this));
 
 
-	await Promise.all(promises);
-	this.parsers.shipParse = new shipParse(this.weaponOutfitMap);
-	this.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
+	return Promise.all(promises);
     }
 };
 

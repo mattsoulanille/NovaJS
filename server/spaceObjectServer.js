@@ -22,7 +22,6 @@ class spaceObjectServer extends spaceObject {
     callSprites(call) {
     // also do nothing
     }
-    _placeContainer() {}
     
 /*
 spaceObjectServer.prototype.destroy = function() {

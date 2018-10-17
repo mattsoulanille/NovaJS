@@ -7,14 +7,16 @@ const baseParse = require("./baseParse.js");
 // number of frames before wrapping one row down
 const wrap = 10;
 
-class spriteSheet extends baseParse {
-
+// Returns a parsed spriteSheet (with convex hulls) and the corresponding pict.
+class spriteSheetAndImageParse extends baseParse {
+    
     constructor() {
 	super(...arguments);
     }
 
     async parse(rled) {
-	var out = super.parse(rled);
+	var out = {};
+	out.spriteSheet = super.parse(rled);
 
 	var frames = rled.frames;
 	var frameWidth = frames[0].width;
@@ -30,7 +32,7 @@ class spriteSheet extends baseParse {
 	}
 	var height = frameHeight * Math.ceil(frameCount / wrap);
 
-	out.frameInfo = this.makeFrameMetadata(frames, frameWidth, frameHeight, width, height, out.id);
+	out.frameInfo = this.makeFrameMetadata(frames, frameWidth, frameHeight, width, height, out.spriteSheet.id);
 
 	
 	var png = this.buildPNG(frames, frameWidth, frameHeight, width, height);
@@ -38,7 +40,7 @@ class spriteSheet extends baseParse {
 	out.png = PNG.sync.write(png);
 
 	let builder = new convexHullBuilder(png, out.frameInfo.frames);
-	out.convexHulls = await builder.buildFromSpriteSheet();
+	out.spriteSheet.convexHulls = await builder.buildFromSpriteSheet();
 
 	return out;
     }
@@ -73,7 +75,8 @@ class spriteSheet extends baseParse {
 		h: height
 	    },
 	    scale:'1',
-	    image: './image.png'
+	    image: '../spriteSheetImages/' + id + ".png"
+	    // The image for this spriteSheet should be accessable at ../spriteSheetImages/:id
 	    // imagePurposes: {
 	    // 	// default uses all frames as normal animation frames. Shan changes this
 	    // 	normal: {
@@ -137,4 +140,4 @@ class spriteSheet extends baseParse {
 
 };
 
-module.exports = spriteSheet;
+module.exports = spriteSheetAndImageParse;

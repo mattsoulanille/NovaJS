@@ -5,7 +5,7 @@ var assert = chai.assert;
 var novaParse = require("novaParse");
 var novaData = require("../parsing/novaData");
 var system = require("../server/systemServer.js");
-var inSystem = require("../client/inSystem");
+var resourcesPrototypeHolder = require("../client/resourcesPrototypeHolder");
 var ship = require("../server/shipServer.js");
 // var http = require('http').Server();
 // var io = require('socket.io')(http);
@@ -31,8 +31,8 @@ describe("destroy", function() {
 
     var makeShip = async function(id) {
 	var s = new ship({id:id}, sol, socketStub);
-	s.meta = await s.novaData[s.type].get(s.buildInfo.id);	
-	s.parseDefaultWeaponsSync();
+	
+	//s.meta = await s.novaData[s.type].get(s.buildInfo.id);	
 	await s.build();
 	ships.push(s);
 	return s;
@@ -50,7 +50,8 @@ describe("destroy", function() {
 	var np = new novaParse("./Nova\ Data");
 	await np.read();
 	var nd = new novaData(np);
-	inSystem.prototype.novaData = nd;
+	await nd.build();
+	resourcesPrototypeHolder.prototype.data = nd;
 
 	shuttle = await makeShip("nova:128");
 	shuttleB = await makeShip("nova:188");
