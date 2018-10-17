@@ -6,7 +6,7 @@ var PIXI = require("../server/pixistub.js");
 
 class outfitter extends menu {
     constructor() {
-	var buildInfo = {background : "/objects/picts/nova:8502.png"};
+	var buildInfo = {background : "nova:8502"};
 	super(buildInfo);
 	this.scope = "outfitter";
 

@@ -1,7 +1,7 @@
 {
     "animation": {
 	"pictures": {
-	    "statusBar": "nova:700.png"
+	    "statusBar": "nova:700"
 	}
     },
     "colors": {

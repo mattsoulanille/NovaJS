@@ -7,9 +7,10 @@ class pictParse extends baseParse {
 	super(...arguments);
     }
     async parse(PICT) {
-	var out = await super.parse(PICT);
-	out.png = PNG.sync.write(PICT.png);
-	return out;
+	//var out = await super.parse(PICT);
+	//out.png = PNG.sync.write(PICT.png);
+	//return out.png;
+	return PNG.sync.write(PICT.png);
     }
 }
 

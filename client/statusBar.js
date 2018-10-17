@@ -74,9 +74,9 @@ var statusBar = class extends loadsResources(destroyable(function() {})) {
     }
 
     makeSprites() {
-	// revise this when you can parse PICT
-	var baseImageURL = "objects/picts/" + this.meta.animation.pictures.statusBar;
-	var baseImage = PIXI.Sprite.fromImage(baseImageURL);
+	//var baseImageURL = "objects/picts/" + this.meta.animation.pictures.statusBar;
+	//var baseImage = PIXI.Sprite.fromImage(baseImageURL);
+	var baseImage = this.data.sprite.fromPict(this.meta.animation.pictures.statusBar);
 	this.sprites['baseImage'] = baseImage;
 
 	this.container.addChildAt(this.sprites['baseImage'], 0);

@@ -188,11 +188,7 @@ app.get('/', function(req, res){
     res.sendFile(__dirname + '/index.html');
 });
 
-
 app.use(favicon(path.join(__dirname, "/favicon.ico")));
-app.use(express.static(__dirname));
-
-
 
 
 //
@@ -289,6 +285,10 @@ var startGame = async function() {
     
     io.on('connection', connectFunction);
 
+    app.use("/static", express.static("static"));
+    app.use("/settings", express.static("settings"));
+    
+    // TODO: Make this less bad
     app.get('/objects/meta/allShips.json', function(req, res) {
 	res.send(JSON.stringify(allShips));
     });
@@ -297,29 +297,6 @@ var startGame = async function() {
 	res.send(JSON.stringify(allOutfits));
     });
 
-
-    // app.get('objects/planets/:planet.json', function(req, res) {
-    // 	req.sendFile(res['planet.json']); //temporary
-    // });
-
-
-    app.get('/objects/picts/:image.png', async function(req, res) {
-	var id = req.params.image;
-	try {
-	    var pict = await nd.picts.get(id);
-	    var buf = pict.png;
-	    res.send(buf);
-	    return;
-	}
-	catch (e) {
-	    console.log("Pict failed to parse: " + e);
-	}
-
-	// Otherwise, send the default pict
-	res.sendFile(path.join(__dirname, "/objects/defaults/PICT.png"));
-
-    });
-    
     app.param("spriteSheet", async function(req, res, next, id) {
 	try {
 	    req.spriteSheet = await nd.spriteSheets.get(id);

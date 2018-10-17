@@ -5,8 +5,8 @@ var shipyard = require("./shipyard.js");
 var PIXI = require("../server/pixistub.js");
 
 class spaceport extends menu {
-    constructor(buildInfo, departCallback) { // buildInfo will contain the url or something...
-	buildInfo.background = "/objects/picts/nova:8500.png";
+    constructor(buildInfo, departCallback) {
+	buildInfo.background = "nova:8500";
 	super(buildInfo);
 	this.departCallback = departCallback;
 	this.container.position.x = (global.screenW-194)/2;
@@ -26,8 +26,7 @@ class spaceport extends menu {
 	}.bind(this));
 
 	// make the spaceport pict
-	var url = "/objects/picts/" + this.buildInfo.landingPictID + ".png";
-	this.spaceportPict = new PIXI.Sprite.fromImage(url);
+	this.spaceportPict = this.data.sprite.fromPict(this.buildInfo.landingPictID);
 	this.spaceportPict.position.x = -306;
 	this.spaceportPict.position.y = -256;
 	this.container.addChild(this.spaceportPict);

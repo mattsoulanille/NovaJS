@@ -70,9 +70,8 @@ class itemTile extends eventable(loadsResources(function() {})) {
 	}
 
 	if (this.item.pictID) {
-	    var url = "/objects/picts/" + this.item.pictID + ".png";
-	    this.smallPict = new PIXI.Sprite.fromImage(url);
-	    this.largePict = new PIXI.Sprite.fromImage(url);
+	    this.smallPict = this.data.sprite.fromPict(this.item.pictID);
+	    this.largePict = this.data.sprite.fromPict(this.item.pictID);
 	    this.smallPict.anchor.x = 0.5;
 	    this.smallPict.position.x = this.middle[0];
 	    this.smallPict.position.y = 1;

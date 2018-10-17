@@ -5,7 +5,7 @@ var PIXI = require("../server/pixistub.js");
 
 class shipyard extends menu {
     constructor() {
-	var buildInfo = {background : "/objects/picts/nova:8501.png"};
+	var buildInfo = {background : "nova:8501"};
 	super(buildInfo);
 	this.scope = "shipyard";
 	this.itemGrid = new itemGrid(global.allShips);
