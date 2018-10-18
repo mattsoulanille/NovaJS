@@ -15,10 +15,6 @@ class gameData extends gameDataSuper {
 	    this.addGettable(name);
 	}
 
-	// TODO: Make this into a more permanenet solution for filesystem access
-	// TEMPORARY UNTIL STATUSBARS CAN BE PARSED
-	this.addGettable("statusBars");
-
 	this.data.sprite = {};
 	this.data.sprite.fromPict = this.getSpriteFromPict.bind(this);
 	this.data.texture = {};
@@ -27,6 +23,7 @@ class gameData extends gameDataSuper {
 
     async _build() {
 	this.ids = await getURL(path.join(this.metaPath, "ids.json"));
+	super._build();
     }
     
     getSpriteFromPict(globalID) {

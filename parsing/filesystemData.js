@@ -42,7 +42,9 @@ class filesystemData {
 		    reject(err);
 		}
 		else {
-		    fulfill(items.filter(x => x[0] != ".")); // Remove anything with leading .
+		    // Remove anything with a . in front of it
+		    // Cut off all extensions
+		    fulfill(items.filter(x => x[0] != ".").map(x => x.slice(0, x.lastIndexOf("."))));
 		}
 	    });
 	});

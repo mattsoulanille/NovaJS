@@ -5,17 +5,18 @@ const fs = require("fs");
 const path = require("path");
 const filesystemData = require("../parsing/filesystemData.js");
 const gameDataSuper = require("../superclasses/gameDataSuper.js");
-
+const novaData = require("../parsing/novaData.js");
 
 // This combines all sources of data into one place to get data from.
 class gameDataServer extends gameDataSuper {
     // TODO: Make this create its own novaData
-    constructor(app, novaData) {
+    constructor(app) {
 	super();
-	this.data = {};
 	this.app = app;
-	this.novaData = novaData;
+
+	this.novaData = new novaData("./Nova\ Data");
 	this.filesystemData = new filesystemData("objects");
+
 	this.dataSources = [this.novaData, this.filesystemData];
 
 	this.app.get(path.join(this.resourcePath, ":name/:item.json"),
@@ -30,11 +31,13 @@ class gameDataServer extends gameDataSuper {
 
     async _build() {
 	await this.filesystemData.build();
-
+	await this.novaData.build();
+	
 	this.setupIDs();
 	this.app.get(path.join(this.metaPath, "ids.json"), function(req, res) {
 	    res.send(this.ids);
 	}.bind(this));
+	super._build();
     }
 
     setupDataSources() {
@@ -66,7 +69,6 @@ class gameDataServer extends gameDataSuper {
 	    this.ids[dataType] = [];
 	    for (let j in this.dataSources) {
 		let dataSource = this.dataSources[j];
-		debugger;
 		if (typeof dataSource.ids[dataType] !== 'undefined') {
 		    this.ids[dataType] = [...this.ids[dataType], ...dataSource.ids[dataType]];
 		}

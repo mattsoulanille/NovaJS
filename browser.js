@@ -107,26 +107,26 @@ resourcesPrototypeHolder.prototype.data = global.gd.data;
 global.gameControls = new controls(); // global controls
 var players = {};
 
-
-// Temporary until there's an actual system for planets knowing
-// what ships they have available.
-
-
-function loadJson(url) {
-    return new Promise(function(fulfill, reject) {
-	var loader = new PIXI.loaders.Loader();
-	var data;
-	loader
-	    .add('stuff', url)
-	    .load(function(loader, resource) {
-		data = resource.stuff.data;
-	    })
-	    .onComplete.add(function() {fulfill(data);});
-    });
+async function promiseMap(arr, func) {
+    var out = [];
+    for (let i in arr) {
+	out[i] = await func(arr[i]);
+    }
+    return out;
 }
 
 
 socket.on('onconnected', async function(data) {
+    await global.gd.build();
+    
+    global.allOutfits = await promiseMap(global.gd.ids.outfits, function(id) {
+	return global.gd.data.outfits.get(id);
+    });
+
+    global.allShips = await promiseMap(global.gd.ids.ships, function(id) {
+	return global.gd.data.ships.get(id);
+    });
+    
     global.UUID = data.id;
     console.log("Connected to server. UUID: "+global.UUID);
     //global.myShip = new playerShip(data.playerShip);
@@ -134,22 +134,11 @@ socket.on('onconnected', async function(data) {
     if (typeof global.stars === 'undefined') {
 	global.stars = new starfield(global.myShip, SPACE_DIM);
     }
-    
 
     if (data.paused) {
 	pause();
     }
-    await loadJson("/objects/meta/allShips.json")
-	.then(function(ships) {
-	    // Temporary
-	    global.allShips = ships;
-	});
 
-    await loadJson("/objects/meta/allOutfits.json")
-	.then(function(outfits) {
-	    // Temporary
-	    global.allOutfits = outfits;
-	});
     global.currentSystem = new system(data.system);
     
     await global.currentSystem.setObjects(data.systemObjects);

@@ -8,7 +8,7 @@ var _ = require("underscore");
 var errors = require("./client/errors.js");
 var favicon = require("serve-favicon");
 
-Promise = require("bluebird");
+//Promise = require("bluebird");
 
 //process.on('unhandledRejection', r => console.log(r));
 // This turns incomprehensible promise errors into real stacktraces
@@ -49,8 +49,8 @@ var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
 var system = require("./server/systemServer.js");
 var collidable = require("./server/collidableServer.js");
-var medium_blaster = new outfit("Medium Blaster", 1);
 var sol;
+
 Object.defineProperty(local.context, 'ships', {set: function() {}, get: function() {
     return Array.from(sol.ships);
 }});
@@ -145,48 +145,17 @@ app.use(favicon(path.join(__dirname, "/favicon.ico")));
 //
 // Start the game
 //
-var np = new novaParse("./Nova\ Data");
-var nd; // nova data
 var gd; // game data
-//var nc; // nova cache (not actually a cache. just
 
-// all ships
-var shipIDs;
-var allShips;
-var allOutfits;
+
 var startGame = async function() {
-    console.log("Reading nova data");
-    try {
-	await np.read();
-    }
-    catch(err) {
-	if (err.code === 'ENOENT') {
-	    console.log("Missing data files or directory structure. Expected \"" + err.path + "\" to exist.");
-	    console.log('Please make sure your nova files are located at "./Nova Data/Nova Files/" and your plug-ins at "./Nova Data/Plug-ins/"');
-	    process.exit(1);
-	}
-	else {
-	    throw err;
-	}
-    }
-
-
-
-    shipIDs = Object.keys(np.ids.resources.shïp);
-    nd = new novaData(np);
-    await nd.build();
-    inSystem.prototype.novaData = nd;
-    resourcesPrototypeHolder.prototype.novaData = nd;
     resourcesPrototypeHolder.prototype.socket = io;
 
-    
-
-    gd = new gameData(app, nd);
+    gd = new gameData(app);
     await gd.build();
     resourcesPrototypeHolder.prototype.data = gd.data;
 
     local.context.gd = gd;
-
     
     sol = new system({id:"nova:130"});
     local.context.sol = sol;
@@ -194,62 +163,14 @@ var startGame = async function() {
     var tichel = new system({id: "nova:129"});
     local.context.tichel = tichel;
 
-    npcMaker = new AI(sol, io, shipIDs);
+    npcMaker = new AI(sol, io, gd.ids.ships);
     local.context.npcMaker = npcMaker;
-
-    allShips = [];
-    
-    for (var i in shipIDs) {
-	let id = shipIDs[i];
-	var globalID = np.ids.resources.shïp[id].globalID;
-	try {
-	    allShips.push(await nd.ships.get(globalID));
-	}
-	catch(e) {
-	    // These errors should really be more specific (change this)
-	}
-    }
-
-
-    var outfIDs = Object.keys(np.ids.resources.oütf);
-    allOutfits = [];
-    for (var i in outfIDs) {
-	let id = outfIDs[i];
-	var globalID = np.ids.resources.oütf[id].globalID;
-	try {
-	    allOutfits.push(await nd.outfits.get(globalID));
-	}
-	catch(e) {
-	    // These errors should really be more specific (change this)
-	}
-    }
-
-    local.context.allShips = allShips;
-    local.context.allOutfits = allOutfits;
-    local.context.shipIDs = shipIDs;
-
-
-    
-    console.log("Parsing nova files and setting up cache");
-    local.context.nd = nd;
-
-    
     
     io.on('connection', connectFunction);
 
     app.use("/static", express.static("static"));
     app.use("/settings", express.static("settings"));
     
-    // TODO: Make this less bad
-    app.get('/objects/meta/allShips.json', function(req, res) {
-	res.send(JSON.stringify(allShips));
-    });
-
-    app.get('/objects/meta/allOutfits.json', function(req, res) {
-	res.send(JSON.stringify(allOutfits));
-    });
-
-
     await sol.build();
     console.log("finished loading");
 
@@ -279,7 +200,7 @@ var connectFunction = function(socket){
 
 
     var playerShipType = {
-	id: shipIDs[_.random(0, shipIDs.length - 1)]
+	id: gd.ids.ships[_.random(0, gd.ids.ships.length - 1)]
     };
 
 
@@ -328,20 +249,20 @@ var connectFunction = function(socket){
     var setShip = async function(id) {
 	// doesn't work
 	var buildInfo = {};
-	if (shipIDs.includes(id)) {
+	if (gd.ids.ships.includes(id)) {
 	    buildInfo.id = id;
 	    buildInfo.UUID = userid;
 	    myShip.destroy();
 	    await buildShip(buildInfo);
 	    io.emit("replaceObject", buildInfo);
 	}
-	else if (shipNames[id]) {
-	    buildInfo.id = shipNames[id];
-	    buildInfo.UUID = userid;
-	    myShip.destroy();
-	    await buildShip(buildInfo);
-	    io.emit("replaceObject", buildInfo);
-	}
+	// else if (shipNames[id]) {
+	//     buildInfo.id = shipNames[id];
+	//     buildInfo.UUID = userid;
+	//     myShip.destroy();
+	//     await buildShip(buildInfo);
+	//     io.emit("replaceObject", buildInfo);
+	// }
 	else {
 	    socket.emit("noSuchShip", id);
 	}
@@ -420,7 +341,7 @@ var connectFunction = function(socket){
 	io.emit('pause', {for:'everyone'});
     });
     socket.on('resume', function() {
-	palused = false;
+	paused = false;
 	io.emit('resume', {for:'everyone'});
 	sol.resume();
 //	gameTimeout = setTimeout(function() {gameloop(system)}, 0);

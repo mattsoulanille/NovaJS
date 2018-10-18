@@ -8,11 +8,14 @@ const pictParse = require("./pictParse.js");
 const planetParse = require("./planetParse.js");
 const systemParse = require("./systemParse.js");
 const gettable = require("../libraries/gettable.js");
+const buildable = require("../client/buildable.js"); // maybe move this out of /client?
+const novaParse = require("novaParse");
 
-
-class novaData {
-    constructor(parsed) {
-	this.novaParse = parsed;
+class novaData extends buildable(function() {}) {
+    constructor(path) {
+	super();
+	//this.novaParse = parsed;
+	this.path = path;
 	this.parsers = {
 	    spriteSheetAndImageParse : new spriteSheetAndImageParse(),
 	    outfParse : new outfParse(),
@@ -21,7 +24,32 @@ class novaData {
 	    planetParse : new planetParse(),
 	    systemParse : new systemParse()
 	};
+    }
 
+    async _build() {
+	this.novaParse = new novaParse(this.path);
+
+	try {
+	    await this.novaParse.read();
+	}
+	catch (e) {
+	    if (e.code === "ENOENT") {
+		console.log("Missing data files or directory structure. Expected \"" + e.path + "\" to exist.");
+		console.log('Please make sure your nova files are located at "./Nova Data/Nova Files/" and your plug-ins at "./Nova Data/Plug-ins/"');
+	    }
+	    else {
+		throw e;
+	    }
+	}
+
+	await this.buildWeaponOutfitMap();
+	this.parsers.shipParse = new shipParse(this.weaponOutfitMap);
+	this.setupDataSources();
+	this.setupIDs();
+	super._build();
+    }
+
+    setupDataSources() {
 	this._spriteSheetAndImages = new gettable(
 	    this.getFunction("rlëD", this.parsers.spriteSheetAndImageParse));
 	
@@ -45,7 +73,10 @@ class novaData {
 	this.picts = new gettable(this.getFunction("PICT", this.parsers.pictParse));
 	this.planets = new gettable(this.getFunction("spöb", this.parsers.planetParse));
 	this.systems = new gettable(this.getFunction("sÿst", this.parsers.systemParse));
+	this.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
+    }
 
+    setupIDs() {
 	this.ids = {
 	    outfits: this._getIDs("oütf"),
 	    weapons: this._getIDs("wëap"),
@@ -58,7 +89,7 @@ class novaData {
 	    ships: this._getIDs("shïp")
 	};
     }
-
+    
     _getIDs(resourceName) {
 	return Object.keys(this.novaParse.ids.resources[resourceName]);
     }
@@ -77,12 +108,6 @@ class novaData {
 		throw new Error(globalID + " not found in novaParse under " + resourceType);
 	    }
 	}.bind(this);
-    }
-
-    async build() {
-	await this.buildWeaponOutfitMap();
-	this.parsers.shipParse = new shipParse(this.weaponOutfitMap);
-	this.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
     }
 
     buildWeaponOutfitMap() { // returns a promise
