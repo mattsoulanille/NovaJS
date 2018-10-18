@@ -2,12 +2,17 @@
 
 
 class universe {
-    constructor() {
+    constructor(gameData) {
+	this.data = gameData;
 	this.systems = new Set();
 	this.players = new Set();
 	this.activeSystems = new Set();
     }
 
+    build() {
+
+    }
+    
     render(delta, time) {
 	this.activeSystems.forEach(function(system) {
 	    system.render(delta, time);

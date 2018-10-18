@@ -38,13 +38,31 @@ class novaData {
 	}.bind(this));
 
 
+	// TODO: Refactor these with .ids: Define a map between my names and nova's names
+	// and make these programmatically
 	this.outfits = new gettable(this.getFunction("oütf", this.parsers.outfParse));
 	this.weapons = new gettable(this.getFunction("wëap", this.parsers.weapParse));
 	this.picts = new gettable(this.getFunction("PICT", this.parsers.pictParse));
 	this.planets = new gettable(this.getFunction("spöb", this.parsers.planetParse));
 	this.systems = new gettable(this.getFunction("sÿst", this.parsers.systemParse));
+
+	this.ids = {
+	    outfits: this._getIDs("oütf"),
+	    weapons: this._getIDs("wëap"),
+	    picts: this._getIDs("PICT"),
+	    planets: this._getIDs("spöb"),
+	    systems: this._getIDs("sÿst"),
+	    spriteSheets: this._getIDs("rlëD"),
+	    spriteSheetImages: this._getIDs("rlëD"),
+	    spriteSheetFrames: this._getIDs("rlëD"),
+	    ships: this._getIDs("shïp")
+	};
     }
 
+    _getIDs(resourceName) {
+	return Object.keys(this.novaParse.ids.resources[resourceName]);
+    }
+    
     getFunction(resourceType, parser) {
 	return async function(globalID) {
 	    var index = globalID.lastIndexOf(":");

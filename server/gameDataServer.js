@@ -3,23 +3,38 @@ const gettable = require("../libraries/gettable.js");
 const novaDataTypes = require("../parsing/novaDataTypes.js");
 const fs = require("fs");
 const path = require("path");
-var filesystemData = require("../parsing/filesystemData.js");
+const filesystemData = require("../parsing/filesystemData.js");
+const gameDataSuper = require("../superclasses/gameDataSuper.js");
+
 
 // This combines all sources of data into one place to get data from.
-class gameDataServer {
+class gameDataServer extends gameDataSuper {
     // TODO: Make this create its own novaData
     constructor(app, novaData) {
+	super();
 	this.data = {};
 	this.app = app;
 	this.novaData = novaData;
 	this.filesystemData = new filesystemData("objects");
 	this.dataSources = [this.novaData, this.filesystemData];
 
-	this.app.get('/gameData/:name/:item.json', this._requestFulfiller.bind(this));
-	this.app.get('/gameData/:name/:item.png', this._requestFulfiller.bind(this));
+	this.app.get(path.join(this.resourcePath, ":name/:item.json"),
+		     this._requestFulfiller.bind(this));
+	this.app.get(path.join(this.resourcePath, ":name/:item.png"),
+		     this._requestFulfiller.bind(this));
 	// Extensions are so that the PIXI loader knows how to interpret the data.
-
+	
+	
 	this.setupDataSources();
+    }
+
+    async _build() {
+	await this.filesystemData.build();
+
+	this.setupIDs();
+	this.app.get(path.join(this.metaPath, "ids.json"), function(req, res) {
+	    res.send(this.ids);
+	}.bind(this));
     }
 
     setupDataSources() {
@@ -44,6 +59,21 @@ class gameDataServer {
 	}
     }
 
+    setupIDs() {
+	this.ids = {};
+	for (let i in novaDataTypes) {
+	    var dataType = novaDataTypes[i];
+	    this.ids[dataType] = [];
+	    for (let j in this.dataSources) {
+		let dataSource = this.dataSources[j];
+		debugger;
+		if (typeof dataSource.ids[dataType] !== 'undefined') {
+		    this.ids[dataType] = [...this.ids[dataType], ...dataSource.ids[dataType]];
+		}
+	    }
+	}
+    }
+
     async _requestFulfiller(req, res, next) {
 	try {
 	    var data = await this.data[req.params.name].get(req.params.item);
@@ -60,9 +90,6 @@ class gameDataServer {
 	}
 	// Add to its own data
 	this.data[name] = g;
-
-	// Add a route so the client can get it too.
-
     }
 
 }

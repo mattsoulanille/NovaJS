@@ -25,38 +25,6 @@ const port = settings.port;
 
 local.context.io = io;
 
-var help = function() {
-    console.log("Available commands:\n" +
-		"help\tprints this help\n" + 
-		"list\tlists players\n" +
-		"kick(uuid)\tkicks a player by uuid"
-	       );
-};
-Object.defineProperty(local.context, 'help', {set: function(x) {}, get: help});
-
-// lists players
-
-
-var listPlayers = function() {
-    var formatted = {};
-    _.each(players, function(p, key) {
-	formatted[key] = {"ship":p.ship.name};
-    });
-    return formatted;
-};
-
-Object.defineProperty(local.context, 'list', {set: function(x) {}, get: listPlayers});
-
-
-// kicks a player
-var kick = function(UUID) {
-    if (_.includes(Object.keys(players), UUID)) {
-	players[UUID].io.disconnect();
-    }
-};
-
-local.context.kick = kick;
-
 // parses nova files + plug-ins
 var novaParse = require("novaparse");
 var novaData = require("./parsing/novaData");
@@ -75,7 +43,7 @@ var basicWeapon = require("./server/basicWeaponServer");
 basicWeapon.prototype.socket = io;
 
 
-
+ 
 var ship = require("./server/shipServer");
 var outfit = require("./server/outfitServer");
 var planet = require("./server/planetServer");
@@ -214,6 +182,7 @@ var startGame = async function() {
     
 
     gd = new gameData(app, nd);
+    await gd.build();
     resourcesPrototypeHolder.prototype.data = gd.data;
 
     local.context.gd = gd;
