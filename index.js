@@ -202,24 +202,10 @@ var connectFunction = function(socket){
     var playerShipType = {
 	id: gd.ids.ships[_.random(0, gd.ids.ships.length - 1)]
     };
-
-
-    //playerShipType = {id: "nova:164"}; // Polaris Raven
-    //playerShipType = {id: "nova:176"}; // Krypt Pod
-    //playerShipType = {id: "nova:128"}; // shuttle
-    //playerShipType = {id: "nova:199"}; // Starbridge C
-    //playerShipType = {id: "nova:378"}; // Kestrel
-    //playerShipType = {id: "nova:157"}; // thunderhead
-    //
-    //playerShipType = {id: "singularity:418"};
     
     playerShipType.UUID = userid;
 
     var sendSystem = function() {
-	//	console.log(myShip.buildInfo.outfits[0])
-	//console.log(currentSystem.getObjects())
-	//testSystem[userid] = myShip.buildInfo; // for testing missing objects
-
 	socket.emit('onconnected', {
 	    "playerShip":myShip.buildInfo,
 	    "id": userid,
@@ -243,7 +229,6 @@ var connectFunction = function(socket){
 	});
 
 	myShip.show();
-    //	.then(function() {console.log(myShip.weapons.all[0].UUID)})
     };
 
     var setShip = async function(id) {
@@ -281,11 +266,6 @@ var connectFunction = function(socket){
     socket.on('setShip', function(id) {
 	    setShip(id);
     });
-//    console.log(owned_uuids);
-//    console.log(playerShipType);
-
-
-
 
     players[userid] = {"ship":myShip,"io":socket};
     playercount = _.keys(players).length;
@@ -304,9 +284,6 @@ var connectFunction = function(socket){
     	    response.socketTime = msg.time;
     	    response.serverTime = new Date().getTime();
     	    socket.emit('pongTime', response);
-//	    console.log(msg);
-	    
-
     	}
     });
 
@@ -314,7 +291,6 @@ var connectFunction = function(socket){
 	var toSend = {};
 	_.each(missing, function(uuid) {
 	    if (currentSystem.multiplayer.hasOwnProperty(uuid)) {
-//		console.log("Sending missing object: "+uuid);
 		toSend[uuid] = currentSystem.multiplayer[uuid].buildInfo;
 	    }
 	    else {
