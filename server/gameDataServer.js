@@ -32,14 +32,28 @@ class gameDataServer extends gameDataSuper {
     async _build() {
 	await this.filesystemData.build();
 	await this.novaData.build();
-	
-	this.setupIDs();
-	this.app.get(path.join(this.metaPath, "ids.json"), function(req, res) {
-	    res.send(this.ids);
+
+	this.meta.ids = this.setupIDs();
+	this.meta.shipIDMap = await this.setupShipIDMap();
+	this.app.get(path.join(this.metaPath), function(req, res) {
+	    res.send(this.meta);
 	}.bind(this));
+
+
+	
 	super._build();
     }
 
+    async setupShipIDMap() {
+	var out = {};
+	for (let i in this.meta.ids.ships) {
+	    var id = this.meta.ids.ships[i];
+	    var ship = await this.data.ships.get(id);
+	    out[ship.name] = id;
+	}
+	return out;
+    }
+    
     setupDataSources() {
 	for (let i in novaDataTypes) {
 	    let name = novaDataTypes[i];
@@ -63,17 +77,18 @@ class gameDataServer extends gameDataSuper {
     }
 
     setupIDs() {
-	this.ids = {};
+	var ids = {};
 	for (let i in novaDataTypes) {
 	    var dataType = novaDataTypes[i];
-	    this.ids[dataType] = [];
+	    ids[dataType] = [];
 	    for (let j in this.dataSources) {
 		let dataSource = this.dataSources[j];
 		if (typeof dataSource.ids[dataType] !== 'undefined') {
-		    this.ids[dataType] = [...this.ids[dataType], ...dataSource.ids[dataType]];
+		    ids[dataType] = [...ids[dataType], ...dataSource.ids[dataType]];
 		}
 	    }
 	}
+	return ids;
     }
 
     async _requestFulfiller(req, res, next) {

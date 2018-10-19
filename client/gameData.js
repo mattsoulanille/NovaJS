@@ -22,7 +22,7 @@ class gameData extends gameDataSuper {
     }
 
     async _build() {
-	this.ids = await getURL(path.join(this.metaPath, "ids.json"));
+	this.meta = await getURL(path.join(this.metaPath));
 	super._build();
     }
     

@@ -77,12 +77,7 @@ local.context.addNPCs = async function(count, name=null) {
     var newNPCs = [];
     var id = null;
     if (name !== null) {
-	for (let i in allShips) {
-	    if (allShips[i].name == name) {
-		id = allShips[i].id;
-		break;
-	    }
-	}
+	id = gd.meta.shipIDMap[name];
 	if (id == null) {
 	    throw new Error("Ship name " + name + " not found");
 	}
@@ -97,13 +92,7 @@ local.context.addNPCs = async function(count, name=null) {
 local.context.addEscort = async function(master, name=null) {
     var id = null;
     if (name !== null) {
-	for (let i in allShips) {
-	    if (allShips[i].name == name) {
-		id = allShips[i].id;
-		break;
-	    }
-	}
-
+	id = gd.meta.shipIDMap[name];
     }
     if (id == null) {
 	throw new Error("Ship name " + name + " not found");
@@ -163,7 +152,7 @@ var startGame = async function() {
     var tichel = new system({id: "nova:129"});
     local.context.tichel = tichel;
 
-    npcMaker = new AI(sol, io, gd.ids.ships);
+    npcMaker = new AI(sol, io, gd.meta.ids.ships);
     local.context.npcMaker = npcMaker;
     
     io.on('connection', connectFunction);
@@ -200,7 +189,7 @@ var connectFunction = function(socket){
 
 
     var playerShipType = {
-	id: gd.ids.ships[_.random(0, gd.ids.ships.length - 1)]
+	id: gd.meta.ids.ships[_.random(0, gd.meta.ids.ships.length - 1)]
     };
     
     playerShipType.UUID = userid;
@@ -234,7 +223,7 @@ var connectFunction = function(socket){
     var setShip = async function(id) {
 	// doesn't work
 	var buildInfo = {};
-	if (gd.ids.ships.includes(id)) {
+	if (gd.meta.ids.ships.includes(id)) {
 	    buildInfo.id = id;
 	    buildInfo.UUID = userid;
 	    myShip.destroy();
@@ -323,7 +312,3 @@ var connectFunction = function(socket){
 //	gameTimeout = setTimeout(function() {gameloop(system)}, 0);
     });
 };
-
-
-
-

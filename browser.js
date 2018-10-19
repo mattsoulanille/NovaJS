@@ -119,11 +119,11 @@ async function promiseMap(arr, func) {
 socket.on('onconnected', async function(data) {
     await global.gd.build();
     
-    global.allOutfits = await promiseMap(global.gd.ids.outfits, function(id) {
+    global.allOutfits = await promiseMap(global.gd.meta.ids.outfits, function(id) {
 	return global.gd.data.outfits.get(id);
     });
 
-    global.allShips = await promiseMap(global.gd.ids.ships, function(id) {
+    global.allShips = await promiseMap(global.gd.meta.ids.ships, function(id) {
 	return global.gd.data.ships.get(id);
     });
     
