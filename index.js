@@ -70,10 +70,18 @@ local.context.killNPCs = function() {
     });
 };
 
+local.context.explodeNPCs = function() {
+    sol.npcs.forEach(function(n) {
+	n.onDeath();
+    });
+};
+
 var neuralAI = require("./server/neuralAI.js");
 var escort = require("./server/escortServer.js");
 
+var addingNPC = false;
 local.context.addNPCs = async function(count, name=null) {
+    addingNPC = true;
     var newNPCs = [];
     var id = null;
     if (name !== null) {
@@ -87,6 +95,7 @@ local.context.addNPCs = async function(count, name=null) {
 	newNPCs.push(newShip.buildInfo);
     }
     io.emit("buildObjects", newNPCs);
+    addingNPC = false;
 };
 
 local.context.addEscort = async function(master, name=null) {
@@ -266,8 +275,19 @@ var connectFunction = function(socket) {
 	console.log("test:");
 	console.log(data);
     });
-    
 
+    // Temporary. For testing.
+    socket.on('addNPC', function() {
+	if (! addingNPC) {
+	    local.context.addNPCs(1);
+	}
+    });
+    
+    socket.on('explodeNPCs', function() {
+	console.log("Exploding npcs");
+	local.context.explodeNPCs();
+    });
+    
     socket.on('pingTime', function(msg) {
     	var response = {};
     	if (msg.hasOwnProperty('time')) {

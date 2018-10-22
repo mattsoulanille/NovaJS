@@ -69,10 +69,10 @@ class gameDataServer extends gameDataSuper {
 	return toReturn;
     }
 
-    getParseErrorMessage(dataType, id, e) {
-	return "Failed to parse " + dataType + " " + id + ".\n" +
-	    "This " + dataType + " will not be available. Stacktrace: \n" + e.stack;
-    }
+    // getParseErrorMessage(dataType, id, e) {
+    // 	return "Failed to parse " + dataType + " " + id + ".\n" +
+    // 	    "This " + dataType + " will not be available. Stacktrace: \n" + e.stack;
+    // }
     
     async setupShipIDMap() {
 	var out = {};

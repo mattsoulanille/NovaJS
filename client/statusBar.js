@@ -2,7 +2,7 @@ var targetCorners = require("./targetCorners.js");
 var radar = require("./radar.js");
 var PIXI = require("pixi.js");
 var destroyable = require("./destroyable.js");
-
+const button = require("./button.js");
 
 
 var loadsResources = require("./loadsResources.js");
@@ -45,6 +45,25 @@ var statusBar = class extends loadsResources(destroyable(function() {})) {
 	if (typeof(this.source) !== 'undefined') {
 	    this.system = this.source.system;
 	}
+
+	this._makeNPCButtons();
+    }
+
+    _makeNPCButtons() {
+	// TEMPORARY for testing
+	this.addNPCButton = new button("Add Enemy", 120, {x: 26, y: 520});
+	this.container.addChild(this.addNPCButton.container);
+	this.addNPCButton.on("press", function() {
+	    // bad style, but this will be removed in the future
+	    this.source.socket.emit("addNPC");
+	}.bind(this));
+
+	this.explodeNPCButton = new button("Kill Enemies", 120, {x: 26, y:495});
+	this.container.addChild(this.explodeNPCButton.container);
+	this.explodeNPCButton.on("press", function() {
+	    this.source.socket.emit("explodeNPCs");
+	}.bind(this));
+	
     }
 
     async build() {
