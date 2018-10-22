@@ -10,7 +10,7 @@ const systemParse = require("./systemParse.js");
 const explosionParse = require("./explosionParse.js");
 const gettable = require("../libraries/gettable.js");
 const buildable = require("../client/buildable.js"); // maybe move this out of /client?
-const novaParse = require("novaParse");
+const novaParse = require("novaparse");
 
 class novaData extends buildable(function() {}) {
     constructor(path) {
