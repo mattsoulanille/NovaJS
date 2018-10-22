@@ -1,15 +1,20 @@
 // A single menu window
+var PIXI = require("../server/pixistub.js");
 var controllable = require("./controllable.js");
 var visible = require("./visible.js");
+var destroyable = require("./destroyable.js");
+var loadsResources = require("./loadsResources.js");
 
-class menu extends controllable(visible(function() {})) {
+
+class menu extends loadsResources(controllable(visible(destroyable(function() {})))) {
 
     constructor(buildInfo) {
 	super(...arguments);
 	this.buildInfo = buildInfo;
 	
 	if (typeof this.buildInfo !== 'undefined') {
-	    this.background = new PIXI.Sprite.fromImage(this.buildInfo.background);
+	    this.background = this.data.sprite.fromPict(this.buildInfo.background);
+	    
 	    // So that you can't press things that are behind menus:
 	    this.background.interactive = true;
 	    this.background.anchor.x = 0.5;
@@ -22,8 +27,6 @@ class menu extends controllable(visible(function() {})) {
 	this.buttons = new Set();
 
     }
-
-
     
     show() {
 	super.show();
@@ -36,14 +39,13 @@ class menu extends controllable(visible(function() {})) {
 
     }
     
-
     render() {
 	
     }
 
-    destroy() {
+    _destroy() {
 	this.hide();
-	super.destroy();
+	super._destroy();
     }
 
 }

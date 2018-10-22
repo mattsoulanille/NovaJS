@@ -168,6 +168,14 @@ class playerShip extends controllable(ship) {
 	this.setPlanetTarget(null);
     }
 
+    _startAfterburner() {
+	this.usingAfterburner = true;
+    }
+
+    _endAfterburner() {
+	this.usingAfterburner = false;
+    }
+    
     bindControls() {
 
 	var c = this.controls; // is gameControls as defined in controllable
@@ -184,7 +192,9 @@ class playerShip extends controllable(ship) {
 	
 	    c.onStart(this.scope, "target nearest", this.targetNearest.bind(this)),
 	    c.onStart(this.scope, "target", this.cycleTarget.bind(this)),
-	    c.onStart(this.scope, "reset nav", this.resetNav.bind(this))
+	    c.onStart(this.scope, "reset nav", this.resetNav.bind(this)),
+	    c.onStart(this.scope, "afterburner", this._startAfterburner.bind(this)),
+	    c.onEnd(this.scope, "afterburner", this._endAfterburner.bind(this))
 	];
     }
 
@@ -204,7 +214,8 @@ class playerShip extends controllable(ship) {
 	else {
 	    stats.turning = 'left';
 	}
-	
+
+
 	if (state.reverse) {
 	    stats.accelerating = -1;
 	}
@@ -214,6 +225,8 @@ class playerShip extends controllable(ship) {
 	else {
 	    stats.accelerating = 0;
 	}
+
+
 	this.turningToTarget = state["point to"];
 	
 	
@@ -247,6 +260,7 @@ class playerShip extends controllable(ship) {
 	this.pointing = Math.random() * 2*Math.PI;
 	this.shield = this.properties.shield;
 	this.armor = this.properties.armor;
+	this.ionization = 0;
 	this.show();
     }
 
@@ -358,6 +372,7 @@ class playerShip extends controllable(ship) {
 	this.velocity[1] = 0;
 	this.shield = this.properties.shield;
 	this.armor = this.properties.armor;
+	this.ionization = 0;
 	//var newStats = {};
 	//newStats[this.UUID] = this.getStats();
 	//this.socket.emit('updateStats', newStats);
@@ -398,7 +413,7 @@ class playerShip extends controllable(ship) {
 	super._removeFromSystem();
     }
 
-    destroy() {
+    _destroy() {
 	try {
 	    this.unbindControls();
 
@@ -418,7 +433,7 @@ class playerShip extends controllable(ship) {
 	    }
 	}
 	this.statusBar.destroy();
-	super.destroy.call(this);
+	super._destroy();
     }
 }
 

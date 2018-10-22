@@ -204,7 +204,7 @@ Else, return false
 	throw new AlliesError("Tried to set allies of a beam weapon but they are defined implicitly by source");
     }
 
-    collideWith(other, res) {
+    _collideWith(other, res) {
 	//console.log(res);
 	var delta = (other.delta) * 60 / 1000;
 
@@ -216,6 +216,8 @@ Else, return false
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage * delta;
 	    collision.armorDamage = this.properties.armorDamage * delta;
+	    collision.ionizationDamage = this.properties.ionizationDamage * delta;
+	    collision.ionizationColor = this.properties.ionizationColor;
 	    collision.passThroughShields = this.meta.passThroughShields;
 	    // needs improvement for proper tractoring
 	    //collision.impact = this.properties.impact * delta;
@@ -228,7 +230,7 @@ Else, return false
 	}
     }
 
-    receiveCollision(collision) { // maybe do beam clipping here?
+    _receiveCollision(collision) { // maybe do beam clipping here?
     }
 
     _removeFromSystem() {
@@ -259,8 +261,8 @@ Else, return false
     }
     
     
-    destroy() {
-	super.destroy();
+    _destroy() {
+	super._destroy();
     }
 
 };

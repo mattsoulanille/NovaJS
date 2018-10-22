@@ -5,8 +5,10 @@ const PIXI = require("pixi.js");
 require("pixi-display");
 const socket = require("socket.io-client")();
 const novaCache = require("./client/novaCache.js");
+const gameData = require("./client/gameData.js");
 const inSystem = require("./client/inSystem.js");
 const statusBar = require("./client/statusBar.js");
+const resourcesPrototypeHolder = require("./client/resourcesPrototypeHolder.js");
 const system = require("./client/system.js");
 const controls = require("./client/controls.js");
 const spaceObject = require("./client/spaceObject.js");
@@ -89,38 +91,42 @@ global.UUID;
 
 // caches nova data that is loaded from the server
 var nc = new novaCache();
-inSystem.prototype.novaData = nc; // is this bad practice?
-statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResourecs's prototype chain
+global.gd = new gameData();
+//inSystem.prototype.novaData = nc; // is this bad practice?
+//statusBar.prototype.novaData = nc; // yes it is. It should be set in loadResourecs's prototype chain
+resourcesPrototypeHolder.prototype.novaData = nc;
+resourcesPrototypeHolder.prototype.data = global.gd.data;
+
 
 // global system variable; eventually will become a syst (like sol or wolf 359).
 // will be given by the server on client entrance to the system;
-global.currentSystem = new system();
+//global.currentSystem = new system();
 
 
 
 global.gameControls = new controls(); // global controls
 var players = {};
 
-
-// Temporary until there's an actual system for planets knowing
-// what ships they have available.
-
-
-function loadJson(url) {
-    return new Promise(function(fulfill, reject) {
-	var loader = new PIXI.loaders.Loader();
-	var data;
-	loader
-	    .add('stuff', url)
-	    .load(function(loader, resource) {
-		data = resource.stuff.data;
-	    })
-	    .onComplete.add(function() {fulfill(data);});
-    });
+async function promiseMap(arr, func) {
+    var out = [];
+    for (let i in arr) {
+	out[i] = await func(arr[i]);
+    }
+    return out;
 }
 
 
 socket.on('onconnected', async function(data) {
+    await global.gd.build();
+    
+    global.allOutfits = await promiseMap(global.gd.meta.ids.outfits, function(id) {
+	return global.gd.data.outfits.get(id);
+    });
+
+    global.allShips = await promiseMap(global.gd.meta.ids.ships, function(id) {
+	return global.gd.data.ships.get(id);
+    });
+    
     global.UUID = data.id;
     console.log("Connected to server. UUID: "+global.UUID);
     //global.myShip = new playerShip(data.playerShip);
@@ -129,23 +135,13 @@ socket.on('onconnected', async function(data) {
 	global.stars = new starfield(global.myShip, SPACE_DIM);
     }
 
-
     if (data.paused) {
 	pause();
     }
-    await loadJson("/objects/meta/allShips.json")
-	.then(function(ships) {
-	    // Temporary
-	    global.allShips = ships;
-	});
 
-    await loadJson("/objects/meta/allOutfits.json")
-	.then(function(outfits) {
-	    // Temporary
-	    global.allOutfits = outfits;
-	});
-
-    await global.currentSystem.setObjects(data.system);
+    global.currentSystem = new system(data.system);
+    
+    await global.currentSystem.setObjects(data.systemObjects);
     await global.stars.build();
     await global.gameControls.build();
     await global.currentSystem.build();

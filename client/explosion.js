@@ -1,15 +1,17 @@
-var visible = require("./visible.js");
-var loadsResources = require("./loadsResources.js");
-var inSystem = require("./inSystem.js");
-var explosionSprite = require("./explosionSprite.js");
-var explosion = class extends loadsResources(visible(inSystem)) {
+const factoryQueue = require("../libraries/factoryQueue.js");
+const visible = require("./visible.js");
+const loadsResources = require("./loadsResources.js");
+const inSystem = require("./inSystem.js");
+const explosionSprite = require("./explosionSprite.js");
+const buildable = require("./buildable.js");
+
+class explosion extends buildable(loadsResources(visible(inSystem))) {
     constructor(buildInfo) {
 	super();
-	this.destroyed = false; // generalize this
 	if (typeof buildInfo !== "undefined") {
 	    this.buildInfo = buildInfo;
 	    this.id = buildInfo.id;
-	    this.spriteId = buildInfo.animation.id;
+	    this.spriteID = buildInfo.animation.id;
 	    this.frameTime = buildInfo.animation.frameTime;
 	}
 	this.built = false;
@@ -19,17 +21,14 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 	this.show();
     }
 
-    async build() {
-	if (!this.built && !this.building) {
-	    this.building = true;
-	    this.spriteSheet = await this.loadResources("spriteSheets", this.spriteId);
-	    this.makeNewExplosion();
-	    this.built = true;
-	}
+    async _build() {
+	await this.queue.prebuild(1);
+	await super._build();
     }
 
-    makeNewExplosion(enqueue) {
-	var expl = new explosionSprite(this.spriteSheet.textures, this.frameTime, enqueue);
+    async makeNewExplosion(enqueue) {
+	var expl = new explosionSprite(this.spriteID, this.frameTime, enqueue);
+	await expl.build();
 	this.container.addChild(expl.container);
 	this.addChild(expl);
 	return expl;
@@ -55,7 +54,6 @@ var explosion = class extends loadsResources(visible(inSystem)) {
 	super._removeFromSystem();
 	this.system.container.removeChild(this.container);
     }
-    
 };
 
 module.exports = explosion;

@@ -9,11 +9,12 @@ planetServer = class extends planet {
 
     addSpritesToContainer() {};
 
+    /*
     async loadResources(type, id) {
 	// temporary until planets can be parsed
 	return require("../objects/planets/" + id + ".json");
     }
-
+    */
     buildSpaceport() {};
     
     land() {};

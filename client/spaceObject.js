@@ -9,21 +9,23 @@ var exitPoint = require("./exitPoint.js");
 var renderable = require("./renderable.js");
 var visible = require("./visible.js");
 var targetable = require("./targetable.js");
+var destroyable = require("./destroyable.js");
+var position = require("./position.js");
+var buildable = require("./buildable.js");
+var placeable = require("../server/placeableServer.js");
 
-
-var spaceObject = class extends targetable(loadsResources(renderable(visible(inSystem)))) {
+var spaceObject = class extends placeable(destroyable(targetable(loadsResources(renderable(visible(buildable(inSystem))))))) {
 
     constructor(buildInfo, system, socket) {
-
+	// Socket must be known at build time so setMultiplayer works
 	super(...arguments);
 	this.socket = socket || this.socket;
 	this.buildInfo = buildInfo;
 	this.renderReady = false;
-	this.destroyed = false;
-	this._destroying = false;
 	this.type = 'misc';
 	//this.url = 'objects/misc/';
-	this.position = [0,0];
+	this.position = new position(0, 0);
+	//this.position = [0,0];
 	// planets can have weapons
 	// this also means projectiles can have weapons :P
 	this.weapons = {};
@@ -32,8 +34,6 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	this.sprites = {};
 
 	this.size = [];
-	this.built = false;
-	this.building = false;
 
 	
 	if (typeof(buildInfo) !== 'undefined') {
@@ -95,23 +95,14 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	await this.setProperties();
 	await this.makeSprites();
 	this.makeSize();
+	
 	this.addSpritesToContainer();
 	this.addToSpaceObjects();
 	if (this.multiplayer) {
 	    this.setListeners();
 	}
 	this.renderReady = true;
-    }
-
-    async build() {
-	if (!this.building && !this.built) {
-	    this.building = true;
-	    await this._build();
-	    this.building = false;
-	    this.built = true;
-	    this.emit("built");
-	    this.setState("built", true);
-	}	
+	await super._build();
     }
 
     setVisible(v) {
@@ -155,12 +146,14 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 
 	var images = this.meta.animation.images;
 	var promises = Object.keys(images).map(async function(imageName) {
-	    var imageID = images[imageName].id;
+	    var spriteSheetID = images[imageName].id;
 
 	    // see planetServer.js for the reason I can't change this yet. (it's a stupid one)
-	    var spriteSheet = await this.novaData.spriteSheets.get(imageID);
+	    //var spriteSheet = await this.novaData.spriteSheets.get(imageID);
 	    //var spriteSheet = await this.loadResources("spriteSheets", imageID);
-	    this.sprites[imageName] = new sprite(spriteSheet.textures, spriteSheet.convexHulls);
+	    
+	    this.sprites[imageName] = new sprite(spriteSheetID);
+	    await this.sprites[imageName].build();
 
 	}.bind(this));
 
@@ -232,30 +225,6 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	return stats;
     }
 
-    _placeContainer() {
-	if (!this.isPlayerShip) {
-	    this.container.position.x = this.position[0];
-	    this.container.position.y = -1 * this.position[1];
-	}
-	
-    }
-    
-    render() {
-	// rewrite this please. Put it in playerShip.
-	super.render(...arguments);
-	this._placeContainer();
-
-    }
-
-
-    _addToContainer() {
-	this.system.container.addChild(this.container);
-    }
-
-    _removeFromContainer() {
-	this.system.container.removeChild(this.container);
-    }
-    
     _removeFromSystem() {
 	this.hide();
 	this._removeFromContainer();
@@ -281,14 +250,10 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
     }
 
     findNearest(items) {
-	var get_distance = function(a, b) {
-	    return Math.pow((a.position[0] - b.position[0]), 2) +
-		Math.pow((a.position[1] - b.position[1]), 2);
-	};
 	
 	var distances = {};
 	items.forEach(function(t) {
-	    var dist = get_distance(t, this);
+	    var dist = this.position.distanceSquared(t.position);
 	    distances[dist] = t;
 	}.bind(this));
 	
@@ -302,14 +267,9 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
     }
 
     
-    
-// destroys the object. This is NOT the function to call
-// if you want it to explode.
-    destroy() {
-	if (this.destroyed) {
-            return;
-        }
-
+    // destroys the object. This is NOT the function to call
+    // if you want it to explode.
+    _destroy() {
 	this.weapons.all.forEach(function(o) {
 	    if (! o.destroyed) {
 		o.destroy();
@@ -322,9 +282,8 @@ var spaceObject = class extends targetable(loadsResources(renderable(visible(inS
 	
         this.container.destroy();
         _.each(this.sprites, function(s) {s.destroy();});
-	this._destroying = true;
-	super.destroy();
-	this.destroyed = true;
+
+	super._destroy();
     }
 
     _randomCirclePoint(rad) {

@@ -1,17 +1,25 @@
+var resourcesPrototypeHolder = require("./resourcesPrototypeHolder");
 var loadsResources = (superclass) => class extends superclass {
     constructor() {
 	super(...arguments);
+	if (! this.data) {
+	    this.data = resourcesPrototypeHolder.prototype.data;
 	}
+	if (! this.socket) {
+	    this.socket = resourcesPrototypeHolder.prototype.socket;
+	}
+    }
     
     
     async loadResources(type, id) {
-	return await(this.novaData[type].get(id));
+	return await(this.data[type].get(id));
     }
 
     setProperties() {
 	// a modifiable copy of meta.
 	// Why is this the best way to make a copy???!!!
 	var copy = JSON.parse(JSON.stringify(this.meta));
+
 	if (! ("properties" in this) ) {
 	    this.properties = {};
 	}

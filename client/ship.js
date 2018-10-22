@@ -13,8 +13,12 @@ var errors = require("../client/errors.js");
 var UnsupportedWeaponTypeError = errors.UnsupportedWeaponTypeError;
 var explosion = require("./explosion.js");
 var PIXI = require("../server/pixistub.js");
+var ionizable = require("../server/ionizableServer.js");
 
-ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceObject))))) {
+const AFTERBURNER_ACCEL_FACTOR = 1.6;
+const AFTERBURNER_SPEED_FACTOR = 1.4;
+
+ship = class extends ionizable(acceleratable(turnable(damageable(collidable(movable(spaceObject)))))) {
     constructor(buildInfo, system) {
 	super(...arguments);
 	//this.url = 'objects/ships/';
@@ -25,7 +29,7 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this.outfits = [];
 	this.escorts = {};
 	this.escorts.all = [];
-
+	
 	this.turningToTarget = false;
 	this.landedOn = null;
 	if (typeof(buildInfo) !== 'undefined') {
@@ -36,21 +40,36 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 
 	// Don't automatically die when the client thinks it has zero armor.
 	// Get confirmation from the server.
-	this.offState("zeroArmor", this._onDeathBound); 
+	this.offState("zeroArmor", this._onDeathBound);
+	this.usingAfterburner = false;
     }
 
     _bindListeners() {
 	this.multiplayer.on("setOutfits", this._setOutfitsListener.bind(this));
     }
+
+
+    // set usingAfterburner(v) {
+    // 	if (typeof v === "undefined") {
+    // 	    throw new Error("got it");
+    // 	}
+    // 	this._usingAfterburner = v;
+    // }
+    // get usingAfterburner() {
+    // 	return this._usingAfterburner;
+    // }
+
+
     
     async _build() {
 	await super._build();
 	this.buildTargetImage();
-
+	
 	this.buildExitPoints();
 	await this.buildOutfits();
+	this.checkMass(this.outfits);
 	await this.buildExplosion();
-
+	
 	this.energy = this.properties.energy;
 	if (this.system) {
 	    this.system.built.ships.add(this);
@@ -58,7 +77,19 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	this._bindListeners();
     }
 
+    checkMass(outfits) {
+	var outfitMass = this.outfits.map(function(outf) {
+	    if (outf.meta.mass) {
+		return outf.meta.mass * outf.count;
+	    }
+	    else {
+		return 0;
+	    }
+	}).reduce(function(a, b) {return a + b;}, 0);
 
+	this.properties.freeMass = this.meta.freeMass - outfitMass;
+    }
+    
     buildExitPoints() {
 	for (var name in this.meta.animation.exitPoints) {
 	    if (name === 'upCompress' || name === 'downCompress') {
@@ -181,6 +212,8 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	if (this.properties.turnRate < 0) {
 	    this.properties.turnRate = 0;
 	}
+
+	this.checkMass(this.outfits);
     }
 
 
@@ -188,22 +221,38 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
     setProperties() {
 	super.setProperties();
 	this.properties.vulnerableTo = ["normal"];
+	this.properties.afterburnerFuel = null;
+    }
+
+    _getAcceleration() {
+	if (this.getState("afterburner")) {
+	    return super._getAcceleration() * AFTERBURNER_ACCEL_FACTOR;
+	}
+	else {
+	    return super._getAcceleration();
+	}
+    }
+    _getMaxSpeed() {
+	if (this.getState("afterburner")) {
+	    return super._getMaxSpeed() * AFTERBURNER_SPEED_FACTOR;
+	}
+	else {
+	    return super._getMaxSpeed();
+	}
     }
 
     getOutfits() {
 	return this.multiplayer.query("getOutfits"); // a promise
     }
 
-    
-    
-    
-    
+        
     addSpritesToContainer() {
 
 	// adds sprites to the container in the correct order to have proper
 	// layering of engine, ship, lights etc.
 	// Also set the correct blend mode
-	var orderedSprites = [this.sprites.baseImage.sprite];
+	//var orderedSprites = [this.sprites.baseImage.sprite];
+	var orderedSprites = [];
 	if ("lightImage" in this.sprites) {
 	    orderedSprites.push(this.sprites.lightImage.sprite);
 	    this.sprites.lightImage.sprite.blendMode = PIXI.BLEND_MODES["ADD"];
@@ -224,8 +273,10 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	
 	//sprites that have no specified order
 	var without =  _.difference(spriteList, orderedSprites);
-	//console.log(without)
-	_.each(without, function(x) {this.container.addChild(x);}, this);
+
+	// It just so happens that all the sprites without order are solid (blendmode overlay)
+	_.each(without, function(x) {this.solidContainer.addChild(x);}, this);
+
 	_.each(orderedSprites, function(x) {this.container.addChild(x);}, this);
 	//this.system.container.addChild(this.container);
     }
@@ -244,6 +295,9 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	if (typeof stats.turningToTarget !== 'undefined') {
 	    this.turningToTarget = stats.turningToTarget;
 	}
+	if (typeof stats.usingAfterburner !== "undefined") {
+	    this.usingAfterburner = stats.usingAfterburner;
+	}
     }
 
     getStats() {
@@ -255,16 +309,14 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    stats.target = null;
 	}
 	stats.turningToTarget = this.turningToTarget;
+	stats.usingAfterburner = this.usingAfterburner;
 	return stats;
     }
 
 
     turnToTarget() {
 	if (this.target) {
-	    var x = this.target.position[0] - this.position[0];
-	    var y = this.target.position[1] - this.position[1];
-	    var direction = (Math.atan2(y,x) + 2*Math.PI) % (2*Math.PI);
-	    
+	    var direction = this.position.angle(this.target.position);
 	    this.turnTo(direction);
 	}
     }
@@ -322,8 +374,28 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	    this.sprites.glowImage.sprite.alpha = 0;
 	}
     }
+
+    doAfterburnerFuelDrain(delta) {
+	// Note that afterburners can have different fuel drains
+	// depending on which outfit provides them.
+	// afterburnerFuel is in units / second
+	if (this.properties.afterburnerFuel == null) {
+	    // No afterburner
+ 	    return false;
+	}
+
+	var cost = (this.properties.afterburnerFuel / 1000) * delta;
+	if (this.energy < cost) {
+	    return false;
+	}
+	else {
+	    this.energy -= cost;
+	    return true;
+	}
+	
+    }
     
-    render() {
+    render(delta) {
 	// maybe revise this to be a set of functions that are all called when rendering
 	// so you don't have to do 'if' every time you render
 	if ("glowImage" in this.sprites) {
@@ -343,32 +415,23 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	}
 	
 	
-	if (this.properties.fuelRecharge) {
-	    // Fuel recharge is in frames / unit, so recharge ^ -1 = units / frame
-	    // 30 nova frames / second
-	    // 30 frames/sec * x units / frame = x units / sec
-	    this.fuel += (30 / this.properties.fuelRecharge) * (this.time - this.lastTime) / 1000;
+	if (this.properties.energyRecharge) {
+	    this.energy = Math.min(this.properties.energy,
+				   this.energy + this.properties.energyRecharge * 60/1000 * delta);
 	}
-	if (this.fuel > this.properties.maxFuel) {
-	    this.fuel = this.properties.maxFuel;
+
+	if (this.usingAfterburner) {
+	    let canAfford = this.doAfterburnerFuelDrain(delta);
+	    this.setState("afterburner", canAfford);
+	    if (canAfford) {
+		this.accelerating = 1;
+	    }
+	}
+	else {
+	    this.setState("afterburner", false);
 	}
 	
 	super.render(...arguments);
-	// super hacky bounding box
-	var bound = [7000,7000];
-	if (this.position[0] > bound[0]/2) {
-	    this.position[0] -= bound[0];
-	}
-	if (this.position[0] < -bound[0]/2) {
-	    this.position[0] += bound[0];
-	}
-	if (this.position[1] > bound[1]/2) {
-	    this.position[1] -= bound[1];
-	}
-	if (this.position[1] < -bound[1]/2) {
-	    this.position[1] += bound[1];
-	}
-
     }
     setTarget(newTarget) {
 	super.setTarget(newTarget);
@@ -464,11 +527,11 @@ ship = class extends acceleratable(turnable(damageable(collidable(movable(spaceO
 	_.each(this.outfits, function(o) {o.destroy();});
     }
     
-    destroy() {
+    _destroy() {
 	this.destroyOutfits();
-	super.destroy();
+	super._destroy();
     }
-}
+};
 
 
 

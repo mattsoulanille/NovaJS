@@ -1,7 +1,8 @@
 var eventable = require("../libraries/eventable.js");
 var visible = require("./visible.js");
+var loadsResources = require("./loadsResources.js");
 
-class button extends eventable(visible(function() {})) {
+class button extends loadsResources(eventable(visible(function() {}))) {
     constructor (text, size, position = {x:0, y:0}) {
 	super();
 
@@ -9,11 +10,10 @@ class button extends eventable(visible(function() {})) {
 	this.container.position.y = position.y;
 	this.size = size;
 	this.height = 25; // Height: An experimentally determined magic number.
-	var base_url = '/objects/menus/';
-	var button_urls =
-	    {'normal': ['leftButton.png', 'middleButton.png', 'rightButton.png'],
-	     'clicked': ['leftClickedButton.png', 'middleClickedButton.png', 'rightClickedButton.png'],
-	     'grey': ['leftGreyButton.png', 'middleGreyButton.png', 'rightGreyButton.png']
+	var button_ids =
+	    {'normal': ['nova:7500', 'nova:7501', 'nova:7502'],
+	     'clicked': ['nova:7503', 'nova:7504', 'nova:7505'],
+	     'grey': ['nova:7506', 'nova:7507', 'nova:7508']
 	    };
 	
 	// this.sprites = {
@@ -30,18 +30,18 @@ class button extends eventable(visible(function() {})) {
 	
 	// This should use texture switching instead of sprite switching,
 	// but that's tough since PIXI.extras.TilingSprite is used
-	Object.keys(button_urls).forEach(function(buttonType) {
+	Object.keys(button_ids).forEach(function(buttonType) {
 	    
-	    this.left[buttonType] = new PIXI.Sprite.fromImage(base_url + button_urls[buttonType][0]);
+	    this.left[buttonType] = this.data.sprite.fromPict(button_ids[buttonType][0]);
 	    this.left[buttonType].anchor.x = 1;
-	    this.right[buttonType] = new PIXI.Sprite.fromImage(base_url + button_urls[buttonType][2]);
+	    this.right[buttonType] = this.data.sprite.fromPict(button_ids[buttonType][2]);
 
 	    this.left[buttonType].interactive = true;
 	    this.left[buttonType].buttonMode = true;
 	    
 	    this.middle[buttonType] =
 		new PIXI.extras.TilingSprite(
-		    new PIXI.Texture.fromImage(base_url + button_urls[buttonType][1]),
+		    this.data.texture.fromPict(button_ids[buttonType][1]),
 		    size,
 		    this.height
 		);

@@ -1,9 +1,9 @@
-
+var destroyable = require("./destroyable.js");
 var PIXI = require("../server/pixistub.js");
 var eventable = require("../libraries/eventable.js");
 
 
-var visible = (superclass) => class extends eventable(superclass) {
+var visible = (superclass) => class extends destroyable(eventable(superclass)) {
     constructor(buildInfo) {
 	super(...arguments);
 	this.container = new PIXI.Container(); // Must be before call to set system
@@ -28,6 +28,24 @@ var visible = (superclass) => class extends eventable(superclass) {
 	this.container.visible = Boolean(v);
     }
 
+    _addToSystem() {
+	super._addToSystem();
+	//this._addToContainer();
+    }
+
+    _removeFromSystem() {
+	super._removeFromSystem();
+	//super._removeFromContainer();
+    }
+
+    _addToContainer() {
+	this.system.container.addChild(this.container);
+    }
+
+    _removeFromContainer() {
+	this.system.container.removeChild(this.container);
+    }
+    
     hide() {
 	this.setVisible(false);
 	if (super.hide) {
@@ -40,11 +58,9 @@ var visible = (superclass) => class extends eventable(superclass) {
 	    super.show();
 	}
     }
-    destroy() {
+    _destroy() {
 	this.container.destroy();
-	if (super.destroy) {
-	    super.destroy();
-	}
+	super._destroy();
     }
 };
 

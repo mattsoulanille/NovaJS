@@ -117,8 +117,7 @@ turretWeapon = class extends projectileWeapon {
     }
     
     calcFiringSolution(position) {
-	var dx = this.target.position[0] - position[0];
-	var dy = this.target.position[1] - position[1];
+	var [dx, dy] = position.delta(this.target.position);
 	var dvx = this.target.velocity[0] - this.source.velocity[0];
 	var dvy = this.target.velocity[1] - this.source.velocity[1];
 	// 1 nova projectile speed = 100 pixels / frame. 3/10 pixels / ms

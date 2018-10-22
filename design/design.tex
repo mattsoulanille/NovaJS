@@ -1,0 +1,204 @@
+\documentclass{article}
+\usepackage{xspace, hyperref}
+\newcommand{\gameData}{\emph{gameData}\xspace}
+
+\title{NovaJS Design}
+
+
+
+\begin{document}
+\maketitle
+
+\section{Purpose of this Document}
+This design document aims to specify every design choice in the NovaJS project and define all interfaces between pieces of the project.
+
+\section{Accessing Game Data}
+
+There is a universal interface, used on both the client and the server, for accessing game data.
+\subsection{Game Data Interface}
+
+All game data is accessed from a single object hereafter referred to as \gameData. \gameData has the following data types as fields: \textbf{outfits}, \textbf{picts}, \textbf{planets}, \textbf{spriteSheets}, \textbf{systems}, and \textbf{weapons}. Each data type field has a \textbf{.get} method which takes a string ID of a resource in the field and returns a promise that resolves to the resource corresponding to the ID.\\
+
+The format of each resource is described below. Resources do not have circular references and can be JSONified.
+\subsubsection{Common Fields}
+Almost every resource has the following fields. The two exceptions are \textbf{pict} and \textbf{spriteSheetImage} (due to how PIXI.js loads images):
+\begin{itemize}
+\item{\textbf{id}}: The unique global ID of the resource. Same as the ID used to \textbf{.get} it.
+\item{\textbf{name}}: The name corresponding to the resource. Only used for player interaction.
+
+\end{itemize}
+
+
+
+\subsubsection{Outfit}
+An \textbf{outfit} is anything that can be attached to a ship. It has the following fields in addition to the default ones:
+\begin{itemize}
+\item{\textbf{functions}}: An object whose keys are the general functions an outfit performs and whose values are parameters for those functions. See \ref{outfit-functions} for details.
+\item{\textbf{weapon}}: An object specifying the weapon (if any) that the outfit has. Specifies the global ID under \textbf{id} and the quantity of the corresponding weapon under \textbf{count}.
+\item{\textbf{pictID}}: The global ID of the picture to use in the outfitter.
+\item{\textbf{desc}}: The text description of the outfit.
+\item{\textbf{mass}}: The mass of the outfit (see \ref{outfitter}).
+\item{\textbf{price}}: The price of the outfit (see \ref{outfitter}).
+\item{\textbf{displayWeight}}: Determines the order in which the outfit is shown in the outfitter. See \ref{outfitter}
+\item{\textbf{max}}: The maximum number that can be on a single ship.
+\end{itemize}
+
+\subsubsection{Pict}
+A \textbf{pict} stores a single picture. It is a buffer containing the data of the picture in PNG format.
+
+\subsubsection{Planet}
+A \textbf{planet} is a stationary stellar object. Space stations fall under this category. A \textbf{planet} has the following fields in addition to the default ones:
+\begin{itemize}
+\item{\textbf{type}}: A field containing the value \textbf{``planet''} specifying that this object is a planet (maybe change this).
+\item{\textbf{position}}: A list specifying the $[x,y]$ position of the planet.
+\item{\textbf{landingPictID}}: The global ID of the picture to show when a player lands.
+\item{\textbf{landingDesc}}: The text description to show when the player lands.
+\item{\textbf{animation}}: An object specifying the spritesheet to use for the planet (and how to use it? Revise this)
+\end{itemize}
+
+\subsubsection{Ship}
+A \textbf{ship} is anything a player can fly around in. Ships have the following fields:
+\begin{itemize}
+\item{\textbf{pictID}}: The global ID of the \emph{pict} to show in the shipyard.
+\item{\textbf{desc}}: The text description of the ship.
+\item{\textbf{animation}}: An object with the following fields containing instructions on how to animate the ship:
+  \begin{itemize}
+  \item{\textbf{images}}: Most ships are comprised of multiple spriteSheets that serve differe purposes:
+    \begin{itemize}
+    \item{\textbf{baseImage}}: Required. The ship itself. Does nothing fancy. Moves and turns as the ship does.
+    \item{\textbf{altImage}}: An alternate set of images to show when some condition is met (e.g. hyperjumping)(IS THIS CORRECT???)
+    \item{\textbf{glowImage}}: The engine glow. Appears on top of the baseImage with ADD blending.
+    \item{\textbf{lightImage}}: Running lights. Appear on top of baseImage with ADD blending. Blink or fade in and out according to (TODO).
+    \item{\textbf{weapImage}}:\label{weapImage} Flashes or glows when certain weapons are fired. ADD blending.
+    \end{itemize}
+    \textbf{images} is an object whose keys are a subset of the above types of images. Each key's corresponding value is an object with \textbf{id} as the global ID of the spriteSheet to use and \textbf{imagePurposes} as an object describing what ranges of images in the spriteSheet correspond to what actions taken by the ship as follows:
+    \begin{itemize}
+    \item{\textbf{normal}}: An object specifying the start and length of the range of the \textbf{spriteSheet}'s frames used for the ship's normal movement.
+    \item{\textbf{left}}: Same as \textbf{normal} but for when the ship is banking left. If not present, frames from \textbf{normal} are used instead.
+    \item{\textbf{right}}: Same as \textbf{left} but for when the ship is banking right.
+    \end{itemize}
+
+  \item{\textbf{exitPoints}}:\label{exitpoints} An object specifying where projectiles and beams exit the ship from. Has a field for each type of weapon: \textbf{gun}, \textbf{turret}, \textbf{guided}, and \textbf{beam}, each of which has a list of four 3-dimensional positions for the exitpoints. Also has fields called \textbf{upCompress} and \textbf{downCompress} to account for the ship's non-vertical rendering angle. See the EV Nova Bible page 14 for more information.
+
+  \end{itemize}
+
+\item{\textbf{shield}}: The maximum (before outfits) shield of the ship.
+\item{\textbf{shieldRecharge}}: The rate at which the shield recharges in points per second (TODO).
+\item{\textbf{armor}}: The maximum (before outfits) armor of the ship.
+\item{\textbf{armorRecharge}}: The rate at which the ship's armor recharges in points per second (TODO).
+\item{\textbf{energy}}: The maximum (before outfits) energy / fuel of the ship.
+\item{\textbf{energyRechargs}}: The rate at which the energy recharges in points per second (TODO).
+\item{\textbf{ionization}}: The maximum ionization value of the ship. Ships become ionized when their ionization value is above half their ionization value.
+\item{\textbf{deionize}}: The rate at which ionization disappates from the ship in points per second (TODO).
+
+\item{\textbf{speed}}: The ship's maximum speed in (WHAT UNIT? TODO)
+\item{\textbf{acceleration}}: The ship's acceleration while the engine is on.
+\item{\textbf{turnRate}}: The ship's turn rate in radians per second.
+\item{\textbf{mass}}: The ship's mass in tons. Used for collision knockback.
+\item{\textbf{outfits}}: An object whose keys are the global IDs of outfits and whose values are the number of that type of outfit on the ship. To add weapons to a ship, put the outfit corresponding to them in this object.
+\item{\textbf{freeMass}}: The total mass available for installing outfits. This includes the mass of outfits listed in \textbf{outfits}, so it will show up as less if the outfits in \textbf{outfits} are massive.
+\item{\textbf{initialExplosion}}: The initial explosion to use when the ship dies. (TODO: explain more)
+\item{\textbf{finalExplosion}}: The final explosion to use when the ship dies.
+\item{\textbf{deathDelay}}: The delay in milliseconds between when the ship hits zero armor and when the ship explodes, during which the initial explosion plays repeatedly.
+\item{\textbf{displayWeight}}: Specifies the order in which the ship is displayed. See Shipyard.
+
+\end{itemize}
+
+\subsubsection{SpriteSheetImage}
+A \textbf{spriteSheetImage} resource is identical to a \textbf{pict} resource, however, it exists within a different id scope (\textbf{spriteSheetImages} instead of \textbf{picts}).
+
+\subsubsection{SpriteSheetFrame}
+A \textbf{spriteSheetFrame} resource describes how to pull textures out of a \textbf{spriteSheetImage}. It uses the \href{http://texturepacker.com/}{TexturePacker} format (because PIXI.js requires it).
+
+
+\subsubsection{SpriteSheet (TODO)}
+A \textbf{spriteSheet} resource encodes data about the contents of a \textbf{spriteSheetImage} including the global ID of the \textbf{spriteSheetImage}, frame boundaries, and collision convex hulls for each image.
+
+\subsubsection{Systems}
+A \textbf{system} resource describes the contents of a system. It includes the following fields:
+\begin{itemize}
+\item{\textbf{position}}: The $[x,y]$ position of the system on the star map.
+\item{\textbf{links}}: A list of the global IDs of \textbf{systems} that this system has a link to.
+\item{\textbf{planets}} A list of the global IDs of \textbf{planets} contained in the system.
+\end{itemize}
+
+\subsubsection{Weapon}
+A \textbf{weapon} resource describes how a weapon behaves.
+\begin{itemize}
+\item{\textbf{type}}: A string specifying the type of weapon. See \ref{weapons} for details on the types. (THIS CONTRADICTS THE USE OF TYPE IN PLANET!!!)
+\item{\textbf{animation}}: (TODO: REFACTOR ANIMATION WITH SPRITESHEET). (This might turn out not to be an animation.)
+\item{\textbf{shieldDamage}}: The amount of shield damage to do per shot. In the case of a beam weapon, the amount of shield damage to do per second of contact. (TODO: FIX BEAM WEAPONS)
+\item{\textbf{armorDamage}}: Same as shieldDamage but for armor.
+\item{\textbf{ionizationDamage}}: Same but for ionization.
+\item{\textbf{ionizationColor}}: The color to tint the ionized ship with.
+\item{\textbf{reload}}: The time in seconds it takes to reload the weapon after firing. A weapon can not fire more than 60 times per second. (TODO: FIX THE UNITS IN THE CODE)
+\item{\textbf{duration}}: The time in seconds that a projectile stays on the screen. Ignored for beams (WAIT. Maybe this is how multibeam works? Check that plugin)
+\item{\textbf{speed}}: The speed of projectiles as they leave the weapon. Frame of reference depends on the weapon type.
+\item{\textbf{turnRate}}: The turn rate of the projectile if it is guided.
+\item{\textbf{fireGroup}}: ``primary'' or ``secondary''. Whether the weapon fires with primary weapons or is a secondary weapon. Ignored for point defense (TODO: MAKE SURE THIS IS TRUE).
+\item{\textbf{exitType}}: Which exitpoints (\ref{exitpoints}) of the ship to fire the weapon from. ``gun'', ``turret'', ``guided'', ``beam'', or ``center''.
+\item{\textbf{inaccuracy}}: The maximum angle to either side of the desired firing angle that the shot may take. Radians. (TODO: MAKE IT RADIANS, CALL IT INACCURACY)
+\item{\textbf{impact}}: The change in momentum to impart to the ship it hits. (Tons distance / second)
+\item{\textbf{burstCount}}: The number of shots the weapon may fire at it's standard reload period before performing an additional burst reload. Zero means infinity.
+\item{\textbf{burstReload}}: The time in seconds the weapon must spend reloading after firing off a burst (TODO: MAKE IT SECONDS)
+\item{\textbf{shield}}: The shield of the weapon. Used if it's vulnerable to point defense.
+\item{\textbf{armor}}: The armor of the weapon. Used if it's vulnerable to point defense. (TODO: Refactor the fact that shield damage deals 1/2 to armor for weapons into giving weapons shields? Maybe not. I'm not sure.)
+\item{\textbf{trailParticles}}: The number of particles the weapon emits per second while in flight (TODO: Make it seconds)
+\item{\textbf{hitParticles}}: The number of particles the weapon emits when it hits something.
+\item{\textbf{maxAmmo}}: (TODO: Decide how maxAmmo will work)
+\item{\textbf{useWeapImage}}: Whether or not to use the weapImage (\ref{weapImage}) animation of the parent ship when firing. (TODO: RENAME FROM useFiringAnimation)
+  % \item{\textbf{destroyShipWhenFiring}}
+\item{\textbf{energyCost}}: The energy to use per shot. If it's a beam weapon, the energy to use per second while firing.
+\item{\textbf{ammoType}}: (TODO: Decide how ammo is tracked)
+\item{\textbf{fireSimultaneously}}: Whether multiple weapons of the same type should all fire at once or fire one after another.
+\item{\textbf{explosion}}: The explosion to use for the weapon. (TODO: Explain explosion)
+\item{\textbf{secondaryExplosion}}: A secondary explosion to use when the weapon explodes. About 16 are placed randomly around the main explosion.
+\item{\textbf{vulnerableTo}}: A list of weapon types the weapon's shots are vulnerable to. Including ``point defense'' will make point defense weapons fire on this weapons projectiles.
+\item{\textbf{submunitions}}: A list of objects with the following fields describing the submunitions to fire and information about how to fire them:
+  \begin{itemize}
+    \item{\textbf{id}}: The global ID of the weapon to sub into.
+    \item{\textbf{count}}: The number of submunitions of this type to fire.
+    \item{\textbf{theta}}: The largest angle offset from the parent projectile's angle at which a sub may fire in radians (TODO: Make this radians)
+    \item{\textbf{limit}}: The recursion depth limit when a submunition is the same as its parent projectile. Doesn't handle mutual recursion (behavior of the game engine is undefined in that case).
+    \item{\textbf{uniformSpacing}}: Whether the submunitions should be uniformly spaced at angles of \textbf{theta} or whether they should appear randomly within a cone of angle 2*\textbf{theta} in front of the parent projectile.
+  \end{itemize}
+\end{itemize}
+
+
+
+
+
+
+% \begin{itemize}
+% \item{outfits}: 
+% \item{picts}
+% \item{planets}
+% \item{spriteSheets}
+% \item{systems}
+% \item{weapons}
+
+
+
+
+\section{Outfit Functions} \label{outfit-functions}
+
+\section{Outfitter} \label{outfitter}
+
+\section{Weapons} \label{weapons}
+The types of weapons are as follows:
+\begin{itemize}
+\item{\textbf{unguided}}
+\item{\textbf{turret}}
+\item{\textbf{guided}}
+\item{\textbf{freefall bomb}}
+\item{\textbf{rocket}}
+\item{\textbf{front quadrant}}
+\item{\textbf{rear quadrant}}
+\item{\textbf{point defense}}
+\item{\textbf{beam}}
+\item{\textbf{beam turret}}
+\item{\textbf{point defense beam}}
+\end{itemize}
+
+
+\end{document}

@@ -3,9 +3,9 @@ var NoSystemError = errors.NoSystemError;
 var NotBuiltError = errors.NotBuiltError;
 var AlreadyRenderedError = errors.AlreadyRenderedError;
 var eventable = require("../libraries/eventable.js");
+var destroyable = require("./destroyable.js");
 
-
-var renderable = (superclass) => class extends eventable(superclass) {
+var renderable = (superclass) => class extends destroyable(eventable(superclass)) {
     constructor() {
 	super(...arguments);
 	this.rendered = false;
@@ -78,16 +78,14 @@ var renderable = (superclass) => class extends eventable(superclass) {
 	this.emit("rendered");
 
     }
-    destroy() {
+    _destroy() {
 	if (this.system) {
 	    this.hide();
 	}
-	super.destroy();
+	super._destroy();
 	this.render = this.hide = this.show = function() {
 	    throw new Error("Called method of destroyed object");
 	};
-
-	this.destroyed = true;
     }
 
     

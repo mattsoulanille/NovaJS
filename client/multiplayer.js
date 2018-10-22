@@ -1,7 +1,8 @@
 
+var destroyable = require("./destroyable.js");
 
 
-var multiplayer = class {
+var multiplayer = class extends destroyable(function() {}) {
     // handles some multiplayer communication
 
     // the whole updateStats thing should probably be
@@ -13,13 +14,13 @@ var multiplayer = class {
     // Secure because one client can not access another client's socket listeners
     
     constructor(socket, UUID) {
+	super(...arguments);
 	this.socket = socket;
 	this.UUID = UUID;
 	this.events = {};
 	this.queryHandlers = {}; // functions that respond to a query.
 	this.responseHandlers = {}; // Functions that take a response to fulfill the promise in the query.
 	this.queryID = 0;
-	this.destroyed = false;
 	
 	// Yes they need to be defined here beacuse they need to be bound to "this"
 	// because see multiplayerServer.js bindSocket function.
@@ -164,20 +165,18 @@ var multiplayer = class {
 	toEmit.rebroadcast = rebroadcast;
 	this.socket.emit(this.UUID + "event", toEmit);
     }
-
     
-    
-    destroy() {
+    _destroy() {
 	this.socket.removeListener(this.UUID + "event", this.eventListener);
 	this.socket.removeListener("query", this.queryListener);
 	this.socket.removeListener("response", this.responseListener);
-	this.destroyed = true;
 
 	// Maybe do something like this for other objects' destroy functions?
 	this.on = this.off = this.onQuery = this.offQuery
 	    = this.query = this.emit = function() {
-	    throw new Error("Tried to call method of destroyed multiplayer object");
-	};
+		throw new Error("Tried to call method of destroyed multiplayer object");
+	    };
+	super._destroy();
     }
 
 };

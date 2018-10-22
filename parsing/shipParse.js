@@ -1,31 +1,49 @@
 var shanParse = require("./shanParse.js");
 var baseParse = require("./baseParse.js");
-var explosionParse = require("./explosionParse.js");
-var shipParse = class extends baseParse {
-    constructor(ship) {
+
+class shipParse extends baseParse {
+    constructor(data, weaponOutfitMap) {
 	super(...arguments);
+	this.weaponOutfitMap = weaponOutfitMap;
+    }
+    
+    async parse(ship) {
+	var out = await super.parse(ship);
 	
-	this.shanID = this.id;
-	this.prefix = ship.prefix;
+	out.shanID = out.id;
 
-	this.animation = new shanParse(ship.idSpace.shän[ship.id]);
+	try {
+	    out.pictID = ship.idSpace.PICT[ship.pictID].globalID;
+	}
+	catch(e) {
+	    console.log("Parsing pict failed: " + e.message);
+	}
+
+	try {
+	    out.desc = ship.idSpace.dësc[ship.descID].string;
+	}
+	catch(e) {
+	    out.desc = "Parsing desc failed: " + e.message;
+	}
+
+	var sp = new shanParse();
+	out.animation = await sp.parse(ship.idSpace.shän[ship.id]);
 	
-	this.shield = ship.shield;
-	this.shieldRecharge = ship.shieldRecharge;
-	this.armor = ship.armor;
-	this.armorRecharge = ship.armorRecharge;
-	this.energy = ship.energy;
-	this.energyRecharge = ship.energyRecharge;
-	this.ionization = ship.ionization;
-	this.deionize = ship.deionize;
+	out.shield = ship.shield;
+	out.shieldRecharge = ship.shieldRecharge;
+	out.armor = ship.armor;
+	out.armorRecharge = ship.armorRecharge;
+	out.energy = ship.energy;
+	out.energyRecharge = 1 / ship.energyRecharge; // units / frame instead of frames / unit
+	out.ionization = ship.ionization;
+	out.deionize = ship.deionize;
 
-	this.speed = ship.speed;
-	this.acceleration = ship.acceleration;
-	this.turnRate = ship.turnRate;
+	out.speed = ship.speed;
+	out.acceleration = ship.acceleration;
+	out.turnRate = ship.turnRate;
 
-	this.mass = ship.mass;
-
-
+	out.mass = ship.mass;
+	
 	var outfits = {};
 
 	// Put the outfit corresponding to each weapon into the outfit object
@@ -35,9 +53,7 @@ var shipParse = class extends baseParse {
 
 		var weaponID = ship.idSpace.wëap[weapon.id].globalID;
 
-		// Expects this.weaponOutfitMap to have been set in the prototype chain
 		if (weaponID in this.weaponOutfitMap) {
-		    
 		    let outfitID = this.weaponOutfitMap[weaponID]; // A global ID
 		    if (!outfits.hasOwnProperty(outfitID)) {
 			outfits[outfitID] = 0; // the number of outfits of this ID
@@ -62,34 +78,47 @@ var shipParse = class extends baseParse {
 
 	}.bind(this));		
 
-
-	this.outfits = Object.keys(outfits).map(function(id) {
+	// Why is this done?
+	out.outfits = Object.keys(outfits).map(function(id) {
 	    return {"id" : id, "count" : outfits[id]};
 	});
+
+	// Calculate the free mass of the ship from the
+	// initial free mass and the stock outfits.
+	out.freeMass = ship.freeSpace;
+	for (let index in out.outfits) {
+	    var outfitID = out.outfits[index].id;
+	    var outfit = ship.globalSpace.oütf[outfitID];
+	    var count = out.outfits[index].count;
+	    out.freeMass += outfit.mass * count;
+	}
+
 	
 
 	if (ship.initialExplosion >= 128) {
-	    let boom = ship.idSpace.bööm[ship.initialExplosion];
-	    this.initialExplosion = new explosionParse(boom);
+	    let boomID = ship.idSpace.bööm[ship.initialExplosion].globalID;
+	    out.initialExplosion = await this.data.explosions.get(boomID);//new explosionParse(boom);
 	}
 	else {
-	    this.initialExplosion = null;
+	    out.initialExplosion = null;
 	}
 	
 	if (ship.finalExplosion >= 128) {
-	    let boom = ship.idSpace.bööm[ship.finalExplosion];
-	    this.finalExplosion = new explosionParse(boom);
+	    let boomID = ship.idSpace.bööm[ship.finalExplosion].globalID;
+	    out.finalExplosion = await this.data.explosions.get(boomID);//new explosionParse(boom);
 	}
 	else {
-	    this.finalExplosion = null;
+	    out.finalExplosion = null;
 	}
 	
-	this.deathDelay = ship.deathDelay / 60 * 1000;
+	out.deathDelay = ship.deathDelay / 60 * 1000;
 	if (ship.deathDelay >= 60) {
-	    this.largeExplosion = true;
+	    out.largeExplosion = true;
 	}
-	
-	
+
+	out.displayWeight = ship.id; // FIX ME ONCE DISPLAYWEIGHT IS PARSED
+
+	return out;
     }
 };
 

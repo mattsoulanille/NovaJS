@@ -97,7 +97,30 @@ var outfit = class extends loadsResources(inSystem) {
 	if (functions.hasOwnProperty("armor recharge")) {
 	    properties.armorRecharge += functions["armor recharge"] * this.count;
 	}
-	
+
+	if (functions.hasOwnProperty("ion absorber")) {
+	    properties.ionization += functions["ion absorber"] * this.count;
+	}
+
+	if (functions.hasOwnProperty("ion dissipater")) {
+	    properties.deionize += functions["ion dissipater"] * this.count;
+	}
+
+	if (functions.hasOwnProperty("afterburner")) {
+	    // Use the most efficient afterburner
+	    if (properties.afterburnerFuel === null) {
+		properties.afterburnerFuel = Math.max(0, functions["afterburner"]);
+	    }
+	    else {
+		properties.afterburnerFuel = Math.max(0, Math.min(properties.afterburnerFuel,
+								  functions["afterburner"]));
+	    }
+
+	}
+
+	if (functions.hasOwnProperty("fuel scoop")) {
+	    properties.energyRecharge += functions["fuel scoop"];
+	}
 	
 
 	    

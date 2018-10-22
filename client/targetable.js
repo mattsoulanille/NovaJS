@@ -1,6 +1,6 @@
+var destroyable = require("./destroyable.js");
 
-
-var targetable = (superclass) => class extends superclass {
+var targetable = (superclass) => class extends destroyable(superclass) {
     constructor() {
 	super(...arguments);
 	this.target = null;
@@ -30,9 +30,9 @@ var targetable = (superclass) => class extends superclass {
 	this.setTarget(null);
     }
     
-    destroy() {
-	super.destroy(...arguments);
+    _destroy() {
 	this.setTarget(null);
+	super._destroy();
     }
 
 };

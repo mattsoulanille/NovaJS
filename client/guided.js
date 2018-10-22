@@ -23,8 +23,7 @@ guided = class extends projectile {
     }
 
     turnToTarget() {
-	var x_diff = this.target.position[0] - this.position[0];
-	var y_diff = this.target.position[1] - this.position[1];
+	var [x_diff, y_diff] = this.position.delta(this.target.position);
 	var hitSolution = this.calcHitSolution();
 	var turnTo;
 	if (hitSolution.fireAngle !== null) {
@@ -52,8 +51,7 @@ guided = class extends projectile {
     }
 
     calcHitSolution() {
-	var dx = this.target.position[0] - this.position[0];
-	var dy = this.target.position[1] - this.position[1];
+	var [dx, dy] = this.position.delta(this.target.position);
 	var dvx = this.target.velocity[0] - this.velocity[0];
 	var dvy = this.target.velocity[1] - this.velocity[1];
 	// 1 nova projectile speed = 100 pixels / frame. 3/10 pixels / ms

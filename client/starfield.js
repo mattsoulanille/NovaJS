@@ -123,7 +123,7 @@ var starfield = class extends renderable(visible(inSystem)) {
     
     buildStars() {
 
-	for (var i = 0; i < this.count; i++) {
+	for (var i = this.stars.length; i < this.count; i++) {
 	    var s = new star(this.source, this.container, this.system, this.tree, this.screenDimensions);
 	    this.stars.push(s);
 	    this.children.add(s);
@@ -167,7 +167,7 @@ var starfield = class extends renderable(visible(inSystem)) {
 	    s.rendered = false;
 	    s.render(delta);
 	});
-
     }
+
 };
 module.exports = starfield;

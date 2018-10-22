@@ -1,14 +1,16 @@
 
-var spriteSheet = require("./spriteSheet.js");
 var baseParse = require("./baseParse.js");
 
-var shanParse = class extends baseParse {
-    constructor(shan) {
+class shanParse extends baseParse {
+    constructor() {
 	super(...arguments);
-	//this.buildInfo.spriteSheets = {};
-	this.images = {};
+    }
+    
+    parse(shan) {
+	var out = super.parse(...arguments);
+	out.images = {};
 
-	this.exitPoints = shan.exitPoints;
+	out.exitPoints = shan.exitPoints;
 	
 	var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage', 'weapImage'];
 	for (var index in imageNames) {
@@ -22,11 +24,12 @@ var shanParse = class extends baseParse {
 	    // get the rled from novadata
 	    var rled = shan.idSpace['rlëD'][imageInfo.ID];
 
-	    this.images[imageName] = { id: rled.prefix + ":" + rled.id,
-					         imagePurposes: {} };
+	    //out.images[imageName] = { id: rled.prefix + ":" + rled.id,
+	    out.images[imageName] = { id: rled.globalID,
+				       imagePurposes: {} };
 
 
-	    var imagePurposes = this.images[imageName].imagePurposes;
+	    var imagePurposes = out.images[imageName].imagePurposes;
 	    
 	    imagePurposes.normal = {
 		start: 0,
@@ -55,12 +58,9 @@ var shanParse = class extends baseParse {
 		};
 		break;
 	    }
-
-
 	}
-
+	return out;
     }
-    
 };
 
 module.exports = shanParse;

@@ -1,0 +1,8 @@
+{
+	"images": {
+	    "neutral": "targetNeutral",
+	    "hostile": "targetHostile",
+	    "friendly": "targetFriendly",
+	    "disabled": "targetDisabled"
+    }
+}

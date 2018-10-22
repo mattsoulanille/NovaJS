@@ -59,8 +59,8 @@ var multiplayerServer = class extends multiplayer {
     	this.respond(eventName, eventData);
     }
 
-    destroy() {
-	super.destroy();
+    _destroy() {
+	super._destroy();
 	this.globalSet.delete(this);
     }
     
@@ -77,7 +77,7 @@ multiplayerServer.prototype.bindSocket = function(socket) {
     // It handles communication between all instances of multiplayerServer
     // It is gross and terrible
     // It would be better if socket had a way of listening for events regardless of client.
-
+    
 
     // If multiplayerObject doesn't get destroyed, these start piling up and sending bunches
     // of extra responses. Make sure to destroy multiplayerObject when it's no longer needed!

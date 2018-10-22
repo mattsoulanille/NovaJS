@@ -1,10 +1,14 @@
 var baseParse = require("./baseParse.js");
-var explosionParse = require("./explosionParse.js");
 
 var weapParse = class extends baseParse {
-    constructor(weap) {
+    constructor() {
 	super(...arguments);
-	this.type = weap.guidance;
+    }
+
+    async parse(weap) {
+	var out = await super.parse(weap);
+
+	out.type = weap.guidance;
 	// ones that have spins
 	var spinGuidances = [
 	    "unguided",
@@ -17,108 +21,110 @@ var weapParse = class extends baseParse {
 	    "point defense"
 	];
 	var beamGuidances = ["beam", "beam turret", "point defense beam"];
-	this.animation = {};
-	if (spinGuidances.includes(this.type)) {
+	out.animation = {};
+	if (spinGuidances.includes(out.type)) {
 	    var spin = weap.idSpace.spïn[weap.graphic];
 	    // assumes rleD
 	    
 	    var rled = spin.idSpace.rlëD[spin.spriteID];
-	    this.animation.images = {
+	    out.animation.images = {
 		baseImage: {
 		    id: rled.prefix + ":" + rled.id
 		}
 	    };
 	}
-	else if (beamGuidances.includes(this.type)) {
-	    this.animation.beamLength = weap.beamLength;
-	    this.animation.beamWidth = weap.beamWidth;
-	    this.animation.beamColor = weap.beamColor;
-	    this.animation.coronaColor = weap.coronaColor;
-	    this.animation.coronaFalloff = weap.coronaFalloff;	    
+	else if (beamGuidances.includes(out.type)) {
+	    out.animation.beamLength = weap.beamLength;
+	    out.animation.beamWidth = weap.beamWidth;
+	    out.animation.beamColor = weap.beamColor;
+	    out.animation.coronaColor = weap.coronaColor;
+	    out.animation.coronaFalloff = weap.coronaFalloff;	    
 	}
-	else if (this.type === "bay") {
+	else if (out.type === "bay") {
 	    // set ship type here
 	}
 
-	this.passThroughShields = weap.passThroughShields;
-	this.shieldDamage = weap.shieldDamage;
-	this.armorDamage = weap.armorDamage;
-	this.reload = weap.reload;
-	this.duration = weap.duration;
-	this.speed = weap.speed;
-	this.turnRate = weap.turnRate;
-	this.fireGroup = weap.fireGroup; // primary or secondary
-	if (this.type == "point defense" || this.type == "point defense beam") {
-	    this.fireGroup = null;
+	out.passThroughShields = weap.passThroughShields;
+	out.shieldDamage = weap.shieldDamage;
+	out.armorDamage = weap.armorDamage;
+	out.ionizationDamage = weap.ionization;
+	out.ionizationColor = weap.ionizeColor;
+	out.reload = weap.reload;
+	out.duration = weap.duration;
+	out.speed = weap.speed;
+	out.turnRate = weap.turnRate;
+	out.fireGroup = weap.fireGroup; // primary or secondary
+	if (out.type == "point defense" || out.type == "point defense beam") {
+	    out.fireGroup = null;
 	}
 	
-	this.exitType = weap.exitType;
-	this.accuracy = weap.accuracy;
-	this.impact = weap.impact; // knockback force
-	this.burstCount = weap.burstCount;
-	this.burstReload = weap.burstReload;
+	out.exitType = weap.exitType;
+	out.accuracy = weap.accuracy;
+	out.impact = weap.impact; // knockback force
+	out.burstCount = weap.burstCount;
+	out.burstReload = weap.burstReload;
 
-	this.shield = 0;
-	this.armor = weap.durability;
+	out.shield = 0;
+	out.armor = weap.durability;
 
-	this.trailParticles = weap.trailParticles;
-	this.hitParticles = weap.hitParticles;
+	out.trailParticles = weap.trailParticles;
+	out.hitParticles = weap.hitParticles;
 	
-	this.maxAmmo = weap.maxAmmo;
+	out.maxAmmo = weap.maxAmmo;
 
-	this.useFiringAnimation = weap.useFiringAnimation;
-	this.destroyShipWhenFiring = false;
-	this.energyCost = 0;
-	this.ammoType = "unlimited"; // unlimited ammo
-	this.fireSimultaneously = weap.fireSimultaneously;
+	out.useFiringAnimation = weap.useFiringAnimation;
+	out.destroyShipWhenFiring = false;
+	out.energyCost = 0;
+	out.ammoType = "unlimited"; // unlimited ammo
+	out.fireSimultaneously = weap.fireSimultaneously;
 
 	// change me when you implement sound.
 	if (weap.explosion >= 128) {
-	    var boom = weap.idSpace.bööm[weap.explosion];
-	    this.explosion = new explosionParse(boom);
+	    var boomID = weap.idSpace.bööm[weap.explosion].globalID;
+	    out.explosion = await this.data.explosions.get(boomID);
 	}
 	else {
-	    this.explosion = null;
+	    out.explosion = null;
 	}
 
 	if (weap.explosion128sparks) {
-	    var extraBoom = weap.idSpace.bööm[128];
-	    this.secondaryExplosion = new explosionParse(extraBoom);
+	    var extraBoomID = weap.idSpace.bööm[128].globalID;
+	    out.secondaryExplosion = await this.data.explosions.get(extraBoomID);
 	}
 	else {
-	    this.secondaryExplosion = null;
+	    out.secondaryExplosion = null;
 	}
 
 	if (weap.ammoType <= -1000) {
 	    // then it costs energy
-	    this.energyCost = Math.abs(weap.ammoType + 1000) / 10;
+	    out.energyCost = Math.abs(weap.ammoType + 1000) / 10;
 	}
 	else if (weap.ammoType === -999) {
 	    // ship is destroyed
-	    this.destroyShipWhenFiring = true;
+	    out.destroyShipWhenFiring = true;
 	}
 	else if (weap.ammoType >= 0) {
 	    // uses ammo of id adjusted
 	    var adjusted = 128 + weap.ammoType;
-	    this.ammoType = weap.prefix + ":" + adjusted;
+	    out.ammoType = weap.prefix + ":" + adjusted;
 	}
 
-	this.vulnerableTo = [];
-	if (weap.vulnerableToPD && this.type === "guided") {
-	    this.vulnerableTo.push("point defense");
+	out.vulnerableTo = [];
+	if (weap.vulnerableToPD && out.type === "guided") {
+	    out.vulnerableTo.push("point defense");
 	}
 
-	this.submunitions = [];
+	out.submunitions = [];
 	if (weap.submunitions[0]) {
 	    var subs = Object.assign({}, weap.submunitions[0]);
 	    subs.id = weap.idSpace.wëap[subs.type].globalID;
 	    subs.type = undefined;
-	    this.submunitions.push(subs);
+	    out.submunitions.push(subs);
 	}
 
 
 
-	
+	return out;
 	
 	
     }

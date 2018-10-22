@@ -74,6 +74,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 
 	// no need to add explosion time because multiple explosions can be constructed.
 
+	/*
 	if (this.subs.length !== 0) {
 	    var subDurations = await Promise.map(this.subs, async function(sub) {
 		return (await sub.projectileQueue.peek()).lifetime;
@@ -81,7 +82,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	    var maxSubTime = Math.max(...subDurations);
 	    additionalTimes.push(maxSubTime);
 	}
-	
+	*/
 	this.additionalTime = Math.max(...additionalTimes);
 	this.lifetime += this.additionalTime;
 	this.available = true;
@@ -200,8 +201,8 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	this.system.vulnerableToPD.delete(this);
     }
     
-    collideWith(other) {
-	// temporary. will have damage types later
+    _collideWith(other) {
+
 	// this should probably be a separate mixin or class. lots of things do damage.
 	if (other.properties.vulnerableTo &&
 	    other.properties.vulnerableTo.includes(this.properties.damageType) &&
@@ -211,6 +212,8 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	    var collision = {};
 	    collision.shieldDamage = this.properties.shieldDamage;
 	    collision.armorDamage = this.properties.armorDamage;
+	    collision.ionizationDamage = this.properties.ionizationDamage;
+	    collision.ionizationColor = this.properties.ionizationColor;
 	    collision.impact = this.properties.impact;
 	    collision.angle = this.pointing;
 	    collision.passThroughShields = this.meta.passThroughShields;
@@ -238,7 +241,8 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	
 	this.available = false;
 	this.pointing = direction;
-	this.position = position.map(function(x) {return x;});
+	this.position[0] = position[0];
+	this.position[1] = position[1];
 
 	// nova speeds for weapons is in pixels / frame * 100. 3/10 pixels / ms
 	//    var factor = 3/10;
@@ -251,7 +255,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 			 Math.sin(direction) * this.properties.speed * this.factor  + velocity[1]];
 
 	if (this.trailParticles) {
-	    this.trailParticles.emit = true;
+	    this.trailParticles.emitParticles = true;
 	}
 	
 	this.show();
@@ -285,10 +289,10 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	if (this.trailParticles || this.hitParticles) {
 
 	    if (this.trailParticles) {
-		this.trailParticles.emit = false;
+		this.trailParticles.emitParticles = false;
 	    }
 	    if (this.hitParticles) {
-		this.hitParticles.emit = false;
+		this.hitParticles.emitParticles = false;
 	    }
 	}
 
@@ -310,7 +314,7 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	}
     }
     
-    receiveCollision(other) {
+    _receiveCollision(other) {
 	// Projectiles take damage as 1*armor and 0.5*shield
 	this.armor = this.armor - other.armorDamage - other.shieldDamage / 2;
 	if (this.armor <= 0) {
@@ -332,19 +336,18 @@ var projectile = class extends acceleratable(turnable(damageable(collidable(mova
 	    this.end();
 	}
     }
-    destroy() {
+    _destroy() {
 	// make a parent child thing for this
 	//clearTimeout(this.endTimeout);
 	if (this.trailParticles) {
 	    this.trailParticles.destroy();
 	}
-
 	
 	if (this.hitParticles) {
 	    this.hitParticles.destroy();
 	}
 	this.subs.forEach(function(sub) {sub.destroy();});
-	super.destroy();
+	super._destroy();
     }
 };
 

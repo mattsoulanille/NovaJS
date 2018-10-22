@@ -6,8 +6,6 @@ var spriteSheetCache = class extends cache {
     }
 
 
-    //get
-    
     get(id) {
 
 	if ( !(id in this.cached) ) {

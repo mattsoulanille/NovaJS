@@ -16,7 +16,19 @@ var turnable = (superclass) => class extends superclass {
 	// 10 nova spaceObject turn rate/sec ~= 30°/sec This turn rate is radians/sec
 	this.properties.turnRate = this.meta.turnRate * 2*Math.PI/120 || 0;
     }
+
+    _getTurnRate() {
+	return this.properties.turnRate;
+    }
     
+    get turnRate() {
+	// for ionization, afterburner, whatever happens during the game
+	return this._getTurnRate();
+    }
+    set turnRate(v) {
+	throw new Error("Can't set turnRate. Set properties.turnRate instead");
+    }
+
     updateStats(stats) {
 	super.updateStats.call(this, stats);
 	if (typeof(stats.turning) !== 'undefined') {
@@ -47,7 +59,7 @@ var turnable = (superclass) => class extends superclass {
 
 	if (this.delta !== 0) {
 	    if ((this.pointing == pointTo) || (Math.min(Math.abs(Math.abs(this.pointing - pointTo) - 2*Math.PI),
-							Math.abs(this.pointing - pointTo)) <= (this.properties.turnRate * (this.delta) / 1000))) {
+							Math.abs(this.pointing - pointTo)) <= (this.turnRate * (this.delta) / 1000))) {
 		this.pointing = pointTo;
 		this.turning = "";
 	    }
@@ -113,7 +125,7 @@ var turnable = (superclass) => class extends superclass {
 	
 	if (this.turning == "left") {
 	    
-	    this.pointing = this.pointing + (this.properties.turnRate * delta / 1000);
+	    this.pointing = this.pointing + (this.turnRate * delta / 1000);
 	    if (this.hasLeftTexture) {
 		frameStart = _.map(images, function(image) {return image.imagePurposes.left.start;});
 		frameCount = _.map(images, function(image) {return image.imagePurposes.left.length;});		    
@@ -121,7 +133,7 @@ var turnable = (superclass) => class extends superclass {
 	}
 	else if (this.turning == "right") {
 	    
-	    this.pointing = this.pointing - (this.properties.turnRate * delta / 1000);
+	    this.pointing = this.pointing - (this.turnRate * delta / 1000);
 	    // Right != correct in this instance. Right = a direction.
 	    if (this.hasRightTexture) {
 		frameStart = _.map(images, function(image) {return image.imagePurposes.right.start;});

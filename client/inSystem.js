@@ -1,7 +1,8 @@
-var inSystem = class {
+var destroyable = require("./destroyable.js");
+var inSystem = class extends destroyable(function() {}) {
     constructor() {
+	super(...arguments);
 	this.children = new Set();
-	this.destroyed = false;
     }
 
     addChild(child) {
@@ -66,13 +67,14 @@ var inSystem = class {
 
     }
     
-    destroy() {
+    _destroy() {
 	this.children.forEach(function(child) {
 	    child.destroy();
 	});
 	if (this.system !== null) {
 	    this.system = null;
 	}
+	super._destroy();
     }
 
     

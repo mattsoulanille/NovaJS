@@ -11,7 +11,8 @@
     "chai": "^4.1.2",
     "crash-colliders": "^2.0.1",
     "express": "^4.16.3",
-    "novaparse": "^0.0.24",
+    "novaparse": "^0.0.42",
+    "paralleljs": "^0.2.1",
     "pixi-display": "^1.1.1",
     "pixi-particles": "^2.1.9",
     "pixi.js": "^4.8.1",
@@ -22,10 +23,13 @@
     "socket.io-client": "^2.1.1",
     "uglifyify": "^5.0.1",
     "underscore": "^1.9.1",
-    "uuid": "^3.2.1"
+    "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "mocha": "^5.2.0"
+    "mocha": "^5.2.0",
+    "browserify": "^16.2.2",
+    "watchify": "^3.11.0",
+    "uglify-es": "^3.3.9"
   },
   "scripts": {
     "build": "browserify -g uglifyify browser.js | uglifyjs -c > static/bundle.js",
@@ -83,6 +87,8 @@
     "./server/systemServer.js": "./client/system.js",
     "./server/playerShipServer.js": "./client/playerShip.js",
     "./server/particleEmitterServer.js": "./client/particleEmitter.js",
-    "./server/pixistub.js": "pixi.js"
+    "./server/pixistub.js": "pixi.js",
+    "./server/ionizableServer.js": "./client/ionizable.js",
+    "./server/placeableServer.js": "./client/placeable.js"
   }
 }

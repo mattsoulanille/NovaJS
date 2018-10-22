@@ -6,6 +6,8 @@ var PNG = require('pngjs').PNG;
 var hull = require('./hull.js');
 var sprite = require("./spriteServer.js");
 
+var Parallel = require("paralleljs");
+
 function convexHullBuilder(source, frames) {
     // source is the source of the png data to build from
     // can be a url or a png
@@ -54,42 +56,39 @@ convexHullBuilder.prototype.makeConvexHulls = async function(alphaMatrix, frames
     return convexHulls;
 };
 
-convexHullBuilder.prototype._makeHulls = function(points_array) {
-    return new Promise(function(fulfill, reject) {
-
-	// For the love of god, if, when you're reading this,
-	// there is a reasonable parallel library for node js,
-	// rip this piece of garbage out and replace it.
-	var makeHulls = function(points_array, hulls = []) {
-	    if (points_array.length === 0) {
-		fulfill(hulls);
-	    }
-	    else {
-		let points = points_array.shift();
-		var hull = this.makeConvexHull(points);
-		hulls.push(hull);
-		// To prevent it from blocking the event queue
-		setTimeout(makeHulls.bind(this, points_array, hulls), 0);
-	    }
-	}.bind(this);
-	makeHulls(points_array);
-
-    }.bind(this));
-};
-
-
-
-convexHullBuilder.prototype.makeConvexHull = function(points) {
+const makeConvexHullThread = function(input) {
     // the last element is the same as the first,
     // and crash does not like that...
-    var h = hull(points);
+    var h = hull(input);
     h.pop();
     if (h.length !== 0) {
 	return h;
     }
     else {
-	return null; // since there isn't a convex hull
+	return null;
     }
+};
+
+const makeConvexHull = function(points) {
+    return new Promise(function(fulfill, reject) {
+	var h = hull(points);
+	h.pop();
+	if (h.length !== 0) {
+	    fulfill(h);
+	}
+	else {
+	    fulfill(null);
+	}
+    });
+};
+
+convexHullBuilder.prototype._makeHulls = async function(points_array) {
+    var hullPromises = points_array.map(function(points) {
+	return makeConvexHull(points);
+    });
+    
+    var real = await Promise.all(hullPromises);
+    return real;
 };
 
 

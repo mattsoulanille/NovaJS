@@ -8,6 +8,7 @@ var UnsupportedWeaponTypeError = class extends Error{};
 var AlreadyRenderedError = class extends Error{};
 var ControlScopeError = class extends Error {};
 
+
 module.exports = {
     AlliesError,
     NoSystemError,

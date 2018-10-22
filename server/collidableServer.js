@@ -14,8 +14,6 @@ let collidableServer = (superclass) => class extends collidable(superclass) {
     constructor() {
 	super(...arguments); // get 'this'
     }
-    // stops the server from sending bogus updateStats events
-    receiveCollision(other) {};
     /*
     _build() {
 

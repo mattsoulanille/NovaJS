@@ -175,8 +175,8 @@ class npcServer extends npc {
     }
     */
 
-    receiveCollision(other) {
-	super.receiveCollision.call(this, other);
+    _receiveCollision(other) {
+	super._receiveCollision(other);
 	this.sendCollision();
     }
 
@@ -208,11 +208,11 @@ class npcServer extends npc {
 	
     }
 
-    destroy() {
+    _destroy() {
 	if (typeof this.controlInterval !== 'undefined') {
 	    clearInterval(this.controlInterval);
 	}
-	super.destroy.call(this);
+	super._destroy(this);
 	this.socket.emit("removeObjects", this.UUIDS); // Is this necessary?
     }
 

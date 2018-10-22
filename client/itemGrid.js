@@ -1,11 +1,17 @@
 var eventable = require("../libraries/eventable.js");
-class itemTile extends eventable(function() {}) {
+var loadsResources = require("./loadsResources.js");
+var PIXI = require("../server/pixistub.js");
+
+class itemTile extends eventable(loadsResources(function() {})) {
     constructor(item) {
 	super();
 	this.item = item;
 	this.boxDimensions = [83, 54];
+	this.middle = this.boxDimensions.map(function(x) {return x / 2;});
 
 	this.name = this.item.name;
+	this.desc = this.item.desc;
+	
 	this.font = {
 	    normal:  {fontFamily:"Geneva", fontSize:10, fill:0xffffff,
 		      align:'center', wordWrap:true, wordWrapWidth:this.boxDimensions[0]},
@@ -28,13 +34,13 @@ class itemTile extends eventable(function() {}) {
 	this.dimStyle = [this.lineWidth, this.colors.dim];
 	this.brightStyle = [this.lineWidth, this.colors.bright];
 
-
+	
 	this.graphics = new PIXI.Graphics();
 	
-	this.itemText = new PIXI.Text(this.name, this.font.normal);
-	this.itemText.anchor.x = 0.5;
-	this.itemText.position.x = this.boxDimensions[0] / 2;
-	this.itemText.position.y = this.boxDimensions[1] * 1/2;
+	this.nameText = new PIXI.Text(this.name, this.font.normal);
+	this.nameText.anchor.x = 0.5;
+	this.nameText.position.x = this.middle[0];
+	this.nameText.position.y = this.boxDimensions[1] * 0.5;
 
 	this.quantity = 0;
 	this.quantityText = new PIXI.Text("", this.font.normal);
@@ -52,11 +58,32 @@ class itemTile extends eventable(function() {}) {
 	}.bind(this));
 
 	this.container.addChild(this.graphics);
-	this.container.addChild(this.itemText);
+	this.container.addChild(this.nameText);
 	this.container.addChild(this.quantityText);
 
+	//this.build(); // Too laggy
+	
     }
+    build() {
+	if (this.built) {
+	    return;
+	}
 
+	if (this.item.pictID) {
+	    this.smallPict = this.data.sprite.fromPict(this.item.pictID);
+	    this.largePict = this.data.sprite.fromPict(this.item.pictID);
+	    this.smallPict.anchor.x = 0.5;
+	    this.smallPict.position.x = this.middle[0];
+	    this.smallPict.position.y = 1;
+
+	    var scale = 0.15;
+	    this.smallPict.scale.x = scale;
+	    this.smallPict.scale.y = scale;
+
+	    this.container.addChildAt(this.smallPict, 1);
+	}
+	this.built = true;
+    }
     draw() {
 	this.graphics.clear();
 	if (this.active) {
@@ -75,6 +102,7 @@ class itemTile extends eventable(function() {}) {
     }
     show() {
 	this.container.visible = true;
+	this.build(); // Builds if not already built
     }
     moveTo(pos) {
 	this.container.position.x = pos[0];
@@ -94,8 +122,9 @@ class itemTile extends eventable(function() {}) {
 
 
 
-class itemGrid {
+class itemGrid extends eventable(function() {}) {
     constructor(items) {
+	super();
 	this.container = new PIXI.Container();
 
 	// Experimentally Determined
@@ -103,7 +132,12 @@ class itemGrid {
 	this.boxDimensions = [83, 54];
 
 	// Make this be ships or outfits or something in the future.
-	this.items = items;
+	this.items = items.slice(); // won't need to slice once the planet gives an array of only the outfits / ships it actually has
+	this.items.sort(function(a,b) {
+	    return a.displayWeight - b.displayWeight;
+	    //return Math.random() - 0.5;
+	});
+
 	this.selectionIndex = -1;
 
 	this.scroll = 0;
@@ -114,7 +148,7 @@ class itemGrid {
     get selection() {
 	return this.items[this.selectionIndex];
     }
-
+    
     set selection(item) {
 	this.selectionIndex = this.items.indexOf(item);
 	this.drawGrid();
@@ -129,7 +163,6 @@ class itemGrid {
 	    this.tilesDict[item.id] = tile;
 	    return tile;
 	}.bind(this));
-
     }
 
     _onTileClicked(tile) {
@@ -143,6 +176,7 @@ class itemGrid {
 	    t.hide();
 	});
 
+
 	var start = this.boxCount[0] * this.scroll;
 
 	let selectedPosition = null;
@@ -155,6 +189,9 @@ class itemGrid {
 	    tile.show();
 	    if (itemIndex === this.selectionIndex) {
 		tile.active = true;
+		// send which one is selected
+		this.emit("tileSelected", tile);
+
 		// Make sure it is above the others
 		this.container.addChildAt(tile.container, this.tiles.length - 1);
 	    }
@@ -167,6 +204,7 @@ class itemGrid {
 	    tile.moveTo(pos);
 	    tile.draw();
 	}
+
 
     }
 
