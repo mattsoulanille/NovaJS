@@ -1,8 +1,8 @@
 var shanParse = require("./shanParse.js");
 var baseParse = require("./baseParse.js");
-var explosionParse = require("./explosionParse.js");
+
 class shipParse extends baseParse {
-    constructor(weaponOutfitMap) {
+    constructor(data, weaponOutfitMap) {
 	super(...arguments);
 	this.weaponOutfitMap = weaponOutfitMap;
     }
@@ -96,16 +96,16 @@ class shipParse extends baseParse {
 	
 
 	if (ship.initialExplosion >= 128) {
-	    let boom = ship.idSpace.bööm[ship.initialExplosion];
-	    out.initialExplosion = new explosionParse(boom);
+	    let boomID = ship.idSpace.bööm[ship.initialExplosion].globalID;
+	    out.initialExplosion = await this.data.explosions.get(boomID);//new explosionParse(boom);
 	}
 	else {
 	    out.initialExplosion = null;
 	}
 	
 	if (ship.finalExplosion >= 128) {
-	    let boom = ship.idSpace.bööm[ship.finalExplosion];
-	    out.finalExplosion = new explosionParse(boom);
+	    let boomID = ship.idSpace.bööm[ship.finalExplosion].globalID;
+	    out.finalExplosion = await this.data.explosions.get(boomID);//new explosionParse(boom);
 	}
 	else {
 	    out.finalExplosion = null;

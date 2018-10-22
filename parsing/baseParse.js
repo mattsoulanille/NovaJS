@@ -1,6 +1,8 @@
 
 class baseParse {
-    constructor() {}
+    constructor(data) {
+	this.data = data;
+    }
 
     parse(resource) {
 	var out = {};

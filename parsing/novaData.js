@@ -7,6 +7,7 @@ const outfParse = require("./outfParse.js");
 const pictParse = require("./pictParse.js");
 const planetParse = require("./planetParse.js");
 const systemParse = require("./systemParse.js");
+const explosionParse = require("./explosionParse.js");
 const gettable = require("../libraries/gettable.js");
 const buildable = require("../client/buildable.js"); // maybe move this out of /client?
 const novaParse = require("novaParse");
@@ -16,13 +17,15 @@ class novaData extends buildable(function() {}) {
 	super();
 	//this.novaParse = parsed;
 	this.path = path;
-	this.parsers = {
-	    spriteSheetAndImageParse : new spriteSheetAndImageParse(),
-	    outfParse : new outfParse(),
-	    weapParse : new weapParse(),
-	    pictParse : new pictParse(),
-	    planetParse : new planetParse(),
-	    systemParse : new systemParse()
+	this.data = {};
+	this.parsers = { // None of these should modify this.data directly
+	    spriteSheetAndImageParse : new spriteSheetAndImageParse(this.data),
+	    outfParse : new outfParse(this.data),
+	    weapParse : new weapParse(this.data),
+	    pictParse : new pictParse(this.data),
+	    planetParse : new planetParse(this.data),
+	    systemParse : new systemParse(this.data),
+	    explosionParse: new explosionParse(this.data)
 	};
     }
 
@@ -43,7 +46,7 @@ class novaData extends buildable(function() {}) {
 	}
 
 	await this.buildWeaponOutfitMap();
-	this.parsers.shipParse = new shipParse(this.weaponOutfitMap);
+	this.parsers.shipParse = new shipParse(this.data, this.weaponOutfitMap);
 	this.setupDataSources();
 	this.setupIDs();
 	super._build();
@@ -53,27 +56,27 @@ class novaData extends buildable(function() {}) {
 	this._spriteSheetAndImages = new gettable(
 	    this.getFunction("rlëD", this.parsers.spriteSheetAndImageParse));
 	
-	this.spriteSheets = new gettable(async function(globalID) {
+	this.data.spriteSheets = new gettable(async function(globalID) {
 	    return (await this._spriteSheetAndImages.get(globalID)).spriteSheet;
 	}.bind(this));
 
-	this.spriteSheetImages = new gettable(async function(globalID) {
+	this.data.spriteSheetImages = new gettable(async function(globalID) {
 	    return (await this._spriteSheetAndImages.get(globalID)).png;
 	}.bind(this));
 
-	this.spriteSheetFrames = new gettable(async function(globalID) {
+	this.data.spriteSheetFrames = new gettable(async function(globalID) {
 	    return (await this._spriteSheetAndImages.get(globalID)).frameInfo;
 	}.bind(this));
 
-
 	// TODO: Refactor these with .ids: Define a map between my names and nova's names
 	// and make these programmatically
-	this.outfits = new gettable(this.getFunction("oütf", this.parsers.outfParse));
-	this.weapons = new gettable(this.getFunction("wëap", this.parsers.weapParse));
-	this.picts = new gettable(this.getFunction("PICT", this.parsers.pictParse));
-	this.planets = new gettable(this.getFunction("spöb", this.parsers.planetParse));
-	this.systems = new gettable(this.getFunction("sÿst", this.parsers.systemParse));
-	this.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
+	this.data.outfits = new gettable(this.getFunction("oütf", this.parsers.outfParse));
+	this.data.weapons = new gettable(this.getFunction("wëap", this.parsers.weapParse));
+	this.data.picts = new gettable(this.getFunction("PICT", this.parsers.pictParse));
+	this.data.planets = new gettable(this.getFunction("spöb", this.parsers.planetParse));
+	this.data.systems = new gettable(this.getFunction("sÿst", this.parsers.systemParse));
+	this.data.ships = new gettable(this.getFunction("shïp", this.parsers.shipParse));
+	this.data.explosions = new gettable(this.getFunction("bööm", this.parsers.explosionParse));
     }
 
     setupIDs() {

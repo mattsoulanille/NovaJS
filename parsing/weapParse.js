@@ -1,5 +1,4 @@
 var baseParse = require("./baseParse.js");
-var explosionParse = require("./explosionParse.js");
 
 var weapParse = class extends baseParse {
     constructor() {
@@ -81,16 +80,16 @@ var weapParse = class extends baseParse {
 
 	// change me when you implement sound.
 	if (weap.explosion >= 128) {
-	    var boom = weap.idSpace.bööm[weap.explosion];
-	    out.explosion = new explosionParse(boom);
+	    var boomID = weap.idSpace.bööm[weap.explosion].globalID;
+	    out.explosion = await this.data.explosions.get(boomID);
 	}
 	else {
 	    out.explosion = null;
 	}
 
 	if (weap.explosion128sparks) {
-	    var extraBoom = weap.idSpace.bööm[128];
-	    out.secondaryExplosion = new explosionParse(extraBoom);
+	    var extraBoomID = weap.idSpace.bööm[128].globalID;
+	    out.secondaryExplosion = await this.data.explosions.get(extraBoomID);
 	}
 	else {
 	    out.secondaryExplosion = null;

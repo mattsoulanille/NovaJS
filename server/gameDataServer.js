@@ -14,6 +14,11 @@ class gameDataServer extends gameDataSuper {
 	super();
 	this.app = app;
 
+	// preloaded resources are fully parsed and given
+	// to the clients in one request when they connect
+	// so they don't have to request them all individually.
+	this.preload = ["outfits", "ships"];
+	
 	this.novaData = new novaData("./Nova\ Data");
 	this.filesystemData = new filesystemData("objects");
 
@@ -33,17 +38,42 @@ class gameDataServer extends gameDataSuper {
 	await this.filesystemData.build();
 	await this.novaData.build();
 
-	this.meta.ids = this.setupIDs();
+	this.meta.ids = await this.setupIDs();
 	this.meta.shipIDMap = await this.setupShipIDMap();
+
+	this.meta.preloadCache = {};
+	await this.buildPreloadCache();
+
 	this.app.get(path.join(this.metaPath), function(req, res) {
 	    res.send(this.meta);
 	}.bind(this));
-
-
-	
 	super._build();
     }
 
+
+    async buildPreloadCache() {
+	for (let i in this.preload) {
+	    var dataType = this.preload[i];
+	    this.meta.preloadCache[dataType] = await this._getAll(dataType);
+	}
+    }
+
+    async _getAll(dataType) {
+	var toReturn = {};
+    	var gettable = this.data[dataType];
+    	var ids = this.meta.ids[dataType];
+	for (let i in ids) {
+	    let id = ids[i];
+	    toReturn[id] = await this.data[dataType].get(id);
+	}
+	return toReturn;
+    }
+
+    getParseErrorMessage(dataType, id, e) {
+	return "Failed to parse " + dataType + " " + id + ".\n" +
+	    "This " + dataType + " will not be available. Stacktrace: \n" + e.stack;
+    }
+    
     async setupShipIDMap() {
 	var out = {};
 	for (let i in this.meta.ids.ships) {
@@ -64,19 +94,27 @@ class gameDataServer extends gameDataSuper {
 		    let dataSource = this.dataSources[i];
 		    
 		    try {
-			return await dataSource[name].get(item);
+			return await dataSource.data[name].get(item);
 		    }
 		    catch (e) {
 			errors.push(e);
 		    }
 		}
-		throw new Error(item + " not found under " + name + "\nStacktraces:\n"
-				+ errors.map(x => x.stack).join("\n"));
+		console.warn(item + " not found under " + name + ". Using default instead. "
+			     + "\nStacktraces:\n"
+			     + errors.map(x => x.stack).join("\n"));
+		// For now, this assumes the first ID parses correctly.
+		// TODO: Make a real default for each resource.
+		return await this.data[name].get(this.meta.ids[name][0]);
+		
 	    }.bind(this)));
 	}
     }
 
-    setupIDs() {
+    async setupIDs(check=false) {
+	// If check is set, then this attempts to build the ID
+	// and only adds the ID if the resource builds successfully
+	// Checking is very costly for certain resources (pictures)
 	var ids = {};
 	for (let i in novaDataTypes) {
 	    var dataType = novaDataTypes[i];
@@ -84,7 +122,24 @@ class gameDataServer extends gameDataSuper {
 	    for (let j in this.dataSources) {
 		let dataSource = this.dataSources[j];
 		if (typeof dataSource.ids[dataType] !== 'undefined') {
-		    ids[dataType] = [...ids[dataType], ...dataSource.ids[dataType]];
+		    if (check) {
+			for (let k in dataSource.ids[dataType]) {
+			    var id = dataSource.ids[dataType][k];
+			    try {
+				// Try to get the resource of that id. On success, push.
+				await dataSource.data[dataType].get(id);
+				ids[dataType].push(id);
+			    }
+			    catch (e) {
+				console.warn("Failed to parse " + dataType + " " + id + ":\n"
+					     + e.stack);
+
+			    }
+			}
+		    }
+		    else {
+			ids[dataType] = [...ids[dataType], ...dataSource.ids[dataType]];
+		    }
 		}
 	    }
 	}

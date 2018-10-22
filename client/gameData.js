@@ -42,9 +42,9 @@ class gameData extends gameDataSuper {
 	return new PIXI.Texture.fromImage(path.join(this.resourcePath, "picts", globalID + ".png"));
     }
     
-    addGettable(name) {
+    addGettable(dataType) {
 	var extension;
-	switch(name) {
+	switch(dataType) {
 	case ("spriteSheetImage"):
 	    extension = ".png";
 	    break;
@@ -54,17 +54,27 @@ class gameData extends gameDataSuper {
 	default:
 	    extension = ".json";
 	}
-	this.data[name] = new gettable(this._makeGetFunction(name, extension));
+	this.data[dataType] = new gettable(this._makeGetFunction(dataType, extension));
 	
     }
 
     // The function for the gettable
-    _makeGetFunction(name, extension) {
+    _makeGetFunction(dataType, extension) {
 	return function(item) {
 	    if (typeof item == "undefined") {
 		throw new Error("Requested undefined item");
 	    }
-	    var url = path.join(this.resourcePath, name, item + extension);
+	    // Some resources are preloaded
+	    if ( (dataType in this.meta.preloadCache) &&
+		 (item in this.meta.preloadCache[dataType]) ) {
+		var toReturn = this.meta.preloadCache[dataType][item];
+
+		// The resource is now stored by the gettable. Don't store it twice.
+		delete this.meta.preloadCache[dataType][item];
+
+		return toReturn;
+	    }
+	    var url = path.join(this.resourcePath, dataType, item + extension);
 	    return getURL(url);
 	}.bind(this);
     }

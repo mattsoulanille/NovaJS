@@ -19,6 +19,7 @@ var loadsResources = (superclass) => class extends superclass {
 	// a modifiable copy of meta.
 	// Why is this the best way to make a copy???!!!
 	var copy = JSON.parse(JSON.stringify(this.meta));
+
 	if (! ("properties" in this) ) {
 	    this.properties = {};
 	}

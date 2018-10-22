@@ -154,23 +154,24 @@ var startGame = async function() {
 
     npcMaker = new AI(sol, io, gd.meta.ids.ships);
     local.context.npcMaker = npcMaker;
-    
-    io.on('connection', connectFunction);
+
+    await sol.build();
+
+    spaceObject.prototype.lastTime = new Date().getTime();
+    gameloop(sol);
 
     app.use("/static", express.static("static"));
     app.use("/settings", express.static("settings"));
-    
-    await sol.build();
-    console.log("finished loading");
+    io.on('connection', connectFunction);
+
 
     http.listen(port, function(){
 	console.log('listening on *:'+port);
     });
 
-    spaceObject.prototype.lastTime = new Date().getTime();
-    gameloop(sol);
-
+    console.log("finished loading");
 };
+
 local.context.startGame = startGame;
 startGame();
 
@@ -179,7 +180,7 @@ var playercount = 0;
 var multiplayer = require("./server/multiplayerServer.js");
 local.context.m = multiplayer.prototype.globalSet;
 local.context.players = players;
-var connectFunction = function(socket){
+var connectFunction = function(socket) {
 
     multiplayer.prototype.bindSocket(socket);
     
