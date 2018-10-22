@@ -6,6 +6,7 @@ const path = require("path");
 const filesystemData = require("../parsing/filesystemData.js");
 const gameDataSuper = require("../superclasses/gameDataSuper.js");
 const novaData = require("../parsing/novaData.js");
+const NoNovaFilesError = require("../client/errors.js").NoNovaFilesError;
 
 // This combines all sources of data into one place to get data from.
 class gameDataServer extends gameDataSuper {
@@ -37,6 +38,7 @@ class gameDataServer extends gameDataSuper {
     async _build() {
 	await this.filesystemData.build();
 	await this.novaData.build();
+
 
 	this.meta.ids = await this.setupIDs();
 	this.meta.shipIDMap = await this.setupShipIDMap();

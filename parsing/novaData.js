@@ -11,6 +11,9 @@ const explosionParse = require("./explosionParse.js");
 const gettable = require("../libraries/gettable.js");
 const buildable = require("../client/buildable.js"); // maybe move this out of /client?
 const novaParse = require("novaparse");
+const fs = require("fs");
+const path = require("path");
+const NoNovaFilesError = require("../client/errors.js").NoNovaFilesError;
 
 class novaData extends buildable(function() {}) {
     constructor(path) {
@@ -31,19 +34,26 @@ class novaData extends buildable(function() {}) {
 
     async _build() {
 	this.novaParse = new novaParse(this.path);
+	var ndPath = path.join(this.path, "Nova Files");
+	if (! fs.existsSync(ndPath) ) {
+	    var message = "Missing Nova Files directory at " + ndPath
+		+ ". Make sure to copy the Nova Files directory from " 
+		+ "EV Nova into " + this.path + ". To get the Nova Files"
+		+ " directory out of EV Nova, right click it and select \"Show package contents.\""
+		+ " Then, navigate to Contents/Resources and copy the Nova Files directory to " + this.path;
+	    var err = new NoNovaFilesError(message);
+	    err.code = "ENOENT";
+	    throw err;
+	}
 
-	try {
-	    await this.novaParse.read();
+	var pluginsPath = path.join(this.path, "Plug-ins");
+	if (! fs.existsSync(pluginsPath) ) {
+	    console.warn("Missing Plug-ins directory at " + pluginsPath
+			 + ". Creating directory now.");
+	    fs.mkdirSync(pluginsPath);
 	}
-	catch (e) {
-	    if (e.code === "ENOENT") {
-		console.log("Missing data files or directory structure. Expected \"" + e.path + "\" to exist.");
-		console.log('Please make sure your nova files are located at "./Nova Data/Nova Files/" and your plug-ins at "./Nova Data/Plug-ins/"');
-	    }
-	    else {
-		throw e;
-	    }
-	}
+
+	await this.novaParse.read();
 
 	await this.buildWeaponOutfitMap();
 	this.parsers.shipParse = new shipParse(this.data, this.weaponOutfitMap);

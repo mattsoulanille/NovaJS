@@ -29,7 +29,7 @@ local.context.io = io;
 var novaParse = require("novaparse");
 var novaData = require("./parsing/novaData");
 var gameData = require("./server/gameDataServer.js");
-
+const NoNovaFilesError = require("./client/errors.js").NoNovaFilesError;
 var npc = require("./server/npcServer.js");
 //npc.prototype.io = io;
 var spaceObject = require("./server/spaceObjectServer");
@@ -150,7 +150,15 @@ var startGame = async function() {
     resourcesPrototypeHolder.prototype.socket = io;
 
     gd = new gameData(app);
-    await gd.build();
+    try {
+	await gd.build();
+    }
+    catch (e) {
+	if (e instanceof NoNovaFilesError) {
+	    console.error(e.message);
+	    process.exit(1);
+	}
+    }
     resourcesPrototypeHolder.prototype.data = gd.data;
 
     local.context.gd = gd;

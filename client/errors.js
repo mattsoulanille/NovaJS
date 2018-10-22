@@ -7,7 +7,7 @@ var NoCollisionShapeError = class extends Error{};
 var UnsupportedWeaponTypeError = class extends Error{};
 var AlreadyRenderedError = class extends Error{};
 var ControlScopeError = class extends Error {};
-
+var NoNovaFilesError = class extends Error {};
 
 module.exports = {
     AlliesError,
@@ -16,6 +16,7 @@ module.exports = {
     NoCollisionShapeError,
     UnsupportedWeaponTypeError,
     AlreadyRenderedError,
-    ControlScopeError
+    ControlScopeError,
+    NoNovaFilesError
 };
 
