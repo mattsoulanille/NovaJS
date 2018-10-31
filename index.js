@@ -5,8 +5,9 @@ var http = require('http').Server(app);
 var io = require('socket.io')(http);
 var UUID = require('uuid/v4');
 var _ = require("underscore");
-var errors = require("./client/errors.js");
+var errors = require("./lib/client/errors.js");
 var favicon = require("serve-favicon");
+
 
 //Promise = require("bluebird");
 
@@ -27,38 +28,38 @@ local.context.io = io;
 
 // parses nova files + plug-ins
 var novaParse = require("novaparse");
-var novaData = require("./parsing/novaData");
-var gameData = require("./server/gameDataServer.js");
-const NoNovaFilesError = require("./client/errors.js").NoNovaFilesError;
-var npc = require("./server/npcServer.js");
+var novaData = require("./lib/parsing/novaData");
+var gameData = require("./lib/server/gameDataServer.js");
+const NoNovaFilesError = require("./lib/client/errors.js").NoNovaFilesError;
+var npc = require("./lib/server/npcServer.js");
 //npc.prototype.io = io;
-var spaceObject = require("./server/spaceObjectServer");
-var inSystem = require("./client/inSystem");
-var resourcesPrototypeHolder = require("./client/resourcesPrototypeHolder.js");
+var spaceObject = require("./lib/server/spaceObjectServer");
+var inSystem = require("./lib/client/inSystem");
+var resourcesPrototypeHolder = require("./lib/client/resourcesPrototypeHolder.js");
 //spaceObject.prototype.socket = io;
-var beamWeapon = require("./server/beamWeaponServer");
+var beamWeapon = require("./lib/server/beamWeaponServer");
 beamWeapon.prototype.socket = io;
 
-var basicWeapon = require("./server/basicWeaponServer");
+var basicWeapon = require("./lib/server/basicWeaponServer");
 basicWeapon.prototype.socket = io;
 
 
  
-var ship = require("./server/shipServer");
-var outfit = require("./server/outfitServer");
-var planet = require("./server/planetServer");
-var system = require("./server/systemServer.js");
-var collidable = require("./server/collidableServer.js");
+var ship = require("./lib/server/shipServer");
+var outfit = require("./lib/server/outfitServer");
+var planet = require("./lib/server/planetServer");
+var system = require("./lib/server/systemServer.js");
+var collidable = require("./lib/server/collidableServer.js");
 var sol;
 
 Object.defineProperty(local.context, 'ships', {set: function() {}, get: function() {
     return Array.from(sol.ships);
 }});
 
-var convexHullBuilder = require("./server/convexHullBuilder.js");
+var convexHullBuilder = require("./lib/server/convexHullBuilder.js");
 var path = require('path');
 
-var AI = require("./server/AI.js");
+var AI = require("./lib/server/AI.js");
 var npcMaker;
 
 
@@ -76,8 +77,8 @@ local.context.explodeNPCs = function() {
     });
 };
 
-var neuralAI = require("./server/neuralAI.js");
-var escort = require("./server/escortServer.js");
+var neuralAI = require("./lib/server/neuralAI.js");
+var escort = require("./lib/server/escortServer.js");
 
 var addingNPC = false;
 local.context.addNPCs = async function(count, name=null) {
@@ -194,7 +195,7 @@ startGame();
 
 var paused = false;
 var playercount = 0;
-var multiplayer = require("./server/multiplayerServer.js");
+var multiplayer = require("./lib/server/multiplayerServer.js");
 local.context.m = multiplayer.prototype.globalSet;
 local.context.players = players;
 var connectFunction = function(socket) {
