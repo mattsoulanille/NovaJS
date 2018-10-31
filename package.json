@@ -21,6 +21,7 @@
     "serve-favicon": "^2.5.0",
     "socket.io": "^2.1.1",
     "socket.io-client": "^2.1.1",
+    "timesync": "^1.0.3",
     "uglifyify": "^5.0.1",
     "underscore": "^1.9.1",
     "uuid": "^3.3.2"
