@@ -7,6 +7,8 @@
     "test": "test"
   },
   "dependencies": {
+    "@types/socket.io": "^2.1.0",
+    "@types/socket.io-client": "^1.4.32",
     "bluebird": "^3.5.1",
     "chai": "^4.1.2",
     "crash-colliders": "^2.0.1",
@@ -22,21 +24,32 @@
     "socket.io": "^2.1.1",
     "socket.io-client": "^2.1.1",
     "timesync": "^1.0.3",
-    "uglifyify": "^5.0.1",
     "underscore": "^1.9.1",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
+    "@types/express": "^4.16.0",
+    "@types/pixi.js": "^4.8.2",
     "mocha": "^5.2.0",
     "browserify": "^16.2.2",
+    "tsify": "^4.0.0",
+    "typescript": "^3.1.5",
     "watchify": "^3.11.0",
-    "uglify-es": "^3.3.9"
+    "uglify-es": "^3.3.9",
+    "uglifyify": "^5.0.1"
   },
   "scripts": {
-    "build": "browserify -g uglifyify lib/browser.js | uglifyjs -c > static/bundle.js",
-    "watch": "watchify lib/browser.js -o static/bundle.js --debug --verbose",
-    "run": "node index.js",
-    "test": "mocha"
+    "build": "npm run build-server; npm run build-client",
+    "build-server": "tsc",
+    "move-client-files": "mkdir -p build/static/; cp src/index.html build/",
+    "build-client": "npm run move-client-files; browserify -p [ tsify --noImplicitAny ] -g uglifyify src/browser.ts | uglifyjs -c > build/static/bundle.js",
+    "build-debug": "npm run build-server; npm run build-client-debug",
+    "build-client-debug": "npm run move-client-files; browserify -p [ tsify --noImplicitAny ] src/browser.ts -o build/static/bundle.js --debug --verbose",
+    "watch": "watchify -p [ tsify --noImplicitAny ] src/browser.ts -o build/static/bundle.js --debug --verbose",
+    "run": "node build/server.js",
+    "debug": "ndb build/server.js",
+    "test": "mocha",
+    "clean": "rm -r build/"
   },
   "repository": {
     "type": "git",
@@ -53,43 +66,5 @@
   "bugs": {
     "url": "https://github.com/mattsoulanille/NovaJS/issues"
   },
-  "homepage": "https://github.com/mattsoulanille/NovaJS#readme",
-  "browser": {
-    "./lib/server/acceleratableServer.js": "./lib/client/acceleratable.js",
-    "./lib/server/basicWeaponServer.js": "./lib/client/basicWeapon.js",
-    "./lib/server/beamWeaponServer.js": "./lib/client/beamWeapon.js",
-    "./lib/server/collidableServer.js": "./lib/client/collidable.js",
-    "./lib/server/damageableServer.js": "./lib/client/damageable.js",
-    "./lib/server/escortServer.js": "./lib/client/escort.js",
-    "./lib/server/frontQuadrantTurretWeaponServer.js": "./lib/client/frontQuadrantTurretWeapon.js",
-    "./lib/server/guidedServer.js": "./lib/client/guided.js",
-    "./lib/server/inertialServer.js": "./lib/client/inertial.js",
-    "./lib/server/inertialessServer.js": "./lib/client/inertialess.js",
-    "./lib/server/movableServer.js": "./lib/client/movable.js",
-    "./lib/server/multiplayerServer.js": "./lib/client/multiplayer.js",
-    "./lib/server/npcServer.js": "./lib/client/npc.js",
-    "./lib/server/outfitServer.js": "./lib/client/outfit.js",
-    "./lib/server/planetServer.js": "./lib/client/planet.js",
-    "./lib/server/pointDefenseBeamServer.js": "./lib/client/pointDefenseBeam.js",
-    "./lib/server/projectileServer.js": "./lib/client/projectile.js",
-    "./lib/server/projectileWeaponServer.js": "./lib/client/projectileWeapon.js",
-    "./lib/server/shipServer.js": "./lib/client/ship.js",
-    "./lib/server/spaceObjectServer.js": "./lib/client/spaceObject.js",
-    "./lib/server/spriteServer.js": "./lib/client/sprite.js",
-    "./lib/server/turnableServer.js": "./lib/client/turnable.js",
-    "./lib/server/turretWeaponServer.js": "./lib/client/turretWeapon.js",
-    "./lib/server/weaponBuilderServer.js": "./lib/client/weaponBuilder.js",
-    "./lib/server/bayWeaponServer.js": "./lib/client/bayWeapon.js",
-    "./lib/server/beamTurretServer.js": "./lib/client/beamTurret.js",
-    "./lib/server/loadsResourcesServer.js": "./lib/client/loadsResources.js",
-    "./lib/server/novaCacheServer.js": "./lib/client/novaCache.js",
-    "./lib/server/pointDefenseWeaponServer.js": "./lib/client/pointDefenseWeapon.js",
-    "./lib/server/renderableServer.js": "./lib/client/renderable.js",
-    "./lib/server/systemServer.js": "./lib/client/system.js",
-    "./lib/server/playerShipServer.js": "./lib/client/playerShip.js",
-    "./lib/server/particleEmitterServer.js": "./lib/client/particleEmitter.js",
-    "./lib/server/pixistub.js": "pixi.js",
-    "./lib/server/ionizableServer.js": "./lib/client/ionizable.js",
-    "./lib/server/placeableServer.js": "./lib/client/placeable.js"
-  }
+  "homepage": "https://github.com/mattsoulanille/NovaJS#readme"
 }
