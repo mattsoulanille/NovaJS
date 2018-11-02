@@ -8,7 +8,7 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 ### Project Goals
 * Function as a Nova Engine that can, given Nova files, run EV Nova.
 * Support Nova Plug-ins.
-* Improve on some of the issues with EV Nova's engine (such as limited turning angles) as long as doing so does not greatly affect gameplay.
+* Improve on some of the issues with EV Nova's engine (such as limited turning angles) as long as doing so does not negatively affect gameplay.
 * Support multiplayer to an extent.
 
 ## Wait, but isn't EV Nova Copyrighted?
@@ -64,21 +64,18 @@ By default, Nova runs on port 8000. See [Deployment](Deployment) for instruction
 The available tests are not comprehensive, and many are broken or inaccurate. They can be run with `mocha` but should not be trusted.
 
 ## Deployment
-Deployment is the same as installation, however, the port used for the server can be changed by editing the `port` variable in [index.js](https://github.com/mattsoulanille/NovaJS/blob/master/Nova/index.js).
+Deployment is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`
 
 ## Contributing
 
 I welcome pull requests, however, I am often in school and unable to accept them immediately. Some easy places to contribute include:
 * Parsing: [See the companion project NovaParse](https://github.com/mattsoulanille/NovaParse). This is probably the easiest and most helpful way to contribute and is a prerequisite for most of the following features.
-* Menus: Some work on menus has been done, but it has been vary basic so far (on the scale of displaying a box when landing on a planet).
 * NPCs and AI: There are two approaches to this: Writing or training an AI to be as best as possible or trying to mimic Nova's AI's behavior, but for both of them, lots needs to be written in the way of API.
 
 ## Known Bugs
-* Some ships don't have their massees parsed correctly. This results in them doing strange things when they are hit by projectiles.
 * Ship velocity scaling is wrong in that ships are far too fast. I think the scale should be 3/10 of what it currently is, but Nova gives a speed boost to the player when they're not playing in strict mode, so I don't know what the actual scale is. Perhaps the coordinate system needs to be redone so that no scaling is needed for non-player ships?
 * Beam weapons do not clip after colliding with a target and instead pass through as if they did not collide (more of a feature that hasn't been implemented yet).
 * Beam weapons seem to do too much damage.
-* Various texture layring issues such as stars being above planets, etc (mostly fixed using [pixi-display](https://github.com/pixijs/pixi-display)).
 
 ## Unsolved Multiplayer Questions
 * How will mission strings that significantly change the universe work?
@@ -89,10 +86,9 @@ I welcome pull requests, however, I am often in school and unable to accept them
   * This is probably the biggest proplem with multiplayer support, and I welcome any suggestions.
 * How will dates work? Realtime is definitely a bad idea for timing missions since it takes time to read the dialogue. Maybe everyone just has a different date that changes normally (when you jump / land)?
 * Will there be some form of chat, and if so, where will it be? Perhaps you need to hail other ships to talk to them? Perhaps it's just in the bottom left info area?
-* How will hailing other ships be managed when the game can't just pause whenever?
+* How will hailing other ships be managed when the game can't just pause at any time?
 * How will 2x speed work on a client basis? (It probably just won't and will be a server-configured option).
-* Should we make the AI behave like humans such that it's not obvious who the other players are? This probably won't work since AI never actually lands on planets. Also, humans do insane things.
-* How should pilot files be saved? How should deaths be handled? (These have more obvious answers, I think)
+* How should pilot files be saved? How should deaths be handled?
 
 
 
