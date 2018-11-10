@@ -7,10 +7,12 @@
     "test": "test"
   },
   "dependencies": {
+    "@types/chai-as-promised": "^7.1.0",
     "@types/socket.io": "^2.1.0",
     "@types/socket.io-client": "^1.4.32",
     "bluebird": "^3.5.1",
     "chai": "^4.1.2",
+    "chai-as-promised": "^7.1.1",
     "crash-colliders": "^2.0.1",
     "express": "^4.16.3",
     "novaparse": "^0.0.42",
@@ -24,16 +26,21 @@
     "socket.io": "^2.1.1",
     "socket.io-client": "^2.1.1",
     "timesync": "^1.0.3",
+    "ts-mocha": "^2.0.0",
     "underscore": "^1.9.1",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
     "@types/express": "^4.16.0",
     "@types/pixi.js": "^4.8.2",
+    "@types/chai": "^4.1.7",
+    "@types/mocha": "^5.2.5",
+    "@types/node": "^10.12.2",
     "mocha": "^5.2.0",
     "browserify": "^16.2.2",
     "tsify": "^4.0.0",
     "typescript": "^3.1.5",
+    "ts-node": "^7.0.1",
     "watchify": "^3.11.0",
     "uglify-es": "^3.3.9",
     "uglifyify": "^5.0.1"
@@ -48,7 +55,8 @@
     "watch": "watchify -p [ tsify --noImplicitAny ] src/browser.ts -o build/static/bundle.js --debug --verbose",
     "run": "node build/server.js",
     "debug": "ndb build/server.js",
-    "test": "mocha",
+    "test": "mocha -r ts-node/register -O tsconfig.json --recursive test/**/*.ts test/**/**/*.ts",
+    "test-brk": "mocha -r ts-node/register -O tsconfig.json --recursive --inspect-brk test/**/*.ts test/**/**/*.ts",
     "clean": "rm -r build/"
   },
   "repository": {
