@@ -1,5 +1,6 @@
 {
     "name": "testShip",
     "id": "test:1337",
-    "prefix": "test"
+    "prefix": "test",
+    "shield": 123
 }

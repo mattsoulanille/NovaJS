@@ -22,7 +22,8 @@ describe("FilesystemData", function() {
         expect(await fsData.data.Ship.get("test:1337")).to.deep.equal({
             "name": "testShip",
             "id": "test:1337",
-            "prefix": "test"
+            "prefix": "test",
+            "shield": 123
         });
     });
 
