@@ -1,0 +1,16 @@
+build/
+npm-debug.log
+*~
+\#*\#
+.\#*
+.DS_Store
+*.pyc
+*.swp
+bower_components
+node_modules
+favicon.icns
+parsing.js
+Nova Files
+Nova Data
+Plug-ins
+static
