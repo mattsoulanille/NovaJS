@@ -1,4 +1,4 @@
-import { Gettable } from "../../common/Gettable";
+import { Gettable } from "./Gettable";
 
 import { BaseResource } from "./BaseResource";
 import { ShipResource } from "./ShipResource";
