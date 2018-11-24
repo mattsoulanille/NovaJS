@@ -59,9 +59,9 @@ class GameDataAggregator implements GameDataInterface {
                 }
             }
 
-            // this.warningReporter(id + " not found under " + name + ". Using default instead. "
-            //     + "\nStacktraces:\n"
-            //     + errors.join("\n"));
+            this.warningReporter(id + " not found under " + dataType + ". Using default instead. "
+                + "\nStacktraces:\n"
+                + errors.join("\n"));
 
             return <T>DefaultBaseResource;
         });
