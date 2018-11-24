@@ -1,8 +1,8 @@
 type Builder<T> = (id: string) => Promise<T>;
 
 class Gettable<T> {
-    private data: { [key: string]: Promise<T> };
-    private getFunction: Builder<T>
+    protected data: { [key: string]: Promise<T> };
+    protected getFunction: Builder<T>
 
     constructor(getFunction: Builder<T>) {
         this.data = {};
@@ -17,5 +17,5 @@ class Gettable<T> {
     }
 }
 
-export { Gettable };
+export { Gettable, Builder };
 

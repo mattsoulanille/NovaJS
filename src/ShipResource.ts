@@ -19,8 +19,8 @@ interface ShipResource extends BaseResource {
     mass: number;
     outfits: { [index: string]: number }
     freeMass: number;
-    initialExplosion: string | null;
-    finalExplosion: string | null;
+    initialExplosion: BaseResource | null;
+    finalExplosion: BaseResource | null;
     largeExplosion: boolean;
     deathDelay: number;
     displayWeight: number;

@@ -47,6 +47,9 @@ enum NovaDataType {
 //     StatusBar: Gettable<BaseResource>
 // };
 
-interface NovaDataInterface { [index: string]: Gettable<BaseResource> }
 
-export { NovaDataInterface, NovaDataType };
+// index: NovaDataType
+interface NovaDataInterface { [index: number]: Gettable<BaseResource> }
+class NovaIDNotFoundError extends Error { };
+
+export { NovaDataInterface, NovaDataType, NovaIDNotFoundError };
