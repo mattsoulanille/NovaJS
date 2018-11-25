@@ -32,18 +32,6 @@ class NovaParse implements GameDataInterface {
         });
     }
 
-    isDirectory(path: string): Promise<boolean> {
-        return new Promise(function(fulfill, reject) {
-            fs.stat(path, function(err, stats): void {
-                if (err) {
-                    reject(err);
-                }
-                else {
-                    fulfill(stats.isDirectory());
-                }
-            });
-        });
-    }
 
     async read() {
 

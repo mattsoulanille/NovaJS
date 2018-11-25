@@ -8,6 +8,7 @@ var descParse = require("./parsers/desc.js");
 var outfParse = require("./parsers/outf.js");
 var spobParse = require("./parsers/spob.js");
 var systParse = require("./parsers/syst.js");
+var rledParse = require("./parsers/rled.js");
 
 /*
 var ndat4 = new rf("./test/Nova\ Data\ 4.ndat", false);
@@ -22,6 +23,8 @@ var desc = new rf("./test/files/desc.ndat", false);
 var outf = new rf("./test/files/outf.ndat", false);
 var spob = new rf("./test/files/spob.ndat", false);
 var syst = new rf("./test/files/syst.ndat", false);
+var cicn = new rf("./test/files/cicn.ndat", false);
+
 /*
 ndat4.read();
 weap.read();
@@ -43,6 +46,8 @@ np.read().then(function() {
 });
 
 
+local.context.pictParse = pictParse;
+local.context.rledParse = rledParse;
 
 
 
@@ -77,6 +82,9 @@ syst.read().then(function() {
     local.context.s1 = new systParse(syst.resources.sÿst[128]);
     local.context.s2 = new systParse(syst.resources.sÿst[129]);
     
+});
+cicn.read().then(function() {
+    local.context.cicn = cicn;
 });
 
 //local.context.spin = spin;

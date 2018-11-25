@@ -1,5 +1,5 @@
 
-import { NovaDataInterface } from "novadatainterface/NovaDataInterface";
+import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
 import { ShipResource } from "novadatainterface/ShipResource";
 import { BaseParse } from "./BaseParse";
 import { BaseResource } from "novadatainterface/BaseResource";
@@ -29,12 +29,12 @@ async function ShipParse(ship: any, data: NovaDataInterface): Promise<ShipResour
 
     if (ship.initialExplosion >= 128) {
         let boomID = ship.idSpace.bööm[ship.initialExplosion].globalID;
-        initialExplosion = await data.explosions.get(boomID);
+        initialExplosion = await data[NovaDataType.Explosion].get(boomID);
     }
 
     if (ship.finalExplosion >= 128) {
         let boomID = ship.idSpace.bööm[ship.finalExplosion].globalID;
-        finalExplosion = await data.explosions.get(boomID);
+        finalExplosion = await data[NovaDataType.Explosion].get(boomID);
     }
 
 
