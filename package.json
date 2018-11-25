@@ -26,6 +26,7 @@
   },
   "homepage": "https://github.com/mattsoulanille/NovaParse#readme",
   "dependencies": {
+    "@types/pngjs": "^3.3.2",
     "novadatainterface": "0.0.4",
     "pngjs": "^3.3.3",
     "resourceforkjs": "^0.1.0",
