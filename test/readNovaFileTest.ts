@@ -15,7 +15,7 @@ const expect = chai.expect;
 
 describe("readNovaFile", function() {
 
-    var shipPath = "./test/files/ship.ndat";
+    var shipPath = "./test/resourceParsers/files/ship.ndat";
 
     var localIDSpace: NovaResources = {
         resources: {},
