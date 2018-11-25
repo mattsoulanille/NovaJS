@@ -1,5 +1,5 @@
 import { BaseResource } from "novadatainterface/BaseResource";
-import { NovaDataType, NovaDataInterface, NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
+import { NovaDataInterface } from "novadatainterface/NovaDataInterface";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { Gettable } from "novadatainterface/Gettable";
 import { CachelessGettable } from "./CachelessGettable";
@@ -8,6 +8,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { NovaResourceBase } from "./resourceParsers/NovaResourceBase";
 import { readNovaFile } from "./readNovaFile";
+import { dirname } from "path";
 
 // type IDSpace = {
 //     [index: string]: { // ResourceType
@@ -15,27 +16,31 @@ import { readNovaFile } from "./readNovaFile";
 //     }
 // };
 
+//const log = console.log;
+const log = (m: string) => { };
 
 class IDSpaceHandler {
     private globalResources: Promise<NovaResources>;
     private tmpBuildingResources: NovaResources;
 
-    constructor(novaFilesPath: string, novaPluginsPath: string) {
+    constructor(novaPath: string) {
         this.tmpBuildingResources = {
             resources: {},
             prefix: null
         };
 
         // Initialize resources
-        for (let i in NovaDataType) {
-            var val = NovaDataType[i];
+        for (let i in NovaResourceType) {
+            var val = NovaResourceType[i];
             this.tmpBuildingResources.resources[val] = {};
         }
 
-        this.globalResources = this.build(novaFilesPath, novaPluginsPath);
+        this.globalResources = this.build(novaPath);
     }
 
-    private async build(novaFilesPath: string, novaPluginsPath: string) {
+    private async build(novaPath: string) {
+        var novaFilesPath = path.join(novaPath, "Nova\ Files/");
+        var novaPluginsPath = path.join(novaPath, "Plug-ins/");
         await this.addNovaFilesDirectory(novaFilesPath);
         await this.addNovaPluginsDirectory(novaPluginsPath);
         return this.tmpBuildingResources;
@@ -51,32 +56,60 @@ class IDSpaceHandler {
     // Used in parsing.
     private getIDSpaceUnsafe(prefix: string | null = null): NovaResources {
         var globalResources = this.tmpBuildingResources;
+
+        if (prefix == null) {
+            return globalResources;
+        }
+
         return {
             prefix,
             resources: new Proxy(globalResources.resources, {
-                get: (target, dataType) => {
-                    if (typeof dataType === "symbol") {
-                        throw new Error("Can't access by symbol");
+                get: (target, resourceType) => {
+                    if (typeof resourceType === "symbol") {
+                        console.warn("accessing resources by symbol");
+                        return Reflect.get(target, resourceType);
                     }
 
-                    var idList = Reflect.get(target, dataType);
+                    var idList = Reflect.get(target, resourceType);
+                    if (!idList) {
+                        Reflect.set(target, resourceType, {});
+                        var idList = Reflect.get(target, resourceType);
+                    }
+
                     return new Proxy(idList, {
 
                         // Replace requests for 324 with prefix:324
+                        // or nova:324 if nova:324 exists
                         get: (target, localID) => {
                             if (typeof localID === "symbol") {
-                                throw new Error("Can't access by symbol");
+                                console.warn("accessing ids by symbol");
+                                return Reflect.get(target, localID);
                             }
-                            var globalID = prefix + ":" + localID;
-                            return Reflect.get(target, globalID);
+                            var novaScopeValue = Reflect.get(target, "nova:" + localID);
+                            if (novaScopeValue) {
+                                return novaScopeValue;
+                            }
+                            else {
+                                var globalID = prefix + ":" + localID;
+                                return Reflect.get(target, globalID);
+                            }
                         },
 
                         // Replace setting 324 with setting prefix:324
+                        // or nova:324 if nova:324 exists
                         set: (target, localID, value) => {
                             if (typeof localID === "symbol") {
                                 throw new Error("Can't set by symbol");
                             }
-                            var globalID = prefix + ":" + localID;
+
+                            // Assume it exists in the nova prefix
+                            var globalID = "nova:" + localID;
+                            if (!Reflect.get(target, globalID)) {
+                                // It doesn't, so use its own prefix.
+                                globalID = prefix + ":" + localID;
+                            }
+                            console.log("Setting " + resourceType + " " + globalID);
+
                             return Reflect.set(target, globalID, value);
                         }
                     });
@@ -85,10 +118,9 @@ class IDSpaceHandler {
         }
     }
 
-
     // Adds the Nova Plug-ins directory
     async addNovaPluginsDirectory(pluginsPath: string) {
-        if (!isDirectory(pluginsPath)) {
+        if (!(await isDirectory(pluginsPath))) {
             throw new Error("Plug-ins must be a directory. Got " + pluginsPath + " instead");
         }
 
@@ -102,7 +134,9 @@ class IDSpaceHandler {
             var currentPath = path.join(pluginsPath, name);
             var prefix = name.split(".")[0]; // Cut off extensions
 
-            if (isDirectory(currentPath)) {
+
+            if (await isDirectory(currentPath)) {
+                log(currentPath + " is a directory");
                 await this.addDirectory(currentPath, prefix);
             }
             else {
@@ -113,14 +147,16 @@ class IDSpaceHandler {
 
     // Adds the Nova Files directory
     async addNovaFilesDirectory(filePath: string) {
-        this.addDirectory(filePath, "nova");
+        await this.addDirectory(filePath, "nova");
     }
 
     // Adds a directory under a single ID prefix
     async addDirectory(dirPath: string, prefix: string) {
-        if (!isDirectory(dirPath)) {
+        if (!(await isDirectory(dirPath))) {
             throw new Error("Must be a directory. Got " + dirPath + " instead");
         }
+
+        log("Adding Directory of plugins " + dirPath);
 
         var fileNames = await readdir(dirPath);
         for (let i in fileNames) {
@@ -134,13 +170,21 @@ class IDSpaceHandler {
     async addPlugin(filePath: string, prefix: string) {
         // Can't await this.getIDSpace because that causes an infinite loop
         // (getIDSpace awaits this.globalResources which depends on this function)
+
+        var disallowedExtensions = new Set([".mp3"]);
+        if (disallowedExtensions.has(path.extname(filePath))) {
+            return false;
+        }
+
+        log("Parsing " + filePath + " under prefix " + prefix);
         await readNovaFile(filePath, this.getIDSpaceUnsafe(prefix));
+        return true;
     }
 }
 
 function isDirectory(path: string): Promise<boolean> {
     return new Promise(function(fulfill, reject) {
-        fs.stat(path, function(err, stats): void {
+        fs.stat(path, (err, stats): void => {
             if (err) {
                 reject(err);
             }
@@ -171,4 +215,4 @@ function readdir(path: string): Promise<Array<string>> {
 
 
 
-export { IDSpaceHandler, NovaIDNotFoundError };
+export { IDSpaceHandler };

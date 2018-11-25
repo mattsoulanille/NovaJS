@@ -1,4 +1,7 @@
 
+
+
+global.Promise=require(“bluebird”);
 var novaParse = require("../novaParse.js");
 var chai = require("chai");
 var assert = chai.assert;
