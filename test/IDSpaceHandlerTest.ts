@@ -39,5 +39,22 @@ describe("IDSpaceHandler", function() {
         expect(idSpace.resources.wëap['Plugin 2:150'].name).to.equal("this one also not overwritten");
     });
 
+    it("should assign the right global id to each resource", function() {
+        expect(idSpace.resources.wëap['nova:128'].globalID).to.equal("nova:128");
+        expect(idSpace.resources.wëap['nova:129'].globalID).to.equal("nova:129");
+        expect(idSpace.resources.wëap['Plugin 2:150'].globalID).to.equal("Plugin 2:150");
+        expect(idSpace.resources.wëap['Plugin 1:150'].globalID).to.equal("Plugin 1:150");
+        expect(idSpace.resources.wëap['plug pack:153'].globalID).to.equal("plug pack:153");
+    });
+
+    /*
+    it("Should assign the same pictID to ships with the same baseImage", function() {
+        expect(idSpace.resources.shïp["nova:128"].pictID).to.equal(5000);
+        expect(idSpace.resources.shïp["nova:129"].pictID).to.equal(5000);
+        expect(idSpace.resources.shïp["nova:130"].pictID).to.equal(5002);
+    });
+    */
+
+
 
 });

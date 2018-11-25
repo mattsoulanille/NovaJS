@@ -53,7 +53,11 @@ class IDSpaceHandler {
     }
 
     // Gets the ID Space without requiring that everything be parsed
-    // Used in parsing.
+    // An ID space is a NovaResource that is constrained to a specific namespace, such as "plugin 1."
+    // When it's asked for resources, it prepends all IDs given to it with
+    // either "plugin 1:" or "nova:" depending on whether or not the ID already exists in the "nova"
+    // namespace. It is used by nova resource parsers to reference other nova resources because those
+    // references must occur in the correct namespace.
     private getIDSpaceUnsafe(prefix: string | null = null): NovaResources {
         var globalResources = this.tmpBuildingResources;
 
@@ -108,7 +112,13 @@ class IDSpaceHandler {
                                 // It doesn't, so use its own prefix.
                                 globalID = prefix + ":" + localID;
                             }
-                            console.log("Setting " + resourceType + " " + globalID);
+
+                            //console.log("Setting " + resourceType + " " + globalID);
+
+                            // Setting the globalID here is necessary because
+                            // this is the only place where it is known whether the prefix
+                            // is "nova" or prefix. It's not the best practice...
+                            value.globalID = globalID;
 
                             return Reflect.set(target, globalID, value);
                         }
