@@ -1,7 +1,7 @@
-import { BaseResource } from "./BaseResource";
+import { BaseData } from "./BaseData";
 
 //interface NovaDataInterface { [index: string]: Gettable<BaseResource> }
-interface Animation extends BaseResource {
+interface Animation extends BaseData {
     images: {
         [index: string]: {
             id: string,

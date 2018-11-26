@@ -1,8 +1,5 @@
 import { Gettable } from "./Gettable";
-
-import { BaseResource } from "./BaseResource";
-import { ShipResource } from "./ShipResource";
-
+import { BaseData } from "./BaseData";
 
 
 // const NovaDataTypes = [
@@ -20,7 +17,8 @@ enum NovaDataType {
     SpriteSheet,
     SpriteSheetImage,
     SpriteSheetFrames,
-    StatusBar
+    StatusBar,
+    Explosion
 };
 
 
@@ -49,7 +47,7 @@ enum NovaDataType {
 
 
 // index: NovaDataType
-interface NovaDataInterface { [index: number]: Gettable<BaseResource> }
+interface NovaDataInterface { [index: number]: Gettable<BaseData> }
 class NovaIDNotFoundError extends Error { };
 
 export { NovaDataInterface, NovaDataType, NovaIDNotFoundError };

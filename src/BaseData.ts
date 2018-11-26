@@ -1,14 +1,14 @@
-interface BaseResource {
+interface BaseData {
     name: string;
     id: string;
     prefix: string;
 }
 
 
-const DefaultBaseResource: BaseResource = {
+const DefaultBaseData: BaseData = {
     name: "default",
     id: "default",
     prefix: "default"
 }
 
-export { BaseResource, DefaultBaseResource };
+export { BaseData, DefaultBaseData };

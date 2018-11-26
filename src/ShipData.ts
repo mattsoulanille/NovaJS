@@ -1,7 +1,7 @@
-import { BaseResource } from "./BaseResource";
 import { Animation } from "./Animation";
+import { BaseData } from "./BaseData";
 
-interface ShipResource extends BaseResource {
+interface ShipData extends BaseData {
     pictID: string;
     desc: string;
     animation: Animation;
@@ -19,12 +19,12 @@ interface ShipResource extends BaseResource {
     mass: number;
     outfits: { [index: string]: number }
     freeMass: number;
-    initialExplosion: BaseResource | null;
-    finalExplosion: BaseResource | null;
+    initialExplosion: BaseData | null;
+    finalExplosion: BaseData | null;
     largeExplosion: boolean;
     deathDelay: number;
     displayWeight: number;
 };
 
 
-export { ShipResource };
+export { ShipData };
