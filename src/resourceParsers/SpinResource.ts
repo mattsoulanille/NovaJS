@@ -27,7 +27,8 @@ class SpinResource extends NovaResourceBase {
         this.imageType = NovaResourceType.rlëD; // for now until picts can be used properly
         this.usedFor = "Unknown";
 
-        //switch
+
+        // What the resource is used for (Not sure if this is ever used)
         if (this.spriteID >= 400 && this.spriteID <= 463) {
             this.usedFor = "Explosion";
         }
@@ -64,7 +65,7 @@ class SpinResource extends NovaResourceBase {
         if (this.spriteID >= 3000 && this.spriteID <= 3255) {
             this.usedFor = "Weapon";
         }
-        //end switch
+
     }
 }
 
