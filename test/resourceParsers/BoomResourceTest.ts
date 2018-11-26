@@ -34,6 +34,12 @@ describe("BoomResource", function() {
         slowBoom = new BoomResource(booms[130], idSpace);
     });
 
+    it("should parse all inherited properties", function() {
+        expect(firstBoom.id).to.equal(128);
+
+
+    });
+
 
     it("should parse animation rate", function() {
         expect(firstBoom.animationRate).to.equal(100);

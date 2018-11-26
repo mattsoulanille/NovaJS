@@ -1,11 +1,18 @@
-import { BaseResource } from "novadatainterface/BaseResource";
-import { Gettable } from "novadatainterface/Gettable";
-import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { readResourceFork, Resource, ResourceMap } from "resourceforkjs"; // TODO: Add a declaration file
-
-import { ShipParse } from "./parsers/ShipParse";
-import { ResourceHolderBase, NovaResourceType, NovaResources } from "./ResourceHolderBase";
+import { readResourceFork } from "resourceforkjs"; // TODO: Add a declaration file
+import { NovaResources, NovaResourceType } from "./ResourceHolderBase";
+import { BoomResource } from "./resourceParsers/BoomResource";
+import { DescResource } from "./resourceParsers/DescResource";
 import { NovaResourceBase } from "./resourceParsers/NovaResourceBase";
+import { OutfResource } from "./resourceParsers/OutfResource";
+import { PictResource } from "./resourceParsers/PictResource";
+import { RledResource } from "./resourceParsers/RledResource";
+import { ShanResource } from "./resourceParsers/ShanResource";
+import { ShipResource } from "./resourceParsers/ShipResource";
+import { SpinResource } from "./resourceParsers/SpinResource";
+import { SpobResource } from "./resourceParsers/SpobResource";
+import { SystResource } from "./resourceParsers/SystResource";
+import { WeapResource } from "./resourceParsers/WeapResource";
+
 
 
 
@@ -37,13 +44,51 @@ function read(path: string) {
 }
 
 
+// Since we're storing subclasses, not instances of subclasses.
+// TODO: Fill this out as more are implemented
+var parserMap: { [index: string]: typeof NovaResourceBase } = {};
+parserMap[NovaResourceType.bööm] = BoomResource;
+//parserMap[NovaResourceType.chär] = ;
+//parserMap[NovaResourceType.cicn] = ;
+//parserMap[NovaResourceType.cölr] = ;
+//parserMap[NovaResourceType.crön] = ;
+parserMap[NovaResourceType.dësc] = DescResource;
+//parserMap[NovaResourceType.DITL] = ;
+//parserMap[NovaResourceType.DLOG] = ;
+//parserMap[NovaResourceType.düde] = ;
+//parserMap[NovaResourceType.flët] = ;
+//parserMap[NovaResourceType.gövt] = ;
+//parserMap[NovaResourceType.ïntf] = ;
+//parserMap[NovaResourceType.jünk] = ;
+//parserMap[NovaResourceType.mïsn] = ;
+//parserMap[NovaResourceType.nëbu] = ;
+//parserMap[NovaResourceType.öops] = ;
+parserMap[NovaResourceType.oütf] = OutfResource;
+//parserMap[NovaResourceType.përs] = ;
+parserMap[NovaResourceType.PICT] = PictResource;
+//parserMap[NovaResourceType.ränk] = ;
+//parserMap[NovaResourceType.rlë8] = ;
+parserMap[NovaResourceType.rlëD] = RledResource;
+//parserMap[NovaResourceType.röid] = ;
+parserMap[NovaResourceType.shän] = ShanResource;
+parserMap[NovaResourceType.shïp] = ShipResource;
+//parserMap[NovaResourceType.snd] = ;
+parserMap[NovaResourceType.spïn] = SpinResource;
+parserMap[NovaResourceType.spöb] = SpobResource;
+//parserMap[NovaResourceType.STR] = ;
+//parserMap[NovaResourceType.STRH] = ;
+parserMap[NovaResourceType.sÿst] = SystResource;
+//parserMap[NovaResourceType.vers] = ;
+parserMap[NovaResourceType.wëap] = WeapResource;
 
-function getParser(resourceType: NovaResourceType) {
-    switch (resourceType) {
-        default:
-            //Temporary
-            return NovaResourceBase;
-        //throw new Error("Unknown data type " + dataType);
+
+function getParser(resourceType: NovaResourceType): typeof NovaResourceBase {
+    if (parserMap[resourceType]) {
+        return parserMap[resourceType];
+    }
+    else {
+        return NovaResourceBase;
+        //throw new Error("Unknown data type " + resourceType);
     }
 }
 
