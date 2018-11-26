@@ -8,7 +8,7 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { NovaResources } from "../../src/ResourceHolderBase";
 import { PictResource } from "../../src/resourceParsers/PictResource";
 import { comparePNGs, getPNG } from "./PNGCompare";
-
+import { defaultIDSpace } from "./DefaultIDSpace";
 
 
 
@@ -33,10 +33,8 @@ describe("PictResource", function() {
     var rf: ResourceMap;
 
     // Picts don't depend on other resources.
-    var idSpace: NovaResources = {
-        resources: {},
-        prefix: "picts"
-    };
+
+    var idSpace: NovaResources = defaultIDSpace;
 
     before(async function() {
         shipPNG = await getPNG("./test/resourceParsers/files/picts/ship.png");

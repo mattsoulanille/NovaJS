@@ -1,20 +1,8 @@
-import { BaseResource } from "novadatainterface/BaseResource";
-import { NovaDataInterface } from "novadatainterface/NovaDataInterface";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { Gettable } from "novadatainterface/Gettable";
-import { CachelessGettable } from "./CachelessGettable";
-import { NovaResources, ResourceHolderBase, NovaResourceType } from "./ResourceHolderBase";
 import * as fs from "fs";
 import * as path from "path";
-import { NovaResourceBase } from "./resourceParsers/NovaResourceBase";
 import { readNovaFile } from "./readNovaFile";
-import { dirname } from "path";
+import { NovaResources, NovaResourceType } from "./ResourceHolderBase";
 
-// type IDSpace = {
-//     [index: string]: { // ResourceType
-//         [index: number]: BaseResource // Resource ID
-//     }
-// };
 
 //const log = console.log;
 const log = (m: string) => { };
@@ -24,15 +12,12 @@ class IDSpaceHandler {
     private tmpBuildingResources: NovaResources;
 
     constructor(novaPath: string) {
-        this.tmpBuildingResources = {
-            resources: {},
-            prefix: null
-        };
+        this.tmpBuildingResources = {};
 
         // Initialize resources
         for (let i in NovaResourceType) {
             var val = NovaResourceType[i];
-            this.tmpBuildingResources.resources[val] = {};
+            this.tmpBuildingResources[val] = {};
         }
 
         this.globalResources = this.build(novaPath);
@@ -65,67 +50,66 @@ class IDSpaceHandler {
             return globalResources;
         }
 
-        return {
-            prefix,
-            resources: new Proxy(globalResources.resources, {
-                get: (target, resourceType) => {
-                    if (typeof resourceType === "symbol") {
-                        console.warn("accessing resources by symbol");
-                        return Reflect.get(target, resourceType);
-                    }
-
-                    var idList = Reflect.get(target, resourceType);
-                    if (!idList) {
-                        Reflect.set(target, resourceType, {});
-                        var idList = Reflect.get(target, resourceType);
-                    }
-
-                    return new Proxy(idList, {
-
-                        // Replace requests for 324 with prefix:324
-                        // or nova:324 if nova:324 exists
-                        get: (target, localID) => {
-                            if (typeof localID === "symbol") {
-                                console.warn("accessing ids by symbol");
-                                return Reflect.get(target, localID);
-                            }
-                            var novaScopeValue = Reflect.get(target, "nova:" + localID);
-                            if (novaScopeValue) {
-                                return novaScopeValue;
-                            }
-                            else {
-                                var globalID = prefix + ":" + localID;
-                                return Reflect.get(target, globalID);
-                            }
-                        },
-
-                        // Replace setting 324 with setting prefix:324
-                        // or nova:324 if nova:324 exists
-                        set: (target, localID, value) => {
-                            if (typeof localID === "symbol") {
-                                throw new Error("Can't set by symbol");
-                            }
-
-                            // Assume it exists in the nova prefix
-                            var globalID = "nova:" + localID;
-                            if (!Reflect.get(target, globalID)) {
-                                // It doesn't, so use its own prefix.
-                                globalID = prefix + ":" + localID;
-                            }
-
-                            //console.log("Setting " + resourceType + " " + globalID);
-
-                            // Setting the globalID here is necessary because
-                            // this is the only place where it is known whether the prefix
-                            // is "nova" or prefix. It's not the best practice...
-                            value.globalID = globalID;
-
-                            return Reflect.set(target, globalID, value);
-                        }
-                    });
+        return new Proxy(globalResources, {
+            get: (target, resourceType) => {
+                if (typeof resourceType === "symbol") {
+                    console.warn("accessing resources by symbol");
+                    return Reflect.get(target, resourceType);
                 }
-            })
-        }
+
+                var idList = Reflect.get(target, resourceType);
+                if (!idList) {
+                    Reflect.set(target, resourceType, {});
+                    var idList = Reflect.get(target, resourceType);
+                }
+
+                return new Proxy(idList, {
+
+                    // Replace requests for 324 with prefix:324
+                    // or nova:324 if nova:324 exists
+                    get: (target, localID) => {
+                        if (typeof localID === "symbol") {
+                            console.warn("accessing ids by symbol");
+                            return Reflect.get(target, localID);
+                        }
+                        var novaScopeValue = Reflect.get(target, "nova:" + localID);
+                        if (novaScopeValue) {
+                            return novaScopeValue;
+                        }
+                        else {
+                            var globalID = prefix + ":" + localID;
+                            return Reflect.get(target, globalID);
+                        }
+                    },
+
+                    // Replace setting 324 with setting prefix:324
+                    // or nova:324 if nova:324 exists
+                    set: (target, localID, value) => {
+                        if (typeof localID === "symbol") {
+                            throw new Error("Can't set by symbol");
+                        }
+
+                        // Assume it exists in the nova prefix
+                        var usedPrefix = "nova";
+                        var globalID = usedPrefix + ":" + localID;
+                        if (!Reflect.get(target, globalID)) {
+                            // It doesn't, so use its own prefix.
+                            usedPrefix = prefix;
+                            globalID = usedPrefix + ":" + localID;
+                        }
+
+                        // Setting the globalID here is necessary because
+                        // this is the only place where it is known whether the prefix
+                        // is "nova" or prefix. It's not the best practice...
+                        value.globalID = globalID;
+                        value.prefix = usedPrefix;
+
+
+                        return Reflect.set(target, globalID, value);
+                    }
+                });
+            }
+        });
     }
 
     // Adds the Nova Plug-ins directory

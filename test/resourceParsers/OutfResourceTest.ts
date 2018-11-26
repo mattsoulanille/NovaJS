@@ -8,7 +8,7 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 
 import { OutfResource } from "../../src/resourceParsers/OutfResource";
 import { NovaResources } from "../../src/ResourceHolderBase";
-
+import { defaultIDSpace } from "./DefaultIDSpace";
 
 before(function() {
     chai.should();
@@ -23,10 +23,7 @@ describe("OutfResource", function() {
     var rf: ResourceMap;
 
     // Outfits don't depend on othe resources.
-    var idSpace: NovaResources = {
-        resources: {},
-        prefix: "outfits"
-    };
+    var idSpace: NovaResources = defaultIDSpace;
 
     var w1: OutfResource;
     var blank: OutfResource;

@@ -14,6 +14,7 @@ class NovaResourceBase {
     name: string;
     idSpace: NovaResources;
     globalID: string | null;
+    prefix: string | null;
 
     constructor(resource: Resource, idSpace: NovaResources) {
         this.idSpace = idSpace;
@@ -21,6 +22,7 @@ class NovaResourceBase {
         this.id = resource.id;
         this.data = resource.data;
         this.globalID = null; // This is set by IDSpaceHandler in getIDSpaceUnsafe
+        this.prefix = null;   // Same for this
     }
 }
 

@@ -17,10 +17,7 @@ describe("readNovaFile", function() {
 
     var shipPath = "./test/resourceParsers/files/ship.ndat";
 
-    var localIDSpace: NovaResources = {
-        resources: {},
-        prefix: "ship"
-    }
+    var localIDSpace: NovaResources = {}
 
     before(function(done) {
         readNovaFile(shipPath, localIDSpace).then(function() {
@@ -29,7 +26,7 @@ describe("readNovaFile", function() {
     });
 
     it("should parse resources", function() {
-        expect(localIDSpace.resources["shïp"][128].name).to.equal("contrived ship test");
+        expect(localIDSpace["shïp"][128].name).to.equal("contrived ship test");
 
     })
 

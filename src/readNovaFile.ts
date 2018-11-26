@@ -26,12 +26,12 @@ async function readNovaFile(filePath: string, localIDSpace: NovaResources) {
     for (let resourceType in NovaResourceType) {
         var parser = getParser(<NovaResourceType>resourceType);
 
-        if (!localIDSpace.resources[resourceType]) {
-            localIDSpace.resources[resourceType] = {};
+        if (!localIDSpace[resourceType]) {
+            localIDSpace[resourceType] = {};
         }
 
         for (let id in rf[resourceType]) {
-            localIDSpace.resources[resourceType][id] =
+            localIDSpace[resourceType][id] =
                 new parser(rf[resourceType][id], localIDSpace);
         }
     }
