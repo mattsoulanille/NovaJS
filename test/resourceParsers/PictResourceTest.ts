@@ -1,17 +1,15 @@
 global.Promise = require("bluebird"); // For stacktraces
 
 import * as chai from "chai";
-import "mocha";
 import * as chaiAsPromised from "chai-as-promised";
-import * as fs from "fs";
-
-import { readResourceFork, ResourceMap } from "resourceforkjs";
-
-import { PictResource } from "../../src/resourceParsers/PictResource";
-import { NovaResources } from "../../src/ResourceHolderBase";
+import "mocha";
 import { PNG } from "pngjs";
-import { assert } from "chai";
-import { getPNG, comparePNGs, getFrames, applyMask } from "./PNGCompare"
+import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { NovaResources } from "../../src/ResourceHolderBase";
+import { PictResource } from "../../src/resourceParsers/PictResource";
+import { comparePNGs, getPNG } from "./PNGCompare";
+
+
 
 
 before(function() {
