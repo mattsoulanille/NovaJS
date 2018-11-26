@@ -1,13 +1,12 @@
 global.Promise = require("bluebird"); // For stacktraces
 
 import * as chai from "chai";
+import { assert } from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
 import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { ShanResource } from "../../src/resourceParsers/ShanResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
-import { assert } from "chai";
-import { NovaResourceType } from "../../src/ResourceHolderBase";
 
 
 

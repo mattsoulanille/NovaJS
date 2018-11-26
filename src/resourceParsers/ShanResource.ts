@@ -1,6 +1,6 @@
-import { NovaResourceBase } from "./NovaResourceBase";
-import { NovaResources, NovaResourceType } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
+import { NovaResources } from "../ResourceHolderBase";
+import { NovaResourceBase } from "./NovaResourceBase";
 
 
 
@@ -157,4 +157,4 @@ class ShanResource extends NovaResourceBase {
 }
 
 
-export { ShanResource }
+export { ShanResource };
