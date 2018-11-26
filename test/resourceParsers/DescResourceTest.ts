@@ -1,17 +1,12 @@
 global.Promise = require("bluebird"); // For stacktraces
 
 import * as chai from "chai";
-import "mocha";
 import * as chaiAsPromised from "chai-as-promised";
-import * as fs from "fs";
-
+import "mocha";
 import { readResourceFork, ResourceMap } from "resourceforkjs";
-
 import { DescResource } from "../../src/resourceParsers/DescResource";
-import { NovaResources } from "../../src/ResourceHolderBase";
-import { PNG } from "pngjs";
-import { assert } from "chai";
-import { getPNG, comparePNGs, getFrames, applyMask } from "./PNGCompare"
+import { defaultIDSpace } from "./DefaultIDSpace";
+
 
 
 before(function() {
@@ -28,10 +23,7 @@ describe("DescResource", function() {
     var rf: ResourceMap;
 
     // Descs don't depend on other resources.
-    var idSpace: NovaResources = {
-        resources: {},
-        prefix: "descs"
-    };
+    var idSpace = defaultIDSpace;
 
     before(async function() {
 
