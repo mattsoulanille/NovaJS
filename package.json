@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "mocha -r ts-node/register -O tsconfig.json --recursive test/**/*.ts test/**/**/*.ts",
-    "build": "npm run build-only; npm run move",
+    "build": "npm run build-only",
     "build-only": "tsc --declaration --outDir ./",
     "move": "mv src/*.d.ts .; mv src/*.js .",
     "clean": "rm ./*.d.ts; rm ./*.js"
@@ -13,6 +13,8 @@
   "author": "Matthew Soulanille",
   "license": "MIT",
   "dependencies": {
+    "@types/pngjs": "^3.3.2",
+    "pngjs": "^3.3.3",
     "typescript": "^3.1.6"
   },
   "devDependencies": {

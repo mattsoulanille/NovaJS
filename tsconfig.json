@@ -1,5 +1,6 @@
 {
-  "exclude": ["*.d.ts", "*.js"],
+  "include": ["src/"],
+  "exclude": ["*.d.ts", "*.js", "test"],
   "compilerOptions": {
     /* Basic Options */
     "target": "es2015",                          /* Specify ECMAScript target version: 'ES3' (default), 'ES5', 'ES2015', 'ES2016', 'ES2017', or 'ESNEXT'. */

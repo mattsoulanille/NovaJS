@@ -1,6 +1,36 @@
-import { BaseData } from "./BaseData";
+import { BaseData, DefaultBaseData } from "./BaseData";
 
-//interface NovaDataInterface { [index: string]: Gettable<BaseResource> }
+
+type AnimationImagePurposes = {
+    [index: string]: { start: number, length: number }
+}
+
+type AnimationImages = {
+    [index: string]: {
+        id: string,
+        imagePurposes: AnimationImagePurposes
+    }
+}
+
+type ExitPoint = Array<Array<number>>;
+type ExitPoints = {
+    gun: ExitPoint,
+    turret: ExitPoint,
+    guided: ExitPoint,
+    beam: ExitPoint,
+    upCompress: Array<number>,
+    downCompress: Array<number>
+};
+
+var DefaultExitPoints: ExitPoints = {
+    gun: [],
+    turret: [],
+    guided: [],
+    beam: [],
+    upCompress: [],
+    downCompress: []
+}
+
 interface Animation extends BaseData {
     images: {
         [index: string]: {
@@ -8,8 +38,16 @@ interface Animation extends BaseData {
             imagePurposes: { [index: string]: { start: number, length: number } }
         }
     };
-    exitPoints?: Array<Array<number>>;
+    exitPoints: ExitPoints;
+}
+
+const DefaultAnimation: Animation = {
+    images: {
+
+    },
+    exitPoints: DefaultExitPoints,
+    ...DefaultBaseData
 }
 
 
-export { Animation };
+export { Animation, DefaultAnimation, AnimationImages, AnimationImagePurposes, ExitPoints, ExitPoint };
