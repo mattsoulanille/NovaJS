@@ -8,6 +8,7 @@ import { NovaResources } from "../ResourceHolderBase";
 import { ShipResource } from "../resourceParsers/ShipResource";
 import { BaseData } from "novadatainterface/BaseData";
 import { Animation } from "novadatainterface/Animation";
+import { ShanParse } from "./ShanParse";
 
 
 async function ShipParse(ship: ShipResource): Promise<ShipData> {

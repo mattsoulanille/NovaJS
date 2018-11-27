@@ -134,6 +134,10 @@ class IDSpaceHandler {
 
     // Adds the Nova Files directory
     async addNovaFilesDirectory(filePath: string) {
+        if (!(await isDirectory(filePath))) {
+            throw new Error("Nova Files must be a directory. Got " + filePath + " instead");
+        }
+
         await this.addDirectory(filePath, "nova");
     }
 
@@ -177,6 +181,9 @@ function isDirectory(path: string): Promise<boolean> {
     return new Promise(function(fulfill, reject) {
         fs.stat(path, (err, stats): void => {
             if (err) {
+                if (err.code == "ENOENT") {
+                    fulfill(false);
+                }
                 reject(err);
             }
             else {

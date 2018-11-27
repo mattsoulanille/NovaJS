@@ -16,7 +16,7 @@ const expect = chai.expect;
 
 describe("IDSpaceHandler", function() {
 
-    var dataPath = "./test/testFilesystem/";
+    var dataPath = "./test/IDSpaceHandlerTestFilesystem/";
 
     var handler = new IDSpaceHandler(dataPath);
     var idSpace: NovaResources;

@@ -1,6 +1,7 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
 import { BaseResource } from "./NovaResourceBase";
+import { ExitPoint, ExitPoints } from "novadatainterface/Animation";
 
 
 
@@ -48,15 +49,6 @@ function doImageRequired(d: DataView, p: number, simple: boolean): ImageInfo {
 };
 
 
-type ExitPoint = Array<Array<number>>;
-type ExitPoints = {
-    gun: ExitPoint,
-    turret: ExitPoint,
-    guided: ExitPoint,
-    beam: ExitPoint,
-    upCompress: Array<number>,
-    downCompress: Array<number>
-};
 function doPos(d: DataView, px: number, py: number, pz: number): ExitPoint {
     var o: ExitPoint = [];
     for (var i = 0; i < 4; i++) {
