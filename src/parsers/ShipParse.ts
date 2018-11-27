@@ -15,17 +15,24 @@ async function ShipParse(ship: ShipResource): Promise<ShipData> {
 
     var base: BaseData = await BaseParse(ship);
 
-    var desc: string;
+
+
+
+
+    var pictID = DefaultPictData.id;
     try {
-        desc = ship.idSpace.dësc[ship.descID].text;
+        let pict = ship.idSpace.PICT[ship.pictID]
+        if (typeof pict !== "undefined") {
+            pictID = pict.globalID;
+        }
     }
     catch (e) {
-        desc = "Default description";
+        console.warn(e);
     }
 
 
-    var pictID: string = ship.idSpace.PICT[ship.pictID].globalID || DefaultPictData.id;
 
+    var desc: string;
     try {
         desc = ship.idSpace.dësc[ship.descID].text;
     }
@@ -38,13 +45,19 @@ async function ShipParse(ship: ShipResource): Promise<ShipData> {
     var finalExplosion: ExplosionData | null = null;
 
     if (ship.initialExplosion !== null) {
-        let boomID = ship.idSpace.bööm[ship.initialExplosion].globalID;
-        //initialExplosion = await data[NovaDataType.Explosion].get(boomID);
+        let boom = ship.idSpace.bööm[ship.initialExplosion]
+        if (boom) {
+            let boomID = boom.globalID;
+            //initialExplosion = await data[NovaDataType.Explosion].get(boomID);
+        }
     }
 
     if (ship.finalExplosion !== null) {
-        let boomID = ship.idSpace.bööm[ship.finalExplosion].globalID;
-        //finalExplosion = await data[NovaDataType.Explosion].get(boomID);
+        let boom = ship.idSpace.bööm[ship.finalExplosion]
+        if (boom) {
+            let boomID = boom.globalID;
+            //finalExplosion = await data[NovaDataType.Explosion].get(boomID);
+        }
     }
 
 
