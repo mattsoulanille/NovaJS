@@ -11,9 +11,15 @@ type ImageInfo = {
     size: Array<number>,
     transparency: number;
 };
-function doImage(d: DataView, p: number, simple: boolean): ImageInfo {//10
+function doImage(d: DataView, p: number, simple: boolean): ImageInfo | null {//10
+    var id = d.getInt16(p);
+
+    if (id <= 0) {
+        return null;
+    }
+
     var o: ImageInfo = {
-        ID: d.getInt16(p),
+        ID: id,
         maskID: d.getInt16(p + 2),
         setCount: 0,
         size: [],
@@ -26,7 +32,19 @@ function doImage(d: DataView, p: number, simple: boolean): ImageInfo {//10
     }
 
     o.size = [d.getInt16(p + 4), d.getInt16(p + 6)];
+
     return o;
+};
+
+// Can not return null
+function doImageRequired(d: DataView, p: number, simple: boolean): ImageInfo {
+    var result = doImage(d, p, simple);
+    if (result == null) {
+        throw new Error("Required image was null");
+    }
+    else {
+        return result;
+    }
 };
 
 
@@ -67,29 +85,43 @@ type Blink = {
     d: number
 }
 
+
+type ShanImages = {
+    [index: string]: ImageInfo | null,
+    baseImage: ImageInfo, // All Shans must have a base image
+    altImage: ImageInfo | null,
+    glowImage: ImageInfo | null,
+    lightImage: ImageInfo | null,
+    weapImage: ImageInfo | null,
+    shieldImage: ImageInfo | null
+}
+
 class ShanResource extends BaseResource {
-    baseImage: ImageInfo;
-    altImage: ImageInfo;
-    glowImage: ImageInfo;
-    lightImage: ImageInfo;
-    weapImage: ImageInfo;
-    flags: Flags
+    images: ShanImages;
+    flags: Flags;
     animDelay: number;
     weapDecay: number;
     framesPer: number;
     blink: Blink | null;
-    shieldImage: ImageInfo;
     exitPoints: ExitPoints;
+
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
         var d = this.data;
 
-        this.baseImage = doImage(d, 0, false);
-        this.baseImage.transparency = d.getInt16(10);
-        this.altImage = doImage(d, 12, false);
-        this.glowImage = doImage(d, 22, true);
-        this.lightImage = doImage(d, 30, true);
-        this.weapImage = doImage(d, 38, true);
+        this.images = {
+            baseImage: doImageRequired(d, 0, false),
+            altImage: doImage(d, 12, false),
+            glowImage: doImage(d, 22, true),
+            lightImage: doImage(d, 30, true),
+            weapImage: doImage(d, 38, true),
+            shieldImage: doImage(d, 64, true)
+        };
+
+        if (this.images.baseImage) {
+            this.images.baseImage.transparency = d.getInt16(10);
+        }
+
 
         var flagN = d.getInt16(46);
         this.flags = {
@@ -143,7 +175,7 @@ class ShanResource extends BaseResource {
             }
         }
 
-        this.shieldImage = doImage(d, 64, true);
+
 
         this.exitPoints = {
             gun: doPos(d, 72, 80, 144),

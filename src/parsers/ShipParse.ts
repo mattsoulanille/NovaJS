@@ -1,10 +1,13 @@
 
 import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
 import { ShipData } from "novadatainterface/ShipData";
+import { DefaultPictData } from "novadatainterface/PictData";
+import { ExplosionData } from "novadatainterface/ExplosionData";
 import { BaseParse } from "./BaseParse";
 import { NovaResources } from "../ResourceHolderBase";
 import { ShipResource } from "../resourceParsers/ShipResource";
-import { BaseData } from "../../../NovaDataInterface/BaseData";
+import { BaseData } from "novadatainterface/BaseData";
+import { Animation } from "novadatainterface/Animation";
 
 
 async function ShipParse(ship: ShipResource): Promise<ShipData> {
@@ -20,28 +23,32 @@ async function ShipParse(ship: ShipResource): Promise<ShipData> {
     }
 
 
-    var pictID: string = ship.idSpace.PICT[ship.pictID].globalID;
+    var pictID: string = ship.idSpace.PICT[ship.pictID].globalID || DefaultPictData.id;
 
     try {
-        desc = ship.idSpace.dësc[ship.descID].string;
+        desc = ship.idSpace.dësc[ship.descID].text;
     }
     catch (e) {
         desc = "Parsing desc failed: " + e.message;
     }
 
-    var initialExplosion: BaseResource | null = null; // TODO: Make this Explosion once it exists
-    var finalExplosion: BaseResource | null = null;
+    // TODO: Parse Explosions
+    var initialExplosion: ExplosionData | null = null;
+    var finalExplosion: ExplosionData | null = null;
 
-    if (ship.initialExplosion >= 128) {
+    if (ship.initialExplosion !== null) {
         let boomID = ship.idSpace.bööm[ship.initialExplosion].globalID;
-        initialExplosion = await data[NovaDataType.Explosion].get(boomID);
+        //initialExplosion = await data[NovaDataType.Explosion].get(boomID);
     }
 
-    if (ship.finalExplosion >= 128) {
+    if (ship.finalExplosion !== null) {
         let boomID = ship.idSpace.bööm[ship.finalExplosion].globalID;
-        finalExplosion = await data[NovaDataType.Explosion].get(boomID);
+        //finalExplosion = await data[NovaDataType.Explosion].get(boomID);
     }
 
+
+
+    var animation: Animation = await ShanParse(ship.idSpace.shän[ship.globalID]);
 
     return {
         pictID: pictID,
@@ -64,7 +71,7 @@ async function ShipParse(ship: ShipResource): Promise<ShipData> {
         deathDelay: ship.deathDelay / 60,
         largeExplosion: ship.deathDelay >= 60,
         displayWeight: ship.id, // TODO: Fix this once displayweight is implemented
-        animation: { name: "tmp", id: "tmp", prefix: "tmp", images: {} }, // TODO: Fix
+        animation,
         freeMass: 0,
         ...base
     }

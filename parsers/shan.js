@@ -18,13 +18,16 @@ var shan = class extends base {
 	    o.size = [d.getInt16(p+4),d.getInt16(p+6)];
 	    return o;
 	};
-	
-	this.baseImage = doImage(0,false);
-	this.baseImage.transparency = d.getInt16(10);
-	this.altImage = doImage(12,false);
-	this.glowImage = doImage(22,true);
-	this.lightImage = doImage(30,true);
-	this.weapImage = doImage(38,true);
+
+	this.images = {
+	    baseImage : doImage(0,false),
+	    altImage : doImage(12,false),
+	    glowImage : doImage(22,true),
+	    lightImage : doImage(30,true),
+	    weapImage : doImage(38,true)
+	};
+	this.images.baseImage.transparency = d.getInt16(10),
+
 
 	this.flagN = d.getInt16(46);
 	this.flags = {}

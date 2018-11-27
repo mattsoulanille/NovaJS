@@ -37,148 +37,121 @@ describe("ShanResource", function() {
     });
 
     it("should parse baseImage ID", function() {
-        assert.equal(shuttle.baseImage.ID, 1000);
-        assert.equal(thunderforge.baseImage.ID, 1130);
-        assert.equal(miner.baseImage.ID, 1128);
+        assert.propertyVal(shuttle.images.baseImage, "ID", 1000);
+        assert.propertyVal(thunderforge.images.baseImage, "ID", 1130);
+        assert.propertyVal(miner.images.baseImage, "ID", 1128);
     });
 
     it("should parse baseImage maskID", function() {
-        assert.equal(shuttle.baseImage.maskID, 1001);
-        assert.equal(thunderforge.baseImage.maskID, 1131);
-        assert.equal(miner.baseImage.maskID, 1129);
+        assert.propertyVal(shuttle.images.baseImage, "maskID", 1001);
+        assert.propertyVal(thunderforge.images.baseImage, "maskID", 1131);
+        assert.propertyVal(miner.images.baseImage, "maskID", 1129);
     });
 
     it("should parse baseImage setCount", function() {
         // number of sets of images (rotations / animations)
-        assert.equal(shuttle.baseImage.setCount, 3);
-        assert.equal(thunderforge.baseImage.setCount, 1);
-        assert.equal(miner.baseImage.setCount, 6);
+        assert.propertyVal(shuttle.images.baseImage, "setCount", 3);
+        assert.propertyVal(thunderforge.images.baseImage, "setCount", 1);
+        assert.propertyVal(miner.images.baseImage, "setCount", 6);
     });
 
     it("should parse baseImage size", function() {
-        assert.equal(shuttle.baseImage.size[0], 24);
-        assert.equal(shuttle.baseImage.size[1], 24);
-        assert.equal(thunderforge.baseImage.size[0], 130);
-        assert.equal(thunderforge.baseImage.size[1], 130);
-        assert.equal(miner.baseImage.size[0], 80);
-        assert.equal(miner.baseImage.size[1], 80);
+        assert.deepPropertyVal(shuttle.images.baseImage, "size", [24, 24]);
+        assert.deepPropertyVal(thunderforge.images.baseImage, "size", [130, 130]);
+        assert.deepPropertyVal(miner.images.baseImage, "size", [80, 80]);
     });
 
     it("should parse baseImage.transparency", function() {
-        assert.equal(shuttle.baseImage.transparency, 0);
-        assert.equal(thunderforge.baseImage.transparency, 0);
-        assert.equal(miner.baseImage.transparency, 0);
+        assert.propertyVal(shuttle.images.baseImage, "transparency", 0);
+        assert.propertyVal(thunderforge.images.baseImage, "transparency", 0);
+        assert.propertyVal(miner.images.baseImage, "transparency", 0);
     });
 
     it("should parse altImage ID", function() {
-        assert.equal(shuttle.altImage.ID, -1);
-        assert.equal(thunderforge.altImage.ID, 1330);
-        assert.equal(miner.altImage.ID, -1);
+        assert.isNull(shuttle.images.altImage);
+        assert.propertyVal(thunderforge.images.altImage, "ID", 1330);
+        assert.isNull(miner.images.altImage)
     });
 
     it("should parse altImage maskID", function() {
-        assert.equal(shuttle.altImage.maskID, -1);
-        assert.equal(thunderforge.altImage.maskID, 1331);
-        assert.equal(miner.altImage.maskID, -1);
+        assert.propertyVal(thunderforge.images.altImage, "maskID", 1331);
     });
 
     it("should parse altImage setCount", function() {
-        assert.equal(shuttle.altImage.setCount, 0);
-        assert.equal(thunderforge.altImage.setCount, 6);
-        assert.equal(miner.altImage.setCount, 0);
+        assert.propertyVal(thunderforge.images.altImage, "setCount", 6);
     });
 
     it("should parse altImage size", function() {
-        assert.equal(shuttle.altImage.size[0], 0);
-        assert.equal(shuttle.altImage.size[1], 0);
-        assert.equal(thunderforge.altImage.size[0], 260);
-        assert.equal(thunderforge.altImage.size[1], 260);
-        assert.equal(miner.altImage.size[0], 0);
-        assert.equal(miner.altImage.size[1], 0);
+        assert.deepPropertyVal(thunderforge.images.altImage, "size", [260, 260]);
     });
 
     it("should parse glowImage ID", function() {
-        assert.equal(shuttle.glowImage.ID, 1400);
-        assert.equal(thunderforge.glowImage.ID, 1530);
-        assert.equal(miner.glowImage.ID, 1528);
+        assert.propertyVal(shuttle.images.glowImage, "ID", 1400);
+        assert.propertyVal(thunderforge.images.glowImage, "ID", 1530);
+        assert.propertyVal(miner.images.glowImage, "ID", 1528);
     });
 
     it("should parse glowImage maskID", function() {
-        assert.equal(shuttle.glowImage.maskID, 1401);
-        assert.equal(thunderforge.glowImage.maskID, 1531);
-        assert.equal(miner.glowImage.maskID, 1529);
+        assert.propertyVal(shuttle.images.glowImage, "maskID", 1401);
+        assert.propertyVal(thunderforge.images.glowImage, "maskID", 1531);
+        assert.propertyVal(miner.images.glowImage, "maskID", 1529);
     });
     /*
       it("should parse glowImage setCount", function() {
-      // set this to baseImage setCount (or 0 if no glow image)
-      assert.equal(shuttle.glowImage.setCount, 3);
-      assert.equal(thunderforge.glowImage.setCount, 1);
-      assert.equal(miner.glowImage.setCount, 6);
+      // set this to .images.baseImage setCount (or 0 if no glow image)
+      assert.propertyVal(shuttle.images.glowImage,"setCount", 3);
+      assert.propertyVal(thunderforge.images.glowImage,"setCount", 1);
+      assert.propertyVal(miner.images.glowImage,"setCount", 6);
       });
     */
     it("should parse glowImage size", function() {
-        assert.equal(shuttle.glowImage.size[0], 48);
-        assert.equal(shuttle.glowImage.size[1], 48);
-        assert.equal(thunderforge.glowImage.size[0], 260);
-        assert.equal(thunderforge.glowImage.size[1], 260);
-        assert.equal(miner.glowImage.size[0], 80);
-        assert.equal(miner.glowImage.size[1], 80);
+        assert.deepPropertyVal(shuttle.images.glowImage, "size", [48, 48]);
+        assert.deepPropertyVal(thunderforge.images.glowImage, "size", [260, 260]);
+        assert.deepPropertyVal(miner.images.glowImage, "size", [80, 80]);
     });
 
     it("should parse lightImage ID", function() {
-        assert.equal(shuttle.lightImage.ID, 1600);
-        assert.equal(thunderforge.lightImage.ID, -1);
-        assert.equal(miner.lightImage.ID, 1728);
+        assert.propertyVal(shuttle.images.lightImage, "ID", 1600);
+        assert.isNull(thunderforge.images.lightImage);
+        assert.propertyVal(miner.images.lightImage, "ID", 1728);
     });
 
     it("should parse lightImage maskID", function() {
-        assert.equal(shuttle.lightImage.maskID, 1601);
-        assert.equal(thunderforge.lightImage.maskID, -1);
-        assert.equal(miner.lightImage.maskID, 1729);
+        assert.propertyVal(shuttle.images.lightImage, "maskID", 1601);
+        assert.propertyVal(miner.images.lightImage, "maskID", 1729);
     });
     /*
       it("should parse lightImage setCount", function() {
       // set this to baseImage setCount (or 0 if no light image)
-      assert.equal(shuttle.lightImage.setCount, 3);
-      assert.equal(thunderforge.lightImage.setCount, 0);
-      assert.equal(miner.lightImage.setCount, 6);
+      assert.propertyVal(shuttle.images.lightImage,"setCount", 3);
+      assert.propertyVal(thunderforge.images.lightImage,"setCount", 0);
+      assert.propertyVal(miner.images.lightImage,"setCount", 6);
       });
     */
     it("should parse lightImage size", function() {
-        assert.equal(shuttle.lightImage.size[0], 48);
-        assert.equal(shuttle.lightImage.size[1], 48);
-        assert.equal(thunderforge.lightImage.size[0], 0);
-        assert.equal(thunderforge.lightImage.size[1], 0);
-        assert.equal(miner.lightImage.size[0], 80);
-        assert.equal(miner.lightImage.size[1], 80);
+        assert.deepPropertyVal(shuttle.images.lightImage, "size", [48, 48]);
+        assert.deepPropertyVal(miner.images.lightImage, "size", [80, 80]);
     });
 
     it("should parse weapImage ID", function() {
-        assert.equal(shuttle.weapImage.ID, -1);
-        assert.equal(thunderforge.weapImage.ID, 1930);
-        assert.equal(miner.weapImage.ID, -1);
+        assert.isNull(shuttle.images.weapImage);
+        assert.propertyVal(thunderforge.images.weapImage, "ID", 1930);
+        assert.isNull(miner.images.weapImage);
     });
 
     it("should parse weapImage maskID", function() {
-        assert.equal(shuttle.weapImage.maskID, -1);
-        assert.equal(thunderforge.weapImage.maskID, 1931);
-        assert.equal(miner.weapImage.maskID, -1);
+        assert.propertyVal(thunderforge.images.weapImage, "maskID", 1931);
     });
     /*
       it("should parse weapImage setCount", function() {
       // set this to baseImage setCount (or 0 if no weap image)
-      assert.equal(shuttle.weapImage.setCount, 0);
-      assert.equal(thunderforge.weapImage.setCount, 1);
-      assert.equal(miner.weapImage.setCount, 0);
+      assert.propertyVal(shuttle.images.weapImage,"setCount", 0);
+      assert.propertyVal(thunderforge.images.weapImage,"setCount", 1);
+      assert.propertyVal(miner.images.weapImage,"setCount", 0);
       });
     */
     it("should parse weapImage size", function() {
-        assert.equal(shuttle.weapImage.size[0], 0);
-        assert.equal(shuttle.weapImage.size[1], 0);
-        assert.equal(thunderforge.weapImage.size[0], 260);
-        assert.equal(thunderforge.weapImage.size[1], 260);
-        assert.equal(miner.weapImage.size[0], 0);
-        assert.equal(miner.weapImage.size[1], 0);
+        assert.deepPropertyVal(thunderforge.images.weapImage, "size", [260, 260]);
     });
 
 
@@ -254,16 +227,16 @@ describe("ShanResource", function() {
 
 
     it("should parse shieldImage ID", function() {
-        assert.equal(shuttle.shieldImage.ID, -1);
-        assert.equal(thunderforge.shieldImage.ID, -1);
-        assert.equal(miner.shieldImage.ID, -1);
+        assert.isNull(shuttle.images.shieldImage);
+        assert.isNull(thunderforge.images.shieldImage);
+        assert.isNull(miner.images.shieldImage);
     });
 
-    it("should parse shieldImage maskID", function() {
-        assert.equal(shuttle.shieldImage.maskID, -1);
-        assert.equal(thunderforge.shieldImage.maskID, -1);
-        assert.equal(miner.shieldImage.maskID, -1);
-    });
+    // it("should parse shieldImage maskID", function() {
+    //     assert.propertyVal(shuttle.images.shieldImage, "maskID", -1);
+    //     assert.propertyVal(thunderforge.images.shieldImage, "maskID", -1);
+    //     assert.propertyVal(miner.images.shieldImage, "maskID", -1);
+    // });
     /*
       it("should parse shieldImage setCount", function() {
       // set this to baseImage setCount (or 0 if no shield image)
@@ -272,14 +245,11 @@ describe("ShanResource", function() {
       assert.equal(miner.shieldImage.setCount, 6);
       });
     */
-    it("should parse shieldImage size", function() {
-        assert.equal(shuttle.shieldImage.size[0], 0);
-        assert.equal(shuttle.shieldImage.size[1], 0);
-        assert.equal(thunderforge.shieldImage.size[0], 0);
-        assert.equal(thunderforge.shieldImage.size[1], 0);
-        assert.equal(miner.shieldImage.size[0], 0);
-        assert.equal(miner.shieldImage.size[1], 0);
-    });
+    // it("should parse shieldImage size", function() {
+    //     assert.propertyVal(shuttle.images.shieldImage, "size", [0, 0]);
+    //     assert.propertyVal(thunderforge.images.shieldImage, "size", [0, 0]);
+    //     assert.propertyVal(miner.images.shieldImage, "size", [0, 0]);
+    // });
 
 
     it("should parse exitPoints", function() {
