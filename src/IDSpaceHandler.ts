@@ -5,7 +5,7 @@ import { NovaResources, NovaResourceType, getEmptyNovaResources } from "./Resour
 
 
 //const log = console.log;
-const log = (m: string) => { };
+const log = (_m: string) => { };
 
 class IDSpaceHandler {
     private globalResources: Promise<NovaResources>;

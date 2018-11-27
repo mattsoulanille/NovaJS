@@ -17,7 +17,7 @@ before(function() {
     chai.use(chaiAsPromised);
 });
 
-const expect = chai.expect;
+//const expect = chai.expect;
 
 
 describe("PictResource", function() {

@@ -421,7 +421,7 @@ class PICTParse {
         var length = this.readWord();
         this.pos += length;
     }
-    log(thing: any) {
+    log(_thing: any) {
         //console.log(text);
     }
 };

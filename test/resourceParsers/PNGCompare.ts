@@ -11,7 +11,8 @@ function getPNG(path: string): Promise<PNG> {
             .pipe(pngObj)
             .on('parsed', function() {
                 fulfill(pngObj);
-            });
+            })
+            .on('error', reject);
     });
 };
 

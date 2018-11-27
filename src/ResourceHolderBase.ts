@@ -1,6 +1,3 @@
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { NovaDataType, NovaDataInterface } from "novadatainterface/NovaDataInterface";
-import { Gettable } from "novadatainterface/Gettable";
 import { BaseResource } from "./resourceParsers/NovaResourceBase";
 import { BoomResource } from "./resourceParsers/BoomResource";
 import { DescResource } from "./resourceParsers/DescResource";

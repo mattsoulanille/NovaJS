@@ -1,7 +1,6 @@
 import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
-import { PNG } from "pngjs";
 import { PICTParse } from "./PICTParse";
 
 class PictResource extends BaseResource {
