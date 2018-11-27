@@ -8,23 +8,45 @@ import { NovaResources } from "../ResourceHolderBase";
 // before you actually need them (thus delaying the game's startup time).
 // This class is an exception, however, since none of its properties could easily
 // be replaced with getters. 
-class NovaResourceBase {
+class BaseResource {
     data: DataView;
     id: number;
     name: string;
     idSpace: NovaResources;
-    globalID: string | null;
-    prefix: string | null;
+    private _globalID: string | null;
+    private _prefix: string | null;
 
     constructor(resource: Resource, idSpace: NovaResources) {
         this.idSpace = idSpace;
         this.name = resource.name;
         this.id = resource.id;
         this.data = resource.data;
-        this.globalID = null; // This is set by IDSpaceHandler in getIDSpaceUnsafe
-        this.prefix = null;   // Same for this
+        this._globalID = null; // This is set by IDSpaceHandler in getIDSpaceUnsafe
+        this._prefix = null;   // Same for this
     }
+    get globalID(): string {
+        if (this._globalID == null) {
+            throw new Error("globalID of " + this.name + " was requested before it was set");
+        }
+        return this._globalID;
+    }
+
+    set globalID(id: string) {
+        this._globalID = id;
+    }
+
+    get prefix(): string {
+        if (this._prefix == null) {
+            throw new Error("prefix of " + this.name + " was requested before it was set");
+        }
+        return this._prefix;
+    }
+
+    set prefix(id: string) {
+        this._prefix = id;
+    }
+
 }
 
 
-export { NovaResourceBase }
+export { BaseResource }

@@ -1,9 +1,9 @@
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 import { PNG } from "pngjs";
 
-class RledResource extends NovaResourceBase {
+class RledResource extends BaseResource {
     size: number[];
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);

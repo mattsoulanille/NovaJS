@@ -1,8 +1,8 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 
-class SystResource extends NovaResourceBase {
+class SystResource extends BaseResource {
     position: number[];
     links: Set<number>;
     spobs: number[];

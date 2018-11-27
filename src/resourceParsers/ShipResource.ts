@@ -1,6 +1,6 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 
 type ShipWeap = {
     id: number,
@@ -13,7 +13,7 @@ type Outfit = {
     count: number,
 }
 
-class ShipResource extends NovaResourceBase {
+class ShipResource extends BaseResource {
     pictID: number;
     cargoSpace: number;
     shield: number;

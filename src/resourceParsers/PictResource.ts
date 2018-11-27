@@ -1,10 +1,10 @@
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 import { PNG } from "pngjs";
 import { PICTParse } from "./PICTParse";
 
-class PictResource extends NovaResourceBase {
+class PictResource extends BaseResource {
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
     }

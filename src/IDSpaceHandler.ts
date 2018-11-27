@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { readNovaFile } from "./readNovaFile";
-import { NovaResources, NovaResourceType } from "./ResourceHolderBase";
+import { NovaResources, NovaResourceType, getEmptyNovaResources } from "./ResourceHolderBase";
 
 
 //const log = console.log;
@@ -12,14 +12,7 @@ class IDSpaceHandler {
     private tmpBuildingResources: NovaResources;
 
     constructor(novaPath: string) {
-        this.tmpBuildingResources = {};
-
-        // Initialize resources
-        for (let i in NovaResourceType) {
-            var val = NovaResourceType[i];
-            this.tmpBuildingResources[val] = {};
-        }
-
+        this.tmpBuildingResources = getEmptyNovaResources();
         this.globalResources = this.build(novaPath);
     }
 
@@ -171,6 +164,10 @@ class IDSpaceHandler {
         }
 
         log("Parsing " + filePath + " under prefix " + prefix);
+
+        // This is the correct ID space because even though a plugin named,
+        // for example, "cats", might have a resource that overwrites a nova resource,
+        // that resource should still have access to all the other stuff in "cats"
         await readNovaFile(filePath, this.getIDSpaceUnsafe(prefix));
         return true;
     }

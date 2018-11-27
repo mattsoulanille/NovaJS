@@ -1,6 +1,6 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 
 
 
@@ -67,7 +67,7 @@ type Blink = {
     d: number
 }
 
-class ShanResource extends NovaResourceBase {
+class ShanResource extends BaseResource {
     baseImage: ImageInfo;
     altImage: ImageInfo;
     glowImage: ImageInfo;

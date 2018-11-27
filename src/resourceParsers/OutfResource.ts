@@ -1,9 +1,9 @@
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 
 type OutfitFunctions = Array<{ [index: string]: number | boolean }>;
-class OutfResource extends NovaResourceBase {
+class OutfResource extends BaseResource {
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
     }

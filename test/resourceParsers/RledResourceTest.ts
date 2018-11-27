@@ -12,6 +12,8 @@ import { NovaResources } from "../../src/ResourceHolderBase";
 import { PNG } from "pngjs";
 import { assert } from "chai";
 import { getPNG, comparePNGs, getFrames, applyMask } from "./PNGCompare"
+import { defaultIDSpace } from "./DefaultIDSpace";
+
 
 before(function() {
     chai.should();
@@ -32,10 +34,7 @@ describe("RledResource", function() {
     var leviathanMask: PNG;
 
     // Rleds don't depend on other resources.
-    var idSpace: NovaResources = {
-        resources: {},
-        prefix: "rleds"
-    };
+    var idSpace = defaultIDSpace;
 
     before(async function() {
         this.timeout(10000); // 10 seconds to read all files

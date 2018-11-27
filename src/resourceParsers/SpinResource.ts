@@ -1,11 +1,11 @@
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 import { NovaResources, NovaResourceType } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 
 
 // These take up little space and take little time to parse, so
 // they can be stored directly.
-class SpinResource extends NovaResourceBase {
+class SpinResource extends BaseResource {
     spriteID: number;
     maskID: number;
     spriteSize: Array<number>;

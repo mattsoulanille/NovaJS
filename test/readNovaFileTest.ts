@@ -1,4 +1,4 @@
-import { NovaResources } from "../src/ResourceHolderBase";
+import { NovaResources, getEmptyNovaResources } from "../src/ResourceHolderBase";
 import { readNovaFile } from "../src/readNovaFile";
 
 import * as chai from "chai";
@@ -17,7 +17,7 @@ describe("readNovaFile", function() {
 
     var shipPath = "./test/resourceParsers/files/ship.ndat";
 
-    var localIDSpace: NovaResources = {}
+    var localIDSpace: NovaResources = getEmptyNovaResources();
 
     before(function(done) {
         readNovaFile(shipPath, localIDSpace).then(function() {

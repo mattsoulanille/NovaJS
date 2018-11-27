@@ -2,7 +2,7 @@ import { readResourceFork } from "resourceforkjs"; // TODO: Add a declaration fi
 import { NovaResources, NovaResourceType } from "./ResourceHolderBase";
 import { BoomResource } from "./resourceParsers/BoomResource";
 import { DescResource } from "./resourceParsers/DescResource";
-import { NovaResourceBase } from "./resourceParsers/NovaResourceBase";
+import { BaseResource } from "./resourceParsers/NovaResourceBase";
 import { OutfResource } from "./resourceParsers/OutfResource";
 import { PictResource } from "./resourceParsers/PictResource";
 import { RledResource } from "./resourceParsers/RledResource";
@@ -26,13 +26,8 @@ async function readNovaFile(filePath: string, localIDSpace: NovaResources) {
     for (let resourceType in NovaResourceType) {
         var parser = getParser(<NovaResourceType>resourceType);
 
-        if (!localIDSpace[resourceType]) {
-            localIDSpace[resourceType] = {};
-        }
-
         for (let id in rf[resourceType]) {
-            localIDSpace[resourceType][id] =
-                new parser(rf[resourceType][id], localIDSpace);
+            localIDSpace[resourceType][id] = new parser(rf[resourceType][id], localIDSpace);
         }
     }
 }
@@ -46,7 +41,7 @@ function read(path: string) {
 
 // Since we're storing subclasses, not instances of subclasses.
 // TODO: Fill this out as more are implemented
-var parserMap: { [index: string]: typeof NovaResourceBase } = {};
+var parserMap: { [index: string]: typeof BaseResource } = {};
 parserMap[NovaResourceType.bööm] = BoomResource;
 //parserMap[NovaResourceType.chär] = ;
 //parserMap[NovaResourceType.cicn] = ;
@@ -82,12 +77,12 @@ parserMap[NovaResourceType.sÿst] = SystResource;
 parserMap[NovaResourceType.wëap] = WeapResource;
 
 
-function getParser(resourceType: NovaResourceType): typeof NovaResourceBase {
+function getParser(resourceType: NovaResourceType): typeof BaseResource {
     if (parserMap[resourceType]) {
         return parserMap[resourceType];
     }
     else {
-        return NovaResourceBase;
+        return BaseResource;
         //throw new Error("Unknown data type " + resourceType);
     }
 }

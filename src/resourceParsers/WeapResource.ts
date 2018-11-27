@@ -1,6 +1,6 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 
 type BlindSpots = {
     front: boolean,
@@ -31,7 +31,7 @@ type Jam = {
     gravametric: number
 }
 
-class WeapResource extends NovaResourceBase {
+class WeapResource extends BaseResource {
     reload: number;
     duration: number;
     armorDamage: number;

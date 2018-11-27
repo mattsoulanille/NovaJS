@@ -1,8 +1,8 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 
-class BoomResource extends NovaResourceBase {
+class BoomResource extends BaseResource {
     animationRate: number;
     sound: number | null;
     graphic: number;

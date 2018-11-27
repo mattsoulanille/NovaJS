@@ -7,18 +7,20 @@ import { ShipResource } from "../resourceParsers/ShipResource";
 import { BaseData } from "../../../NovaDataInterface/BaseData";
 
 
-async function ShipParse(ship: ShipResource, idSpace: NovaResources): Promise<ShipData> {
+async function ShipParse(ship: ShipResource): Promise<ShipData> {
 
-    var base: BaseData = await BaseParse(ship, idSpace);
-    var pictID = "nova:128";
-    var desc = "Default description";
+    var base: BaseData = await BaseParse(ship);
 
+    var desc: string;
     try {
-        pictID = ship.idSpace["PICT"][ship.pictID].globalID;
+        desc = ship.idSpace.dësc[ship.descID].text;
     }
     catch (e) {
-        console.log("Parsing pict failed: " + e.message);
+        desc = "Default description";
     }
+
+
+    var pictID: string = ship.idSpace.PICT[ship.pictID].globalID;
 
     try {
         desc = ship.idSpace.dësc[ship.descID].string;

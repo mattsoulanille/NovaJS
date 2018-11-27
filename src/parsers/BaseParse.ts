@@ -1,10 +1,10 @@
 
 import { BaseData } from "novadatainterface/BaseData";
 import { NovaResources } from "../ResourceHolderBase";
-import { NovaResourceBase } from "../resourceParsers/NovaResourceBase";
+import { BaseResource } from "../resourceParsers/NovaResourceBase";
 
 
-async function BaseParse(resource: NovaResourceBase, idSpace: NovaResources): Promise<BaseData> {
+async function BaseParse(resource: BaseResource): Promise<BaseData> {
     // These must have been set (by IDSpaceHandler::getIDSpaceUnsafe) when this function is called.
     if (resource.globalID == null) {
         throw new Error("Resource id was not set");

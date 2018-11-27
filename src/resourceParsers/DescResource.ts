@@ -1,4 +1,4 @@
-import { NovaResourceBase } from "./NovaResourceBase";
+import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 
@@ -21,7 +21,7 @@ function ab2str(data: DataView) {
 }
 
 
-class DescResource extends NovaResourceBase {
+class DescResource extends BaseResource {
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
     }
