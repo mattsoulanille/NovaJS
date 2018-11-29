@@ -7,18 +7,23 @@ import { NovaResources, NovaResourceType } from "./ResourceHolderBase"
 import { Gettable } from "novadatainterface/Gettable";
 import { BaseData } from "novadatainterface/BaseData";
 import { BaseResource } from "./resourceParsers/NovaResourceBase";
-import { ShipParseClosure, ShipPictMap } from "./parsers/ShipParse";
+import { ShipParseClosure, ShipPictMap, WeaponOutfitMap } from "./parsers/ShipParse";
 import { ShipResource } from "./resourceParsers/ShipResource";
+import { OutfResource } from "./resourceParsers/OutfResource";
 import { resourceIDNotFoundStrict, resourceIDNotFoundWarn } from "./parsers/ResourceIDNotFound";
 import { ShipData } from "../../NovaDataInterface/ShipData";
 import { DefaultAnimation } from "../../NovaDataInterface/Animation";
+import { OutfitParse } from "./parsers/OutfitParse";
+import { OutfitData } from "../../NovaDataInterface/OutiftData";
 
 type ParseFunction<T extends BaseResource, O extends BaseData> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
 class NovaParse implements GameDataInterface {
+
     shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
 
     private shipPICTMap: ShipPictMap;
+    private weaponOutfitMap: WeaponOutfitMap;
     resourceNotFoundFunction: (message: string) => void;
     public data: NovaDataInterface;
     path: string
@@ -40,7 +45,8 @@ class NovaParse implements GameDataInterface {
         this.ids = new IDSpaceHandler(dataPath);
         this.idSpace = this.ids.getIDSpace();
         this.shipPICTMap = this.makeShipPictMap();
-        this.shipParser = ShipParseClosure(this.shipPICTMap);
+        this.weaponOutfitMap = this.makeWeaponOutfitMap();
+        this.shipParser = ShipParseClosure(this.shipPICTMap, this.weaponOutfitMap, this.idSpace);
         this.data = this.buildData();
 
     }
@@ -49,8 +55,8 @@ class NovaParse implements GameDataInterface {
     private buildData(): NovaDataInterface {
         // This should really use NovaDataType.Ship etc but that isn't allowed when constructing like this.
         var data = {
-            "Ship": this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser)
-            //	    "Outfit": this.makeGettable<OutfitResource, OutfitData>(NovaResourceType.shïp, )
+            "Ship": this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
+            "Outfit": this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse)
         }
 
         return data;
@@ -125,6 +131,25 @@ class NovaParse implements GameDataInterface {
             }
         }
         return shipPICTMap;
+    }
+
+    private async makeWeaponOutfitMap(): WeaponOutfitMap {
+        var idSpace = await this.idSpace;
+
+        // Maps a weapon to the first outfit that provides it.
+        var weaponOutfitMap: { [index: string]: string } = {};
+
+        for (let outfitID in idSpace.oütf) {
+
+            var outfit = await this.data.Outfit.get(outfitID);
+            for (let weaponID in outfit.weapons) {
+                if (!(weaponOutfitMap[weaponID])) {
+                    weaponOutfitMap[weaponID] = outfitID;
+                }
+            }
+        }
+
+        return weaponOutfitMap;
     }
 
 }

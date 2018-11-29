@@ -72,7 +72,6 @@ describe("NovaParse", function() {
             .should.be.rejectedWith(NovaIDNotFoundError, "No matching dësc for shïp of id nova:130");
 
 
-
         s1.pictID.should.equal("nova:5000");
         s1.desc.should.equal("a contrived description");
 
@@ -92,9 +91,6 @@ describe("NovaParse", function() {
         s1.displayWeight.should.equal(128);
         s1.deathDelay.should.equal(67 / 30);
         s1.largeExplosion.should.equal(true);
-
-
-
 
     });
 
@@ -139,6 +135,15 @@ describe("NovaParse", function() {
         assert.propertyVal(s1, "finalExplosion", "nova:169");
         assert.propertyVal(s2, "initialExplosion", "nova:132");
         assert.propertyVal(s2, "finalExplosion", "nova:133");
+    });
+
+    it("Should parse ship outfits including weapons", async function() {
+        s1.outfits.should.deep.equal({
+            "nova:150": 26,
+            "nova:151": 38,
+            "nova:130": 50,
+            "nova:131": 58
+        });
     });
 
 

@@ -13,18 +13,26 @@ import { DescResource } from "../resourceParsers/DescResource";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
 type ShipPictMap = Promise<{ [index: string]: string }>;
+type WeaponOutfitMap = ShipPictMap;
 
-function ShipParseClosure(shipPictMap: ShipPictMap): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
+function ShipParseClosure(shipPictMap: ShipPictMap,
+    weaponOutfitMap: WeaponOutfitMap,
+    globalIDSpace: Promise<NovaResources>): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
+
     // Returns the function ShipParse with shipPictMap already assigned
-
     return function(ship: ShipResource, notFoundFunction: (m: string) => void) {
-        return ShipParse(ship, notFoundFunction, shipPictMap);
+        return ShipParse(ship, notFoundFunction, shipPictMap, weaponOutfitMap, globalIDSpace);
     }
 }
 
 
 
-async function ShipParse(ship: ShipResource, notFoundFunction: (message: string) => void, shipPictMap: ShipPictMap): Promise<ShipData> {
+async function ShipParse(ship: ShipResource,
+    notFoundFunction: (message: string) => void,
+    shipPictMap: ShipPictMap,
+    weaponOutfitMap: WeaponOutfitMap,
+    globalIDSpace: Promise<NovaResources>): Promise<ShipData> {
+
 
     var base: BaseData = await BaseParse(ship, notFoundFunction);
 
@@ -89,6 +97,67 @@ async function ShipParse(ship: ShipResource, notFoundFunction: (message: string)
         }
     }
 
+
+
+
+    // Outfits and weapons are included on the ship. Weapons need to be
+    // turned into their corresponding outfits.
+
+    var outfits: { [index: string]: number } = {} // globalID : count
+
+    // Parse Outfits
+    // Refactor with parse weapons?
+    for (let i in ship.outfits) {
+        var o = ship.outfits[i];
+        var localID = o.id;
+        var count = o.count;
+
+        let outfit = ship.idSpace.oütf[localID];
+        if (!outfit) {
+            notFoundFunction("No matching oütf of id " + localID + " for ship of id " + base.id);
+            continue; // Outfit not found so don't add it
+        }
+        var globalID = outfit.globalID;
+        if (!outfits[globalID]) {
+            outfits[globalID] = 0;
+        }
+        outfits[globalID] += count;
+    }
+
+    // Parse weapons, turning them into their corresponding outfits.
+    for (let i in ship.weapons) {
+        var w = ship.weapons[i];
+        var localID = w.id;
+        var count = w.count;
+
+        var weapon = ship.idSpace.wëap[localID]
+        if (!weapon) {
+            notFoundFunction("No matching wëap of id " + localID + " for ship of id " + base.id);
+            continue;
+        }
+        var globalID = weapon.globalID;
+
+        var outfitID = (await weaponOutfitMap)[globalID];
+        if (!outfitID) {
+            notFoundFunction("No matching oütf for weapon of id " + weapon.globalID);
+            continue;
+        }
+        if (!outfits[outfitID]) {
+            outfits[outfitID] = 0;
+        }
+        outfits[outfitID] += count;
+    }
+
+    // The ship's free mass is mass on top of the mass of preinstalled outfits,
+    // so to find it's actual free mass, we add in the masses of all the outfits.
+    // (this is done while outfits are parsed).
+    var freeMass = ship.freeSpace;
+    for (let outfitID in outfits) {
+        let outfit = (await globalIDSpace).oütf[outfitID];
+        freeMass += outfit.mass * outfits[outfitID];
+    }
+
+
     var properties: ShipProperties = {
         shield: ship.shield,
         shieldRecharge: ship.shieldRecharge * FPS / 1000, // Recharge per second
@@ -109,7 +178,7 @@ async function ShipParse(ship: ShipResource, notFoundFunction: (message: string)
         properties,
         pictID: pictID,
         desc: desc,
-        outfits: {}, //TODO: Parse Outfits
+        outfits,
         initialExplosion: initialExplosionID,
         finalExplosion: finalExplosionID,
         deathDelay: ship.deathDelay / FPS,
@@ -120,4 +189,4 @@ async function ShipParse(ship: ShipResource, notFoundFunction: (message: string)
     }
 }
 
-export { ShipParse, ShipParseClosure, ShipPictMap };
+export { ShipParse, ShipParseClosure, ShipPictMap, WeaponOutfitMap };

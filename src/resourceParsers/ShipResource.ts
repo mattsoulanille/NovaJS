@@ -87,19 +87,25 @@ class ShipResource extends BaseResource {
         //stock weapons
         this.weapons = [];
         for (var i = 0; i < 4; i++) {
-            this.weapons[i] = {
-                id: d.getInt16(18 + 2 * i),
-                count: d.getInt16(26 + 2 * i),
-                ammo: d.getInt16(34 + 2 * i)
-            };
+            let id = d.getInt16(18 + 2 * i);
+            if (id >= 128) {
+                this.weapons.push({
+                    id,
+                    count: d.getInt16(26 + 2 * i),
+                    ammo: d.getInt16(34 + 2 * i)
+                });
+            }
         }
         // Additional weapons are stored way down the resource
         for (var i = 4; i < 8; i++) {
-            this.weapons[i] = {
-                id: d.getInt16(1742 + 2 * i - 8),
-                count: d.getInt16(1750 + 2 * i - 8),
-                ammo: d.getInt16(1758 + 2 * i - 8)
-            };
+            let id = d.getInt16(1742 + 2 * i - 8);
+            if (id >= 128) {
+                this.weapons.push({
+                    id,
+                    count: d.getInt16(1750 + 2 * i - 8),
+                    ammo: d.getInt16(1758 + 2 * i - 8)
+                });
+            }
         }
 
         this.maxGuns = d.getInt16(42);
@@ -137,17 +143,23 @@ class ShipResource extends BaseResource {
         this.podCount = d.getInt16(76);
         this.outfits = [];
         for (var i = 0; i < 4; i++) {
-            this.outfits[i] = {
-                id: d.getInt16(78 + 2 * i),
-                count: d.getInt16(86 + 2 * i)
-            };
+            let id = d.getInt16(78 + 2 * i);
+            if (id >= 128) {
+                this.outfits.push({
+                    id,
+                    count: d.getInt16(86 + 2 * i)
+                });
+            }
         }
         // More outfits
         for (var i = 0; i < 4; i++) {
-            this.outfits[i + 4] = {
-                id: d.getInt16(880 + 2 * i),
-                count: d.getInt16(888 + 2 * i)
-            };
+            let id = d.getInt16(880 + 2 * i);
+            if (id >= 128) {
+                this.outfits.push({
+                    id,
+                    count: d.getInt16(888 + 2 * i)
+                });
+            }
         }
 
 

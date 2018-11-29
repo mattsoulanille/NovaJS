@@ -23,7 +23,7 @@ class OutfResource extends BaseResource {
         return this.id - 128 + 6000;
     }
     get descID(): number {
-        return this.id - 128 + 6000;
+        return this.id - 128 + 3000;
     }
     get cost(): number {
         return this.data.getInt32(14);
