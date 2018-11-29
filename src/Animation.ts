@@ -50,4 +50,4 @@ const DefaultAnimation: Animation = {
 }
 
 
-export { Animation, DefaultAnimation, AnimationImages, AnimationImagePurposes, ExitPoints, ExitPoint };
+export { Animation, DefaultAnimation, AnimationImages, AnimationImagePurposes, ExitPoints, ExitPoint, DefaultExitPoints };

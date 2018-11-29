@@ -1,5 +1,5 @@
-import { Animation } from "./Animation";
-import { BaseData } from "./BaseData";
+import { Animation, DefaultAnimation } from "./Animation";
+import { BaseData, DefaultBaseData } from "./BaseData";
 
 interface ShipData extends BaseData {
     pictID: string;
@@ -19,12 +19,39 @@ interface ShipData extends BaseData {
     mass: number;
     outfits: { [index: string]: number }
     freeMass: number;
-    initialExplosion: BaseData | null;
-    finalExplosion: BaseData | null;
+    initialExplosion: string | null;
+    finalExplosion: string | null;
     largeExplosion: boolean;
     deathDelay: number;
     displayWeight: number;
 };
 
 
-export { ShipData };
+var DefaultShip: ShipData = {
+    ...DefaultBaseData,
+    pictID: "default",
+    desc: "default",
+    animation: DefaultAnimation,
+    shield: 100,
+    shieldRecharge: 10,
+    armor: 100,
+    armorRecharge: 0,
+    energy: 200,
+    energyRecharge: 10,
+    ionization: 100,
+    deionize: 10,
+    speed: 300,
+    acceleration: 300,
+    turnRate: 3,
+    mass: 100,
+    outfits: {},
+    freeMass: 0,
+    initialExplosion: null,
+    finalExplosion: null,
+    largeExplosion: false,
+    deathDelay: 1,
+    displayWeight: 1
+}
+
+
+export { ShipData, DefaultShip };
