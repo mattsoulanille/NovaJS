@@ -12,6 +12,7 @@ import { ShipData } from "../../NovaDataInterface/ShipData";
 import { BaseData } from "../../NovaDataInterface/BaseData";
 import { ShipResource } from "../src/resourceParsers/ShipResource";
 import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
+import { OutfitData } from "../../NovaDataInterface/OutiftData";
 
 before(function() {
     chai.should();
@@ -43,8 +44,8 @@ describe("NovaParse", function() {
 
     before(async function() {
         np = new NovaParse("./test/novaParseTestFilesystem");
-        s1 = <ShipData>await np.data[NovaDataType.Ship].get("nova:128");
-        s2 = <ShipData>await np.data[NovaDataType.Ship].get("nova:129");
+        s1 = await np.data[NovaDataType.Ship].get("nova:128");
+        s2 = await np.data[NovaDataType.Ship].get("nova:129");
     });
 
     it("Should produce the correct error when the ID is not available", async function() {
@@ -98,7 +99,7 @@ describe("NovaParse", function() {
         // Ships with the same baseImage as a previous ship that don't have a pictID defined for them get
         // the same pictID as the previous ship's
 
-        var s200 = <ShipData>await np.data[NovaDataType.Ship].get("nova:200");
+        var s200 = await np.data[NovaDataType.Ship].get("nova:200");
         // Even though it shares baseImage with s1, it should use its own pict.
         s200.pictID.should.equal("nova:5072");
     });
@@ -145,6 +146,20 @@ describe("NovaParse", function() {
             "nova:131": 58
         });
     });
+
+    it("Should parse outfit properties", async function() {
+        let o131: OutfitData = await np.data.Outfit.get("nova:131");
+        o131.properties.should.deep.equal({
+            cargo: 123,
+            shield: 55,
+            armor: 45,
+            energyRecharge: FPS / 100
+        });
+    });
+
+
+
+
 
 
 });
