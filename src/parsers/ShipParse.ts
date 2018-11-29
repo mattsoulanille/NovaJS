@@ -1,6 +1,6 @@
 
 import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { ShipData } from "novadatainterface/ShipData";
+import { ShipData, ShipProperties } from "novadatainterface/ShipData";
 import { DefaultPictData } from "novadatainterface/PictData";
 import { ExplosionData } from "novadatainterface/ExplosionData";
 import { BaseParse } from "./BaseParse";
@@ -10,6 +10,7 @@ import { BaseData } from "novadatainterface/BaseData";
 import { Animation, DefaultAnimation } from "novadatainterface/Animation";
 import { ShanParse } from "./ShanParse";
 import { DescResource } from "../resourceParsers/DescResource";
+import { FPS, TurnRateConversionFactor } from "./Constants";
 
 type ShipPictMap = Promise<{ [index: string]: string }>;
 
@@ -88,29 +89,33 @@ async function ShipParse(ship: ShipResource, notFoundFunction: (message: string)
         }
     }
 
-    return {
-        pictID: pictID,
-        desc: desc,
+    var properties: ShipProperties = {
         shield: ship.shield,
-        shieldRecharge: ship.shieldRecharge * 30 / 1000, // Recharge per second
+        shieldRecharge: ship.shieldRecharge * FPS / 1000, // Recharge per second
         armor: ship.armor,
-        armorRecharge: ship.armorRecharge * 30 / 1000,
+        armorRecharge: ship.armorRecharge * FPS / 1000,
         energy: ship.energy,
-        energyRecharge: 30 / ship.energyRecharge, // Frames per unit -> units per second
+        energyRecharge: FPS / ship.energyRecharge, // Frames per unit -> units per second
         ionization: ship.ionization,
-        deionize: ship.deionize / 100 * 30, // 100 is 1 point of ion energy per 1/30th of a second (evn bible)
+        deionize: ship.deionize / 100 * FPS, // 100 is 1 point of ion energy per 1/30th of a second (evn bible)
         speed: ship.speed, // TODO: Figure out the correct scaling factor for these
         acceleration: ship.acceleration,
-        turnRate: ship.turnRate * (100 / 30) * (2 * Math.PI / 360) || 0, // 30 / 100 degrees per second -> Radians per second
+        turnRate: ship.turnRate * TurnRateConversionFactor,
         mass: ship.mass,
+        freeMass: 0,
+    }
+
+    return {
+        properties,
+        pictID: pictID,
+        desc: desc,
         outfits: {}, //TODO: Parse Outfits
         initialExplosion: initialExplosionID,
         finalExplosion: finalExplosionID,
-        deathDelay: ship.deathDelay / 30, // 30 fps
+        deathDelay: ship.deathDelay / FPS,
         largeExplosion: ship.deathDelay >= 60,
         displayWeight: ship.id, // TODO: Fix this once displayweight is implemented
         animation,
-        freeMass: 0,
         ...base
     }
 }

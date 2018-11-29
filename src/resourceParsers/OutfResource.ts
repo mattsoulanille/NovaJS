@@ -42,28 +42,28 @@ class OutfResource extends BaseResource {
                     functions.push(["weapon", modVal]);
                     break;
                 case 2:
-                    functions.push(["cargo expansion", modVal]);
+                    functions.push(["cargo", modVal]);
                     break;
                 case 3:
                     functions.push(["ammunition", modVal]);
                     break;
                 case 4:
-                    functions.push(["shield boost", modVal]);
+                    functions.push(["shield", modVal]);
                     break;
                 case 5:
-                    functions.push(["shield recharge", modVal]);
+                    functions.push(["shieldRecharge", modVal]);
                     break;
                 case 6:
-                    functions.push(["armor boost", modVal]);
+                    functions.push(["armor", modVal]);
                     break;
                 case 7:
-                    functions.push(["acceleration boost", modVal]);
+                    functions.push(["acceleration", modVal]);
                     break;
                 case 8:
-                    functions.push(["speed increase", modVal]);
+                    functions.push(["speed", modVal]);
                     break;
                 case 9:
-                    functions.push(["turn rate change", modVal]);
+                    functions.push(["turnRate", modVal]);
                     break;
                 case 10:
                     // unused
@@ -72,7 +72,7 @@ class OutfResource extends BaseResource {
                     functions.push(["escape pod", true]);
                     break;
                 case 12:
-                    functions.push(["fuel increase", modVal]);
+                    functions.push(["energy", modVal]);
                     break;
                 case 13:
                     functions.push(["density scanner", true]);
@@ -91,7 +91,7 @@ class OutfResource extends BaseResource {
                     functions.push(["cloak", modVal]);
                     break;
                 case 18:
-                    functions.push(["fuel scoop", modVal]);
+                    functions.push(["energyRecharge", modVal]);
                     break;
                 case 19:
                     functions.push(["auto refuel", true]);
@@ -125,7 +125,7 @@ class OutfResource extends BaseResource {
                     functions.push(["murk modifier", modVal]);
                     break;
                 case 29:
-                    functions.push(["armor recharge", modVal]);
+                    functions.push(["armorRecharge", modVal]);
                     break;
                 case 30:
                     functions.push(["cloak scanner", modVal]);
@@ -155,11 +155,11 @@ class OutfResource extends BaseResource {
                     functions.push(["inertial damper", true]);
                     break;
                 case 39:
-                    functions.push(["ion dissipater", modVal]);
+                    functions.push(["deionize", modVal]);
                     break;
                 case 40:
                     // increase ionization capacity
-                    functions.push(["ion absorber", modVal]);
+                    functions.push(["ionization", modVal]);
                     break;
                 case 41:
                     functions.push(["gravity resistance", true]);
@@ -174,10 +174,10 @@ class OutfResource extends BaseResource {
                     functions.push(["reinforcement inhibitor", modVal]);
                     break;
                 case 45:
-                    functions.push(["max guns", modVal]);
+                    functions.push(["maxGuns", modVal]);
                     break;
                 case 46:
-                    functions.push(["max turrets", modVal]);
+                    functions.push(["maxTurrets", modVal]);
                     break;
                 case 47:
                     functions.push(["bomb", modVal]);

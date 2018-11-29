@@ -66,31 +66,31 @@ describe("OutfResource", function() {
         expect(blank.functions).to.deep.equal([]);
 
         expect(armor.functions).to.deep.equal([
-            ["armor boost", 42]
+            ["armor", 42]
         ]);
 
         expect(shields.functions).to.deep.equal([
-            ["shield boost", 424]
+            ["shield", 424]
         ]);
 
         expect(armorRecharge.functions).to.deep.equal([
-            ["armor recharge", 123]
+            ["armorRecharge", 123]
         ]);
 
         expect(shieldRecharge.functions).to.deep.equal([
-            ["shield recharge", 234]
+            ["shieldRecharge", 234]
         ]);
 
         expect(speedIncrease.functions).to.deep.equal([
-            ["speed increase", 19]
+            ["speed", 19]
         ]);
 
         expect(accelBoost.functions).to.deep.equal([
-            ["acceleration boost", 81]
+            ["acceleration", 81]
         ]);
 
         expect(turnRate.functions).to.deep.equal([
-            ["turn rate change", 53]
+            ["turnRate", 53]
         ]);
 
         expect(afterburner.functions).to.deep.equal([
@@ -99,16 +99,16 @@ describe("OutfResource", function() {
 
         expect(four.functions).to.deep.equal([
             ["weapon", 153],
-            ["acceleration boost", 14],
-            ["armor boost", 92],
-            ["shield boost", 525]
+            ["acceleration", 14],
+            ["armor", 92],
+            ["shield", 525]
         ]);
 
         expect(anotherFour.functions).to.deep.equal([
-            ["shield recharge", 99],
+            ["shieldRecharge", 99],
             ["jam 3", 23],
             ["IFF", true],
-            ["fuel increase", 1454]
+            ["energy", 1454]
         ]);
 
     });

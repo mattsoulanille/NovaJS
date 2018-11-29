@@ -11,6 +11,7 @@ import { NovaDataInterface, NovaDataType, NovaIDNotFoundError } from "novadatain
 import { ShipData } from "../../NovaDataInterface/ShipData";
 import { BaseData } from "../../NovaDataInterface/BaseData";
 import { ShipResource } from "../src/resourceParsers/ShipResource";
+import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
 
 before(function() {
     chai.should();
@@ -71,23 +72,27 @@ describe("NovaParse", function() {
             .should.be.rejectedWith(NovaIDNotFoundError, "No matching dësc for shïp of id nova:130");
 
 
+
         s1.pictID.should.equal("nova:5000");
         s1.desc.should.equal("a contrived description");
-        s1.shield.should.equal(17);
-        s1.shieldRecharge.should.equal(18 * 30 / 1000);
-        s1.armor.should.equal(19);
-        s1.armorRecharge.should.equal(20 * 30 / 1000);
-        s1.energy.should.equal(21);
-        s1.energyRecharge.should.equal(30 / 22);
-        s1.ionization.should.equal(23);
-        s1.deionize.should.equal(24 / 100 * 30);
-        s1.speed.should.equal(12);
-        s1.acceleration.should.equal(11);
-        s1.turnRate.should.equal(13 * (100 / 30) * (2 * Math.PI / 360));
-        s1.mass.should.equal(6);
+
+        s1.properties.shield.should.equal(17);
+        s1.properties.shieldRecharge.should.equal(18 * FPS / 1000);
+        s1.properties.armor.should.equal(19);
+        s1.properties.armorRecharge.should.equal(20 * FPS / 1000);
+        s1.properties.energy.should.equal(21);
+        s1.properties.energyRecharge.should.equal(FPS / 22);
+        s1.properties.ionization.should.equal(23);
+        s1.properties.deionize.should.equal(24 / 100 * FPS);
+        s1.properties.speed.should.equal(12);
+        s1.properties.acceleration.should.equal(11);
+        s1.properties.turnRate.should.equal(13 * TurnRateConversionFactor);
+        s1.properties.mass.should.equal(6);
+
+        s1.displayWeight.should.equal(128);
         s1.deathDelay.should.equal(67 / 30);
         s1.largeExplosion.should.equal(true);
-        s1.displayWeight.should.equal(128);
+
 
 
 
