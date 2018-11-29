@@ -37,18 +37,23 @@ class NovaParse implements GameDataInterface {
         }
 
         this.path = path.join(dataPath);
-        this.data = {};
         this.ids = new IDSpaceHandler(dataPath);
         this.idSpace = this.ids.getIDSpace();
         this.shipPICTMap = this.makeShipPictMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap);
-        this.build();
+        this.data = this.buildData();
+
     }
 
     // Assigns all the gettables to this.data
-    private build() {
-        this.data[NovaDataType.Ship] = this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser);
+    private buildData(): NovaDataInterface {
+        // This should really use NovaDataType.Ship etc but that isn't allowed when constructing like this.
+        var data = {
+            "Ship": this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser)
+            //	    "Outfit": this.makeGettable<OutfitResource, OutfitData>(NovaResourceType.shïp, )
+        }
 
+        return data;
     }
 
     makeGettable<T extends BaseResource, O extends BaseData>(resourceType: NovaResourceType, parseFunction: ParseFunction<T, O>): Gettable<O> {

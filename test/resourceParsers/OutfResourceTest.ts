@@ -61,54 +61,54 @@ describe("OutfResource", function() {
 
     it("should parse outfit functions", function() {
         expect(w1.functions).to.deep.equal([
-            { "weapon": 142 }
+            ["weapon", 142]
         ]);
         expect(blank.functions).to.deep.equal([]);
 
         expect(armor.functions).to.deep.equal([
-            { "armor boost": 42 }
+            ["armor boost", 42]
         ]);
 
         expect(shields.functions).to.deep.equal([
-            { "shield boost": 424 }
+            ["shield boost", 424]
         ]);
 
         expect(armorRecharge.functions).to.deep.equal([
-            { "armor recharge": 123 }
+            ["armor recharge", 123]
         ]);
 
         expect(shieldRecharge.functions).to.deep.equal([
-            { "shield recharge": 234 }
+            ["shield recharge", 234]
         ]);
 
         expect(speedIncrease.functions).to.deep.equal([
-            { "speed increase": 19 }
+            ["speed increase", 19]
         ]);
 
         expect(accelBoost.functions).to.deep.equal([
-            { "acceleration boost": 81 }
+            ["acceleration boost", 81]
         ]);
 
         expect(turnRate.functions).to.deep.equal([
-            { "turn rate change": 53 }
+            ["turn rate change", 53]
         ]);
 
         expect(afterburner.functions).to.deep.equal([
-            { "afterburner": 144 }
+            ["afterburner", 144]
         ]);
 
         expect(four.functions).to.deep.equal([
-            { "weapon": 153 },
-            { "acceleration boost": 14 },
-            { "armor boost": 92 },
-            { "shield boost": 525 }
+            ["weapon", 153],
+            ["acceleration boost", 14],
+            ["armor boost", 92],
+            ["shield boost", 525]
         ]);
 
         expect(anotherFour.functions).to.deep.equal([
-            { "shield recharge": 99 },
-            { "jam 3": 23 },
-            { "IFF": true },
-            { "fuel increase": 1454 }
+            ["shield recharge", 99],
+            ["jam 3", 23],
+            ["IFF", true],
+            ["fuel increase", 1454]
         ]);
 
     });

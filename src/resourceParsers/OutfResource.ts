@@ -2,7 +2,7 @@ import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 
-type OutfitFunctions = Array<{ [index: string]: number | boolean }>;
+type OutfitFunctions = Array<[string, number | boolean]>;
 class OutfResource extends BaseResource {
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
@@ -39,157 +39,157 @@ class OutfResource extends BaseResource {
 
             switch (modType) {
                 case 1:
-                    functions.push({ "weapon": modVal });
+                    functions.push(["weapon", modVal]);
                     break;
                 case 2:
-                    functions.push({ "cargo expansion": modVal });
+                    functions.push(["cargo expansion", modVal]);
                     break;
                 case 3:
-                    functions.push({ "ammunition": modVal });
+                    functions.push(["ammunition", modVal]);
                     break;
                 case 4:
-                    functions.push({ "shield boost": modVal });
+                    functions.push(["shield boost", modVal]);
                     break;
                 case 5:
-                    functions.push({ "shield recharge": modVal });
+                    functions.push(["shield recharge", modVal]);
                     break;
                 case 6:
-                    functions.push({ "armor boost": modVal });
+                    functions.push(["armor boost", modVal]);
                     break;
                 case 7:
-                    functions.push({ "acceleration boost": modVal });
+                    functions.push(["acceleration boost", modVal]);
                     break;
                 case 8:
-                    functions.push({ "speed increase": modVal });
+                    functions.push(["speed increase", modVal]);
                     break;
                 case 9:
-                    functions.push({ "turn rate change": modVal });
+                    functions.push(["turn rate change", modVal]);
                     break;
                 case 10:
                     // unused
                     break;
                 case 11:
-                    functions.push({ "escape pod": true });
+                    functions.push(["escape pod", true]);
                     break;
                 case 12:
-                    functions.push({ "fuel increase": modVal });
+                    functions.push(["fuel increase", modVal]);
                     break;
                 case 13:
-                    functions.push({ "density scanner": true });
+                    functions.push(["density scanner", true]);
                     break;
                 case 14:
-                    functions.push({ "IFF": true });
+                    functions.push(["IFF", true]);
                     break;
                 case 15:
-                    functions.push({ "afterburner": modVal });
+                    functions.push(["afterburner", modVal]);
                     break;
                 case 16:
-                    functions.push({ "map": modVal });
+                    functions.push(["map", modVal]);
                     break;
                 case 17:
                     // This will need perhaps some more parsing. There are many different cloaking device types
-                    functions.push({ "cloak": modVal });
+                    functions.push(["cloak", modVal]);
                     break;
                 case 18:
-                    functions.push({ "fuel scoop": modVal });
+                    functions.push(["fuel scoop", modVal]);
                     break;
                 case 19:
-                    functions.push({ "auto refuel": true });
+                    functions.push(["auto refuel", true]);
                     break;
                 case 20:
-                    functions.push({ "auto eject": true });
+                    functions.push(["auto eject", true]);
                     break;
                 case 21:
-                    functions.push({ "clean legal record": modVal });
+                    functions.push(["clean legal record", modVal]);
                     break;
                 case 22:
-                    functions.push({ "hyperspace speed mod": modVal });
+                    functions.push(["hyperspace speed mod", modVal]);
                     break;
                 case 23:
                     // distance from system center
-                    functions.push({ "hyperspace dist mod": modVal });
+                    functions.push(["hyperspace dist mod", modVal]);
                     break;
                 case 24:
-                    functions.push({ "interference mod": modVal });
+                    functions.push(["interference mod", modVal]);
                     break;
                 case 25:
-                    functions.push({ "marines": modVal });
+                    functions.push(["marines", modVal]);
                     break;
                 case 26:
                     // unused
                     break;
                 case 27:
-                    functions.push({ "increase maximum": modVal });
+                    functions.push(["increase maximum", modVal]);
                     break;
                 case 28:
-                    functions.push({ "murk modifier": modVal });
+                    functions.push(["murk modifier", modVal]);
                     break;
                 case 29:
-                    functions.push({ "armor recharge": modVal });
+                    functions.push(["armor recharge", modVal]);
                     break;
                 case 30:
-                    functions.push({ "cloak scanner": modVal });
+                    functions.push(["cloak scanner", modVal]);
                     break;
                 case 31:
-                    functions.push({ "mining scoop": true });
+                    functions.push(["mining scoop", true]);
                     break;
                 case 32:
-                    functions.push({ "multi-jump": modVal });
+                    functions.push(["multi-jump", modVal]);
                     break;
                 case 33:
-                    functions.push({ "jam 1": modVal });
+                    functions.push(["jam 1", modVal]);
                     break;
                 case 34:
-                    functions.push({ "jam 2": modVal });
+                    functions.push(["jam 2", modVal]);
                     break;
                 case 35:
-                    functions.push({ "jam 3": modVal });
+                    functions.push(["jam 3", modVal]);
                     break;
                 case 36:
-                    functions.push({ "jam 4": modVal });
+                    functions.push(["jam 4", modVal]);
                     break;
                 case 37:
-                    functions.push({ "fast jump": true });
+                    functions.push(["fast jump", true]);
                     break;
                 case 38:
-                    functions.push({ "inertial damper": true });
+                    functions.push(["inertial damper", true]);
                     break;
                 case 39:
-                    functions.push({ "ion dissipater": modVal });
+                    functions.push(["ion dissipater", modVal]);
                     break;
                 case 40:
                     // increase ionization capacity
-                    functions.push({ "ion absorber": modVal });
+                    functions.push(["ion absorber", modVal]);
                     break;
                 case 41:
-                    functions.push({ "gravity resistance": true });
+                    functions.push(["gravity resistance", true]);
                     break;
                 case 42:
-                    functions.push({ "deadly stellar resistance": true });
+                    functions.push(["deadly stellar resistance", true]);
                     break;
                 case 43:
-                    functions.push({ "paint": modVal });
+                    functions.push(["paint", modVal]);
                     break;
                 case 44:
-                    functions.push({ "reinforcement inhibitor": modVal });
+                    functions.push(["reinforcement inhibitor", modVal]);
                     break;
                 case 45:
-                    functions.push({ "max guns": modVal });
+                    functions.push(["max guns", modVal]);
                     break;
                 case 46:
-                    functions.push({ "max turrets": modVal });
+                    functions.push(["max turrets", modVal]);
                     break;
                 case 47:
-                    functions.push({ "bomb": modVal });
+                    functions.push(["bomb", modVal]);
                     break;
                 case 48:
-                    functions.push({ "iff scrambler": true });
+                    functions.push(["iff scrambler", true]);
                     break;
                 case 49:
-                    functions.push({ "repair system": true });
+                    functions.push(["repair system", true]);
                     break;
                 case 50:
-                    functions.push({ "nonlethal bomb": true });
+                    functions.push(["nonlethal bomb", true]);
                     break;
                 default:
                     break;
