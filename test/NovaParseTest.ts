@@ -13,6 +13,7 @@ import { BaseData } from "../../NovaDataInterface/BaseData";
 import { ShipResource } from "../src/resourceParsers/ShipResource";
 import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
 import { OutfitData } from "../../NovaDataInterface/OutiftData";
+import { ExplosionData } from "../../NovaDataInterface/ExplosionData";
 
 before(function() {
     chai.should();
@@ -131,11 +132,16 @@ describe("NovaParse", function() {
         anim.images.should.not.haveOwnProperty("altImage");
     });
 
-    it("Should parse ship explosions", async function() {
+    it("Should parse which explosion a ship has", async function() {
         assert.propertyVal(s1, "initialExplosion", "nova:168");
         assert.propertyVal(s1, "finalExplosion", "nova:169");
         assert.propertyVal(s2, "initialExplosion", "nova:132");
         assert.propertyVal(s2, "finalExplosion", "nova:133");
+    });
+
+    it("Should parse explosions", async function() {
+        let e1: ExplosionData = await np.data.Explosion.get("nova:132");
+
     });
 
     it("Should parse ship outfits including weapons", async function() {
@@ -156,7 +162,6 @@ describe("NovaParse", function() {
             energyRecharge: FPS / 100
         });
     });
-
 
 
 

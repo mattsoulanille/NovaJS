@@ -1,14 +1,16 @@
 import { BaseParse } from "./BaseParse";
 import { ShanResource } from "../resourceParsers/ShanResource";
-import { Animation, AnimationImagePurposes, AnimationImages } from "novadatainterface/Animation";
+import { Animation, AnimationImagePurposes, AnimationImages, DefaultAnimation, DefaultAnimationImage } from "novadatainterface/Animation";
 import { BaseData } from "novadatainterface/BaseData";
-import { NovaIDNotFoundError } from "../../../NovaDataInterface/NovaDataInterface";
+import { NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
 
 
 async function ShanParse(shan: ShanResource, notFoundFunction: (message: string) => void): Promise<Animation> {
     var base: BaseData = await BaseParse(shan, notFoundFunction);
 
-    var images: AnimationImages = {};
+    var images: AnimationImages = {
+        baseImage: DefaultAnimationImage
+    };
 
     var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage', 'weapImage'];
     for (var index in imageNames) {

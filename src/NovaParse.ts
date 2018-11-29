@@ -11,10 +11,13 @@ import { ShipParseClosure, ShipPictMap, WeaponOutfitMap } from "./parsers/ShipPa
 import { ShipResource } from "./resourceParsers/ShipResource";
 import { OutfResource } from "./resourceParsers/OutfResource";
 import { resourceIDNotFoundStrict, resourceIDNotFoundWarn } from "./parsers/ResourceIDNotFound";
-import { ShipData } from "../../NovaDataInterface/ShipData";
-import { DefaultAnimation } from "../../NovaDataInterface/Animation";
+import { ShipData } from "novadatainterface/ShipData";
+import { DefaultAnimation } from "novadatainterface/Animation";
 import { OutfitParse } from "./parsers/OutfitParse";
-import { OutfitData } from "../../NovaDataInterface/OutiftData";
+import { OutfitData } from "novadatainterface/OutiftData";
+import { BoomResource } from "./resourceParsers/BoomResource";
+import { ExplosionData } from "novadatainterface/ExplosionData";
+import { ExplosionParse } from "../src/parsers/ExplosionParse";
 
 type ParseFunction<T extends BaseResource, O extends BaseData> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
@@ -56,7 +59,8 @@ class NovaParse implements GameDataInterface {
         // This should really use NovaDataType.Ship etc but that isn't allowed when constructing like this.
         var data = {
             "Ship": this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
-            "Outfit": this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse)
+            "Outfit": this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse),
+            "Explosion": this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse)
         }
 
         return data;
