@@ -1,10 +1,9 @@
 import { Animation, DefaultAnimation } from "./Animation";
 import { BaseData, DefaultBaseData } from "./BaseData";
 
-interface ShipData extends BaseData {
-    pictID: string;
-    desc: string;
-    animation: Animation;
+
+type ShipProperties = {
+    [index: string]: number | boolean,
     shield: number;
     shieldRecharge: number;
     armor: number;
@@ -17,21 +16,10 @@ interface ShipData extends BaseData {
     acceleration: number;
     turnRate: number;
     mass: number;
-    outfits: { [index: string]: number }
     freeMass: number;
-    initialExplosion: string | null;
-    finalExplosion: string | null;
-    largeExplosion: boolean;
-    deathDelay: number;
-    displayWeight: number;
-};
+}
 
-
-var DefaultShip: ShipData = {
-    ...DefaultBaseData,
-    pictID: "default",
-    desc: "default",
-    animation: DefaultAnimation,
+const DefaultShipProperties: ShipProperties = {
     shield: 100,
     shieldRecharge: 10,
     armor: 100,
@@ -44,8 +32,30 @@ var DefaultShip: ShipData = {
     acceleration: 300,
     turnRate: 3,
     mass: 100,
+    freeMass: 0
+}
+
+interface ShipData extends BaseData {
+    properties: ShipProperties;
+    pictID: string;
+    desc: string;
+    animation: Animation;
+    outfits: { [index: string]: number }
+    initialExplosion: string | null;
+    finalExplosion: string | null;
+    largeExplosion: boolean;
+    deathDelay: number;
+    displayWeight: number;
+};
+
+
+const DefaultShip: ShipData = {
+    ...DefaultBaseData,
+    properties: DefaultShipProperties,
+    pictID: "default",
+    desc: "default",
+    animation: DefaultAnimation,
     outfits: {},
-    freeMass: 0,
     initialExplosion: null,
     finalExplosion: null,
     largeExplosion: false,
@@ -54,4 +64,4 @@ var DefaultShip: ShipData = {
 }
 
 
-export { ShipData, DefaultShip };
+export { ShipData, DefaultShip, ShipProperties, DefaultShipProperties };

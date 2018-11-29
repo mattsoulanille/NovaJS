@@ -1,5 +1,6 @@
 import { Gettable } from "./Gettable";
 import { BaseData } from "./BaseData";
+import { ShipData } from "./ShipData";
 
 
 // const NovaDataTypes = [
@@ -7,47 +8,26 @@ import { BaseData } from "./BaseData";
 // ];
 
 enum NovaDataType {
-    Ship,
-    Outfit,
-    Weapon,
-    Pict,
-    Planet,
-    System,
-    TargetCorner,
-    SpriteSheet,
-    SpriteSheetImage,
-    SpriteSheetFrames,
-    StatusBar,
-    Explosion
+    Ship = "Ship",
+    Outfit = "Outfit",
+    Weapon = "Weapon",
+    Pict = "Pict",
+    Planet = "Planet",
+    System = "System",
+    TargetCorner = "TargetCorner",
+    SpriteSheet = "SpriteSheet",
+    SpriteSheetImage = "SpriteSheetImage",
+    SpriteSheetFrames = "SpriteSheetFrames",
+    StatusBar = "StatusBar",
+    Explosion = "Explosion"
 };
 
 
-
-// var NovaDataInterface = {};
-// NovaDataInterface[NovaDataType.Ship];
-
-// interface NovaDataInterface {
-//     g: (n: NovaDataType) => Gettable<BaseResource>
-// }
-
-
-// type NovaDataInterface = {
-//     Ship: Gettable<ShipResource>,
-//     Outfit: Gettable<BaseResource>,
-//     Weapon: Gettable<BaseResource>,
-//     Pict: Gettable<BaseResource>,
-//     Planet: Gettable<BaseResource>,
-//     System: Gettable<BaseResource>,
-//     TargetCorner: Gettable<BaseResource>,
-//     SpriteSheet: Gettable<BaseResource>,
-//     SpriteSheetImage: Gettable<BaseResource>,
-//     SpriteSheetFrames: Gettable<BaseResource>,
-//     StatusBar: Gettable<BaseResource>
-// };
-
-
 // index: NovaDataType
-interface NovaDataInterface { [index: number]: Gettable<BaseData> }
+type NovaDataInterface = {
+    [index: string]: Gettable<BaseData>,
+    Ship: Gettable<ShipData>
+}
 class NovaIDNotFoundError extends Error { };
 
 export { NovaDataInterface, NovaDataType, NovaIDNotFoundError };
