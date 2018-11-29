@@ -7,62 +7,86 @@ import { BaseParse } from "./BaseParse";
 import { NovaResources } from "../ResourceHolderBase";
 import { ShipResource } from "../resourceParsers/ShipResource";
 import { BaseData } from "novadatainterface/BaseData";
-import { Animation } from "novadatainterface/Animation";
+import { Animation, DefaultAnimation } from "novadatainterface/Animation";
 import { ShanParse } from "./ShanParse";
+import { DescResource } from "../resourceParsers/DescResource";
 
+type ShipPictMap = Promise<{ [index: string]: string }>;
 
-async function ShipParse(ship: ShipResource): Promise<ShipData> {
+function ShipParseClosure(shipPictMap: ShipPictMap): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
+    // Returns the function ShipParse with shipPictMap already assigned
 
-    var base: BaseData = await BaseParse(ship);
-
-
-
-
-
-    var pictID = DefaultPictData.id;
-    try {
-        let pict = ship.idSpace.PICT[ship.pictID]
-        if (typeof pict !== "undefined") {
-            pictID = pict.globalID;
-        }
+    return function(ship: ShipResource, notFoundFunction: (m: string) => void) {
+        return ShipParse(ship, notFoundFunction, shipPictMap);
     }
-    catch (e) {
-        console.warn(e);
-    }
+}
 
 
+
+async function ShipParse(ship: ShipResource, notFoundFunction: (message: string) => void, shipPictMap: ShipPictMap): Promise<ShipData> {
+
+    var base: BaseData = await BaseParse(ship, notFoundFunction);
 
     var desc: string;
-    try {
-        desc = ship.idSpace.dësc[ship.descID].text;
+    var descResource = ship.idSpace.dësc[ship.descID];
+    if (descResource) {
+        desc = descResource.text;
     }
-    catch (e) {
-        desc = "Parsing desc failed: " + e.message;
+    else {
+        desc = "No matching dësc for shïp of id " + base.id;
+        notFoundFunction(desc);
     }
 
     // TODO: Parse Explosions
-    var initialExplosion: ExplosionData | null = null;
-    var finalExplosion: ExplosionData | null = null;
+    var initialExplosionID: string | null = null;
+    var finalExplosionID: string | null = null;
 
+    // Refactor into a function? Eh, there's only 2 of them.
     if (ship.initialExplosion !== null) {
         let boom = ship.idSpace.bööm[ship.initialExplosion]
         if (boom) {
-            let boomID = boom.globalID;
-            //initialExplosion = await data[NovaDataType.Explosion].get(boomID);
+            initialExplosionID = boom.globalID;
+        }
+        else {
+            notFoundFunction("shïp id " + base.id + " missing bööm of id " + ship.initialExplosion);
         }
     }
 
     if (ship.finalExplosion !== null) {
         let boom = ship.idSpace.bööm[ship.finalExplosion]
         if (boom) {
-            let boomID = boom.globalID;
-            //finalExplosion = await data[NovaDataType.Explosion].get(boomID);
+            finalExplosionID = boom.globalID;
+        }
+        else {
+            notFoundFunction("shïp id " + base.id + " missing bööm of id " + ship.finalExplosion);
         }
     }
 
 
+    var shanResource = ship.idSpace.shän[ship.id];
+    var animation: Animation;
+    if (shanResource) {
+        animation = await ShanParse(shanResource, notFoundFunction);
+    }
+    else {
+        notFoundFunction("No matching shän for shïp of id " + base.id);
+        animation = DefaultAnimation;
+    }
 
-    var animation: Animation = await ShanParse(ship.idSpace.shän[ship.globalID]);
+
+
+    var pictID: string;
+    var pict = ship.idSpace.PICT[ship.pictID]
+    if (pict) {
+        pictID = pict.globalID;
+    }
+    else {
+        pictID = (await shipPictMap)[base.id];
+        if (!pictID) {
+            notFoundFunction("No matching PICT for ship of id " + base.id);
+            pictID = DefaultPictData.id;
+        }
+    }
 
     return {
         pictID: pictID,
@@ -77,12 +101,12 @@ async function ShipParse(ship: ShipResource): Promise<ShipData> {
         deionize: ship.deionize / 100 * 30, // 100 is 1 point of ion energy per 1/30th of a second (evn bible)
         speed: ship.speed, // TODO: Figure out the correct scaling factor for these
         acceleration: ship.acceleration,
-        turnRate: ship.turnRate * (100 / 30) * (2 * Math.PI / 360) | 0, // 30 / 100 degrees per second -> Radians per second
+        turnRate: ship.turnRate * (100 / 30) * (2 * Math.PI / 360) || 0, // 30 / 100 degrees per second -> Radians per second
         mass: ship.mass,
         outfits: {}, //TODO: Parse Outfits
-        initialExplosion: initialExplosion,
-        finalExplosion: finalExplosion,
-        deathDelay: ship.deathDelay / 60,
+        initialExplosion: initialExplosionID,
+        finalExplosion: finalExplosionID,
+        deathDelay: ship.deathDelay / 30, // 30 fps
         largeExplosion: ship.deathDelay >= 60,
         displayWeight: ship.id, // TODO: Fix this once displayweight is implemented
         animation,
@@ -91,4 +115,4 @@ async function ShipParse(ship: ShipResource): Promise<ShipData> {
     }
 }
 
-export { ShipParse };
+export { ShipParse, ShipParseClosure, ShipPictMap };

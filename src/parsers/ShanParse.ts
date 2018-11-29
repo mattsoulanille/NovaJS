@@ -2,12 +2,11 @@ import { BaseParse } from "./BaseParse";
 import { ShanResource } from "../resourceParsers/ShanResource";
 import { Animation, AnimationImagePurposes, AnimationImages } from "novadatainterface/Animation";
 import { BaseData } from "novadatainterface/BaseData";
+import { NovaIDNotFoundError } from "../../../NovaDataInterface/NovaDataInterface";
 
 
-
-
-async function ShanParse(shan: ShanResource): Promise<Animation> {
-    var base: BaseData = await BaseParse(shan);
+async function ShanParse(shan: ShanResource, notFoundFunction: (message: string) => void): Promise<Animation> {
+    var base: BaseData = await BaseParse(shan, notFoundFunction);
 
     var images: AnimationImages = {};
 
@@ -48,8 +47,20 @@ async function ShanParse(shan: ShanResource): Promise<Animation> {
                 break;
         }
 
+
         // get the rled from novadata
+        // The rled contains the ID of the image that is used.
         var rled = shan.idSpace.rlëD[imageInfo.ID];
+        if (!rled) {
+            notFoundFunction("shän id " + base.id + " has no corresponding rlëD for " + imageName
+                + ", which expects rlëD id " + imageInfo.ID + " to be available.");
+
+            if (imageName == "baseImage") { // Everything must have a baseImage.
+                throw new NovaIDNotFoundError("Base image not found for rlëD id " + imageInfo.ID);
+            }
+
+            continue; // Don't add this as an image since it wasn't found. 
+        }
 
         // Store the image in images
         images[imageName] = {

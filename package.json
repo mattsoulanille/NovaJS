@@ -8,6 +8,7 @@
     "test": "mocha -r ts-node/register -O tsconfig.json --recursive test/**/*.ts test/**/**/*.ts",
     "test-brk": "mocha -r ts-node/register -O tsconfig.json --recursive --inspect-brk test/**/*.ts test/**/**/*.ts",
     "test-only": "mocha -r ts-node/register -O tsconfig.json",
+    "test-only-brk": "mocha -r ts-node/register -O tsconfig.json --inspect-brk",
     "clean": "rm -r build/"
   },
   "repository": {

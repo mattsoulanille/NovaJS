@@ -7,6 +7,13 @@ import { NovaResources, NovaResourceType, getEmptyNovaResources } from "./Resour
 //const log = console.log;
 const log = (_m: string) => { };
 
+// Parses Nova Files and Plug-ins into resources
+// without dealing with the interactions that resources might
+// have with one another. A resource that references another resource
+// will not use a globalID to do so. Also, ships, which, if they don't have
+// a PICT available, will instead use the pict of the last ship to
+// have the same baseImage, are not linked to the correct PICT at this stage.
+// All interactions are handled by NovaParse.ts
 class IDSpaceHandler {
     private globalResources: Promise<NovaResources>;
     private tmpBuildingResources: NovaResources;
