@@ -1,6 +1,8 @@
 import { Gettable } from "./Gettable";
 import { BaseData } from "./BaseData";
 import { ShipData } from "./ShipData";
+import { OutfitData } from "./OutiftData";
+import { ExplosionData } from "./ExplosionData";
 
 
 // const NovaDataTypes = [
@@ -26,7 +28,10 @@ enum NovaDataType {
 // index: NovaDataType
 type NovaDataInterface = {
     [index: string]: Gettable<BaseData>,
-    Ship: Gettable<ShipData>
+    Ship: Gettable<ShipData>,
+    Outfit: Gettable<OutfitData>,
+    Explosion: Gettable<ExplosionData>
+
 }
 class NovaIDNotFoundError extends Error { };
 
