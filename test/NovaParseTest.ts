@@ -14,6 +14,7 @@ import { ShipResource } from "../src/resourceParsers/ShipResource";
 import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
 import { OutfitData } from "../../NovaDataInterface/OutiftData";
 import { ExplosionData } from "../../NovaDataInterface/ExplosionData";
+import { WeaponData } from "../../NovaDataInterface/WeaponData";
 
 before(function() {
     chai.should();
@@ -140,8 +141,17 @@ describe("NovaParse", function() {
     });
 
     it("Should parse explosions", async function() {
-        let e1: ExplosionData = await np.data.Explosion.get("nova:132");
+        let e132: ExplosionData = await np.data.Explosion.get("nova:132");
+        e132.animation.images.should.deep.equal({
+            baseImage: {
+                id: "nova:1600",
+                imagePurposes: {
+                    normal: { start: 0, length: 108 }
+                }
+            }
+        });
 
+        e132.rate.should.equal(0.83);
     });
 
     it("Should parse ship outfits including weapons", async function() {
@@ -163,7 +173,20 @@ describe("NovaParse", function() {
         });
     });
 
+    it("Should parse weapons (INCOMPLETE TEST)", async function() {
+        var w132: WeaponData = await np.data.Weapon.get("nova:132");
 
+        if (w132.type !== "ProjectileWeaponData") {
+            assert.fail("Expected w132 to be a projectile weapon");
+        }
+        else {
+            // Now it is known that w132 is a projectileWeapon.
+
+        }
+
+
+
+    });
 
 
 

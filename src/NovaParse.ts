@@ -18,6 +18,9 @@ import { OutfitData } from "novadatainterface/OutiftData";
 import { BoomResource } from "./resourceParsers/BoomResource";
 import { ExplosionData } from "novadatainterface/ExplosionData";
 import { ExplosionParse } from "../src/parsers/ExplosionParse";
+import { WeaponParse } from "./parsers/WeaponParse";
+import { WeaponData } from "novadatainterface/WeaponData";
+import { WeapResource } from "./resourceParsers/WeapResource";
 
 type ParseFunction<T extends BaseResource, O extends BaseData> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
@@ -60,7 +63,8 @@ class NovaParse implements GameDataInterface {
         var data = {
             "Ship": this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
             "Outfit": this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse),
-            "Explosion": this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse)
+            "Weapon": this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
+            "Explosion": this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse),
         }
 
         return data;
@@ -152,7 +156,6 @@ class NovaParse implements GameDataInterface {
                 }
             }
         }
-
         return weaponOutfitMap;
     }
 

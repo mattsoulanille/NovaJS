@@ -94,7 +94,7 @@ describe("WeapResource", function() {
         assert.equal(beam.guidance, "beam");
         assert.equal(missile.guidance, "guided");
         assert.equal(turret.guidance, "turret");
-        assert.equal(beamTurret.guidance, "beam turret");
+        assert.equal(beamTurret.guidance, "beamTurret");
     });
 
     it("should parse turn rate", function() {

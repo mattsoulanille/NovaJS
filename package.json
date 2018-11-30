@@ -29,7 +29,7 @@
   "homepage": "https://github.com/mattsoulanille/NovaParse#readme",
   "dependencies": {
     "@types/pngjs": "^3.3.2",
-    "novadatainterface": "0.0.6",
+    "novadatainterface": "0.0.7",
     "pngjs": "^3.3.3",
     "resourceforkjs": "^0.1.0",
     "stringview": "^2.0.1"

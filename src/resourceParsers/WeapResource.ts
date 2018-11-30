@@ -1,18 +1,12 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "../ResourceHolderBase";
 import { BaseResource } from "./NovaResourceBase";
+import { Particles, ExitType, FireGroup, GuidanceType } from "novadatainterface/WeaponData";
 
 type BlindSpots = {
     front: boolean,
     side: boolean,
     back: boolean
-}
-type Particles = {
-    count: number,
-    velocity: number,
-    lifeMin: number,
-    lifeMax: number,
-    color: number,
 }
 
 type Submunition = {
@@ -37,7 +31,7 @@ class WeapResource extends BaseResource {
     armorDamage: number;
     shieldDamage: number;
     guidanceN: number;
-    guidance: string;
+    guidance: GuidanceType;
     speed: number;
     ammoType: number;
     graphic: number | null;
@@ -51,7 +45,7 @@ class WeapResource extends BaseResource {
     blastRadius: number;
     flags: number;
     spinShots: boolean;
-    fireGroup: string;
+    fireGroup: FireGroup;
     startSpinningOnFirstFrame: boolean;
     dontFireAtFastShips: boolean;
     loopSound: boolean;
@@ -104,7 +98,7 @@ class WeapResource extends BaseResource {
     hitParticles: Particles;
     recoil: number;
     exitTypeN: number;
-    exitType: string;
+    exitType: ExitType;
     burstCount: number;
     burstReload: number;
     jam: Jam;
@@ -130,8 +124,9 @@ class WeapResource extends BaseResource {
         this.armorDamage = d.getInt16(4);
         this.shieldDamage = d.getInt16(6);
 
-        this.guidanceN = d.getInt16(8);
+        var fireGroup: FireGroup | null = null;
 
+        this.guidanceN = d.getInt16(8);
         switch (this.guidanceN) {
             case -1:
                 this.guidance = 'unguided';
@@ -143,28 +138,33 @@ class WeapResource extends BaseResource {
                 this.guidance = 'guided';
                 break;
             case 3:
-                this.guidance = 'beam turret';
+                this.guidance = 'beamTurret';
                 break;
             case 4:
                 this.guidance = 'turret';
                 break;
             case 5:
-                this.guidance = 'freefall bomb';
+                // Freefall bombs are actually different from rockets.
+                // They launch at 80% of the ship's velocity, according to
+                // the nova bible.
+                this.guidance = 'freefallBomb';
                 break;
             case 6:
                 this.guidance = 'rocket';
                 break;
             case 7:
-                this.guidance = 'front quadrant';
+                this.guidance = 'frontQuadrant';
                 break;
             case 8:
-                this.guidance = 'rear quadrant';
+                this.guidance = 'rearQuadrant';
                 break;
             case 9:
-                this.guidance = 'point defense';
+                this.guidance = 'pointDefense';
+                fireGroup = "pointDefense";
                 break;
             case 10:
-                this.guidance = 'point defense beam';
+                this.guidance = 'pointDefenseBeam';
+                fireGroup = "pointDefense";
                 break;
             case 99:
                 this.guidance = 'bay';
@@ -213,11 +213,17 @@ class WeapResource extends BaseResource {
         this.flags = d.getUint16(28);
         //flags
         this.spinShots = (this.flags & 0x1) > 0;
-        if (this.flags & 0x2) {
-            this.fireGroup = "secondary";
-        } else {
-            this.fireGroup = "primary";
+
+        // May have already been set by GuidanceType
+        if (!fireGroup) {
+            if (this.flags & 0x2) {
+                fireGroup = "secondary";
+            } else {
+                fireGroup = "primary";
+            }
         }
+        this.fireGroup = fireGroup;
+
         this.startSpinningOnFirstFrame = (this.flags & 0x4) > 0;
         this.dontFireAtFastShips = (this.flags & 0x8) > 0;
         this.loopSound = (this.flags & 0x10) > 0;
@@ -303,10 +309,12 @@ class WeapResource extends BaseResource {
         this.proxHitAll = (this.flags2 & 0x8) > 0 || (this.guidance != "guided");
 
         this.submunition = null;
-        if (d.getInt16(64) > 0) {
+        let subID = d.getInt16(64);
+        let subCount = d.getInt16(62);
+        if (subID >= 128 && subCount > 0) {
             this.submunition = {
-                count: d.getInt16(62),
-                id: d.getInt16(64),
+                count: subCount,
+                id: subID,
                 theta: d.getInt16(66),
                 limit: d.getInt16(68),
                 fireAtNearest: (this.flags2 & 0x10) > 0,
@@ -346,26 +354,28 @@ class WeapResource extends BaseResource {
             this.recoil = 0;
 
         this.exitTypeN = d.getInt16(88);
-        var exitLoc = '';
+
         switch (this.exitTypeN) {
             case -1:
-                exitLoc = "center";
+                this.exitType = "center";
                 break;
             case 0:
-                exitLoc = "gun";
+                this.exitType = "gun";
                 break;
             case 1:
-                exitLoc = "turret";
+                this.exitType = "turret";
                 break;
             case 2:
-                exitLoc = "guided";
+                this.exitType = "guided";
                 break;
             case 3:
-                exitLoc = "beam";
+                this.exitType = "beam";
+                break;
+            default:
+                this.exitType = "center"
                 break;
         }
 
-        this.exitType = exitLoc;
 
         this.burstCount = d.getInt16(90);
 
