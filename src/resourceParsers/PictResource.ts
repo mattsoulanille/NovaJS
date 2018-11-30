@@ -3,6 +3,8 @@ import { NovaResources } from "../ResourceHolderBase";
 import { Resource } from "resourceforkjs";
 import { PICTParse } from "./PICTParse";
 
+class PNGError extends Error { };
+
 class PictResource extends BaseResource {
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
@@ -15,7 +17,7 @@ class PictResource extends BaseResource {
             PICT = new PICTParse(this.data);
         }
         catch (e) {
-            throw new Error("PICT id " + this.id + " failed to parse: " + e.message);
+            throw new PNGError("PICT id " + this.id + " failed to parse: " + e.message);
         }
         return PICT.PNG;
     }
@@ -23,5 +25,5 @@ class PictResource extends BaseResource {
 
 }
 
-export { PictResource };
+export { PictResource, PNGError };
 

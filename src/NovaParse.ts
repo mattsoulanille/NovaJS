@@ -21,6 +21,12 @@ import { ExplosionParse } from "../src/parsers/ExplosionParse";
 import { WeaponParse } from "./parsers/WeaponParse";
 import { WeaponData } from "novadatainterface/WeaponData";
 import { WeapResource } from "./resourceParsers/WeapResource";
+import { PictResource } from "./resourceParsers/PictResource";
+import { PictData } from "../../NovaDataInterface/PictData";
+import { PictParse } from "./parsers/PictParse";
+import { PlanetParse } from "./parsers/PlanetParse";
+import { PlanetData } from "../../NovaDataInterface/PlanetData";
+import { SpobResource } from "./resourceParsers/SpobResource";
 
 type ParseFunction<T extends BaseResource, O extends BaseData> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
@@ -61,10 +67,12 @@ class NovaParse implements GameDataInterface {
     private buildData(): NovaDataInterface {
         // This should really use NovaDataType.Ship etc but that isn't allowed when constructing like this.
         var data = {
-            "Ship": this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
-            "Outfit": this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse),
-            "Weapon": this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
-            "Explosion": this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse),
+            Ship: this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
+            Outfit: this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse),
+            Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
+            Pict: this.makeGettable<PictResource, PictData>(NovaResourceType.PICT, PictParse),
+            Planet: this.makeGettable<SpobResource, PlanetData>(NovaResourceType.spöb, PlanetParse),
+            Explosion: this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse),
         }
 
         return data;

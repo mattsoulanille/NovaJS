@@ -1,4 +1,5 @@
 global.Promise = require("bluebird"); // For stacktraces
+import * as fs from "fs";
 
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
@@ -15,6 +16,11 @@ import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
 import { OutfitData } from "../../NovaDataInterface/OutiftData";
 import { ExplosionData } from "../../NovaDataInterface/ExplosionData";
 import { WeaponData } from "../../NovaDataInterface/WeaponData";
+import { DefaultExitPoints } from "../../NovaDataInterface/Animation";
+import { PictData } from "../../NovaDataInterface/PictData";
+import { comparePNGs, getPNG } from "./resourceParsers/PNGCompare";
+import { PNG } from "pngjs";
+import { PlanetData } from "../../NovaDataInterface/PlanetData";
 
 before(function() {
     chai.should();
@@ -173,7 +179,7 @@ describe("NovaParse", function() {
         });
     });
 
-    it("Should parse weapons (INCOMPLETE TEST)", async function() {
+    it("Should parse projectileWeapon", async function() {
         var w132: WeaponData = await np.data.Weapon.get("nova:132");
 
         if (w132.type !== "ProjectileWeaponData") {
@@ -181,14 +187,64 @@ describe("NovaParse", function() {
         }
         else {
             // Now it is known that w132 is a projectileWeapon.
-
+            w132.properties.should.deep.equal({
+                acceleration: 0,
+                armorRecharge: 0,
+                deionize: 0,
+                energy: 0,
+                energyRecharge: 0,
+                ionization: 0,
+                mass: 0,
+                shieldRecharge: 0,
+                speed: 17,
+                turnRate: 0,
+                shield: 0,
+                armor: 0
+            });
+            w132.animation.should.deep.equal({
+                exitPoints: DefaultExitPoints,
+                id: w132.id,
+                name: w132.name,
+                prefix: w132.prefix,
+                images: {
+                    baseImage: {
+                        id: "nova:1600",
+                        imagePurposes: {
+                            "normal": { start: 0, length: 108 }
+                        }
+                    }
+                }
+            });
         }
-
-
-
+    });
+    it("Should parse beamWeapon", async function() {
+        var w133: WeaponData = await np.data.Weapon.get("nova:133");
+        if (w133.type !== "BeamWeaponData") {
+            assert.fail("Expected w133 to be a beam weapon");
+        }
+        else {
+            w133.beamAnimation.should.deep.equal({
+                beamColor: 0xFF151617,
+                coronaColor: 0xFF191A1B,
+                coronaFalloff: 24,
+                length: 19,
+                width: 20
+            });
+        }
     });
 
+    it("Should parse Pict", async function() {
+        var p700: PictData = await np.data.Pict.get("nova:700");
+        var statusBar = await getPNG("./test/resourceParsers/files/picts/statusBar.png");
 
+        p700.PNG.should.deep.equal(PNG.sync.write(statusBar));
+    });
 
+    it("Should parse Planet", async function() {
+        var p128: PlanetData = await np.data.Planet.get("nova:128");
+        p128.landingDesc.should.equal("Hello. I'm a planet!");
+        p128.landingPict.should.equal("nova:10003");
+
+    });
 });
 
