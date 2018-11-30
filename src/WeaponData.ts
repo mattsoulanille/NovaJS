@@ -2,7 +2,7 @@ import { BaseData, DefaultBaseData } from "./BaseData";
 import { SpaceObjectProperties, SpaceObjectData, DefaultSpaceObjectData } from "./SpaceObjectData";
 import { DefaultShipData } from "./ShipData";
 
-type DamageType = "normal" | "pointDefense";
+type DamageType = "normal" | "pointDefense" | "planetBuster";
 
 
 type ProjectileGuidanceType =
@@ -192,12 +192,14 @@ const DefaultProjectileWeaponData: ProjectileWeaponData = {
 
 interface BeamWeaponData extends NotBayWeaponData {
     type: "BeamWeaponData",
+    guidance: BeamGuidanceType,
     beamAnimation: BeamAnimation,
 }
 
 const DefaultBeamWeaponData: BeamWeaponData = {
     ...DefaultNotBayWeaponData,
     type: "BeamWeaponData",
+    guidance: "beam",
     beamAnimation: DefaultBeamAnimation
 }
 

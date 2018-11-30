@@ -3,11 +3,12 @@ import { BaseData } from "./BaseData";
 import { ShipData } from "./ShipData";
 import { OutfitData } from "./OutiftData";
 import { ExplosionData } from "./ExplosionData";
-
-
-// const NovaDataTypes = [
-//     ShipResource
-// ];
+import { WeaponData } from "./WeaponData";
+import { PictData } from "./PictData";
+import { PlanetData } from "./PlanetData";
+import { SystemData } from "./SystemData";
+import { TargetCornersData } from "./TargetCornersData";
+import { SpriteSheetData } from "./SpriteSheetData";
 
 enum NovaDataType {
     Ship = "Ship",
@@ -16,7 +17,7 @@ enum NovaDataType {
     Pict = "Pict",
     Planet = "Planet",
     System = "System",
-    TargetCorner = "TargetCorner",
+    TargetCorners = "TargetCorners",
     SpriteSheet = "SpriteSheet",
     SpriteSheetImage = "SpriteSheetImage",
     SpriteSheetFrames = "SpriteSheetFrames",
@@ -27,9 +28,14 @@ enum NovaDataType {
 
 // index: NovaDataType
 type NovaDataInterface = {
-    [index: string]: Gettable<BaseData>,
     Ship: Gettable<ShipData>,
     Outfit: Gettable<OutfitData>,
+    Weapon: Gettable<WeaponData>,
+    Pict: Gettable<PictData>,
+    Planet: Gettable<PlanetData>,
+    System: Gettable<SystemData>,
+    TargetCorners: Gettable<TargetCornersData>,
+    SpriteSheet: Gettable<SpriteSheetData>,
     Explosion: Gettable<ExplosionData>
 
 }
