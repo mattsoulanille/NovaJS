@@ -23,6 +23,7 @@ import { PNG } from "pngjs";
 import { PlanetData } from "novadatainterface/PlanetData";
 import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
 import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
+import { PictImageData } from "../../NovaDataInterface/PictImage";
 
 before(function() {
     chai.should();
@@ -235,11 +236,11 @@ describe("NovaParse", function() {
         }
     });
 
-    it("Should parse Pict", async function() {
-        var p700: PictData = await np.data.Pict.get("nova:700");
+    it("Should parse PictImage", async function() {
+        var p700: PictImageData = await np.data.PictImage.get("nova:700");
         var statusBar = await getPNG("./test/resourceParsers/files/picts/statusBar.png");
 
-        p700.PNG.should.deep.equal(PNG.sync.write(statusBar));
+        p700.should.deep.equal(PNG.sync.write(statusBar));
     });
 
     it("Should parse Planet", async function() {

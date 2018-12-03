@@ -4,6 +4,7 @@ import { Gettable } from "novadatainterface/Gettable";
 import { NovaDataInterface, NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
 import { OutfitData } from "novadatainterface/OutiftData";
 import { PictData } from "novadatainterface/PictData";
+import { PictImageData } from "novadatainterface/PictImage";
 import { PlanetData } from "novadatainterface/PlanetData";
 import { ShipData } from "novadatainterface/ShipData";
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "novadatainterface/SpriteSheetData";
@@ -15,7 +16,6 @@ import * as path from "path";
 import { IDSpaceHandler } from "./IDSpaceHandler";
 import { ExplosionParse } from "./parsers/ExplosionParse";
 import { OutfitParse } from "./parsers/OutfitParse";
-import { PictParse } from "./parsers/PictParse";
 import { PlanetParse } from "./parsers/PlanetParse";
 import { resourceIDNotFoundStrict, resourceIDNotFoundWarn } from "./parsers/ResourceIDNotFound";
 import { ShipParseClosure, ShipPictMap, WeaponOutfitMap } from "./parsers/ShipParse";
@@ -35,11 +35,15 @@ import { SpobResource } from "./resourceParsers/SpobResource";
 import { SystResource } from "./resourceParsers/SystResource";
 import { WeapResource } from "./resourceParsers/WeapResource";
 import { NovaIDs } from "novadatainterface/NovaIDs";
+import { PictImageMulti, PictImageMultiParse } from "./parsers/PictParse";
 
 
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
 class NovaParse implements GameDataInterface {
+    private pictImageGettable: Gettable<PictImageData>;
+    private pictGettable: Gettable<PictData>;
+    private pictMultiGettable: Gettable<PictImageMulti>;
     private spriteSheetDataGettable: Gettable<SpriteSheetData>;
     private spriteSheetFramesGettable: Gettable<SpriteSheetFramesData>;
     private spriteSheetImageGettable: Gettable<SpriteSheetImageData>;
@@ -84,6 +88,13 @@ class NovaParse implements GameDataInterface {
         this.spriteSheetFramesGettable = new Gettable(this.getSpriteSheetFrames.bind(this));
 
 
+
+        // Similar for pict
+        this.pictMultiGettable = this.makeGettable<PictResource, PictImageMulti>(NovaResourceType.PICT, PictImageMultiParse);
+        this.pictGettable = new Gettable(this.getPictData.bind(this));
+        this.pictImageGettable = new Gettable(this.getPictImage.bind(this));
+
+
         this.ids = this.buildIDs();
         this.data = this.buildData();
 
@@ -116,11 +127,12 @@ class NovaParse implements GameDataInterface {
     // Assigns all the gettables to this.data
     private buildData(): NovaDataInterface {
         // This should really use NovaDataType.Ship etc but that isn't allowed when constructing like this.
-        var data = {
+        var data: NovaDataInterface = {
             Ship: this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
             Outfit: this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf, OutfitParse),
             Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
-            Pict: this.makeGettable<PictResource, PictData>(NovaResourceType.PICT, PictParse),
+            Pict: this.pictGettable,
+            PictImage: this.pictImageGettable,
             Planet: this.makeGettable<SpobResource, PlanetData>(NovaResourceType.spöb, PlanetParse),
             System: this.makeGettable<SystResource, SystemData>(NovaResourceType.sÿst, SystemParse),
             TargetCorners: this.makeGettable<BaseResource, TargetCornersData>(NovaResourceType.cicn, TargetCornersParse),
@@ -238,7 +250,14 @@ class NovaParse implements GameDataInterface {
         return multi.spriteSheetFrames;
     }
 
-
+    private async getPictData(id: string): Promise<PictData> {
+        var multi: PictImageMulti = await this.pictMultiGettable.get(id);
+        return multi.pict;
+    }
+    private async getPictImage(id: string): Promise<PictImageData> {
+        var multi: PictImageMulti = await this.pictMultiGettable.get(id);
+        return multi.image;
+    }
 }
 
 
