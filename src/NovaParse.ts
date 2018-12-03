@@ -24,7 +24,7 @@ import { StatusBarParse } from "./parsers/StatusBarParse";
 import { SystemParse } from "./parsers/SystemParse";
 import { TargetCornersParse } from "./parsers/TargetCornersParse";
 import { WeaponParse } from "./parsers/WeaponParse";
-import { NovaResources, NovaResourceType } from "./ResourceHolderBase";
+import { NovaResources, NovaResourceType, ResList } from "./ResourceHolderBase";
 import { BoomResource } from "./resourceParsers/BoomResource";
 import { BaseResource } from "./resourceParsers/NovaResourceBase";
 import { OutfResource } from "./resourceParsers/OutfResource";
@@ -34,6 +34,7 @@ import { ShipResource } from "./resourceParsers/ShipResource";
 import { SpobResource } from "./resourceParsers/SpobResource";
 import { SystResource } from "./resourceParsers/SystResource";
 import { WeapResource } from "./resourceParsers/WeapResource";
+import { NovaIDs } from "novadatainterface/NovaIDs";
 
 
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
@@ -51,7 +52,9 @@ class NovaParse implements GameDataInterface {
     resourceNotFoundFunction: (message: string) => void;
     public data: NovaDataInterface;
     path: string
-    private ids: IDSpaceHandler;
+    private idSpaceHandler: IDSpaceHandler;
+
+    public readonly ids: Promise<NovaIDs>;
     public readonly idSpace: Promise<NovaResources>;
 
     constructor(dataPath: string, strict: boolean = true) {
@@ -66,8 +69,8 @@ class NovaParse implements GameDataInterface {
         }
 
         this.path = path.join(dataPath);
-        this.ids = new IDSpaceHandler(dataPath);
-        this.idSpace = this.ids.getIDSpace();
+        this.idSpaceHandler = new IDSpaceHandler(dataPath);
+        this.idSpace = this.idSpaceHandler.getIDSpace();
         this.shipPICTMap = this.makeShipPictMap();
         this.weaponOutfitMap = this.makeWeaponOutfitMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap, this.weaponOutfitMap, this.idSpace);
@@ -81,8 +84,33 @@ class NovaParse implements GameDataInterface {
         this.spriteSheetFramesGettable = new Gettable(this.getSpriteSheetFrames.bind(this));
 
 
+        this.ids = this.buildIDs();
         this.data = this.buildData();
 
+    }
+
+    private buildIDsForResource(resourceList: ResList<BaseResource>): Array<string> {
+
+        return Object.keys(resourceList);
+    }
+
+    private async buildIDs(): Promise<NovaIDs> {
+        var idSpace = await this.idSpace;
+
+        return {
+            Ship: this.buildIDsForResource(idSpace.shïp),
+            Outfit: this.buildIDsForResource(idSpace.oütf),
+            Weapon: this.buildIDsForResource(idSpace.wëap),
+            Pict: this.buildIDsForResource(idSpace.PICT),
+            Planet: this.buildIDsForResource(idSpace.spöb),
+            System: this.buildIDsForResource(idSpace.sÿst),
+            TargetCorners: [], // TODO: parse these
+            SpriteSheet: this.buildIDsForResource(idSpace.rlëD),
+            SpriteSheetImage: this.buildIDsForResource(idSpace.rlëD),
+            SpriteSheetFrames: this.buildIDsForResource(idSpace.rlëD),
+            StatusBar: this.buildIDsForResource(idSpace.ïntf),
+            Explosion: this.buildIDsForResource(idSpace.bööm)
+        }
     }
 
     // Assigns all the gettables to this.data

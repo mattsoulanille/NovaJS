@@ -140,4 +140,4 @@ function getEmptyNovaResources(): NovaResources {
 
 
 
-export { NovaResources, NovaResourceType, getEmptyNovaResources }
+export { NovaResources, NovaResourceType, getEmptyNovaResources, ResList }

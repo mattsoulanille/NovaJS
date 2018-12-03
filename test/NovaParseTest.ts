@@ -130,11 +130,11 @@ describe("NovaParse", function() {
         anim.images.baseImage.should.deep.equal({
             id: 'nova:1000',
             imagePurposes:
-            {
-                normal: { start: 0, length: 36 },
-                left: { start: 36, length: 36 },
-                right: { start: 72, length: 36 }
-            }
+                {
+                    normal: { start: 0, length: 36 },
+                    left: { start: 36, length: 36 },
+                    right: { start: 72, length: 36 }
+                }
         });
 
         // s1 has no alt image
@@ -276,5 +276,21 @@ describe("NovaParse", function() {
         sb128.image.should.equal("nova:700");
     });
 
+    it("Should parse ids", async function() {
+        var ids = await np.ids;
+        ids.Weapon.should.deep.equal([
+            'nova:128',
+            'nova:129',
+            'nova:130',
+            'nova:131',
+            'nova:132',
+            'nova:133',
+            'nova:300'],
+        );
+
+
+
+
+    });
 });
 
