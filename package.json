@@ -1,6 +1,6 @@
 {
   "name": "novadatainterface",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "description": "An interface for game data for NovaJS",
   "main": "index.js",
   "scripts": {
