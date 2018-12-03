@@ -4,7 +4,8 @@ import { DamageType } from "./WeaponData";
 
 interface PlanetData extends SpaceObjectData {
     landingPict: string,
-    landingDesc: string
+    landingDesc: string,
+    position: [number, number]
 }
 
 const DefaultPlanetData = {

@@ -63,7 +63,7 @@ type SpriteSheetFramesData = {
 }
 
 
-
+const DefaultImageLocation = "../SpriteSheetImage/"
 
 const DefaultSpriteSheetFrames = {
     frames: {
@@ -89,9 +89,10 @@ const DefaultSpriteSheetFrames = {
             h: 24
         },
         scale: "1",
-        image: "../spriteSheetImages/default.png" // The file path to the image
+        image: DefaultImageLocation + "default.png" // The file path to the image
     }
 }
 
 
-export { SpriteSheetData, DefaultSpriteSheetData, ConvexHulls, ConvexHull, DefaultConvexHulls, SpriteSheetImageData, DefaultSpriteSheetImage, SpriteSheetFramesData, DefaultSpriteSheetFrames, FrameInfo }
+
+export { SpriteSheetData, DefaultSpriteSheetData, ConvexHulls, ConvexHull, DefaultConvexHulls, SpriteSheetImageData, DefaultSpriteSheetImage, SpriteSheetFramesData, DefaultSpriteSheetFrames, FrameInfo, DefaultImageLocation }
