@@ -1,7 +1,7 @@
 import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
 import { BaseResource } from "../resourceParsers/NovaResourceBase";
-import { SpriteSheetData, DefaultSpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, ConvexHulls, DefaultConvexHulls, FrameInfo, ConvexHull } from "novadatainterface/SpriteSheetData";
+import { SpriteSheetData, DefaultSpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, ConvexHulls, DefaultConvexHulls, FrameInfo, ConvexHull, DefaultImageLocation } from "novadatainterface/SpriteSheetData";
 import { RledResource } from "../resourceParsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
@@ -121,7 +121,7 @@ function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
     var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
 
 
-    var imagePath = path.join("../spriteSheetImages/", rled.globalID + ".png");
+    var imagePath = path.join(DefaultImageLocation, rled.globalID + ".png");
 
     var meta = {
         format: "RGBA8888",
