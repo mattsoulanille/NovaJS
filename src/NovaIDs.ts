@@ -5,6 +5,7 @@ type NovaIDs = {
     Outfit: Array<string>,
     Weapon: Array<string>,
     Pict: Array<string>,
+    PictImage: Array<string>,
     Planet: Array<string>,
     System: Array<string>,
     TargetCorners: Array<string>,
