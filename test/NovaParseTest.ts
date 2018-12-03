@@ -21,7 +21,7 @@ import { PictData } from "../../NovaDataInterface/PictData";
 import { comparePNGs, getPNG } from "./resourceParsers/PNGCompare";
 import { PNG } from "pngjs";
 import { PlanetData } from "../../NovaDataInterface/PlanetData";
-import { SpriteSheetFramesData, SpriteSheetImageData } from "../../NovaDataInterface/SpriteSheetData";
+import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "../../NovaDataInterface/SpriteSheetData";
 
 before(function() {
     chai.should();
@@ -247,11 +247,25 @@ describe("NovaParse", function() {
         p128.landingPict.should.equal("nova:10003");
     });
 
-    it("Should parse SpriteSheetImageData", async function() {
+    it("Should parse SpriteSheetImage", async function() {
         var ri1000: SpriteSheetImageData = await np.data.SpriteSheetImage.get("nova:1000");
         var shuttle = fs.readFileSync("./test/testSpriteSheetImage.png");
         ri1000.should.deep.equal(shuttle);
+    });
 
+    it("Should parse SpriteSheetFrames", async function() {
+        var rf1000: SpriteSheetFramesData = await np.data.SpriteSheetFrames.get("nova:1000");
+        var shouldEqual = JSON.parse(fs.readFileSync("./test/testSpriteSheetFrames.json", "utf8"));
+        rf1000.should.deep.equal(shouldEqual);
+    });
+
+    it("Should parse SpriteSheet", async function() {
+        var rs1000: SpriteSheetData = await np.data.SpriteSheet.get("nova:1000");
+        var shouldEqual = JSON.parse(fs.readFileSync("./test/testSpriteSheet.json", "utf8"));
+
+        // Chai thinks that -0 !== 0
+        var noNegativeZeroes = JSON.parse(JSON.stringify(rs1000));
+        noNegativeZeroes.should.deep.equal(shouldEqual);
     });
 
 });
