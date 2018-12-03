@@ -113,6 +113,7 @@ class NovaParse implements GameDataInterface {
             Outfit: this.buildIDsForResource(idSpace.oütf),
             Weapon: this.buildIDsForResource(idSpace.wëap),
             Pict: this.buildIDsForResource(idSpace.PICT),
+            PictImage: this.buildIDsForResource(idSpace.PICT),
             Planet: this.buildIDsForResource(idSpace.spöb),
             System: this.buildIDsForResource(idSpace.sÿst),
             TargetCorners: [], // TODO: parse these
