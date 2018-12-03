@@ -30,7 +30,7 @@
   "dependencies": {
     "@types/pngjs": "^3.3.2",
     "hull.js": "^0.2.10",
-    "novadatainterface": "0.0.7",
+    "novadatainterface": "0.1.0",
     "pngjs": "^3.3.3",
     "resourceforkjs": "^0.1.0",
     "stringview": "^2.0.1"
