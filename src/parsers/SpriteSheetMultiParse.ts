@@ -26,7 +26,7 @@ function getWH(frames: Array<PNG>): { singleFrameWidth: number, singleFrameHeigh
     var singleFrameHeight = frames[0].width;
 
     var fullPixelWidth: number = Math.min(SHEET_LOOP, frames.length) * singleFrameWidth;
-    var fullPixelHeight: number = (frames.length % SHEET_LOOP + 1) * singleFrameHeight;
+    var fullPixelHeight: number = Math.ceil(frames.length / SHEET_LOOP) * singleFrameHeight;
 
     return {
         fullPixelHeight,

@@ -251,13 +251,21 @@ describe("NovaParse", function() {
     it("Should parse SpriteSheetImage", async function() {
         var ri1000: SpriteSheetImageData = await np.data.SpriteSheetImage.get("nova:1000");
         var shuttle = fs.readFileSync("./test/testSpriteSheetImage.png");
-        ri1000.should.deep.equal(shuttle);
+        ri1000.should.deep.equal(shuttle, "err");
     });
 
     it("Should parse SpriteSheetFrames", async function() {
+        var rf1116: SpriteSheetFramesData = await np.data.SpriteSheetFrames.get("nova:1116");
+        var shouldEqual1116 = JSON.parse(fs.readFileSync("./test/zephyrFrames.json", "utf8"));
+        rf1116.should.deep.equal(shouldEqual1116);
+
+
         var rf1000: SpriteSheetFramesData = await np.data.SpriteSheetFrames.get("nova:1000");
-        var shouldEqual = JSON.parse(fs.readFileSync("./test/testSpriteSheetFrames.json", "utf8"));
-        rf1000.should.deep.equal(shouldEqual);
+        var shouldEqual1000 = JSON.parse(fs.readFileSync("./test/testSpriteSheetFrames.json", "utf8"));
+        rf1000.should.deep.equal(shouldEqual1000);
+
+
+
     });
 
     it("Should parse SpriteSheet", async function() {
