@@ -22,6 +22,7 @@ import { comparePNGs, getPNG } from "./resourceParsers/PNGCompare";
 import { PNG } from "pngjs";
 import { PlanetData } from "../../NovaDataInterface/PlanetData";
 import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "../../NovaDataInterface/SpriteSheetData";
+import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "../../NovaDataInterface/StatusBarData";
 
 before(function() {
     chai.should();
@@ -266,6 +267,13 @@ describe("NovaParse", function() {
         // Chai thinks that -0 !== 0
         var noNegativeZeroes = JSON.parse(JSON.stringify(rs1000));
         noNegativeZeroes.should.deep.equal(shouldEqual);
+    });
+
+    it("Should produce the default StatusBar", async function() {
+        var sb128 = await np.data.StatusBar.get("nova:128");
+        sb128.colors.should.deep.equal(DefaultStatusBarColors);
+        sb128.dataAreas.should.deep.equal(DefaultStatusBarDataAreas);
+        sb128.image.should.equal("nova:700");
     });
 
 });

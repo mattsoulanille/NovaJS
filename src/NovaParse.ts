@@ -35,6 +35,8 @@ import { TargetCornersData } from "../../NovaDataInterface/TargetCornersData";
 import { RledResource } from "./resourceParsers/RledResource";
 import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "../../NovaDataInterface/SpriteSheetData";
 import { SpriteSheetMulti, SpriteSheetMultiParse } from "./parsers/SpriteSheetMultiParse";
+import { StatusBarData } from "../../NovaDataInterface/StatusBarData";
+import { StatusBarParse } from "./parsers/StatusBarParse";
 
 
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
@@ -100,7 +102,8 @@ class NovaParse implements GameDataInterface {
             SpriteSheet: this.spriteSheetDataGettable,
             SpriteSheetImage: this.spriteSheetImageGettable,
             SpriteSheetFrames: this.spriteSheetFramesGettable,
-            Explosion: this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse),
+            StatusBar: this.makeGettable<BaseResource, StatusBarData>(NovaResourceType.ïntf, StatusBarParse),
+            Explosion: this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse)
         }
 
         return data;
