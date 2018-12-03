@@ -9,6 +9,7 @@ import { PlanetData } from "./PlanetData";
 import { SystemData } from "./SystemData";
 import { TargetCornersData } from "./TargetCornersData";
 import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "./SpriteSheetData";
+import { StatusBarData } from "./StatusBarData";
 
 enum NovaDataType {
     Ship = "Ship",
@@ -38,6 +39,7 @@ type NovaDataInterface = {
     SpriteSheet: Gettable<SpriteSheetData>,
     SpriteSheetImage: Gettable<SpriteSheetImageData>,
     SpriteSheetFrames: Gettable<SpriteSheetFramesData>,
+    StatusBar: Gettable<StatusBarData>,
     Explosion: Gettable<ExplosionData>
 
 }

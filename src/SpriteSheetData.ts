@@ -94,4 +94,4 @@ const DefaultSpriteSheetFrames = {
 }
 
 
-export { SpriteSheetData, DefaultSpriteSheetData, ConvexHulls, DefaultConvexHulls, SpriteSheetImageData, DefaultSpriteSheetImage, SpriteSheetFramesData, DefaultSpriteSheetFrames, FrameInfo }
+export { SpriteSheetData, DefaultSpriteSheetData, ConvexHulls, ConvexHull, DefaultConvexHulls, SpriteSheetImageData, DefaultSpriteSheetImage, SpriteSheetFramesData, DefaultSpriteSheetFrames, FrameInfo }
