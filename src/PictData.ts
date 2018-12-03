@@ -1,14 +1,10 @@
 import { BaseData, DefaultBaseData } from "./BaseData";
-import * as fs from "fs";
-import * as path from "path";
 
-interface PictData extends BaseData {
-    PNG: Buffer
-}
+interface PictData extends BaseData { }
 
-const DefaultPictData: PictData = {
-    ...DefaultBaseData,
-    PNG: fs.readFileSync(require.resolve("./default.png"))
-}
+
+const DefaultPictData: PictData = DefaultBaseData;
+
+
 
 export { PictData, DefaultPictData }

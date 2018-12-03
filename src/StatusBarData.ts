@@ -24,76 +24,72 @@ const DefaultStatusBarColors: StatusBarColors = {
 }
 
 type StatusBarDataAreas = {
-    dataAreas: {
-        radar: {
-            position: [number, number],
-            size: [number, number]
-        },
-        shield: {
-            position: [number, number],
-            size: [number, number]
-        },
-        armor: {
-            position: [number, number],
-            size: [number, number]
-        },
-        fuel: {
-            position: [number, number],
-            size: [number, number]
-        },
-        navigation: {
-            position: [number, number],
-            size: [number, number]
-        },
-        weapons: {
-            position: [number, number],
-            size: [number, number]
-        },
-        targeting: {
-            position: [number, number],
-            size: [number, number]
-        },
-        cargo: {
-            position: [number, number],
-            size: [number, number]
-        }
+    radar: {
+        position: [number, number],
+        size: [number, number]
+    },
+    shield: {
+        position: [number, number],
+        size: [number, number]
+    },
+    armor: {
+        position: [number, number],
+        size: [number, number]
+    },
+    fuel: {
+        position: [number, number],
+        size: [number, number]
+    },
+    navigation: {
+        position: [number, number],
+        size: [number, number]
+    },
+    weapons: {
+        position: [number, number],
+        size: [number, number]
+    },
+    targeting: {
+        position: [number, number],
+        size: [number, number]
+    },
+    cargo: {
+        position: [number, number],
+        size: [number, number]
     }
 }
 
 const DefaultStatusBarDataAreas: StatusBarDataAreas = {
-    dataAreas: {
-        radar: {
-            position: [8, 8],
-            size: [176, 176]
-        },
-        shield: {
-            position: [35, 199],
-            size: [149, 7]
-        },
-        armor: {
-            position: [35, 216],
-            size: [149, 7]
-        },
-        fuel: {
-            position: [35, 234],
-            size: [149, 7]
-        },
-        navigation: {
-            position: [8, 254],
-            size: [176, 32]
-        },
-        weapons: {
-            position: [8, 300],
-            size: [176, 15]
-        },
-        targeting: {
-            position: [8, 330],
-            size: [176, 112]
-        },
-        cargo: {
-            position: [8, 458],
-            size: [176, 94]
-        }
+    radar: {
+        position: [8, 8],
+        size: [176, 176]
+    },
+    shield: {
+        position: [35, 199],
+        size: [149, 7]
+    },
+    armor: {
+        position: [35, 216],
+        size: [149, 7]
+    },
+    fuel: {
+        position: [35, 234],
+        size: [149, 7]
+    },
+    navigation: {
+        position: [8, 254],
+        size: [176, 32]
+    },
+    weapons: {
+        position: [8, 300],
+        size: [176, 15]
+    },
+    targeting: {
+        position: [8, 330],
+        size: [176, 112]
+    },
+    cargo: {
+        position: [8, 458],
+        size: [176, 94]
     }
 }
 
