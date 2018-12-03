@@ -22,20 +22,20 @@ import { WeaponParse } from "./parsers/WeaponParse";
 import { WeaponData } from "novadatainterface/WeaponData";
 import { WeapResource } from "./resourceParsers/WeapResource";
 import { PictResource } from "./resourceParsers/PictResource";
-import { PictData } from "../../NovaDataInterface/PictData";
+import { PictData } from "novadatainterface/PictData";
 import { PictParse } from "./parsers/PictParse";
 import { PlanetParse } from "./parsers/PlanetParse";
-import { PlanetData } from "../../NovaDataInterface/PlanetData";
+import { PlanetData } from "novadatainterface/PlanetData";
 import { SpobResource } from "./resourceParsers/SpobResource";
 import { SystResource } from "./resourceParsers/SystResource";
 import { SystemParse } from "./parsers/SystemParse";
-import { SystemData } from "../../NovaDataInterface/SystemData";
+import { SystemData } from "novadatainterface/SystemData";
 import { TargetCornersParse } from "./parsers/TargetCornersParse";
-import { TargetCornersData } from "../../NovaDataInterface/TargetCornersData";
+import { TargetCornersData } from "novadatainterface/TargetCornersData";
 import { RledResource } from "./resourceParsers/RledResource";
-import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "../../NovaDataInterface/SpriteSheetData";
+import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "novadatainterface/SpriteSheetData";
 import { SpriteSheetMulti, SpriteSheetMultiParse } from "./parsers/SpriteSheetMultiParse";
-import { StatusBarData } from "../../NovaDataInterface/StatusBarData";
+import { StatusBarData } from "novadatainterface/StatusBarData";
 import { StatusBarParse } from "./parsers/StatusBarParse";
 
 
