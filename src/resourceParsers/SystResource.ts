@@ -22,7 +22,10 @@ class SystResource extends BaseResource {
 
         this.spobs = [];
         for (let i = 0; i < 16; i++) {
-            this.spobs[i] = d.getInt16(36 + i * 2);
+            var spob = d.getInt16(36 + i * 2);
+            if (spob >= 128) {
+                this.spobs.push(spob);
+            }
         }
     }
 }

@@ -44,7 +44,7 @@ describe("SystResource", function() {
     });
 
     it("should parse spobs", function() {
-        expect(s1.spobs).to.deep.equal([128, 189, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, 194]);
+        expect(s1.spobs).to.deep.equal([128, 189, 194]);
     });
 
 });

@@ -287,9 +287,16 @@ describe("NovaParse", function() {
             'nova:133',
             'nova:300'],
         );
+    });
 
+    it("Should parse system planets", async function() {
+        var s128 = await np.data.System.get("nova:128");
+        s128.planets.should.deep.equal(['nova:128', 'nova:189', 'nova:194']);
+    });
 
-
+    it("Should parse planet position", async function() {
+        var p194 = await np.data.Planet.get("nova:194");
+        p194.position.should.deep.equal([22, -56]);
 
     });
 });

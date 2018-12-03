@@ -59,7 +59,6 @@ async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => 
         }
     };
 
-
     return {
         ...base,
         landingDesc: desc,
@@ -79,7 +78,8 @@ async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => 
             ionization: 0,
             mass: 0,
             turnRate: 0,
-        }
+        },
+        position: [spob.position[0], spob.position[1]]
     }
 }
 

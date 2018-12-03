@@ -6,7 +6,7 @@ import { BaseData } from "novadatainterface/BaseData";
 
 
 
-
+// TODO: Refactor redundant code
 async function SystemParse(syst: SystResource, notFoundFunction: (m: string) => void): Promise<SystemData> {
     var base: BaseData = await BaseParse(syst, notFoundFunction);
 
@@ -23,12 +23,26 @@ async function SystemParse(syst: SystResource, notFoundFunction: (m: string) => 
         }
     }
 
+    var planets: Array<string> = [];
+
+    for (let i in syst.spobs) {
+        let planetLocal = syst.spobs[i];
+
+        let planetGlobal = syst.idSpace.spöb[planetLocal];
+        if (planetGlobal) {
+            planets.push(planetGlobal.globalID);
+        }
+        else {
+            notFoundFunction("Missing spöb id " + planetLocal + " for sÿst " + base.id);
+        }
+    }
 
 
     return {
         ...base,
         links,
         position: [syst.position[0], syst.position[1]],
+        planets
     }
 
 }
