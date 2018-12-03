@@ -169,7 +169,7 @@ class IDSpaceHandler {
         // Can't await this.getIDSpace because that causes an infinite loop
         // (getIDSpace awaits this.globalResources which depends on this function)
 
-        var disallowedExtensions = new Set([".mp3"]);
+        var disallowedExtensions = new Set([".mp3", ".mov"]);
         if (disallowedExtensions.has(path.extname(filePath))) {
             return false;
         }
