@@ -28,30 +28,31 @@ const DefaultSpriteSheetData: SpriteSheetData = {
 
 
 
-type SpriteSheetImage = Buffer;
+type SpriteSheetImageData = Buffer;
 
 const DefaultSpriteSheetImage = fs.readFileSync(require.resolve("./defaultRled.png"));
 
+type FrameInfo = {
+    frame: {
+        x: number,
+        y: number,
+        w: number,
+        h: number
+    },
+    rotated: boolean,
+    trimmed: boolean,
+    sourceSize: {
+        w: number,
+        h: number
+    }
+};
 
-type SpriteSheetFrames = {
+type SpriteSheetFramesData = {
     frames: {
-        [index: string]: {
-            frame: {
-                x: number,
-                y: number,
-                w: number,
-                h: number
-            },
-            rotated: boolean,
-            trimmed: boolean,
-            sourceSize: {
-                w: number,
-                h: number
-            }
-        }
+        [index: string]: FrameInfo,
     },
     meta: {
-        format: string
+        format: string,
         size: {
             w: number,
             h: number
@@ -62,7 +63,9 @@ type SpriteSheetFrames = {
 }
 
 
-type DefaultSpriteSheetFrames = {
+
+
+const DefaultSpriteSheetFrames = {
     frames: {
         "default 0.png": {
             frame: {
@@ -80,15 +83,15 @@ type DefaultSpriteSheetFrames = {
         }
     },
     meta: {
-        format: string
+        format: "RGBA8888",
         size: {
-            w: number,
-            h: number
+            w: 24,
+            h: 24
         },
-        scale: string,
-        image: string // The file path to the image
+        scale: "1",
+        image: "../spriteSheetImages/default.png" // The file path to the image
     }
 }
 
 
-export { SpriteSheetData, DefaultSpriteSheetData, DefaultConvexHulls, SpriteSheetImage, DefaultSpriteSheetImage, SpriteSheetFrames, DefaultSpriteSheetFrames }
+export { SpriteSheetData, DefaultSpriteSheetData, ConvexHulls, DefaultConvexHulls, SpriteSheetImageData, DefaultSpriteSheetImage, SpriteSheetFramesData, DefaultSpriteSheetFrames, FrameInfo }
