@@ -27,12 +27,25 @@ import { PictParse } from "./parsers/PictParse";
 import { PlanetParse } from "./parsers/PlanetParse";
 import { PlanetData } from "../../NovaDataInterface/PlanetData";
 import { SpobResource } from "./resourceParsers/SpobResource";
+import { SystResource } from "./resourceParsers/SystResource";
+import { SystemParse } from "./parsers/SystemParse";
+import { SystemData } from "../../NovaDataInterface/SystemData";
+import { TargetCornersParse } from "./parsers/TargetCornersParse";
+import { TargetCornersData } from "../../NovaDataInterface/TargetCornersData";
+import { RledResource } from "./resourceParsers/RledResource";
+import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "../../NovaDataInterface/SpriteSheetData";
+import { SpriteSheetMulti, SpriteSheetMultiParse } from "./parsers/SpriteSheetMultiParse";
 
-type ParseFunction<T extends BaseResource, O extends BaseData> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
+
+type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
 
 class NovaParse implements GameDataInterface {
+    private spriteSheetDataGettable: Gettable<SpriteSheetData>;
+    private spriteSheetFramesGettable: Gettable<SpriteSheetFramesData>;
+    private spriteSheetImageGettable: Gettable<SpriteSheetImageData>;
+    private spriteSheetMultiGettable: Gettable<SpriteSheetMulti>;
 
-    shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
+    private shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
 
     private shipPICTMap: ShipPictMap;
     private weaponOutfitMap: WeaponOutfitMap;
@@ -59,6 +72,16 @@ class NovaParse implements GameDataInterface {
         this.shipPICTMap = this.makeShipPictMap();
         this.weaponOutfitMap = this.makeWeaponOutfitMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap, this.weaponOutfitMap, this.idSpace);
+
+
+        // Holds spriteSheetMulti which gets split up
+        this.spriteSheetMultiGettable = this.makeGettable<RledResource, SpriteSheetMulti>(NovaResourceType.rlëD, SpriteSheetMultiParse);
+        // Since everything about a spriteSheet is parsed at once, it needs to be split up here
+        this.spriteSheetDataGettable = new Gettable(this.getSpriteSheetData.bind(this));
+        this.spriteSheetImageGettable = new Gettable(this.getSpriteSheetImage.bind(this));
+        this.spriteSheetFramesGettable = new Gettable(this.getSpriteSheetFrames.bind(this));
+
+
         this.data = this.buildData();
 
     }
@@ -72,13 +95,18 @@ class NovaParse implements GameDataInterface {
             Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
             Pict: this.makeGettable<PictResource, PictData>(NovaResourceType.PICT, PictParse),
             Planet: this.makeGettable<SpobResource, PlanetData>(NovaResourceType.spöb, PlanetParse),
+            System: this.makeGettable<SystResource, SystemData>(NovaResourceType.sÿst, SystemParse),
+            TargetCorners: this.makeGettable<BaseResource, TargetCornersData>(NovaResourceType.cicn, TargetCornersParse),
+            SpriteSheet: this.spriteSheetDataGettable,
+            SpriteSheetImage: this.spriteSheetImageGettable,
+            SpriteSheetFrames: this.spriteSheetFramesGettable,
             Explosion: this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse),
         }
 
         return data;
     }
 
-    makeGettable<T extends BaseResource, O extends BaseData>(resourceType: NovaResourceType, parseFunction: ParseFunction<T, O>): Gettable<O> {
+    makeGettable<T extends BaseResource, O>(resourceType: NovaResourceType, parseFunction: ParseFunction<T, O>): Gettable<O> {
         return new Gettable(async (id: string) => {
             var idSpace = await this.idSpace;
             var resource = <T>idSpace[resourceType][id];
@@ -166,6 +194,22 @@ class NovaParse implements GameDataInterface {
         }
         return weaponOutfitMap;
     }
+
+
+
+    private async getSpriteSheetData(id: string): Promise<SpriteSheetData> {
+        var multi: SpriteSheetMulti = await this.spriteSheetMultiGettable.get(id);
+        return multi.spriteSheet
+    }
+    private async getSpriteSheetImage(id: string): Promise<SpriteSheetImageData> {
+        var multi: SpriteSheetMulti = await this.spriteSheetMultiGettable.get(id);
+        return multi.spriteSheetImage;
+    }
+    private async getSpriteSheetFrames(id: string): Promise<SpriteSheetFramesData> {
+        var multi: SpriteSheetMulti = await this.spriteSheetMultiGettable.get(id);
+        return multi.spriteSheetFrames;
+    }
+
 
 }
 

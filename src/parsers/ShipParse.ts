@@ -185,6 +185,7 @@ async function ShipParse(ship: ShipResource,
         largeExplosion: ship.deathDelay >= 60,
         displayWeight: ship.id, // TODO: Fix this once displayweight is implemented
         animation,
+        vulnerableTo: ["normal"], // TODO: Parse if it's vulnerable to point defense
         ...base
     }
 }

@@ -21,6 +21,7 @@ import { PictData } from "../../NovaDataInterface/PictData";
 import { comparePNGs, getPNG } from "./resourceParsers/PNGCompare";
 import { PNG } from "pngjs";
 import { PlanetData } from "../../NovaDataInterface/PlanetData";
+import { SpriteSheetFramesData, SpriteSheetImageData } from "../../NovaDataInterface/SpriteSheetData";
 
 before(function() {
     chai.should();
@@ -244,7 +245,14 @@ describe("NovaParse", function() {
         var p128: PlanetData = await np.data.Planet.get("nova:128");
         p128.landingDesc.should.equal("Hello. I'm a planet!");
         p128.landingPict.should.equal("nova:10003");
+    });
+
+    it("Should parse SpriteSheetImageData", async function() {
+        var ri1000: SpriteSheetImageData = await np.data.SpriteSheetImage.get("nova:1000");
+        var shuttle = fs.readFileSync("./test/testSpriteSheetImage.png");
+        ri1000.should.deep.equal(shuttle);
 
     });
+
 });
 
