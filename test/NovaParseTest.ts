@@ -9,20 +9,20 @@ import { assert } from "chai";
 import { NovaParse } from "../src/NovaParse";
 import { NovaResourceType } from "../src/ResourceHolderBase";
 import { NovaDataInterface, NovaDataType, NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
-import { ShipData } from "../../NovaDataInterface/ShipData";
-import { BaseData } from "../../NovaDataInterface/BaseData";
+import { ShipData } from "novadatainterface/ShipData";
+import { BaseData } from "novadatainterface/BaseData";
 import { ShipResource } from "../src/resourceParsers/ShipResource";
 import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
-import { OutfitData } from "../../NovaDataInterface/OutiftData";
-import { ExplosionData } from "../../NovaDataInterface/ExplosionData";
-import { WeaponData } from "../../NovaDataInterface/WeaponData";
-import { DefaultExitPoints } from "../../NovaDataInterface/Animation";
-import { PictData } from "../../NovaDataInterface/PictData";
+import { OutfitData } from "novadatainterface/OutiftData";
+import { ExplosionData } from "novadatainterface/ExplosionData";
+import { WeaponData } from "novadatainterface/WeaponData";
+import { DefaultExitPoints } from "novadatainterface/Animation";
+import { PictData } from "novadatainterface/PictData";
 import { comparePNGs, getPNG } from "./resourceParsers/PNGCompare";
 import { PNG } from "pngjs";
-import { PlanetData } from "../../NovaDataInterface/PlanetData";
-import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "../../NovaDataInterface/SpriteSheetData";
-import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "../../NovaDataInterface/StatusBarData";
+import { PlanetData } from "novadatainterface/PlanetData";
+import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
+import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
 
 before(function() {
     chai.should();
@@ -130,11 +130,11 @@ describe("NovaParse", function() {
         anim.images.baseImage.should.deep.equal({
             id: 'nova:1000',
             imagePurposes:
-                {
-                    normal: { start: 0, length: 36 },
-                    left: { start: 36, length: 36 },
-                    right: { start: 72, length: 36 }
-                }
+            {
+                normal: { start: 0, length: 36 },
+                left: { start: 36, length: 36 },
+                right: { start: 72, length: 36 }
+            }
         });
 
         // s1 has no alt image
