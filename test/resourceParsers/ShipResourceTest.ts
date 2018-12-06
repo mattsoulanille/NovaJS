@@ -76,7 +76,7 @@ describe("ShipResource", function() {
     });
 
     it("should parse mass", function() {
-        expect(s1.mass).to.equal(6);
+        expect(s1.mass).to.equal(4147);
     });
 
     it("should parse length", function() {
@@ -127,7 +127,7 @@ describe("ShipResource", function() {
     });
 
     it("should parse freeSpace", function() {
-        expect(s1.freeSpace).to.equal(15);
+        expect(s1.freeSpace).to.equal(3841);
     });
 
     it("should parse acceleration", function() {

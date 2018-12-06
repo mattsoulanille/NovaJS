@@ -1,6 +1,6 @@
 
 import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { ShipData, ShipProperties } from "novadatainterface/ShipData";
+import { ShipData, ShipPhysics } from "novadatainterface/ShipData";
 import { DefaultPictData } from "novadatainterface/PictData";
 import { ExplosionData } from "novadatainterface/ExplosionData";
 import { BaseParse } from "./BaseParse";
@@ -158,7 +158,7 @@ async function ShipParse(ship: ShipResource,
     }
 
 
-    var properties: ShipProperties = {
+    var physics: ShipPhysics = {
         shield: ship.shield,
         shieldRecharge: ship.shieldRecharge * FPS / 1000, // Recharge per second
         armor: ship.armor,
@@ -171,12 +171,13 @@ async function ShipParse(ship: ShipResource,
         acceleration: ship.acceleration,
         turnRate: ship.turnRate * TurnRateConversionFactor,
         mass: ship.mass,
-        freeMass: 0,
+        freeMass: ship.freeSpace,
+        freeCargo: ship.cargoSpace
     }
 
     return {
-        properties,
-        pictID: pictID,
+        physics,
+        pict: pictID,
         desc: desc,
         outfits,
         initialExplosion: initialExplosionID,

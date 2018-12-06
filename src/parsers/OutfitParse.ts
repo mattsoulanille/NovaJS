@@ -1,13 +1,16 @@
 import { OutfResource } from "../resourceParsers/OutfResource";
 import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { OutfitData } from "novadatainterface/OutiftData";
+import { OutfitData, OutfitPhysics } from "novadatainterface/OutiftData";
 import { DefaultPictData } from "novadatainterface/PictData";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
 
-const noUnitConversion = new Set(["cargo", "shield", "armor", "energy", "ionization"])
+// This should not be necessary!
+const noUnitConversion = new Set(["freeCargo", "shield", "armor", "energy", "ionization"])
+type NoUnitConversion = "freeCargo" | "shield" | "armor" | "energy" | "ionization";
 const perFrameTimes1000 = new Set(["shieldRecharge", "armorRecharge"]);
+type PerFrameTimes1000 = "shieldRecharge" | "armorRecharge";
 
 async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => void): Promise<OutfitData> {
     var base: BaseData = await BaseParse(outf, notFoundFunction);
@@ -16,8 +19,7 @@ async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => 
     // lists of tuples because properties should not be repeated,
     // and objects enforce a "one value per key" requirement.
     var weapons: { [index: string]: number } = {};
-    var properties: { [index: string]: number | boolean } = {};
-
+    var physics: OutfitPhysics = { freeMass: outf.mass };
 
     for (let i in outf.functions) {
         let func = outf.functions[i];
@@ -45,40 +47,40 @@ async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => 
             weapons[weaponGlobalID] += 1;
         }
         else if (noUnitConversion.has(fType)) {
+            //else if (fType === "freeCargo") {
             // No unit conversion needed
-            properties[fType] = fVal;
+            physics[<NoUnitConversion>fType] = <number>fVal;
         }
         else if (perFrameTimes1000.has(fType)) {
             // convert from (units * 1000) / frame to units / second
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            properties[fType] = fVal * FPS / 1000;
+            physics[<PerFrameTimes1000>fType] = fVal * FPS / 1000;
         }
         else if (fType == "deionize") {
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            properties["deionize"] = fVal * FPS / 100;
+            physics["deionize"] = fVal * FPS / 100;
         }
         else if (fType == "turnRate") {
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            properties["deionize"] = fVal * TurnRateConversionFactor;
+            physics["deionize"] = fVal * TurnRateConversionFactor;
         }
         else if (fType == "energyRecharge") {
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            properties["energyRecharge"] = FPS / fVal;
+            physics["energyRecharge"] = FPS / fVal;
 
         }
         else {
             //throw new Error("Unknown outfit function " + fType + " on outfit " + base.id);
         }
     }
-
 
     var pict: string;
     var pictResource = outf.idSpace.PICT[outf.pictID];
@@ -103,9 +105,8 @@ async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => 
     return {
         ...base,
         weapons,
-        properties,
+        physics,
         pict,
-        mass: outf.mass,
         price: outf.cost,
         desc,
         displayWeight: outf.displayWeight,

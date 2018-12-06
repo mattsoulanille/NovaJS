@@ -42,7 +42,7 @@ class OutfResource extends BaseResource {
                     functions.push(["weapon", modVal]);
                     break;
                 case 2:
-                    functions.push(["cargo", modVal]);
+                    functions.push(["freeCargo", modVal]);
                     break;
                 case 3:
                     functions.push(["ammunition", modVal]);

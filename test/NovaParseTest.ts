@@ -50,13 +50,13 @@ describe("NovaParse", function() {
 
     var np: NovaParse;
 
-    var s1: ShipData;
-    var s2: ShipData;
+    var s128: ShipData;
+    var s129: ShipData;
 
     before(async function() {
         np = new NovaParse("./test/novaParseTestFilesystem");
-        s1 = await np.data[NovaDataType.Ship].get("nova:128");
-        s2 = await np.data[NovaDataType.Ship].get("nova:129");
+        s128 = await np.data[NovaDataType.Ship].get("nova:128");
+        s129 = await np.data[NovaDataType.Ship].get("nova:129");
     });
 
     it("Should produce the correct error when the ID is not available", async function() {
@@ -76,7 +76,7 @@ describe("NovaParse", function() {
         // Should parse the right Pict for ships that don't have a pict but share their baseImage with another ship
 
 
-        s2.pictID.should.equal(s1.pictID);
+        s129.pict.should.equal(s128.pict);
 
 
 
@@ -84,25 +84,26 @@ describe("NovaParse", function() {
             .should.be.rejectedWith(NovaIDNotFoundError, "No matching dësc for shïp of id nova:130");
 
 
-        s1.pictID.should.equal("nova:5000");
-        s1.desc.should.equal("a contrived description");
+        s128.pict.should.equal("nova:5000");
+        s128.desc.should.equal("a contrived description");
 
-        s1.properties.shield.should.equal(17);
-        s1.properties.shieldRecharge.should.equal(18 * FPS / 1000);
-        s1.properties.armor.should.equal(19);
-        s1.properties.armorRecharge.should.equal(20 * FPS / 1000);
-        s1.properties.energy.should.equal(21);
-        s1.properties.energyRecharge.should.equal(FPS / 22);
-        s1.properties.ionization.should.equal(23);
-        s1.properties.deionize.should.equal(24 / 100 * FPS);
-        s1.properties.speed.should.equal(12);
-        s1.properties.acceleration.should.equal(11);
-        s1.properties.turnRate.should.equal(13 * TurnRateConversionFactor);
-        s1.properties.mass.should.equal(6);
+        s128.physics.shield.should.equal(17);
+        s128.physics.shieldRecharge.should.equal(18 * FPS / 1000);
+        s128.physics.armor.should.equal(19);
+        s128.physics.armorRecharge.should.equal(20 * FPS / 1000);
+        s128.physics.energy.should.equal(21);
+        s128.physics.energyRecharge.should.equal(FPS / 22);
+        s128.physics.ionization.should.equal(23);
+        s128.physics.deionize.should.equal(24 / 100 * FPS);
+        s128.physics.speed.should.equal(12);
+        s128.physics.acceleration.should.equal(11);
+        s128.physics.turnRate.should.equal(13 * TurnRateConversionFactor);
+        s128.physics.mass.should.equal(5678);
+        s128.physics.freeMass.should.equal(1234);
 
-        s1.displayWeight.should.equal(128);
-        s1.deathDelay.should.equal(67 / 30);
-        s1.largeExplosion.should.equal(true);
+        s128.displayWeight.should.equal(128);
+        s128.deathDelay.should.equal(67 / 30);
+        s128.largeExplosion.should.equal(true);
 
     });
 
@@ -112,12 +113,12 @@ describe("NovaParse", function() {
 
         var s200 = await np.data[NovaDataType.Ship].get("nova:200");
         // Even though it shares baseImage with s1, it should use its own pict.
-        s200.pictID.should.equal("nova:5072");
+        s200.pict.should.equal("nova:5072");
     });
 
     it("Should parse animations for ships", async function() {
 
-        var anim = s1.animation;
+        var anim = s128.animation;
         anim.exitPoints.should.deep.equal({
             gun: [[3, 10, 1], [-3, 10, -2], [3, 10, 3], [-3, 10, -4]],
             turret: [[0, 0, 5], [0, 0, 6], [0, 0, 7], [0, 0, 8]],
@@ -143,10 +144,10 @@ describe("NovaParse", function() {
     });
 
     it("Should parse which explosion a ship has", async function() {
-        assert.propertyVal(s1, "initialExplosion", "nova:168");
-        assert.propertyVal(s1, "finalExplosion", "nova:169");
-        assert.propertyVal(s2, "initialExplosion", "nova:132");
-        assert.propertyVal(s2, "finalExplosion", "nova:133");
+        assert.propertyVal(s128, "initialExplosion", "nova:168");
+        assert.propertyVal(s128, "finalExplosion", "nova:169");
+        assert.propertyVal(s129, "initialExplosion", "nova:132");
+        assert.propertyVal(s129, "finalExplosion", "nova:133");
     });
 
     it("Should parse explosions", async function() {
@@ -164,7 +165,7 @@ describe("NovaParse", function() {
     });
 
     it("Should parse ship outfits including weapons", async function() {
-        s1.outfits.should.deep.equal({
+        s128.outfits.should.deep.equal({
             "nova:150": 26,
             "nova:151": 38,
             "nova:130": 50,
@@ -172,10 +173,11 @@ describe("NovaParse", function() {
         });
     });
 
-    it("Should parse outfit properties", async function() {
+    it("Should parse outfit physics", async function() {
         let o131: OutfitData = await np.data.Outfit.get("nova:131");
-        o131.properties.should.deep.equal({
-            cargo: 123,
+        o131.physics.should.deep.equal({
+            freeMass: 73,
+            freeCargo: 123,
             shield: 55,
             armor: 45,
             energyRecharge: FPS / 100
@@ -190,7 +192,7 @@ describe("NovaParse", function() {
         }
         else {
             // Now it is known that w132 is a projectileWeapon.
-            w132.properties.should.deep.equal({
+            w132.physics.should.deep.equal({
                 acceleration: 0,
                 armorRecharge: 0,
                 deionize: 0,

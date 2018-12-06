@@ -65,7 +65,7 @@ async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => 
         landingPict: pictID,
         animation,
         vulnerableTo: <Array<DamageType>>["planetBuster"],
-        properties: {
+        physics: {
             shield: 1000,
             shieldRecharge: 1000,
             armor: 1000,

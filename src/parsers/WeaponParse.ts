@@ -3,7 +3,7 @@ import { BaseParse } from "./BaseParse";
 import { BaseData } from "novadatainterface/BaseData";
 import { WeaponData, ProjectileWeaponData, BeamWeaponData, BaseWeaponData, NotBayWeaponData, DamageType, SubmunitionType, ProjectileGuidanceSet, GuidanceType, BeamGuidanceSet, BayGuidanceSet, ProjectileGuidanceType, BayWeaponData, BeamGuidanceType } from "novadatainterface/WeaponData";
 import { FPS, TurnRateConversionFactor } from "./Constants";
-import { SpaceObjectProperties } from "novadatainterface/SpaceObjectData";
+import { SpaceObjectPhysics } from "novadatainterface/SpaceObjectData";
 import { Animation, DefaultExitPoints, DefaultAnimation } from "novadatainterface/Animation";
 import { DefaultShipData } from "novadatainterface/ShipData";
 
@@ -172,7 +172,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         hitParticles: weap.hitParticles,
         animation,
         vulnerableTo,
-        properties: {
+        physics: {
             acceleration: 0,
             armorRecharge: 0,
             deionize: 0,
