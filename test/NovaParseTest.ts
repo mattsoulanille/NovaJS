@@ -99,7 +99,7 @@ describe("NovaParse", function() {
         s128.physics.acceleration.should.equal(11);
         s128.physics.turnRate.should.equal(13 * TurnRateConversionFactor);
         s128.physics.mass.should.equal(5678);
-        s128.physics.freeMass.should.equal(1234);
+        s128.physics.freeMass.should.equal(4234);
 
         s128.displayWeight.should.equal(128);
         s128.deathDelay.should.equal(67 / 30);

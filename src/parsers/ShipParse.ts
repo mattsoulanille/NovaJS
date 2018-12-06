@@ -171,7 +171,7 @@ async function ShipParse(ship: ShipResource,
         acceleration: ship.acceleration,
         turnRate: ship.turnRate * TurnRateConversionFactor,
         mass: ship.mass,
-        freeMass: ship.freeSpace,
+        freeMass,
         freeCargo: ship.cargoSpace
     }
 

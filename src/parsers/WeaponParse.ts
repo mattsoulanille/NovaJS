@@ -164,7 +164,6 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         ...notBayBase,
         type: "ProjectileWeaponData",
         guidance,
-        turnRate: weap.turnRate * TurnRateConversionFactor,
         submunitions,
         proxRadius: weap.proxRadius,
         proxSafety: weap.proxSafety / FPS,
@@ -182,7 +181,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
             mass: 0,
             shieldRecharge: 0,
             speed: weap.speed,
-            turnRate: weap.turnRate,
+            turnRate: weap.turnRate * TurnRateConversionFactor,
             shield: 0,
             armor: weap.durability
         }
