@@ -168,7 +168,6 @@ const DefaultParticles: Particles = {
 interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData {
     type: "ProjectileWeaponData",
     guidance: ProjectileGuidanceType,
-    turnRate: number,
     submunitions: Array<SubmunitionType>,
     proxRadius: number, // Proximity to something before it explodes
     proxSafety: number // Number of seconds after firing that the weapon won't explode
@@ -182,7 +181,6 @@ const DefaultProjectileWeaponData: ProjectileWeaponData = {
     ...DefaultSpaceObjectData,
     type: "ProjectileWeaponData",
     guidance: "unguided",
-    turnRate: 3,
     submunitions: [],
     proxRadius: 1,
     proxSafety: 0,
