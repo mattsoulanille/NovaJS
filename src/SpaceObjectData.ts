@@ -4,7 +4,7 @@ import { DamageType } from "./WeaponData";
 
 
 
-type SpaceObjectProperties = {
+type SpaceObjectPhysics = {
     shield: number;
     shieldRecharge: number;
     armor: number;
@@ -19,7 +19,7 @@ type SpaceObjectProperties = {
     mass: number;
 };
 
-const DefaultSpaceObjectProperties: SpaceObjectProperties = {
+const DefaultSpaceObjectPhysics: SpaceObjectPhysics = {
     shield: 100,
     shieldRecharge: 10,
     armor: 100,
@@ -35,17 +35,17 @@ const DefaultSpaceObjectProperties: SpaceObjectProperties = {
 }
 
 interface SpaceObjectData extends BaseData {
-    properties: SpaceObjectProperties,
+    physics: SpaceObjectPhysics,
     animation: Animation,
     vulnerableTo: Array<DamageType>
 }
 
 const DefaultSpaceObjectData: SpaceObjectData = {
     ...DefaultBaseData,
-    properties: DefaultSpaceObjectProperties,
+    physics: DefaultSpaceObjectPhysics,
     animation: DefaultAnimation,
     vulnerableTo: <Array<DamageType>>["normal"]
 }
 
 
-export { SpaceObjectData, DefaultSpaceObjectData, SpaceObjectProperties, DefaultSpaceObjectProperties }
+export { SpaceObjectData, DefaultSpaceObjectData, SpaceObjectPhysics, DefaultSpaceObjectPhysics }

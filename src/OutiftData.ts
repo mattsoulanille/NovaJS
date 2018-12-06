@@ -1,15 +1,19 @@
 import { BaseData } from "./BaseData";
+import { ShipPhysics } from "./ShipData";
 
+
+type OutfitPhysics = Partial<ShipPhysics> & { freeMass: number };
 
 interface OutfitData extends BaseData {
     weapons: { [index: string]: number }, // globalID : count
-    properties: { [index: string]: number | boolean }, // how it changes the properties of the ship it's attached to.
+
+    // how it changes the physics of the ship it's attached to. Idea: What if these were allowed to be functions?
+    physics: OutfitPhysics,
     pict: string, // id of picture
-    mass: number,
     price: number,
     desc: string,
     displayWeight: number,
     max: number
 }
 
-export { OutfitData };
+export { OutfitData, OutfitPhysics };

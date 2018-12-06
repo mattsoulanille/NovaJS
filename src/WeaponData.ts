@@ -1,5 +1,5 @@
 import { BaseData, DefaultBaseData } from "./BaseData";
-import { SpaceObjectProperties, SpaceObjectData, DefaultSpaceObjectData } from "./SpaceObjectData";
+import { SpaceObjectPhysics, SpaceObjectData, DefaultSpaceObjectData } from "./SpaceObjectData";
 import { DefaultShipData } from "./ShipData";
 
 type DamageType = "normal" | "pointDefense" | "planetBuster";
