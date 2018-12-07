@@ -310,5 +310,9 @@ describe("NovaParse", function() {
         p194.position.should.deep.equal([22, -56]);
 
     });
+    it("Should load Plug-ins in reverse alphabetical order", async function() {
+        var s201 = await np.data.Ship.get("nova:202");
+        s201.desc.should.equal("This should overwrite the Loaded Before plug-in");
+    });
 });
 

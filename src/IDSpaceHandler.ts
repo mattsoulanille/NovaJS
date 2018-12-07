@@ -122,7 +122,7 @@ class IDSpaceHandler {
             console.warn("Plug-ins parser given a directory called " + path.basename(pluginsPath) + " instead of Plug-ins");
         }
 
-        var fileNames = await readdir(pluginsPath);
+        var fileNames = (await readdir(pluginsPath)).reverse();
         for (let i in fileNames) {
             var name = fileNames[i];
             var currentPath = path.join(pluginsPath, name);
