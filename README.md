@@ -18,6 +18,7 @@ npm install --save novaparse
 #### Reading Nova data and Nova plug-ins
 
 ```
+// TypeScript
 import { NovaParse } from "novaparse";
 
 // Determines whether NovaParse should throw errors when a parse fails
