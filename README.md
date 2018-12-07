@@ -13,26 +13,12 @@ For deployment, [get it from npm](https://www.npmjs.com/package/novaparse) with
 npm install --save novaparse
 ```
 
-For development, download the repository and run 
-```
-npm install
-```
-to install dependencies,
-```
-npm run test
-```
-to run the tests, and
-```
-npm run build
-```
-to compile typescript into javascript for deployment (`npm run build` must be run before publishing to npm).
-
-
 ## Usage
 
 #### Reading Nova data and Nova plug-ins
 
 ```
+// TypeScript
 import { NovaParse } from "novaparse";
 
 // Determines whether NovaParse should throw errors when a parse fails
@@ -54,11 +40,24 @@ NovaParse implements `GameDataInterface` of [NovaDataInterface](https://github.c
 The global IDs of `Nova Files` all start with `nova:` and end with their corresponding ID. Global IDs of things in the `Plug-ins` directory start with the name of the Plug-in or directory and end with a colon and their ID.
 
 
-## Running Tests
+## Development
+To set up development, download the repository and run 
+```
+npm install
+```
+to install dependencies.
+
+To build the project for deployment, use
+```
+npm run build
+```
+This command must be run prior to publishing to npm.
+
+### Running Tests
 Tests can be run with
 ```npm run test```
 
 To run an individual test, run ```npm run test-only ./test/path/to/test.ts```
 
-## Contributing
+### Contributing
 Pull requests are welcome if you find bugs, but more type definitions need to be written before new data types can be implemented. The next large project is parsing the `snd ` resource, which contains all the Nova sounds.
