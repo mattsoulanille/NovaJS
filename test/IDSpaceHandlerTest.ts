@@ -37,13 +37,13 @@ describe("IDSpaceHandler", function() {
         expect(idSpace.wëap['nova:129'].name).to.equal("Overwritten by plugin2");
 
         expect(idSpace.wëap['Plugin 1:150'].name).to.equal("Also doesn\'t get overwritten");
-        expect(idSpace.wëap['Plugin 2:150'].name).to.equal("this one also not overwritten");
+        expect(idSpace.wëap['A first plug:150'].name).to.equal("this one also not overwritten");
     });
 
     it("should assign the right global id to each resource", function() {
         expect(idSpace.wëap['nova:128'].globalID).to.equal("nova:128");
         expect(idSpace.wëap['nova:129'].globalID).to.equal("nova:129");
-        expect(idSpace.wëap['Plugin 2:150'].globalID).to.equal("Plugin 2:150");
+        expect(idSpace.wëap['A first plug:150'].globalID).to.equal("A first plug:150");
         expect(idSpace.wëap['Plugin 1:150'].globalID).to.equal("Plugin 1:150");
         expect(idSpace.wëap['plug pack:153'].globalID).to.equal("plug pack:153");
     });

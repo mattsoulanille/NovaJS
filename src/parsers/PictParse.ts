@@ -3,7 +3,7 @@ import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
 import { PictResource, PNGError } from "../resourceParsers/PictResource";
 import { PNG } from "pngjs";
-import { DefaultPictImageData } from "../../../NovaDataInterface/PictImage";
+import { DefaultPictImageData } from "novadatainterface/PictImage";
 
 
 type PictImageMulti = {
