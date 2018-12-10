@@ -67,7 +67,7 @@ Deployment is the same as installation, however, the port used for the server ca
 
 ## Contributing
 
-#### Note that NovaJS will soon be undergoing a much-needed major rewrite. It will be rewritten in TypeScript with a great deal of attention paid to separating game logic from the user interface. Details and progress can be see on on the [project page](https://github.com/mattsoulanille/NovaJS/projects/3).
+#### Note that NovaJS will soon be undergoing a much-needed major rewrite. It will be rewritten in TypeScript with a great deal of attention paid to separating game logic from the user interface. Details and progress can be see on on the [project page](https://github.com/mattsoulanille/NovaJS/projects/3) and on the [TypeScript branch](https://github.com/mattsoulanille/NovaJS/tree/typescript).
 
 I welcome pull requests, however, I am often in school and unable to accept them immediately. Some easy places to contribute include:
 * Parsing: [See the companion project NovaParse](https://github.com/mattsoulanille/NovaParse). This is probably the easiest and most helpful way to contribute and is a prerequisite for most of the following features.
