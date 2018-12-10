@@ -16,7 +16,6 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights to anything in the [objects](https://github.com/mattsoulanille/NovaJS/tree/master/Nova/objects) directory, nor do I claim any rights over pictures or Nova Data in this repository. The end goal of this project is to write a Nova engine that can interpret Nova files without including any Nova data itself, thereby avoiding these legal issues.
 
 ## Getting Started
-
 ### Prerequisites
 
 [node.js](https://nodejs.org/),
@@ -67,6 +66,8 @@ The available tests are not comprehensive, and many are broken or inaccurate. Th
 Deployment is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`
 
 ## Contributing
+
+#### Note that NovaJS will soon be undergoing a much-needed major rewrite. It will be rewritten in TypeScript with a great deal of attention paid to separating game logic from the user interface. Details and progress can be see on on the [project page](https://github.com/mattsoulanille/NovaJS/projects/3).
 
 I welcome pull requests, however, I am often in school and unable to accept them immediately. Some easy places to contribute include:
 * Parsing: [See the companion project NovaParse](https://github.com/mattsoulanille/NovaParse). This is probably the easiest and most helpful way to contribute and is a prerequisite for most of the following features.
