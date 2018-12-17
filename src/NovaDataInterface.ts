@@ -17,6 +17,7 @@ enum NovaDataType {
     Outfit = "Outfit",
     Weapon = "Weapon",
     Pict = "Pict",
+    PictImage = "PictImage",
     Planet = "Planet",
     System = "System",
     TargetCorners = "TargetCorners",
@@ -43,8 +44,8 @@ type NovaDataInterface = {
     SpriteSheetFrames: Gettable<SpriteSheetFramesData>,
     StatusBar: Gettable<StatusBarData>,
     Explosion: Gettable<ExplosionData>
-
 }
+
 class NovaIDNotFoundError extends Error { };
 
 export { NovaDataInterface, NovaDataType, NovaIDNotFoundError };
