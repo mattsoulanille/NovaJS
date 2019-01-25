@@ -3,7 +3,7 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-~[Here's a running example](http://54.173.49.38/) (works in modern browsers).
+[Here's a running example](http://54.173.49.38/) (works in modern browsers).
 #### Controls (standard EV Nova):
 * Arrow keys to move
 * Spacebar to fire
