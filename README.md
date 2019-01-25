@@ -3,13 +3,25 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-~[Here's a running example](http://165.82.246.25:8000/) (works in modern browsers).~ Down due to server costs.
+~[Here's a running example](http://54.173.49.38/) (works in modern browsers).
+#### Controls (standard EV Nova):
+* Arrow keys to move
+* Spacebar to fire
+* **There is a button on the right side of the screen to add enemy ships.**
+* L while moving slowly over a planet to land
+* Tab to select a target
+* W to choose a secondary weapon
+* Ctrl to fire secondary weapon (Should maybe be revised since Ctrl is usually bound to keystrokes)
+* R to choose nearest target
+* Hold A to point towards target.
+* Z for afterburner (if installed)
+* **Scroll down in the outfitter and shipyard with the arrow keys to see more items**
 
 ### Project Goals
 * Function as a Nova Engine that can, given Nova files, run EV Nova.
 * Support Nova Plug-ins.
 * Improve on some of the issues with EV Nova's engine (such as limited turning angles) as long as doing so does not negatively affect gameplay.
-* Support multiplayer to an extent.
+* **Support multiplayer to an extent.**
 
 ### Related Projects
 * [NovaParse](https://github.com/mattsoulanille/NovaParse): The parser for NovaJS
