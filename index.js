@@ -28,7 +28,6 @@ local.context.io = io;
 
 // parses nova files + plug-ins
 var novaParse = require("novaparse");
-var novaData = require("./lib/parsing/novaData");
 var gameData = require("./lib/server/gameDataServer.js");
 const NoNovaFilesError = require("./lib/client/errors.js").NoNovaFilesError;
 var npc = require("./lib/server/npcServer.js");
@@ -170,7 +169,7 @@ var startGame = async function() {
     var tichel = new system({id: "nova:129"});
     local.context.tichel = tichel;
 
-    npcMaker = new AI(sol, io, gd.meta.ids.ships);
+    npcMaker = new AI(sol, io, gd.meta.ids.Ship);
     local.context.npcMaker = npcMaker;
 
     await sol.build();
@@ -208,7 +207,7 @@ var connectFunction = function(socket) {
 
 
     var playerShipType = {
-	id: gd.meta.ids.ships[_.random(0, gd.meta.ids.ships.length - 1)]
+	id: gd.meta.ids.Ship[_.random(0, gd.meta.ids.Ship.length - 1)]
     };
     
     playerShipType.UUID = userid;
@@ -242,7 +241,7 @@ var connectFunction = function(socket) {
     var setShip = async function(id) {
 	// doesn't work
 	var buildInfo = {};
-	if (gd.meta.ids.ships.includes(id)) {
+	if (gd.meta.ids.Ship.includes(id)) {
 	    buildInfo.id = id;
 	    buildInfo.UUID = userid;
 	    myShip.destroy();

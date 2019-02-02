@@ -1,6 +1,6 @@
 {
     "frames": {
-	"targetHostile 0.png": {
+	"targetNeutral 0.png": {
 	    "frame": {
 		"x": 0,
 		"y": 0,
@@ -22,7 +22,7 @@
 	    "h": 16
 	},
 	"scale": "1",
-	"image": "../spriteSheetImages/targetHostile.png"
+	"image": "../SpriteSheetImage/targetNeutral.png"
     }
 }
     

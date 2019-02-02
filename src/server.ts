@@ -11,7 +11,7 @@ const port = 8000; // FIX ME
 
 app.use("/static", express.static(__dirname + "/static"));
 
-app.use("/", function(req: express.Request, res: express.Response) {
+app.use("/", function(_req: express.Request, res: express.Response) {
     res.sendFile(__dirname + "/index.html");
 });
 

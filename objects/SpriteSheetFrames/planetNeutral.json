@@ -1,6 +1,6 @@
 {
     "frames": {
-	"targetNeutral 0.png": {
+	"planetNeutral 0.png": {
 	    "frame": {
 		"x": 0,
 		"y": 0,
@@ -22,7 +22,7 @@
 	    "h": 16
 	},
 	"scale": "1",
-	"image": "../spriteSheetImages/targetNeutral.png"
+	"image": "../SpriteSheetImage/planetNeutral.png"
     }
 }
     
