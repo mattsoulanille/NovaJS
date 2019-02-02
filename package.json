@@ -3,6 +3,7 @@
   "version": "0.1.9",
   "description": "An EV Nova file parser for NovaJS",
   "main": "build/NovaParse.js",
+  "types": "build/NovaParse.d.ts",
   "scripts": {
     "build": "mkdir -p build/; tsc",
     "test": "mocha -r ts-node/register -O tsconfig.json --recursive test/**/*.ts test/**/**/*.ts",
@@ -30,7 +31,7 @@
   "dependencies": {
     "@types/pngjs": "^3.3.2",
     "hull.js": "^0.2.10",
-    "novadatainterface": "0.1.1",
+    "novadatainterface": "0.1.4",
     "pngjs": "^3.3.3",
     "resourceforkjs": "^0.1.0",
     "stringview": "^2.0.1"
