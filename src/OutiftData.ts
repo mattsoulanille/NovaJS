@@ -1,4 +1,4 @@
-import { BaseData } from "./BaseData";
+import { BaseData, DefaultBaseData } from "./BaseData";
 import { ShipPhysics } from "./ShipData";
 
 
@@ -16,4 +16,17 @@ interface OutfitData extends BaseData {
     max: number
 }
 
-export { OutfitData, OutfitPhysics };
+const DefaultOutfitData: OutfitData = {
+    ...DefaultBaseData,
+    weapons: {},
+    physics: {
+        freeMass: 0
+    },
+    pict: "default",
+    price: 0,
+    desc: "default outfit",
+    displayWeight: 0,
+    max: 0
+}
+
+export { OutfitData, OutfitPhysics, DefaultOutfitData };
