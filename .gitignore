@@ -14,3 +14,8 @@ Nova Files
 Nova Data
 Plug-ins
 static
+
+*.aux
+*.log
+*.out
+design/auto/
