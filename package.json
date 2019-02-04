@@ -7,10 +7,12 @@
     "test": "test"
   },
   "dependencies": {
+    "@types/app-root-path": "^1.2.4",
     "@types/chai-as-promised": "^7.1.0",
     "@types/socket.io": "^2.1.0",
     "@types/socket.io-client": "^1.4.32",
-    "bluebird": "^3.5.1",
+    "app-root-path": "^2.1.0",
+    "bluebird": "^3.5.3",
     "chai": "^4.2.0",
     "chai-as-promised": "^7.1.1",
     "crash-colliders": "^2.0.1",
