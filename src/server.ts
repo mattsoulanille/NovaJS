@@ -29,8 +29,7 @@ gameData.data.Ship.get("nova:128").then(function(s) {
 });
 
 
-app.use("/static", express.static(appRoot + "/static"));
-
+app.use("/static", express.static(__dirname + "/static"));
 app.use("/", function(_req: express.Request, res: express.Response) {
     res.sendFile(__dirname + "/index.html");
 });
