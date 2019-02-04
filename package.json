@@ -1,6 +1,6 @@
 {
   "name": "novaparse",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "description": "An EV Nova file parser for NovaJS",
   "main": "build/NovaParse.js",
   "types": "build/NovaParse.d.ts",
