@@ -1,5 +1,5 @@
 global.Promise = require("bluebird"); // For stacktraces
-import { IDSpaceHandler } from "../src/IDSpaceHandler";
+import { IDSpaceHandler, BadDirectoryStructureError } from "../src/IDSpaceHandler";
 
 import * as chai from "chai";
 import "mocha";
@@ -56,6 +56,9 @@ describe("IDSpaceHandler", function() {
     });
     */
 
-
+    it("should defer errors to when a specific idSpace is requested", async function() {
+        var broken = new IDSpaceHandler("./not/a/real/path/");
+        broken.getIDSpace("nova").should.be.rejectedWith(BadDirectoryStructureError);
+    });
 
 });

@@ -3,6 +3,7 @@ import * as path from "path";
 import { readNovaFile } from "./readNovaFile";
 import { NovaResources, NovaResourceType, getEmptyNovaResources } from "./ResourceHolderBase";
 
+class BadDirectoryStructureError extends Error { };
 
 //const log = console.log;
 const log = (_m: string) => { };
@@ -15,12 +16,15 @@ const log = (_m: string) => { };
 // have the same baseImage, are not linked to the correct PICT at this stage.
 // All interactions are handled by NovaParse.ts
 class IDSpaceHandler {
-    private globalResources: Promise<NovaResources>;
+    private globalResources: Promise<NovaResources | Error>;
     private tmpBuildingResources: NovaResources;
 
     constructor(novaPath: string) {
         this.tmpBuildingResources = getEmptyNovaResources();
-        this.globalResources = this.build(novaPath);
+        this.globalResources = this.build(novaPath).catch((e: Error) => {
+            // Catch all promise rejections. They are instead handled when getting ID spaces.
+            return e;
+        });
     }
 
     private async build(novaPath: string) {
@@ -33,7 +37,10 @@ class IDSpaceHandler {
 
     // Returns the IDSpace of namespace 'prefix'
     public async getIDSpace(prefix: string | null = null): Promise<NovaResources> {
-        await this.globalResources;
+        var result = await this.globalResources; // May be an error
+        if (result instanceof Error) {
+            throw result;
+        }
         return this.getIDSpaceUnsafe(prefix);
     }
 
@@ -115,7 +122,7 @@ class IDSpaceHandler {
     // Adds the Nova Plug-ins directory
     async addNovaPluginsDirectory(pluginsPath: string) {
         if (!(await isDirectory(pluginsPath))) {
-            throw new Error("Plug-ins must be a directory. Got " + pluginsPath + " instead");
+            throw new BadDirectoryStructureError("Plug-ins must be a directory. Got " + pluginsPath + " instead");
         }
 
         if (!(path.basename(pluginsPath) == "Plug-ins")) {
@@ -142,7 +149,7 @@ class IDSpaceHandler {
     // Adds the Nova Files directory
     async addNovaFilesDirectory(filePath: string) {
         if (!(await isDirectory(filePath))) {
-            throw new Error("Nova Files must be a directory. Got " + filePath + " instead");
+            throw new BadDirectoryStructureError("Nova Files must be a directory. Got " + filePath + " instead");
         }
 
         await this.addDirectory(filePath, "nova");
@@ -151,7 +158,7 @@ class IDSpaceHandler {
     // Adds a directory under a single ID prefix
     async addDirectory(dirPath: string, prefix: string) {
         if (!(await isDirectory(dirPath))) {
-            throw new Error("Must be a directory. Got " + dirPath + " instead");
+            throw new BadDirectoryStructureError("Must be a directory. Got " + dirPath + " instead");
         }
 
         log("Adding Directory of plugins " + dirPath);
@@ -220,4 +227,4 @@ function readdir(path: string): Promise<Array<string>> {
 
 
 
-export { IDSpaceHandler };
+export { IDSpaceHandler, BadDirectoryStructureError };

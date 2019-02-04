@@ -11,7 +11,7 @@ import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "no
 import { StatusBarData } from "novadatainterface/StatusBarData";
 import { SystemData } from "novadatainterface/SystemData";
 import { TargetCornersData } from "novadatainterface/TargetCornersData";
-import { WeaponData } from "novadatainterface/WeaponData";
+import { WeaponData, DefaultNotBayWeaponData } from "novadatainterface/WeaponData";
 import * as path from "path";
 import { IDSpaceHandler } from "./IDSpaceHandler";
 import { ExplosionParse } from "./parsers/ExplosionParse";
@@ -34,7 +34,7 @@ import { ShipResource } from "./resourceParsers/ShipResource";
 import { SpobResource } from "./resourceParsers/SpobResource";
 import { SystResource } from "./resourceParsers/SystResource";
 import { WeapResource } from "./resourceParsers/WeapResource";
-import { NovaIDs } from "novadatainterface/NovaIDs";
+import { NovaIDs, DefaultNovaIDs } from "novadatainterface/NovaIDs";
 import { PictImageMulti, PictImageMultiParse } from "./parsers/PictParse";
 
 
@@ -59,7 +59,7 @@ class NovaParse implements GameDataInterface {
     private idSpaceHandler: IDSpaceHandler;
 
     public readonly ids: Promise<NovaIDs>;
-    public readonly idSpace: Promise<NovaResources>;
+    public readonly idSpace: Promise<NovaResources | Error>;
 
     constructor(dataPath: string, strict: boolean = true) {
 
@@ -74,7 +74,15 @@ class NovaParse implements GameDataInterface {
 
         this.path = path.join(dataPath);
         this.idSpaceHandler = new IDSpaceHandler(dataPath);
-        this.idSpace = this.idSpaceHandler.getIDSpace();
+        this.idSpace = this.idSpaceHandler.getIDSpace().catch((e: Error) => {
+            // Suppress all promise rejections. These are instead thrown when specific resources are requested
+            //console.log("Got an error");
+            return e;
+        });
+
+
+        this.idSpace.catch((_e: Error) => { });
+
         this.shipPICTMap = this.makeShipPictMap();
         this.weaponOutfitMap = this.makeWeaponOutfitMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap, this.weaponOutfitMap, this.idSpace);
@@ -107,6 +115,9 @@ class NovaParse implements GameDataInterface {
 
     private async buildIDs(): Promise<NovaIDs> {
         var idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return DefaultNovaIDs;
+        }
 
         return {
             Ship: this.buildIDsForResource(idSpace.shïp),
@@ -147,11 +158,16 @@ class NovaParse implements GameDataInterface {
         return data;
     }
 
-    makeGettable<T extends BaseResource, O>(resourceType: NovaResourceType, parseFunction: ParseFunction<T, O>): Gettable<O> {
+    private makeGettable<T extends BaseResource, O>(resourceType: NovaResourceType, parseFunction: ParseFunction<T, O>): Gettable<O> {
         return new Gettable(async (id: string) => {
-            var idSpace = await this.idSpace;
+            var idSpace = await this.idSpace; // May be an error
+            if (idSpace instanceof Error) {
+                throw idSpace;
+            }
+
             var resource = <T>idSpace[resourceType][id];
 
+            // Shouldn't this just call resourceNotFoundFunction???
             if (typeof resource === "undefined") {
                 throw new NovaIDNotFoundError("NovaParse could not find " + resourceType + " of ID " + id + ".");
             }
@@ -164,6 +180,9 @@ class NovaParse implements GameDataInterface {
     // use the PICT of the first shïp that had the same baseImage ID
     private async makeShipPictMap(): ShipPictMap {
         var idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return {};
+        }
 
         // Maps shïp ids to their baseImage ids
         var shipPICTMap: { [index: string]: string } = {};
@@ -220,6 +239,9 @@ class NovaParse implements GameDataInterface {
 
     private async makeWeaponOutfitMap(): WeaponOutfitMap {
         var idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return {};
+        }
 
         // Maps a weapon to the first outfit that provides it.
         var weaponOutfitMap: { [index: string]: string } = {};

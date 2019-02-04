@@ -1,4 +1,5 @@
 global.Promise = require("bluebird"); // For stacktraces
+
 import * as fs from "fs";
 
 import * as chai from "chai";
@@ -64,12 +65,12 @@ describe("NovaParse", function() {
             .should.be.rejectedWith(NovaIDNotFoundError);
     });
 
-    /*
-    it("Ship should error on missing graphics", async function() {
-        np.data[NovaDataType.Ship].get("nova:131")
-            .should.be.rejectedWith(NovaIDNotFoundError);
-    });
-*/
+
+    // it("Ship should error on missing graphics", async function() {
+    //     np.data[NovaDataType.Ship].get("nova:131")
+    //         .should.be.rejectedWith(NovaIDNotFoundError);
+    // });
+
     it("Should parse Ship", async function() {
 
 
@@ -313,6 +314,14 @@ describe("NovaParse", function() {
     it("Should load Plug-ins in reverse alphabetical order", async function() {
         var s201 = await np.data.Ship.get("nova:202");
         s201.desc.should.equal("This should overwrite the Loaded Before plug-in");
+    });
+
+    it("Should defer throwing of errors to when specific resources are requested", async function() {
+        var brokenNovaParse = new NovaParse("./not/a/real/path/");
+
+        //brokenNovaParse.data[NovaDataType.Ship].get("nova:128").should.be.rejectedWith(Error);
+        //brokenNovaParse.data[NovaDataType.Outfit].get("nova:128").should.be.rejectedWith(Error);
+        //brokenNovaParse.data[NovaDataType.Planet].get("nova:128").should.be.rejectedWith(Error);
     });
 });
 

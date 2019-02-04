@@ -17,12 +17,13 @@ type WeaponOutfitMap = ShipPictMap;
 
 function ShipParseClosure(shipPictMap: ShipPictMap,
     weaponOutfitMap: WeaponOutfitMap,
-    globalIDSpace: Promise<NovaResources>): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
+    globalIDSpacePromise: Promise<NovaResources | Error>): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
 
     // Returns the function ShipParse with shipPictMap already assigned
     return function(ship: ShipResource, notFoundFunction: (m: string) => void) {
-        return ShipParse(ship, notFoundFunction, shipPictMap, weaponOutfitMap, globalIDSpace);
+        return ShipParse(ship, notFoundFunction, shipPictMap, weaponOutfitMap, globalIDSpacePromise);
     }
+
 }
 
 
@@ -31,8 +32,13 @@ async function ShipParse(ship: ShipResource,
     notFoundFunction: (message: string) => void,
     shipPictMap: ShipPictMap,
     weaponOutfitMap: WeaponOutfitMap,
-    globalIDSpace: Promise<NovaResources>): Promise<ShipData> {
+    globalIDSpacePromise: Promise<NovaResources | Error>): Promise<ShipData> {
 
+    var globalIDSpace = await globalIDSpacePromise;
+
+    if (globalIDSpace instanceof Error) {
+        throw globalIDSpace;
+    }
 
     var base: BaseData = await BaseParse(ship, notFoundFunction);
 
@@ -153,7 +159,7 @@ async function ShipParse(ship: ShipResource,
     // (this is done while outfits are parsed).
     var freeMass = ship.freeSpace;
     for (let outfitID in outfits) {
-        let outfit = (await globalIDSpace).oütf[outfitID];
+        let outfit = globalIDSpace.oütf[outfitID];
         freeMass += outfit.mass * outfits[outfitID];
     }
 
