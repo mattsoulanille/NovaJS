@@ -5,4 +5,20 @@ type NovaIDs = {
     [index in NovaDataType]: Array<string>
 }
 
-export { NovaIDs }
+const DefaultNovaIDs: NovaIDs = {
+    Explosion: [],
+    Outfit: [],
+    Pict: [],
+    PictImage: [],
+    Planet: [],
+    Ship: [],
+    SpriteSheet: [],
+    SpriteSheetFrames: [],
+    SpriteSheetImage: [],
+    StatusBar: [],
+    System: [],
+    TargetCorners: [],
+    Weapon: []
+}
+
+export { NovaIDs, DefaultNovaIDs }
