@@ -25,6 +25,7 @@ import { PlanetData } from "novadatainterface/PlanetData";
 import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
 import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
 import { PictImageData } from "../../NovaDataInterface/PictImage";
+import { BadDirectoryStructureError } from "../src/IDSpaceHandler";
 
 before(function() {
     chai.should();
@@ -319,9 +320,9 @@ describe("NovaParse", function() {
     it("Should defer throwing of errors to when specific resources are requested", async function() {
         var brokenNovaParse = new NovaParse("./not/a/real/path/");
 
-        //brokenNovaParse.data[NovaDataType.Ship].get("nova:128").should.be.rejectedWith(Error);
-        //brokenNovaParse.data[NovaDataType.Outfit].get("nova:128").should.be.rejectedWith(Error);
-        //brokenNovaParse.data[NovaDataType.Planet].get("nova:128").should.be.rejectedWith(Error);
+        brokenNovaParse.data[NovaDataType.Ship].get("nova:128").should.be.rejectedWith(BadDirectoryStructureError);
+        brokenNovaParse.data[NovaDataType.Outfit].get("nova:128").should.be.rejectedWith(BadDirectoryStructureError);
+        brokenNovaParse.data[NovaDataType.Planet].get("nova:128").should.be.rejectedWith(BadDirectoryStructureError);
     });
 });
 
