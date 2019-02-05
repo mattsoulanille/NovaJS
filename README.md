@@ -1,5 +1,5 @@
 # NovaParse
-An EV Nova data file and plug-in parser built for NovaJS, this project aims to parse entire nova data / plug-in files and does little post-processing of the retrieved data. It also tries to resolve the notorious id conflict issues Nova had by putting each plug-in in its own id space, letting it change Nova files but not other plug-ins. 
+An EV Nova data file and plug-in parser built for [NovaJS](https://github.com/mattsoulanille/NovaJS), this project aims to parse entire nova data / plug-in files and does little post-processing of the retrieved data. It also tries to resolve the notorious id conflict issues Nova had by putting each plug-in in its own id space, letting it change Nova files but not other plug-ins. 
 
 ## Prerequisites
 git, npm
