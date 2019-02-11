@@ -11,7 +11,7 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 * L while moving slowly over a planet to land
 * Tab to select a target
 * W to choose a secondary weapon
-* Left Shift to fire secondary weapon (Should maybe be revised since Ctrl is usually bound to keystrokes)
+* **Left Shift to fire secondary weapon** (not Ctrl since that's used by Windows)
 * R to choose nearest target
 * Hold A to point towards target.
 * Z for afterburner (if installed)
