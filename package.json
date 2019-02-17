@@ -56,7 +56,7 @@
     "build-debug": "npm run build-server; npm run build-client-debug",
     "build-client-debug": "npm run move-client-files; browserify -p [ tsify ] src/browser.ts -o build/static/bundle.js --debug --verbose",
     "watch": "watchify -p [ tsify ] src/browser.ts -o build/static/bundle.js --debug --verbose",
-    "run": "node build/server.js",
+    "start": "node build/server.js",
     "debug": "ndb build/server.js",
     "test": "mocha -r ts-node/register -O tsconfig.json --recursive test/**/*.ts test/**/**/*.ts",
     "test-brk": "mocha -r ts-node/register -O tsconfig.json --recursive --inspect-brk test/**/*.ts test/**/**/*.ts",
