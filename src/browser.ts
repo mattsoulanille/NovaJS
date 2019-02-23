@@ -2,7 +2,14 @@ import * as PIXI from "pixi.js";
 import 'pixi-display';
 import { Display } from "./client/Display";
 import { GameState } from "./engine/GameState";
-import { Engine } from "./engine/Engine";
+import { GameData } from "./client/GameData";
+//import * as io from "socket.io-client";
+
+
+// Temporary
+(window as any).gameData = new GameData();
+
+
 
 const app = new PIXI.Application({
     resolution: window.devicePixelRatio || 1,
@@ -24,6 +31,7 @@ function updateState(delta: number) {
 }
 
 function startGame() {
+    //io.Socket.emit("pingTest", "Hello from the client");
     app.ticker.add(updateState);
 }
 

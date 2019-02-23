@@ -5,7 +5,8 @@ import { NovaParse } from "novaparse";
 import * as fs from "fs";
 import * as path from "path";
 import { GameDataAggregator } from "./server/parsing/GameDataAggregator";
-//import * as RootPath from "app-root-path";
+import { GameDataServer } from "./server/GameDataServer";
+//import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
 const appRoot: string = path.join(__dirname, "../");
 
@@ -23,12 +24,12 @@ const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
 
 const novaFileData = new NovaParse(novaDataPath, false);
 const gameData = new GameDataAggregator([novaFileData]);
-
-gameData.data.Ship.get("nova:128").then(function(s) {
-    console.log(s);
-});
+const gameDataServer = new GameDataServer(gameData, app);
 
 
+
+
+// This has to be __dirname + "/static" or else sourcemaps don't work!
 app.use("/static", express.static(__dirname + "/static"));
 app.use("/", function(_req: express.Request, res: express.Response) {
     res.sendFile(__dirname + "/index.html");
@@ -37,3 +38,9 @@ app.use("/", function(_req: express.Request, res: express.Response) {
 httpServer.listen(port, function() {
     console.log("listening at port " + port);
 });
+
+/*
+io.onconnection(function(socket: socket.Socket) {
+    socket.on("pingTest", (data) => { console.log(data) });
+});
+*/

@@ -2,7 +2,7 @@
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
 import { Gettable } from "novadatainterface/Gettable";
-import { BaseData, DefaultBaseData } from "novadatainterface/BaseData";
+import { BaseData } from "novadatainterface/BaseData";
 import { ShipData } from "novadatainterface/ShipData";
 import { OutfitData } from "novadatainterface/OutiftData";
 import { WeaponData } from "novadatainterface/WeaponData";
@@ -114,7 +114,6 @@ class GameDataAggregator implements GameDataInterface {
         }
         return IDs;
     }
-
 }
 
 export { GameDataAggregator };
