@@ -1,5 +1,5 @@
 # NovaParse
-An EV Nova data file and plug-in parser built for NovaJS, this project parses a directory containing `Nova Data` and `Plug-ins` subdirectories according to the [NovaDataInterface](https://github.com/mattsoulanille/NovaDataInterface). 
+An EV Nova data file and plug-in parser built for [NovaJS](https://github.com/mattsoulanille/NovaJS), this project parses a directory containing `Nova Data` and `Plug-ins` subdirectories according to the [NovaDataInterface](https://github.com/mattsoulanille/NovaDataInterface). 
 
 In contrast to how EV Nova parsed files, NovaParse separates Plug-ins into their own namespaces to prevent ID conflicts. Each plug-in placed directly in the `Plug-ins` directory has access to its own IDs and to the global `Nova Files` IDs, but does not have access to IDs defined in other plug-ins. Creating a subdirectory inside the `Plug-ins` directory creates a shared namespace, and any plug-ins placed into that directory will have access to each other's IDs (in addition to the `Nova Files` ids), allowing plug-in packs like Extra Outfits and ARPIA2 to work correctly.
 
