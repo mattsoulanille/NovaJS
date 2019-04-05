@@ -272,10 +272,10 @@ class WeapResource extends BaseResource {
         this.decay = d.getInt16(34);
 
         var getColor32 = function(n: number) {
-	    /*	c =+ (255-d.getInt8(n))<<24;//a inverted 'cause nova has it as 0
-		c =+ d.getInt8(n+1)<<16;//r
-		c =+ d.getInt8(n+2)<<8;//g
-		c =+ d.getInt8(n+3);//b*/
+            /*	c =+ (255-d.getInt8(n))<<24;//a inverted 'cause nova has it as 0
+            c =+ d.getInt8(n+1)<<16;//r
+            c =+ d.getInt8(n+2)<<8;//g
+            c =+ d.getInt8(n+3);//b*/
             //times 2 bc newa - a = max - 2a when newa = max - a
             var aCorrection = 0xff000000 - d.getInt8(n) * 0x02000000;
             return d.getUint32(n) + aCorrection; // fix alpha
