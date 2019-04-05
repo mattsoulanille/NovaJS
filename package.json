@@ -15,7 +15,7 @@
   "dependencies": {
     "@types/pngjs": "^3.3.2",
     "pngjs": "^3.3.3",
-    "typescript": "^3.1.6"
+    "typescript": "^3.4.1"
   },
   "devDependencies": {
     "@types/chai": "^4.1.7",
