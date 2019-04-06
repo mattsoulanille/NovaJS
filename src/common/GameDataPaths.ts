@@ -1,6 +1,6 @@
 import * as path from "path";
 const prefix = "/gameData/";
-const resourcesPath = path.join(prefix, "resources");
+const dataPath = path.join(prefix, "data");
 const idsPath = path.join(prefix, "ids");
 
-export { prefix, resourcesPath, idsPath }
+export { prefix, dataPath, idsPath }

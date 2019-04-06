@@ -44,10 +44,10 @@
     "mocha": "^5.2.0",
     "ts-node": "^7.0.1",
     "tsify": "^4.0.1",
-    "typescript": "^3.3.3",
+    "typescript": "^3.4.2",
     "uglify-es": "^3.3.9",
     "uglifyify": "^5.0.1",
-    "watchify": "^3.11.0"
+    "watchify": "^3.11.1"
   },
   "scripts": {
     "build": "npm run build-server; npm run build-client",

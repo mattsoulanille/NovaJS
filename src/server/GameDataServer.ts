@@ -3,7 +3,7 @@ import { Express } from "express";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import * as path from 'path';
-import { idsPath, resourcesPath } from "../common/GameDataPaths";
+import { idsPath, dataPath } from "../common/GameDataPaths";
 
 /**
  * Serves GameData to the client
@@ -21,9 +21,9 @@ class GameDataServer {
     }
 
     private setupRoutes() {
-        this.app.get(path.join(resourcesPath, ":name/:item.png"), this.requestFulfiller.bind(this));
-        this.app.get(path.join(resourcesPath, ":name/:item.json"), this.requestFulfiller.bind(this));
-        this.app.get(path.join(resourcesPath, ":name/:item"), this.requestFulfiller.bind(this));
+        this.app.get(path.join(dataPath, ":name/:item.png"), this.requestFulfiller.bind(this));
+        this.app.get(path.join(dataPath, ":name/:item.json"), this.requestFulfiller.bind(this));
+        this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath, this.idRequestFulfiller.bind(this));
     }
 
