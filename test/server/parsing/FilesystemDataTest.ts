@@ -27,5 +27,9 @@ describe("FilesystemData", function() {
         });
     });
 
-
+    it("Should find all IDs", async function() {
+        var ids = await fsData.ids;
+        ids.Ship.should.include("test:1337");
+        ids.Outfit.should.include("blaster");
+    });
 });

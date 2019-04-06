@@ -1,10 +1,9 @@
+import * as express from "express";
 import { Express } from "express";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { resourcesPath, idsPath } from "../common/GameDataPaths";
-import * as path from 'path';
-import * as express from "express";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
-import { Gettable } from "novadatainterface/Gettable";
+import * as path from 'path';
+import { idsPath, resourcesPath } from "../common/GameDataPaths";
 
 /**
  * Serves GameData to the client
@@ -52,4 +51,4 @@ class GameDataServer {
 }
 
 
-export { GameDataServer }
+export { GameDataServer };

@@ -1,12 +1,13 @@
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
-import { GameDataInterface } from "../../../src/server/parsing/GameDataInterface";
-import { NovaDataInterface } from "../../../src/server/parsing/NovaDataInterface";
-import { Gettable } from "../../../src/common/Gettable";
-import { BaseResource } from "../../../src/server/parsing/BaseResource";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { NovaDataInterface } from "novadatainterface/NovaDataInterface";
+import { Gettable } from "novadatainterface/Gettable";
+import { BaseData } from "novadatainterface/BaseData";
 import { GameDataAggregator } from "../../../src/server/parsing/GameDataAggregator";
 
+import { NovaIDs, DefaultNovaIDs } from "novadatainterface/NovaIDs";
 
 
 before(function() {
@@ -17,18 +18,23 @@ before(function() {
 
 const expect = chai.expect;
 
-
+/*
 class TestGameData implements GameDataInterface {
-    data: NovaDataInterface
+    ids: Promise<NovaIDs>;
+    data: NovaDataInterface;
     constructor(dataType: string) {
-        this.data = {};
-        this.data[dataType] = new Gettable<BaseResource>(async function(id: string) {
+        this.ids = Promise.resolve(DefaultNovaIDs);
+        this.data = {
+
+		};
+        this.data[dataType] = new Gettable<BaseData>(async function(id: string) {
             return {
                 name: "Got the " + dataType + " of id " + id,
                 id: id,
                 prefix: "tacos"
             }
         });
+        this.ids
     }
 }
 
@@ -52,3 +58,4 @@ describe("GameDataAggregator", function() {
         expect((await aggregator.data["Outfit"].get("123")).name).to.equal("default");
     });
 });
+*/
