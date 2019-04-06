@@ -15,7 +15,7 @@ import { WeaponData } from "novadatainterface/WeaponData";
 import { OutfitData } from "novadatainterface/OutiftData";
 import { ShipData } from "novadatainterface/ShipData";
 import { Gettable } from "novadatainterface/Gettable";
-import { resourcesPath, idsPath } from "../common/GameDataPaths";
+import { dataPath, idsPath } from "../common/GameDataPaths";
 
 
 /**
@@ -66,7 +66,7 @@ class GameData implements GameDataInterface {
     }
 
     private getDataPrefix(dataType: NovaDataType): string {
-        return path.join(resourcesPath, dataType);
+        return path.join(dataPath, dataType);
     }
 
     private addGettable<T extends BaseData | SpriteSheetFramesData>(dataType: NovaDataType): Gettable<T> {
