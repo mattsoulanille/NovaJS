@@ -6,6 +6,7 @@ import * as fs from "fs";
 import * as path from "path";
 import { GameDataAggregator } from "./server/parsing/GameDataAggregator";
 import { GameDataServer } from "./server/GameDataServer";
+import { FilesystemData } from "./server/parsing/FilesystemData";
 //import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
 const appRoot: string = path.join(__dirname, "../");
@@ -23,7 +24,8 @@ const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
 
 
 const novaFileData = new NovaParse(novaDataPath, false);
-const gameData = new GameDataAggregator([novaFileData]);
+const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
+const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 const gameDataServer = new GameDataServer(gameData, app);
 
 
