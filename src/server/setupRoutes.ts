@@ -10,6 +10,11 @@ import { idsPath, dataPath } from "../common/GameDataPaths";
  * Maybe consider https://github.com/RioloGiuseppe/byte-serializer in the future?
  */
 
+
+function setupRoutes(gameData: GameDataInterface, app: Express) {
+    return new GameDataServer(gameData, app);
+}
+
 class GameDataServer {
     private gameData: GameDataInterface;
     private app: Express;
@@ -24,7 +29,7 @@ class GameDataServer {
         this.app.get(path.join(dataPath, ":name/:item.png"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item.json"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
-        this.app.get(idsPath, this.idRequestFulfiller.bind(this));
+        this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
     }
 
     private async requestFulfiller(req: express.Request, res: express.Response): Promise<void> {
@@ -51,4 +56,4 @@ class GameDataServer {
 }
 
 
-export { GameDataServer };
+export { setupRoutes };
