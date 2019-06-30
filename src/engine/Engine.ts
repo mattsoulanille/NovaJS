@@ -1,7 +1,7 @@
 import { GameState } from "./GameState";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { System } from "./System";
-import { Stateful } from "./Stateful";
+import { Stateful, StateIndexer } from "./Stateful";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
 import { StatefulMap } from "./StatefulMap";
@@ -19,7 +19,7 @@ class Engine implements Stateful<GameState>, Steppable {
 
     constructor({ gameData }: { gameData: GameDataInterface }) {
         this.gameData = gameData;
-        this.systems = new Map();
+        this.systems = new StatefulMap<System, SystemState>();
         this.activeSystems = new Set();
     }
 
@@ -34,12 +34,10 @@ class Engine implements Stateful<GameState>, Steppable {
     }
 
     // Serializes the current state of the game
-    getState(): GameState {
-        let state: GameState = { systems: {} };
-        for (let [uuid, system] of this.systems) {
-            state.systems[uuid] = system.getState()
-        }
-        return state;
+    getState(toGet: StateIndexer<GameState> = {}): GameState {
+        return {
+            systems: this.systems.getState(toGet.systems)
+        };
     }
 
     // Set the current state of the game

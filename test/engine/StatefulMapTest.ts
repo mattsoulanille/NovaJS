@@ -2,7 +2,7 @@ import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
 import { StatefulMap } from "../../src/engine/StatefulMap";
-import { Stateful, MissingObjects } from "../../src/engine/Stateful";
+import { Stateful, StateIndexer } from "../../src/engine/Stateful";
 
 before(function() {
     chai.should();
@@ -19,12 +19,12 @@ class TestObject implements Stateful<TestState> {
         this.state = items;
     }
 
-    getState(_missing?: MissingObjects): TestState {
+    getState(_missing?: StateIndexer<TestState>): TestState {
         return this.state;
 
     }
 
-    setState(state: TestState): MissingObjects {
+    setState(state: TestState): StateIndexer<TestState> {
         this.state = state;
         return {}
     }

@@ -1,14 +1,15 @@
-import { Stateful, MissingObjects, RecursivePartial } from "./Stateful";
+import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 
 
 
 type StateObject<T> = { [index: string]: T };
 
 //type NotArray<T> = T extends any[] ? never : T;
+//type Extract<V> = V extends Stateful<(infer T)> ? T : never;
 
-class StatefulMap<V extends Stateful<T>, T>
+class StatefulMap<V extends Stateful<StateType>, StateType>
     extends Map<string, V>
-    implements Stateful<StateObject<T>> {
+    implements Stateful<StateObject<StateType>> {
 
 	/**
 	 * Maps this Map to an object with keys from this map and values 
@@ -26,15 +27,19 @@ class StatefulMap<V extends Stateful<T>, T>
 	/**
 	 * Gets the states of all objects in `missing`
 	 */
-    private getMissing(missing: MissingObjects): StateObject<T> {
-        const state: StateObject<T> = {};
-        for (let key of Object.keys(missing)) {
+    private getSubstate(toGet: StateIndexer<StateObject<StateType>>): StateObject<StateType> {
+        const state: StateObject<StateType> = {};
+        for (let key of Object.keys(toGet)) {
+            const substateToGet = toGet[key];
             const ourVal = this.get(key);
             if (ourVal === undefined) {
                 throw new Error("Missing object of key " + key);
             }
+            if (substateToGet === undefined) {
+                throw new Error("Impossible: Object didn't have key from Object.keys");
+            }
             else {
-                state[key] = ourVal.getState(missing[key])
+                state[key] = ourVal.getState(substateToGet)
             }
         }
         return state;
@@ -45,10 +50,10 @@ class StatefulMap<V extends Stateful<T>, T>
 	 * and whose values are the result of calling each of this map's values'
 	 * getState function.
 	 */
-    getState(missing?: MissingObjects): StateObject<T> {
-        if (missing && Object.entries(missing).length > 0) {
+    getState(toGet?: StateIndexer<StateObject<StateType>>): StateObject<StateType> {
+        if (toGet && Object.entries(toGet).length > 0) {
             // An empty missing object means everything is missing
-            return this.getMissing(missing)
+            return this.getSubstate(toGet)
         }
         else {
             return this.mapToObject((val: V) => {
@@ -61,11 +66,11 @@ class StatefulMap<V extends Stateful<T>, T>
 	 * Sets the state of the objects in the map whose keys appear in 
 	 * `stateObject` to their corresponding new state in `stateObject`.
 	 * If `stateObject` contains a key that this map does not contain,
-	 * that key is included in the [[MissingObjects]] retnnnurn value.
+	 * that key is included in the [[MissingObjects]] return value.
 	 */
-    setState(stateObject: RecursivePartial<StateObject<T>>): MissingObjects {
+    setState(stateObject: RecursivePartial<StateObject<StateType>>): StateIndexer<StateObject<StateType>> {
         // Sets the state of each key in `stateObject`
-        const missing: MissingObjects = {};
+        const missing: StateIndexer<StateObject<StateType>> = {};
         for (let key of Object.keys(stateObject)) {
             const ourVal: V | undefined = this.get(key);
             if (ourVal != undefined) {
