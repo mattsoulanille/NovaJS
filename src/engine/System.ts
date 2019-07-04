@@ -1,4 +1,4 @@
-import { Stateful, StateIndexer } from "./Stateful";
+import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { SystemState } from "./SystemState";
 import { Steppable } from "./Steppable";
 
@@ -22,14 +22,14 @@ class System implements Stateful<SystemState>, Steppable {
 
     }
 
-    getState(missing: StateIndexer = {}): SystemState {
+    getState(missing: StateIndexer<SystemState> = {}): RecursivePartial<SystemState> {
         return {
             ships: this.ships.getState(missing.ships),
             planets: {},
             uuid: "temporary"
         }
     }
-    setState(_state: Partial<SystemState>): StateIndexer {
+    setState(_state: Partial<SystemState>): StateIndexer<SystemState> {
         return {}
     }
 

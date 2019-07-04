@@ -1,5 +1,5 @@
 import { ShipState } from "./ShipState";
-import { Stateful, StateIndexer } from "./Stateful";
+import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { Vector } from "./Vector";
 import { MovementType } from "./MovementType";
 
@@ -9,7 +9,7 @@ class Ship implements Stateful<ShipState> {
 
     }
 
-    getState(_missing?: StateIndexer | undefined): ShipState {
+    getState(_missing: StateIndexer<ShipState> = {}): RecursivePartial<ShipState> {
         return {
             movementType: MovementType.inertialess,
             position: new Vector(0, 0),
@@ -18,7 +18,7 @@ class Ship implements Stateful<ShipState> {
         }
     }
 
-    setState(_state: Partial<ShipState>): StateIndexer {
+    setState(_state: Partial<ShipState>): StateIndexer<ShipState> {
         throw new Error("Method not implemented.");
     }
 

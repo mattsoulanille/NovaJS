@@ -3,6 +3,7 @@ import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
 import { StatefulMap } from "../../src/engine/StatefulMap";
 import { Stateful, StateIndexer } from "../../src/engine/Stateful";
+import { fail } from "assert";
 
 before(function() {
     chai.should();
@@ -71,19 +72,36 @@ describe("StatefulMap", function() {
 
     it("Should ask for missing entries when setting state", function() {
         var state = everythingMap.getState();
-        state["things"]["animals"] = ["cow"];
-        state["things"]["food"] = ["bread", "rice"];
-        var missing = everythingMap.setState(state);
+        let things = state["things"];
+        if (things == undefined) {
+            expect.fail();
+        }
+        else {
+            things["animals"] = ["cow"];
+            things["food"] = ["bread", "rice"];
+            var missing = everythingMap.setState(state);
 
 
-        everythingMap.getState()["things"]["animals"].should.deep.equal(["cow"]);
-
-        missing.should.deep.equal({
-            things: {
-                food: {}
+            things = everythingMap.getState()["things"]
+            if (things == undefined) {
+                expect.fail()
             }
-        });
+            else {
+                let animals = things["animals"];
+                if (animals == undefined) {
+                    expect.fail()
+                }
+                else {
+                    animals.should.deep.equal(["cow"]);
+                }
+            }
 
+            missing.should.deep.equal({
+                things: {
+                    food: {}
+                }
+            });
+        }
     });
 
     it("Should provide specific entries upon request", function() {

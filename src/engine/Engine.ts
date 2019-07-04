@@ -1,7 +1,7 @@
 import { GameState } from "./GameState";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { System } from "./System";
-import { Stateful, StateIndexer } from "./Stateful";
+import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
 import { StatefulMap } from "./StatefulMap";
@@ -34,14 +34,21 @@ class Engine implements Stateful<GameState>, Steppable {
     }
 
     // Serializes the current state of the game
-    getState(toGet: StateIndexer<GameState> = {}): GameState {
+    getState(toGet: StateIndexer<GameState> = {}): RecursivePartial<GameState> {
         return {
             systems: this.systems.getState(toGet.systems)
         };
     }
 
     // Set the current state of the game
-    setState(_state: GameState) {
+    setState(state: RecursivePartial<GameState>): StateIndexer<GameState> {
+        const missing: StateIndexer<GameState> = {};
+
+        if (state.systems) {
+            missing.systems = this.systems.setState(state.systems);
+        }
+
+        return missing;
 
     }
 

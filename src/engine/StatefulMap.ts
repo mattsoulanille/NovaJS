@@ -27,8 +27,8 @@ class StatefulMap<V extends Stateful<StateType>, StateType>
 	/**
 	 * Gets the states of all objects in `missing`
 	 */
-    private getSubstate(toGet: StateIndexer<StateObject<StateType>>): StateObject<StateType> {
-        const state: StateObject<StateType> = {};
+    private getSubstate(toGet: StateIndexer<StateObject<StateType>>): RecursivePartial<StateObject<StateType>> {
+        const state: RecursivePartial<StateObject<StateType>> = {};
         for (let key of Object.keys(toGet)) {
             const substateToGet = toGet[key];
             const ourVal = this.get(key);
@@ -50,7 +50,7 @@ class StatefulMap<V extends Stateful<StateType>, StateType>
 	 * and whose values are the result of calling each of this map's values'
 	 * getState function.
 	 */
-    getState(toGet?: StateIndexer<StateObject<StateType>>): StateObject<StateType> {
+    getState(toGet?: StateIndexer<StateObject<StateType>>): RecursivePartial<StateObject<StateType>> {
         if (toGet && Object.entries(toGet).length > 0) {
             // An empty missing object means everything is missing
             return this.getSubstate(toGet)
