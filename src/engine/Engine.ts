@@ -19,8 +19,8 @@ class Engine implements Stateful<GameState>, Steppable {
     private activeSystems: Set<string>;
     private uuidFunction: () => string;
 
-    constructor({ gameData, uuidFunction = UUID }: { gameData: GameDataInterface, uuidFunction: () => string }) {
-        this.uuidFunction = uuidFunction;
+    constructor({ gameData, uuidFunction }: { gameData: GameDataInterface, uuidFunction?: () => string }) {
+        this.uuidFunction = uuidFunction || UUID;
         this.gameData = gameData;
         this.systems = new StatefulMap<System, SystemState>();
         this.activeSystems = new Set();
@@ -55,6 +55,7 @@ class Engine implements Stateful<GameState>, Steppable {
 
     }
 
+	/*
     async getInitialState(): GameState {
         const ids = await this.gameData.ids;
         const state: GameState = {
@@ -70,7 +71,7 @@ class Engine implements Stateful<GameState>, Steppable {
         }
         this.setState(state);
     }
-
+	*/
 }
 
 export { Engine }
