@@ -1,17 +1,19 @@
-import { Vector } from "./Vector";
+import * as t from "io-ts";
+import { VectorType } from "./Vector";
 import { MovementType } from "./MovementType";
 import { WithUUID } from "./WithUUID";
 
 
-type SpaceObjectState = WithUUID & {
+const SpaceObjectState = t.intersection([
+    WithUUID,
+    t.type({
+        position: VectorType,
+        velocity: VectorType,
+        movementType: MovementType
+    })
+]);
 
-    // Convex Hulls are not stored in the state
-    // because the state would be too big.
-    // They are instead stored in the 
-    position: Vector,
-    velocity: Vector,
-    movementType: MovementType
+type SpaceObjectState = t.TypeOf<typeof SpaceObjectState>;
 
-}
 
 export { SpaceObjectState }

@@ -5,6 +5,7 @@ import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
 import { StatefulMap } from "./StatefulMap";
+import * as UUID from "uuid/v4";
 
 class MissingSystemError extends Error {
     constructor(system: string) {
@@ -16,8 +17,10 @@ class Engine implements Stateful<GameState>, Steppable {
     private gameData: GameDataInterface;
     private systems: StatefulMap<System, SystemState>;
     private activeSystems: Set<string>;
+    private uuidFunction: () => string;
 
-    constructor({ gameData }: { gameData: GameDataInterface }) {
+    constructor({ gameData, uuidFunction = UUID }: { gameData: GameDataInterface, uuidFunction: () => string }) {
+        this.uuidFunction = uuidFunction;
         this.gameData = gameData;
         this.systems = new StatefulMap<System, SystemState>();
         this.activeSystems = new Set();
@@ -50,6 +53,22 @@ class Engine implements Stateful<GameState>, Steppable {
 
         return missing;
 
+    }
+
+    async getInitialState(): GameState {
+        const ids = await this.gameData.ids;
+        const state: GameState = {
+            systems: {}
+        };
+
+        for (let id of ids.System) {
+            state.systems[id] = {
+                uuid: this.uuidFunction(),
+                ships: {},
+                planets: {}
+            }
+        }
+        this.setState(state);
     }
 
 }

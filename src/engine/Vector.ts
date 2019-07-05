@@ -1,3 +1,4 @@
+import * as t from "io-ts";
 
 class Vector {
 
@@ -27,4 +28,9 @@ class Vector {
     }
 }
 
-export { Vector }
+const VectorType = t.type({
+    x: t.number,
+    y: t.number
+});
+
+export { Vector, VectorType }

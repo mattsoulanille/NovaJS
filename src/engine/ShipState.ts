@@ -1,11 +1,12 @@
+import * as t from "io-ts";
 import { SpaceObjectState } from "./SpaceObjectState";
 
 
-type ShipState = SpaceObjectState & {
+const ShipState = t.intersection([
+    SpaceObjectState,
+    t.type({})
+]);
 
-
-
-
-}
+type ShipState = t.TypeOf<typeof ShipState>;
 
 export { ShipState }
