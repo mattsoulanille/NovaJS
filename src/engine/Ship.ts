@@ -2,8 +2,9 @@ import { ShipState } from "./ShipState";
 import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { Vector } from "./Vector";
 import { MovementType } from "./MovementType";
+import { SpaceObject } from "./SpaceObject";
 
-class Ship implements Stateful<ShipState> {
+class Ship extends SpaceObject implements Stateful<ShipState> {
 
     constructor() {
 

@@ -1,8 +1,10 @@
-import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
+import { Stateful, StateIndexer, RecursivePartial, PartialState } from "./Stateful";
+import { isEmptyObject } from "./EmptyObject";
 
 
 
 type ObjectOf<T> = { [index: string]: T };
+type Defined<T> = T extends undefined ? never : T;
 
 //type NotArray<T> = T extends any[] ? never : T;
 //type Extract<V> = V extends Stateful<(infer T)> ? T : never;
@@ -50,7 +52,7 @@ class StatefulMap<V extends Stateful<StateType>, StateType>
 	 * and whose values are the result of calling each of this map's values'
 	 * getState function.
 	 */
-    getState(toGet?: StateIndexer<ObjectOf<StateType>>): RecursivePartial<ObjectOf<StateType>> {
+    getState(toGet?: StateIndexer<ObjectOf<StateType>>): PartialState<ObjectOf<StateType>> {
         if (toGet && Object.entries(toGet).length > 0) {
             // An empty `toGet` object means get everything
             // since you wouldn't be asking for the state of nothing.
@@ -69,7 +71,7 @@ class StatefulMap<V extends Stateful<StateType>, StateType>
 	 * If `stateObject` contains a key that this map does not contain,
 	 * that key is included in the [[MissingObjects]] return value.
 	 */
-    setState(stateObject: RecursivePartial<ObjectOf<StateType>>): StateIndexer<ObjectOf<StateType>> {
+    setState(stateObject: PartialState<ObjectOf<StateType>>): StateIndexer<ObjectOf<StateType>> {
         // Sets the state of each key in `stateObject`
         const missing: StateIndexer<ObjectOf<StateType>> = {};
         for (let key of Object.keys(stateObject)) {
@@ -89,10 +91,14 @@ class StatefulMap<V extends Stateful<StateType>, StateType>
                 // If we did include it, it would look like we were missing the whole child.
             }
             else {
-                missing[key] = {};
+                // This is okay since ReplaceWithEmptyObjects<T> always extends object
+                // TypeScript should really detect this.
+                missing[key] = {} as any;
             }
         }
+
         return missing;
+
     }
 }
 

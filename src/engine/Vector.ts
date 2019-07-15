@@ -1,36 +1,49 @@
 import * as t from "io-ts";
+import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
+import { VectorState } from "./VectorState";
+import { isEmptyObject } from "./EmptyObject";
 
-class Vector {
 
-    readonly x: number
-    readonly y: number
+class Vector implements Stateful<VectorState>{
+
+    x: number
+    y: number
 
     constructor(x: number, y: number) {
         this.x = x;
         this.y = y;
     }
 
-    static add(v1: Vector, v2: Vector) {
-        return new Vector(v1.x + v2.x, v1.y + v2.y);
+    add(other: Vector) {
+        this.x += other.x;
+        this.y += other.y;
     }
 
-    static rotate(vec: Vector, radians: number) {
+    rotate(radians: number) {
         var cos = Math.cos(radians);
         var sin = Math.sin(radians);
-        return new Vector(
-            cos * vec.x - sin * vec.y,
-            sin * vec.x + cos * vec.y
-        );
+        this.x = cos * this.x - sin * this.y;
+        this.y = sin * this.x + cos * this.y;
     }
 
-    toJSON(): string {
-        return JSON.stringify({ x: this.x, y: this.y });
+    getState(_toGet: StateIndexer<VectorState> = {}): RecursivePartial<VectorState> {
+        return {
+            x: this.x,
+            y: this.y
+        }
+    }
+
+    setState({ x, y }: RecursivePartial<VectorState>): StateIndexer<VectorState> {
+        if (x !== undefined) {
+            this.x = x
+        }
+        if (y !== undefined) {
+            this.y = y
+        }
+        return {};
     }
 }
 
-const VectorType = t.type({
-    x: t.number,
-    y: t.number
-});
+const VectorType = t.type({ x: t.number, y: t.number });
 
 export { Vector, VectorType }
