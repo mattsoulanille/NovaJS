@@ -36,7 +36,7 @@ class SpriteSheetSprite extends PIXI.Sprite {
         this.buildPromise = loadTextures();
     }
 
-    setTexture(index: number) {
+    private setTexture(index: number) {
         if (this.textures) {
             if (index < this.textures.length) {
                 this.texture = this.textures[index];
@@ -45,6 +45,12 @@ class SpriteSheetSprite extends PIXI.Sprite {
                 console.warn("Requested texture index " + index
                     + " but there are only " + this.textures.length);
             }
+        }
+    }
+
+    setFramesToUse(frames: string) {
+        if (frames in this.imagePurposes) {
+            this.textureSet = this.imagePurposes[frames];
         }
     }
 
