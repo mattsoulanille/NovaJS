@@ -26,6 +26,10 @@ class Vector implements Stateful<VectorState>{
         this.y = sin * this.x + cos * this.y;
     }
 
+    static scale(vec: Vector, scale: number) {
+        return new Vector(vec.x * scale, vec.y * scale);
+    }
+
     getState(_toGet: StateIndexer<VectorState> = {}): RecursivePartial<VectorState> {
         return {
             x: this.x,

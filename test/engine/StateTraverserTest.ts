@@ -126,7 +126,7 @@ describe("StateTraverser", function() {
         });
     });
 
-    it("Should set the complete state", function() {
+    it("Should set the state", function() {
         baz.setState({
             c: 11,
             foo: {
@@ -135,10 +135,19 @@ describe("StateTraverser", function() {
             }
         }).should.deep.equal({});
 
-        baz.getState().should.deep.equal({}); // TODO
+        baz.getState().should.deep.equal({
+            c: 11,
+            foo: {
+                a: 100,
+                b: "one hundred"
+            },
+            foo2: {
+                a: 42,
+                b: "the answer"
+            }
+
+        }); // TODO
 
     });
-
-
 
 });

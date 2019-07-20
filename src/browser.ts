@@ -7,7 +7,8 @@ import { GameData } from "./client/GameData";
 
 
 // Temporary
-(window as any).gameData = new GameData();
+const gameData = new GameData();
+(window as any).gameData = gameData;
 
 
 
@@ -18,16 +19,31 @@ const app = new PIXI.Application({
     height: window.innerHeight
 });
 
+(window as any).app = app;
+
+
 document.body.appendChild(app.view);
 
-const display = new Display(app.stage);
+
+const display = new Display({ container: app.stage, gameData: gameData });
+(window as any).display = display;
+
+window.onresize = function() {
+    app.renderer.resize(window.innerWidth, window.innerHeight);
+    display.resize(window.innerWidth, window.innerHeight);
+}
+
+display.buildPromise.then(function() {
+    // Set the window size once everything is built
+    display.resize(window.innerWidth, window.innerHeight);
+});
 
 
 //var engine = new Engine();
 
 var currentState: GameState;
-function updateState(delta: number) {
-    currentState = display.draw(currentState, delta);
+function updateState(_delta: number) {
+    currentState = display.draw(currentState);
 }
 
 function startGame() {

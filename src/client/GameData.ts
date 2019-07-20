@@ -18,6 +18,7 @@ import { Gettable } from "novadatainterface/Gettable";
 import { dataPath, idsPath } from "../common/GameDataPaths";
 
 
+
 /**
  * Retrieves game data from the server
  */
@@ -49,10 +50,10 @@ class GameData implements GameDataInterface {
 
     }
 
-    private getUrl(url: string): Promise<Buffer> {
-        return new Promise(function(fulfill, reject) {
-            PIXI.loader
-                .add(url, url)
+    private async getUrl(url: string): Promise<Buffer> {
+        return await new Promise(function(fulfill, reject) {
+            var loader = new PIXI.loaders.Loader();
+            loader.add(url, url)
                 .load(function(_loader: any, resource: { [x: string]: { data: any; error: Error }; }) {
                     if (resource[url].error) {
                         reject(resource[url].error);
@@ -84,9 +85,25 @@ class GameData implements GameDataInterface {
         });
     }
 
+    async textureFromPict(id: string): Promise<PIXI.Texture> {
+        const pictPath = path.join(dataPath, "PictImage", id + ".png");
+        if (!PIXI.utils.TextureCache[pictPath]) {
+            await this.getUrl(pictPath);
+        }
+        return PIXI.Texture.from(pictPath);
+    }
+
+
+    async spriteFromPict(id: string) {
+        // TODO: Use this.data
+        var texture = await this.textureFromPict(id);
+        return new PIXI.Sprite(texture);
+    }
+
     private async getIds(): Promise<NovaIDs> {
-        var idsBuffer = await this.getUrl(idsPath);
-        return JSON.parse(idsBuffer.toString('utf8'));
+        // Working with PIXI is weird
+        return ((await this.getUrl(idsPath + ".json")) as unknown) as NovaIDs;
+        //return JSON.parse(idsBuffer.toString('utf8'));
     }
 }
 

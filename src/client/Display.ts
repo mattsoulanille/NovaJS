@@ -1,29 +1,37 @@
 import { GameState } from "../engine/GameState";
 import * as PIXI from "pixi.js";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { StatusBar } from "./StatusBar";
+import { GameData } from "./GameData";
 
 
 class Display {
-    text: PIXI.Text;
     readonly container: PIXI.Container;
+    gameData: GameData;
+    statusBarContainer: PIXI.Container;
+    statusBar: StatusBar;
+    buildPromise: Promise<void[]>;
 
-    constructor(container: PIXI.Container) {
+    constructor({ container, gameData }: { container: PIXI.Container, gameData: GameData }) {
         this.container = container;
-
-        const style = new PIXI.TextStyle({
-            fill: "#ff3328"
+        this.gameData = gameData;
+        this.statusBarContainer = new PIXI.Container();
+        this.container.addChild(this.statusBarContainer);
+        this.statusBar = new StatusBar({
+            container: this.statusBarContainer,
+            gameData: this.gameData
         });
 
-        this.text = new PIXI.Text("This is a test", style);
-        this.text.position.x = 100;
-        this.text.position.y = 100;
-        this.text.anchor.x = 0.5;
-        this.text.anchor.y = 0.5;
-        this.container.addChild(this.text);
+
+        this.buildPromise = Promise.all([this.statusBar.buildPromise]);
     }
 
-    draw(state: GameState, delta: number): GameState {
-        this.text.rotation += delta / 500;
+    draw(state: GameState): GameState {
         return state;
+    }
+
+    resize(x: number, y: number) {
+        this.statusBar.resize(x, y);
     }
 
 }
