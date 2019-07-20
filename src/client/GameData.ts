@@ -73,8 +73,7 @@ class GameData implements GameDataInterface {
     private addGettable<T extends BaseData | SpriteSheetFramesData>(dataType: NovaDataType): Gettable<T> {
         var dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string): Promise<T> => {
-            var buffer = await this.getUrl(path.join(dataPrefix, id));
-            return JSON.parse(buffer.toString('utf8'));
+            return (await this.getUrl(path.join(dataPrefix, id + ".json"))) as any;
         });
     }
 
@@ -86,10 +85,12 @@ class GameData implements GameDataInterface {
     }
 
     async textureFromPict(id: string): Promise<PIXI.Texture> {
-        const pictPath = path.join(dataPath, "PictImage", id + ".png");
-        if (!PIXI.utils.TextureCache[pictPath]) {
-            await this.getUrl(pictPath);
-        }
+        const pictPath = path.join(dataPath, NovaDataType.PictImage, id + ".png");
+        // if (!PIXI.utils.TextureCache[pictPath]) {
+        //     await this.getUrl(pictPath);
+        // }
+
+        await this.data.PictImage.get(id);
         return PIXI.Texture.from(pictPath);
     }
 
@@ -98,6 +99,18 @@ class GameData implements GameDataInterface {
         // TODO: Use this.data
         var texture = await this.textureFromPict(id);
         return new PIXI.Sprite(texture);
+    }
+
+    async texturesFromSpriteSheet(id: string): Promise<PIXI.Texture[]> {
+        const spriteSheetFrames = await this.data.SpriteSheetFrames.get(id);
+
+        const allTextures: PIXI.Texture[] = [];
+        const frameNames = Object.keys(spriteSheetFrames.frames);
+        for (let frameIndex = 0; frameIndex < frameNames.length; frameIndex++) {
+            let frameName = frameNames[frameIndex];
+            allTextures[frameIndex] = PIXI.Texture.from(frameName);
+        }
+        return allTextures;
     }
 
     private async getIds(): Promise<NovaIDs> {
