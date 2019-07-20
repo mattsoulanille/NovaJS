@@ -1,3 +1,4 @@
+import * as PIXI from "pixi.js";
 import * as path from "path";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
