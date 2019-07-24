@@ -72,12 +72,17 @@ class SocketChannelClient implements Channel {
     private _handleAddPeer(peer: unknown) {
         if (typeof peer === "string") {
             this._peers.add(peer);
+            this.onConnect.post(peer);
+        }
+        else {
+            this.warn("Expected peer to be string but got " + peer);
         }
     }
 
     private _handleRemovePeer(peer: unknown) {
         if (typeof peer === "string") {
             this._peers.delete(peer);
+            this.onDisconnect.post(peer);
         }
     }
 

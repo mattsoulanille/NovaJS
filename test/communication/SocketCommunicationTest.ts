@@ -7,6 +7,8 @@ import * as io from "socket.io-client";
 import { SocketChannelServer } from "../../src/server/SocketChannelServer";
 import { SocketChannelClient } from "../../src/client/SocketChannelClient";
 import { fail } from "assert";
+import { AnyEvent } from "ts-events";
+import { expect } from "chai";
 
 before(function() {
     chai.should();
@@ -26,29 +28,50 @@ function sleep(ms: number): Promise<void> {
     });
 }
 
+function waitForEvent<T>(handler: AnyEvent<T>, timeout = 1000): Promise<T> {
+
+    return new Promise((fulfill, reject) => {
+        const failTimeout = setTimeout(() => {
+            handler.detach(success);
+            reject(new Error("More than " + timeout + " milliseconds spent"));
+        }, timeout);
+
+        function success(v: T) {
+            clearTimeout(failTimeout);
+            fulfill(v);
+        }
+
+        handler.once(success);
+    });
+}
+
 // https://stackoverflow.com/questions/15509231/unit-testing-node-js-and-websockets-socket-io
 describe("Socket Communication Channel", function() {
 
-    const clients: SocketIOClient.Socket[] = [];
+    const SocketIOclients: SocketIOClient.Socket[] = [];
 
     const serverChannel = new SocketChannelServer({ io: io_server });
+    const clientChannels: { [index: string]: SocketChannelClient } = {};
 
-    afterEach((done) => {
-        for (let socket of clients) {
+    afterEach(async () => {
+        for (let clientUUID in clientChannels) {
+            await disconnectClient(clientUUID);
+        }
+
+        for (let socket of SocketIOclients) {
             if (socket.connected) {
                 socket.disconnect();
             }
         }
-        clients.length = 0; // clear the list of clients
+        SocketIOclients.length = 0; // clear the list of clients
         //io_server.close();
-        done();
     });
 
     after(() => {
         io_server.close(); // is this necessary?
     })
 
-    function connectClient(): Promise<SocketIOClient.Socket> {
+    function connectSocketIOClient(): Promise<SocketIOClient.Socket> {
         return new Promise((fulfill) => {
             let socket = io.connect("http://localhost:3001", {
                 reconnectionDelay: 0,
@@ -56,11 +79,63 @@ describe("Socket Communication Channel", function() {
                 reconnectionDelayMax: 0,
                 transports: ["websocket"]
             });
-            clients.push(socket);
+            SocketIOclients.push(socket);
             socket.on("connect", () => {
                 fulfill(socket);
             });
         });
+    }
+
+
+    // Builds and connects a client
+    // Guarantees that the client and all peers know about eachother
+    async function connectClient(): Promise<SocketChannelClient> {
+        const promises: Promise<string>[] = [];
+        for (let peerUUID in clientChannels) {
+            let peer = clientChannels[peerUUID];
+            promises.push(waitForEvent(peer.onConnect));
+        }
+        promises.push(waitForEvent(serverChannel.onConnect));
+        const client = new SocketChannelClient({ socket: await connectSocketIOClient() });
+
+        let results = await Promise.all(promises);
+        await client.readyPromise;
+        for (let uuid of results) {
+            uuid.should.equal(client.uuid);
+        }
+
+        if (client.uuid !== undefined) {
+            clientChannels[client.uuid] = client;
+        }
+        else {
+            fail("Client uuid was undefined");
+        }
+
+        return client;
+    }
+
+    async function disconnectClient(uuid: string): Promise<void> {
+        let client = clientChannels[uuid];
+        if (client !== undefined) {
+            const promises: Promise<string>[] = [];
+            for (let peerUUID in clientChannels) {
+                if (peerUUID !== uuid) {
+                    let peer = clientChannels[peerUUID];
+                    promises.push(waitForEvent(peer.onDisconnect));
+                }
+            }
+            promises.push(waitForEvent(serverChannel.onDisconnect));
+
+            client.disconnect();
+            let results = await Promise.all(promises);
+            for (let uuid of results) {
+                uuid.should.equal(client.uuid);
+            }
+            delete clientChannels[uuid];
+        }
+        else {
+            fail("Tried to disconnect nonexistent client " + uuid);
+        }
     }
 
     it("basic socket.io communication should work (if this fails, the tester is broken)", async () => {
@@ -75,7 +150,7 @@ describe("Socket Communication Channel", function() {
             });
         });
 
-        let socket = await connectClient();
+        let socket = await connectSocketIOClient();
 
         socket.once("helloWorld", (message: any) => {
             // Check that the message matches
@@ -90,28 +165,153 @@ describe("Socket Communication Channel", function() {
 
 
     it("Clients and the server should know who's connected", async function() {
-        let client1 = new SocketChannelClient({ socket: await connectClient() });
-        let client2 = new SocketChannelClient({ socket: await connectClient() });
-        let client3 = new SocketChannelClient({ socket: await connectClient() });
-        await client1.readyPromise;
-        await client2.readyPromise;
-        await client3.readyPromise;
+
+        let client1 = await connectClient();
+        let client2 = await connectClient();
+        let client3 = await connectClient();
+
         if (client1.uuid === undefined || client2.uuid === undefined || client3.uuid === undefined) {
             fail("uuid was undefined for a client");
         }
         else {
             // .have.keys also fails if it has keys we don't mention.
             serverChannel.peers.should.have.keys(client1.uuid, client2.uuid, client3.uuid);
-            await sleep(50); // Wait for the server to notify the clients of new peers
+
             client1.peers.should.have.keys(serverChannel.uuid, client2.uuid, client3.uuid);
             client2.peers.should.have.keys(client1.uuid, serverChannel.uuid, client3.uuid);
             client3.peers.should.have.keys(client1.uuid, client2.uuid, serverChannel.uuid);
 
-            client2.disconnect();
-            await sleep(50); // Wait for the disconnect message to arrive.
+            await disconnectClient(client2.uuid);
+
             serverChannel.peers.should.have.keys(client1.uuid, client3.uuid);
             client1.peers.should.have.keys(serverChannel.uuid, client3.uuid);
             client3.peers.should.have.keys(client1.uuid, serverChannel.uuid);
         }
     });
+
+    it("serverChannel should be cleared of peers between tests", function() {
+        serverChannel.peers.should.be.empty;
+    });
+
+    it("Should allow messages to be sent between clients", async function() {
+        let client1 = await connectClient();
+        let client2 = await connectClient();
+        let client3 = await connectClient();
+
+
+        var client3Promise = waitForEvent(client3.onMessage, 100);
+        var message1 = "Hello from client1 " + Math.random();
+        var message1Promise = waitForEvent(client2.onMessage);
+        if (client2.uuid !== undefined) {
+            client1.send(client2.uuid, message1);
+
+            (await message1Promise).should.deep.equal({
+                source: client1.uuid,
+                message: message1
+            });
+        }
+        else {
+            fail("client2 uuid undefined");
+        }
+
+
+        let caughtException = false;
+        try {
+            await client3Promise;
+        }
+        catch (e) {
+            caughtException = true;
+        }
+        caughtException.should.equal(true, "client3 received message sent from client1 to client2");
+
+    });
+
+    it("Should allow messages to be sent to and from the server", async function() {
+        let client1 = await connectClient();
+        let client2 = await connectClient();
+        let client3 = await connectClient();
+
+        var client3Promise = waitForEvent(client3.onMessage, 100);
+        var toServer = "Hello from client1 " + Math.random();
+        var toServerPromise = waitForEvent(serverChannel.onMessage);
+        client1.send(serverChannel.uuid, toServer);
+
+        (await toServerPromise).should.deep.equal({
+            source: client1.uuid,
+            message: toServer
+        });
+
+        var fromServer = "Hello from the server " + Math.random();
+        var fromServerPromise = waitForEvent(client2.onMessage);
+        if (client2.uuid !== undefined) {
+            serverChannel.send(client2.uuid, fromServer);
+
+            (await fromServerPromise).should.deep.equal({
+                source: serverChannel.uuid,
+                message: fromServer
+            });
+        }
+        else {
+            fail("client2 uuid undefined");
+        }
+
+
+        let caughtException = false;
+        try {
+            await client3Promise;
+        }
+        catch (e) {
+            caughtException = true;
+        }
+        caughtException.should.equal(true, "client3 received message it should not have received");
+
+    })
+
+    it("Should allow broadcasts from a client", async function() {
+        let client1 = await connectClient();
+        let client2 = await connectClient();
+        let client3 = await connectClient();
+
+        let client2ReceiveClient1 = waitForEvent(client2.onMessage);
+        let client3ReceiveClient1 = waitForEvent(client3.onMessage);
+        let serverReceiveClient1 = waitForEvent(serverChannel.onMessage);
+
+        let client1Message = "Broadcast from client1 " + Math.random();
+        client1.broadcast(client1Message);
+
+        let expectedMessage = {
+            source: client1.uuid,
+            message: client1Message
+        };
+
+        (await client2ReceiveClient1).should.deep.equal(expectedMessage);
+        (await client3ReceiveClient1).should.deep.equal(expectedMessage);
+        (await serverReceiveClient1).should.deep.equal(expectedMessage);
+    });
+
+    it("Should allow broadcasts from the server", async function() {
+        let client1 = await connectClient();
+        let client2 = await connectClient();
+        let client3 = await connectClient();
+
+        let client1ReceiveServer = waitForEvent(client1.onMessage);
+        let client2ReceiveServer = waitForEvent(client2.onMessage);
+        let client3ReceiveServer = waitForEvent(client3.onMessage);
+
+
+        let serverMessage = "Broadcast from server " + Math.random();
+        serverChannel.broadcast(serverMessage);
+
+        let expectedMessage = {
+            source: serverChannel.uuid,
+            message: serverMessage
+        };;
+
+        (await client1ReceiveServer).should.deep.equal(expectedMessage);
+        (await client2ReceiveServer).should.deep.equal(expectedMessage);
+        (await client3ReceiveServer).should.deep.equal(expectedMessage);
+
+    });
+
+
 });

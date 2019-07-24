@@ -122,7 +122,8 @@ class SocketChannelServer implements Channel {
                 message: decoded.value,
                 source: clientUUID
             };
-            socket.broadcast.emit("broadcast", toBroadcast);
+            socket.broadcast.emit("message", toBroadcast);
+            this.onMessage.post(toBroadcast);
         }
         else {
             this.warn(
