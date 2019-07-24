@@ -1,6 +1,6 @@
-import { Channel, MessageType, MessageWithSourceType } from "../common/Channel";
+import { Channel, MessageType, MessageWithSourceType } from "./Channel";
 import { AnyEvent } from "ts-events";
-import { InitialDataType } from "../server/SocketChannelServer";
+import { InitialDataType } from "./SocketChannelServer";
 
 
 

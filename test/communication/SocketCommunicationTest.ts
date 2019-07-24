@@ -1,14 +1,13 @@
+import { fail } from "assert";
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
 import * as io_server_precursor from "socket.io";
 import * as io from "socket.io-client";
-
-import { SocketChannelServer } from "../../src/server/SocketChannelServer";
-import { SocketChannelClient } from "../../src/client/SocketChannelClient";
-import { fail } from "assert";
 import { AnyEvent } from "ts-events";
-import { expect } from "chai";
+import { SocketChannelClient } from "../../src/communication/SocketChannelClient";
+import { SocketChannelServer } from "../../src/communication/SocketChannelServer";
+
 
 before(function() {
     chai.should();

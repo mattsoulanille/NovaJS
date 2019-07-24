@@ -1,7 +1,7 @@
 import * as t from "io-ts";
 import { AnyEvent } from "ts-events";
 import * as UUID from "uuid/v4";
-import { Channel, MessageType, MessageWithSourceType } from "../common/Channel";
+import { Channel, MessageType, MessageWithSourceType } from "./Channel";
 
 
 
