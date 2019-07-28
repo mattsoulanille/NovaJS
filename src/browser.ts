@@ -3,8 +3,11 @@ import 'pixi-display';
 import { Display } from "./client/Display";
 import { GameState } from "./engine/GameState";
 import { GameData } from "./client/GameData";
-//import * as io from "socket.io-client";
+import { Engine } from "./engine/Engine";
+import * as io from "socket.io-client";
 
+const socket = io.Socket;
+(window as any).socket = socket;
 
 // Temporary
 const gameData = new GameData();
@@ -39,17 +42,22 @@ display.buildPromise.then(function() {
 });
 
 
-//var engine = new Engine();
+
+var engine = new Engine({
+    gameData
+});
+(window as any).engine = engine;
 
 var currentState: GameState;
 function updateState(_delta: number) {
-    currentState = display.draw(currentState);
+    display.draw(currentState, "nobody");
 }
 
 function startGame() {
-    //io.Socket.emit("pingTest", "Hello from the client");
     app.ticker.add(updateState);
 }
+
+
 
 
 startGame();

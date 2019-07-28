@@ -17,6 +17,8 @@ const app = express();
 const httpServer = new http.Server(app);
 const io = socket(httpServer);
 
+
+
 const port: number = settings.port;
 const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
 //const novaDataPath: string = path.join(__dirname, "Nova\ Data");

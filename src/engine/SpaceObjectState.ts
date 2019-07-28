@@ -2,6 +2,7 @@ import * as t from "io-ts";
 import { VectorType } from "./Vector";
 import { MovementType } from "./MovementType";
 import { AngleType } from "./Angle";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
 
 
 const SpaceObjectState =
@@ -9,7 +10,8 @@ const SpaceObjectState =
         position: VectorType,
         velocity: VectorType,
         rotation: AngleType,
-        movementType: MovementType
+        movementType: MovementType,
+        id: t.string // The ID for GameData. Not UUID.
     });
 
 

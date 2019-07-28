@@ -27,7 +27,7 @@ class TestObject implements Stateful<TestState> {
 
     setState(state: TestState): StateIndexer<TestState> {
         this.state = state;
-        return {}
+        return []
     }
 
 
@@ -105,14 +105,14 @@ describe("StatefulMap", function() {
     });
 
     it("Should provide specific entries upon request", function() {
-        thingsMap.getState({ rocks: {} }).should.deep.equal(
+        thingsMap.getState({ rocks: [] }).should.deep.equal(
             {
                 rocks: ["basalt", "granite"]
             });
 
         everythingMap.getState({
             things: {
-                rocks: {}
+                rocks: []
             },
             ideas: {}
         }).should.deep.equal({

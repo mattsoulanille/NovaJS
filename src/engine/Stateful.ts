@@ -4,9 +4,10 @@
 
 // Allows any subset of object properties all the way down
 // through all subobjects.o
+
 type RecursivePartial<T> =
     T extends object ? {
-        [P in Exclude<keyof T, symbol | number>]?: RecursivePartial<T[P]>
+        [P in keyof T]?: RecursivePartial<T[P]>
         //    T[P] extends (infer U)[] ? RecursivePartial<U>[] :
         //    T[P] extends object ? RecursivePartial<T[P]> :
     } :
@@ -50,7 +51,7 @@ type OnlyStringKeys<T> =
 type EmptyObject = { [index: string]: never };
 type ReplaceWithEmptyObjects<T> =
     T extends object ? {
-        [P in Exclude<keyof T, symbol | number>]: ReplaceWithEmptyObjects<T[P]>
+        [P in keyof T]: ReplaceWithEmptyObjects<T[P]>
     } : EmptyObject;
 
 // type T1 = keyof any; // string | number | symbol
