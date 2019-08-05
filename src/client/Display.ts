@@ -41,8 +41,7 @@ class Display {
     }
 
 
-    draw(_state: GameState, _activeShipUUID: string) {
-		/*
+    draw(state: GameState, activeShipUUID: string) {
         if (this.built && activeShipUUID) {
             const activeSystemUUID = this.activeSystemTracker.getActiveSystem(state, activeShipUUID);
             const activeSystem = state.systems[activeSystemUUID];
@@ -53,7 +52,7 @@ class Display {
             }
 
         }
-*/
+
     }
 
 
