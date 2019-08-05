@@ -24,7 +24,7 @@ import { PNG } from "pngjs";
 import { PlanetData } from "novadatainterface/PlanetData";
 import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
 import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
-import { PictImageData } from "../../NovaDataInterface/PictImage";
+import { PictImageData } from "novadatainterface/PictImage";
 import { BadDirectoryStructureError } from "../src/IDSpaceHandler";
 
 before(function() {
@@ -134,11 +134,11 @@ describe("NovaParse", function() {
         anim.images.baseImage.should.deep.equal({
             id: 'nova:1000',
             imagePurposes:
-                {
-                    normal: { start: 0, length: 36 },
-                    left: { start: 36, length: 36 },
-                    right: { start: 72, length: 36 }
-                }
+            {
+                normal: { start: 0, length: 36 },
+                left: { start: 36, length: 36 },
+                right: { start: 72, length: 36 }
+            }
         });
 
         // s1 has no alt image
