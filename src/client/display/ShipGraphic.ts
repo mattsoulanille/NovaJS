@@ -1,9 +1,9 @@
 import * as PIXI from "pixi.js";
-import { GameData } from "./GameData";
+import { GameData } from "../GameData";
 import { Animation } from "novadatainterface/Animation";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import { SpriteSheetSprite } from "./SpriteSheetSprite";
-import { ShipState } from "../engine/ShipState";
+import { ShipState } from "../../engine/ShipState";
 
 
 class ShipGraphic extends PIXI.Container {

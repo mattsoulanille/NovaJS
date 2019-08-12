@@ -4,7 +4,6 @@ import * as UUID from "uuid/v4";
 import { AnyEvent } from "ts-events";
 import { Channel } from "./Channel";
 import { GameState } from "../engine/GameState";
-import { ActiveSystemTracker } from "../common/ActiveSystemTracker";
 import { PartialState } from "../engine/Stateful";
 
 
@@ -22,34 +21,17 @@ class Communicator {
     // Used to determine whether or not a state change that peers
     // would need to be notified of has occurred.
     readonly shipUUID: string;
-    activeSystemTracker: ActiveSystemTracker;
 
     constructor({ channel, shipUUID }: { channel: Channel, shipUUID: string }) {
         this.peerUUIDs = {};
         this.channel = channel;
         this.shipUUID = shipUUID;
-        this.activeSystemTracker = new ActiveSystemTracker();
 
 
     }
 
-    notifyPeers(state: GameState, activeShipUUID: string) {
-        const systemUUID = this.activeSystemTracker.getActiveSystem(state, activeShipUUID);
-        const ship = this.activeSystemTracker.getShip(state, activeShipUUID);
-        const stateToBroadcast: PartialState<GameState> = {
-            systems: {
-                [systemUUID]: {
-                    ships: {
-                        [activeShipUUID]: ship
-                    }
-                }
-            }
+    notifyPeers(_state: GameState) {
 
-        };
-
-        this.channel.broadcast({
-            newState: stateToBroadcast
-        });
     }
 }
 

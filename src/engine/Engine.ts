@@ -6,6 +6,7 @@ import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
 import { StatefulMap } from "./StatefulMap";
 import * as UUID from "uuid/v4";
+import { BuildingMap } from "./BuildingMap";
 
 class MissingSystemError extends Error {
     constructor(system: string) {
@@ -55,8 +56,7 @@ class Engine implements Stateful<GameState>, Steppable {
 
     }
 
-	/*
-    async getInitialState(): GameState {
+    async setInitialState(): Promise<GameState> {
         const ids = await this.gameData.ids;
         const state: GameState = {
             systems: {}
@@ -64,14 +64,13 @@ class Engine implements Stateful<GameState>, Steppable {
 
         for (let id of ids.System) {
             state.systems[id] = {
-                uuid: this.uuidFunction(),
                 ships: {},
                 planets: {}
             }
         }
         this.setState(state);
+        return state
     }
-	*/
 }
 
 export { Engine }

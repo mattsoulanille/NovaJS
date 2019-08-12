@@ -1,8 +1,8 @@
-import { GameState } from "../engine/GameState";
+import { GameState } from "../../engine/GameState";
 import * as PIXI from "pixi.js";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { StatusBarData } from "novadatainterface/StatusBarData";
-import { GameData } from "./GameData";
+import { GameData } from "../GameData";
 
 
 class StatusBar {

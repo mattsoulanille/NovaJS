@@ -1,12 +1,11 @@
-import { GameState } from "../engine/GameState";
+import { GameState } from "../../engine/GameState";
 import * as PIXI from "pixi.js";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { StatusBar } from "./StatusBar";
-import { GameData } from "./GameData";
+import { GameData } from "../GameData";
 import { SpriteSheetSprite } from "./SpriteSheetSprite";
-import { ActiveSystemTracker } from "../common/ActiveSystemTracker";
 import { ShipData } from "novadatainterface/ShipData";
-import { ShipState } from "../engine/ShipState";
+import { ShipState } from "../../engine/ShipState";
 import { ShipGraphic } from "./ShipGraphic";
 
 
@@ -17,7 +16,6 @@ class Display {
     statusBar: StatusBar;
     readonly buildPromise: Promise<unknown>;
     //    private activeShip: string | undefined; // The uuid of the ship to render from.
-    activeSystemTracker: ActiveSystemTracker;
     built: boolean;
     starbridge: ShipGraphic | undefined;
 
@@ -35,23 +33,12 @@ class Display {
         this.built = false;
         this.buildPromise = Promise.all([this.statusBar.buildPromise])
         this.buildPromise.then(() => { this.built = true });
-        this.activeSystemTracker = new ActiveSystemTracker();
 
         this.buildStarbridge();
     }
 
 
-    draw(state: GameState, activeShipUUID: string) {
-        if (this.built && activeShipUUID) {
-            const activeSystemUUID = this.activeSystemTracker.getActiveSystem(state, activeShipUUID);
-            const activeSystem = state.systems[activeSystemUUID];
-
-            for (let shipUUID in activeSystem.ships) {
-                let ship = activeSystem.ships[shipUUID];
-                this.drawShip(ship, shipUUID);
-            }
-
-        }
+    draw(_state: GameState) {
 
     }
 

@@ -6,7 +6,7 @@ import { ShipState } from "./ShipState";
 
 const SystemState = t.type({
     ships: t.record(t.string, ShipState),
-    planets: t.record(t.string, PlanetState)
+    planets: t.record(t.string, PlanetState),
 });
 
 

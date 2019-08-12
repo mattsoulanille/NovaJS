@@ -1,6 +1,6 @@
 import { SpriteSheetImageData, SpriteSheetFramesData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
 import * as PIXI from "pixi.js";
-import { GameData } from "./GameData";
+import { GameData } from "../GameData";
 import { AnimationImagePurposes, AnimationImageIndex } from "novadatainterface/Animation";
 
 const TWO_PI = 2 * Math.PI;

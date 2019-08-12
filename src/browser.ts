@@ -1,6 +1,6 @@
 import * as PIXI from "pixi.js";
 import 'pixi-display';
-import { Display } from "./client/Display";
+import { Display } from "./client/display/Display";
 import { GameState } from "./engine/GameState";
 import { GameData } from "./client/GameData";
 import { Engine } from "./engine/Engine";
@@ -50,7 +50,7 @@ var engine = new Engine({
 
 var currentState: GameState;
 function updateState(_delta: number) {
-    display.draw(currentState, "nobody");
+    display.draw(currentState);
 }
 
 function startGame() {

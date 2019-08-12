@@ -7,6 +7,7 @@ import * as path from "path";
 import { GameDataAggregator } from "./server/parsing/GameDataAggregator";
 import { setupRoutes } from "./server/setupRoutes";
 import { FilesystemData } from "./server/parsing/FilesystemData";
+import { Engine } from "./engine/Engine";
 //import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
 const appRoot: string = path.join(__dirname, "../");
@@ -30,6 +31,12 @@ const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 setupRoutes(gameData, app);
 
+
+
+const engine = new Engine({ gameData });
+engine.setInitialState().then(function(s) {
+    console.log(s);
+});
 
 
 
