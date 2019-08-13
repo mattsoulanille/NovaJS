@@ -34,10 +34,11 @@ setupRoutes(gameData, app);
 
 
 const engine = new Engine({ gameData });
+/*
 engine.setInitialState().then(function(s) {
     console.log(s);
 });
-
+*/
 
 
 // This has to be __dirname + "/static" or else sourcemaps don't work!

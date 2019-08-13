@@ -5,6 +5,7 @@ import { GameState } from "./engine/GameState";
 import { GameData } from "./client/GameData";
 import { Engine } from "./engine/Engine";
 import * as io from "socket.io-client";
+import { platform } from "os";
 
 const socket = io.Socket;
 (window as any).socket = socket;
@@ -48,8 +49,28 @@ var engine = new Engine({
 });
 (window as any).engine = engine;
 
-var currentState: GameState;
-function updateState(_delta: number) {
+
+engine.setState({
+    systems: {
+        "sol": {
+            uuid: "sol",
+            planets: {},
+            ships: {
+                "ship1": {
+                    id: "nova:128",
+                    movementType: "inertial",
+                    position: { x: 20, y: 20 },
+                    rotation: 0,
+                    velocity: { x: 0, y: 0 }
+                }
+            }
+        }
+    }
+});
+
+function updateState(delta: number) {
+    engine.step(delta);
+    let currentState = engine.getSystemFullState("sol");
     display.draw(currentState);
 }
 

@@ -17,7 +17,6 @@ class ShipGraphic extends PIXI.Container {
     // id is the id for GameData. Not the UUID.
     constructor({ gameData, id }: { gameData: GameData, id: string }) {
         super();
-        this.visible = false;
         this.gameData = gameData;
         this.id = id;
         this.sprites = [];

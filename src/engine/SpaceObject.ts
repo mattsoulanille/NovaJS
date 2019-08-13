@@ -14,16 +14,28 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
     private velocity: Vector;
     private movementType: MovementType;
     private rotation: Angle;
+    private id: string;
 
-    constructor() {
-        this.movementType = "inertial"; // Temporary
-        this.position = new Position(0, 0);
-        this.velocity = new Vector(0, 0);
-        this.rotation = new Angle(0);
+    constructor({ state }: { state: SpaceObjectState }) {
+        this.id = state.id;
+        this.movementType = state.movementType;
+        this.position = new Position(
+            state.position.x,
+            state.position.y
+        );
+
+        this.velocity = new Vector(
+            state.velocity.x,
+            state.velocity.y
+        );
+
+        this.rotation = new Angle(state.rotation);
+        this.setState(state);
     }
 
     getState(toGet: StateIndexer<SpaceObjectState> = {}): PartialState<SpaceObjectState> {
         return getStateFromGetters<SpaceObjectState>(toGet, {
+            id: () => this.id,
             movementType: () => this.movementType,
             position: () => this.position.getState(),
             velocity: () => this.velocity.getState(),

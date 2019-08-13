@@ -1,6 +1,6 @@
 import { GameState } from "./GameState";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { System } from "./System";
+import { System, makeSystemFactory, fullSystemState } from "./System";
 import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
@@ -16,14 +16,20 @@ class MissingSystemError extends Error {
 
 class Engine implements Stateful<GameState>, Steppable {
     private gameData: GameDataInterface;
-    private systems: StatefulMap<System, SystemState>;
+    private systems: BuildingMap<System, SystemState>;
     private activeSystems: Set<string>;
     private uuidFunction: () => string;
 
     constructor({ gameData, uuidFunction }: { gameData: GameDataInterface, uuidFunction?: () => string }) {
         this.uuidFunction = uuidFunction || UUID;
         this.gameData = gameData;
-        this.systems = new StatefulMap<System, SystemState>();
+
+
+        this.systems = new BuildingMap<System, SystemState>(
+            makeSystemFactory(this.gameData),
+            fullSystemState
+        );
+
         this.activeSystems = new Set();
     }
 
@@ -56,21 +62,31 @@ class Engine implements Stateful<GameState>, Steppable {
 
     }
 
-    async setInitialState(): Promise<GameState> {
-        const ids = await this.gameData.ids;
-        const state: GameState = {
-            systems: {}
-        };
-
-        for (let id of ids.System) {
-            state.systems[id] = {
-                ships: {},
-                planets: {}
-            }
+    getSystemFullState(systemUUID: string): SystemState {
+        let system = this.systems.get(systemUUID);
+        if (system) {
+            return system.getFullState();
         }
-        this.setState(state);
-        return state
+        else {
+            throw Error("Unknown system " + systemUUID);
+        }
     }
+
+    // async setInitialState(): Promise<GameState> {
+    //     const ids = await this.gameData.ids;
+    //     const state: GameState = {
+    //         systems: {}
+    //     };
+
+    //     for (let id of ids.System) {
+    //         state.systems[id] = {
+    //             ships: {},
+    //             planets: {}
+    //         }
+    //     }
+    //     this.setState(state);
+    //     return state
+    // }
 }
 
 export { Engine }

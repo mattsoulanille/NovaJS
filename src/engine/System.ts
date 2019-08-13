@@ -2,24 +2,30 @@ import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { SystemState } from "./SystemState";
 import { Steppable } from "./Steppable";
 
-import { Ship } from "./Ship";
+import { Ship, fullShipState, makeShipFactory } from "./Ship";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { ShipState } from "./ShipState";
 import { StatefulMap } from "./StatefulMap";
 import { isEmptyObject } from "./EmptyObject";
 import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { PlanetState } from "./PlanetState";
+import { BuildingMap } from "./BuildingMap";
 
 
 class System implements Stateful<SystemState>, Steppable {
-    private ships: StatefulMap<Ship, ShipState>;
+    private ships: BuildingMap<Ship, ShipState>;
     private gameData: GameDataInterface;
-    private readonly id: string;
+    readonly uuid: string;
 
-    constructor({ gameData, id }: { gameData: GameDataInterface, id: string }) {
+    constructor({ gameData, state }: { gameData: GameDataInterface, state: SystemState }) {
+        this.uuid = state.uuid;
         this.gameData = gameData;
-        this.ships = new StatefulMap();
-        this.id = id; // The id in gameData
+        this.ships = new BuildingMap<Ship, ShipState>(
+            makeShipFactory(this.gameData),
+            fullShipState
+        );
+
+        this.setState(state);
     }
 
     step(milliseconds: number): void {
@@ -30,7 +36,8 @@ class System implements Stateful<SystemState>, Steppable {
 
         return getStateFromGetters<SystemState>(toGet, {
             planets: (_toGet) => { return {} },
-            ships: (ships) => this.ships.getState(ships)
+            ships: (ships) => this.ships.getState(ships),
+            uuid: () => { return this.uuid }
         });
     }
 
@@ -42,20 +49,50 @@ class System implements Stateful<SystemState>, Steppable {
         });
     }
 
-    private async getInitialState(): Promise<SystemState> {
-        let planets: { [index: string]: PlanetState } = {};
-        let systemData = await this.gameData.data.System.get(this.id);
-
-
-        systemData.planets
-
-
-
-        return {
-            ships: {},
-            planets: planets
+    getFullState(): SystemState {
+        var state = this.getState({});
+        var decoded = SystemState.decode(state);
+        if (decoded.isLeft()) {
+            throw decoded.value
         }
+        else {
+            return decoded.value;
+        }
+    }
+
+    // private async getInitialState(): Promise<SystemState> {
+    //     let planets: { [index: string]: PlanetState } = {};
+    //     let systemData = await this.gameData.data.System.get(this.id);
+
+
+    //     //systemData.planets
+
+
+
+    //     return {
+    //         uuid: "test",
+    //         ships: {},
+    //         planets: planets
+    //     }
+    // }
+}
+
+function makeSystemFactory(gameData: GameDataInterface): (s: SystemState) => System {
+    return function(state: SystemState) {
+        return new System({ gameData, state });
     }
 }
 
-export { System }
+function fullSystemState(maybeState: RecursivePartial<SystemState>): SystemState | undefined {
+    let decoded = SystemState.decode(maybeState)
+    if (decoded.isRight()) {
+        return decoded.value
+    }
+    else {
+        return undefined;
+    }
+}
+
+
+
+export { System, makeSystemFactory, fullSystemState }
