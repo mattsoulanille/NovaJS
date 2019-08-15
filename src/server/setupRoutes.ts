@@ -3,7 +3,7 @@ import { Express } from "express";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import * as path from 'path';
-import { idsPath, dataPath } from "../common/GameDataPaths";
+import { idsPath, dataPath, settingsPrefix } from "../common/GameDataPaths";
 
 /**
  * Serves GameData to the client
@@ -11,25 +11,40 @@ import { idsPath, dataPath } from "../common/GameDataPaths";
  */
 
 
-function setupRoutes(gameData: GameDataInterface, app: Express) {
-    return new GameDataServer(gameData, app);
+function setupRoutes(gameData: GameDataInterface, app: Express, appRoot: string) {
+    return new GameDataServer(gameData, app, appRoot);
 }
 
 class GameDataServer {
-    private gameData: GameDataInterface;
-    private app: Express;
 
-    constructor(gameData: GameDataInterface, app: Express) {
-        this.gameData = gameData;
-        this.app = app;
+    constructor(
+        private readonly gameData: GameDataInterface,
+        private readonly app: Express,
+        private readonly appRoot: string) {
+
         this.setupRoutes();
     }
 
     private setupRoutes() {
+
+        // The order in which these routes are set up matters.
+        // Earlier routes take precedence over later ones.
+
         this.app.get(path.join(dataPath, ":name/:item.png"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item.json"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
+
+        const settingsPath = path.join(this.appRoot, "settings");
+        this.app.use(settingsPrefix,
+            express.static(settingsPath));
+
+        // This has to be here or else sourcemaps don't work!
+        const staticPath = path.join(this.appRoot, "build", "static");
+        this.app.use("/static", express.static(staticPath));
+        this.app.use("/", (_req: express.Request, res: express.Response) => {
+            res.sendFile(path.join(this.appRoot, "build", "index.html"));
+        });
     }
 
     private async requestFulfiller(req: express.Request, res: express.Response): Promise<void> {

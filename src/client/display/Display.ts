@@ -62,9 +62,7 @@ class Display {
         }
 
         let s = this.shipGraphics[uuid];
-        s.position.x = ship.position.x;
-        s.position.y = ship.position.y;
-        s.rotation = ship.rotation;
+        s.drawState(ship);
     }
 
     resize(x: number, y: number) {

@@ -29,7 +29,7 @@ const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
 const novaFileData = new NovaParse(novaDataPath, false);
 const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
-setupRoutes(gameData, app);
+setupRoutes(gameData, app, appRoot);
 
 
 
@@ -41,11 +41,6 @@ engine.setInitialState().then(function(s) {
 */
 
 
-// This has to be __dirname + "/static" or else sourcemaps don't work!
-app.use("/static", express.static(__dirname + "/static"));
-app.use("/", function(_req: express.Request, res: express.Response) {
-    res.sendFile(__dirname + "/index.html");
-});
 
 httpServer.listen(port, function() {
     console.log("listening at port " + port);

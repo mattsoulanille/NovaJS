@@ -30,6 +30,44 @@ class Vector implements Stateful<VectorState>{
         return new Vector(vec.x * scale, vec.y * scale);
     }
 
+    scaleBy(scale: number) {
+        this.x *= scale;
+        this.y *= scale;
+    }
+
+    // Possible divide by zero
+    scaleToLength(targetLength: number) {
+        const length = this.getLength();
+        const ratio = targetLength / length;
+        this.scaleBy(ratio);
+    }
+
+    getLengthSquared(): number {
+        return this.x ** 2 + this.y ** 2;
+    }
+
+    getLength(): number {
+        return Math.sqrt(this.getLengthSquared());
+    }
+
+    getUnitVector() {
+        const l = this.getLength();
+        return new Vector(this.x / l, this.y / l);
+    }
+
+    lengthenBy(c: number) {
+        const u = this.getUnitVector();
+        u.scaleBy(c);
+        this.add(u);
+    }
+
+    shortenToLength(c: number) {
+        const length = this.getLength();
+        if (length > c) {
+            this.scaleToLength(c);
+        }
+    }
+
     getState(_toGet: StateIndexer<VectorState> = {}): RecursivePartial<VectorState> {
         return {
             x: this.x,

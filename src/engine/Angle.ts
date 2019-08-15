@@ -1,6 +1,7 @@
 import * as t from "io-ts";
 import { Stateful, StateIndexer, PartialState } from "./Stateful";
 import { AngleState } from "./AngleState";
+import { Vector } from "./Vector";
 
 const TWO_PI = 2 * Math.PI;
 
@@ -51,6 +52,18 @@ class Angle implements Stateful<AngleState> {
 
     distanceTo(other: Angle) {
         return Angle.minus(this, other);
+    }
+
+    // Note that we use the clock unit circle
+    // and window coordinates (+y is down)
+    // instead of the standard one, so it's not
+    // just x = cos(angle), y = sin(angle).
+    // sin and cos are swapped.
+    getUnitVector(): Vector {
+        return new Vector(
+            Math.sin(this.angle),
+            -Math.cos(this.angle)
+        );
     }
 
     getState(): PartialState<AngleState> {

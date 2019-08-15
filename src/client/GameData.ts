@@ -51,6 +51,10 @@ class GameData implements GameDataInterface {
 
     }
 
+    getSettings(file: string): Promise<unknown> {
+        return this.getUrl(path.join("/settings", file));
+    }
+
     private async getUrl(url: string): Promise<Buffer> {
         return await new Promise(function(fulfill, reject) {
             var loader = new PIXI.loaders.Loader();

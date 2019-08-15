@@ -10,7 +10,7 @@ class ShipGraphic extends PIXI.Container {
     private readonly gameData: GameData;
     id: string;
     buildPromise: Promise<void>;
-    sprites: SpriteSheetSprite[];
+    sprites: { [index: string]: SpriteSheetSprite };
     private _rotation: number;
 
 
@@ -19,7 +19,7 @@ class ShipGraphic extends PIXI.Container {
         super();
         this.gameData = gameData;
         this.id = id;
-        this.sprites = [];
+        this.sprites = {};
         this._rotation = 0;
         super.rotation = 0;
 
@@ -42,7 +42,7 @@ class ShipGraphic extends PIXI.Container {
                 sprite.blendMode = PIXI.BLEND_MODES.ADD;
             }
 
-            this.sprites.push(sprite);
+            this.sprites[imageName] = sprite;
             this.addChild(sprite);
             promises.push(sprite.buildPromise);
         }
@@ -51,14 +51,14 @@ class ShipGraphic extends PIXI.Container {
     }
 
     setFramesToUse(frames: string) {
-        for (let sprite of this.sprites) {
+        for (let sprite of Object.values(this.sprites)) {
             sprite.setFramesToUse(frames);
         }
     }
 
     set rotation(angle: number) {
         this._rotation = angle;
-        for (let sprite of this.sprites) {
+        for (let sprite of Object.values(this.sprites)) {
             sprite.rotation = angle;
         }
     }
@@ -71,7 +71,9 @@ class ShipGraphic extends PIXI.Container {
         this.position.x = state.position.x;
         this.position.y = state.position.y;
         this.rotation = state.rotation;
-
+        if (this.sprites.glowImage) {
+            this.sprites.glowImage.alpha = state.accelerating;
+        }
     }
 }
 

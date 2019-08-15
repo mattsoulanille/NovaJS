@@ -6,6 +6,11 @@ import { GameData } from "./client/GameData";
 import { Engine } from "./engine/Engine";
 import * as io from "socket.io-client";
 import { platform } from "os";
+import { KeyboardController, Keybindings } from "./client/KeyboardController";
+import { Controller } from "./client/Controller";
+import { PathReporter } from 'io-ts/lib/PathReporter'
+import { setupControls } from "./client/setupControls";
+import { ShipController } from "./common/ShipController";
 
 const socket = io.Socket;
 (window as any).socket = socket;
@@ -56,32 +61,49 @@ engine.setState({
             uuid: "sol",
             planets: {},
             ships: {
-                "ship1": {
+                "myship": {
                     id: "nova:128",
                     movementType: "inertial",
                     position: { x: 20, y: 20 },
                     rotation: 0,
-                    velocity: { x: 0, y: 0 }
+                    velocity: { x: 0.05, y: 0 },
+                    maxVelocity: 500,
+                    turning: 0,
+                    turnRate: 1,
+                    acceleration: 300,
+                    accelerating: 0
                 }
             }
         }
     }
 });
 
-function updateState(delta: number) {
+engine.activeSystems.add("sol");
+
+
+let controller: Controller;
+let shipController: ShipController;
+async function startGame() {
+    controller = await setupControls(gameData);
+    (window as any).controller = controller;
+    shipController = new ShipController(controller);
+    app.ticker.add(gameLoop);
+}
+
+function gameLoop() {
+    const delta = app.ticker.elapsedMS;
+    engine.setShipState("myship", shipController.generateShipState());
+
     engine.step(delta);
     let currentState = engine.getSystemFullState("sol");
     display.draw(currentState);
 }
 
-function startGame() {
-    app.ticker.add(updateState);
-}
-
-
-
 
 startGame();
+
+
+
 
 
 

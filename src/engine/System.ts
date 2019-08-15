@@ -13,7 +13,7 @@ import { BuildingMap } from "./BuildingMap";
 
 
 class System implements Stateful<SystemState>, Steppable {
-    private ships: BuildingMap<Ship, ShipState>;
+    readonly ships: BuildingMap<Ship, ShipState>;
     private gameData: GameDataInterface;
     readonly uuid: string;
 
