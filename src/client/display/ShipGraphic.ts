@@ -74,6 +74,19 @@ class ShipGraphic extends PIXI.Container {
         if (this.sprites.glowImage) {
             this.sprites.glowImage.alpha = state.accelerating;
         }
+
+        switch (state.turning) {
+            case -1:
+                this.setFramesToUse("left");
+                break;
+            case 1:
+                this.setFramesToUse("right");
+                break;
+            default:
+                this.setFramesToUse("normal");
+                break;
+        }
+
     }
 }
 

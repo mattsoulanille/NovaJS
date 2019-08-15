@@ -1,7 +1,8 @@
 import { ShipState } from "./ShipState";
 import { SpaceObject } from "./SpaceObject";
-import { Stateful, RecursivePartial } from "./Stateful";
+import { Stateful, RecursivePartial, PartialState } from "./Stateful";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { ShipData } from "novadatainterface/ShipData";
 
 class Ship extends SpaceObject implements Stateful<ShipState> {
     readonly gameData: GameDataInterface;
@@ -9,6 +10,21 @@ class Ship extends SpaceObject implements Stateful<ShipState> {
         super({ state });
 
         this.gameData = gameData;
+    }
+
+    static fromGameData(data: ShipData): ShipState {
+        return {
+            accelerating: 0,
+            acceleration: data.physics.acceleration,
+            id: data.id,
+            maxVelocity: data.physics.speed,
+            movementType: "inertial",
+            position: { x: 0, y: 0 },
+            rotation: 0,
+            turning: 0,
+            turnRate: data.physics.turnRate,
+            velocity: { x: 0, y: 0 }
+        };
     }
 }
 

@@ -27,6 +27,10 @@ class ShipController {
         else {
             state.turning = 0;
         }
+
+
+
+
         return state;
     }
 

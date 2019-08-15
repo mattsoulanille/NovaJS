@@ -11,6 +11,7 @@ import { Controller } from "./client/Controller";
 import { PathReporter } from 'io-ts/lib/PathReporter'
 import { setupControls } from "./client/setupControls";
 import { ShipController } from "./common/ShipController";
+import { Ship } from "./engine/Ship";
 
 const socket = io.Socket;
 (window as any).socket = socket;
@@ -55,35 +56,26 @@ var engine = new Engine({
 (window as any).engine = engine;
 
 
-engine.setState({
-    systems: {
-        "sol": {
-            uuid: "sol",
-            planets: {},
-            ships: {
-                "myship": {
-                    id: "nova:128",
-                    movementType: "inertial",
-                    position: { x: 20, y: 20 },
-                    rotation: 0,
-                    velocity: { x: 0.05, y: 0 },
-                    maxVelocity: 500,
-                    turning: 0,
-                    turnRate: 1,
-                    acceleration: 300,
-                    accelerating: 0
-                }
-            }
-        }
-    }
-});
-
-engine.activeSystems.add("sol");
 
 
 let controller: Controller;
 let shipController: ShipController;
 async function startGame() {
+
+    engine.setState({
+        systems: {
+            "sol": {
+                uuid: "sol",
+                planets: {},
+                ships: {
+                    "myship": Ship.fromGameData(await gameData.data.Ship.get("nova:133"))
+                }
+            }
+        }
+    });
+
+    engine.activeSystems.add("sol");
+
     controller = await setupControls(gameData);
     (window as any).controller = controller;
     shipController = new ShipController(controller);
