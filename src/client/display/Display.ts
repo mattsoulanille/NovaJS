@@ -51,11 +51,14 @@ class Display {
             gameData: this.gameData,
             graphicClass: ShipGraphic
         });
+        this.shipDrawer.zOrder = 100;
         this.systemContainer.addChild(this.shipDrawer);
+
         this.planetDrawer = new ObjectDrawer({
             gameData: this.gameData,
             graphicClass: PlanetGraphic
         });
+        this.planetDrawer.zOrder = 10;
         this.systemContainer.addChild(this.planetDrawer);
 
         this.dimensions = new Vector(10, 10);
@@ -84,10 +87,15 @@ class Display {
         }
 
         for (let shipID in state.ships) {
-            let ship = state.ships[shipID];
-            this.shipDrawer.draw(ship, shipID);
+            let shipState = state.ships[shipID];
+            this.shipDrawer.draw(shipState, shipID);
         }
         this.shipDrawer.cleanup();
+
+        for (let planetID in state.planets) {
+            let planetState = state.planets[planetID];
+            this.planetDrawer.draw(planetState, planetID);
+        }
     }
 
     private setViewpoint(v: { x: number, y: number }) {
@@ -106,54 +114,6 @@ class Display {
     get target() {
         return this._target;
     }
-
-	/*
-    private drawObject<O extends SpaceObjectState>(
-        state: O,
-        uuid: string,
-        storage: { [index: string]: PIXI.Container },
-        buildNew: (id: string) => PIXI.Container) {
-
-        if (!(uuid in storage)) {
-            let newGraphic = buildNew(
-                this.shipGraphics[uuid] = newGraphic;
-            this.systemContainer.addChild(newGraphic);
-        }
-
-        let s = this.shipGraphics[uuid];
-        s.drawState(ship);
-
-
-    }
-
-
-    private drawShip(ship: ShipState, uuid: string) {
-        if (!(uuid in this.shipGraphics)) {
-            let newGraphic = new ShipGraphic({
-                gameData: this.gameData,
-                id: ship.id
-            });
-            this.shipGraphics[uuid] = newGraphic;
-            this.systemContainer.addChild(newGraphic);
-        }
-
-        let s = this.shipGraphics[uuid];
-        s.drawState(ship);
-    }
-
-    private drawPlanet(planet: PlanetState, uuid: string) {
-        if (!(uuid in this.planetGraphics)) {
-            let newGraphic = new PlanetGraphic({
-                gameData: this.gameData,
-                id: planet.id
-            });
-            this.planetGraphics[uuid] = newGraphic;
-            this.systemContainer.addChild(newGraphic);
-        }
-        let p = this.planetGraphics[uuid];
-        p.drawState(planet);
-    }
-*/
 
     resize(x: number, y: number) {
         this.dimensions = new Vector(x, y);

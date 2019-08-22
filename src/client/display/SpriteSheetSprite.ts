@@ -54,16 +54,32 @@ class SpriteSheetSprite extends PIXI.Sprite {
         }
     }
 
+    private getAngleAndPartition(angle: number, resolution: number) {
+
+        const index = mod(
+            Math.round((angle / TWO_PI) * resolution),
+            resolution
+        );
+
+        const partitionAngle = index * TWO_PI / resolution;
+        const localAngle = angle - partitionAngle;
+
+        return {
+            index: index,
+            angle: localAngle
+        };
+    }
+
     set rotation(angle: number) {
         // Divide rotation equally among the available rotation textures
+        angle = mod(angle, TWO_PI);
         const count = this.textureSet.length;
-        const partitionSize = TWO_PI / count;
 
         // Center the textures around the rotations they
         // best represent instead of having them offset to the right.
-        const centeredAngle = mod(angle + partitionSize / 2, TWO_PI);
 
-        const textureSetLocalIndex = Math.floor(centeredAngle / partitionSize);
+        let r = this.getAngleAndPartition(angle, count);
+        const textureSetLocalIndex = r.index;
         const textureSetGlobalIndex = textureSetLocalIndex + this.textureSet.start;
 
         if (this.textures) {
@@ -71,8 +87,8 @@ class SpriteSheetSprite extends PIXI.Sprite {
 
         }
 
-        super.rotation = mod(centeredAngle, partitionSize);
-        this._rotation = mod(angle, TWO_PI);
+        super.rotation = r.angle;
+        this._rotation = angle;
     }
 
     get rotation() {
