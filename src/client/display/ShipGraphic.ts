@@ -4,67 +4,21 @@ import { Animation } from "novadatainterface/Animation";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import { SpriteSheetSprite } from "./SpriteSheetSprite";
 import { ShipState } from "../../engine/ShipState";
+import { AnimationGraphic } from "./AnimationGraphic";
+import { IDGraphic } from "./IDGraphic";
 
 
-class ShipGraphic extends PIXI.Container {
-    private readonly gameData: GameData;
-    id: string;
-    buildPromise: Promise<void>;
-    sprites: { [index: string]: SpriteSheetSprite };
-    private _rotation: number;
-
+class ShipGraphic extends AnimationGraphic {
 
     // id is the id for GameData. Not the UUID.
     constructor({ gameData, id }: { gameData: GameData, id: string }) {
-        super();
-        this.gameData = gameData;
-        this.id = id;
-        this.sprites = {};
-        this._rotation = 0;
-        super.rotation = 0;
-
-        this.buildPromise = this.build();
+        super({ gameData, id });
+        this.build();
     }
 
-    private async build() {
-        var data = await this.gameData.data.Ship.get(this.id);
-        var promises: Promise<unknown>[] = [];
-        for (let imageName in data.animation.images) {
-            let image = data.animation.images[imageName];
-            let sprite = new SpriteSheetSprite({
-                id: image.id,
-                imagePurposes: image.imagePurposes,
-                gameData: this.gameData
-            });
-
-            if (imageName === "glowImage" || // Engine glow
-                imageName === "lightImage") { // Lights
-                sprite.blendMode = PIXI.BLEND_MODES.ADD;
-            }
-
-            this.sprites[imageName] = sprite;
-            this.addChild(sprite);
-            promises.push(sprite.buildPromise);
-        }
-        await Promise.all(promises);
-        this.rotation = this.rotation;
-    }
-
-    setFramesToUse(frames: string) {
-        for (let sprite of Object.values(this.sprites)) {
-            sprite.setFramesToUse(frames);
-        }
-    }
-
-    set rotation(angle: number) {
-        this._rotation = angle;
-        for (let sprite of Object.values(this.sprites)) {
-            sprite.rotation = angle;
-        }
-    }
-
-    get rotation() {
-        return this._rotation;
+    protected async getAnimation(): Promise<Animation> {
+        const ship = await this.gameData.data.Ship.get(this.id);
+        return ship.animation;
     }
 
     drawState(state: ShipState) {

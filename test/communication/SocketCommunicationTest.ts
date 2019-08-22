@@ -17,15 +17,6 @@ before(function() {
 
 var io_server = io_server_precursor.listen(3001);
 
-// Used to wait for socketio messages
-// that we don't need to ack in production
-// but we would like to verify that they eventually
-// arrive
-function sleep(ms: number): Promise<void> {
-    return new Promise((fulfill) => {
-        setTimeout(fulfill, ms);
-    });
-}
 
 function waitForEvent<T>(handler: AnyEvent<T>, timeout = 1000): Promise<T> {
 

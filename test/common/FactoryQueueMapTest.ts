@@ -2,7 +2,7 @@ import { fail } from "assert";
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
-import { FactoryQueueArray } from "../../src/common/FactoryQueueArray";
+import { FactoryQueueMap } from "../../src/common/FactoryQueueMap";
 
 
 before(function() {
@@ -30,14 +30,14 @@ async function buildFunction(str: string) {
     return new NumberStringHolder(count, str);
 }
 
-describe("FactoryQueueArray", function() {
+describe("FactoryQueueMap", function() {
 
     this.beforeEach(() => {
         count = 0;
     });
 
     it("Should make FactoryQueues as needed", async function() {
-        const c = new FactoryQueueArray(buildFunction, 1);
+        const c = new FactoryQueueMap(buildFunction, 1);
 
         let someItem = await c.dequeueFrom("someID");
         let anotherItem = await c.dequeueFrom("anotherID");
@@ -46,7 +46,7 @@ describe("FactoryQueueArray", function() {
     })
 
     it("Should return items to their respective queues", async function() {
-        const c = new FactoryQueueArray(buildFunction, 0);
+        const c = new FactoryQueueMap(buildFunction, 0);
 
         let someItem = await c.dequeueFrom("someID");
         let anotherItem = await c.dequeueFrom("anotherID");

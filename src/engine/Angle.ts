@@ -54,11 +54,13 @@ class Angle implements Stateful<AngleState> {
         return Angle.minus(this, other);
     }
 
-    // Note that we use the clock unit circle
-    // and window coordinates (+y is down)
-    // instead of the standard one, so it's not
-    // just x = cos(angle), y = sin(angle).
-    // sin and cos are swapped.
+    // Remember that we use clock angles
+    // with y inverted, which means
+    // we are using the unit circle rotated 
+    // clockwise pi/4. An angle x in this circle corresponds
+    // to the coordinate cos(x - pi/4), sin(x - pi/4)
+    // which is the same as cos, sin shifted pi/4
+    // to the left, which becomes sin, -cos
     getUnitVector(): Vector {
         return new Vector(
             Math.sin(this.angle),

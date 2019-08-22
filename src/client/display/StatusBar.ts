@@ -51,14 +51,17 @@ class StatusBar {
         this.dimFont = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.dimText, align: 'center' };
 
 
-
         this.radarContainer.position.x = this.data.dataAreas.radar.position[0];
         this.radarContainer.position.y = this.data.dataAreas.radar.position[1];
         //   this.
     }
 
+    get width() {
+        return this.container.width;
+    }
+
     resize(x: number, _y: number) {
-        this.container.position.x = x - this.container.width;
+        this.container.position.x = x - this.width;
     }
 }
 

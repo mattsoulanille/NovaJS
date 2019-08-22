@@ -1,16 +1,13 @@
 import * as PIXI from "pixi.js";
-import 'pixi-display';
-import { Display } from "./client/display/Display";
-import { GameState } from "./engine/GameState";
-import { GameData } from "./client/GameData";
-import { Engine } from "./engine/Engine";
+import 'pixi-display'; // Must be imported after PIXI
 import * as io from "socket.io-client";
-import { platform } from "os";
-import { KeyboardController, Keybindings } from "./client/KeyboardController";
 import { Controller } from "./client/Controller";
-import { PathReporter } from 'io-ts/lib/PathReporter'
+import { Display } from "./client/display/Display";
+import { GameData } from "./client/GameData";
 import { setupControls } from "./client/setupControls";
 import { ShipController } from "./common/ShipController";
+import { Engine } from "./engine/Engine";
+import { Planet } from "./engine/Planet";
 import { Ship } from "./engine/Ship";
 
 const socket = io.Socket;
@@ -66,21 +63,25 @@ async function startGame() {
         systems: {
             "sol": {
                 uuid: "sol",
-                planets: {},
+                planets: {
+                    "earth": await Planet.fromID("nova:128", gameData)
+                },
                 ships: {
-                    "myship": Ship.fromGameData(await gameData.data.Ship.get("nova:133"))
+                    "myship": await Ship.fromID("nova:133", gameData),
+                    "anotherShip": await Ship.fromID("nova:128", gameData)
                 }
             }
         }
     });
-
     engine.activeSystems.add("sol");
-
+    display.target = "myship";
     controller = await setupControls(gameData);
     (window as any).controller = controller;
     shipController = new ShipController(controller);
     app.ticker.add(gameLoop);
 }
+
+(window as any).Ship = Ship;
 
 function gameLoop() {
     const delta = app.ticker.elapsedMS;

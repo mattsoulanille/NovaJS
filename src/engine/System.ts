@@ -1,28 +1,34 @@
-import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
-import { SystemState } from "./SystemState";
-import { Steppable } from "./Steppable";
-
-import { Ship, fullShipState, makeShipFactory } from "./Ship";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { ShipState } from "./ShipState";
-import { StatefulMap } from "./StatefulMap";
-import { isEmptyObject } from "./EmptyObject";
-import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
-import { PlanetState } from "./PlanetState";
 import { BuildingMap } from "./BuildingMap";
+import { Planet } from "./Planet";
+import { PlanetState } from "./PlanetState";
+import { Ship } from "./Ship";
+import { ShipState } from "./ShipState";
+import { RecursivePartial, Stateful, StateIndexer } from "./Stateful";
+import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
+import { Steppable } from "./Steppable";
+import { SystemState } from "./SystemState";
+
 
 
 class System implements Stateful<SystemState>, Steppable {
     readonly ships: BuildingMap<Ship, ShipState>;
+    readonly planets: BuildingMap<Planet, PlanetState>;
     private gameData: GameDataInterface;
     readonly uuid: string;
 
     constructor({ gameData, state }: { gameData: GameDataInterface, state: SystemState }) {
         this.uuid = state.uuid;
         this.gameData = gameData;
+
         this.ships = new BuildingMap<Ship, ShipState>(
-            makeShipFactory(this.gameData),
-            fullShipState
+            Ship.makeFactory(this.gameData),
+            Ship.fullState
+        );
+
+        this.planets = new BuildingMap<Planet, PlanetState>(
+            Planet.makeFactory(this.gameData),
+            Planet.fullState
         );
 
         this.setState(state);
@@ -35,16 +41,16 @@ class System implements Stateful<SystemState>, Steppable {
     getState(toGet: StateIndexer<SystemState> = {}): RecursivePartial<SystemState> {
 
         return getStateFromGetters<SystemState>(toGet, {
-            planets: (_toGet) => { return {} },
+            planets: (toGet) => this.planets.getState(toGet),
             ships: (ships) => this.ships.getState(ships),
-            uuid: () => { return this.uuid }
+            uuid: () => this.uuid
         });
     }
 
     setState(state: Partial<SystemState>): StateIndexer<SystemState> {
 
         return setStateFromSetters<SystemState>(state, {
-            planets: () => { },
+            planets: (planetStates) => this.planets.setState(planetStates),
             ships: (shipStates) => this.ships.setState(shipStates)
         });
     }
@@ -60,20 +66,21 @@ class System implements Stateful<SystemState>, Steppable {
         }
     }
 
-    // private async getInitialState(): Promise<SystemState> {
-    //     let planets: { [index: string]: PlanetState } = {};
-    //     let systemData = await this.gameData.data.System.get(this.id);
+    // static fromGameData(data: SystemData): SystemState {
 
+    //     const planets: { [index: string]: PlanetState } = {};
 
-    //     //systemData.planets
+    //     for (let planetID of data.planets) {
 
+    //     }
 
 
     //     return {
-    //         uuid: "test",
     //         ships: {},
-    //         planets: planets
+
     //     }
+
+
     // }
 }
 
@@ -95,4 +102,4 @@ function fullSystemState(maybeState: RecursivePartial<SystemState>): SystemState
 
 
 
-export { System, makeSystemFactory, fullSystemState }
+export { System, makeSystemFactory, fullSystemState };

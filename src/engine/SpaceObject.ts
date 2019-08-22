@@ -77,7 +77,15 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
 
         const seconds = milliseconds / 1000;
 
-        this.rotation.add(this.turning * this.turnRate * seconds)
+        let turning: number;
+        if (this.turning === "back") {
+            turning = 0;
+        }
+        else {
+            turning = this.turning;
+        }
+
+        this.rotation.add(turning * this.turnRate * seconds)
         if (this.accelerating > 0) {
             const delta = this.rotation.getUnitVector();
             delta.scaleToLength(

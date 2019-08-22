@@ -7,7 +7,8 @@ import { NovaDataType } from "novadatainterface/NovaDataInterface";
 const TurnDirection = t.union([
     t.literal(1),
     t.literal(0),
-    t.literal(-1)
+    t.literal(-1),
+    t.literal("back")
 ]);
 type TurnDirection = t.TypeOf<typeof TurnDirection>;
 

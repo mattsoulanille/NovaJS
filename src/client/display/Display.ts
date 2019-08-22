@@ -8,24 +8,38 @@ import { ShipData } from "novadatainterface/ShipData";
 import { ShipState } from "../../engine/ShipState";
 import { ShipGraphic } from "./ShipGraphic";
 import { SystemState } from "../../engine/SystemState";
+import { Vector } from "../../engine/Vector";
+import { PlanetState } from "../../engine/PlanetState";
+import { PlanetGraphic } from "./PlanetGraphic";
+import { SpaceObjectState } from "../../engine/SpaceObjectState";
+import { FactoryQueueMap } from "../../common/FactoryQueueMap";
+import { IDGraphic } from "./IDGraphic";
+import { AnimationGraphic } from "./AnimationGraphic";
+import { ObjectDrawer } from "./ObjectDrawer";
 
 
 class Display {
     readonly container: PIXI.Container;
-    readonly gameData: GameData;
-    statusBarContainer: PIXI.Container;
-    statusBar: StatusBar;
+    private readonly systemContainer: PIXI.Container;
+    private readonly gameData: GameData;
+    private statusBarContainer: PIXI.Container;
+    private statusBar: StatusBar;
     readonly buildPromise: Promise<unknown>;
     //    private activeShip: string | undefined; // The uuid of the ship to render from.
     built: boolean;
-    starbridge: ShipGraphic | undefined;
 
-    shipGraphics: { [index: string]: ShipGraphic }
+    private readonly shipDrawer: ObjectDrawer<ShipState, ShipGraphic>;
+    private readonly planetDrawer: ObjectDrawer<PlanetState, PlanetGraphic>;
 
+    private _target!: string | Vector;
+    private dimensions: Vector;
 
-    constructor({ container, gameData }: { container: PIXI.Container, gameData: GameData }) {
-        this.container = container;
+    constructor({ container, gameData, target }: { container: PIXI.Container, gameData: GameData, target?: Vector | string }) {
         this.gameData = gameData;
+        this.container = container;
+        this.systemContainer = new PIXI.Container();
+        this.systemContainer.pivot
+        this.container.addChild(this.systemContainer);
         this.statusBarContainer = new PIXI.Container();
         this.container.addChild(this.statusBarContainer);
         this.statusBar = new StatusBar({
@@ -33,21 +47,83 @@ class Display {
             gameData: this.gameData
         });
 
-        this.shipGraphics = {};
+        this.shipDrawer = new ObjectDrawer({
+            gameData: this.gameData,
+            graphicClass: ShipGraphic
+        });
+        this.systemContainer.addChild(this.shipDrawer);
+        this.planetDrawer = new ObjectDrawer({
+            gameData: this.gameData,
+            graphicClass: PlanetGraphic
+        });
+        this.systemContainer.addChild(this.planetDrawer);
 
+        this.dimensions = new Vector(10, 10);
         this.built = false;
         this.buildPromise = Promise.all([this.statusBar.buildPromise])
         this.buildPromise.then(() => { this.built = true });
 
-        this.buildStarbridge();
+        if (target !== undefined) {
+            this.target = target;
+        }
+        else {
+            this.target = new Vector(0, 0);
+        }
     }
 
-
     draw(state: SystemState) {
+        if (!(this.target instanceof Vector)) {
+            let targetShip = state.ships[this.target];
+            if (targetShip !== undefined) {
+                let middle = this.dimensions.copy();
+                middle.x -= this.statusBar.width;
+                middle.scaleBy(-0.5);
+                middle.add(targetShip.position);
+                this.setViewpoint(middle);
+            }
+        }
+
         for (let shipID in state.ships) {
             let ship = state.ships[shipID];
-            this.drawShip(ship, shipID);
+            this.shipDrawer.draw(ship, shipID);
         }
+        this.shipDrawer.cleanup();
+    }
+
+    private setViewpoint(v: { x: number, y: number }) {
+        // Negative because that's how you cancel out
+        // positions
+        this.systemContainer.position.x = -v.x;
+        this.systemContainer.position.y = -v.y;
+    }
+
+    set target(target: string | Vector) {
+        if (target instanceof Vector) {
+            this.setViewpoint(target);
+        }
+        this._target = target;
+    }
+    get target() {
+        return this._target;
+    }
+
+	/*
+    private drawObject<O extends SpaceObjectState>(
+        state: O,
+        uuid: string,
+        storage: { [index: string]: PIXI.Container },
+        buildNew: (id: string) => PIXI.Container) {
+
+        if (!(uuid in storage)) {
+            let newGraphic = buildNew(
+                this.shipGraphics[uuid] = newGraphic;
+            this.systemContainer.addChild(newGraphic);
+        }
+
+        let s = this.shipGraphics[uuid];
+        s.drawState(ship);
+
+
     }
 
 
@@ -58,23 +134,30 @@ class Display {
                 id: ship.id
             });
             this.shipGraphics[uuid] = newGraphic;
-            this.container.addChild(newGraphic);
+            this.systemContainer.addChild(newGraphic);
         }
 
         let s = this.shipGraphics[uuid];
         s.drawState(ship);
     }
 
-    resize(x: number, y: number) {
-        this.statusBar.resize(x, y);
+    private drawPlanet(planet: PlanetState, uuid: string) {
+        if (!(uuid in this.planetGraphics)) {
+            let newGraphic = new PlanetGraphic({
+                gameData: this.gameData,
+                id: planet.id
+            });
+            this.planetGraphics[uuid] = newGraphic;
+            this.systemContainer.addChild(newGraphic);
+        }
+        let p = this.planetGraphics[uuid];
+        p.drawState(planet);
     }
+*/
 
-    async buildStarbridge() {
-        this.starbridge = new ShipGraphic({ gameData: this.gameData, id: "nova:133" });
-        this.starbridge.visible = true;
-        this.container.addChild(this.starbridge)
-        this.starbridge.position.x = 300;
-        this.starbridge.position.y = 300;
+    resize(x: number, y: number) {
+        this.dimensions = new Vector(x, y);
+        this.statusBar.resize(x, y);
     }
 
 }

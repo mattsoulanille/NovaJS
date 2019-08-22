@@ -1,6 +1,6 @@
 import { FactoryQueue } from "./FactoryQueue";
 
-class FactoryQueueArray<Item extends { id: string }> {
+class FactoryQueueMap<Item extends { id: string }> {
 
     readonly items: { [index: string]: FactoryQueue<Item> };
     private _minimum!: number;
@@ -46,4 +46,4 @@ class FactoryQueueArray<Item extends { id: string }> {
     }
 }
 
-export { FactoryQueueArray }
+export { FactoryQueueMap }

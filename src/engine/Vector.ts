@@ -2,6 +2,7 @@ import * as t from "io-ts";
 import { Stateful, StateIndexer, RecursivePartial } from "./Stateful";
 import { VectorState } from "./VectorState";
 import { isEmptyObject } from "./EmptyObject";
+import { Angle } from "./Angle";
 
 
 class Vector implements Stateful<VectorState>{
@@ -14,9 +15,14 @@ class Vector implements Stateful<VectorState>{
         this.y = y;
     }
 
-    add(other: Vector) {
+    add(other: { x: number, y: number }) {
         this.x += other.x;
         this.y += other.y;
+    }
+
+    subtract(other: { x: number, y: number }) {
+        this.x -= other.x;
+        this.y -= other.y;
     }
 
     rotate(radians: number) {
@@ -26,6 +32,10 @@ class Vector implements Stateful<VectorState>{
         this.y = sin * this.x + cos * this.y;
     }
 
+    copy() {
+        return new Vector(this.x, this.y);
+    }
+
     static scale(vec: Vector, scale: number) {
         return new Vector(vec.x * scale, vec.y * scale);
     }
@@ -33,6 +43,12 @@ class Vector implements Stateful<VectorState>{
     scaleBy(scale: number) {
         this.x *= scale;
         this.y *= scale;
+    }
+
+    scaledBy(scale: number) {
+        const v = this.copy();
+        v.scaleBy(scale);
+        return v;
     }
 
     // Possible divide by zero
@@ -83,6 +99,15 @@ class Vector implements Stateful<VectorState>{
             this.y = y
         }
         return {};
+    }
+
+    // Remember that we use clock angles
+    // with y inverted, which means
+    // we are using the unit circle rotated 
+    // clockwise pi/4. In these new coordinates,
+    // x <- -y and y <- x
+    getAngle(): Angle {
+        return new Angle(Math.atan2(this.x, -this.y));
     }
 }
 
