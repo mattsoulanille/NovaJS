@@ -19,7 +19,7 @@ class Planet extends SpaceObject implements Stateful<PlanetState> {
             id: data.id,
             maxVelocity: 0,
             movementType: "stationary",
-            position: { x: 0, y: 0 },
+            position: { x: data.position[0], y: data.position[1] },
             rotation: 0,
             turning: 0,
             turnBack: false,

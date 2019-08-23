@@ -5,13 +5,14 @@ import { WithUUID } from "./WithUUID";
 
 
 
-const SystemState = t.intersection([
-    WithUUID,
+const SystemState =
     t.type({
         ships: t.record(t.string, ShipState),
         planets: t.record(t.string, PlanetState),
-    })
-]);
+    });
+
+
+
 // Systems are not explicitly attached to IDs of system resources. The game engine just puts the correct planets in them.
 
 

@@ -9,6 +9,7 @@ import { ShipController } from "./common/ShipController";
 import { Engine } from "./engine/Engine";
 import { Planet } from "./engine/Planet";
 import { Ship } from "./engine/Ship";
+import { System } from "./engine/System";
 
 const socket = io.Socket;
 (window as any).socket = socket;
@@ -59,20 +60,17 @@ let controller: Controller;
 let shipController: ShipController;
 async function startGame() {
 
+    let solState = await System.fromID("nova:130", gameData);
+
+    solState.ships.myship = await Ship.fromID("nova:133", gameData);
+    solState.ships.anotherShip = await Ship.fromID("nova:128", gameData);
+
     engine.setState({
         systems: {
-            "sol": {
-                uuid: "sol",
-                planets: {
-                    "earth": await Planet.fromID("nova:128", gameData)
-                },
-                ships: {
-                    "myship": await Ship.fromID("nova:133", gameData),
-                    "anotherShip": await Ship.fromID("nova:128", gameData)
-                }
-            }
+            "sol": solState
         }
     });
+
     engine.activeSystems.add("sol");
     display.target = "myship";
     controller = await setupControls(gameData);

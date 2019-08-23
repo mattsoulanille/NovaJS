@@ -1,6 +1,6 @@
 import { GameState } from "./GameState";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { System, makeSystemFactory, fullSystemState } from "./System";
+import { System } from "./System";
 import { Stateful, StateIndexer, RecursivePartial, PartialState } from "./Stateful";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
@@ -33,8 +33,8 @@ class Engine implements Stateful<GameState>, Steppable {
 
         this.shipSystemMap = new Map();
         this.systems = new BuildingMap<System, SystemState>(
-            makeSystemFactory(this.gameData),
-            fullSystemState
+            System.makeFactory(this.gameData),
+            System.fullState
         );
 
         this.activeSystems = new Set();
@@ -123,21 +123,6 @@ class Engine implements Stateful<GameState>, Steppable {
         ship.setState(shipState);
     }
 
-    // async setInitialState(): Promise<GameState> {
-    //     const ids = await this.gameData.ids;
-    //     const state: GameState = {
-    //         systems: {}
-    //     };
-
-    //     for (let id of ids.System) {
-    //         state.systems[id] = {
-    //             ships: {},
-    //             planets: {}
-    //         }
-    //     }
-    //     this.setState(state);
-    //     return state
-    // }
 }
 
 export { Engine }

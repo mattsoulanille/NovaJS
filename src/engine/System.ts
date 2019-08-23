@@ -8,6 +8,7 @@ import { RecursivePartial, Stateful, StateIndexer } from "./Stateful";
 import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
+import * as UUID from "uuid/v4";
 
 
 
@@ -15,10 +16,10 @@ class System implements Stateful<SystemState>, Steppable {
     readonly ships: BuildingMap<Ship, ShipState>;
     readonly planets: BuildingMap<Planet, PlanetState>;
     private gameData: GameDataInterface;
-    readonly uuid: string;
+    //    readonly uuid: string;
 
     constructor({ gameData, state }: { gameData: GameDataInterface, state: SystemState }) {
-        this.uuid = state.uuid;
+        //        this.uuid = state.uuid;
         this.gameData = gameData;
 
         this.ships = new BuildingMap<Ship, ShipState>(
@@ -43,7 +44,7 @@ class System implements Stateful<SystemState>, Steppable {
         return getStateFromGetters<SystemState>(toGet, {
             planets: (toGet) => this.planets.getState(toGet),
             ships: (ships) => this.ships.getState(ships),
-            uuid: () => this.uuid
+            //            uuid: () => this.uuid
         });
     }
 
@@ -66,40 +67,42 @@ class System implements Stateful<SystemState>, Steppable {
         }
     }
 
-    // static fromGameData(data: SystemData): SystemState {
+    static async fromID(id: string, gameData: GameDataInterface, makeUUID = UUID): Promise<SystemState> {
 
-    //     const planets: { [index: string]: PlanetState } = {};
+        const planets: { [index: string]: PlanetState } = {};
+        const data = await gameData.data.System.get(id);
 
-    //     for (let planetID of data.planets) {
+        // Make sure the UUIDs match up with the
+        // server if you call this on the client!
+        for (let planetID of data.planets) {
+            planets[makeUUID()] = await Planet.fromID(planetID, gameData);
+        }
 
-    //     }
+        return {
+            ships: {},
+            planets: planets,
+        }
+    }
+
+    static makeFactory(gameData: GameDataInterface): (s: SystemState) => System {
+        return function(state: SystemState) {
+            return new System({ gameData, state });
+        }
+    }
 
 
-    //     return {
-    //         ships: {},
+    static fullState(maybeState: RecursivePartial<SystemState>): SystemState | undefined {
+        let decoded = SystemState.decode(maybeState)
+        if (decoded.isRight()) {
+            return decoded.value
+        }
+        else {
+            return undefined;
+        }
+    }
 
-    //     }
 
 
-    // }
 }
 
-function makeSystemFactory(gameData: GameDataInterface): (s: SystemState) => System {
-    return function(state: SystemState) {
-        return new System({ gameData, state });
-    }
-}
-
-function fullSystemState(maybeState: RecursivePartial<SystemState>): SystemState | undefined {
-    let decoded = SystemState.decode(maybeState)
-    if (decoded.isRight()) {
-        return decoded.value
-    }
-    else {
-        return undefined;
-    }
-}
-
-
-
-export { System, makeSystemFactory, fullSystemState };
+export { System }

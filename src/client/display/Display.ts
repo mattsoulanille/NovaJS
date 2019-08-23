@@ -14,7 +14,6 @@ class Display {
     readonly container: PIXI.Container;
     private readonly systemContainer: PIXI.Container;
     private readonly gameData: GameData;
-    private statusBarContainer: PIXI.Container;
     private statusBar: StatusBar;
     readonly buildPromise: Promise<unknown>;
     //    private activeShip: string | undefined; // The uuid of the ship to render from.
@@ -32,26 +31,23 @@ class Display {
         this.systemContainer = new PIXI.Container();
         this.systemContainer.pivot
         this.container.addChild(this.systemContainer);
-        this.statusBarContainer = new PIXI.Container();
-        this.container.addChild(this.statusBarContainer);
         this.statusBar = new StatusBar({
-            container: this.statusBarContainer,
             gameData: this.gameData
         });
+        this.container.addChild(this.statusBar);
 
-        this.shipDrawer = new ObjectDrawer({
-            gameData: this.gameData,
-            graphicClass: ShipGraphic
-        });
-        this.shipDrawer.zOrder = 100;
-        this.systemContainer.addChild(this.shipDrawer);
 
         this.planetDrawer = new ObjectDrawer({
             gameData: this.gameData,
             graphicClass: PlanetGraphic
         });
-        this.planetDrawer.zOrder = 10;
         this.systemContainer.addChild(this.planetDrawer);
+
+        this.shipDrawer = new ObjectDrawer({
+            gameData: this.gameData,
+            graphicClass: ShipGraphic
+        });
+        this.systemContainer.addChild(this.shipDrawer);
 
         this.dimensions = new Vector(10, 10);
         this.built = false;

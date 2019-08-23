@@ -1,12 +1,9 @@
-import { GameState } from "../../engine/GameState";
-import * as PIXI from "pixi.js";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { StatusBarData } from "novadatainterface/StatusBarData";
+import * as PIXI from "pixi.js";
 import { GameData } from "../GameData";
 
 
-class StatusBar {
-    readonly container: PIXI.Container;
+class StatusBar extends PIXI.Container {
     readonly gameData: GameData;
     readonly id: string;
     bars: PIXI.Graphics;
@@ -20,8 +17,8 @@ class StatusBar {
     buildPromise: Promise<void>;
 
 
-    constructor({ container, gameData, id }: { container: PIXI.Container, gameData: GameData, id?: string }) {
-        this.container = container;
+    constructor({ gameData, id }: { gameData: GameData, id?: string }) {
+        super();
         this.gameData = gameData;
 
         if (id === undefined) {
@@ -31,12 +28,12 @@ class StatusBar {
             this.id = id
         }
 
-        this.container.displayGroup = new PIXI.DisplayGroup(100, true); // appear above others
+        this.displayGroup = new PIXI.DisplayGroup(100, true); // appear above others
         this.bars = new PIXI.Graphics();
         this.radarContainer = new PIXI.Container();
         this.targetContainer = new PIXI.Container();
 
-        this.container.addChild(this.bars, this.radarContainer, this.targetContainer);
+        this.addChild(this.bars, this.radarContainer, this.targetContainer);
         this.buildPromise = this.build()
     }
 
@@ -45,7 +42,7 @@ class StatusBar {
         this.baseSprite = await this.gameData.spriteFromPict(this.data.image);
 
 
-        this.container.addChild(this.baseSprite)
+        this.addChild(this.baseSprite)
 
         this.font = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.brightText, align: 'center' };
         this.dimFont = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.dimText, align: 'center' };
@@ -56,13 +53,9 @@ class StatusBar {
         //   this.
     }
 
-    get width() {
-        return this.container.width;
-    }
-
     resize(x: number, _y: number) {
-        this.container.position.x = x - this.width;
+        this.position.x = x - this.width;
     }
 }
 
-export { StatusBar }
+export { StatusBar };
