@@ -1,21 +1,13 @@
-import { GameState } from "../../engine/GameState";
 import * as PIXI from "pixi.js";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { StatusBar } from "./StatusBar";
-import { GameData } from "../GameData";
-import { SpriteSheetSprite } from "./SpriteSheetSprite";
-import { ShipData } from "novadatainterface/ShipData";
+import { PlanetState } from "../../engine/PlanetState";
 import { ShipState } from "../../engine/ShipState";
-import { ShipGraphic } from "./ShipGraphic";
 import { SystemState } from "../../engine/SystemState";
 import { Vector } from "../../engine/Vector";
-import { PlanetState } from "../../engine/PlanetState";
-import { PlanetGraphic } from "./PlanetGraphic";
-import { SpaceObjectState } from "../../engine/SpaceObjectState";
-import { FactoryQueueMap } from "../../common/FactoryQueueMap";
-import { IDGraphic } from "./IDGraphic";
-import { AnimationGraphic } from "./AnimationGraphic";
+import { GameData } from "../GameData";
 import { ObjectDrawer } from "./ObjectDrawer";
+import { PlanetGraphic } from "./PlanetGraphic";
+import { ShipGraphic } from "./ShipGraphic";
+import { StatusBar } from "./StatusBar";
 
 
 class Display {
@@ -122,4 +114,4 @@ class Display {
 
 }
 
-export { Display }
+export { Display };

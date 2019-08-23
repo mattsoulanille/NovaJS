@@ -15,8 +15,12 @@ class ShipController {
         let controlState = this.controller.poll();
 
         state.accelerating = Number(controlState.accelerate.keyPressed);
+        state.turnBack = false;
 
-        if (controlState.turnLeft.keyPressed !== controlState.turnRight.keyPressed) {
+        if (controlState.reverse.keyPressed) {
+            state.turnBack = true;
+        }
+        else if (controlState.turnLeft.keyPressed !== controlState.turnRight.keyPressed) {
             if (controlState.turnLeft.keyPressed) {
                 state.turning = -1;
             }
@@ -27,9 +31,6 @@ class ShipController {
         else {
             state.turning = 0;
         }
-
-
-
 
         return state;
     }

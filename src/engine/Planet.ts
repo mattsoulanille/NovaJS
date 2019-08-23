@@ -22,6 +22,7 @@ class Planet extends SpaceObject implements Stateful<PlanetState> {
             position: { x: 0, y: 0 },
             rotation: 0,
             turning: 0,
+            turnBack: false,
             turnRate: 0,
             velocity: { x: 0, y: 0 }
         }

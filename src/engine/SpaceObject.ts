@@ -15,6 +15,7 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
     private movementType: MovementType;
     private rotation: Angle;
     private turning: TurnDirection;
+    private turnBack: boolean;
     private id: string;
     private acceleration: number;
     private accelerating: number;
@@ -40,6 +41,7 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
         this.acceleration = state.acceleration;
         this.accelerating = state.accelerating;
         this.turning = state.turning;
+        this.turnBack = state.turnBack;
         this.turnRate = state.turnRate;
         this.setState(state);
     }
@@ -53,6 +55,7 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
             maxVelocity: () => this.maxVelocity,
             rotation: () => this.rotation.getState(),
             turning: () => this.turning,
+            turnBack: () => this.turnBack,
             turnRate: () => this.turnRate,
             acceleration: () => this.acceleration,
             accelerating: () => this.accelerating
@@ -67,25 +70,54 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
             maxVelocity: (newVal) => { this.maxVelocity = newVal },
             rotation: (newVal) => this.rotation.setState(newVal),
             turning: (newVal) => { this.turning = newVal },
+            turnBack: (newVal) => { this.turnBack = newVal },
             turnRate: (newVal) => { this.turnRate = newVal },
             acceleration: (newVal) => { this.acceleration = newVal },
             accelerating: (newVal) => { this.accelerating = newVal }
         });
     }
 
-    step(milliseconds: number): void {
+    private turnToDirection(seconds: number, target: Angle) {
+        // We change this.turning because we need
+        // the display to render the turning direction.
+        let difference = this.rotation.distanceTo(target);
 
-        const seconds = milliseconds / 1000;
-
-        let turning: number;
-        if (this.turning === "back") {
-            turning = 0;
+        // If we would turn past
+        // the target direction,
+        // just go to the target direction
+        if (this.turnRate * seconds
+            > Math.abs(difference)) {
+            this.turning = 0;
+            this.rotation.angle = target.angle;
+        }
+        else if (difference > 0) {
+            this.turning = 1;
         }
         else {
-            turning = this.turning;
+            this.turning = -1;
         }
 
-        this.rotation.add(turning * this.turnRate * seconds)
+        this.rotation.add(this.turning * this.turnRate * seconds)
+
+    }
+
+    private doInertialControls(seconds: number) {
+        // Turning
+        if (this.turnBack) {
+            if (this.velocity.getLength() > 0) {
+                let reverseAngle = this.velocity.getAngle();
+                reverseAngle.add(Math.PI);
+                this.turnToDirection(seconds, reverseAngle);
+            }
+        }
+        else {
+            this.rotation.add(
+                this.turning
+                * this.turnRate
+                * seconds);
+        }
+
+        // Acceleration
         if (this.accelerating > 0) {
             const delta = this.rotation.getUnitVector();
             delta.scaleToLength(
@@ -97,8 +129,13 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
         }
 
         this.velocity.shortenToLength(this.maxVelocity);
-
         this.position.add(Vector.scale(this.velocity, seconds));
+    }
+
+
+    step(milliseconds: number): void {
+        const seconds = milliseconds / 1000;
+        this.doInertialControls(seconds);
     }
 }
 

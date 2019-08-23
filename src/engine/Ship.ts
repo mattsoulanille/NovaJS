@@ -23,6 +23,7 @@ class Ship extends SpaceObject implements Stateful<ShipState> {
             position: { x: 0, y: 0 },
             rotation: 0,
             turning: 0,
+            turnBack: false,
             turnRate: data.physics.turnRate,
             velocity: { x: 0, y: 0 }
         };

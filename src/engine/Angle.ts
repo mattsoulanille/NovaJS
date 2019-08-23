@@ -41,8 +41,8 @@ class Angle implements Stateful<AngleState> {
         }
     }
 
-    // Returns an angle in [-pi, pi)
-    static minus(a: Angle, b: Angle) {
+    // Returns a number in [-pi, pi)
+    static minus(a: Angle, b: Angle): number {
         let difference = Angle.mod(a.angle - b.angle);
         if (difference >= Math.PI) {
             difference -= TWO_PI;
@@ -50,8 +50,10 @@ class Angle implements Stateful<AngleState> {
         return difference;
     }
 
+    // What you would need to add to this angle
+    // to turn it into the other angle
     distanceTo(other: Angle) {
-        return Angle.minus(this, other);
+        return Angle.minus(other, this);
     }
 
     // Remember that we use clock angles

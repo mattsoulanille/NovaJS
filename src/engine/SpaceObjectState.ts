@@ -8,7 +8,6 @@ const TurnDirection = t.union([
     t.literal(1),
     t.literal(0),
     t.literal(-1),
-    t.literal("back")
 ]);
 type TurnDirection = t.TypeOf<typeof TurnDirection>;
 
@@ -19,6 +18,7 @@ const SpaceObjectState =
         maxVelocity: t.number,
         rotation: AngleType,
         turning: TurnDirection,
+        turnBack: t.boolean,
         turnRate: t.number,
         movementType: MovementType,
         acceleration: t.number,
