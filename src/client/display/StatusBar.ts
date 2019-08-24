@@ -1,13 +1,16 @@
 import { StatusBarData } from "novadatainterface/StatusBarData";
 import * as PIXI from "pixi.js";
 import { GameData } from "../GameData";
+import { SystemState } from "../../engine/SystemState";
+import { Radar } from "./Radar";
+import { VectorLike } from "../../engine/Vector";
 
 
 class StatusBar extends PIXI.Container {
     readonly gameData: GameData;
     readonly id: string;
-    bars: PIXI.Graphics;
-    radarContainer: PIXI.Container;
+    readonly bars: PIXI.Graphics;
+    radar: Radar | undefined;
     targetContainer: PIXI.Container;
 
     data: StatusBarData | undefined;
@@ -30,10 +33,9 @@ class StatusBar extends PIXI.Container {
 
         this.displayGroup = new PIXI.DisplayGroup(100, true); // appear above others
         this.bars = new PIXI.Graphics();
-        this.radarContainer = new PIXI.Container();
-        this.targetContainer = new PIXI.Container();
 
-        this.addChild(this.bars, this.radarContainer, this.targetContainer);
+        this.targetContainer = new PIXI.Container();
+        this.addChild(this.bars, this.targetContainer);
         this.buildPromise = this.build()
     }
 
@@ -48,9 +50,24 @@ class StatusBar extends PIXI.Container {
         this.dimFont = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.dimText, align: 'center' };
 
 
-        this.radarContainer.position.x = this.data.dataAreas.radar.position[0];
-        this.radarContainer.position.y = this.data.dataAreas.radar.position[1];
-        //   this.
+
+        this.radar = new Radar({
+            dimensions: {
+                x: this.data.dataAreas.radar.size[0],
+                y: this.data.dataAreas.radar.size[1]
+            }
+        });
+
+        this.addChild(this.radar)
+        this.radar.position.x = this.data.dataAreas.radar.position[0];
+        this.radar.position.y = this.data.dataAreas.radar.position[1];
+
+    }
+
+    draw(state: SystemState, targetPosition: VectorLike) {
+        if (this.radar) {
+            this.radar.draw(state, targetPosition);
+        }
     }
 
     resize(x: number, _y: number) {

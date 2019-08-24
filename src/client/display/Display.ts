@@ -2,7 +2,7 @@ import * as PIXI from "pixi.js";
 import { PlanetState } from "../../engine/PlanetState";
 import { ShipState } from "../../engine/ShipState";
 import { SystemState } from "../../engine/SystemState";
-import { Vector } from "../../engine/Vector";
+import { Vector, VectorLike } from "../../engine/Vector";
 import { GameData } from "../GameData";
 import { ObjectDrawer } from "./ObjectDrawer";
 import { PlanetGraphic } from "./PlanetGraphic";
@@ -23,6 +23,7 @@ class Display {
     private readonly planetDrawer: ObjectDrawer<PlanetState, PlanetGraphic>;
 
     private _target!: string | Vector;
+    private targetPosition: VectorLike;
     private dimensions: Vector;
 
     constructor({ container, gameData, target }: { container: PIXI.Container, gameData: GameData, target?: Vector | string }) {
@@ -54,23 +55,24 @@ class Display {
         this.buildPromise = Promise.all([this.statusBar.buildPromise])
         this.buildPromise.then(() => { this.built = true });
 
+        this.targetPosition = new Vector(0, 0);
         if (target !== undefined) {
             this.target = target;
         }
         else {
             this.target = new Vector(0, 0);
         }
+
+
     }
 
     draw(state: SystemState) {
+
         if (!(this.target instanceof Vector)) {
             let targetShip = state.ships[this.target];
             if (targetShip !== undefined) {
-                let middle = this.dimensions.copy();
-                middle.x -= this.statusBar.width;
-                middle.scaleBy(-0.5);
-                middle.add(targetShip.position);
-                this.setViewpoint(middle);
+                this.targetPosition = targetShip.position;
+                this.setViewpoint(this.targetPosition);
             }
         }
 
@@ -84,17 +86,43 @@ class Display {
             let planetState = state.planets[planetID];
             this.planetDrawer.draw(planetState, planetID);
         }
+
+
+        this.statusBar.draw(state, this.targetPosition)
     }
 
+
+    // Set the viewpoint to be centered around v
     private setViewpoint(v: { x: number, y: number }) {
+        // This works by moving the systemContainer
+        // so that v appears in the center of the screen
+
+        // To do this, we need to know where the top left
+        // corner of the screen should be.
+
+        // Start with the target position v
+        let pos = Vector.fromVectorLike(v);
+
+        // Get the local coordinates for the center
+        // of the screen
+        let localCenter = this.dimensions.copy();
+        localCenter.x -= this.statusBar.width;
+        localCenter.scaleBy(0.5);
+
+
+        pos.subtract(localCenter);
+        // Now, pos is the top left corner of the screen
+        // when we draw with v in the center
+
         // Negative because that's how you cancel out
         // positions
-        this.systemContainer.position.x = -v.x;
-        this.systemContainer.position.y = -v.y;
+        this.systemContainer.position.x = -pos.x;
+        this.systemContainer.position.y = -pos.y;
     }
 
     set target(target: string | Vector) {
         if (target instanceof Vector) {
+            this.targetPosition = target;
             this.setViewpoint(target);
         }
         this._target = target;

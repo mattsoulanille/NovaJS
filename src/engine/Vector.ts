@@ -5,7 +5,7 @@ import { isEmptyObject } from "./EmptyObject";
 import { Angle } from "./Angle";
 
 
-class Vector implements Stateful<VectorState>{
+class Vector implements Stateful<VectorState>, VectorLike {
 
     x: number
     y: number
@@ -15,12 +15,20 @@ class Vector implements Stateful<VectorState>{
         this.y = y;
     }
 
-    add(other: { x: number, y: number }) {
+    static fromVectorLike(v: VectorLike) {
+        return new Vector(v.x, v.y);
+    }
+
+    add(other: VectorLike) {
         this.x += other.x;
         this.y += other.y;
     }
 
-    subtract(other: { x: number, y: number }) {
+    static minus(a: VectorLike, b: VectorLike) {
+        return new Vector(a.x - b.x, a.y - b.y);
+    }
+
+    subtract(other: VectorLike) {
         this.x -= other.x;
         this.y -= other.y;
     }
@@ -112,5 +120,6 @@ class Vector implements Stateful<VectorState>{
 }
 
 const VectorType = t.type({ x: t.number, y: t.number });
+type VectorLike = t.TypeOf<typeof VectorType>;
 
-export { Vector, VectorType }
+export { Vector, VectorType, VectorLike }
