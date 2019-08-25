@@ -12,7 +12,7 @@ import { StatusBar } from "./StatusBar";
 
 class Display {
     readonly container: PIXI.Container;
-    private readonly systemContainer: PIXI.Container;
+    readonly systemContainer: PIXI.Container;
     private readonly gameData: GameData;
     private statusBar: StatusBar;
     readonly buildPromise: Promise<unknown>;
@@ -30,8 +30,8 @@ class Display {
         this.gameData = gameData;
         this.container = container;
         this.systemContainer = new PIXI.Container();
-        this.systemContainer.pivot
         this.container.addChild(this.systemContainer);
+
         this.statusBar = new StatusBar({
             gameData: this.gameData
         });
@@ -49,6 +49,7 @@ class Display {
             graphicClass: ShipGraphic
         });
         this.systemContainer.addChild(this.shipDrawer);
+
 
         this.dimensions = new Vector(10, 10);
         this.built = false;
@@ -72,61 +73,30 @@ class Display {
             let targetShip = state.ships[this.target];
             if (targetShip !== undefined) {
                 this.targetPosition = targetShip.position;
-                this.setViewpoint(this.targetPosition);
             }
         }
 
         for (let shipID in state.ships) {
             let shipState = state.ships[shipID];
-            this.shipDrawer.draw(shipState, shipID);
+            this.shipDrawer.draw(shipState, shipID, this.targetPosition);
         }
         this.shipDrawer.cleanup();
 
         for (let planetID in state.planets) {
             let planetState = state.planets[planetID];
-            this.planetDrawer.draw(planetState, planetID);
+            this.planetDrawer.draw(planetState, planetID, this.targetPosition);
         }
 
-
         this.statusBar.draw(state, this.targetPosition)
-    }
-
-
-    // Set the viewpoint to be centered around v
-    private setViewpoint(v: { x: number, y: number }) {
-        // This works by moving the systemContainer
-        // so that v appears in the center of the screen
-
-        // To do this, we need to know where the top left
-        // corner of the screen should be.
-
-        // Start with the target position v
-        let pos = Vector.fromVectorLike(v);
-
-        // Get the local coordinates for the center
-        // of the screen
-        let localCenter = this.dimensions.copy();
-        localCenter.x -= this.statusBar.width;
-        localCenter.scaleBy(0.5);
-
-
-        pos.subtract(localCenter);
-        // Now, pos is the top left corner of the screen
-        // when we draw with v in the center
-
-        // Negative because that's how you cancel out
-        // positions
-        this.systemContainer.position.x = -pos.x;
-        this.systemContainer.position.y = -pos.y;
     }
 
     set target(target: string | Vector) {
         if (target instanceof Vector) {
             this.targetPosition = target;
-            this.setViewpoint(target);
         }
         this._target = target;
     }
+
     get target() {
         return this._target;
     }
@@ -134,8 +104,9 @@ class Display {
     resize(x: number, y: number) {
         this.dimensions = new Vector(x, y);
         this.statusBar.resize(x, y);
+        this.systemContainer.position.x = (x - this.statusBar.width) / 2;
+        this.systemContainer.position.y = y / 2;
     }
-
 }
 
 export { Display };

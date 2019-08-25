@@ -27,7 +27,7 @@ class Engine implements Stateful<GameState>, Steppable {
     readonly activeSystems: Set<string>;
     private uuidFunction: () => string;
 
-    constructor({ gameData, uuidFunction }: { gameData: GameDataInterface, uuidFunction?: () => string }) {
+    constructor({ gameData, state, uuidFunction }: { gameData: GameDataInterface, state?: PartialState<GameState>, uuidFunction?: () => string }) {
         this.uuidFunction = uuidFunction || UUID;
         this.gameData = gameData;
 
@@ -38,6 +38,13 @@ class Engine implements Stateful<GameState>, Steppable {
         );
 
         this.activeSystems = new Set();
+
+        if (state) {
+            this.setState(state);
+        }
+        else {
+
+        }
     }
 
     step(milliseconds: number) {
@@ -122,7 +129,6 @@ class Engine implements Stateful<GameState>, Steppable {
         const ship = this.getShip(shipUUID);
         ship.setState(shipState);
     }
-
 }
 
 export { Engine }

@@ -1,14 +1,11 @@
-import * as PIXI from "pixi.js";
-import { GameData } from "../GameData";
 import { Animation } from "novadatainterface/Animation";
-import { NovaDataType } from "novadatainterface/NovaDataInterface";
-import { SpriteSheetSprite } from "./SpriteSheetSprite";
 import { ShipState } from "../../engine/ShipState";
-import { AnimationGraphic } from "./AnimationGraphic";
-import { IDGraphic } from "./IDGraphic";
+import { VectorLike } from "../../engine/Vector";
+import { GameData } from "../GameData";
+import { SpaceObjectGraphic } from "./SpaceObjectGraphic";
 
 
-class ShipGraphic extends AnimationGraphic {
+class ShipGraphic extends SpaceObjectGraphic {
 
     // id is the id for GameData. Not the UUID.
     constructor({ gameData, id }: { gameData: GameData, id: string }) {
@@ -21,10 +18,9 @@ class ShipGraphic extends AnimationGraphic {
         return ship.animation;
     }
 
-    drawState(state: ShipState) {
-        this.position.x = state.position.x;
-        this.position.y = state.position.y;
-        this.rotation = state.rotation;
+    draw(state: ShipState, center: VectorLike) {
+        super.draw(state, center);
+
         if (this.sprites.glowImage) {
             this.sprites.glowImage.alpha = state.accelerating;
         }
@@ -44,4 +40,4 @@ class ShipGraphic extends AnimationGraphic {
     }
 }
 
-export { ShipGraphic }
+export { ShipGraphic };

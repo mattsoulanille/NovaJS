@@ -1,8 +1,9 @@
-import { AnimationGraphic } from "./AnimationGraphic";
 import { PlanetState } from "../../engine/PlanetState";
 import { GameData } from "../GameData";
+import { VectorLike } from "../../engine/Vector";
+import { SpaceObjectGraphic } from "./SpaceObjectGraphic";
 
-class PlanetGraphic extends AnimationGraphic {
+class PlanetGraphic extends SpaceObjectGraphic {
 
     constructor({ gameData, id }: { gameData: GameData, id: string }) {
         super({ gameData, id });
@@ -12,11 +13,6 @@ class PlanetGraphic extends AnimationGraphic {
     protected async getAnimation() {
         const planet = await this.gameData.data.Planet.get(this.id);
         return planet.animation;
-    }
-
-    drawState(state: PlanetState) {
-        this.position.x = state.position.x;
-        this.position.y = state.position.y;
     }
 }
 

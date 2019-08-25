@@ -5,6 +5,7 @@ import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import { SpriteSheetSprite } from "./SpriteSheetSprite";
 import { ShipState } from "../../engine/ShipState";
 import { SpaceObjectState } from "../../engine/SpaceObjectState";
+import { VectorLike } from "../../engine/Vector";
 
 
 abstract class AnimationGraphic extends PIXI.Container {
@@ -73,7 +74,7 @@ abstract class AnimationGraphic extends PIXI.Container {
         return this._rotation;
     }
 
-    abstract drawState(state: SpaceObjectState): void;
+    abstract draw(state: SpaceObjectState, center: VectorLike): void;
 }
 
 export { AnimationGraphic }

@@ -3,6 +3,7 @@ import { GameData } from "../GameData";
 import { FactoryQueueMap } from "../../common/FactoryQueueMap";
 import { IDGraphic } from "./IDGraphic";
 import { AnimationGraphic } from "./AnimationGraphic";
+import { VectorLike } from "../../engine/Vector";
 
 
 class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGraphic> extends PIXI.Container {
@@ -36,7 +37,7 @@ class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGrap
     }
 
 
-    draw(state: State, uuid: string) {
+    draw(state: State, uuid: string, center: VectorLike) {
         if (this.onScreen[uuid] === undefined) {
             const newObj = this.offScreen.dequeueFromIfAvailable(state.id);
 
@@ -53,9 +54,12 @@ class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGrap
 
         const obj = this.onScreen[uuid];
         if (obj) {
-            obj.graphic.drawState(state);
+            obj.graphic.draw(state, center);
             obj.drawn = true;
         }
+
+
+
     }
 
     cleanup() {
