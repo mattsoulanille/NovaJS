@@ -22,6 +22,7 @@ class Vector implements Stateful<VectorState>, VectorLike {
     add(other: VectorLike) {
         this.x += other.x;
         this.y += other.y;
+        return this;
     }
 
     static minus(a: VectorLike, b: VectorLike) {
@@ -31,6 +32,7 @@ class Vector implements Stateful<VectorState>, VectorLike {
     subtract(other: VectorLike) {
         this.x -= other.x;
         this.y -= other.y;
+        return this;
     }
 
     rotate(radians: number) {
@@ -38,6 +40,7 @@ class Vector implements Stateful<VectorState>, VectorLike {
         var sin = Math.sin(radians);
         this.x = cos * this.x - sin * this.y;
         this.y = sin * this.x + cos * this.y;
+        return this;
     }
 
     copy() {

@@ -1,10 +1,9 @@
+import { FactoryQueueMap } from "../../common/FactoryQueueMap";
+import { Position } from "../../engine/Position";
 import { SpaceObjectState } from "../../engine/SpaceObjectState";
 import { GameData } from "../GameData";
-import { FactoryQueueMap } from "../../common/FactoryQueueMap";
-import { IDGraphic } from "./IDGraphic";
 import { AnimationGraphic } from "./AnimationGraphic";
-import { VectorLike } from "../../engine/Vector";
-
+import { IDGraphic } from "./IDGraphic";
 
 class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGraphic> extends PIXI.Container {
     private onScreen: {
@@ -37,7 +36,7 @@ class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGrap
     }
 
 
-    draw(state: State, uuid: string, center: VectorLike) {
+    draw(state: State, uuid: string, center: Position) {
         if (this.onScreen[uuid] === undefined) {
             const newObj = this.offScreen.dequeueFromIfAvailable(state.id);
 
@@ -78,4 +77,4 @@ class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGrap
     }
 }
 
-export { ObjectDrawer }
+export { ObjectDrawer };

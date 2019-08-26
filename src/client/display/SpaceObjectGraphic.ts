@@ -1,29 +1,26 @@
-import { AnimationGraphic } from "./AnimationGraphic";
+import { Position } from "../../engine/Position";
 import { SpaceObjectState } from "../../engine/SpaceObjectState";
-import { VectorLike } from "../../engine/Vector";
-import { BOUNDARY } from "../../engine/Position";
+import { AnimationGraphic } from "./AnimationGraphic";
 
 
 abstract class SpaceObjectGraphic extends AnimationGraphic {
 
-    // private findClosest(target: number, input: number) {
-    //     if (Math.abs(target - input) < BOUNDARY / 2) {
-    //         return input;
-    //     }
-    //     else {
-    // 		return 
-    //     }
-    // }
 
     // Accounts for modulus
-    draw(state: SpaceObjectState, center: VectorLike) {
+    draw(state: SpaceObjectState, center: Position) {
 
-        this.position.x = state.position.x - center.x;
-        this.position.y = state.position.y - center.y;
+        let realPosition = new Position(
+            state.position.x,
+            state.position.y
+        );
 
+        let screenPosition = realPosition.getClosestRelativeTo(center).subtract(center);
+
+        this.position.x = screenPosition.x;
+        this.position.y = screenPosition.y;
 
         this.rotation = state.rotation;
     }
 }
 
-export { SpaceObjectGraphic }
+export { SpaceObjectGraphic };

@@ -65,6 +65,17 @@ async function startGame() {
     solState.ships.myship = await Ship.fromID("nova:133", gameData);
     solState.ships.anotherShip = await Ship.fromID("nova:128", gameData);
 
+    solState.ships.leftof = await Ship.fromID("nova:129", gameData);
+    solState.ships.leftof.position.x = 9950;
+    solState.ships.rightof = await Ship.fromID("nova:130", gameData);
+    solState.ships.rightof.position.x = 10050;
+
+    solState.ships.leftOfEarth = await Ship.fromID("nova:128", gameData);
+    solState.ships.rightOfEarth = await Ship.fromID("nova:128", gameData);
+
+    solState.ships.leftOfEarth.position.x = -50;
+    solState.ships.rightOfEarth.position.x = 50;
+
     engine.setState({
         systems: {
             "sol": solState

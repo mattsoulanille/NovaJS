@@ -1,12 +1,9 @@
-import * as PIXI from "pixi.js";
-import { GameData } from "../GameData";
 import { Animation } from "novadatainterface/Animation";
-import { NovaDataType } from "novadatainterface/NovaDataInterface";
-import { SpriteSheetSprite } from "./SpriteSheetSprite";
-import { ShipState } from "../../engine/ShipState";
+import * as PIXI from "pixi.js";
+import { Position } from "../../engine/Position";
 import { SpaceObjectState } from "../../engine/SpaceObjectState";
-import { VectorLike } from "../../engine/Vector";
-
+import { GameData } from "../GameData";
+import { SpriteSheetSprite } from "./SpriteSheetSprite";
 
 abstract class AnimationGraphic extends PIXI.Container {
     protected readonly gameData: GameData;
@@ -74,7 +71,7 @@ abstract class AnimationGraphic extends PIXI.Container {
         return this._rotation;
     }
 
-    abstract draw(state: SpaceObjectState, center: VectorLike): void;
+    abstract draw(state: SpaceObjectState, center: Position): void;
 }
 
-export { AnimationGraphic }
+export { AnimationGraphic };

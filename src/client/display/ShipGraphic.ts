@@ -1,9 +1,8 @@
 import { Animation } from "novadatainterface/Animation";
+import { Position } from "../../engine/Position";
 import { ShipState } from "../../engine/ShipState";
-import { VectorLike } from "../../engine/Vector";
 import { GameData } from "../GameData";
 import { SpaceObjectGraphic } from "./SpaceObjectGraphic";
-
 
 class ShipGraphic extends SpaceObjectGraphic {
 
@@ -18,7 +17,7 @@ class ShipGraphic extends SpaceObjectGraphic {
         return ship.animation;
     }
 
-    draw(state: ShipState, center: VectorLike) {
+    draw(state: ShipState, center: Position) {
         super.draw(state, center);
 
         if (this.sprites.glowImage) {

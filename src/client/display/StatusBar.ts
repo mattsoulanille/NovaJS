@@ -4,7 +4,7 @@ import { GameData } from "../GameData";
 import { SystemState } from "../../engine/SystemState";
 import { Radar } from "./Radar";
 import { VectorLike } from "../../engine/Vector";
-
+import { Position } from "../../engine/Position";
 
 class StatusBar extends PIXI.Container {
     readonly gameData: GameData;
@@ -64,7 +64,7 @@ class StatusBar extends PIXI.Container {
 
     }
 
-    draw(state: SystemState, targetPosition: VectorLike) {
+    draw(state: SystemState, targetPosition: Position) {
         if (this.radar) {
             this.radar.draw(state, targetPosition);
         }

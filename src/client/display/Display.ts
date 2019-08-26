@@ -8,7 +8,7 @@ import { ObjectDrawer } from "./ObjectDrawer";
 import { PlanetGraphic } from "./PlanetGraphic";
 import { ShipGraphic } from "./ShipGraphic";
 import { StatusBar } from "./StatusBar";
-
+import { BOUNDARY, Position } from "../../engine/Position";
 
 class Display {
     readonly container: PIXI.Container;
@@ -22,11 +22,11 @@ class Display {
     private readonly shipDrawer: ObjectDrawer<ShipState, ShipGraphic>;
     private readonly planetDrawer: ObjectDrawer<PlanetState, PlanetGraphic>;
 
-    private _target!: string | Vector;
-    private targetPosition: VectorLike;
+    private _target!: string | Position;
+    private targetPosition: Position;
     private dimensions: Vector;
 
-    constructor({ container, gameData, target }: { container: PIXI.Container, gameData: GameData, target?: Vector | string }) {
+    constructor({ container, gameData, target }: { container: PIXI.Container, gameData: GameData, target?: Position | string }) {
         this.gameData = gameData;
         this.container = container;
         this.systemContainer = new PIXI.Container();
@@ -56,12 +56,12 @@ class Display {
         this.buildPromise = Promise.all([this.statusBar.buildPromise])
         this.buildPromise.then(() => { this.built = true });
 
-        this.targetPosition = new Vector(0, 0);
+        this.targetPosition = new Position(0, 0);
         if (target !== undefined) {
             this.target = target;
         }
         else {
-            this.target = new Vector(0, 0);
+            this.target = new Position(0, 0);
         }
 
 
@@ -72,7 +72,10 @@ class Display {
         if (!(this.target instanceof Vector)) {
             let targetShip = state.ships[this.target];
             if (targetShip !== undefined) {
-                this.targetPosition = targetShip.position;
+                this.targetPosition = new Position(
+                    targetShip.position.x,
+                    targetShip.position.y
+                );
             }
         }
 
@@ -90,8 +93,8 @@ class Display {
         this.statusBar.draw(state, this.targetPosition)
     }
 
-    set target(target: string | Vector) {
-        if (target instanceof Vector) {
+    set target(target: string | Position) {
+        if (target instanceof Position) {
             this.targetPosition = target;
         }
         this._target = target;
