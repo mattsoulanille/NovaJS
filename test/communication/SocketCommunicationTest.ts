@@ -40,7 +40,7 @@ describe("Socket Communication Channel", function() {
 
     const SocketIOclients: SocketIOClient.Socket[] = [];
 
-    const serverChannel = new SocketChannelServer({ io: io_server });
+    const serverChannel = new SocketChannelServer({ io: io_server, admins: new Set(["bob", "frank"]) });
     const clientChannels: { [index: string]: SocketChannelClient } = {};
 
     afterEach(async () => {
@@ -303,5 +303,11 @@ describe("Socket Communication Channel", function() {
 
     });
 
-
+    it("Should forward a set of admins", async function() {
+        let client1 = await connectClient();
+        let admins = new Set([serverChannel.uuid, "bob", "frank"]);
+        console.log(client1.admins);
+        client1.admins.should.deep.equal(admins);
+        serverChannel.admins.should.deep.equal(admins);
+    })
 });

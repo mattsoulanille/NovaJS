@@ -17,11 +17,18 @@ interface Channel {
     // Broadcast is necessary so that when communicating
     // via socket.io, the client doesn't spam the server with
     // individual messages to each other client.
+
+    // Message source should not be spoofable.
     readonly onMessage: AnyEvent<MessageWithSourceType>;
     readonly onConnect: AnyEvent<string>;
     readonly onDisconnect: AnyEvent<string>;
     readonly peers: Set<string>;
 
+    // UUIDs for admins including the server(s)
+    // They can change the state however they want.
+    // This has to be at the Channel level because there
+    // is no way to establish trust at the Communicator level.
+    readonly admins: Set<string>;
 }
 
 

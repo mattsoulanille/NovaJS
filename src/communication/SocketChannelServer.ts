@@ -12,7 +12,8 @@ const IncomingMessageType = t.type({
 
 const InitialDataType = t.type({
     peers: t.array(t.string),
-    uuid: t.string
+    uuid: t.string,
+    admins: t.array(t.string),
 });
 
 type InitialDataType = t.TypeOf<typeof InitialDataType>;
@@ -28,7 +29,9 @@ class SocketChannelServer implements Channel {
     readonly uuid: string;
     private warn: (m: string) => void;
 
-    constructor({ io, warn }: { io: SocketIO.Server, warn?: ((m: string) => void) }) {
+    readonly admins: Set<string>;
+
+    constructor({ io, warn, uuid, admins }: { io: SocketIO.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string> }) {
 
         this.onMessage = new AnyEvent<MessageWithSourceType>();
         this.onConnect = new AnyEvent<string>();
@@ -41,10 +44,21 @@ class SocketChannelServer implements Channel {
             this.warn = console.warn;
         }
 
+        if (uuid !== undefined) {
+            this.uuid = uuid;
+        }
+        else {
+            this.uuid = UUID();
+        }
+
+        if (admins !== undefined) {
+            this.admins = new Set([...admins, this.uuid]);
+        }
+        else {
+            this.admins = new Set([this.uuid]);
+        }
 
         this.clientSockets = {};
-
-        this.uuid = UUID();
 
         this.io = io;
         this.io.on("connection", this._onConnect.bind(this));
@@ -76,9 +90,11 @@ class SocketChannelServer implements Channel {
         let peersSet = new Set(this.peers);
         peersSet.delete(clientUUID);
         peersSet.add(this.uuid);
+
         let initialData: InitialDataType = {
             peers: [...peersSet],
-            uuid: clientUUID
+            uuid: clientUUID,
+            admins: [...this.admins]
         };
         socket.emit("setInitialData", initialData);
 

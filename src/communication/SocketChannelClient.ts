@@ -12,7 +12,9 @@ class SocketChannelClient implements Channel {
     private socket: SocketIOClient.Socket;
     warn: (m: string) => void;
     private _uuid: string | undefined;
+    private _admins: Set<string>;
     readonly readyPromise: Promise<void>;
+
 
     constructor({ socket, warn }: { socket: SocketIOClient.Socket, warn?: ((m: string) => void) }) {
 
@@ -20,6 +22,7 @@ class SocketChannelClient implements Channel {
         this.onConnect = new AnyEvent<string>();
         this.onDisconnect = new AnyEvent<string>();
         this._peers = new Set<string>();
+        this._admins = new Set<string>();
 
         if (warn !== undefined) {
             this.warn = warn;
@@ -63,6 +66,7 @@ class SocketChannelClient implements Channel {
         if (decoded.isRight()) {
             this._uuid = decoded.value.uuid;
             this._peers = new Set(decoded.value.peers);
+            this._admins = new Set(decoded.value.admins);
         }
         else {
             this.warn(decoded.value.toString());
@@ -91,6 +95,9 @@ class SocketChannelClient implements Channel {
     }
     get uuid() {
         return this._uuid;
+    }
+    get admins() {
+        return this._admins;
     }
     disconnect() {
         this.socket.disconnect();
