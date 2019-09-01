@@ -10,9 +10,16 @@ import { Engine } from "./engine/Engine";
 import { Planet } from "./engine/Planet";
 import { Ship } from "./engine/Ship";
 import { System } from "./engine/System";
+import { SocketChannelClient } from "./communication/SocketChannelClient";
+import { Communicator } from "./communication/Communicator";
 
-const socket = io.Socket;
+const socket = io();
 (window as any).socket = socket;
+const socketChannel = new SocketChannelClient({ socket });
+const communicator = new Communicator({
+    channel: socketChannel
+});
+(window as any).communicator = communicator;
 
 // Temporary
 const gameData = new GameData();
@@ -97,7 +104,7 @@ function gameLoop() {
     engine.setShipState("myship", shipController.generateShipState());
 
     engine.step(delta);
-    let currentState = engine.getSystemFullState("sol");
+    let currentState = engine.getSystemContainingShip("myship");
     display.draw(currentState);
 }
 

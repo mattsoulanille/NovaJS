@@ -86,7 +86,12 @@ class Engine implements Stateful<GameState>, Steppable {
         }
     }
 
-    private searchForShip(shipUUID: string): Ship {
+    getSystemContainingShip(shipUUID: string): SystemState {
+        let system = this.getShipSystem(shipUUID);
+        return system.getFullState();
+    }
+
+    private searchForShipSystem(shipUUID: string): System {
         for (let systemUUID of this.systems.keys()) {
             let system = this.systems.get(systemUUID);
             if (system === undefined) {
@@ -95,32 +100,38 @@ class Engine implements Stateful<GameState>, Steppable {
             let ship = system.ships.get(shipUUID)
             if (ship !== undefined) {
                 this.shipSystemMap.set(shipUUID, systemUUID);
-                return ship;
+                return system;
             }
         }
         throw new Error("Ship " + shipUUID + " not found");
     }
 
-    private getShip(shipUUID: string): Ship {
+    private getShipSystem(shipUUID: string): System {
         const possibleSystemUUID = this.shipSystemMap.get(shipUUID);
         if (possibleSystemUUID === undefined) {
-            return this.searchForShip(shipUUID);
+            return this.searchForShipSystem(shipUUID);
         }
         else {
             const possibleSystem = this.systems.get(possibleSystemUUID);
             if (possibleSystem === undefined) {
-                return this.searchForShip(shipUUID);
+                return this.searchForShipSystem(shipUUID);
             }
             else {
                 const possibleShip = possibleSystem.ships.get(shipUUID);
                 if (possibleShip === undefined) {
-                    return this.searchForShip(shipUUID);
+                    return this.searchForShipSystem(shipUUID);
                 }
                 else {
-                    return possibleShip;
+                    return possibleSystem;
                 }
+
             }
         }
+    }
+
+    private getShip(shipUUID: string): Ship {
+
+        return this.getShipSystem(shipUUID).ships.get(shipUUID) as Ship; // Known to be defined. See getShipSystem.
     }
 
 
@@ -128,6 +139,25 @@ class Engine implements Stateful<GameState>, Steppable {
     setShipState(shipUUID: string, shipState: PartialState<ShipState>) {
         const ship = this.getShip(shipUUID);
         ship.setState(shipState);
+    }
+
+
+
+    static async fromGameData(gameData: GameDataInterface): Promise<Engine> {
+        const systems: { [index: string]: SystemState } = {};
+
+        const systemIDs = (await gameData.ids).System;
+
+        for (let id of systemIDs) {
+            systems[id] = await System.fromID(id, gameData);
+        }
+
+        let state: GameState = { systems };
+
+        return new Engine({
+            state,
+            gameData
+        });
     }
 }
 

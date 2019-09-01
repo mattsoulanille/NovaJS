@@ -4,6 +4,88 @@
 
 // Allows any subset of object properties all the way down
 // through all subobjects.o
+import * as t from "io-ts";
+import { GameState } from "./GameState";
+import { Either } from "fp-ts/lib/Either";
+import { ShipState } from "./ShipState";
+
+// Copied from https://github.com/gcanti/io-ts/blob/master/src/index.ts
+// May break if io-ts changes. Probably a terrible idea!
+function isTypeC(codec: t.Any): codec is t.TypeC<t.Props> {
+    return (codec as any)._tag === 'InterfaceType';
+}
+
+function MakeOptional(T: t.Any) {
+    return t.union([T, t.undefined]);
+}
+
+function MakeRecursivePartial(T: t.Any): t.Any {
+
+    if (isTypeC(T)) {
+        let optional: { [index: string]: t.Any } = {}
+        for (let [key, value] of Object.entries(T.props)) {
+            optional[key] = MakeOptional(MakeRecursivePartial(value));
+        }
+        return t.type(optional);
+    }
+    else if (T instanceof t.DictionaryType) {
+        return t.record(
+            T.domain,
+            MakeOptional(MakeRecursivePartial(T.codomain)));
+
+    }
+    else if ((T instanceof t.IntersectionType)
+        || (T instanceof t.UnionType)) {
+
+        let newTypes: t.Any[] = [];
+        for (let i in [...T.types]) {
+            newTypes[i] = MakeRecursivePartial(T.types[i])
+        }
+        if (newTypes.length < 2) {
+            throw Error("Intersection of less than 2 types");
+        }
+        // It complains about not having enough entries
+        // if you don't cast to `any`, but we know
+        // there are at least 2 in `newTypes`
+        if (T instanceof t.IntersectionType) {
+            return t.intersection(newTypes as any);
+        }
+        else {
+            return t.union(newTypes as any);
+        }
+    }
+    else {
+        return T;
+    }
+}
+
+function clearUndefined(v: unknown) {
+    if (v instanceof Object) {
+        for (let [key, value] of Object.entries(v)) {
+            if (value === undefined) {
+                delete (v as any)[key];
+            }
+            else {
+                clearUndefined((v as any)[key]);
+            }
+        }
+    }
+}
+
+function MakeRecursivePartialParser<T extends t.Any>(T: T): (v: unknown) => Either<t.Errors, RecursivePartial<t.TypeOf<typeof T>>> {
+    const decoder = MakeRecursivePartial(T)
+    return (v: unknown) => {
+        const decoded = decoder.decode(v);
+        if (decoded.isRight()) {
+            const value = decoded.value;
+            clearUndefined(value);
+            return t.success(value);
+        }
+        else {
+            return decoded;
+        }
+    }
+}
 
 type RecursivePartial<T> =
     T extends object ? {
@@ -12,6 +94,8 @@ type RecursivePartial<T> =
         //    T[P] extends object ? RecursivePartial<T[P]> :
     } :
     T;
+
+
 
 
 
@@ -94,5 +178,23 @@ interface Stateful<T> {
 }
 
 
+const PartialGameStateParser = MakeRecursivePartialParser(GameState);
+const PartialGameState = new t.Type<
+    PartialState<GameState>,
+    PartialState<GameState>,
+    unknown>(
+        'PartialGameState',
+        function(u: unknown): u is PartialState<GameState> {
+            return MakeRecursivePartial(GameState)
+                .is(u).valueOf();
+        },
+        function(input: unknown) {
+            return PartialGameStateParser(input);
+        },
+        t.identity
+    )
 
-export { Stateful, StateIndexer, RecursivePartial, ReplaceWithEmptyObjects, PartialState, OnlyStringKeys }
+
+
+
+export { Stateful, StateIndexer, RecursivePartial, PartialGameState, ReplaceWithEmptyObjects, PartialState, OnlyStringKeys }

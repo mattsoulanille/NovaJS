@@ -98,14 +98,14 @@ class Radar extends PIXI.Graphics {
         for (let shipID in state.ships) {
             let shipState = state.ships[shipID];
             let position = Position.fromVectorLike(shipState.position);
-            this.drawPosition(position, 2, 0xffffff, center);
+            this.drawPosition(position, 1, 0xffffff, center);
 
         }
 
         for (let planetID in state.planets) {
             let planetState = state.planets[planetID];
             let position = Position.fromVectorLike(planetState.position)
-            this.drawPosition(position, 3, 0xffffff, center);
+            this.drawPosition(position, 2, 0xffffff, center);
         }
     }
 }
