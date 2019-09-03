@@ -45,7 +45,7 @@ describe("parseGameState", function() {
                 "s1": {
                     ships: {
                         "ship": {
-                            position: { x: "Not ok", y: NaN }
+                            position: { x: "Not ok", y: 4 }
                         }
                     },
                 }

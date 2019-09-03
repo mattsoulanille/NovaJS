@@ -19,19 +19,23 @@ function MakeOptional(T: t.Any) {
     return t.union([T, t.undefined]);
 }
 
-function MakeRecursivePartial(T: t.Any): t.Any {
+function MakeRecursivePartial<T extends t.Any>(T: T): t.Type<
+    RecursivePartial<t.TypeOf<typeof T>>,
+    RecursivePartial<t.TypeOf<typeof T>>,
+    unknown
+> {
 
     if (isTypeC(T)) {
         let optional: { [index: string]: t.Any } = {}
         for (let [key, value] of Object.entries(T.props)) {
             optional[key] = MakeOptional(MakeRecursivePartial(value));
         }
-        return t.type(optional);
+        return t.type(optional) as any;
     }
     else if (T instanceof t.DictionaryType) {
         return t.record(
             T.domain,
-            MakeOptional(MakeRecursivePartial(T.codomain)));
+            MakeOptional(MakeRecursivePartial(T.codomain))) as any;
 
     }
     else if ((T instanceof t.IntersectionType)
@@ -86,6 +90,33 @@ function MakeRecursivePartialParser<T extends t.Any>(T: T): (v: unknown) => Eith
         }
     }
 }
+
+
+function RecursivePartial<T extends t.Any>(T: T): t.Type<
+    RecursivePartial<t.TypeOf<typeof T>>,
+    RecursivePartial<t.TypeOf<typeof T>>,
+    unknown> {
+
+    const parser = MakeRecursivePartialParser(T);
+    const io_ts_type = MakeRecursivePartial(T);
+    type TStatic = RecursivePartial<t.TypeOf<typeof T>>;
+
+
+    return new t.Type<
+        TStatic,
+        TStatic,
+        unknown>(
+            "RecursivePartial<" + T.name + ">",
+            function(u: unknown): u is TStatic {
+                return io_ts_type.is(u).valueOf();
+            },
+            function(input: unknown) {
+                return parser(input)
+            },
+            t.identity
+        );
+}
+
 
 type RecursivePartial<T> =
     T extends object ? {
@@ -177,7 +208,7 @@ interface Stateful<T> {
     setState(state: PartialState<T>): StateIndexer<T>
 }
 
-
+/*
 const PartialGameStateParser = MakeRecursivePartialParser(GameState);
 const PartialGameState = new t.Type<
     PartialState<GameState>,
@@ -194,7 +225,8 @@ const PartialGameState = new t.Type<
         t.identity
     )
 
-
+*/
+const PartialGameState = RecursivePartial(GameState);
 
 
 export { Stateful, StateIndexer, RecursivePartial, PartialGameState, ReplaceWithEmptyObjects, PartialState, OnlyStringKeys }
