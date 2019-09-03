@@ -208,24 +208,6 @@ interface Stateful<T> {
     setState(state: PartialState<T>): StateIndexer<T>
 }
 
-/*
-const PartialGameStateParser = MakeRecursivePartialParser(GameState);
-const PartialGameState = new t.Type<
-    PartialState<GameState>,
-    PartialState<GameState>,
-    unknown>(
-        'PartialGameState',
-        function(u: unknown): u is PartialState<GameState> {
-            return MakeRecursivePartial(GameState)
-                .is(u).valueOf();
-        },
-        function(input: unknown) {
-            return PartialGameStateParser(input);
-        },
-        t.identity
-    )
-
-*/
 const PartialGameState = RecursivePartial(GameState);
 
 
