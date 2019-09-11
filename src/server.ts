@@ -45,7 +45,7 @@ async function startGame() {
         console.log("New Client: " + uuid);
         let toSend: StateMessage = {
             messageType: "setState",
-            state: { cat: 4 }
+            state: engine.getState()
         }
         communicator.channel.send(uuid, toSend);
     });

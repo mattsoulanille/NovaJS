@@ -3,7 +3,7 @@ import { GameState } from "../engine/GameState";
 import { SystemState } from "../engine/SystemState";
 import { Channel } from "./Channel";
 import { PathReporter } from "io-ts/lib/PathReporter";
-import { PartialState, MakeRecursivePartial } from "../engine/Stateful";
+import { PartialState, PartialGameState } from "../engine/Stateful";
 
 
 const SetUUIDsMessage = t.type({
@@ -15,7 +15,7 @@ type SetUUIDsMessage = t.TypeOf<typeof SetUUIDsMessage>;
 
 const StateMessage = t.type({
     messageType: t.literal("setState"),
-    state: MakeRecursivePartial(GameState)
+    state: PartialGameState
 });
 type StateMessage = t.TypeOf<typeof StateMessage>;
 
@@ -65,8 +65,6 @@ class Communicator {
 
         this.channel.onMessage.attach(this._handleMessage.bind(this));
     }
-
-
 
     // applySystemChanges(state: SystemState): SystemState {
 
