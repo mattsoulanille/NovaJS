@@ -21,8 +21,8 @@ type InitialDataType = t.TypeOf<typeof InitialDataType>;
 class SocketChannelServer implements Channel {
     // Socket.io is used as a fallback from WebRTC
     public readonly onMessage: AnyEvent<MessageWithSourceType>;
-    public readonly onConnect: AnyEvent<string>;
-    public readonly onDisconnect: AnyEvent<string>;
+    public readonly onPeerConnect: AnyEvent<string>;
+    public readonly onPeerDisconnect: AnyEvent<string>;
 
     private clientSockets: { [index: string]: SocketIO.Socket };
     readonly io: SocketIO.Server;
@@ -34,8 +34,8 @@ class SocketChannelServer implements Channel {
     constructor({ io, warn, uuid, admins }: { io: SocketIO.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string> }) {
 
         this.onMessage = new AnyEvent<MessageWithSourceType>();
-        this.onConnect = new AnyEvent<string>();
-        this.onDisconnect = new AnyEvent<string>();
+        this.onPeerConnect = new AnyEvent<string>();
+        this.onPeerDisconnect = new AnyEvent<string>();
 
         if (warn !== undefined) {
             this.warn = warn;
@@ -85,7 +85,7 @@ class SocketChannelServer implements Channel {
     }
 
     private _handleClientReady(clientUUID: string, socket: SocketIO.Socket) {
-        this.onConnect.post(clientUUID);
+        this.onPeerConnect.post(clientUUID);
 
         let peersSet = new Set(this.peers);
         peersSet.delete(clientUUID);
@@ -153,7 +153,7 @@ class SocketChannelServer implements Channel {
     private _onDisconnect(clientUUID: string) {
         delete this.clientSockets[clientUUID];
         this.io.emit("removePeer", clientUUID);
-        this.onDisconnect.post(clientUUID);
+        this.onPeerDisconnect.post(clientUUID);
     }
 
     private _constructMessage(message: unknown): MessageWithSourceType {
@@ -167,6 +167,9 @@ class SocketChannelServer implements Channel {
         const socket = this.clientSockets[uuid];
         if (socket !== undefined) {
             socket.emit("message", this._constructMessage(message));
+        }
+        else {
+            this.warn("Tried to send message to non-existent peer " + uuid);
         }
     }
 

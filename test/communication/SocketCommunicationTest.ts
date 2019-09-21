@@ -83,9 +83,9 @@ describe("Socket Communication Channel", function() {
         const promises: Promise<string>[] = [];
         for (let peerUUID in clientChannels) {
             let peer = clientChannels[peerUUID];
-            promises.push(waitForEvent(peer.onConnect));
+            promises.push(waitForEvent(peer.onPeerConnect));
         }
-        promises.push(waitForEvent(serverChannel.onConnect));
+        promises.push(waitForEvent(serverChannel.onPeerConnect));
         const client = new SocketChannelClient({ socket: await connectSocketIOClient() });
 
         let results = await Promise.all(promises);
@@ -111,10 +111,10 @@ describe("Socket Communication Channel", function() {
             for (let peerUUID in clientChannels) {
                 if (peerUUID !== uuid) {
                     let peer = clientChannels[peerUUID];
-                    promises.push(waitForEvent(peer.onDisconnect));
+                    promises.push(waitForEvent(peer.onPeerDisconnect));
                 }
             }
-            promises.push(waitForEvent(serverChannel.onDisconnect));
+            promises.push(waitForEvent(serverChannel.onPeerDisconnect));
 
             client.disconnect();
             let results = await Promise.all(promises);

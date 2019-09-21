@@ -10,9 +10,14 @@ import { BuildingMap } from "./BuildingMap";
 import { ShipState } from "./ShipState";
 import { Ship } from "./Ship";
 
-class MissingSystemError extends Error {
+class SystemMissingError extends Error {
     constructor(system: string) {
         super("Missing system " + system)
+    }
+}
+class ShipMissingError extends Error {
+    constructor(ship: string) {
+        super("Missing ship " + ship);
     }
 }
 
@@ -25,7 +30,8 @@ class Engine implements Stateful<GameState>, Steppable {
     private shipSystemMap: Map<string, string>;
 
     readonly activeSystems: Set<string>;
-    private uuidFunction: () => string;
+    readonly activeShips: Set<string>;
+    readonly uuidFunction: () => string;
 
     constructor({ gameData, state, uuidFunction }: { gameData: GameDataInterface, state?: PartialState<GameState>, uuidFunction?: () => string }) {
         this.uuidFunction = uuidFunction || UUID;
@@ -38,6 +44,7 @@ class Engine implements Stateful<GameState>, Steppable {
         );
 
         this.activeSystems = new Set();
+        this.activeShips = new Set();
 
         if (state) {
             this.setState(state);
@@ -47,11 +54,20 @@ class Engine implements Stateful<GameState>, Steppable {
         }
     }
 
+    private _getSystemsToStep(): Set<string> {
+        const shipSystems = new Set<string>();
+        for (let shipUUID of this.activeShips) {
+            shipSystems.add(this.getShipSystemID(shipUUID));
+        }
+        return new Set([...shipSystems, ...this.activeSystems]);
+    }
+
     step(milliseconds: number) {
-        for (let systemID of this.activeSystems) {
+        const systemsToStep = this._getSystemsToStep();
+        for (let systemID of systemsToStep) {
             var system = this.systems.get(systemID);
             if (system === undefined) {
-                throw new MissingSystemError(systemID);
+                throw new SystemMissingError(systemID);
             }
             system.step(milliseconds);
         }
@@ -62,6 +78,10 @@ class Engine implements Stateful<GameState>, Steppable {
         return {
             systems: this.systems.getState(toGet.systems)
         };
+    }
+
+    getFullState(): GameState {
+        return this.getState() as GameState;
     }
 
     // Set the current state of the game
@@ -86,12 +106,7 @@ class Engine implements Stateful<GameState>, Steppable {
         }
     }
 
-    getSystemContainingShip(shipUUID: string): SystemState {
-        let system = this.getShipSystem(shipUUID);
-        return system.getFullState();
-    }
-
-    private searchForShipSystem(shipUUID: string): System {
+    private searchForShipSystem(shipUUID: string): string {
         for (let systemUUID of this.systems.keys()) {
             let system = this.systems.get(systemUUID);
             if (system === undefined) {
@@ -100,13 +115,13 @@ class Engine implements Stateful<GameState>, Steppable {
             let ship = system.ships.get(shipUUID)
             if (ship !== undefined) {
                 this.shipSystemMap.set(shipUUID, systemUUID);
-                return system;
+                return systemUUID;
             }
         }
-        throw new Error("Ship " + shipUUID + " not found");
+        throw new ShipMissingError(shipUUID);
     }
 
-    private getShipSystem(shipUUID: string): System {
+    getShipSystemID(shipUUID: string): string {
         const possibleSystemUUID = this.shipSystemMap.get(shipUUID);
         if (possibleSystemUUID === undefined) {
             return this.searchForShipSystem(shipUUID);
@@ -122,16 +137,23 @@ class Engine implements Stateful<GameState>, Steppable {
                     return this.searchForShipSystem(shipUUID);
                 }
                 else {
-                    return possibleSystem;
+                    return possibleSystemUUID;
                 }
 
             }
         }
+
+    }
+
+    private getShipSystem(shipUUID: string): System {
+        // This key is known to have a corresponding value in this.systems.
+        // See getShipSystemID.
+        return (this.systems.get(this.getShipSystemID(shipUUID)) as System);
     }
 
     private getShip(shipUUID: string): Ship {
-
-        return this.getShipSystem(shipUUID).ships.get(shipUUID) as Ship; // Known to be defined. See getShipSystem.
+        // Known to either be defined or to have thrown an error. See getShipSystem.
+        return this.getShipSystem(shipUUID).ships.get(shipUUID) as Ship;
     }
 
 
@@ -141,7 +163,21 @@ class Engine implements Stateful<GameState>, Steppable {
         ship.setState(shipState);
     }
 
+    // Create a new ship in the specified system
+    newShipInSystem(shipState: ShipState, systemID: string): string {
+        const shipUUID = this.uuidFunction();
 
+        this.setState({
+            systems: {
+                [systemID]: {
+                    ships: {
+                        [shipUUID]: shipState
+                    }
+                }
+            }
+        });
+        return shipUUID;
+    }
 
     static async fromGameData(gameData: GameDataInterface): Promise<Engine> {
         const systems: { [index: string]: SystemState } = {};
@@ -159,6 +195,8 @@ class Engine implements Stateful<GameState>, Steppable {
             gameData
         });
     }
+
+
 }
 
 export { Engine }

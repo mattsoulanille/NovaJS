@@ -6,8 +6,8 @@ import { InitialDataType } from "./SocketChannelServer";
 
 class SocketChannelClient implements Channel {
     public readonly onMessage: AnyEvent<MessageWithSourceType>;
-    public readonly onConnect: AnyEvent<string>;
-    public readonly onDisconnect: AnyEvent<string>;
+    public readonly onPeerConnect: AnyEvent<string>;
+    public readonly onPeerDisconnect: AnyEvent<string>;
     private _peers: Set<string>;
     private socket: SocketIOClient.Socket;
     warn: (m: string) => void;
@@ -19,8 +19,8 @@ class SocketChannelClient implements Channel {
     constructor({ socket, warn }: { socket: SocketIOClient.Socket, warn?: ((m: string) => void) }) {
 
         this.onMessage = new AnyEvent<MessageWithSourceType>();
-        this.onConnect = new AnyEvent<string>();
-        this.onDisconnect = new AnyEvent<string>();
+        this.onPeerConnect = new AnyEvent<string>();
+        this.onPeerDisconnect = new AnyEvent<string>();
         this._peers = new Set<string>();
         this._admins = new Set<string>();
 
@@ -76,7 +76,7 @@ class SocketChannelClient implements Channel {
     private _handleAddPeer(peer: unknown) {
         if (typeof peer === "string") {
             this._peers.add(peer);
-            this.onConnect.post(peer);
+            this.onPeerConnect.post(peer);
         }
         else {
             this.warn("Expected peer to be string but got " + peer);
@@ -86,7 +86,7 @@ class SocketChannelClient implements Channel {
     private _handleRemovePeer(peer: unknown) {
         if (typeof peer === "string") {
             this._peers.delete(peer);
-            this.onDisconnect.post(peer);
+            this.onPeerDisconnect.post(peer);
         }
     }
 
@@ -94,6 +94,9 @@ class SocketChannelClient implements Channel {
         return this._peers;
     }
     get uuid() {
+        if (this._uuid === undefined) {
+            throw new Error("UUID not yet available");
+        }
         return this._uuid;
     }
     get admins() {

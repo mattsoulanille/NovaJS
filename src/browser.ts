@@ -61,36 +61,24 @@ var engine = new Engine({
 (window as any).engine = engine;
 
 
+// Handle when the player's ship changes.
+communicator.onShipUUID.attach(function([oldUUID, newUUID]) {
+    if (oldUUID) {
+        engine.activeShips.delete(oldUUID);
+    }
+    engine.activeShips.add(newUUID);
+    display.target = newUUID;
+});
 
 
 let controller: Controller;
 let shipController: ShipController;
 async function startGame() {
+    if (!communicator.shipUUID) {
+        throw new Error("Game started before communicator ready");
+    }
+    engine.setState(communicator.applyStateChanges({}));
 
-    let solState = await System.fromID("nova:130", gameData);
-
-    solState.ships.myship = await Ship.fromID("nova:133", gameData);
-    solState.ships.anotherShip = await Ship.fromID("nova:128", gameData);
-
-    solState.ships.leftof = await Ship.fromID("nova:129", gameData);
-    solState.ships.leftof.position.x = 9950;
-    solState.ships.rightof = await Ship.fromID("nova:130", gameData);
-    solState.ships.rightof.position.x = 10050;
-
-    solState.ships.leftOfEarth = await Ship.fromID("nova:128", gameData);
-    solState.ships.rightOfEarth = await Ship.fromID("nova:128", gameData);
-
-    solState.ships.leftOfEarth.position.x = -50;
-    solState.ships.rightOfEarth.position.x = 50;
-
-    engine.setState({
-        systems: {
-            "sol": solState
-        }
-    });
-
-    engine.activeSystems.add("sol");
-    display.target = "myship";
     controller = await setupControls(gameData);
     (window as any).controller = controller;
     shipController = new ShipController(controller);
@@ -101,15 +89,24 @@ async function startGame() {
 
 function gameLoop() {
     const delta = app.ticker.elapsedMS;
-    engine.setShipState("myship", shipController.generateShipState());
-
+    if (communicator.shipUUID !== undefined) {
+        engine.setShipState(communicator.shipUUID, shipController.generateShipState());
+    }
     engine.step(delta);
-    let currentState = engine.getSystemContainingShip("myship");
-    display.draw(currentState);
+
+    if (communicator.shipUUID !== undefined) {
+        let currentState = engine.getState();
+        let currentSystemState = engine.getSystemFullState(
+            engine.getShipSystemID(communicator.shipUUID));
+
+        display.draw(currentSystemState);
+        communicator.notifyPeers(currentState);
+        const newState = communicator.applyStateChanges(currentState);
+        engine.setState(newState);
+    }
 }
 
-
-startGame();
+communicator.onReady.once(startGame);
 
 
 

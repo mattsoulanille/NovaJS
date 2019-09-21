@@ -169,39 +169,11 @@ type ReplaceWithEmptyObjects<T> =
         [P in keyof T]: ReplaceWithEmptyObjects<T[P]>
     } : EmptyObject;
 
-// type T1 = keyof any; // string | number | symbol
-// type T2 = keyof ReplaceWithEmptyObjects<any>; // string | number
-// type T3 = keyof EmptyObject; // string | number
-// type T4 = keyof OnlyStringKeys<any> // string | number | symbol ?????
-
-
-// type ST = any;//{ [index: string]: unknown };
-// type Ta = keyof ReplaceWithEmptyObjects<ST>;
-// type Tb = keyof RecursivePartial<ST>;
-// type T5 = keyof ReplaceWithEmptyObjects<ST[string]>;
-// type T6 = keyof ReplaceWithEmptyObjects<ST>[string];
-
-// type T7 = keyof RecursivePartial<ReplaceWithEmptyObjects<ST[string]>>;
-// type T8 = keyof RecursivePartial<ReplaceWithEmptyObjects<ST>[string]>;
-
-
-//    T[P] extends any[] ? {} :
-//T[P] extends object ? ReplaceWithEmptyObjects<T[P]> : {}
 
 // Indexes a subtree of the state tree
 type StateIndexer<T> = RecursivePartial<ReplaceWithEmptyObjects<T>>;
 type PartialState<StateType> = RecursivePartial<StateType>;
 
-// type StateIndexer<T> =
-//     T extends any[] ? {} :
-//     T extends object ? {} | {
-//         [P in keyof T]?: StateIndexer<T[P]>
-//     } : {}
-
-// type PartialState<T> = RecursivePartial<T>;
-
-//type StateIndexer = { [index: string]: StateIndexer };
-//type PartialState = { [index: string]: unknown };
 
 interface Stateful<T> {
     getState(toGet?: StateIndexer<T>): PartialState<T>

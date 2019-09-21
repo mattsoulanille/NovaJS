@@ -11,6 +11,8 @@ import { Engine } from "./engine/Engine";
 import { SocketChannelServer } from "./communication/SocketChannelServer";
 import { Communicator, StateMessage } from "./communication/Communicator";
 import { object } from "io-ts";
+import { PilotData } from "./server/PilotData";
+import { Ship } from "./engine/Ship";
 //import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
 const appRoot: string = path.join(__dirname, "../");
@@ -41,19 +43,24 @@ let engine: Engine;
 async function startGame() {
     engine = await Engine.fromGameData(gameData);
 
-    communicator.channel.onConnect.attach((uuid: string) => {
-        console.log("New Client: " + uuid);
-        let toSend: StateMessage = {
-            messageType: "setState",
-            state: engine.getState()
-        }
-        communicator.channel.send(uuid, toSend);
-    });
-
+    communicator.bindServerConnectionHandler(
+        engine.getFullState.bind(engine),
+        addClientToGame
+    );
 
     httpServer.listen(port, function() {
         console.log("listening at port " + port);
     });
+}
+
+async function addClientToGame() {
+    const shipID = (await new PilotData().getShip()).id;
+    const shipState = await Ship.fromID(shipID, gameData);
+    const shipUUID = engine.newShipInSystem(shipState, "nova:130");
+    return {
+        clientUUIDs: new Set([shipUUID]),
+        shipUUID: shipUUID
+    }
 }
 
 startGame();

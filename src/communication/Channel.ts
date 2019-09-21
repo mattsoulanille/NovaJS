@@ -20,8 +20,8 @@ interface Channel {
 
     // Message source should not be spoofable.
     readonly onMessage: AnyEvent<MessageWithSourceType>;
-    readonly onConnect: AnyEvent<string>;
-    readonly onDisconnect: AnyEvent<string>;
+    readonly onPeerConnect: AnyEvent<string>;
+    readonly onPeerDisconnect: AnyEvent<string>;
     readonly peers: Set<string>;
 
     // UUIDs for admins including the server(s)
@@ -29,6 +29,7 @@ interface Channel {
     // This has to be at the Channel level because there
     // is no way to establish trust at the Communicator level.
     readonly admins: Set<string>;
+    readonly uuid: string;
 }
 
 
