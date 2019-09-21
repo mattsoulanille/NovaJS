@@ -91,4 +91,26 @@ function valueComparator<T>(a: PartialState<T>, b: PartialState<T>): PartialStat
     }
 }
 
-export { Comparator, makeComparator, valueComparator, combineComparators }
+
+type RecordOf<T> = { [index: string]: T };
+function makeRecordComparator<T>(comparator: Comparator<T>): Comparator<RecordOf<T>> {
+    type R = RecordOf<T>;
+    return function(a: PartialState<R>, b: PartialState<R>): PartialState<R> {
+        const fullDiff: PartialState<R> = {};
+        for (let key in b) {
+            let aVal = a[key];
+            if (aVal === undefined) {
+                fullDiff[key] = b[key];
+            }
+            else {
+                let diff = comparator(aVal, b[key] as RecursivePartial<T>);
+                if (!isEmptyObject(diff)) {
+                    fullDiff[key] = diff;
+                }
+            }
+        }
+        return fullDiff;
+    }
+}
+
+export { Comparator, makeComparator, valueComparator, combineComparators, makeRecordComparator }

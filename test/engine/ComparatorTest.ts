@@ -1,7 +1,7 @@
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
-import { Comparator, makeComparator, valueComparator, combineComparators } from "../../src/engine/Comparator";
+import { Comparator, makeComparator, valueComparator, combineComparators, makeRecordComparator } from "../../src/engine/Comparator";
 import { Stateful, StateIndexer, RecursivePartial, PartialState } from "../../src/engine/Stateful";
 import { fail } from "assert";
 
@@ -32,23 +32,23 @@ describe("Comparator", function() {
     })
     const BarComparator = combineComparators<Bar>(FooComparator, BarSpecific);
 
-    it("Should produce the correct diff when comparing", function() {
-        let f1: PartialState<Foo> = {
-            a: 42,
-            b: "cat"
-        }
+    let f0: PartialState<Foo> = {
+        b: "cat"
+    }
 
-        let f2: PartialState<Foo> = {
-            a: 48,
-        }
+    let f1: PartialState<Foo> = {
+        a: 42,
+        b: "cat"
+    }
+
+    let f2: PartialState<Foo> = {
+        a: 48,
+    }
+
+    it("Should produce the correct diff when comparing", function() {
 
         let diff = FooComparator(f1, f2);
         diff.should.deep.equal({ a: 48 });
-
-
-        let f0: PartialState<Foo> = {
-            b: "cat"
-        }
 
         diff = FooComparator(f0, f2);
         diff.should.deep.equal({ a: 48 });
@@ -82,4 +82,24 @@ describe("Comparator", function() {
 
     })
 
+    it("makeRecordComparator should work", function() {
+        const recordFooComparator = makeRecordComparator(FooComparator);
+        const r1: PartialState<{ [index: string]: Foo }> = {
+            a: f0,
+            b: f1,
+            z: f1
+        }
+        const r2: PartialState<{ [index: string]: Foo }> = {
+            a: f0,
+            b: f2,
+            c: f0
+        }
+
+        const diff = recordFooComparator(r1, r2);
+
+        diff.should.deep.equal({
+            b: FooComparator(f1, f2),
+            c: f0
+        });
+    });
 });
