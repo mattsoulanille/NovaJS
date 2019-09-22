@@ -1,7 +1,7 @@
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
-import { Comparator, makeComparator, valueComparator, combineComparators, makeRecordComparator } from "../../src/engine/Comparator";
+import { Comparator, makeComparator, valueComparator, combineComparators, makeRecordComparator, neverComparator, subtractFromComparator, sufficientDifferenceComparator, allOrNothingComparator } from "../../src/engine/Comparator";
 import { Stateful, StateIndexer, RecursivePartial, PartialState } from "../../src/engine/Stateful";
 import { fail } from "assert";
 
@@ -79,7 +79,6 @@ describe("Comparator", function() {
             b: "cat",
             c: "moose"
         });
-
     })
 
     it("makeRecordComparator should work", function() {
@@ -101,5 +100,66 @@ describe("Comparator", function() {
             b: FooComparator(f1, f2),
             c: f0
         });
+    });
+
+    it("subtractFromComparator should work", function() {
+        const subtracted = subtractFromComparator(FooComparator, new Set("a"));
+        let f4: Foo = {
+            a: 12,
+            b: "asdf"
+        }
+
+        let f5: Foo = {
+            a: 18,
+            b: "yes"
+        }
+        subtracted(f4, f5).should.deep.equal({ b: "yes" });
+    });
+
+    it("allOrNothingComparator should work", function() {
+        let allBar = allOrNothingComparator(BarComparator)
+        let b1: PartialState<Bar> = {
+            a: 42,
+            b: "cat"
+        }
+        let b2: PartialState<Bar> = {
+            a: 42,
+            b: "dog"
+        }
+        allBar(b1, b2).should.deep.equal(b2);
+        allBar(b1, b1).should.deep.equal({});
+    });
+
+    it("sufficientDifferenceComparator should work", function() {
+        const ignoreA = sufficientDifferenceComparator(BarComparator, {
+            a: function() {
+                return false;
+            }
+        })
+
+        let t1: PartialState<Bar> = {
+            a: 42,
+            b: "cat",
+            c: "dog"
+        }
+        let t2: PartialState<Bar> = {
+            a: 512,
+            b: "cat"
+        }
+
+        let t3: PartialState<Bar> = {
+            a: 384,
+            b: "moose"
+        }
+
+        // Differences in `a` don't trigger a difference,
+        // but ~do~ get reported when a difference is triggered.
+        ignoreA(t1, t2).should.deep.equal({});
+        ignoreA(t1, t3).should.deep.equal({
+            a: 384,
+            b: "moose"
+        });
+
+
     });
 });
