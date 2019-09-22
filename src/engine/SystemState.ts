@@ -1,7 +1,8 @@
 import * as t from "io-ts";
-import { PlanetState } from "./PlanetState";
-import { ShipState } from "./ShipState";
+import { PlanetState, PlanetComparator } from "./PlanetState";
+import { ShipState, ShipComparator } from "./ShipState";
 import { WithUUID } from "./WithUUID";
+import { makeComparator, makeRecordComparator } from "./Comparator";
 
 
 
@@ -18,4 +19,10 @@ const SystemState =
 
 type SystemState = t.TypeOf<typeof SystemState>;
 
-export { SystemState };
+const SystemComparator = makeComparator<SystemState>({
+    planets: makeRecordComparator(PlanetComparator),
+    ships: makeRecordComparator(ShipComparator)
+})
+
+
+export { SystemState, SystemComparator };

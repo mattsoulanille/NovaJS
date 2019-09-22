@@ -1,5 +1,6 @@
 import * as t from "io-ts";
-import { SystemState } from "./SystemState";
+import { SystemState, SystemComparator } from "./SystemState";
+import { makeComparator, makeRecordComparator } from "./Comparator";
 
 const GameState = t.type({
     systems: t.record(t.string, SystemState)
@@ -7,4 +8,8 @@ const GameState = t.type({
 
 type GameState = t.TypeOf<typeof GameState>;
 
-export { GameState }
+const GameStateComparator = makeComparator<GameState>({
+    systems: makeRecordComparator(SystemComparator)
+});
+
+export { GameState, GameStateComparator }

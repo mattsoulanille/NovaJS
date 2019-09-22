@@ -2,7 +2,7 @@ import { fail } from "assert";
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
-import { mergeStates } from "../../src/communication/mergeStates";
+import { mergeStates } from "../../src/engine/mergeStates";
 import { GameState } from "../../src/engine/GameState";
 import { PartialState } from "../../src/engine/Stateful";
 

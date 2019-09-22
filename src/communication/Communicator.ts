@@ -1,13 +1,14 @@
 import * as t from "io-ts";
-import { GameState } from "../engine/GameState";
+import { GameState, GameStateComparator } from "../engine/GameState";
 import { SystemState } from "../engine/SystemState";
 import { Channel } from "./Channel";
 import { PathReporter } from "io-ts/lib/PathReporter";
 import { PartialState, PartialGameState, RecursivePartial } from "../engine/Stateful";
-import { mergeStates } from "./mergeStates";
+import { mergeStates } from "../engine/mergeStates";
 import { filterUUIDs } from "./filterUUIDs";
 import { SetType } from "../common/SetType"
 import { AnyEvent } from "ts-events";
+import { isEmptyObject } from "../engine/EmptyObject";
 
 // const SetUUIDsMessage = t.type({
 //     messageType: t.literal("setUUIDs"),
@@ -69,7 +70,12 @@ class Communicator {
     readonly peerUUIDs: { [channelUUID: string]: Set<string> };
     readonly channel: Channel;
 
+    // Aggregates changes to the state made by peers
     private stateChanges: PartialState<GameState>;
+
+    // Last state: Used for seeing what changed
+    // to determine what updates need to be sent to peers.
+    private lastState: GameState | undefined;
 
     // The ship under this client's control.
     // Changes when buying or capturing a ship.
@@ -81,6 +87,7 @@ class Communicator {
     onShipUUID: AnyEvent<[string | undefined, string]> // [old, new] ship uuids
     onReady: AnyEvent<boolean>; // After the server gives us the universe.
 
+    private notifyCount: number;
 
     constructor({ channel }: { channel: Channel }) {
         this.peerUUIDs = {};
@@ -95,6 +102,7 @@ class Communicator {
         this.channel.onPeerDisconnect.attach(this._removeOldPeer.bind(this));
         this.onShipUUID = new AnyEvent();
         this.onReady = new AnyEvent();
+        this.notifyCount = 0;
     }
 
     // applySystemChanges(state: SystemState): SystemState {
@@ -175,20 +183,33 @@ class Communicator {
         delete this.peerUUIDs[peerID];
     }
 
-    applyStateChanges(state: PartialState<GameState>): PartialState<GameState> {
-        mergeStates(state, this.stateChanges);
+    getStateChanges(): PartialState<GameState> {
+        const changes = this.stateChanges;
         this.stateChanges = {};
-        return state;
+        return changes;
     }
 
     // Note that this overwrites state!
-    notifyPeers(state: PartialState<GameState>) {
+    notifyPeers(state: GameState) {
         const filtered = filterUUIDs(state, this.ownedUUIDs);
-        const stateMessage: StateMessage = {
-            messageType: "setState",
-            state: filtered
+
+        let differences: PartialState<GameState>;
+        if (this.lastState) {
+            differences = GameStateComparator(this.lastState, filtered);
         }
-        this.channel.broadcast(stateMessage);
+        else {
+            differences = filtered;
+        }
+        if (!isEmptyObject(differences)) {
+            const stateMessage: StateMessage = {
+                messageType: "setState",
+                state: differences
+            }
+            this.channel.broadcast(stateMessage);
+            this.notifyCount++;
+        }
+
+        this.lastState = state;
     }
 
     // Used by the server to handle client connections

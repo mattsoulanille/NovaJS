@@ -1,5 +1,6 @@
 import * as t from "io-ts";
-import { SpaceObjectState } from "./SpaceObjectState";
+import { SpaceObjectState, SpaceObjectComparator } from "./SpaceObjectState";
+import { makeComparator, combineComparators } from "./Comparator";
 
 const PlanetState = t.intersection([
     SpaceObjectState,
@@ -9,4 +10,6 @@ const PlanetState = t.intersection([
 
 type PlanetState = t.TypeOf<typeof PlanetState>;
 
-export { PlanetState }
+const PlanetComparator = combineComparators(SpaceObjectComparator);
+
+export { PlanetState, PlanetComparator }

@@ -77,7 +77,7 @@ async function startGame() {
     if (!communicator.shipUUID) {
         throw new Error("Game started before communicator ready");
     }
-    engine.setState(communicator.applyStateChanges({}));
+    engine.setState(communicator.getStateChanges());
 
     controller = await setupControls(gameData);
     (window as any).controller = controller;
@@ -95,14 +95,15 @@ function gameLoop() {
     engine.step(delta);
 
     if (communicator.shipUUID !== undefined) {
-        let currentState = engine.getState();
+        let currentState = engine.getFullState();
         let currentSystemState = engine.getSystemFullState(
             engine.getShipSystemID(communicator.shipUUID));
 
         display.draw(currentSystemState);
         communicator.notifyPeers(currentState);
-        const newState = communicator.applyStateChanges(currentState);
-        engine.setState(newState);
+
+        const stateChanges = communicator.getStateChanges();
+        engine.setState(stateChanges);
     }
 }
 
