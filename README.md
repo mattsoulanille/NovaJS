@@ -14,7 +14,6 @@ npm install --save novaparse
 ```
 
 ## Usage
-p
 #### Reading Nova data and Nova plug-ins
 
 ```
