@@ -1,0 +1,28 @@
+{
+    "frames": {
+	"targetNeutral 0.png": {
+	    "frame": {
+		"x": 0,
+		"y": 0,
+		"w": 16,
+		"h": 16
+	    },
+	    "rotated": false,
+	    "trimmed": false,
+	    "sourceSize": {
+		"w": 16,
+		"h": 16
+	    }
+	}
+    },
+    "meta": {
+	"format": "RGBA8888",
+	"size": {
+	    "w": 16,
+	    "h": 16
+	},
+	"scale": "1",
+	"image": "../SpriteSheetImage/targetNeutral.png"
+    }
+}
+    
