@@ -59,4 +59,4 @@ Tests can be run with
 To run an individual test, run ```npm run test-only ./test/path/to/test.ts```
 
 ### Contributing
-Pull requests are welcome if you find bugs, but more type definitions need to be written before new data types can be implemented. The next large project is parsing the `snd ` resource, which contains all the Nova sounds.
+Feel free to write types, parsers, and tests for Nova resources that are not yet parsed by NovaParse. Try to represent anything that happens every `n` frames or happens `n` times per millisecond in terms of `times / second` assuming 60fps. If there is demand for it, I will write a proper design doc with details on the internal structure of NovaParse. 
