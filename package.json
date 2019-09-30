@@ -18,7 +18,7 @@
     "crash-colliders": "^2.0.1",
     "express": "^4.17.1",
     "io-ts": "^1.8.6",
-    "novadatainterface": "^0.1.2",
+    "novadatainterface": "^0.1.6",
     "novaparse": "^0.1.9",
     "paralleljs": "^0.2.1",
     "pixi-display": "^1.1.1",
