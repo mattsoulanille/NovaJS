@@ -22,15 +22,15 @@
     "socket.io": "^2.1.1",
     "socket.io-client": "^2.1.1",
     "timesync": "^1.0.3",
-    "uglifyify": "^5.0.1",
+    "uglifyify": "^5.0.2",
     "underscore": "^1.9.1",
     "uuid": "^3.3.2"
   },
   "devDependencies": {
-    "mocha": "^5.2.0",
     "browserify": "^16.2.2",
-    "watchify": "^3.11.0",
-    "uglify-es": "^3.3.9"
+    "mocha": "^5.2.0",
+    "uglify-es": "^3.3.9",
+    "watchify": "^3.11.1"
   },
   "scripts": {
     "build": "mkdir -p ./static/ && browserify -g uglifyify lib/browser.js | uglifyjs -c > static/bundle.js",
