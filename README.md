@@ -37,7 +37,7 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 
 [node.js](https://nodejs.org/),
 [npm](https://www.npmjs.com/),
-[A Mac copy of EV Nova](https://www.reddit.com/r/evnova/comments/cwwjnf/ambrosia_software_mediafire_archive_mirror/)
+[A Mac copy of EV Nova](https://www.reddit.com/r/evnova/comments/cwwjnf/ambrosia_software_mediafire_archive_mirror/) ([Direct Link](http://www.tuxedojack.com/hosted/ambrosia-archive/mac/Action-Adventure/EVNova%201.1.1.dmg))
 
 ### Installing
 
