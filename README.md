@@ -3,7 +3,7 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers).
+[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers). This version is running release [0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js).
 #### Controls (mostly standard EV Nova):
 * Arrow keys to move
 * Spacebar to fire
@@ -77,18 +77,15 @@ npm run-script run
 By default, Nova runs on port 8000. See [Deployment](Deployment) for instructions on changing this. Assuming you installed on the machine you would like to play from, navigate to [localhost:8000](http://localhost:8000).
 
 ## Running the Tests
-The available tests are not comprehensive, and many are broken or inaccurate. They can be run with `mocha` but should not be trusted.
+The available tests can be run with `npm run test`.
 
 ## Deployment
 Deployment is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`
 
 ## Contributing
 
-#### Note that NovaJS will soon be undergoing a much-needed major rewrite. It will be rewritten in TypeScript with a great deal of attention paid to separating game logic from the user interface. Details and progress can be see on on the [project page](https://github.com/mattsoulanille/NovaJS/projects/3) and on the [TypeScript branch](https://github.com/mattsoulanille/NovaJS/tree/typescript).
+I haven't written a design document yet, so contributing to NovaJS itself at this time is infeasably difficult. The easiest place to contribute, and the easiest place for me to evaluate and merge contributions right now would be in the [NovaParse project](https://github.com/mattsoulanille/NovaParse), which seeks to parse all of Nova's resource fork files.
 
-I welcome pull requests, however, I am often in school and unable to accept them immediately. Some easy places to contribute include:
-* Parsing: [See the companion project NovaParse](https://github.com/mattsoulanille/NovaParse). This is probably the easiest and most helpful way to contribute and is a prerequisite for most of the following features.
-* NPCs and AI: There are two approaches to this: Writing or training an AI to be as best as possible or trying to mimic Nova's AI's behavior, but for both of them, lots needs to be written in the way of API.
 
 ## Known Bugs
 * Ship velocity scaling is wrong in that ships are far too fast. I think the scale should be 3/10 of what it currently is, but Nova gives a speed boost to the player when they're not playing in strict mode, so I don't know what the actual scale is. Perhaps the coordinate system needs to be redone so that no scaling is needed for non-player ships?
