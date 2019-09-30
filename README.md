@@ -3,7 +3,7 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers). This version is running release [0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js).
+[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers). This version is running release [0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js), an earlier version written in JavaScript. This version uses TypeScript and is not yet at feature parity with the JavaScript version.
 #### Controls (mostly standard EV Nova):
 * Arrow keys to move
 * Spacebar to fire
@@ -30,8 +30,7 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 
 ## Wait, but isn't EV Nova Copyrighted?
 
-Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights to anything in the [objects](https://github.com/mattsoulanille/NovaJS/tree/master/Nova/objects) directory, nor do I claim any rights over pictures or Nova Data in this repository. The end goal of this project is to write a Nova engine that can interpret Nova files without including any Nova data itself, thereby avoiding these legal issues.
-
+Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights to anything in the [objects](https://github.com/mattsoulanille/NovaJS/tree/master/Nova/objects) directory. The end goal of this project is to write a Nova engine that can interpret Nova files without including any Nova data itself.
 ## Getting Started
 ### Prerequisites
 
@@ -43,7 +42,7 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 
 Clone the repository
 ```
-git clone git@github.com:mattsoulanille/NovaJS.git
+git clone https://github.com/mattsoulanille/NovaJS.git
 ```
 Move to the `NovaJS/` directory
 ```
@@ -64,16 +63,22 @@ npm install
 ```
 Build for release with 
 ```
-npm run-script build
+npm run build
 ```
-Alternatively, build for development with
+Alternatively, build for development and debugging with
 ```
-npm run-script watch
+npm run build-debug
 ```
 At this point, you can run NovaJS with
 ```
-npm run-script run
+npm start
 ```
+You can also use
+```
+npm run watch
+```
+to compile incremental changed made to the browser's code, but you will still need to do a full `npm run build-server` and restart the server for changes to be applied to the server.
+
 By default, Nova runs on port 8000. See [Deployment](Deployment) for instructions on changing this. Assuming you installed on the machine you would like to play from, navigate to [localhost:8000](http://localhost:8000).
 
 ## Running the Tests
