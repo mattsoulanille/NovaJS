@@ -1,0 +1,1 @@
+Sounds are unsigned 8-bit PCM little-endien 1 channell 11000 samples per second
