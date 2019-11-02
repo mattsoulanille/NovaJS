@@ -45,6 +45,7 @@
     "browserify": "^16.2.2",
     "mocha": "^5.2.0",
     "ndb": "^1.0.47",
+    "protoc": "^1.0.3",
     "ts-node": "^7.0.1",
     "tsify": "^4.0.1",
     "typescript": "^3.5.1",
