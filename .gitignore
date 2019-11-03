@@ -18,6 +18,7 @@ tramp
 
 # flymake-mode
 *_flymake.*
+*flymd.*
 
 # eshell files
 /eshell/history
@@ -59,3 +60,7 @@ Nova Data*
 Nova Plug*
 Nova Ship*
 build/
+
+dist
+bazel-out
+node_modules
