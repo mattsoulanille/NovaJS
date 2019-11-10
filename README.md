@@ -40,6 +40,8 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 
 ### Installing
 
+#### For production builds, see the releases page instead of using `git clone`.
+
 Clone the repository
 ```
 git clone https://github.com/mattsoulanille/NovaJS.git
