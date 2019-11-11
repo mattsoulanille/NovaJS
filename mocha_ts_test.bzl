@@ -12,10 +12,6 @@ def mocha_ts_test(name, args = None, srcs = [], deps = [], **kwargs):
         "-O tsconfig.json",
     ]
 
-    print("\n\n\n")
-    print(args)
-    print("\n\n\n")
-
     nodejs_test(
         name = name,
         entry_point = "@npm//:node_modules/mocha/bin/mocha",
