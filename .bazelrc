@@ -22,7 +22,7 @@ build --symlink_prefix=dist/
 #   'all' to print logs for all tests
 #   'streamed' to output logs for all tests in real time
 #     (this will force tests to be executed locally one at a time regardless of --test_strategy value).
-test --test_output=errors
+test --test_output=all
 
 # Support for debugging NodeJS tests
 # Add the Bazel option `--config=debug` to enable this
@@ -80,4 +80,8 @@ run --incompatible_strict_action_env
 # (Note that we use .bazelrc.user so the file appears next to .bazelrc in directory listing,
 # rather than user.bazelrc as suggested in the Bazel docs)
 try-import %workspace%/.bazelrc.user
+
+# Make TypeScript and Angular compilation fast, by keeping a few copies of the
+# compiler running as daemons, and cache SourceFile AST's to reduce parse time.
+build --strategy=TypeScriptCompile=worker
 

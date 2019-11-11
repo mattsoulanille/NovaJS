@@ -6,11 +6,25 @@
         "@bazel/bazel": "latest",
         "@bazel/buildifier": "latest",
         "@bazel/ibazel": "latest",
+        "@bazel/jasmine": "^0.39.1",
+        "@bazel/karma": "^0.39.1",
         "@bazel/typescript": "latest",
+        "@types/jasmine": "^3.4.5",
+        "chai": "^4.2.0",
+        "chai-as-promised": "^7.1.1",
+        "jasmine": "^3.5.0",
+        "karma": "^4.4.1",
+        "karma-mocha": "^1.3.0",
+        "karma-typescript": "^4.1.1",
+        "mocha": "^6.2.2",
+        "ts-node": "^8.4.1",
         "typescript": "~3.4.0"
     },
     "scripts": {
         "build": "bazel build //...",
         "test": "bazel test //..."
+    },
+    "dependencies": {
+        "resourceforkjs": "^0.1.0"
     }
 }

@@ -6,4 +6,3 @@
 #   so that ts_library rules still use it by default.
 #   See https://www.npmjs.com/package/@bazel/typescript#installation
 exports_files(["tsconfig.json"], visibility = ["//:__subpackages__"])
-

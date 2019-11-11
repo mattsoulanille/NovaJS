@@ -1,16 +1,12 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-#load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
-#load("@npm_bazel_karma//:index.bzl", "ts_web_test")
-#load("@build_bazel_rules_nodejs//:index.bzl", "mocha_ts_test")
-#load("@npm//mocha:index.bzl", "mocha_test")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
 ts_library(
     name = "novadatainterface",
     srcs = glob(["src/*.ts"]),
-    module_name = "novadatainterface",
+    module_name = "novadatainterface", # for npm
     deps = [
 #        "@npm//pngjs",
         "@npm//@types/node",
