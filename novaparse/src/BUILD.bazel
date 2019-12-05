@@ -1,0 +1,41 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+
+# ts_library(
+#     name = "cacheless_gettable",
+#     srcs = ["CachelessGettable.ts"],
+#     deps = [
+#         "//novadatainterface",
+#     ]
+# )
+
+# ts_library(
+#     name = "read_nova_file",
+#     srcs = ["readNovaFile.ts"],
+#     deps = [
+#         "@npm//resourceforkjs",
+#         "//novaparse/src/resource_parsers:resource_parsers",
+#     ]
+# )
+
+# ts_library(
+#     name = "idspace_handler",
+#     srcs = ["IDSpaceHandler.ts"],
+#     deps = [
+#         "@npm//resourceforkjs",
+#         "//novaparse/src/resource_parsers:resource_parsers",
+#     ]
+# )
+
+ts_library(
+    name = "novaparse_libraries",
+    srcs = glob(["*.ts"]),
+    deps = [
+        "@npm//@types/node",
+        "@npm//resourceforkjs",
+        "//novadatainterface",
+        "//novaparse/src/resource_parsers:resource_parsers",
+        "//novaparse/src/parsers",
+    ]
+)

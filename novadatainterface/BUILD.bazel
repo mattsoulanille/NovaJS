@@ -1,0 +1,26 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
+
+ts_library(
+    name = "novadatainterface",
+    srcs = glob(["*.ts"]),
+    module_name = "novadatainterface", # for npm
+    deps = [
+#        "@npm//pngjs",
+        "@npm//@types/node",
+    ],
+)
+
+
+mocha_ts_test(
+    name = "novadatainterface_test",
+    srcs = glob(["test/*.ts"]),
+    deps = [
+        ":novadatainterface",
+        "@npm//chai",
+        "@npm//chai-as-promised",
+        "@npm//@types/node",
+    ]
+)

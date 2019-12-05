@@ -39,9 +39,9 @@ install_bazel_dependencies()
 
 # Karma
 # Fetch transitive Bazel dependencies of npm_bazel_karma
-load("@npm_bazel_karma//:package.bzl", "npm_bazel_karma_dependencies")
+#load("@npm_bazel_karma//:package.bzl", "npm_bazel_karma_dependencies")
 
-npm_bazel_karma_dependencies()
+#npm_bazel_karma_dependencies()
 
 # More Karma
 # Set up web testing, choose browsers we can test on
@@ -55,13 +55,13 @@ npm_bazel_karma_dependencies()
 #     ],
 # )
 
-load("@io_bazel_rules_webtesting//web:repositories.bzl", "web_test_repositories")
-load("@io_bazel_rules_webtesting//web/versioned:browsers-0.3.1.bzl", "browser_repositories")
+# load("@io_bazel_rules_webtesting//web:repositories.bzl", "web_test_repositories")
+# load("@io_bazel_rules_webtesting//web/versioned:browsers-0.3.1.bzl", "browser_repositories")
 
-web_test_repositories()
-browser_repositories(
-    chromium = True,
-)
+# web_test_repositories()
+# browser_repositories(
+#     chromium = True,
+# )
 
 # Setup TypeScript toolchain
 load("@npm_bazel_typescript//:index.bzl", "ts_setup_workspace")

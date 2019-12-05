@@ -1,6 +1,6 @@
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_test")
 
-def mocha_ts_test(name, args = None, srcs = [], deps = [], **kwargs):
+def mocha_ts_test(name, args = None, srcs = [], deps = [], data = [], **kwargs):
     if args == None:
         # `../` is a hack to get around the fact that `location`
         # returns the path including the project root directory.
@@ -15,13 +15,10 @@ def mocha_ts_test(name, args = None, srcs = [], deps = [], **kwargs):
     nodejs_test(
         name = name,
         entry_point = "@npm//:node_modules/mocha/bin/mocha",
-        data = srcs + deps + [
+        data = srcs + deps + data + [
+            "//:tsconfig.json",
             "@npm//mocha",
             "@npm//ts-node",
-            "@npm//chai",
-            "@npm//chai-as-promised",
-            "@npm//@types/node",
-            "//:tsconfig.json",
         ],
         templated_args = args,
         expected_exit_code = 0,
