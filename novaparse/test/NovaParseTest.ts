@@ -1,31 +1,27 @@
 global.Promise = require("bluebird"); // For stacktraces
 
-import * as fs from "fs";
-
 import * as chai from "chai";
-import * as chaiAsPromised from "chai-as-promised";
-import "mocha";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { assert } from "chai";
-import { NovaParse } from "../src/NovaParse";
-import { NovaResourceType } from "../src/ResourceHolderBase";
-import { NovaDataInterface, NovaDataType, NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
-import { ShipData } from "novadatainterface/ShipData";
-import { BaseData } from "novadatainterface/BaseData";
-import { ShipResource } from "../src/resource_parsers/ShipResource";
-import { TurnRateConversionFactor, FPS } from "../src/parsers/Constants";
-import { OutfitData } from "novadatainterface/OutiftData";
-import { ExplosionData } from "novadatainterface/ExplosionData";
-import { WeaponData } from "novadatainterface/WeaponData";
+import * as chaiAsPromised from "chai-as-promised";
+import * as fs from "fs";
+import "mocha";
 import { DefaultExitPoints } from "novadatainterface/Animation";
-import { PictData } from "novadatainterface/PictData";
-import { comparePNGs, getPNG } from "./resource_parsers/PNGCompare";
-import { PNG } from "pngjs";
-import { PlanetData } from "novadatainterface/PlanetData";
-import { SpriteSheetFramesData, SpriteSheetImageData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
-import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
+import { BaseData } from "novadatainterface/BaseData";
+import { ExplosionData } from "novadatainterface/ExplosionData";
+import { NovaDataType, NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
+import { OutfitData } from "novadatainterface/OutiftData";
 import { PictImageData } from "novadatainterface/PictImage";
+import { PlanetData } from "novadatainterface/PlanetData";
+import { ShipData } from "novadatainterface/ShipData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "novadatainterface/SpriteSheetData";
+import { DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
+import { WeaponData } from "novadatainterface/WeaponData";
+import { PNG } from "pngjs";
+import { NovaParse } from "../NovaParse";
 import { BadDirectoryStructureError } from "../src/IDSpaceHandler";
+import { FPS, TurnRateConversionFactor } from "../src/parsers/Constants";
+import { getPNG } from "./resource_parsers/PNGCompare";
+
 
 before(function() {
     chai.should();
@@ -56,7 +52,7 @@ describe("NovaParse", function() {
     var s129: ShipData;
 
     before(async function() {
-        np = new NovaParse("./test/novaParseTestFilesystem");
+        np = new NovaParse("novaparse/test/novaParseTestFilesystem");
         s128 = await np.data[NovaDataType.Ship].get("nova:128");
         s129 = await np.data[NovaDataType.Ship].get("nova:129");
     });
@@ -242,7 +238,7 @@ describe("NovaParse", function() {
 
     it("Should parse PictImage", async function() {
         var p700: PictImageData = await np.data.PictImage.get("nova:700");
-        var statusBar = await getPNG("./test/resource_parsers/files/picts/statusBar.png");
+        var statusBar = await getPNG("novaparse/test/resource_parsers/files/picts/statusBar.png");
 
         p700.should.deep.equal(PNG.sync.write(statusBar));
     });
@@ -255,18 +251,18 @@ describe("NovaParse", function() {
 
     it("Should parse SpriteSheetImage", async function() {
         var ri1000: SpriteSheetImageData = await np.data.SpriteSheetImage.get("nova:1000");
-        var shuttle = fs.readFileSync("./test/testSpriteSheetImage.png");
+        var shuttle = fs.readFileSync("novaparse/test/testSpriteSheetImage.png");
         ri1000.should.deep.equal(shuttle, "err");
     });
 
     it("Should parse SpriteSheetFrames", async function() {
         var rf1116: SpriteSheetFramesData = await np.data.SpriteSheetFrames.get("nova:1116");
-        var shouldEqual1116 = JSON.parse(fs.readFileSync("./test/zephyrFrames.json", "utf8"));
+        var shouldEqual1116 = JSON.parse(fs.readFileSync("novaparse/test/zephyrFrames.json", "utf8"));
         rf1116.should.deep.equal(shouldEqual1116);
 
 
         var rf1000: SpriteSheetFramesData = await np.data.SpriteSheetFrames.get("nova:1000");
-        var shouldEqual1000 = JSON.parse(fs.readFileSync("./test/testSpriteSheetFrames.json", "utf8"));
+        var shouldEqual1000 = JSON.parse(fs.readFileSync("novaparse/test/testSpriteSheetFrames.json", "utf8"));
         rf1000.should.deep.equal(shouldEqual1000);
 
 
@@ -275,7 +271,7 @@ describe("NovaParse", function() {
 
     it("Should parse SpriteSheet", async function() {
         var rs1000: SpriteSheetData = await np.data.SpriteSheet.get("nova:1000");
-        var shouldEqual = JSON.parse(fs.readFileSync("./test/testSpriteSheet.json", "utf8"));
+        var shouldEqual = JSON.parse(fs.readFileSync("novaparse/test/testSpriteSheet.json", "utf8"));
 
         // Chai thinks that -0 !== 0
         var noNegativeZeroes = JSON.parse(JSON.stringify(rs1000));

@@ -5,6 +5,10 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
 ts_library(
     name = "novadatainterface",
+    data = [
+        "default.png",
+        "defaultRled.png",
+    ],        
     srcs = glob(["*.ts"]),
     module_name = "novadatainterface", # for npm
     deps = [

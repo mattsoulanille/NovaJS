@@ -5,10 +5,30 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
 
 
+ts_library(
+    name = "png_compare",
+    srcs = [
+        "PNGCompare.ts"
+    ],
+    deps = [
+        "@npm//@types/node",
+        "@npm//@types/chai",
+        "@npm//bluebird",
+        "@npm//@types/bluebird",
+        "@npm//pngjs",
+        "@npm//@types/pngjs",
+    ]
+)
+
+filegroup(
+    name = "resource_parsers_files",
+    srcs = glob(["files/**"]),
+)
+
 mocha_ts_test(
     name = "resource_parsers_test",
     srcs = glob(["*.ts"]),
-    data = glob(["files/**"]),
+    data = [":resource_parsers_files"],
     deps = [
         "//novaparse/src/resource_parsers",
         "@npm//bluebird",

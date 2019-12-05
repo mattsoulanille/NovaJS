@@ -4,13 +4,35 @@ load("@npm_bazel_typescript//:index.bzl", "ts_library")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
 
+# WARNING: Using directory labels here. That means bazel can't
+# detect changes to files within these directories. It only
+# detects when the directories change via addition or deletion
+# of files. It's necessary because the files in these directories
+# have spaces in their names. See the documentation at
+# https://docs.bazel.build/versions/master/build-ref.html#label_directory
+filegroup(
+    name = "novaparse_test_files",
+    srcs = [
+        "IDSpaceHandlerTestFilesystem",
+        "novaParseTestFilesystem",
+        "testSpriteSheetImage.png",
+        "zephyrFrames.json",
+        "testSpriteSheet.json",
+        "testSpriteSheetFrames.json",
+    ]
+)
+
 
 mocha_ts_test(
-    name = "resource_parsers_test",
+    name = "novaparse_test",
     srcs = glob(["*.ts"]),
-    data = glob(["files/**"]),
+    data = [
+        "//novaparse/test/resource_parsers:resource_parsers_files",
+        ":novaparse_test_files",
+    ],
     deps = [
-        "//novaparse/src/resource_parsers",
+        "//novaparse/src:novaparse_libraries",
+        "//novaparse",
         "@npm//bluebird",
         "@npm//@types/bluebird",
         "@npm//chai",
@@ -19,6 +41,7 @@ mocha_ts_test(
         "@npm//@types/mocha",
         "@npm//@types/chai",
         "@npm//@types/chai-as-promised",
+        "//novaparse/test/resource_parsers:png_compare",
     ]
 )
 

@@ -4,7 +4,7 @@ import { IDSpaceHandler, BadDirectoryStructureError } from "../src/IDSpaceHandle
 import * as chai from "chai";
 import "mocha";
 import * as chaiAsPromised from "chai-as-promised";
-import { NovaResources } from "../src/ResourceHolderBase";
+import { NovaResources } from "../src/resource_parsers/ResourceHolderBase";
 
 before(function() {
     chai.should();
@@ -16,7 +16,7 @@ const expect = chai.expect;
 
 describe("IDSpaceHandler", function() {
 
-    var dataPath = "./test/IDSpaceHandlerTestFilesystem/";
+    var dataPath = "novaparse/test/IDSpaceHandlerTestFilesystem/";
 
     var handler = new IDSpaceHandler(dataPath);
     var idSpace: NovaResources;

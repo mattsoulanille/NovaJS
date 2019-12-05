@@ -1,4 +1,4 @@
-import { NovaResources, getEmptyNovaResources } from "../src/ResourceHolderBase";
+import { NovaResources, getEmptyNovaResources } from "../src/resource_parsers/ResourceHolderBase";
 import { readNovaFile } from "../src/readNovaFile";
 
 import * as chai from "chai";
@@ -15,7 +15,7 @@ const expect = chai.expect;
 
 describe("readNovaFile", function() {
 
-    var shipPath = "./test/resource_parsers/files/ship.ndat";
+    var shipPath = "novaparse/test/resource_parsers/files/ship.ndat";
 
     var localIDSpace: NovaResources = getEmptyNovaResources();
 
