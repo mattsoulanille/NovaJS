@@ -1,4 +1,4 @@
-import { Controller } from "../client/Controller";
+import { Controller } from "./Controller";
 import { ShipState } from "../engine/ShipState";
 import { PartialState } from "../engine/Stateful";
 

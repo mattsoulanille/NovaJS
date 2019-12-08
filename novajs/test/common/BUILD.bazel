@@ -2,22 +2,20 @@ package(default_visibility = ["//visibility:public"])
 
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
-
-ts_library(
-    name = "server",
+mocha_ts_test(
+    name = "common_test",
     srcs = glob(["*.ts"]),
     deps = [
         "@npm//@types/node",
+        "@npm//chai",
+        "@npm//chai-as-promised",
+        "@npm//@types/chai",
+        "@npm//@types/chai-as-promised",
         "@npm//io-ts",
-        "@npm//uuid",
-        "@npm//@types/uuid",
         "@npm//fp-ts",
-        "@npm//express",
-        "@npm//@types/express",
-        "//novadatainterface",
-        "//novajs/src/server/parsing",
-        "//novajs/src/engine",
+        "@npm//@types/mocha",
         "//novajs/src/common",
     ]
 )

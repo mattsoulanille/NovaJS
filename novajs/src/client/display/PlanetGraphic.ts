@@ -1,5 +1,5 @@
 import { PlanetState } from "../../engine/PlanetState";
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 import { VectorLike } from "../../engine/Vector";
 import { SpaceObjectGraphic } from "./SpaceObjectGraphic";
 

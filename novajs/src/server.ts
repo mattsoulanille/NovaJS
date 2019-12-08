@@ -1,7 +1,7 @@
 import * as express from "express";
 import * as http from "http";
 import * as socket from "socket.io";
-import { NovaParse } from "novaparse";
+import { NovaParse } from "novaparse/NovaParse";
 import * as fs from "fs";
 import * as path from "path";
 import { GameDataAggregator } from "./server/parsing/GameDataAggregator";

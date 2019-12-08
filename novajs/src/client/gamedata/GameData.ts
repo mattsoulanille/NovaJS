@@ -16,7 +16,7 @@ import { WeaponData } from "novadatainterface/WeaponData";
 import { OutfitData } from "novadatainterface/OutiftData";
 import { ShipData } from "novadatainterface/ShipData";
 import { Gettable } from "novadatainterface/Gettable";
-import { dataPath, idsPath } from "../common/GameDataPaths";
+import { dataPath, idsPath } from "../../common/GameDataPaths";
 
 
 
@@ -57,14 +57,20 @@ class GameData implements GameDataInterface {
 
     private async getUrl(url: string): Promise<Buffer> {
         return await new Promise(function(fulfill, reject) {
-            var loader = new PIXI.loaders.Loader();
+            //var loader = new PIXI.loaders.Loader();
+            var loader = new PIXI.Loader();
             loader.add(url, url)
-                .load(function(_loader: any, resource: { [x: string]: { data: any; error: Error }; }) {
-                    if (resource[url].error) {
-                        reject(resource[url].error);
+                .load(function(_loader: any, resources: Partial<Record<string, PIXI.LoaderResource>>) {
+                    const resource = resources[url];
+                    if (resource == undefined) {
+                        reject(`Resource ${url} not present on loaded url`)
+                        return;
+                    }
+                    if (resource.error) {
+                        reject(resource.error);
                     }
                     else {
-                        fulfill(resource[url].data);
+                        fulfill(resource.data);
                     }
                 });
         });

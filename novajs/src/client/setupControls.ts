@@ -1,12 +1,13 @@
 import { Keybindings, KeyboardController } from "./KeyboardController";
 import { PathReporter } from "io-ts/lib/PathReporter";
-import { GameData } from "./GameData";
+import { GameData } from "./gamedata/GameData";
+import { isRight } from "fp-ts/lib/Either";
 
 async function setupControls(gameData: GameData) {
     const unparsed = await gameData.getSettings("controls.json");
     const keybindings = Keybindings.decode(unparsed);
-    if (keybindings.isRight()) {
-        return new KeyboardController(keybindings.value);
+    if (isRight(keybindings)) {
+        return new KeyboardController(keybindings.right);
     }
     else {
         throw new Error("Keybindings failed to parse: "

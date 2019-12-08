@@ -48,10 +48,11 @@ class GameDataServer {
     }
 
     private async requestFulfiller(req: express.Request, res: express.Response): Promise<void> {
-        var name: NovaDataType = req.params.name;
-        var item: string = req.params.item;
+        const name: string = req.params.name;
+        const item: string = req.params.item;
 
-        var dataGettable = this.gameData.data[name];
+        // TODO: Replace with protobufs
+        var dataGettable = this.gameData.data[name as NovaDataType];
 
         if (dataGettable) {
             var data = await dataGettable.get(item);

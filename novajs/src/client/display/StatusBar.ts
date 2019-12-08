@@ -1,6 +1,6 @@
 import { StatusBarData } from "novadatainterface/StatusBarData";
 import * as PIXI from "pixi.js";
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 import { SystemState } from "../../engine/SystemState";
 import { Radar } from "./Radar";
 import { VectorLike } from "../../engine/Vector";
@@ -14,8 +14,8 @@ class StatusBar extends PIXI.Container {
     targetContainer: PIXI.Container;
 
     data: StatusBarData | undefined;
-    font: PIXI.TextStyleOptions | undefined;
-    dimFont: PIXI.TextStyleOptions | undefined;
+    font: PIXI.TextStyle | undefined;
+    dimFont: PIXI.TextStyle | undefined;
     baseSprite: PIXI.Sprite | undefined;
     buildPromise: Promise<void>;
 
@@ -31,7 +31,7 @@ class StatusBar extends PIXI.Container {
             this.id = id
         }
 
-        this.displayGroup = new PIXI.DisplayGroup(100, true); // appear above others
+        //        this.displayGroup = new PIXI.display.Group(100, true); // appear above others
         this.bars = new PIXI.Graphics();
 
         this.targetContainer = new PIXI.Container();
@@ -46,8 +46,8 @@ class StatusBar extends PIXI.Container {
 
         this.addChild(this.baseSprite)
 
-        this.font = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.brightText, align: 'center' };
-        this.dimFont = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.dimText, align: 'center' };
+        //this.font = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.brightText, align: 'center' };
+        //this.dimFont = { fontFamily: "Geneva", fontSize: 12, fill: this.data.colors.dimText, align: 'center' };
 
 
 

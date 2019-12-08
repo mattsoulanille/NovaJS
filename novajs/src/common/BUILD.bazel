@@ -5,19 +5,12 @@ load("@npm_bazel_typescript//:index.bzl", "ts_library")
 
 
 ts_library(
-    name = "server",
+    name = "common",
     srcs = glob(["*.ts"]),
     deps = [
         "@npm//@types/node",
         "@npm//io-ts",
-        "@npm//uuid",
-        "@npm//@types/uuid",
         "@npm//fp-ts",
-        "@npm//express",
-        "@npm//@types/express",
-        "//novadatainterface",
-        "//novajs/src/server/parsing",
         "//novajs/src/engine",
-        "//novajs/src/common",
     ]
 )

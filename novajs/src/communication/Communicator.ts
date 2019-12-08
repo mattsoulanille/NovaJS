@@ -9,6 +9,7 @@ import { filterUUIDs } from "./filterUUIDs";
 import { SetType } from "../common/SetType"
 import { AnyEvent } from "ts-events";
 import { isEmptyObject } from "../engine/EmptyObject";
+import { isLeft } from "fp-ts/lib/Either";
 
 // const SetUUIDsMessage = t.type({
 //     messageType: t.literal("setUUIDs"),
@@ -115,14 +116,14 @@ class Communicator {
     }) {
 
         const decoded = CommunicatorMessage.decode(message);
-        if (decoded.isLeft()) {
+        if (isLeft(decoded)) {
             console.warn(
                 `Bad message from ${source}\n`
                 + PathReporter.report(decoded).join("\n"))
             return;
         }
 
-        const decodedMessage = decoded.value;
+        const decodedMessage = decoded.right;
         switch (decodedMessage.messageType) {
             case "setPeers":
                 if (this.channel.admins.has(source)) {

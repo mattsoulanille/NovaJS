@@ -4,6 +4,7 @@ import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
 import { SetType } from "../../src/common/SetType";
 import * as t from "io-ts";
+import { isRight } from "fp-ts/lib/Either";
 
 before(function() {
     chai.should();
@@ -17,8 +18,8 @@ describe("SetType", function() {
         const input = [1, "two", "three", 4, 5, "six"];
 
         const decoded = numberStringSet.decode(input);
-        if (decoded.isRight()) {
-            decoded.value.should.deep.equal(new Set(input));
+        if (isRight(decoded)) {
+            decoded.right.should.deep.equal(new Set(input));
         }
         else {
             fail("Failed to parse " + input + " as a set");
@@ -31,7 +32,7 @@ describe("SetType", function() {
     it("Should not parse things that are not the correct type of set", function() {
         const invalid = [{}, 4, 5]
         const decoded = numberStringSet.decode(invalid);
-        if (decoded.isRight()) {
+        if (isRight(decoded)) {
             fail("Decoded invalid set " + invalid);
         }
     });
@@ -40,8 +41,8 @@ describe("SetType", function() {
         const input = new Set([1, "two", "three", 4]);
 
         let decoded = numberStringSet.decode(input);
-        if (decoded.isRight()) {
-            decoded.value.should.deep.equal(input);
+        if (isRight(decoded)) {
+            decoded.right.should.deep.equal(input);
         }
         else {
             fail(`Failed to parse ${input}`);
@@ -50,7 +51,7 @@ describe("SetType", function() {
         const invalid = new Set([1, {}, undefined]);
 
         decoded = numberStringSet.decode(invalid);
-        if (decoded.isRight()) {
+        if (isRight(decoded)) {
             fail(`Accepted invalid input ${invalid}`);
         }
     });

@@ -1,7 +1,7 @@
 import { Animation } from "novadatainterface/Animation";
 import { Position } from "../../engine/Position";
 import { ShipState } from "../../engine/ShipState";
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 import { SpaceObjectGraphic } from "./SpaceObjectGraphic";
 
 class ShipGraphic extends SpaceObjectGraphic {

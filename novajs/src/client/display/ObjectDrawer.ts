@@ -1,7 +1,7 @@
 import { FactoryQueueMap } from "../../common/FactoryQueueMap";
 import { Position } from "../../engine/Position";
 import { SpaceObjectState } from "../../engine/SpaceObjectState";
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 import { AnimationGraphic } from "./AnimationGraphic";
 import { IDGraphic } from "./IDGraphic";
 

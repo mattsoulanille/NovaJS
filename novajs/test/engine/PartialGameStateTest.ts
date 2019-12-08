@@ -6,6 +6,7 @@ import * as t from "io-ts";
 import { RecursivePartial, PartialGameState } from "../../src/engine/Stateful";
 import { GameState } from "../../src/engine/GameState";
 import { fail } from "assert";
+import { isRight } from "fp-ts/lib/Either";
 
 before(function() {
     chai.should();
@@ -31,8 +32,8 @@ describe("parseGameState", function() {
 
         let s = PartialGameState.decode(validState);
 
-        if (s.isRight()) {
-            s.value.should.deep.equal(validState);
+        if (isRight(s)) {
+            s.right.should.deep.equal(validState);
         }
         else {
             fail(PathReporter.report(s).join("\n"));
@@ -54,9 +55,9 @@ describe("parseGameState", function() {
 
         let s = PartialGameState.decode(invalidState);
 
-        if (s.isRight()) {
+        if (isRight(s)) {
             fail("Parsed invalid state into the following:\n"
-                + JSON.stringify(s.value));
+                + JSON.stringify(s.right));
         }
     });
 });

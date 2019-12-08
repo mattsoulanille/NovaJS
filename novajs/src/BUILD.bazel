@@ -1,0 +1,47 @@
+package(default_visibility = ["//visibility:public"])
+
+
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+
+
+ts_library(
+    name = "browser",
+    srcs = ["browser.ts"],
+    deps = [
+        "@npm//@types/node",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//socket.io-client",
+        "@npm//@types/socket.io-client",
+        "@npm//pixi.js",
+        "@npm//@types/pixi.js",
+        "//novajs/src/common",
+        "//novajs/src/client",
+        "//novajs/src/client/display",
+        "//novajs/src/engine",
+        "//novajs/src/communication",
+        "//novajs/src/client/gamedata",
+    ]
+)
+
+ts_library(
+    name = "server",
+    srcs = ["server.ts"],
+    deps = [
+        "@npm//@types/node",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//pixi.js",
+        "@npm//@types/pixi.js",
+        "@npm//socket.io",
+        "@npm//@types/socket.io",
+        "@npm//express",
+        "@npm//@types/express",
+        "//novaparse",
+        "//novajs/src/common",
+        "//novajs/src/engine",
+        "//novajs/src/communication",
+        "//novajs/src/server",
+        "//novajs/src/server/parsing",
+    ]
+)

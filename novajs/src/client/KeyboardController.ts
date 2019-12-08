@@ -1,14 +1,13 @@
 
 import * as t from "io-ts";
-import { Controller, ControlEvent, ControlState, makeControlState, ControlEventInfo } from "./Controller";
+import { Controller, ControlEvent, ControlState, makeControlState, ControlEventInfo } from "../common/Controller";
 
 
 // This kind of sucks as a way to get a runtime type
 // out of an enum...
 const controlEventVals: { [index in ControlEvent]?: null } = {};
-for (let key in ControlEvent) {
-    let val: ControlEvent = ControlEvent[key] as ControlEvent;
-    controlEventVals[val] = null;
+for (let val in ControlEvent) {
+    controlEventVals[val as ControlEvent] = null;
 }
 
 const ControlEventT = t.keyof(controlEventVals);

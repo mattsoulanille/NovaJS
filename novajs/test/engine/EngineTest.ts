@@ -7,7 +7,7 @@ import { fail } from "assert";
 
 
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { NovaParse } from "novaparse";
+import { NovaParse } from "novaparse/NovaParse";
 import { Engine } from "../../src/engine/Engine";
 
 before(function() {

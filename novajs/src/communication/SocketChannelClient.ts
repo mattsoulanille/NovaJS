@@ -1,6 +1,7 @@
 import { Channel, MessageType, MessageWithSourceType } from "./Channel";
 import { AnyEvent } from "ts-events";
 import { InitialDataType } from "./SocketChannelServer";
+import { isRight } from "fp-ts/lib/Either";
 
 
 
@@ -52,24 +53,24 @@ class SocketChannelClient implements Channel {
 
     private _handleMessage(message: unknown) {
         const decodedMessage = MessageWithSourceType.decode(message)
-        if (decodedMessage.isRight()) {
-            this.onMessage.post(decodedMessage.value);
+        if (isRight(decodedMessage)) {
+            this.onMessage.post(decodedMessage.right);
         }
         else {
             this.warn("Expected message to decode as " + MessageWithSourceType.name + " but "
-                + "decoding failed with error:\n" + decodedMessage.value);
+                + "decoding failed with error:\n" + decodedMessage.left);
         }
     }
 
     private _handleSetInitialData(data: unknown) {
         let decoded = InitialDataType.decode(data);
-        if (decoded.isRight()) {
-            this._uuid = decoded.value.uuid;
-            this._peers = new Set(decoded.value.peers);
-            this._admins = new Set(decoded.value.admins);
+        if (isRight(decoded)) {
+            this._uuid = decoded.right.uuid;
+            this._peers = new Set(decoded.right.peers);
+            this._admins = new Set(decoded.right.admins);
         }
         else {
-            this.warn(decoded.value.toString());
+            this.warn(decoded.left.toString());
         }
     }
 

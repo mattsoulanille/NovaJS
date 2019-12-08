@@ -1,4 +1,5 @@
 import * as t from "io-ts";
+import { isRight } from "fp-ts/lib/Either";
 
 // Stores set as a list
 function SetType<C extends t.Mixed>(codec: C) {
@@ -34,11 +35,11 @@ function SetType<C extends t.Mixed>(codec: C) {
                 }
 
                 const decoded = t.array(codec).decode(input);
-                if (decoded.isRight()) {
-                    return t.success(new Set(decoded.value));
+                if (isRight(decoded)) {
+                    return t.success(new Set(decoded.right));
                 }
                 else {
-                    return t.failure(decoded.value, context);
+                    return t.failure(decoded.left, context);
                 }
             },
             function(toEncode: Set<EntryType>) {

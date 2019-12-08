@@ -2,6 +2,7 @@ import * as t from "io-ts";
 import { AnyEvent } from "ts-events";
 import * as UUID from "uuid/v4";
 import { Channel, MessageType, MessageWithSourceType } from "./Channel";
+import { isRight } from "fp-ts/lib/Either";
 
 
 
@@ -104,8 +105,8 @@ class SocketChannelServer implements Channel {
     // Handles messages received from clients. Forwards messages to their destination.
     private _handleMessageFromClient(clientUUID: string, message: unknown) {
         const decoded = IncomingMessageType.decode(message);
-        if (decoded.isRight()) {
-            const decodedMessage = decoded.value;
+        if (isRight(decoded)) {
+            const decodedMessage = decoded.right;
 
             // The message formatted for forwarding
             const toForward: MessageWithSourceType = {
@@ -126,16 +127,16 @@ class SocketChannelServer implements Channel {
         else {
             this.warn(
                 "Expected message to decode as " + IncomingMessageType.name + " but "
-                + "decoding failed with error:\n" + decoded.value);
+                + "decoding failed with error:\n" + decoded.left);
         }
     }
 
     // Handles broadcast requests from the client.
     private _handleBroadcastFromClient(clientUUID: string, socket: SocketIO.Socket, message: unknown) {
         const decoded = MessageType.decode(message);
-        if (decoded.isRight()) {
+        if (isRight(decoded)) {
             const toBroadcast: MessageWithSourceType = {
-                message: decoded.value,
+                message: decoded.right,
                 source: clientUUID
             };
             socket.broadcast.emit("message", toBroadcast);
@@ -144,7 +145,7 @@ class SocketChannelServer implements Channel {
         else {
             this.warn(
                 "Expected message to decode as " + MessageType.name + " but "
-                + "decoding failed with error:\n" + decoded.value);
+                + "decoding failed with error:\n" + decoded.left);
         }
     }
 

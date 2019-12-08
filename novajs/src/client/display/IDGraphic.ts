@@ -1,4 +1,4 @@
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 
 interface IDGraphic<T> {
     new({ gameData, id }: { gameData: GameData, id: string }): T;

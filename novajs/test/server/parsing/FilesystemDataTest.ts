@@ -15,7 +15,7 @@ const expect = chai.expect;
 
 describe("FilesystemData", function() {
 
-    var fsData = new FilesystemData("test/filesystemDataTestDir/");
+    var fsData = new FilesystemData("novajs/test/filesystemDataTestDir/");
 
 
     it("Should parse JSON from the filesystem", async function() {

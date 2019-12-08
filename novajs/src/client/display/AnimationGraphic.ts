@@ -2,7 +2,7 @@ import { Animation } from "novadatainterface/Animation";
 import * as PIXI from "pixi.js";
 import { Position } from "../../engine/Position";
 import { SpaceObjectState } from "../../engine/SpaceObjectState";
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 import { SpriteSheetSprite } from "./SpriteSheetSprite";
 
 abstract class AnimationGraphic extends PIXI.Container {

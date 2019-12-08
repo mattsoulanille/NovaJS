@@ -1,9 +1,9 @@
 import * as PIXI from "pixi.js";
 import 'pixi-display'; // Must be imported after PIXI
 import * as io from "socket.io-client";
-import { Controller } from "./client/Controller";
+import { Controller } from "./common/Controller";
 import { Display } from "./client/display/Display";
-import { GameData } from "./client/GameData";
+import { GameData } from "./client/gamedata/GameData";
 import { setupControls } from "./client/setupControls";
 import { ShipController } from "./common/ShipController";
 import { Engine } from "./engine/Engine";
@@ -29,7 +29,7 @@ const gameData = new GameData();
 
 const app = new PIXI.Application({
     resolution: window.devicePixelRatio || 1,
-    autoResize: true,
+    //    autoResize: true,
     width: window.innerWidth,
     height: window.innerHeight
 });
@@ -62,7 +62,7 @@ var engine = new Engine({
 
 
 // Handle when the player's ship changes.
-communicator.onShipUUID.attach(function([oldUUID, newUUID]) {
+communicator.onShipUUID.attach(function([oldUUID, newUUID]: [string | undefined, string]) {
     if (oldUUID) {
         engine.activeShips.delete(oldUUID);
     }

@@ -3,7 +3,7 @@ import { PlanetState } from "../../engine/PlanetState";
 import { ShipState } from "../../engine/ShipState";
 import { SystemState } from "../../engine/SystemState";
 import { Vector, VectorLike } from "../../engine/Vector";
-import { GameData } from "../GameData";
+import { GameData } from "../gamedata/GameData";
 import { ObjectDrawer } from "./ObjectDrawer";
 import { PlanetGraphic } from "./PlanetGraphic";
 import { ShipGraphic } from "./ShipGraphic";

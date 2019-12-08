@@ -16,6 +16,7 @@ const expect = chai.expect;
 
 import * as t from "io-ts";
 import { ObjectOf } from "../../src/engine/StatefulMap";
+import { isRight } from "fp-ts/lib/Either";
 
 const SimpleState = t.type({
     catCount: t.number,
@@ -68,8 +69,8 @@ function buildFromState(state: SimpleState): SimpleClass {
 }
 function getFullState(partial: RecursivePartial<SimpleState>): SimpleState | undefined {
     const decoded = SimpleState.decode(partial);
-    if (decoded.isRight()) {
-        return decoded.value;
+    if (isRight(decoded)) {
+        return decoded.right;
     }
     return undefined;
 }

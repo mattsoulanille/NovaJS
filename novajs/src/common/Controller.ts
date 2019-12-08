@@ -103,9 +103,9 @@ function makeControlEventInfo(): ControlEventInfo {
 
 function makeControlState(): ControlState {
     var output: { [index in ControlEvent]?: ControlEventInfo } = {};
-    for (let key in ControlEvent) {
-        let val: ControlEvent = ControlEvent[key] as ControlEvent;
-        output[val] = makeControlEventInfo();
+    for (let val in Object.values(ControlEvent)) {
+        //let val: ControlEvent = ControlEvent[key] as ControlEvent;
+        output[val as ControlEvent] = makeControlEventInfo();
     }
     return output as ControlState;
 }
