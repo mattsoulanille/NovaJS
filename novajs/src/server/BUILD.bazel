@@ -1,0 +1,34 @@
+package(default_visibility = ["//visibility:public"])
+
+
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
+
+
+
+ts_library(
+    name = "engine",
+    srcs = glob(["*.ts"]),
+    deps = [
+        "@npm//@types/node",
+        "@npm//io-ts",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//fp-ts",
+        "//novadatainterface",
+    ]
+)
+
+
+# ts_library(
+#     name = "novaparse",
+#     srcs = glob(["src/*.ts", "src/**/*.ts"]),
+#     module_name = "novaparse", # for npm
+#     deps = [
+#         #"@npm//pngjs",
+#         "@npm//@types/node",
+#         "//NovaDataInterface:novadatainterface",
+#     ],
+# )
+
+

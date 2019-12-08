@@ -3,6 +3,7 @@ import { Stateful, RecursivePartial } from "./Stateful";
 import { PlanetState } from "./PlanetState";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { PlanetData } from "novadatainterface/PlanetData";
+import { isRight } from "fp-ts/lib/Either";
 
 class Planet extends SpaceObject implements Stateful<PlanetState> {
     readonly gameData: GameDataInterface;
@@ -35,8 +36,8 @@ class Planet extends SpaceObject implements Stateful<PlanetState> {
 
     static fullState(maybeState: RecursivePartial<PlanetState>): PlanetState | undefined {
         let decoded = PlanetState.decode(maybeState)
-        if (decoded.isRight()) {
-            return decoded.value
+        if (isRight(decoded)) {
+            return decoded.right;
         }
         else {
             return undefined;

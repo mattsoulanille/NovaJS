@@ -28,8 +28,8 @@ yarn_install(
     # Name this npm so that Bazel Label references look like @npm//package
     name = "npm",
     package_json = "//:package.json",
-    #    yarn_lock = "//:yarn.lock",
-    yarn_lock = "//:package-lock.json",
+    yarn_lock = "//:yarn.lock",
+    #yarn_lock = "//:package-lock.json",
 )
 
 # Install any Bazel rules which were extracted earlier by the yarn_install rule.

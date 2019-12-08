@@ -3,7 +3,7 @@
     "version": "0.1.0",
     "private": true,
     "devDependencies": {
-        "@bazel/bazel": "latest",
+        "@bazel/bazel": "^1.2.0",
         "@bazel/buildifier": "latest",
         "@bazel/ibazel": "latest",
         "@bazel/rollup": "^0.39.1",
@@ -27,8 +27,12 @@
         "test": "bazel test //..."
     },
     "dependencies": {
+        "@types/uuid": "^3.4.6",
+        "fp-ts": "^2.2.0",
         "hull.js": "^1.0.0",
+        "io-ts": "^2.0.1",
         "pngjs": "^3.4.0",
-        "resourceforkjs": "^0.1.0"
+        "resourceforkjs": "^0.1.0",
+        "uuid": "^3.3.3"
     }
 }

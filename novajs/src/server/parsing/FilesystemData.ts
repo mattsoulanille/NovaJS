@@ -1,4 +1,3 @@
-import * as t from "io-ts";
 import * as fs from "fs";
 import * as path from "path";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";

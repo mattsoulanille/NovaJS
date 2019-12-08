@@ -6,7 +6,7 @@
 // through all subobjects.o
 import * as t from "io-ts";
 import { GameState } from "./GameState";
-import { Either } from "fp-ts/lib/Either";
+import { Either, isRight } from "fp-ts/lib/Either";
 import { ShipState } from "./ShipState";
 
 // Copied from https://github.com/gcanti/io-ts/blob/master/src/index.ts
@@ -80,8 +80,8 @@ function MakeRecursivePartialParser<T extends t.Any>(T: T): (v: unknown) => Eith
     const decoder = MakeRecursivePartial(T)
     return (v: unknown) => {
         const decoded = decoder.decode(v);
-        if (decoded.isRight()) {
-            const value = decoded.value;
+		if (isRight(decoded)) {
+            const value = decoded.right;
             clearUndefined(value);
             return t.success(value);
         }

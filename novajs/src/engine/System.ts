@@ -9,6 +9,7 @@ import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
 import * as UUID from "uuid/v4";
+import { isRight, isLeft } from "fp-ts/lib/Either";
 
 
 
@@ -59,15 +60,15 @@ class System implements Stateful<SystemState>, Steppable {
     getFullState(): SystemState {
         var state = this.getState({});
         var decoded = SystemState.decode(state);
-        if (decoded.isLeft()) {
-            throw decoded.value
+        if (isLeft(decoded)) {
+            throw decoded.left;
         }
         else {
-            return decoded.value;
+            return decoded.right;
         }
     }
 
-    static async fromID(id: string, gameData: GameDataInterface, makeUUID = UUID): Promise<SystemState> {
+    static async fromID(id: string, gameData: GameDataInterface, makeUUID: () => string = UUID): Promise<SystemState> {
 
         const planets: { [index: string]: PlanetState } = {};
         const data = await gameData.data.System.get(id);
@@ -93,8 +94,8 @@ class System implements Stateful<SystemState>, Steppable {
 
     static fullState(maybeState: RecursivePartial<SystemState>): SystemState | undefined {
         let decoded = SystemState.decode(maybeState)
-        if (decoded.isRight()) {
-            return decoded.value
+        if (isRight(decoded)) {
+            return decoded.right;
         }
         else {
             return undefined;

@@ -2,6 +2,7 @@ import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { ShipState } from "./ShipState";
 import { SpaceObject } from "./SpaceObject";
 import { RecursivePartial, Stateful } from "./Stateful";
+import { isRight } from "fp-ts/lib/Either";
 
 class Ship extends SpaceObject implements Stateful<ShipState> {
     readonly gameData: GameDataInterface;
@@ -37,8 +38,8 @@ class Ship extends SpaceObject implements Stateful<ShipState> {
 
     static fullState(maybeState: RecursivePartial<ShipState>): ShipState | undefined {
         let decoded = ShipState.decode(maybeState)
-        if (decoded.isRight()) {
-            return decoded.value
+        if (isRight(decoded)) {
+            return decoded.right;
         }
         else {
             return undefined;
