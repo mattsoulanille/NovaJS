@@ -1,0 +1,31 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+
+ts_library(
+    name = "main",
+    srcs = ["main.ts"],
+    deps = [
+        "//TestProject/src:testproject",
+        "@npm//uuid",
+    ],
+)
+
+nodejs_binary(
+    name = "testproject_bin",
+    entry_point = ":testproject_rollup",
+)
+
+
+rollup_bundle(
+    name = "testproject_rollup",
+    deps = [
+        ":main",
+        "@npm//rollup-plugin-node-resolve",
+    ],
+    entry_point = "main.ts",
+    config_file = "//:rollup.config.js",
+)

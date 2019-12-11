@@ -1,8 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
-
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-
+load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
 
 ts_library(
     name = "browser",
@@ -44,4 +43,15 @@ ts_library(
         "//novajs/src/server",
         "//novajs/src/server/parsing",
     ]
+)
+
+rollup_bundle(
+    name = "server_bundle",
+    deps = [
+        ":server",
+        "@npm//rollup-plugin-node-resolve",
+        "@npm//rollup-plugin-commonjs"
+    ],
+    entry_point = "server.ts",
+    config_file = "//:rollup.config.js",
 )

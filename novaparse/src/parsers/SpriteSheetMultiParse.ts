@@ -6,7 +6,8 @@ import { RledResource } from "../resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
 
-import hull = require("hull.js");
+//import hull = require("hull.js");
+//import hull from "hull.js";
 
 
 
@@ -104,7 +105,9 @@ function makeVisibleArray(png: PNG): Array<[number, number]> {
 function makeConvexHull(png: PNG): ConvexHull {
     // No concavity. Convex hull.
     var visibleArray = makeVisibleArray(png);
-    var hullWithRepeat = hull(visibleArray, Infinity);
+    //TODO: Fix convex hulls!
+    //var hullWithRepeat = hull(visibleArray, Infinity);
+    var hullWithRepeat: ConvexHull = [[-10, -10], [10, -10], [10, 10], [-10, 10], [1, 2]];
     // Cut off the last point since it's the same as the first.
     return hullWithRepeat.slice(0, hullWithRepeat.length - 1);
 }

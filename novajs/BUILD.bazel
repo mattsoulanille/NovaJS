@@ -1,0 +1,12 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+
+nodejs_binary(
+    name = "novajs",
+    entry_point = "//novajs/src:server",
+    deps = [
+        "@npm//pngjs",
+    ],
+)
