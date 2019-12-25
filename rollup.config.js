@@ -6,7 +6,7 @@ import compiler from 'rollup-plugin-closure-compiler';
 //import typescript from '@rollup/plugin-typescript';
 import nodeGlobals from 'rollup-plugin-node-globals';
 import builtins from 'rollup-plugin-node-builtins';
-
+import replace from '@rollup/plugin-replace';
 
 export default {
 	// input: "TestProject/main.ts",
@@ -16,6 +16,13 @@ export default {
 	// 	dir: ".",
 	// },
     plugins: [
+		// replace({
+		// 	exclude: "node_modules/**",
+		// 	replaces: {
+		// 		'import \* as UUID from "uuid/v4";': 'import UUID from "uuid/v4";',
+		// 		'import \* as filenamify from "filenamify";': 'import filenamify from "filenamify";',
+		// 	}
+		// }),
 		nodeGlobals(),
 		builtins(),
 //		tscc(),

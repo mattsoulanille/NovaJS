@@ -27,6 +27,7 @@ rollup_bundle(
         "@npm//@rollup/plugin-typescript",
         "@npm//rollup-plugin-node-globals",
         "@npm//rollup-plugin-node-builtins",
+        "@npm//@rollup/plugin-replace",
     ],
     # srcs = [
     #     "//:tscc.spec.json",
