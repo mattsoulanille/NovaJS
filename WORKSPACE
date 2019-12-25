@@ -32,6 +32,39 @@ yarn_install(
     #yarn_lock = "//:package-lock.json",
 )
 
+# Install closure
+http_archive(
+    name = "io_bazel_rules_closure",
+    sha256 = "7d206c2383811f378a5ef03f4aacbcf5f47fd8650f6abbc3fa89f3a27dd8b176",
+    strip_prefix = "rules_closure-0.10.0",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
+        "https://github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
+    ],
+)
+
+load("@io_bazel_rules_closure//closure:repositories.bzl", "rules_closure_dependencies", "rules_closure_toolchains")
+
+rules_closure_dependencies()
+rules_closure_toolchains()
+
+# http_archive(
+#     name = "com_derivita_rules_ts_closure",
+#     sha256 = "f4f53beace2e8ccace417ce851af2b7f09d2dca6dc5d8a047fc198e496ae020a",
+#     strip_prefix = "rules_ts_closure-master",
+#     urls = [
+#         "https://github.com/derivita/rules_ts_closure/archive/master.zip",
+#     ],
+# )
+
+# load("@com_derivita_rules_ts_closure//:deps.bzl", "install_rules_ts_closure_dependencies")
+
+# install_rules_ts_closure_dependencies()
+
+# load("@com_derivita_rules_ts_closure//:closure.bzl", "setup_rules_ts_closure_workspace")
+
+#setup_rules_ts_closure_workspace()
+
 # Install any Bazel rules which were extracted earlier by the yarn_install rule.
 load("@npm//:install_bazel_dependencies.bzl", "install_bazel_dependencies")
 

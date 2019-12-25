@@ -1,31 +1,56 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
+#load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+#load("@io_bazel_rules_closure//closure:defs.bzl", "closure_js_library", "closure_js_binary")
 
 ts_library(
-    name = "main",
+    name = "main_ts",
     srcs = ["main.ts"],
     deps = [
         "//TestProject/src:testproject",
-        "@npm//uuid",
     ],
 )
-
-nodejs_binary(
-    name = "testproject_bin",
-    entry_point = ":testproject_rollup",
-)
-
 
 rollup_bundle(
     name = "testproject_rollup",
     deps = [
-        ":main",
-        "@npm//rollup-plugin-node-resolve",
+        ":main_ts",
+#        "//TestProject/src:testproject",
+        "@npm//@rollup/plugin-node-resolve",
+        "@npm//rollup-plugin-commonjs",
+        "@npm//@tscc/rollup-plugin-tscc",
+        "@npm//rollup-plugin-sourcemaps",
+        "@npm//rollup-plugin-closure-compiler",
+        "@npm//@rollup/plugin-typescript",
+        "@npm//rollup-plugin-node-globals",
+        "@npm//rollup-plugin-node-builtins",
     ],
+    # srcs = [
+    #     "//:tscc.spec.json",
+    #     "@npm//pngjs",
+    #     "@npm//@types/pngjs",
+    # ],
     entry_point = "main.ts",
     config_file = "//:rollup.config.js",
+    #output_dir = True,
+    sourcemap = "inline",
 )
+
+# closure_js_library(
+#     name = "src",
+#     srcs = [":main"],
+#     no_closure_library = True,
+#     deps = [
+# #        "@closure-compiler//:externs",
+#     ]
+# )
+
+nodejs_binary(
+    name = "testproject_bin",
+    entry_point = ":testproject_rollup",
+    #data = [":testproject_rollup"],
+)
+
