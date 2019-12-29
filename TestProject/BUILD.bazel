@@ -11,13 +11,14 @@ ts_library(
     srcs = ["main.ts"],
     deps = [
         "//TestProject/src:testproject",
+        "@npm//@types/pngjs",
     ],
 )
 
-filegroup(
-    name = "main_filegroup",
-    srcs = ["main.ts", "//TestProject/src:testproject_filegroup"]
-)
+# filegroup(
+#     name = "main_filegroup",
+#     srcs = ["main.ts", "//TestProject/src:testproject_filegroup"]
+# )
 
 rollup_bundle(
     name = "testproject_rollup",
@@ -27,13 +28,13 @@ rollup_bundle(
 #        "//TestProject/src:testproject",
         "@npm//@rollup/plugin-node-resolve",
         "@npm//@rollup/plugin-commonjs",
-        "@npm//@tscc/rollup-plugin-tscc",
+#        "@npm//@tscc/rollup-plugin-tscc",
         "@npm//rollup-plugin-sourcemaps",
-        "@npm//rollup-plugin-closure-compiler",
-        "@npm//@rollup/plugin-typescript",
+#        "@npm//rollup-plugin-closure-compiler",
+#        "@npm//@rollup/plugin-typescript",
         "@npm//rollup-plugin-node-globals",
         "@npm//rollup-plugin-node-builtins",
-        "@npm//@rollup/plugin-replace",
+#        "@npm//@rollup/plugin-replace",
     ],
     # srcs = [
     #     "//:tscc.spec.json",
@@ -58,7 +59,7 @@ rollup_bundle(
 nodejs_binary(
     name = "testproject_bin",
 #    entry_point = ":testproject_rollup",
-    entry_point = ":testproject_rollup",
-    #data = [":testproject_rollup"],
+    entry_point = ":testproject_rollup.js",
+    data = [":testproject_rollup"],
 )
 
