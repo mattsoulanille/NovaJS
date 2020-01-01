@@ -11,7 +11,8 @@ ts_library(
     srcs = ["main.ts"],
     deps = [
         "//TestProject/src:testproject",
-        "@npm//@types/pngjs",
+        "@npm//uuid",
+        "@npm//@types/uuid",
     ],
 )
 
@@ -45,6 +46,7 @@ rollup_bundle(
     config_file = "//:rollup.config.js",
     #output_dir = True,
     sourcemap = "inline",
+    format = "cjs",
 )
 
 # closure_js_library(
@@ -59,7 +61,7 @@ rollup_bundle(
 nodejs_binary(
     name = "testproject_bin",
 #    entry_point = ":testproject_rollup",
-    entry_point = ":testproject_rollup.js",
-    data = [":testproject_rollup"],
+    entry_point = "testproject_rollup.js",
+    data = [":testproject_rollup.js"],
 )
 

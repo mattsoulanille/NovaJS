@@ -21,6 +21,18 @@ http_archive(
     urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/0.39.1/rules_nodejs-0.39.1.tar.gz"],
 )
 
+
+
+# # Force node 13.5
+# load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
+# node_repositories(
+#     node_version = "13.5.0",
+#     node_repositories = {
+#         "13.5.0-darwin_amd64": ("node-v13.5.0-darwin-x64.tar.gz", "node-v13.5.0-darwin-x64", "3322c601dc032677e5b5f87f393d4b1d70073bcab24fe74378eff8eb49364001")
+#     }
+# )
+
+
 # The yarn_install rule runs yarn anytime the package.json or yarn.lock file changes.
 # It also extracts and installs any Bazel rules distributed in an npm package.
 load("@build_bazel_rules_nodejs//:index.bzl", "yarn_install")

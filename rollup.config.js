@@ -3,19 +3,31 @@ import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 //import compiler from 'rollup-plugin-closure-compiler';
-//import typescript from '@rollup/plugin-typescript';
 import nodeGlobals from 'rollup-plugin-node-globals';
 import builtins from 'rollup-plugin-node-builtins';
 //import replace from '@rollup/plugin-replace';
+//import typescript from '@rollup/plugin-typescript';
 
 export default {
-	// input: "TestProject/main.ts",
-	// output: {
-	// 	//file: "bundle.js",
-	// 	format: "cjs",
-	// 	dir: "./rollup-out",
+// 	input: "TestProject/main.ts",
+// 	output: {
+// //		file: "bundle.js",
+// 		format: "cjs",
+// 		dir: "./rollup-out",
+// 	},
+	// globals: {
+	// 	crypto: 'crypto',
 	// },
     plugins: [
+		// replace({
+		//  	exclude: "node_modules/**",
+		// 	replaces: {
+		// 		'import \* as UUID from "uuid/v4";': 'import UUID from "uuid/v4";',
+		// 		//'import \* as UUID from "uuid/v4";': 'error()";',
+		// 		//				'import \* as filenamify from "filenamify";': 'import filenamify from "filenamify";',
+		// 	}
+		// }),
+
 	    //typescript(),
 	    commonjs({
 		    // NOTE: This plugin has to be before resolve or else
@@ -28,21 +40,13 @@ export default {
 			// 	"node_modules/pngjs/lib/png.js": ["PNG"]
 			// }
 		}),
-		nodeGlobals(),
-		builtins(),
+	    //nodeGlobals(),
+	    //builtins(),
 
         resolve({
 	        mainFields: ['module', 'main'],
 	        preferBuiltins: true
 		}),
-		// replace({
-		//  	exclude: "node_modules/**",
-		// 	replaces: {
-		// 		//'import \* as UUID from "uuid/v4";': 'import UUID from "uuid/v4";',
-		// 		'import \* as UUID from "uuid/v4";': 'error()";',
-		// 		//				'import \* as filenamify from "filenamify";': 'import filenamify from "filenamify";',
-		// 	}
-		// }),
 
 //		tscc(),
 //		typescript(),
@@ -56,8 +60,3 @@ export default {
 // 		}),
     ]
 }
-
-
-
-
-

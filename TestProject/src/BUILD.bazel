@@ -12,8 +12,8 @@ ts_library(
     srcs = glob(["*.ts"]),
     deps = [
         "@npm//@types/node",
-#        "@npm//uuid",
-#        "@npm//@types/uuid",
+        "@npm//uuid",
+        "@npm//@types/uuid",
         "@npm//pngjs",
         "@npm//@types/pngjs",
         "//novadatainterface",
