@@ -2,9 +2,10 @@
 import resolve from '@rollup/plugin-node-resolve';
 import commonjs from '@rollup/plugin-commonjs';
 import sourcemaps from 'rollup-plugin-sourcemaps';
+import json from '@rollup/plugin-json';
 //import compiler from 'rollup-plugin-closure-compiler';
-import nodeGlobals from 'rollup-plugin-node-globals';
-import builtins from 'rollup-plugin-node-builtins';
+//import nodeGlobals from 'rollup-plugin-node-globals';
+//import builtins from 'rollup-plugin-node-builtins';
 //import replace from '@rollup/plugin-replace';
 //import typescript from '@rollup/plugin-typescript';
 
@@ -15,9 +16,6 @@ export default {
 // 		format: "cjs",
 // 		dir: "./rollup-out",
 // 	},
-	// globals: {
-	// 	crypto: 'crypto',
-	// },
     plugins: [
 		// replace({
 		//  	exclude: "node_modules/**",
@@ -27,7 +25,7 @@ export default {
 		// 		//				'import \* as filenamify from "filenamify";': 'import filenamify from "filenamify";',
 		// 	}
 		// }),
-
+	    json(),
 	    //typescript(),
 	    commonjs({
 		    // NOTE: This plugin has to be before resolve or else

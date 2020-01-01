@@ -4,15 +4,15 @@ import * as socket from "socket.io";
 import { NovaParse } from "novaparse/NovaParse";
 import * as fs from "fs";
 import * as path from "path";
-import { GameDataAggregator } from "./server/parsing/GameDataAggregator";
-import { setupRoutes } from "./server/setupRoutes";
-import { FilesystemData } from "./server/parsing/FilesystemData";
-import { Engine } from "./engine/Engine";
-import { SocketChannelServer } from "./communication/SocketChannelServer";
-import { Communicator, StateMessage } from "./communication/Communicator";
+import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
+import { setupRoutes } from "./src/server/setupRoutes";
+import { FilesystemData } from "./src/server/parsing/FilesystemData";
+import { Engine } from "./src/engine/Engine";
+import { SocketChannelServer } from "./src/communication/SocketChannelServer";
+import { Communicator, StateMessage } from "./src/communication/Communicator";
 import { object } from "io-ts";
-import { PilotData } from "./server/PilotData";
-import { Ship } from "./engine/Ship";
+import { PilotData } from "./src/server/PilotData";
+import { Ship } from "./src/engine/Ship";
 //import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
 const appRoot: string = path.join(__dirname, "../");

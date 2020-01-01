@@ -1,7 +1,7 @@
-//import { stuff } from "./src/thing";
+import { stuff } from "./src/thing";
 
 
-//stuff();
+stuff();
 
 ///import * as UUID from "uuid/v4";
 import UUID from "uuid/v4";
