@@ -31,6 +31,7 @@ rollup_bundle(
         "@npm//@rollup/plugin-commonjs",
 #        "@npm//@tscc/rollup-plugin-tscc",
         "@npm//rollup-plugin-sourcemaps",
+        "@npm//@rollup/plugin-json",
 #        "@npm//rollup-plugin-closure-compiler",
 #        "@npm//@rollup/plugin-typescript",
 #        "@npm//rollup-plugin-node-globals",

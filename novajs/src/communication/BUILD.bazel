@@ -15,9 +15,9 @@ ts_library(
         "@npm//@types/socket.io-client",
         "@npm//socket.io",
         "@npm//@types/socket.io",
-        "@npm//ts-events",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//rxjs",
         "//novajs/src/common",
         "//novajs/src/engine",
     ]

@@ -1,14 +1,14 @@
 import { Channel, MessageType, MessageWithSourceType } from "./Channel";
-import { AnyEvent } from "ts-events";
+import { Subject } from "rxjs";
 import { InitialDataType } from "./SocketChannelServer";
 import { isRight } from "fp-ts/lib/Either";
 
 
 
 class SocketChannelClient implements Channel {
-    public readonly onMessage: AnyEvent<MessageWithSourceType>;
-    public readonly onPeerConnect: AnyEvent<string>;
-    public readonly onPeerDisconnect: AnyEvent<string>;
+    public readonly onMessage: Subject<MessageWithSourceType>;
+    public readonly onPeerConnect: Subject<string>;
+    public readonly onPeerDisconnect: Subject<string>;
     private _peers: Set<string>;
     private socket: SocketIOClient.Socket;
     warn: (m: string) => void;
@@ -19,9 +19,9 @@ class SocketChannelClient implements Channel {
 
     constructor({ socket, warn }: { socket: SocketIOClient.Socket, warn?: ((m: string) => void) }) {
 
-        this.onMessage = new AnyEvent<MessageWithSourceType>();
-        this.onPeerConnect = new AnyEvent<string>();
-        this.onPeerDisconnect = new AnyEvent<string>();
+        this.onMessage = new Subject<MessageWithSourceType>();
+        this.onPeerConnect = new Subject<string>();
+        this.onPeerDisconnect = new Subject<string>();
         this._peers = new Set<string>();
         this._admins = new Set<string>();
 
@@ -54,7 +54,7 @@ class SocketChannelClient implements Channel {
     private _handleMessage(message: unknown) {
         const decodedMessage = MessageWithSourceType.decode(message)
         if (isRight(decodedMessage)) {
-            this.onMessage.post(decodedMessage.right);
+            this.onMessage.next(decodedMessage.right);
         }
         else {
             this.warn("Expected message to decode as " + MessageWithSourceType.name + " but "
@@ -77,7 +77,7 @@ class SocketChannelClient implements Channel {
     private _handleAddPeer(peer: unknown) {
         if (typeof peer === "string") {
             this._peers.add(peer);
-            this.onPeerConnect.post(peer);
+            this.onPeerConnect.next(peer);
         }
         else {
             this.warn("Expected peer to be string but got " + peer);
@@ -87,7 +87,7 @@ class SocketChannelClient implements Channel {
     private _handleRemovePeer(peer: unknown) {
         if (typeof peer === "string") {
             this._peers.delete(peer);
-            this.onPeerDisconnect.post(peer);
+            this.onPeerDisconnect.next(peer);
         }
     }
 

@@ -4,7 +4,8 @@ import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
 import * as io_server_precursor from "socket.io";
 import * as io from "socket.io-client";
-import { AnyEvent } from "ts-events";
+import { Subject } from "rxjs";
+import { first } from "rxjs/operators";
 import { SocketChannelClient } from "../../src/communication/SocketChannelClient";
 import { SocketChannelServer } from "../../src/communication/SocketChannelServer";
 
@@ -18,11 +19,15 @@ before(function() {
 var io_server = io_server_precursor.listen(3001);
 
 
-function waitForEvent<T>(handler: AnyEvent<T>, timeout = 1000): Promise<T> {
+function waitForEvent<T>(handler: Subject<T>, timeout = 1000): Promise<T> {
 
     return new Promise((fulfill, reject) => {
+        const subscription = handler
+            .pipe(first())
+            .subscribe(success);
+
         const failTimeout = setTimeout(() => {
-            handler.detach(success);
+            subscription.unsubscribe();
             reject(new Error("More than " + timeout + " milliseconds spent"));
         }, timeout);
 
@@ -30,8 +35,6 @@ function waitForEvent<T>(handler: AnyEvent<T>, timeout = 1000): Promise<T> {
             clearTimeout(failTimeout);
             fulfill(v);
         }
-
-        handler.once(success);
     });
 }
 

@@ -15,6 +15,7 @@ ts_library(
         "@npm//@types/socket.io-client",
         "@npm//pixi.js",
         "@npm//@types/pixi.js",
+        "@npm//rxjs",
         "//novajs/src/common",
         "//novajs/src/client",
         "//novajs/src/client/display",

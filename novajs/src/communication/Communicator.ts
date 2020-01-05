@@ -7,7 +7,7 @@ import { PartialState, PartialGameState, RecursivePartial } from "../engine/Stat
 import { mergeStates } from "../engine/mergeStates";
 import { filterUUIDs } from "./filterUUIDs";
 import { SetType } from "../common/SetType"
-import { AnyEvent } from "ts-events";
+import { Subject, Observable } from "rxjs";
 import { isEmptyObject } from "../engine/EmptyObject";
 import { isLeft } from "fp-ts/lib/Either";
 
@@ -85,8 +85,8 @@ class Communicator {
     // would need to be notified of has occurred.
     ownedUUIDs: Set<string>;
     shipUUID: string | undefined;
-    onShipUUID: AnyEvent<[string | undefined, string]> // [old, new] ship uuids
-    onReady: AnyEvent<boolean>; // After the server gives us the universe.
+    onShipUUID: Subject<[string | undefined, string]> // [old, new] ship uuids
+    onReady: Subject<boolean>; // After the server gives us the universe.
 
     private notifyCount: number;
 
@@ -99,10 +99,10 @@ class Communicator {
         //     console.log(peer);
         // })
 
-        this.channel.onMessage.attach(this._handleMessage.bind(this));
-        this.channel.onPeerDisconnect.attach(this._removeOldPeer.bind(this));
-        this.onShipUUID = new AnyEvent();
-        this.onReady = new AnyEvent();
+        this.channel.onMessage.subscribe(this._handleMessage.bind(this));
+        this.channel.onPeerDisconnect.subscribe(this._removeOldPeer.bind(this));
+        this.onShipUUID = new Subject();
+        this.onReady = new Subject();
         this.notifyCount = 0;
     }
 
@@ -138,7 +138,7 @@ class Communicator {
                     if (decodedMessage.shipUUID) {
                         let oldUUID = this.shipUUID;
                         this.shipUUID = decodedMessage.shipUUID;
-                        this.onShipUUID.post([oldUUID, this.shipUUID]);
+                        this.onShipUUID.next([oldUUID, this.shipUUID]);
                     }
                 }
                 else {
@@ -176,7 +176,7 @@ class Communicator {
                     message: peersMessage
                 });
 
-                this.onReady.post(true);
+                this.onReady.next(true);
         }
     }
 
@@ -217,7 +217,7 @@ class Communicator {
     bindServerConnectionHandler(getState: () => GameState,
         addClientToGame: () => Promise<{ clientUUIDs: Set<string>, shipUUID: string }>) {
 
-        this.channel.onPeerConnect.attach(async (uuid: string) => {
+        this.channel.onPeerConnect.subscribe(async (uuid: string) => {
             console.log("New Client: " + uuid);
 
             const { clientUUIDs, shipUUID } = await addClientToGame();

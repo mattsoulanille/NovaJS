@@ -12,6 +12,7 @@ import { Ship } from "./engine/Ship";
 import { System } from "./engine/System";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
 import { Communicator } from "./communication/Communicator";
+import { first } from "rxjs/operators";
 
 const socket = io();
 (window as any).socket = socket;
@@ -62,7 +63,7 @@ var engine = new Engine({
 
 
 // Handle when the player's ship changes.
-communicator.onShipUUID.attach(function([oldUUID, newUUID]: [string | undefined, string]) {
+communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefined, string]) {
     if (oldUUID) {
         engine.activeShips.delete(oldUUID);
     }
@@ -107,7 +108,7 @@ function gameLoop() {
     }
 }
 
-communicator.onReady.once(startGame);
+communicator.onReady.pipe(first()).subscribe(startGame);
 
 
 

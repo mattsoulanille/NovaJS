@@ -1,5 +1,5 @@
 import * as t from "io-ts";
-import { AnyEvent } from "ts-events";
+import { Subject } from "rxjs";
 
 const MessageType = t.unknown;
 type MessageType = t.TypeOf<typeof MessageType>;
@@ -19,9 +19,9 @@ interface Channel {
     // individual messages to each other client.
 
     // Message source should not be spoofable.
-    readonly onMessage: AnyEvent<MessageWithSourceType>;
-    readonly onPeerConnect: AnyEvent<string>;
-    readonly onPeerDisconnect: AnyEvent<string>;
+    readonly onMessage: Subject<MessageWithSourceType>;
+    readonly onPeerConnect: Subject<string>;
+    readonly onPeerDisconnect: Subject<string>;
     readonly peers: Set<string>;
 
     // UUIDs for admins including the server(s)

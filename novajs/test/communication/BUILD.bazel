@@ -16,6 +16,7 @@ mocha_ts_test(
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//@types/mocha",
+        "@npm//rxjs",
         "//novajs/src/communication",
     ]
 )

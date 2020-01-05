@@ -1,9 +1,9 @@
-import * as express from "express";
-import * as http from "http";
-import * as socket from "socket.io";
+import express from "express";
+import http from "http";
+import socket from "socket.io";
 import { NovaParse } from "novaparse/NovaParse";
-import * as fs from "fs";
-import * as path from "path";
+import fs from "fs";
+import path from "path";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";

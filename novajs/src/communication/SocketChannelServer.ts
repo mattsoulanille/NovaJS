@@ -1,6 +1,6 @@
 import * as t from "io-ts";
-import { AnyEvent } from "ts-events";
-import * as UUID from "uuid/v4";
+import { Subject } from "rxjs";
+import UUID from "uuid/v4";
 import { Channel, MessageType, MessageWithSourceType } from "./Channel";
 import { isRight } from "fp-ts/lib/Either";
 
@@ -21,9 +21,9 @@ type InitialDataType = t.TypeOf<typeof InitialDataType>;
 
 class SocketChannelServer implements Channel {
     // Socket.io is used as a fallback from WebRTC
-    public readonly onMessage: AnyEvent<MessageWithSourceType>;
-    public readonly onPeerConnect: AnyEvent<string>;
-    public readonly onPeerDisconnect: AnyEvent<string>;
+    public readonly onMessage: Subject<MessageWithSourceType>;
+    public readonly onPeerConnect: Subject<string>;
+    public readonly onPeerDisconnect: Subject<string>;
 
     private clientSockets: { [index: string]: SocketIO.Socket };
     readonly io: SocketIO.Server;
@@ -34,9 +34,9 @@ class SocketChannelServer implements Channel {
 
     constructor({ io, warn, uuid, admins }: { io: SocketIO.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string> }) {
 
-        this.onMessage = new AnyEvent<MessageWithSourceType>();
-        this.onPeerConnect = new AnyEvent<string>();
-        this.onPeerDisconnect = new AnyEvent<string>();
+        this.onMessage = new Subject<MessageWithSourceType>();
+        this.onPeerConnect = new Subject<string>();
+        this.onPeerDisconnect = new Subject<string>();
 
         if (warn !== undefined) {
             this.warn = warn;
@@ -86,7 +86,7 @@ class SocketChannelServer implements Channel {
     }
 
     private _handleClientReady(clientUUID: string, socket: SocketIO.Socket) {
-        this.onPeerConnect.post(clientUUID);
+        this.onPeerConnect.next(clientUUID);
 
         let peersSet = new Set(this.peers);
         peersSet.delete(clientUUID);
@@ -115,7 +115,7 @@ class SocketChannelServer implements Channel {
             };
 
             if (decodedMessage.destination === this.uuid) {
-                this.onMessage.post(toForward);
+                this.onMessage.next(toForward);
             }
             else {
                 let destinationSocket = this.clientSockets[decodedMessage.destination];
@@ -140,7 +140,7 @@ class SocketChannelServer implements Channel {
                 source: clientUUID
             };
             socket.broadcast.emit("message", toBroadcast);
-            this.onMessage.post(toBroadcast);
+            this.onMessage.next(toBroadcast);
         }
         else {
             this.warn(
@@ -154,7 +154,7 @@ class SocketChannelServer implements Channel {
     private _onDisconnect(clientUUID: string) {
         delete this.clientSockets[clientUUID];
         this.io.emit("removePeer", clientUUID);
-        this.onPeerDisconnect.post(clientUUID);
+        this.onPeerDisconnect.next(clientUUID);
     }
 
     private _constructMessage(message: unknown): MessageWithSourceType {
