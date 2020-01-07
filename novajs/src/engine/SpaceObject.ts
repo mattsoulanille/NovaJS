@@ -4,7 +4,7 @@ import { PartialState, Stateful, StateIndexer } from "./Stateful";
 import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { Steppable } from "./Steppable";
 import { Vector } from "./Vector";
-import { Angle } from "./Angle";
+import { Angle } from "./Vector";
 import { Position } from "./Position";
 
 

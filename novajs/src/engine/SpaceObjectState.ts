@@ -1,7 +1,7 @@
 import * as t from "io-ts";
 import { VectorType } from "./Vector";
 import { MovementType } from "./MovementType";
-import { AngleType } from "./Angle";
+import { AngleType } from "./Vector";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import { makeComparator, valueComparator, allOrNothingComparator, sufficientDifferenceComparator } from "./Comparator";
 import { VectorComparator } from "./VectorState";

@@ -13,4 +13,9 @@ const VectorComparator = makeComparator<VectorState>({
     y: valueComparator
 });
 
-export { VectorState, VectorComparator }
+
+const AngleState = t.number
+
+type AngleState = t.TypeOf<typeof AngleState>;
+
+export { VectorState, VectorComparator, AngleState }
