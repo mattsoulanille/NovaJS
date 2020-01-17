@@ -10,9 +10,13 @@ ts_library(
     name = "main_ts",
     srcs = ["main.ts"],
     deps = [
-        "//TestProject/src:testproject",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//supports-color",
+        "@npm//@types/supports-color",
+        "@npm//socket.io",
+        "@npm//@types/socket.io",
+        "//TestProject/src:testproject",
     ],
 )
 

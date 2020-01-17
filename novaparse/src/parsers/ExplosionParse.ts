@@ -1,9 +1,9 @@
-
-import { ExplosionData } from "novadatainterface/ExplosionData";
+import { ExplosionData } from "../../../novadatainterface/ExplosionData";
 import { BoomResource } from "../resource_parsers/BoomResource";
-import { BaseData } from "novadatainterface/BaseData";
+import { BaseData } from "../../../novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { Animation, DefaultExitPoints, AnimationImage, DefaultAnimationImage } from "novadatainterface/Animation";
+import { Animation, DefaultExitPoints, AnimationImage, DefaultAnimationImage } from "../../../novadatainterface/Animation";
+
 
 async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) => void): Promise<ExplosionData> {
     var base: BaseData = await BaseParse(boom, notFoundFunction);

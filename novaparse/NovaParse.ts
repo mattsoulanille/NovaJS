@@ -1,19 +1,19 @@
 
-//import { ExplosionData } from "novadatainterface"
-//import { ExplosionData } from "novadatainterface/ExplosionData";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { Gettable } from "novadatainterface/Gettable";
-import { NovaDataInterface, NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
-import { OutfitData } from "novadatainterface/OutiftData";
-import { PictData } from "novadatainterface/PictData";
-import { PictImageData } from "novadatainterface/PictImage";
-import { PlanetData } from "novadatainterface/PlanetData";
-import { ShipData } from "novadatainterface/ShipData";
-import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "novadatainterface/SpriteSheetData";
-import { StatusBarData } from "novadatainterface/StatusBarData";
-import { SystemData } from "novadatainterface/SystemData";
-import { TargetCornersData } from "novadatainterface/TargetCornersData";
-import { WeaponData, DefaultNotBayWeaponData } from "novadatainterface/WeaponData";
+//import { ExplosionData } from "../novadatainterface"
+//import { ExplosionData } from "../novadatainterface/ExplosionData";
+import { GameDataInterface } from "../novadatainterface/GameDataInterface";
+import { Gettable } from "../novadatainterface/Gettable";
+import { NovaDataInterface, NovaIDNotFoundError } from "../novadatainterface/NovaDataInterface";
+import { OutfitData } from "../novadatainterface/OutiftData";
+import { PictData } from "../novadatainterface/PictData";
+import { PictImageData } from "../novadatainterface/PictImage";
+import { PlanetData } from "../novadatainterface/PlanetData";
+import { ShipData } from "../novadatainterface/ShipData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "../novadatainterface/SpriteSheetData";
+import { StatusBarData } from "../novadatainterface/StatusBarData";
+import { SystemData } from "../novadatainterface/SystemData";
+import { TargetCornersData } from "../novadatainterface/TargetCornersData";
+import { WeaponData, DefaultNotBayWeaponData } from "../novadatainterface/WeaponData";
 import * as path from "path";
 import { IDSpaceHandler } from "./src/IDSpaceHandler";
 import { ExplosionParse } from "./src/parsers/ExplosionParse";
@@ -36,9 +36,9 @@ import { ShipResource } from "./src/resource_parsers/ShipResource";
 import { SpobResource } from "./src/resource_parsers/SpobResource";
 import { SystResource } from "./src/resource_parsers/SystResource";
 import { WeapResource } from "./src/resource_parsers/WeapResource";
-import { NovaIDs, DefaultNovaIDs } from "novadatainterface/NovaIDs";
+import { NovaIDs, DefaultNovaIDs } from "../novadatainterface/NovaIDs";
 import { PictImageMulti, PictImageMultiParse } from "./src/parsers/PictParse";
-import { ExplosionData } from "novajs/novadatainterface/ExplosionData";
+import { ExplosionData } from "../novadatainterface/ExplosionData";
 
 
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;

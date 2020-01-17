@@ -1,10 +1,10 @@
 import { SpobResource } from "../resource_parsers/SpobResource";
-import { PlanetData } from "novadatainterface/PlanetData";
+import { PlanetData } from "../../../novadatainterface/PlanetData";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "novadatainterface/BaseData";
-import { DefaultPictData } from "novadatainterface/PictData";
-import { DamageType } from "novadatainterface/WeaponData";
-import { Animation, DefaultExitPoints, DefaultAnimationImage } from "novadatainterface/Animation";
+import { BaseData } from "../../../novadatainterface/BaseData";
+import { DefaultPictData } from "../../../novadatainterface/PictData";
+import { DamageType } from "../../../novadatainterface/WeaponData";
+import { Animation, DefaultExitPoints, DefaultAnimationImage } from "../../../novadatainterface/Animation";
 
 
 

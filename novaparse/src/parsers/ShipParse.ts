@@ -1,13 +1,13 @@
 
-import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { ShipData, ShipPhysics } from "novadatainterface/ShipData";
-import { DefaultPictData } from "novadatainterface/PictData";
-import { ExplosionData } from "novadatainterface/ExplosionData";
+import { NovaDataInterface, NovaDataType } from "../../../novadatainterface/NovaDataInterface";
+import { ShipData, ShipPhysics } from "../../../novadatainterface/ShipData";
+import { DefaultPictData } from "../../../novadatainterface/PictData";
+import { ExplosionData } from "../../../novadatainterface/ExplosionData";
 import { BaseParse } from "./BaseParse";
 import { NovaResources } from "../resource_parsers/ResourceHolderBase";
 import { ShipResource } from "../resource_parsers/ShipResource";
-import { BaseData } from "novadatainterface/BaseData";
-import { Animation, DefaultAnimation } from "novadatainterface/Animation";
+import { BaseData } from "../../../novadatainterface/BaseData";
+import { Animation, DefaultAnimation } from "../../../novadatainterface/Animation";
 import { ShanParse } from "./ShanParse";
 import { DescResource } from "../resource_parsers/DescResource";
 import { FPS, TurnRateConversionFactor } from "./Constants";

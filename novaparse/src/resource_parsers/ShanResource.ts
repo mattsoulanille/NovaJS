@@ -1,7 +1,7 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "./ResourceHolderBase";
 import { BaseResource } from "./NovaResourceBase";
-import { ExitPoint, ExitPoints } from "novadatainterface/Animation";
+import { ExitPoint, ExitPoints } from "../../../novadatainterface/Animation";
 
 
 

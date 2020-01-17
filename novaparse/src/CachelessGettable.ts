@@ -1,4 +1,5 @@
-import { Gettable, Builder } from "novadatainterface/Gettable";
+import { Gettable, Builder } from "../../novadatainterface/Gettable";
+
 
 class CachelessGettable<T> extends Gettable<T> {
     constructor(getFunction: Builder<T>) {

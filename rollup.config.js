@@ -26,25 +26,28 @@ export default {
 		// 	}
 		// }),
 	    json(),
-	    //typescript(),
-	    commonjs({
-		    // NOTE: This plugin has to be before resolve or else
-		    // all the commonjs imports it rewrites don't work!
-			include: 'node_modules/**',
-//			include: /node_modules/,
-			// namedExports: {
-			// 	"pngjs": ["PNG"]
-			// }
-			// 	"node_modules/pngjs/lib/png.js": ["PNG"]
-			// }
-		}),
+//	    typescript(),
+        // resolve({
+	    //     mainFields: ['module', 'main'],
+	    //     preferBuiltins: true
+		// }),
+
+// 	    commonjs({
+// 		    // NOTE: This plugin has to be before resolve or else
+// 		    // all the commonjs imports it rewrites don't work!
+// 			// Actually, if it comes before resolve, you get a bunch of hidden failures,
+// 			// of modules not being resolved, so don't do that.
+// 			include: 'node_modules/**',
+// //			include: /node_modules/,
+// 			// namedExports: {
+// 			// 	"pngjs": ["PNG"]
+// 			// }
+// 			// 	"node_modules/pngjs/lib/png.js": ["PNG"]
+// 			// }
+// 		}),
 	    //nodeGlobals(),
 	    //builtins(),
 
-        resolve({
-	        mainFields: ['module', 'main'],
-	        preferBuiltins: true
-		}),
 
 //		tscc(),
 //		typescript(),

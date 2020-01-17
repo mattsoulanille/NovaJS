@@ -1,7 +1,7 @@
 import { BaseResource } from "../resource_parsers/NovaResourceBase";
-import { StatusBarData, DefaultStatusBarColors, DefaultStatusBarDataAreas } from "novadatainterface/StatusBarData";
+import { StatusBarData, DefaultStatusBarColors, DefaultStatusBarDataAreas } from "../../../novadatainterface/StatusBarData";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "novadatainterface/BaseData";
+import { BaseData } from "../../../novadatainterface/BaseData";
 
 
 async function StatusBarParse(baseResource: BaseResource, notFoundFunction: (m: string) => void): Promise<StatusBarData> {

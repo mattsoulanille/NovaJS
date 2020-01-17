@@ -1,7 +1,7 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "./ResourceHolderBase";
 import { BaseResource } from "./NovaResourceBase";
-import { Particles, ExitType, FireGroup, GuidanceType } from "novadatainterface/WeaponData";
+import { Particles, ExitType, FireGroup, GuidanceType } from "../../../novadatainterface/WeaponData";
 
 type BlindSpots = {
     front: boolean,

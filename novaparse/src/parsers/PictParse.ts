@@ -1,9 +1,9 @@
-import { PictData, DefaultPictData } from "novadatainterface/PictData";
-import { BaseData } from "novadatainterface/BaseData";
+import { PictData, DefaultPictData } from "../../../novadatainterface/PictData";
+import { BaseData } from "../../../novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
 import { PictResource, PNGError } from "../resource_parsers/PictResource";
 import { PNG } from "pngjs";
-import { DefaultPictImageData } from "novadatainterface/PictImage";
+import { DefaultPictImageData } from "../../../novadatainterface/PictImage";
 
 
 type PictImageMulti = {

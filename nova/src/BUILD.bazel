@@ -1,0 +1,28 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+
+ts_library(
+    name = "browser",
+    srcs = ["browser.ts"],
+    deps = [
+        "@npm//@types/node",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//socket.io-client",
+        "@npm//@types/socket.io-client",
+        "@npm//pixi.js",
+        "@npm//@types/pixi.js",
+        "@npm//rxjs",
+        "//nova/src/common",
+        "//nova/src/client",
+        "//nova/src/client/display",
+        "//nova/src/engine",
+        "//nova/src/communication",
+        "//nova/src/client/gamedata",
+    ]
+)
+
+

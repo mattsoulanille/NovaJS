@@ -1,9 +1,9 @@
 import { PNG } from "pngjs";
 //debugger;
-import { DefaultAnimation } from "novadatainterface/Animation";
+import { DefaultAnimation } from "../../novadatainterface/Animation";
 
 import { Resource } from "resourceforkjs";
-import { DefaultBaseData } from "novadatainterface/BaseData";
+import { DefaultBaseData } from "../../novadatainterface/BaseData";
 //import * as UUID from "uuid/v4";
 import UUID from "uuid/v4";
 import * as fs from 'fs';

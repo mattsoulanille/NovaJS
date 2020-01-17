@@ -1,0 +1,62 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+load("@npm_bazel_typescript//:index.bzl", "ts_library")
+
+# filegroup(
+#     name = "settings"
+#     srcs = glob([])
+# )
+
+ts_library(
+    name = "server",
+    srcs = ["server.ts"],
+    deps = [
+        "@npm//@types/node",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//pixi.js",
+        "@npm//@types/pixi.js",
+        "@npm//socket.io",
+        "@npm//@types/socket.io",
+        "@npm//express",
+        "@npm//@types/express",
+        "//novaparse",
+        "//nova/src/common",
+        "//nova/src/engine",
+        "//nova/src/communication",
+        "//nova/src/server",
+        "//nova/src/server/parsing",
+    ],
+)
+
+rollup_bundle(
+    name = "server_rollup",
+    deps = [
+        ":server",
+        "@npm//@rollup/plugin-node-resolve",
+        "@npm//@rollup/plugin-commonjs",
+        "@npm//rollup-plugin-sourcemaps",
+        "@npm//@rollup/plugin-json",
+    ],
+    entry_point = "server.ts",
+    config_file = "//:rollup.config.js",
+    sourcemap = "inline",
+    format = "cjs",
+)
+
+nodejs_binary(
+    name = "nova",
+    entry_point = "server_rollup.js",
+    # Any files you want access to MUST be listed here!
+    data = [
+        ":server_rollup",
+        "settings/server.json",
+        "//novadatainterface:defaults",
+    ],
+    #data = [":server_rollup"],
+)
+
+
+

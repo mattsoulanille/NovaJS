@@ -1,7 +1,7 @@
 import { SystResource } from "../resource_parsers/SystResource";
-import { SystemData } from "novadatainterface/SystemData";
+import { SystemData } from "../../../novadatainterface/SystemData";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "novadatainterface/BaseData";
+import { BaseData } from "../../../novadatainterface/BaseData";
 
 
 

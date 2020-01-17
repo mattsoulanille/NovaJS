@@ -1,5 +1,6 @@
 import { BaseData, DefaultBaseData } from "./BaseData";
-import * as fs from "fs";
+import fs from "fs";
+import path from "path";
 
 type ConvexHull = Array<[number, number]>;
 
@@ -30,7 +31,14 @@ const DefaultSpriteSheetData: SpriteSheetData = {
 
 type SpriteSheetImageData = Buffer;
 
-const DefaultSpriteSheetImage = fs.readFileSync(require.resolve("./defaultRled.png"));
+//const defaultRledPath = path.join(__dirname, "defaultRled.png");
+debugger;
+console.log("\n\n\n\n");
+const defaultRledPath = require.resolve("novajs/novadatainterface/defaultRled.png");
+console.log(defaultRledPath);
+debugger;
+
+const DefaultSpriteSheetImage = fs.readFileSync(defaultRledPath);
 
 type FrameInfo = {
     frame: {

@@ -3,12 +3,17 @@ package(default_visibility = ["//visibility:public"])
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
-ts_library(
-    name = "novadatainterface",
-    data = [
+filegroup(
+    name = "defaults",
+    srcs = [
         "default.png",
         "defaultRled.png",
-    ],        
+    ],
+)
+
+ts_library(
+    name = "novadatainterface",
+#    data = [":defaults"],
     srcs = glob(["*.ts"]),
     module_name = "novadatainterface", # for npm
     deps = [

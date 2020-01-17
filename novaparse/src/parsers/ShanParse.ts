@@ -1,8 +1,8 @@
 import { BaseParse } from "./BaseParse";
 import { ShanResource } from "../resource_parsers/ShanResource";
-import { Animation, AnimationImagePurposes, AnimationImages, DefaultAnimation, DefaultAnimationImage } from "novadatainterface/Animation";
-import { BaseData } from "novadatainterface/BaseData";
-import { NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
+import { Animation, AnimationImagePurposes, AnimationImages, DefaultAnimation, DefaultAnimationImage } from "../../../novadatainterface/Animation";
+import { BaseData } from "../../../novadatainterface/BaseData";
+import { NovaIDNotFoundError } from "../../../novadatainterface/NovaDataInterface";
 
 
 async function ShanParse(shan: ShanResource, notFoundFunction: (message: string) => void): Promise<Animation> {
