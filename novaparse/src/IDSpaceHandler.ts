@@ -18,20 +18,26 @@ const log = (_m: string) => { };
 class IDSpaceHandler {
     private globalResources: Promise<NovaResources | Error>;
     private tmpBuildingResources: NovaResources;
+    private novaFilesPath: string;
+    private novaPluginsPath: string;
 
-    constructor(novaPath: string) {
+    constructor(novaPath: string,
+        { novaFiles, novaPlugins }:
+            { novaFiles: string, novaPlugins: string } =
+            { novaFiles: "Nova\ Files", novaPlugins: "Plug-ins" }) {
+
+        this.novaFilesPath = path.join(novaPath, novaFiles);
+        this.novaPluginsPath = path.join(novaPath, novaPlugins);
         this.tmpBuildingResources = getEmptyNovaResources();
-        this.globalResources = this.build(novaPath).catch((e: Error) => {
+        this.globalResources = this.build().catch((e: Error) => {
             // Catch all promise rejections. They are instead handled when getting ID spaces.
             return e;
         });
     }
 
-    private async build(novaPath: string) {
-        var novaFilesPath = path.join(novaPath, "Nova\ Files/");
-        var novaPluginsPath = path.join(novaPath, "Plug-ins/");
-        await this.addNovaFilesDirectory(novaFilesPath);
-        await this.addNovaPluginsDirectory(novaPluginsPath);
+    private async build() {
+        await this.addNovaFilesDirectory(this.novaFilesPath);
+        await this.addNovaPluginsDirectory(this.novaPluginsPath);
         return this.tmpBuildingResources;
     }
 

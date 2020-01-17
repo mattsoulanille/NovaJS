@@ -4,10 +4,20 @@ load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 
-# filegroup(
-#     name = "settings"
-#     srcs = glob([])
-# )
+
+# WARNING: Using directory labels here. That means bazel can't
+# detect changes to files within these directories. It only
+# detects when the directories change via addition or deletion
+# of files. It's necessary because the files in these directories
+# have spaces in their names. See the documentation at
+# https://docs.bazel.build/versions/master/build-ref.html#label_directory
+filegroup(
+    name = "nova_data",
+    srcs = [
+        "Nova_Data"
+    ]
+)
+
 
 ts_library(
     name = "server",
@@ -54,8 +64,8 @@ nodejs_binary(
         ":server_rollup",
         "settings/server.json",
         "//novadatainterface:defaults",
+        ":nova_data",
     ],
-    #data = [":server_rollup"],
 )
 
 

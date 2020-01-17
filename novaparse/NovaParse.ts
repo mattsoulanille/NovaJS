@@ -64,7 +64,10 @@ class NovaParse implements GameDataInterface {
     public readonly ids: Promise<NovaIDs>;
     public readonly idSpace: Promise<NovaResources | Error>;
 
-    constructor(dataPath: string, strict: boolean = true) {
+    constructor(dataPath: string, strict: boolean = true,
+        subPaths:
+            { novaFiles: string, novaPlugins: string } =
+            { novaFiles: "Nova\ Files", novaPlugins: "Plug-ins" }) {
 
         // Strict will throw an error if any resource is not found.
         // Otherwise, it will try to substitute default resources whenever possible (success may vary).
@@ -76,7 +79,7 @@ class NovaParse implements GameDataInterface {
         }
 
         this.path = path.join(dataPath);
-        this.idSpaceHandler = new IDSpaceHandler(dataPath);
+        this.idSpaceHandler = new IDSpaceHandler(dataPath, subPaths);
         this.idSpace = this.idSpaceHandler.getIDSpace().catch((e: Error) => {
             // Suppress all promise rejections. These are instead thrown when specific resources are requested
             //console.log("Got an error");

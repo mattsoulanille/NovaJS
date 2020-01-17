@@ -18,8 +18,7 @@ import { NovaParse } from "../novaparse/NovaParse";
 
 //import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
-const appRoot: string = path.join(__dirname, "../");
-
+const appRoot = __dirname;
 //console.log(__dirname);
 
 const settingsPath = require.resolve("novajs/nova/settings/server.json");
@@ -36,21 +35,19 @@ const communicator = new Communicator({
     channel: socketChannel
 });
 
+console.log("\n\n\n\n")
+console.log(__dirname);
+console.log("\n\n\n\n")
 
 const port: number = settings.port;
 const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
 //const novaDataPath: string = path.join(__dirname, "Nova\ Data");
 
 
-console.log(io);
-
-
-
 const novaFileData = new NovaParse(novaDataPath, false);
+const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
 console.log(novaFileData);
 /*
-
-const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 setupRoutes(gameData, app, appRoot);
 
