@@ -3,6 +3,7 @@ import * as path from "path";
 
 type PictImageData = Buffer;
 
-const DefaultPictImageData: PictImageData = fs.readFileSync(require.resolve("./default.png"));
+const defaultImagePath = require.resolve("novajs/novadatainterface/default.png");
+const DefaultPictImageData: PictImageData = fs.readFileSync(defaultImagePath);
 
 export { PictImageData, DefaultPictImageData };

@@ -31,13 +31,7 @@ const DefaultSpriteSheetData: SpriteSheetData = {
 
 type SpriteSheetImageData = Buffer;
 
-//const defaultRledPath = path.join(__dirname, "defaultRled.png");
-debugger;
-console.log("\n\n\n\n");
 const defaultRledPath = require.resolve("novajs/novadatainterface/defaultRled.png");
-console.log(defaultRledPath);
-debugger;
-
 const DefaultSpriteSheetImage = fs.readFileSync(defaultRledPath);
 
 type FrameInfo = {
