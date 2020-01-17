@@ -18,7 +18,6 @@ import { NovaParse } from "../novaparse/NovaParse";
 
 //import * as RootPath from "app-root-path"; // Doesn't work with lerna
 
-const appRoot = __dirname;
 //console.log(__dirname);
 
 const settingsPath = require.resolve("novajs/nova/settings/server.json");
@@ -40,17 +39,20 @@ console.log(__dirname);
 console.log("\n\n\n\n")
 
 const port: number = settings.port;
-const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
-//const novaDataPath: string = path.join(__dirname, "Nova\ Data");
-
-
+const novaDataPath = path.join(__dirname, settings["relative data path"]);
 const novaFileData = new NovaParse(novaDataPath, false);
-const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
-console.log(novaFileData);
-novaFileData.data.Ship.get("nova:128").then(console.log);
-/*
+
+const filesystemDataPath = path.join(__dirname, "objects");
+const filesystemData = new FilesystemData(filesystemDataPath);
+
+filesystemData.data.SpriteSheet.get("planetNeutral").then(console.log);
+
+//console.log(novaFileData);
+//novaFileData.data.Ship.get("nova:128").then(console.log);
+
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
-setupRoutes(gameData, app, appRoot);
+/*
+setupRoutes(gameData, app, __dirname);
 
 
 let engine: Engine;

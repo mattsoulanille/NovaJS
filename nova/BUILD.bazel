@@ -14,7 +14,8 @@ load("@npm_bazel_typescript//:index.bzl", "ts_library")
 filegroup(
     name = "nova_data",
     srcs = [
-        "Nova_Data"
+        "Nova_Data",
+        "objects",
     ]
 )
 
