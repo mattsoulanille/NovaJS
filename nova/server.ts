@@ -47,6 +47,7 @@ const novaDataPath: string = path.join(appRoot, settings["relative data path"]);
 const novaFileData = new NovaParse(novaDataPath, false);
 const filesystemData = new FilesystemData(path.join(appRoot, "/objects/"));
 console.log(novaFileData);
+novaFileData.data.Ship.get("nova:128").then(console.log);
 /*
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 setupRoutes(gameData, app, appRoot);
