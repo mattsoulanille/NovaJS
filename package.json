@@ -38,7 +38,10 @@
     },
     "scripts": {
         "build": "bazel build //...",
-        "test": "bazel test //..."
+        "test": "bazel test //...",
+		"run": "bazel run nova",
+		"watch": "ibazel run nova",
+		"debug": "bazel run nova --verbose_failures --sandbox_debug"
     },
     "dependencies": {
         "@types/uuid": "^3.4.6",
