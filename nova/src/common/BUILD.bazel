@@ -12,5 +12,6 @@ ts_library(
         "@npm//io-ts",
         "@npm//fp-ts",
         "//nova/src/engine",
+        "@npm//ts-enum-util",
     ]
 )

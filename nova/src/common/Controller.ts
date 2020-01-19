@@ -36,7 +36,7 @@
 //     "map",
 //     "hyperjump",
 // ];
-
+import { $enum } from "ts-enum-util";
 
 enum ControlEvent {
     fullscreen = "fullscreen",
@@ -103,9 +103,9 @@ function makeControlEventInfo(): ControlEventInfo {
 
 function makeControlState(): ControlState {
     var output: { [index in ControlEvent]?: ControlEventInfo } = {};
-    for (let val in Object.values(ControlEvent)) {
-        //let val: ControlEvent = ControlEvent[key] as ControlEvent;
-        output[val as ControlEvent] = makeControlEventInfo();
+
+    for (let val of $enum(ControlEvent).getValues()) {
+        output[val] = makeControlEventInfo();
     }
     return output as ControlState;
 }

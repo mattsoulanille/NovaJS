@@ -1,17 +1,15 @@
 
 import * as t from "io-ts";
 import { Controller, ControlEvent, ControlState, makeControlState, ControlEventInfo } from "../common/Controller";
+import { $enum } from "ts-enum-util";
 
 
-// This kind of sucks as a way to get a runtime type
-// out of an enum...
-const controlEventVals: { [index in ControlEvent]?: null } = {};
-for (let val in ControlEvent) {
-    controlEventVals[val as ControlEvent] = null;
+const controlEventKeys: { [key in ControlEvent]?: null } = {};
+for (let val of $enum(ControlEvent).values()) {
+    controlEventKeys[val] = null;
 }
 
-const ControlEventT = t.keyof(controlEventVals);
-// Object keys are always strings (or symbols)
+const ControlEventT = t.keyof(controlEventKeys);
 const Keybindings = t.record(t.string, t.array(ControlEventT));
 type Keybindings = t.TypeOf<typeof Keybindings>;
 

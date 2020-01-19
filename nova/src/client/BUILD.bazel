@@ -13,5 +13,6 @@ ts_library(
         "//nova/src/client/gamedata",
         "@npm//io-ts",
         "@npm//fp-ts",
+        "@npm//ts-enum-util",
     ]
 )

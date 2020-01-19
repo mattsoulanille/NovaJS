@@ -1,4 +1,4 @@
-import { Controller } from "./Controller";
+import { Controller, ControlEvent } from "./Controller";
 import { ShipState } from "../engine/ShipState";
 import { PartialState } from "../engine/Stateful";
 
@@ -14,14 +14,14 @@ class ShipController {
         let state: PartialState<ShipState> = {};
         let controlState = this.controller.poll();
 
-        state.accelerating = Number(controlState.accelerate.keyPressed);
+        state.accelerating = Number(controlState[ControlEvent.accelerate].keyPressed);
         state.turnBack = false;
 
-        if (controlState.reverse.keyPressed) {
+        if (controlState[ControlEvent.reverse].keyPressed) {
             state.turnBack = true;
         }
-        else if (controlState.turnLeft.keyPressed !== controlState.turnRight.keyPressed) {
-            if (controlState.turnLeft.keyPressed) {
+        else if (controlState[ControlEvent.turnLeft].keyPressed !== controlState[ControlEvent.turnRight].keyPressed) {
+            if (controlState[ControlEvent.turnLeft].keyPressed) {
                 state.turning = -1;
             }
             else {
