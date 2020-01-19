@@ -11,8 +11,8 @@ import { NovaDataType } from "../../../novadatainterface/NovaDataInterface";
  */
 
 
-function setupRoutes(gameData: GameDataInterface, app: Express, appRoot: string) {
-    return new GameDataServer(gameData, app, appRoot);
+function setupRoutes(gameData: GameDataInterface, app: Express, htmlPath: string, bundlePath: string, settingsPath: string) {
+    return new GameDataServer(gameData, app, htmlPath, bundlePath, settingsPath);
 }
 
 class GameDataServer {
@@ -20,7 +20,9 @@ class GameDataServer {
     constructor(
         private readonly gameData: GameDataInterface,
         private readonly app: Express,
-        private readonly appRoot: string) {
+        private readonly htmlPath: string,
+        private readonly bundlePath: string,
+        private readonly settingsPath: string) {
 
         this.setupRoutes();
     }
@@ -35,15 +37,24 @@ class GameDataServer {
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
 
-        const settingsPath = path.join(this.appRoot, "settings");
         this.app.use(settingsPrefix,
-            express.static(settingsPath));
+            express.static(this.settingsPath));
 
-        // This has to be here or else sourcemaps don't work!
-        const staticPath = path.join(this.appRoot, "build", "static");
-        this.app.use("/static", express.static(staticPath));
+
+
+        //        // This has to be here or else sourcemaps don't work!
+        //        const staticPath = path.join(this.appRoot, "build", "static");
+        //        this.app.use("/static", express.static(staticPath));
+        this.app.use("/settings/controls.json", (_req: express.Request, res: express.Response) => {
+            res.sendFile(this.settingsPath);
+        });
+
+        this.app.use("/bundle.js", (_req: express.Request, res: express.Response) => {
+            res.sendFile(this.bundlePath);
+        });
+
         this.app.use("/", (_req: express.Request, res: express.Response) => {
-            res.sendFile(path.join(this.appRoot, "build", "index.html"));
+            res.sendFile(this.htmlPath);
         });
     }
 

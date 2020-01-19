@@ -1,6 +1,6 @@
 //import tscc from '@tscc/rollup-plugin-tscc';
-import resolve from '@rollup/plugin-node-resolve';
-import commonjs from '@rollup/plugin-commonjs';
+// import resolve from '@rollup/plugin-node-resolve';
+// import commonjs from '@rollup/plugin-commonjs';
 import sourcemaps from 'rollup-plugin-sourcemaps';
 import json from '@rollup/plugin-json';
 //import compiler from 'rollup-plugin-closure-compiler';

@@ -4,6 +4,7 @@ import { SpaceObjectState } from "../../engine/SpaceObjectState";
 import { GameData } from "../gamedata/GameData";
 import { AnimationGraphic } from "./AnimationGraphic";
 import { IDGraphic } from "./IDGraphic";
+import * as PIXI from "pixi.js";
 
 class ObjectDrawer<State extends SpaceObjectState, Graphic extends AnimationGraphic> extends PIXI.Container {
     private onScreen: {

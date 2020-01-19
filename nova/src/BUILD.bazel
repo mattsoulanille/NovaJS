@@ -4,8 +4,16 @@ load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 
+filegroup(
+    name = "static_files",
+    srcs = [
+        "index.html",
+    ]
+)
+
+
 ts_library(
-    name = "browser",
+    name = "browser_lib",
     srcs = ["browser.ts"],
     deps = [
         "@npm//@types/node",
@@ -14,7 +22,6 @@ ts_library(
         "@npm//socket.io-client",
         "@npm//@types/socket.io-client",
         "@npm//pixi.js",
-        "@npm//@types/pixi.js",
         "@npm//rxjs",
         "//nova/src/common",
         "//nova/src/client",
@@ -26,3 +33,19 @@ ts_library(
 )
 
 
+rollup_bundle(
+    name = "browser_bundle",
+    deps = [
+        ":browser_lib",
+        "@npm//@rollup/plugin-node-resolve",
+        "@npm//@rollup/plugin-commonjs",
+        "@npm//rollup-plugin-sourcemaps",
+        "@npm//@rollup/plugin-json",
+        "@npm//rollup-plugin-node-globals",
+        "@npm//rollup-plugin-node-builtins"
+    ],
+    entry_point = "browser.ts",
+    config_file = "//:rollup_browser.config.js",
+    sourcemap = "inline",
+    format = "iife",
+)

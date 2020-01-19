@@ -19,7 +19,6 @@ filegroup(
     ]
 )
 
-
 ts_library(
     name = "server",
     srcs = ["server.ts"],
@@ -28,7 +27,6 @@ ts_library(
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//pixi.js",
-        "@npm//@types/pixi.js",
         "@npm//socket.io",
         "@npm//@types/socket.io",
         "@npm//express",
@@ -63,9 +61,11 @@ nodejs_binary(
     # Any files you want access to MUST be listed here!
     data = [
         ":server_rollup",
-        "settings/server.json",
+        "//nova/settings",
         "//novadatainterface:defaults",
         ":nova_data",
+        "//nova/src:static_files",
+        "//nova/src:browser_bundle",
     ],
 )
 

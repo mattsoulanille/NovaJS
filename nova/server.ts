@@ -20,8 +20,8 @@ import { NovaParse } from "../novaparse/NovaParse";
 
 //console.log(__dirname);
 
-const settingsPath = require.resolve("novajs/nova/settings/server.json");
-const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8"));
+const serverSettingsPath = require.resolve("novajs/nova/settings/server.json");
+const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8"));
 
 
 const app = express();
@@ -33,10 +33,6 @@ const socketChannel = new SocketChannelServer({ io });
 const communicator = new Communicator({
     channel: socketChannel
 });
-
-console.log("\n\n\n\n")
-console.log(__dirname);
-console.log("\n\n\n\n")
 
 const port: number = settings.port;
 const novaDataPath = path.join(__dirname, settings["relative data path"]);
@@ -51,9 +47,11 @@ filesystemData.data.SpriteSheet.get("planetNeutral").then(console.log);
 //novaFileData.data.Ship.get("nova:128").then(console.log);
 
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
-/*
-setupRoutes(gameData, app, __dirname);
 
+const htmlPath = require.resolve("novajs/nova/src/index.html");
+const bundlePath = require.resolve("novajs/nova/src/browser_bundle.js");
+const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json");
+setupRoutes(gameData, app, htmlPath, bundlePath, clientSettingsPath);
 
 let engine: Engine;
 
@@ -98,4 +96,4 @@ async function addClientToGame() {
 }
 
 startGame();
-*/
+

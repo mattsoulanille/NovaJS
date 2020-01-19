@@ -615,13 +615,6 @@
   resolved "https://registry.yarnpkg.com/@types/node/-/node-12.12.17.tgz#191b71e7f4c325ee0fb23bc4a996477d92b8c39b"
   integrity sha512-Is+l3mcHvs47sKy+afn2O1rV4ldZFU7W8101cNlOd+MRbjM4Onida8jSZnJdTe/0Pcf25g9BNIUsuugmE6puHA==
 
-"@types/pixi.js@^5.0.0":
-  version "5.0.0"
-  resolved "https://registry.yarnpkg.com/@types/pixi.js/-/pixi.js-5.0.0.tgz#3fbd6d9d26cb563a0f2870e0ea767bc62dddf1b8"
-  integrity sha512-yZqQBR043lRBlBZci2cx6hgmX0fvBfYIqFm6VThlnueXEjitxd3coy+BGsqsZ7+ary7O//+ks4aJRhC5MJoHqA==
-  dependencies:
-    pixi.js "*"
-
 "@types/pngjs@^3.4.0":
   version "3.4.0"
   resolved "https://registry.yarnpkg.com/@types/pngjs/-/pngjs-3.4.0.tgz#8d2c330df29db9135211bfb9a988fb121ec30dc3"
@@ -2351,7 +2344,7 @@ pixi-layers@^0.2.3:
   resolved "https://registry.yarnpkg.com/pixi-layers/-/pixi-layers-0.2.3.tgz#db441af4622349deb6257a5c2aff22315468aee5"
   integrity sha512-alf52hWgJ5P95TMUMgLdG4ul/wpqQ1J2MMBYT9/d263FQRSSP4Apgq4bDGKvpXRND2HkboQ1ISGDRAkMwOJLIw==
 
-pixi.js@*, pixi.js@^5.2.0:
+pixi.js@^5.2.0:
   version "5.2.0"
   resolved "https://registry.yarnpkg.com/pixi.js/-/pixi.js-5.2.0.tgz#097eb90825cd28e40230c779998876d575d02b69"
   integrity sha512-q4gxbTU51nrh8qxbplU6EVx2dnb9SiI9OeQOrQmtmCTpysJXAK5p9M2c3v5JRIgK8ZCL74y5vrwHaaB1ZQoPKw==

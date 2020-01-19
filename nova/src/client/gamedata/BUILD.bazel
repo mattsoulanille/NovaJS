@@ -13,6 +13,5 @@ ts_library(
         "//nova/src/common",
         "//novadatainterface",
         "@npm//pixi.js",
-        "@npm//@types/pixi.js",
     ]
 )

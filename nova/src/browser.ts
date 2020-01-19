@@ -1,6 +1,7 @@
 import * as PIXI from "pixi.js";
-import 'pixi-display'; // Must be imported after PIXI
-import * as io from "socket.io-client";
+//import 'pixi-display'; // Must be imported after PIXI
+//import * as io from "socket.io-client";
+import io from "socket.io-client";
 import { Controller } from "./common/Controller";
 import { Display } from "./client/display/Display";
 import { GameData } from "./client/gamedata/GameData";
