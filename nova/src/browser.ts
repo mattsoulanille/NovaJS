@@ -26,19 +26,18 @@ const communicator = new Communicator({
 // Temporary
 const gameData = new GameData();
 (window as any).gameData = gameData;
+(window as any).PIXI = PIXI;
 
-
-
+const pixelRatio = window.devicePixelRatio || 1;
+PIXI.settings.RESOLUTION = pixelRatio;
 const app = new PIXI.Application({
-    resolution: window.devicePixelRatio || 1,
-    //    autoResize: true,
-    width: window.innerWidth,
-    height: window.innerHeight
+    width: window.innerWidth * pixelRatio,
+    height: window.innerHeight * pixelRatio,
+    autoDensity: true
 });
 
+
 (window as any).app = app;
-
-
 document.body.appendChild(app.view);
 
 
