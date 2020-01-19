@@ -17,11 +17,9 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 http_archive(
     name = "build_bazel_rules_nodejs",
     sha256 = "3d7296d834208792fa3b2ded8ec04e75068e3de172fae79db217615bd75a6ff7",
-#    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/1.0.0/rules_nodejs-1.0.0.tar.gz"],
+    #    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/1.0.0/rules_nodejs-1.0.0.tar.gz"],
     urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/0.39.1/rules_nodejs-0.39.1.tar.gz"],
 )
-
-
 
 # # Force node 13.5
 # load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
@@ -31,7 +29,6 @@ http_archive(
 #         "13.5.0-darwin_amd64": ("node-v13.5.0-darwin-x64.tar.gz", "node-v13.5.0-darwin-x64", "3322c601dc032677e5b5f87f393d4b1d70073bcab24fe74378eff8eb49364001")
 #     }
 # )
-
 
 # The yarn_install rule runs yarn anytime the package.json or yarn.lock file changes.
 # It also extracts and installs any Bazel rules distributed in an npm package.
@@ -60,6 +57,30 @@ load("@io_bazel_rules_closure//closure:repositories.bzl", "rules_closure_depende
 
 rules_closure_dependencies()
 rules_closure_toolchains()
+
+# rules_proto defines abstract rules for building Protocol Buffers.
+http_archive(
+    name = "rules_proto",
+    sha256 = "57001a3b33ec690a175cdf0698243431ef27233017b9bed23f96d44b9c98242f",
+    strip_prefix = "rules_proto-9cd4f8f1ede19d81c6d48910429fe96776e567b1",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_proto/archive/9cd4f8f1ede19d81c6d48910429fe96776e567b1.tar.gz",
+        "https://github.com/bazelbuild/rules_proto/archive/9cd4f8f1ede19d81c6d48910429fe96776e567b1.tar.gz",
+    ],
+)
+
+http_archive(
+    name = "rules_typescript_proto",
+    sha256 = "0c76ae0d04eaa4d4c5f12556615cb70d294082ee672aee6dd849fea4ec2075ee",
+    strip_prefix = "rules_typescript_proto-0.0.3",
+    urls = [
+        "https://github.com/Dig-Doug/rules_typescript_proto/archive/0.0.3.tar.gz",
+    ],
+)
+
+load("@rules_typescript_proto//:index.bzl", "rules_typescript_proto_dependencies")
+
+rules_typescript_proto_dependencies()
 
 # http_archive(
 #     name = "com_derivita_rules_ts_closure",

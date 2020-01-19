@@ -18,6 +18,7 @@
         "@types/chai": "^4.2.5",
         "@types/chai-as-promised": "^7.1.2",
         "@types/express": "^4.17.2",
+        "@types/google-protobuf": "^3.7.2",
         "@types/mocha": "^5.2.7",
         "@types/node": "^12.12.17",
         "@types/pngjs": "^3.4.0",
@@ -39,14 +40,15 @@
     "scripts": {
         "build": "bazel build //...",
         "test": "bazel test //...",
-		"start": "bazel run nova",
-		"watch": "ibazel run nova",
-		"debug": "bazel run nova --verbose_failures --sandbox_debug"
+        "start": "bazel run nova",
+        "watch": "ibazel run nova",
+        "debug": "bazel run nova --verbose_failures --sandbox_debug"
     },
     "dependencies": {
         "@types/uuid": "^3.4.6",
         "express": "^4.17.1",
         "fp-ts": "^2.2.0",
+        "google-protobuf": "^3.11.2",
         "hull.js": "^1.0.0",
         "io-ts": "^2.0.1",
         "node": "^13.5.0",

@@ -585,6 +585,11 @@
     "@types/express-serve-static-core" "*"
     "@types/serve-static" "*"
 
+"@types/google-protobuf@^3.7.2":
+  version "3.7.2"
+  resolved "https://registry.yarnpkg.com/@types/google-protobuf/-/google-protobuf-3.7.2.tgz#cd8a360c193ce4d672575a20a79f49ba036d38d2"
+  integrity sha512-ifFemzjNchFBCtHS6bZNhSZCBu7tbtOe0e8qY0z2J4HtFXmPJjm6fXSaQsTG7yhShBEZtt2oP/bkwu5k+emlkQ==
+
 "@types/long@^4.0.0":
   version "4.0.0"
   resolved "https://registry.yarnpkg.com/@types/long/-/long-4.0.0.tgz#719551d2352d301ac8b81db732acb6bdc28dbdef"
@@ -1603,6 +1608,11 @@ google-closure-compiler@>20170000:
     google-closure-compiler-linux "^20191111.0.0"
     google-closure-compiler-osx "^20191111.0.0"
     google-closure-compiler-windows "^20191111.0.0"
+
+google-protobuf@^3.11.2:
+  version "3.11.2"
+  resolved "https://registry.yarnpkg.com/google-protobuf/-/google-protobuf-3.11.2.tgz#43272974521a5cec35a21f62730cf517a5a8e38c"
+  integrity sha512-T4fin7lcYLUPj2ChUZ4DvfuuHtg3xi1621qeRZt2J7SvOQusOzq+sDT4vbotWTCjUXJoR36CA016LlhtPy80uQ==
 
 graceful-fs@^4.1.6, graceful-fs@^4.2.0:
   version "4.2.3"

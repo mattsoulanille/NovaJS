@@ -1,0 +1,22 @@
+package(default_visibility = ["//visibility:public"])
+load("@rules_proto//proto:defs.bzl", "proto_library")
+load("@rules_typescript_proto//:index.bzl", "typescript_proto_library")
+
+
+proto_library(
+    name = "vector_state_proto",
+    srcs = ["vector_state.proto"],
+)
+
+proto_library(
+    name = "space_object_state_proto",
+    srcs = ["space_object_state.proto"],
+    deps = [
+        ":vector_state_proto",
+    ]
+)
+
+typescript_proto_library(
+    name = "vector_state_ts_proto",
+    proto = ":vector_state_proto",
+)

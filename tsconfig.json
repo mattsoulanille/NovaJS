@@ -46,6 +46,15 @@
 		// "moduleResolution": "node",            /* Specify module resolution strategy: 'node' (Node.js) or 'classic' (TypeScript pre-1.6). */
 		// "baseUrl": "./",                       /* Base directory to resolve non-absolute module names. */
 
+		// For typescript protobufs
+		"baseUrl": ".",
+		"paths": {
+			"novajs/*": [
+				"*", // Enables absolute paths for src files in your project
+				//"bazel-bin/*" // Enables referencing generate protos with absolute paths
+				"dist/bin/*" // Enables referencing generate protos with absolute paths
+			]
+		},
 		// rollup_bundle doesn't work with this
 		// "paths": { // For bazel
 		// 	"novajs/*": ["*"] /* novajs is the workspace name */

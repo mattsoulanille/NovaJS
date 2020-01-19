@@ -14,6 +14,11 @@ import { System } from "./engine/System";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
 import { Communicator } from "./communication/Communicator";
 import { first } from "rxjs/operators";
+import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
+
+
+(window as any).VectorState = VectorState;
+
 
 const socket = io();
 (window as any).socket = socket;
