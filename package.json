@@ -39,7 +39,7 @@
     "scripts": {
         "build": "bazel build //...",
         "test": "bazel test //...",
-		"run": "bazel run nova",
+		"start": "bazel run nova",
 		"watch": "ibazel run nova",
 		"debug": "bazel run nova --verbose_failures --sandbox_debug"
     },
