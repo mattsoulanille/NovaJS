@@ -37,7 +37,12 @@ ts_library(
         "//nova/src/communication",
         "//nova/src/server",
         "//nova/src/server/parsing",
+        "//nova/src/proto:vector_state_ts_proto",
+        "@npm//google-protobuf",
     ],
+    data = [
+        "//:tsconfig.json"
+    ]
 )
 
 rollup_bundle(
@@ -48,11 +53,18 @@ rollup_bundle(
         "@npm//@rollup/plugin-commonjs",
         "@npm//rollup-plugin-sourcemaps",
         "@npm//@rollup/plugin-json",
+        "@npm//rollup-plugin-node-globals",
+        "@npm//rollup-plugin-node-builtins",
+        "@npm//rollup-plugin-typescript-paths",
     ],
+    # data = [
+    #"//:tsconfig.json",        
+    # ],
     entry_point = "server.ts",
     config_file = "//:rollup.config.js",
     sourcemap = "inline",
     format = "cjs",
+    #format = "iife",
 )
 
 nodejs_binary(
@@ -66,8 +78,8 @@ nodejs_binary(
         ":nova_data",
         "//nova/src:static_files",
         "//nova/src:browser_bundle",
+        # TODO: Understand why this makes protos
+        # work on the server.
+        "//nova/src/proto:proto_ts_srcs",
     ],
 )
-
-
-

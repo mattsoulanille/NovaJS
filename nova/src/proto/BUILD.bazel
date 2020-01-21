@@ -20,3 +20,10 @@ typescript_proto_library(
     name = "vector_state_ts_proto",
     proto = ":vector_state_proto",
 )
+
+filegroup(
+    name = "proto_ts_srcs",
+    srcs = [
+        ":vector_state_ts_proto"
+    ]
+)

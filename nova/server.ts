@@ -13,6 +13,12 @@ import { object } from "io-ts";
 import { PilotData } from "./src/server/PilotData";
 import { Ship } from "./src/engine/Ship";
 import { NovaParse } from "../novaparse/NovaParse";
+import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
+
+const testv = new VectorState();
+testv.setX(4);
+testv.setY(5);
+console.log(testv);
 
 //import { NovaParse } from "../novaparse/NovaParse";
 

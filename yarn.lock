@@ -2641,6 +2641,11 @@ rollup-plugin-sourcemaps@^0.4.2:
     rollup-pluginutils "^2.0.1"
     source-map-resolve "^0.5.0"
 
+rollup-plugin-typescript-paths@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/rollup-plugin-typescript-paths/-/rollup-plugin-typescript-paths-1.2.0.tgz#b456a4da03582b7c68a4321e7be9e9ba79ff0473"
+  integrity sha512-gce4kdka5uucLb4+MJDpfFubgAG4XBGOOkW0iAh+vvaG1wNaf6ux1KWdf95330qAJfJ70s+q/eyTDeo1LjAMFw==
+
 rollup-pluginutils@^2.0.1, rollup-pluginutils@^2.3.1, rollup-pluginutils@^2.5.0, rollup-pluginutils@^2.6.0:
   version "2.8.2"
   resolved "https://registry.yarnpkg.com/rollup-pluginutils/-/rollup-pluginutils-2.8.2.tgz#72f2af0748b592364dbd3389e600e5a9444a351e"
