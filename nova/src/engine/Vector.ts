@@ -2,6 +2,9 @@ import * as t from "io-ts";
 import { Stateful, StateIndexer, RecursivePartial, PartialState } from "./Stateful";
 import { VectorState, AngleState } from "./VectorState";
 import { isEmptyObject } from "./EmptyObject";
+import { VectorState as VectorStateProto } from "novajs/nova/src/proto/vector_state_pb";
+
+
 
 const TWO_PI = 2 * Math.PI;
 class Vector implements Stateful<VectorState>, VectorLike {
@@ -92,6 +95,13 @@ class Vector implements Stateful<VectorState>, VectorLike {
         if (length > c) {
             this.scaleToLength(c);
         }
+    }
+
+    getProto() {
+        const proto = new VectorStateProto();
+        proto.setX(this.x);
+        proto.setY(this.y);
+        return proto;
     }
 
     getState(_toGet: StateIndexer<VectorState> = {}): RecursivePartial<VectorState> {

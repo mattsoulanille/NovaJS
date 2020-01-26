@@ -18,7 +18,7 @@ import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
 const testv = new VectorState();
 testv.setX(4);
 testv.setY(5);
-console.log(testv);
+console.log(testv.serializeBinary());
 
 //import { NovaParse } from "../novaparse/NovaParse";
 
@@ -34,6 +34,8 @@ const app = express();
 const httpServer = new http.Server(app);
 
 const io = socket(httpServer);
+
+
 
 const socketChannel = new SocketChannelServer({ io });
 const communicator = new Communicator({
@@ -94,6 +96,7 @@ async function addClientToGame() {
     const shipState = await Ship.fromID(shipID, gameData);
     const shipUUID = engine.newShipInSystem(shipState, "nova:130");
     engine.activeShips.add(shipUUID);
+
 
     return {
         clientUUIDs: new Set([shipUUID]),

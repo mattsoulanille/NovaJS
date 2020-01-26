@@ -12,7 +12,6 @@ class Ship extends SpaceObject implements Stateful<ShipState> {
         this.gameData = gameData;
     }
 
-
     static async fromID(id: string, gameData: GameDataInterface): Promise<ShipState> {
         const data = await gameData.data.Ship.get(id);
         return {

@@ -6,6 +6,7 @@ import { Steppable } from "./Steppable";
 import { Vector } from "./Vector";
 import { Angle } from "./Vector";
 import { Position } from "./Position";
+import { SpaceObjectState as SpaceObjectStateProto } from "novajs/nova/src/proto/space_object_state_pb";
 
 
 
@@ -44,6 +45,33 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
         this.turnBack = state.turnBack;
         this.turnRate = state.turnRate;
         this.setState(state);
+    }
+
+    getProto() {
+        const proto = new SpaceObjectStateProto();
+        proto.setId(this.id);
+        switch (this.movementType) {
+            case "inertial":
+                proto.setMovementtype(SpaceObjectStateProto.MovementType.INERTIAL);
+                break;
+            case "inertialess":
+                proto.setMovementtype(SpaceObjectStateProto.MovementType.INERTIALESS);
+                break;
+            case "stationary":
+                proto.setMovementtype(SpaceObjectStateProto.MovementType.STATIONARY);
+                break;
+        }
+
+        proto.setPosition(this.position.getProto());
+        proto.setVelocity(this.velocity.getProto());
+        proto.setMaxvelocity(this.maxVelocity);
+        proto.setRotation(this.rotation.angle);
+        proto.setTurning(this.turning);
+        proto.setTurnback(this.turnBack);
+        proto.setTurnrate(this.turnRate);
+        proto.setAcceleration(this.acceleration);
+        proto.setAccelerating(this.accelerating);
+        return proto;
     }
 
     getState(toGet: StateIndexer<SpaceObjectState> = {}): PartialState<SpaceObjectState> {

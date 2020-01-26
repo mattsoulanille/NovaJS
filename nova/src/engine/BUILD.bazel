@@ -15,6 +15,10 @@ ts_library(
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//fp-ts",
+        "@npm//google-protobuf",
+        "//nova/src/proto:vector_state_ts_proto",
+        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/proto:system_state_ts_proto",
         "//novadatainterface",
     ]
 )

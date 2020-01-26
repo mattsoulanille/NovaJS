@@ -8,9 +8,9 @@ import { RecursivePartial, Stateful, StateIndexer } from "./Stateful";
 import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { Steppable } from "./Steppable";
 import { SystemState } from "./SystemState";
-import * as UUID from "uuid/v4";
+import UUID from "uuid/v4";
 import { isRight, isLeft } from "fp-ts/lib/Either";
-
+import { SystemState as SystemStateProto } from "novajs/nova/src/proto/system_state_pb";
 
 
 class System implements Stateful<SystemState>, Steppable {
@@ -40,6 +40,48 @@ class System implements Stateful<SystemState>, Steppable {
         this.ships.forEach((ship) => ship.step(milliseconds));
     }
 
+    getProto() {
+        const proto = new SystemStateProto();
+        const shipsMap = proto.getShipsMap();
+        for (const [id, ship] of this.ships) {
+            shipsMap.set(id, ship.getProto());
+        }
+
+        const planetsMap = proto.getPlanetsMap();
+        for (const [id, planet] of this.planets) {
+            planetsMap.set(id, planet.getProto());
+        }
+        return proto;
+    }
+
+    addRandomShip() {
+        const uuid = UUID();
+        const idNumber = Math.floor(Math.random() * 50) + 128;
+        const idString = `nova:${idNumber}`;
+        const x = (Math.random() - 0.5) * 500;
+        const y = (Math.random() - 0.5) * 500;
+        const shipState: ShipState = {
+            accelerating: 0,
+            acceleration: 0,
+            id: idString,
+            maxVelocity: 0,
+            movementType: "inertial",
+            position: { x, y },
+            rotation: Math.random() * 2 * Math.PI,
+            turnBack: false,
+            turning: 0,
+            turnRate: 0,
+            velocity: { x: 0, y: 0 }
+        }
+
+        this.setState({
+            ships: {
+                [uuid]: shipState
+            }
+        });
+        return uuid;
+    }
+
     getState(toGet: StateIndexer<SystemState> = {}): RecursivePartial<SystemState> {
 
         return getStateFromGetters<SystemState>(toGet, {
@@ -58,6 +100,7 @@ class System implements Stateful<SystemState>, Steppable {
     }
 
     getFullState(): SystemState {
+        const proto = this.getProto();
         var state = this.getState({});
         var decoded = SystemState.decode(state);
         if (isLeft(decoded)) {
