@@ -24,6 +24,14 @@ proto_library(
     ]
 )
 
+proto_library(
+    name = "engine_state_proto",
+    srcs = ["engine_state.proto"],
+    deps = [
+        ":system_state_proto"
+    ]
+)
+
 typescript_proto_library(
     name = "vector_state_ts_proto",
     proto = ":vector_state_proto",
@@ -39,11 +47,17 @@ typescript_proto_library(
     proto = ":system_state_proto",
 )
 
+typescript_proto_library(
+    name = "engine_state_ts_proto",
+    proto = ":engine_state_proto",
+)
+
 filegroup(
     name = "proto_ts_srcs",
     srcs = [
         ":vector_state_ts_proto",
         ":space_object_state_ts_proto",
-        ":system_state_ts_proto",        
+        ":system_state_ts_proto",
+        ":engine_state_ts_proto",
     ]
 )

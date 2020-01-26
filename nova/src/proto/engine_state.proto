@@ -1,0 +1,6 @@
+syntax = "proto3";
+import "nova/src/proto/system_state.proto";
+
+message EngineState { // Next = 2
+  map<string, SystemState> systems = 1;
+}
