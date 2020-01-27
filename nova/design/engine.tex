@@ -1,0 +1,124 @@
+\documentclass{article}
+\usepackage{xspace, hyperref}
+\newcommand{\gameData}{\emph{gameData}\xspace}
+
+\title{Engine Design}
+
+
+
+\begin{document}
+\maketitle
+
+\section{Game Loop}
+This section details one run through the game loop, including calculating the next state, applying user inputs, notifying peers, and drawing a frame. The following steps happen right after the JS event loop calls the gameLoop function.
+\begin{enumerate}
+\item \textbf{State Changes Proto Created}: An empty EngineState protobuf is created to represent the state changes that have happened due to peer inputs, user inputs, and NPC inputs. When adding entries to this proto, state may be copied from the last frame's state to ensure that the minimum size chunk of state is set. See item \ref{minimum-change} for more info on minimum chunk size.
+
+\item \textbf{State Changes from Peers}: Buffered state changes from peers are applied to the state changes proto. 
+\item \textbf{State Changes from User}: Buffered user inputs are applied to the state changes proto.
+\item \textbf{State Changes from Owned NPCs}: Buffered NPC inputs are applied to the state changes proto.
+\item \textbf{Apply State Changes to Engine}: State changes in the State Changes proto are applied to the engine.
+\item \textbf{Step the Engine}: The engine is stepped forward by the amount of time that has passed since the last frame. This step also retrieves the engine's state as a proto.
+\item \label{minimum-change} \textbf{Change Detection for Peers}: Any changes between this frame's state and last frame's state that could not have been predicted by peers are retrieved from the current state. These changes include changes from the player's inputs, changes from the inputs of owned NPCs, and other changes that might be predictable, but that we report anyway, such as when the player's ship takes damage or dies. Predictable changes, like changes in position and velocity, are not included.
+
+  The minimum chunk of state change that can be sent is the full state of a space object. The result of this change detection can only include the states of owned objects, such as owned NPCs and the player's ship.
+
+\item \textbf{Notify Peers}: Send the changes to all peers.
+
+\item \textbf{Give NPCs Current State} NPCs who want the current state (usually those whose state just got applied) are given a copy of the current state. They're given a copy because they might try to change parts of it they shouldn't change.
+\item \textbf{Draw a Frame}: The state of the system that the player is in is given to the frame Drawer, and it draws the current frame.
+\end{enumerate}
+
+\section{Serialization}
+Protobufs are used for serialization of the game state. They comprise the interface between the Engine object and the rest of the game via the $setState$ and $getState$ functions, and they are the format in which state changes are communicated between peers over the wire. The entire state of the game is represented in the $EngineState$ proto, which is a tree structure that includes Systems, Ships and other types detailed below.
+
+\subsection{Mapped Fields and SubStates}
+To avoid sending the entire game state when just a single object is updated, most mapped fields from UUIDs to states allow filling in just the UUIDs that have changed and leaving the other UUIDs empty in the map. To signifiy that the map is not trying to delete the keys that were not filled in, a keys field is included in the proto as well. For example, the $SystemState$ proto represents ships with two fields: a map named $ships$ that maps from UUID to state, and a list $shipsKeys$ that contains the UUIDs of all the ships in the map. When setting the state of a single ship, just that ship's state is included in the $ships$ map, but the UUIDs of all ships are present in the $shipsKeys$ list so no ships are deleted. To delete a ship, it is simply omitted from the $shipskeys$ list. This simplified example does not include discussion of clients' permissions to delete objects, which are handled in the communication section \ref{communication}.
+
+\subsection{EngineState}
+The engine's state is represented by the $EngineState$ protobuf, which has a mapped field from system IDs (not generated UUIDs, parsed IDs) to SystemState protos. The field supports SubStates as described above.
+
+\subsection{SystemState}
+A system's state is represented by the $SystemState$ protobuf, which has five mapped fields that support SubStates. The fields are as follows:
+\begin{enumerate}
+\item[] \textbf{ships}: A map from a ship's UUID to ShipState.
+\item[] \textbf{planets}: A map from a planet's UUID to PlanetState.
+\item[] \textbf{asteroids}: A map from an asteroid's UUID to AsteroidState.
+\item[] \textbf{projectiles}: A map from 
+
+
+\end{enumerate}
+
+
+\section{Communication} \label{communication}
+
+
+\section{Engine Organization}
+The Engine's responsibility is to compute the next state of the universe. It plays no part in drawing, change detection, communication, or player interaction. Its interface with the world is the $setState$ function, which sets the current state of the Engine given a protobuf (possibly partial) state, and the $getState$ function, which returns a protobuf of the current state of the universe.
+
+What follows are implementation details of the TypeScript version of the Engine. They don't really matter to something that wants to use the engine, as that consumer should just refer to the interface above.
+
+\subsection{Stateful Interface}
+The Engine has lots of moving pieces. To provide a standardized interface and an easy way to set the state, most of these pieces implement the $Stateful$ interface. The interface defines how the state of a piece of the Engine can be serialized and deserialized. It takes a type parameter \textbf{State}, which is the representation of the object's state.
+
+\begin{itemize}
+\item[]\textbf{setState(s: State)}: Set the current state of the object from $s$.
+\item[]\textbf{getState(): State}: Get the current state of the object as an instance of type $State$.
+\end{itemize}
+
+$State$ is usually a protobuf.
+
+
+\subsection{Engine}
+The Engine is organized in a tree structure. An instance of Engine owns all the Systems in the universe. A system owns instances of Ships, Planets, Asteroids, and Projectiles.
+
+It is expected that the Engine's $getState$ method will be called every frame since it's the only way to get the information needed to draw the frame. Calling $setState$ every frame is also expected, but the state given to the engine does not need to be the full state of the universe. Including only those objects that have changed is recommended.
+
+\subsection{System}
+A System represents a contiguous play area. Anything in a System can be travelled to by flying toward it. Travel between Systems usually requires a jump, and can not be achieved by flying in a direction, no matter how long a player flies for, as they will just loop around to the other side of the system they're in.
+
+Things that can be in a System include Ships, Planets, Projectiles, and Asteroids. Things in the System usually own instances of SpaceObject, which represents an object in space that can move around, be drawn on the screen, and be collided with. 
+
+A System also owns an instance of a collision library, and the System registers things with the collision library when they are created or move into the System, and removes them when they leave. Things that support collisions implement the Collidable interface.
+
+Everything in the System implements the Stateful interface.
+
+A System is also responsible for creating Projectiles. It has a factory for creating projectiles that takes the following properties for the new projectile:
+\begin{enumerate}
+\item[] \textbf{weaponType}: The ID of the weapon the projectile came from.
+\item[] \textbf{target}: The projectile's target, if any. A UUID indicates a single target. In the case of a submunition that fires at a random target, the weapon that is subbing is responsible for selecting the random target.
+\item[] \textbf{position}: The projectile's initial position.
+\item[] \textbf{angle}: The projectile's firing angle.
+\item[] \textbf{sourceVelocity}: The projectile source or parent's velocity. Certain types of projectiles take on the velocity of their source plus their own firing velocity.
+\end{enumerate}
+
+\subsection{SpaceObject}
+A SpaceObject represents an object in a system. It can move around, and its serialized representation can usually be drawn on the screen. Most things that appear in a system are SpaceObjects. Notable exceptions are the starfield, target reticles, and beam weapons.
+ 
+SpaceObjects can have Outfits (because Ships and Planets need Outfits). An Outfit serves a few functions. It can 
+
+\subsection{Ship}
+A Ship's Outfits are stored in its Equipment object.
+
+\subsection{Equipment}
+An Equipment is a collection of Outfits and, consequently, Weapons. Its interface has a function that, given the properties of a ship, returns a set of properties modified according to what Outfits are installed. It allows its owner access to its weapons via $setState$.
+
+\subsection{Outfit}
+Outfits are owned by Equipment. Outfits have various effects on a ship's properties, such as speed, turn rate, and energy capacity. Outfits can also have weapons associated with them. The interface used by outfits
+
+\subsection{Armament}
+An Armament is a collection of Weapons. It is usually created by, and associated with, an instance of Equipment. However, a Weapon that has submunitions creates an Armament without an associated Equipment since the submunition field in a weapon definition lists weapon IDs instead of outfit IDs.
+
+\subsection{Weapon}
+Weapons are owned by Armaments. Through its updateState function, a weapon can be set to fire at its fire rate. A weapon also exposes a function to fire a single projectile at a specified angle for use with submunitions.
+
+It should be noted that Projectiles are not sent between peers, so for consistency, a weapon uses a counter-based random number generator for any random properties it has, like firing angle. This count is included in the state of the weapon, and when a peer learns that a weapon is being fired, it also learns the count at which that weapon started firing. Submunitions of a projectile fired by a weapon use a random number generator seeded by the random number used in the original projectile's inaccuracy calculation. That way, an arbitrary nesting of submunitions remains free of patterns while being deterministic on all peers, and the times at which a Weapon's count-based random number generator is queried are exactly those times when the Weapon is fired.\footnote{We don't use the count-based random number generator for submunitions because if a weapon subs into itself (with a sub limit of, say, 10), all projectiles that result fire their subs at the same time, which makes it difficult to reason about which ones get which random numbers. You'd have to guarantee the order in which subs and subs of subs are fired, which is difficult to reason about. It's much easier to turn the initial random number into a bunch more numbers via seeded generators.}
+
+In the first version of the engine, beam weapons do not support submunitions nor are they supported as submunitions. Beam weapons also do not require projectiles, but do implement the Collidable interface.
+
+\subsection{Projectile}
+Projectiles are fired by weapons. A weapon receives projectiles to fire from the System's projectile factory, which is dependnecy injected into a Weapon when it is built. This factory is replaced when a Weapon changes systems.
+\section{Serialization Format}
+
+
+\end{document}
