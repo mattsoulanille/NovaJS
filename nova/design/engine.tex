@@ -3,7 +3,7 @@
 \newcommand{\gameData}{\emph{gameData}\xspace}
 
 \title{Engine Design}
-
+ 
 
 
 \begin{document}
@@ -31,6 +31,11 @@ This section details one run through the game loop, including calculating the ne
 
 \section{Serialization}
 Protobufs are used for serialization of the game state. They comprise the interface between the Engine object and the rest of the game via the $setState$ and $getState$ functions, and they are the format in which state changes are communicated between peers over the wire. The entire state of the game is represented in the $EngineState$ proto, which is a tree structure that includes Systems, Ships and other types detailed below.
+
+\subsection{Why proto3}
+We use proto3 since it is recommended for new projects. This decision might seem strange since we are going to be sending a lot of deltas for state updates, which proto2 is better at. Proto2 lets you tell if a primitive field was set to null or not set at all, which is important if you want to, for example, update a ship's rotation without zeroing its shields and armor. However, it turns out that you'd almost never want to update just one property, and sending the full ship state only costs about 300 bytes. Since we only send updates when an unpredictable state change happens, that can peak at 18kBps or 144kbps, given a generous mashing speed of 60 keys per second. Sending the full state also takes care of drift issues that can easily pile up with the delta approach, and if for some reason we really need to omit a primitive field, the field can be boxed.
+
+
 
 \subsection{Mapped Fields and SubStates}
 To avoid sending the entire game state when just a single object is updated, most mapped fields from UUIDs to states allow filling in just the UUIDs that have changed and leaving the other UUIDs empty in the map. To signifiy that the map is not trying to delete the keys that were not filled in, a keys field is included in the proto as well. For example, the $SystemState$ proto represents ships with two fields: a map named $ships$ that maps from UUID to state, and a list $shipsKeys$ that contains the UUIDs of all the ships in the map. When setting the state of a single ship, just that ship's state is included in the $ships$ map, but the UUIDs of all ships are present in the $shipsKeys$ list so no ships are deleted. To delete a ship, it is simply omitted from the $shipskeys$ list. This simplified example does not include discussion of clients' permissions to delete objects, which are handled in the communication section \ref{communication}.
@@ -110,14 +115,16 @@ Outfits are owned by Equipment. Outfits have various effects on a ship's propert
 An Armament is a collection of Weapons. It is usually created by, and associated with, an instance of Equipment. However, a Weapon that has submunitions creates an Armament without an associated Equipment since the submunition field in a weapon definition lists weapon IDs instead of outfit IDs.
 
 \subsection{Weapon}
-Weapons are owned by Armaments. Through its updateState function, a weapon can be set to fire at its fire rate. A weapon also exposes a function to fire a single projectile at a specified angle for use with submunitions.
+https://www.crankuptheamps.com/blog/posts/2017/10/12/protobuf-battle-of-the-syntaxes/# Weapons are owned by Armaments. Through its updateState function, a weapon can be set to fire at its fire rate. A weapon also exposes a function to fire a single projectile at a specified angle for use with submunitions.
 
 It should be noted that Projectiles are not sent between peers, so for consistency, a weapon uses a counter-based random number generator for any random properties it has, like firing angle. This count is included in the state of the weapon, and when a peer learns that a weapon is being fired, it also learns the count at which that weapon started firing. Submunitions of a projectile fired by a weapon use a random number generator seeded by the random number used in the original projectile's inaccuracy calculation. That way, an arbitrary nesting of submunitions remains free of patterns while being deterministic on all peers, and the times at which a Weapon's count-based random number generator is queried are exactly those times when the Weapon is fired.\footnote{We don't use the count-based random number generator for submunitions because if a weapon subs into itself (with a sub limit of, say, 10), all projectiles that result fire their subs at the same time, which makes it difficult to reason about which ones get which random numbers. You'd have to guarantee the order in which subs and subs of subs are fired, which is difficult to reason about. It's much easier to turn the initial random number into a bunch more numbers via seeded generators.}
 
 In the first version of the engine, beam weapons do not support submunitions nor are they supported as submunitions. Beam weapons also do not require projectiles, but do implement the Collidable interface.
 
 \subsection{Projectile}
-Projectiles are fired by weapons. A weapon receives projectiles to fire from the System's projectile factory, which is dependnecy injected into a Weapon when it is built. This factory is replaced when a Weapon changes systems.
+Projectiles are fired by weapons. A weapon receives projectiles to fire from the System's projectile factory, which is passed to a Weapon when it is built and changed whenever the Weapon changes systems. This factory is replaced when a Weapon changes systems.
+
+
 \section{Serialization Format}
 
 
