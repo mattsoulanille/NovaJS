@@ -1,7 +1,10 @@
 syntax = "proto3";
 import "nova/src/proto/space_object_state.proto";
 
-message SystemState { // Next = 3
+message SystemState { // Next = 5
   map<string, SpaceObjectState> ships = 1;
-  map<string, SpaceObjectState> planets = 2;
+  repeated string shipsKeys = 2;
+
+  map<string, SpaceObjectState> planets = 3;
+  repeated string planetsKeys = 4;
 }

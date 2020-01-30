@@ -1,0 +1,8 @@
+syntax = "proto3";
+import "nova/src/proto/space_object_state.proto";
+import "nova/src/proto/equipment_state.proto";
+
+message ShipState {
+  SpaceObjectState spaceObjectState = 1;
+  EquipmentState equipmentState = 2;
+}

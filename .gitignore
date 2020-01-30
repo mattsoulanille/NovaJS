@@ -65,3 +65,9 @@ build/
 dist
 bazel-out
 node_modules
+
+# Latex
+*.aux
+*.dvi
+*.log
+*.out

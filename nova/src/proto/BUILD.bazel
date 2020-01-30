@@ -17,6 +17,24 @@ proto_library(
 )
 
 proto_library(
+    name = "ship_state_proto",
+    srcs = ["ship_state.proto"],
+    deps = [
+        ":space_object_state_proto",
+        ":equipment_state_proto",
+    ]
+)
+
+proto_library(
+    name = "planet_state_proto",
+    srcs = ["planet_state.proto"],
+    deps = [
+        ":space_object_state_proto",
+        ":equipment_state_proto",
+    ]
+)
+
+proto_library(
     name = "system_state_proto",
     srcs = ["system_state.proto"],
     deps = [
@@ -32,6 +50,33 @@ proto_library(
     ]
 )
 
+proto_library(
+    name = "weapon_state_proto",
+    srcs = ["weapon_state.proto"],
+)
+
+proto_library(
+    name = "outfit_state_proto",
+    srcs = ["outfit_state.proto"],
+)
+
+proto_library(
+    name = "armament_state_proto",
+    srcs = ["armament_state.proto"],
+    deps = [
+        ":weapon_state_proto",
+    ],
+)
+
+proto_library(
+    name = "equipment_state_proto",
+    srcs = ["equipment_state.proto"],
+    deps = [
+        ":outfit_state_proto",
+        ":armament_state_proto",
+    ],
+)
+
 typescript_proto_library(
     name = "vector_state_ts_proto",
     proto = ":vector_state_proto",
@@ -40,6 +85,16 @@ typescript_proto_library(
 typescript_proto_library(
     name = "space_object_state_ts_proto",
     proto = ":space_object_state_proto",
+)
+
+typescript_proto_library(
+    name = "ship_state_ts_proto",
+    proto = ":ship_state_proto",
+)
+
+typescript_proto_library(
+    name = "planet_state_ts_proto",
+    proto = ":planet_state_proto",
 )
 
 typescript_proto_library(
@@ -52,12 +107,38 @@ typescript_proto_library(
     proto = ":engine_state_proto",
 )
 
+typescript_proto_library(
+    name = "weapon_state_ts_proto",
+    proto = ":weapon_state_proto",
+)
+
+typescript_proto_library(
+    name = "outfit_state_ts_proto",
+    proto = ":outfit_state_proto",
+)
+
+typescript_proto_library(
+    name = "armament_state_ts_proto",
+    proto = ":armament_state_proto",
+)
+
+typescript_proto_library(
+    name = "equipment_state_ts_proto",
+    proto = ":equipment_state_proto",
+)
+
 filegroup(
     name = "proto_ts_srcs",
     srcs = [
         ":vector_state_ts_proto",
         ":space_object_state_ts_proto",
+        ":ship_state_ts_proto",
+        ":planet_state_ts_proto",
         ":system_state_ts_proto",
         ":engine_state_ts_proto",
+        ":weapon_state_ts_proto",
+        ":outfit_state_ts_proto",
+        ":armament_state_ts_proto",
+        ":equipment_state_ts_proto",
     ]
 )

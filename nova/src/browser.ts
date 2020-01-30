@@ -17,11 +17,15 @@ import { first } from "rxjs/operators";
 import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
 import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
 
+import { SystemState } from "novajs/nova/src/proto/system_state_pb";
+
 (window as any).VectorState = VectorState;
 (window as any).SpaceObjectState = SpaceObjectState;
+(window as any).SystemState = SystemState;
 
 const socket = io();
 (window as any).socket = socket;
+
 
 
 const socketChannel = new SocketChannelClient({ socket });
