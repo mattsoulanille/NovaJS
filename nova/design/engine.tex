@@ -14,7 +14,7 @@ This section details one run through the game loop, including calculating the ne
 \begin{enumerate}
 \item \textbf{State Changes Proto Created}: An empty EngineState protobuf is created to represent the state changes that have happened due to peer inputs, user inputs, and NPC inputs. When adding entries to this proto, state may be copied from the last frame's state to ensure that the minimum size chunk of state is set. See item \ref{minimum-change} for more info on minimum chunk size.
 
-\item \textbf{State Changes from Peers}: Buffered state changes from peers are applied to the state changes proto. 
+\item \textbf{State Changes from Peers}: Buffered state changes from peers are applied to the state changes proto. These state changes are filtered first to make sure only UUIDs owned by the peer are being changed.
 \item \textbf{State Changes from User}: Buffered user inputs are applied to the state changes proto.
 \item \textbf{State Changes from Owned NPCs}: Buffered NPC inputs are applied to the state changes proto.
 \item \textbf{Apply State Changes to Engine}: State changes in the State Changes proto are applied to the engine.
@@ -33,7 +33,7 @@ This section details one run through the game loop, including calculating the ne
 Protobufs are used for serialization of the game state. They comprise the interface between the Engine object and the rest of the game via the $setState$ and $getState$ functions, and they are the format in which state changes are communicated between peers over the wire. The entire state of the game is represented in the $EngineState$ proto, which is a tree structure that includes Systems, Ships and other types detailed below.
 
 \subsection{Why proto3}
-We use proto3 since it is recommended for new projects. This decision might seem strange since we are going to be sending a lot of deltas for state updates, which proto2 is better at. Proto2 lets you tell if a primitive field was set to null or not set at all, which is important if you want to, for example, update a ship's rotation without zeroing its shields and armor. However, it turns out that you'd almost never want to update just one property, and sending the full ship state only costs about 300 bytes. Since we only send updates when an unpredictable state change happens, that can peak at 18kBps or 144kbps, given a generous mashing speed of 60 keys per second. Sending the full state also takes care of drift issues that can easily pile up with the delta approach, and if for some reason we really need to omit a primitive field, the field can be boxed.
+We use proto3 since it is recommended for new projetcs. This decision might seem strange since we are going to be sending a lot of deltas for state updates, which proto2 is better at. Proto2 lets you tell if a primitive field was set to null or not set at all, which is important if you want to, for example, update a ship's rotation without zeroing its shields and armor. However, it turns out that you'd almost never want to update just one property, and sending the full ship state only costs about 300 bytes. Since we only send updates when an unpredictable state change happens, that can peak at 18kBps or 144kbps, given a generous mashing speed of 60 keys per second. Sending the full state also takes care of drift issues that can easily pile up with the delta approach, and if for some reason we really need to omit a primitive field, the field can be boxed. See \url{https://www.crankuptheamps.com/blog/posts/2017/10/12/protobuf-battle-of-the-syntaxes/#} for more.
 
 
 
@@ -49,7 +49,8 @@ A system's state is represented by the $SystemState$ protobuf, which has five ma
 \item[] \textbf{ships}: A map from a ship's UUID to ShipState.
 \item[] \textbf{planets}: A map from a planet's UUID to PlanetState.
 \item[] \textbf{asteroids}: A map from an asteroid's UUID to AsteroidState.
-\item[] \textbf{projectiles}: A map from 
+\item[] \textbf{projectiles}: A map from a projectile's UUID to ProjectileState. Projectiles are usually not sent in the state. They're only included when someone first joins the game or enters a system. Otherwise, each client creates their own projectiles when weapons are fired, and uses deterministic RNG to try to make sure they get fired at the same angels.
+  
 
 
 \end{enumerate}
@@ -97,6 +98,35 @@ A System is also responsible for creating Projectiles. It has a factory for crea
 \item[] \textbf{sourceVelocity}: The projectile source or parent's velocity. Certain types of projectiles take on the velocity of their source plus their own firing velocity.
 \end{enumerate}
 
+A System has a s
+
+\subsubsection{Moving Between Systems}
+\textbf{This section is TODO pending being able to actually test the different ideas I have about how to solve this. What follows was a partial first attempt, but it should really be looked at again.}
+
+Ships can move between systems. This process is a lot more complicated than it might initially seem, involving several asynchronous steps and coordination between peers. The steps are detailed here:
+\begin{enumerate}
+\item \textbf{Initiate Jump}: 
+A user commands their ship to jump from System A to System B. All conditions for the jump are met, and the jump begins.
+
+\item \textbf{Begin Jump Animation}:
+  The ship's jump process starts. This might include the ship stopping to get ready for the jump, or the ship might just immediately leave the system. This step includes all animation up to the point at which the ship is no longer in System A, and it can be interrupted if the user changes their mind or the ship dies. This step also registers the callback that gets called in step \ref{complete-jump-animation}.
+
+\item \textbf{Request State (async)}:
+  The client requests the full state of System B from the server or another peer in the system. The client also subscribes to receive state updates to System B, but stores them instead of directly applying them to System B. This step also registers the callback that gets called in step \ref{receive-system-b-state}.
+
+\item \textbf{Notify Peers}:
+  The ship's current state is used to build a copy of the ship in System B. This copy has the ``hidden'' property set so that it doesn't get rendered or updated. \footnote{The reason we use a property on the ship to indicate that it's hidden instead of storing the ship in a separate map specifically for ships that are entering the system is because the ``hidden'' property already exists for use with fighter bays. It would also be a pain to communicate in a state update that ``a ship stored in an `enteringShips' map has moved to the `ships' map'' instead of ``a ship was deleted from the `enteringShips' map and another ship was added to the `ships' map''.}
+
+\item \textbf{On Complete Jump Animation}: \label{complete-jump-animation}
+
+  
+\item \textbf{On Receive System B State}: \label{receive-system-b-state}
+    Eventually, and as a non-blocking callback, the client receives System B's full state and applies it to the system. Then, all the stored state updates are applied to System B. New state updates are no longer stored, and instead get applied to the system directly as is normal. Once all the stored updates are applied, the client adds System B to its list of active systems (systems whose next states get computed every frame).
+  
+\end{enumerate}
+
+When a ship moves from system A to system B, it plays its jump animation. During the jump animation, the client fetches system B's full state from the server and subscribes to system B's state updates. While fetching the state, and right after the ship's jump animation causes it to leave system A, the engine serializes the ship's state, changes a few properties on the state like position and velocity according to the jump that was made, and gives it to system B to build. System B builds a ship from the state, and waits to receive the rest of the state from the server if not already present. System B is paused for the duration. After the rest of the state is received, the client starts rendering system B, and 
+
 \subsection{SpaceObject}
 A SpaceObject represents an object in a system. It can move around, and its serialized representation can usually be drawn on the screen. Most things that appear in a system are SpaceObjects. Notable exceptions are the starfield, target reticles, and beam weapons.
  
@@ -115,7 +145,7 @@ Outfits are owned by Equipment. Outfits have various effects on a ship's propert
 An Armament is a collection of Weapons. It is usually created by, and associated with, an instance of Equipment. However, a Weapon that has submunitions creates an Armament without an associated Equipment since the submunition field in a weapon definition lists weapon IDs instead of outfit IDs.
 
 \subsection{Weapon}
-https://www.crankuptheamps.com/blog/posts/2017/10/12/protobuf-battle-of-the-syntaxes/# Weapons are owned by Armaments. Through its updateState function, a weapon can be set to fire at its fire rate. A weapon also exposes a function to fire a single projectile at a specified angle for use with submunitions.
+Weapons are owned by Armaments. Through its updateState function, a weapon can be set to fire at its fire rate. A weapon also exposes a function to fire a single projectile at a specified angle for use with submunitions.
 
 It should be noted that Projectiles are not sent between peers, so for consistency, a weapon uses a counter-based random number generator for any random properties it has, like firing angle. This count is included in the state of the weapon, and when a peer learns that a weapon is being fired, it also learns the count at which that weapon started firing. Submunitions of a projectile fired by a weapon use a random number generator seeded by the random number used in the original projectile's inaccuracy calculation. That way, an arbitrary nesting of submunitions remains free of patterns while being deterministic on all peers, and the times at which a Weapon's count-based random number generator is queried are exactly those times when the Weapon is fired.\footnote{We don't use the count-based random number generator for submunitions because if a weapon subs into itself (with a sub limit of, say, 10), all projectiles that result fire their subs at the same time, which makes it difficult to reason about which ones get which random numbers. You'd have to guarantee the order in which subs and subs of subs are fired, which is difficult to reason about. It's much easier to turn the initial random number into a bunch more numbers via seeded generators.}
 
@@ -123,9 +153,6 @@ In the first version of the engine, beam weapons do not support submunitions nor
 
 \subsection{Projectile}
 Projectiles are fired by weapons. A weapon receives projectiles to fire from the System's projectile factory, which is passed to a Weapon when it is built and changed whenever the Weapon changes systems. This factory is replaced when a Weapon changes systems.
-
-
-\section{Serialization Format}
 
 
 \end{document}
