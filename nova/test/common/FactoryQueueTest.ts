@@ -43,7 +43,7 @@ describe("FactoryQueue", function() {
         count.should.equal(1);
         c.count.should.equal(1);
 
-        let item1 = c.dequeueIfAvailable();
+        let item1 = c.dequeue();
         if (item1 === null) {
             fail("item Should not be null");
         }
@@ -56,7 +56,7 @@ describe("FactoryQueue", function() {
         count.should.equal(2);
         c.count.should.equal(1);
 
-        let item2 = c.dequeueIfAvailable();
+        let item2 = c.dequeue();
         if (item2 === null) {
             fail("item Should not be null");
         }
@@ -67,7 +67,7 @@ describe("FactoryQueue", function() {
 
         // Should be available, but we don't know
         // which one we get.
-        let item3 = c.dequeueIfAvailable();
+        let item3 = c.dequeue();
         if (item3 === null) {
             fail("item Should not be null");
             throw new Error("fail");
@@ -88,7 +88,7 @@ describe("FactoryQueue", function() {
         const items: NumberHolder[] = Array(count);
 
         for (let i = 0; i < count; i++) {
-            items[i] = await c.dequeue();
+            items[i] = await c.dequeueGuaranteed();
         }
 
         for (let i = 0; i < count; i++) {

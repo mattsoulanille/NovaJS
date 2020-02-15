@@ -1,50 +1,56 @@
 import { SpaceObject } from "./SpaceObject";
-import { Stateful, RecursivePartial } from "./Stateful";
-import { PlanetState } from "./PlanetState";
 
-import { isRight } from "fp-ts/lib/Either";
 import { GameDataInterface } from "../../../novadatainterface/GameDataInterface";
+import { Stateful } from "./Stateful";
+import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
+import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
+import { Position } from "./Position";
+import { Steppable } from "./Steppable";
 
-class Planet extends SpaceObject implements Stateful<PlanetState> {
+export class Planet implements Stateful<PlanetState>, Steppable {
     readonly gameData: GameDataInterface;
+    private id = "nova:128";
+    private spaceObject = new SpaceObject();
+
     constructor({ gameData, state }: { gameData: GameDataInterface, state: PlanetState }) {
-        super({ state });
         this.gameData = gameData;
+        this.setState(state);
+    }
+
+    getState(): PlanetState {
+        const state = new PlanetState();
+        state.setId(this.id);
+        state.setSpaceobjectstate(this.spaceObject.getState());
+        // TODO: EquipmentState
+        return state;
+    }
+    setState(state: PlanetState): void {
+        if (state.hasSpaceobjectstate()) {
+            this.spaceObject.setState(state.getSpaceobjectstate()!);
+        }
+        this.id = state.getId();
+        // TODO: EquipmentState
+    }
+
+    step(milliseconds: number): void {
+        this.spaceObject.step(milliseconds);
     }
 
     static async fromID(id: string, gameData: GameDataInterface): Promise<PlanetState> {
         const data = await gameData.data.Planet.get(id);
-        return {
-            accelerating: 0,
-            acceleration: 0,
-            id: data.id,
-            maxVelocity: 0,
-            movementType: "stationary",
-            position: { x: data.position[0], y: data.position[1] },
-            rotation: 0,
-            turning: 0,
-            turnBack: false,
-            turnRate: 0,
-            velocity: { x: 0, y: 0 }
-        }
+        const spaceObjectState = new SpaceObjectState();
+        spaceObjectState.setMovementtype(SpaceObjectState.MovementType.STATIONARY);
+        spaceObjectState.setPosition(
+            new Position(data.position[0], data.position[1]).getState());
+
+        const planetState = new PlanetState();
+        planetState.setSpaceobjectstate(spaceObjectState);
+        return planetState;
     }
+
     static makeFactory(gameData: GameDataInterface): (s: PlanetState) => Planet {
         return function(state: PlanetState) {
             return new Planet({ gameData, state });
         }
     }
-
-    static fullState(maybeState: RecursivePartial<PlanetState>): PlanetState | undefined {
-        let decoded = PlanetState.decode(maybeState)
-        if (isRight(decoded)) {
-            return decoded.right;
-        }
-        else {
-            return undefined;
-        }
-    }
 }
-
-
-
-export { Planet }

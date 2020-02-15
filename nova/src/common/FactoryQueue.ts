@@ -1,18 +1,10 @@
+import { Queue, QueueImpl } from "./Queue";
 
-// Order is not preserved
-class FactoryQueue<Item> {
-
-    private items: (Item | undefined)[];
-    private startIndex: number;
-    private endIndex: number;
+export class FactoryQueue<Item> implements Queue<Item> {
     buildingPromise: Promise<unknown>;
-
+    private queue = new QueueImpl<Item>();
 
     constructor(private readonly buildFunction: () => Promise<Item>, public minimum = 0) {
-
-        this.startIndex = 0;
-        this.endIndex = 0;
-        this.items = [];
         this.buildingPromise = this.buildToCountNoCheck(minimum);
     }
 
@@ -24,12 +16,12 @@ class FactoryQueue<Item> {
 
         let items = await Promise.all(promises);
         for (let item of items) {
-            this.enqueue(item);
+            this.queue.enqueue(item);
         }
     }
 
     private async buildToCountNoCheck(c: number) {
-        let deficit = c - this.count;
+        let deficit = c - this.queue.count;
         if (deficit > 0) {
             await this.prebuild(deficit);
         }
@@ -44,46 +36,33 @@ class FactoryQueue<Item> {
     }
 
     get count() {
-        return this.endIndex - this.startIndex;
+        return this.queue.count;
     }
 
-    // Returns an item to the collection
     enqueue(i: Item) {
-        this.items[this.endIndex] = i;
-        this.endIndex++;
+        this.queue.enqueue(i);
     }
 
-    // Gets an item from the collection
-    async dequeue(): Promise<Item> {
-        let maybeItem = this.dequeueIfAvailable();
-        if (maybeItem !== null) {
+    dequeue(): Item | null {
+        const maybeItem = this.queue.dequeue();
+        this.buildToCount(this.minimum);
+        return maybeItem;
+    }
+
+    // A strange thing to do to a factoryqueue.
+    emptyTo(f: (i: Item) => void) {
+        this.queue.emptyTo(f);
+    }
+
+    async dequeueGuaranteed(): Promise<Item> {
+        const maybeItem = this.dequeue();
+        if (maybeItem) {
             return maybeItem;
-        }
-        else {
+        } else {
+            // Return the next available item,
+            // which may already be getting built.
             await this.buildToCount(1);
-            return await this.dequeue();
-        }
-    }
-
-
-    dequeueIfAvailable(): Item | null {
-        if (this.endIndex === this.startIndex) {
-            // Then it's empty.
-            this.buildToCount(this.minimum);
-            return null;
-        }
-        else {
-            const item = this.items[this.startIndex];
-            if (item === undefined) {
-                throw new Error("Item was undefined");
-            }
-            delete this.items[this.startIndex];
-            this.startIndex++;
-            this.buildToCount(this.minimum);
-            return item;
+            return await this.dequeueGuaranteed();
         }
     }
 }
-
-export { FactoryQueue }
-

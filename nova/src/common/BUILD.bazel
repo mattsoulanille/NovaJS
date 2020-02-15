@@ -12,6 +12,7 @@ ts_library(
         "@npm//io-ts",
         "@npm//fp-ts",
         "//nova/src/engine",
+        "//nova/src/proto:ship_state_ts_proto",
         "@npm//ts-enum-util",
     ]
 )

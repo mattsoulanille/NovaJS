@@ -3,11 +3,11 @@ import "nova/src/proto/vector_state.proto";
 
 
 /**
- * SpaceObjectState contains all state information for space 
- * objects. This includes planets, ships, and (in the future)
- * asteroids, and projectiles.
+ * SpaceObjectState contains information on the location and movement
+ * of an object in a system. This includes information on planets, 
+ * ships, and (in the future) asteroids, and projectiles.
  */
-message SpaceObjectState { // Next = 12
+message SpaceObjectState { // Next = 11
   VectorState position = 1;
   VectorState velocity = 2;
   double maxVelocity = 3;
@@ -24,5 +24,4 @@ message SpaceObjectState { // Next = 12
   MovementType movementType = 8;
   double acceleration = 9;
   double accelerating = 10;
-  string id = 11;
 }

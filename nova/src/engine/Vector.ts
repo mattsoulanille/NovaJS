@@ -1,13 +1,8 @@
-import * as t from "io-ts";
-import { Stateful, StateIndexer, RecursivePartial, PartialState } from "./Stateful";
-import { VectorState, AngleState } from "./VectorState";
-import { isEmptyObject } from "./EmptyObject";
-import { VectorState as VectorStateProto } from "novajs/nova/src/proto/vector_state_pb";
-
-
+import { Stateful } from "./Stateful";
+import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
 
 const TWO_PI = 2 * Math.PI;
-class Vector implements Stateful<VectorState>, VectorLike {
+export class Vector implements Stateful<VectorState>, VectorLike {
 
     x: number
     y: number
@@ -19,6 +14,10 @@ class Vector implements Stateful<VectorState>, VectorLike {
 
     static fromVectorLike(v: VectorLike) {
         return new Vector(v.x, v.y);
+    }
+
+    static fromProto(v: VectorState) {
+        return new Vector(v.getX(), v.getY());
     }
 
     add(other: VectorLike) {
@@ -97,28 +96,16 @@ class Vector implements Stateful<VectorState>, VectorLike {
         }
     }
 
-    getProto() {
-        const proto = new VectorStateProto();
-        proto.setX(this.x);
-        proto.setY(this.y);
-        return proto;
+    getState() {
+        const state = new VectorState();
+        state.setX(this.x);
+        state.setY(this.y);
+        return state;
     }
 
-    getState(_toGet: StateIndexer<VectorState> = {}): RecursivePartial<VectorState> {
-        return {
-            x: this.x,
-            y: this.y
-        }
-    }
-
-    setState({ x, y }: RecursivePartial<VectorState>): StateIndexer<VectorState> {
-        if (x !== undefined) {
-            this.x = x
-        }
-        if (y !== undefined) {
-            this.y = y
-        }
-        return {};
+    setState(state: VectorState) {
+        this.x = state.getX();
+        this.y = state.getY();
     }
 
     // Remember that we use clock angles
@@ -130,11 +117,11 @@ class Vector implements Stateful<VectorState>, VectorLike {
         return new Angle(Math.atan2(this.x, -this.y));
     }
 }
-const VectorType = t.type({ x: t.number, y: t.number });
-type VectorLike = t.TypeOf<typeof VectorType>;
+//const VectorType = t.type({ x: t.number, y: t.number });
+export type VectorLike = { x: number, y: number };
 
 
-class Angle implements Stateful<AngleState> {
+export class Angle implements Stateful<number> {
     private _angle!: number
     constructor(angle: number) {
         this.angle = angle
@@ -199,17 +186,10 @@ class Angle implements Stateful<AngleState> {
         );
     }
 
-    getState(): PartialState<AngleState> {
+    getState(): number {
         return this.angle;
     }
-    setState(state: number): StateIndexer<AngleState> {
+    setState(state: number) {
         this.angle = state;
-        return {};
     }
 }
-
-
-
-
-const AngleType = t.number;
-export { Vector, VectorType, VectorLike, Angle, AngleType }

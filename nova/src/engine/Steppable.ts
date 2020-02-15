@@ -1,6 +1,3 @@
-interface Steppable {
+export interface Steppable {
     step(milliseconds: number): void
 }
-
-
-export { Steppable }

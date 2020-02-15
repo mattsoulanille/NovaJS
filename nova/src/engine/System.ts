@@ -1,131 +1,93 @@
 import { GameDataInterface } from "../../../novadatainterface/GameDataInterface";
-import { BuildingMap } from "./BuildingMap";
+
 import { Planet } from "./Planet";
-import { PlanetState } from "./PlanetState";
 import { Ship } from "./Ship";
-import { ShipState } from "./ShipState";
-import { RecursivePartial, Stateful, StateIndexer } from "./Stateful";
-import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { Steppable } from "./Steppable";
-import { SystemState } from "./SystemState";
 import UUID from "uuid/v4";
-import { isRight, isLeft } from "fp-ts/lib/Either";
-import { SystemState as SystemStateProto } from "novajs/nova/src/proto/system_state_pb";
+
+import { SystemState } from "novajs/nova/src/proto/system_state_pb";
+import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
+import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
+import { Stateful } from "./Stateful";
+import { getMapStatesToProto, setMapStates } from "./MapStates";
 
 
 class System implements Stateful<SystemState>, Steppable {
-    readonly ships: BuildingMap<Ship, ShipState>;
-    readonly planets: BuildingMap<Planet, PlanetState>;
+    readonly ships: Map<string, Ship> = new Map();
+    readonly planets: Map<string, Planet> = new Map();
+    readonly shipFactory: (shipState: ShipState) => Ship;
+    readonly planetFactory: (planetState: PlanetState) => Planet;
+
     private gameData: GameDataInterface;
-    //    readonly uuid: string;
 
     constructor({ gameData, state }: { gameData: GameDataInterface, state: SystemState }) {
-        //        this.uuid = state.uuid;
         this.gameData = gameData;
 
-        this.ships = new BuildingMap<Ship, ShipState>(
-            Ship.makeFactory(this.gameData),
-            Ship.fullState
-        );
-
-        this.planets = new BuildingMap<Planet, PlanetState>(
-            Planet.makeFactory(this.gameData),
-            Planet.fullState
-        );
+        this.shipFactory = Ship.makeFactory(gameData);
+        this.planetFactory = Planet.makeFactory(gameData);
 
         this.setState(state);
     }
 
     step(milliseconds: number): void {
         this.ships.forEach((ship) => ship.step(milliseconds));
+        this.planets.forEach((planet) => planet.step(milliseconds));
     }
 
-    getProto() {
-        const proto = new SystemStateProto();
-        const shipsMap = proto.getShipsMap();
-        for (const [id, ship] of this.ships) {
-            shipsMap.set(id, ship.getProto());
-        }
+    getState(): SystemState {
+        const systemState = new SystemState();
 
-        const planetsMap = proto.getPlanetsMap();
-        for (const [id, planet] of this.planets) {
-            planetsMap.set(id, planet.getProto());
-        }
-        return proto;
-    }
-
-    addRandomShip() {
-        const uuid = UUID();
-        const idNumber = Math.floor(Math.random() * 50) + 128;
-        const idString = `nova:${idNumber}`;
-        const x = (Math.random() - 0.5) * 500;
-        const y = (Math.random() - 0.5) * 500;
-        const shipState: ShipState = {
-            accelerating: 0,
-            acceleration: 0,
-            id: idString,
-            maxVelocity: 0,
-            movementType: "inertial",
-            position: { x, y },
-            rotation: Math.random() * 2 * Math.PI,
-            turnBack: false,
-            turning: 0,
-            turnRate: 0,
-            velocity: { x: 0, y: 0 }
-        }
-
-        this.setState({
-            ships: {
-                [uuid]: shipState
-            }
+        getMapStatesToProto({
+            fromMap: this.planets,
+            toMap: systemState.getPlanetsMap(),
+            addKey: (key) => systemState.addPlanetskeys(key)
         });
-        return uuid;
-    }
 
-    getState(toGet: StateIndexer<SystemState> = {}): RecursivePartial<SystemState> {
-
-        return getStateFromGetters<SystemState>(toGet, {
-            planets: (toGet) => this.planets.getState(toGet),
-            ships: (ships) => this.ships.getState(ships),
-            //            uuid: () => this.uuid
+        getMapStatesToProto({
+            fromMap: this.ships,
+            toMap: systemState.getShipsMap(),
+            addKey: (key) => systemState.addShipskeys(key)
         });
+
+        return systemState;
     }
 
-    setState(state: Partial<SystemState>): StateIndexer<SystemState> {
-
-        return setStateFromSetters<SystemState>(state, {
-            planets: (planetStates) => this.planets.setState(planetStates),
-            ships: (shipStates) => this.ships.setState(shipStates)
+    setState(state: SystemState) {
+        // Update planets
+        setMapStates({
+            objects: this.planets,
+            states: state.getPlanetsMap().getEntryList(),
+            keys: state.getPlanetskeysList(),
+            factory: this.planetFactory
         });
-    }
 
-    getFullState(): SystemState {
-        const proto = this.getProto();
-        var state = this.getState({});
-        var decoded = SystemState.decode(state);
-        if (isLeft(decoded)) {
-            throw decoded.left;
-        }
-        else {
-            return decoded.right;
-        }
+        // Update ships
+        setMapStates({
+            objects: this.ships,
+            states: state.getShipsMap().getEntryList(),
+            keys: state.getShipskeysList(),
+            factory: this.shipFactory
+        });
     }
 
     static async fromID(id: string, gameData: GameDataInterface, makeUUID: () => string = UUID): Promise<SystemState> {
 
-        const planets: { [index: string]: PlanetState } = {};
         const data = await gameData.data.System.get(id);
+
+        const systemState = new SystemState();
+        const planetsMap = systemState.getPlanetsMap();
 
         // Make sure the UUIDs match up with the
         // server if you call this on the client!
         for (let planetID of data.planets) {
-            planets[makeUUID()] = await Planet.fromID(planetID, gameData);
+            const uuid = makeUUID();
+            planetsMap.set(
+                uuid,
+                await Planet.fromID(planetID, gameData));
+            systemState.addPlanetskeys(uuid);
         }
 
-        return {
-            ships: {},
-            planets: planets,
-        }
+        return systemState;
     }
 
     static makeFactory(gameData: GameDataInterface): (s: SystemState) => System {
@@ -133,20 +95,6 @@ class System implements Stateful<SystemState>, Steppable {
             return new System({ gameData, state });
         }
     }
-
-
-    static fullState(maybeState: RecursivePartial<SystemState>): SystemState | undefined {
-        let decoded = SystemState.decode(maybeState)
-        if (isRight(decoded)) {
-            return decoded.right;
-        }
-        else {
-            return undefined;
-        }
-    }
-
-
-
 }
 
 export { System }

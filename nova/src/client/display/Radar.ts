@@ -1,7 +1,7 @@
 import * as PIXI from "pixi.js";
-import { SystemState } from "../../engine/SystemState";
 import { VectorLike, Vector } from "../../engine/Vector";
 import { Position } from "../../engine/Position";
+import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 
 class Radar extends PIXI.Graphics {
     iff: boolean;
@@ -95,17 +95,20 @@ class Radar extends PIXI.Graphics {
 
     draw(state: SystemState, center: Position) {
         this.clear();
-        for (let shipID in state.ships) {
-            let shipState = state.ships[shipID];
-            let position = Position.fromVectorLike(shipState.position);
-            this.drawPosition(position, 1, 0xffffff, center);
-
+        for (let [_shipId, shipState] of state.getShipsMap().getEntryList()) {
+            const positionProto = shipState.getSpaceobjectstate()?.getPosition();
+            if (positionProto) {
+                const position = Position.fromProto(positionProto);
+                this.drawPosition(position, 1, 0xffffff, center);
+            }
         }
 
-        for (let planetID in state.planets) {
-            let planetState = state.planets[planetID];
-            let position = Position.fromVectorLike(planetState.position)
-            this.drawPosition(position, 2, 0xffffff, center);
+        for (let [_planetId, planetState] of state.getPlanetsMap().getEntryList()) {
+            const positionProto = planetState.getSpaceobjectstate()?.getPosition();
+            if (positionProto) {
+                let position = Position.fromProto(positionProto);
+                this.drawPosition(position, 2, 0xffffff, center);
+            }
         }
     }
 }

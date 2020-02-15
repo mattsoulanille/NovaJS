@@ -1,10 +1,10 @@
-import { StatusBarData } from "../../../../novadatainterface/StatusBarData";
 import * as PIXI from "pixi.js";
-import { GameData } from "../gamedata/GameData";
-import { SystemState } from "../../engine/SystemState";
-import { Radar } from "./Radar";
-import { VectorLike } from "../../engine/Vector";
+import { StatusBarData } from "../../../../novadatainterface/StatusBarData";
 import { Position } from "../../engine/Position";
+import { GameData } from "../gamedata/GameData";
+import { Radar } from "./Radar";
+import { SystemState } from "novajs/nova/src/proto/system_state_pb";
+
 
 class StatusBar extends PIXI.Container {
     readonly gameData: GameData;

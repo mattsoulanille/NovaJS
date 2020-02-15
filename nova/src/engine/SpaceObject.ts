@@ -1,108 +1,66 @@
-import { MovementType } from "./MovementType";
-import { SpaceObjectState, TurnDirection } from "./SpaceObjectState";
-import { PartialState, Stateful, StateIndexer } from "./Stateful";
-import { getStateFromGetters, setStateFromSetters } from "./StateTraverser";
 import { Steppable } from "./Steppable";
 import { Vector } from "./Vector";
 import { Angle } from "./Vector";
 import { Position } from "./Position";
-import { SpaceObjectState as SpaceObjectStateProto } from "novajs/nova/src/proto/space_object_state_pb";
+import { Stateful } from "./Stateful";
+import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
 
 
 
-class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
-    private position: Position;
-    private velocity: Vector;
-    private movementType: MovementType;
-    private rotation: Angle;
-    private turning: TurnDirection;
-    private turnBack: boolean;
-    private id: string;
-    private acceleration: number;
-    private accelerating: number;
-    turnRate: number;
-    maxVelocity: number;
+export class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
+    private position: Position = new Position(0, 0);
+    private velocity: Vector = new Vector(0, 0);
 
-    constructor({ state }: { state: SpaceObjectState }) {
-        this.id = state.id;
-        this.movementType = state.movementType;
-        this.position = new Position(
-            state.position.x,
-            state.position.y
-        );
+    private movementType:
+        SpaceObjectState.MovementTypeMap[keyof SpaceObjectState.MovementTypeMap]
+        = SpaceObjectState.MovementType.INERTIAL;
 
-        this.velocity = new Vector(
-            state.velocity.x,
-            state.velocity.y
-        );
+    private rotation: Angle = new Angle(0);
+    private turning: number = 0;
+    private turnBack: boolean = false;
+    private acceleration: number = 0;
+    private accelerating: number = 0;
+    turnRate: number = 0;
+    maxVelocity: number = 0;
 
-        this.maxVelocity = state.maxVelocity;
-
-        this.rotation = new Angle(state.rotation);
-        this.acceleration = state.acceleration;
-        this.accelerating = state.accelerating;
-        this.turning = state.turning;
-        this.turnBack = state.turnBack;
-        this.turnRate = state.turnRate;
-        this.setState(state);
+    constructor(state?: SpaceObjectState) {
+        if (state) {
+            this.setState(state);
+        }
     }
 
-    getProto() {
-        const proto = new SpaceObjectStateProto();
-        proto.setId(this.id);
-        switch (this.movementType) {
-            case "inertial":
-                proto.setMovementtype(SpaceObjectStateProto.MovementType.INERTIAL);
-                break;
-            case "inertialess":
-                proto.setMovementtype(SpaceObjectStateProto.MovementType.INERTIALESS);
-                break;
-            case "stationary":
-                proto.setMovementtype(SpaceObjectStateProto.MovementType.STATIONARY);
-                break;
+    getState(): SpaceObjectState {
+        const state = new SpaceObjectState();
+        state.setMovementtype(this.movementType);
+        state.setPosition(this.position.getState());
+        state.setVelocity(this.velocity.getState());
+        state.setMaxvelocity(this.maxVelocity);
+        state.setRotation(this.rotation.angle);
+        state.setTurning(this.turning);
+        state.setTurnback(this.turnBack);
+        state.setTurnrate(this.turnRate);
+        state.setAcceleration(this.acceleration);
+        state.setAccelerating(this.accelerating);
+        return state;
+    }
+
+    setState(state: SpaceObjectState) {
+        this.movementType = state.getMovementtype();
+
+        if (state.hasPosition()) {
+            this.position.setState(state.getPosition()!);
+        }
+        if (state.hasVelocity()) {
+            this.velocity.setState(state.getVelocity()!);
         }
 
-        proto.setPosition(this.position.getProto());
-        proto.setVelocity(this.velocity.getProto());
-        proto.setMaxvelocity(this.maxVelocity);
-        proto.setRotation(this.rotation.angle);
-        proto.setTurning(this.turning);
-        proto.setTurnback(this.turnBack);
-        proto.setTurnrate(this.turnRate);
-        proto.setAcceleration(this.acceleration);
-        proto.setAccelerating(this.accelerating);
-        return proto;
-    }
-
-    getState(toGet: StateIndexer<SpaceObjectState> = {}): PartialState<SpaceObjectState> {
-        return getStateFromGetters<SpaceObjectState>(toGet, {
-            id: () => this.id,
-            movementType: () => this.movementType,
-            position: () => this.position.getState(),
-            velocity: () => this.velocity.getState(),
-            maxVelocity: () => this.maxVelocity,
-            rotation: () => this.rotation.getState(),
-            turning: () => this.turning,
-            turnBack: () => this.turnBack,
-            turnRate: () => this.turnRate,
-            acceleration: () => this.acceleration,
-            accelerating: () => this.accelerating
-        });
-    }
-
-    setState(state: PartialState<SpaceObjectState>): StateIndexer<SpaceObjectState> {
-        return setStateFromSetters<SpaceObjectState>(state, {
-            movementType: (newVal) => { this.movementType = newVal },
-            position: (newVal) => this.position.setState(newVal),
-            velocity: (newVal) => this.velocity.setState(newVal),
-            maxVelocity: (newVal) => { this.maxVelocity = newVal },
-            rotation: (newVal) => this.rotation.setState(newVal),
-            turning: (newVal) => { this.turning = newVal },
-            turnBack: (newVal) => { this.turnBack = newVal },
-            turnRate: (newVal) => { this.turnRate = newVal },
-            acceleration: (newVal) => { this.acceleration = newVal },
-            accelerating: (newVal) => { this.accelerating = newVal }
-        });
+        this.maxVelocity = state.getMaxvelocity();
+        this.rotation.setState(state.getRotation());
+        this.acceleration = state.getAcceleration();
+        this.accelerating = state.getAccelerating();
+        this.turning = state.getTurning();
+        this.turnBack = state.getTurnback();
+        this.turnRate = state.getTurnrate();
     }
 
     private turnToDirection(seconds: number, target: Angle) {
@@ -166,7 +124,3 @@ class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
         this.doInertialControls(seconds);
     }
 }
-
-
-
-export { SpaceObject };

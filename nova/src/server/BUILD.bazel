@@ -15,6 +15,8 @@ ts_library(
         "@npm//fp-ts",
         "@npm//express",
         "@npm//@types/express",
+        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/proto:ship_state_ts_proto",
         "//novadatainterface",
         "//nova/src/server/parsing",
         "//nova/src/engine",

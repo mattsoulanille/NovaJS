@@ -112,18 +112,6 @@ class GameData implements GameDataInterface {
         return new PIXI.Sprite(texture);
     }
 
-    async texturesFromSpriteSheet(id: string): Promise<PIXI.Texture[]> {
-        const spriteSheetFrames = await this.data.SpriteSheetFrames.get(id);
-
-        const allTextures: PIXI.Texture[] = [];
-        const frameNames = Object.keys(spriteSheetFrames.frames);
-        for (let frameIndex = 0; frameIndex < frameNames.length; frameIndex++) {
-            let frameName = frameNames[frameIndex];
-            allTextures[frameIndex] = PIXI.Texture.from(frameName);
-        }
-        return allTextures;
-    }
-
     private async getIds(): Promise<NovaIDs> {
         // Working with PIXI is weird
         return ((await this.getUrl(idsPath + ".json")) as unknown) as NovaIDs;

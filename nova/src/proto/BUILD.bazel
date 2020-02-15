@@ -38,7 +38,8 @@ proto_library(
     name = "system_state_proto",
     srcs = ["system_state.proto"],
     deps = [
-        ":space_object_state_proto"
+        ":ship_state_proto",
+        ":planet_state_proto",
     ]
 )
 

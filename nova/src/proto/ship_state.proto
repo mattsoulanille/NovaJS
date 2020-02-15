@@ -2,7 +2,11 @@ syntax = "proto3";
 import "nova/src/proto/space_object_state.proto";
 import "nova/src/proto/equipment_state.proto";
 
-message ShipState {
+message ShipState { // Next = 4
   SpaceObjectState spaceObjectState = 1;
   EquipmentState equipmentState = 2;
+
+  // The resource's ID. Not a UUID. Used for rendering
+  // and when building from a resource.
+  string id = 3;
 }

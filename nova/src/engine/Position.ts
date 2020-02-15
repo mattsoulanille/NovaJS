@@ -1,5 +1,6 @@
 import { Vector, VectorLike } from "./Vector";
 import { mod } from "./Mod";
+import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
 
 const BOUNDARY = 10000;
 
@@ -32,6 +33,10 @@ class Position extends Vector {
 
     static fromVectorLike(v: VectorLike) {
         return new Position(v.x, v.y);
+    }
+
+    static fromProto(v: VectorState) {
+        return new Position(v.getX(), v.getY());
     }
 
     getClosestRelativeTo(other: Position) {

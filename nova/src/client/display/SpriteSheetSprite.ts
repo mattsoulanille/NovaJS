@@ -1,7 +1,6 @@
-import { SpriteSheetImageData, SpriteSheetFramesData, SpriteSheetData } from "../../../../novadatainterface/SpriteSheetData";
+import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
-import { GameData } from "../gamedata/GameData";
-import { AnimationImagePurposes, AnimationImageIndex } from "../../../../novadatainterface/Animation";
+import { AnimationImageIndex, AnimationImagePurposes } from "../../../../novadatainterface/Animation";
 
 const TWO_PI = 2 * Math.PI;
 
@@ -9,18 +8,20 @@ function mod(a: number, b: number) {
     return ((a % b) + b) % b;
 }
 
-
+// This extends PIXI.Sprite since it doesn't really implement Drawable.
+// It has no associated state. In this case, I think it's fine to extend.
+// But be careful of changes to PIXI.Sprite.
 class SpriteSheetSprite extends PIXI.Sprite {
-    private readonly gameData: GameData;
+    private readonly gameData: GameDataInterface;
     private readonly id: string;
     private textures: PIXI.Texture[] | undefined;
-    readonly buildPromise: Promise<unknown>
+    readonly buildPromise: Promise<SpriteSheetSprite>;
     private readonly imagePurposes: AnimationImagePurposes;
     private textureSet: AnimationImageIndex;
     private _rotation: number;
 
 
-    constructor({ id, gameData, imagePurposes }: { id: string, gameData: GameData, imagePurposes: AnimationImagePurposes }) {
+    constructor({ id, gameData, imagePurposes }: { id: string, gameData: GameDataInterface, imagePurposes: AnimationImagePurposes }) {
         super();
         this.gameData = gameData
         this.id = id;
@@ -29,11 +30,25 @@ class SpriteSheetSprite extends PIXI.Sprite {
         this._rotation = 0;
 
         const loadTextures = async () => {
-            this.textures = await this.gameData.texturesFromSpriteSheet(this.id)
+            this.textures = await this.texturesFromSpriteSheet(this.id)
+            return this;
         }
         this.anchor.x = 0.5;
         this.anchor.y = 0.5;
         this.buildPromise = loadTextures();
+    }
+
+    private async texturesFromSpriteSheet(id: string): Promise<PIXI.Texture[]> {
+        const spriteSheetFrames = await this.gameData.data.SpriteSheetFrames.get(id);
+
+        const allTextures: PIXI.Texture[] = [];
+        const frameNames = Object.keys(spriteSheetFrames.frames);
+        for (let frameIndex = 0; frameIndex < frameNames.length; frameIndex++) {
+            let frameName = frameNames[frameIndex];
+            allTextures[frameIndex] = PIXI.Texture.from(frameName);
+        }
+        return allTextures;
+
     }
 
     private setTexture(index: number) {
@@ -95,6 +110,13 @@ class SpriteSheetSprite extends PIXI.Sprite {
         return this._rotation;
     }
 
+    static getFactory(gameData: GameDataInterface) {
+        return (id: string, imagePurposes: AnimationImagePurposes) => {
+            return new SpriteSheetSprite({
+                gameData, id, imagePurposes
+            }).buildPromise;
+        }
+    }
 }
 
-export { SpriteSheetSprite }
+export { SpriteSheetSprite };

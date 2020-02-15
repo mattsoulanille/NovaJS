@@ -1,0 +1,60 @@
+\documentclass{article}
+\usepackage{xspace, hyperref}
+\newcommand{\gameData}{\emph{gameData}\xspace}
+
+\title{Display Design}
+ 
+
+
+\begin{document}
+\maketitle
+\section{Display}
+The Display is responsible for drawing frames on the screen. It constructs sprites from data in NovaDataInterface and draws SystemState protos as it receives them. It is entirely stateless in that the frame that is drawn depends only on that frame's state. However, it does cache sprites and data.
+
+\section{Drawable}
+Most objects in our implementation of Display that are drawn on the screen implement the Drawable interface. The interface specifies a single function, the \textbf{draw} function, which takes the object's state as its first argument. The second argument is the center of the viewport relative to the system's center, and is (most likely) always the position of the player's ship. The \textbf{draw} function should only be called at most once per frame.
+
+A Drawable also has the \textbf{displayObject} property, which is an instance of \textbf{PIXI.DisplayObject}. A drawable's \textbf{displayObject} is often actually a \textbf{PIXI.Container}, which extends \textbf{PIXI.DisplayObject}.
+
+%% \subsection{DrawableWithId}
+%% A subinterface of Drawable, DrawableWithId adds the `id' field to Drawable, which is a string.
+
+
+\subsection{ShipDrawable}
+ShipDrawable draws a ship. It implements DrawableWithId, so it isn't completely stateless. It is only able to draw states that have the same ID as it was constructed with because it has the sprite for the corresponding ship built. 
+\subsection{PlanetDrawable}
+PlanetDrawable is nearly identical to ShipDrawable except that it draws planets instead of ships.
+\subsection{AsteroidDrawable}
+ditto
+
+\section{DrawableDispatcher}
+The function of \textbf{DrawableDispatcher} is to create, manage, and draw \textbf{Drawable} objects that take a common State type \textbf{S}. It itself implements \textbf{Drawable$\langle$S[]$\rangle$}, and draws all states given to it when its \textbf{draw} function is called. It 
+
+\subsection{FactoryQueue}
+A \textbf{FactoryQueue} is a factory capable of producing one type of object that has a queue of those objects ready to go. Its purpose is to allow quick access to objects that take a while to create, and to allow reuse of those objects after they are no longer needed. A \textbf{FactoryQueue} of item type \textbf{T} has the following methods:
+
+\begin{enumerate}
+  \item \textbf{constructor(buildFunction, minimum)}: A \textbf{FactoryQueue}'s constructor takes a \textbf{buildFunction}, which when called, returns a promise that eventually resolves to an instance of the type of object that the \textbf{FactoryQueue} holds. The \textbf{minimum} argument specifies the minimum number of those objects that the \textbf{FactoryQueue} should have at any given time. The queue will automatically build more if it falls below this limit.
+\item \textbf{dequeue(): Promise$\langle$T$\rangle$}: Dequeues an object from the queue or builds a new one if necessary.
+\item \textbf{dequeueIfAvailable(): T}: Synchronously dequeues an object from the queue if one is available.
+  \item \textbf{enqueue(T)}: Returns an object to the \textbf{FactoryQueue}. Should only be called with objects that are no longer in use.
+\end{enumerate}
+
+A \textbf{FactoryQueue} tries to maintain a minimum number (specified at its time of construction) of items in the queue, building more whenever it runs low. It does not destroy items when it has more than its minimum.
+
+
+
+\subsection{PersistentDrawer}
+Draws multiple copies of a Drawable on the screen in a single frame. Uses a FactoryQueue to manage offscreen items, but also keeps a queue of items that were on the screen last frame to avoid unnecessarily moving items in and out of its PIXI container.
+
+\subsection{PersistentMultiDrawer}
+Draws multiple copies of multiple different Drawables with IDs on the screen in one frame. This class is used for drawing ships, planets, asteroids, and most other things where there is a single type of state, all instances of which are drawn the same way, but with an ID field that determines the graphic that the state is drawn with.
+
+
+\section{Particles}
+
+
+\section{Starfield}
+The starfield is drawn deterministicly from a random number generator seeded by the system's ID. 
+
+\end{document}
