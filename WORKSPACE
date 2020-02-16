@@ -106,29 +106,21 @@ install_bazel_dependencies()
 
 # Karma
 # Fetch transitive Bazel dependencies of npm_bazel_karma
-#load("@npm_bazel_karma//:package.bzl", "npm_bazel_karma_dependencies")
+load("@npm_bazel_karma//:package.bzl", "npm_bazel_karma_dependencies")
 
-#npm_bazel_karma_dependencies()
+npm_bazel_karma_dependencies()
 
-# More Karma
 # Set up web testing, choose browsers we can test on
-# rules_webtesting_vers = "0.3.1"
-# http_archive(
-#     name = "io_bazel_rules_webtesting",
-#     sha256 = "d71b9dc5fef03cc0c0974305b1c9a3c36f4df1b52ed3d5898f8fa4c5d9d4edb1",
-#     strip_prefix = "rules_webtesting-{v}".format(v = rules_webtesting_vers),
-#     urls = [
-#         "https://github.com/bazelbuild/rules_webtesting/archive/{v}.tar.gz".format(v = rules_webtesting_vers),
-#     ],
-# )
+load("@io_bazel_rules_webtesting//web:repositories.bzl", "web_test_repositories")
 
-# load("@io_bazel_rules_webtesting//web:repositories.bzl", "web_test_repositories")
-# load("@io_bazel_rules_webtesting//web/versioned:browsers-0.3.1.bzl", "browser_repositories")
+web_test_repositories()
 
-# web_test_repositories()
-# browser_repositories(
-#     chromium = True,
-# )
+load("@io_bazel_rules_webtesting//web/versioned:browsers-0.3.2.bzl", "browser_repositories")
+
+browser_repositories(
+    chromium = True,
+    firefox = True,
+)
 
 # Setup TypeScript toolchain
 load("@npm_bazel_typescript//:index.bzl", "ts_setup_workspace")

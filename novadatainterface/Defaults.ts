@@ -6,7 +6,8 @@ import { DefaultPictImageData } from "./PictImage";
 import { DefaultPlanetData } from "./PlanetData";
 import { DefaultSystemData } from "./SystemData";
 import { DefaultTargetCornersData } from "./TargetCornersData";
-import { DefaultSpriteSheetData, DefaultSpriteSheetImage, DefaultSpriteSheetFrames } from "./SpriteSheetData";
+import { DefaultSpriteSheetData, DefaultSpriteSheetFrames } from "./SpriteSheetData";
+import { DefaultSpriteSheetImage } from "./DefaultSpriteSheetImage";
 import { DefaultStatusBarData } from "./StatusBarData";
 import { DefaultExplosionData } from "./ExplosionData";
 

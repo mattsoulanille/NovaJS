@@ -8,9 +8,12 @@ interface PlanetData extends SpaceObjectData {
     position: [number, number]
 }
 
-const DefaultPlanetData = {
+const DefaultPlanetData: PlanetData = {
     ...DefaultSpaceObjectData,
-    vulnerableTo: <Array<DamageType>>["planetBuster"]
+    vulnerableTo: <Array<DamageType>>["planetBuster"],
+    landingPict: "default",
+    landingDesc: "default",
+    position: [0, 0]
 }
 
 export { PlanetData, DefaultPlanetData }

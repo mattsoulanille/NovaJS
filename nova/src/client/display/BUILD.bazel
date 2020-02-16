@@ -12,6 +12,7 @@ ts_library(
         "AnimationGraphic.ts",
         "SpriteSheetSprite.ts",
         "Drawable.ts",
+        "DrawableMap.ts",
     ],
     deps = [
         "@npm//@types/node",

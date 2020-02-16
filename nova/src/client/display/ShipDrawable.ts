@@ -1,3 +1,4 @@
+import * as PIXI from "pixi.js";
 import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import { Animation } from "../../../../novadatainterface/Animation";
@@ -26,10 +27,14 @@ class ShipDrawable implements Drawable<ShipState> {
         // can quickly pull from.
         const id = state.getId();
         if (this.id !== id || !this.animation) {
+            if (this.animation) {
+                this.displayObject.removeChild(this.animation);
+            }
             this.animation = new AnimationGraphic({
                 gameData: this.gameData,
                 animation: this.getAnimation(id)
             });
+            this.displayObject.addChild(this.animation);
             this.id = id;
         }
 
