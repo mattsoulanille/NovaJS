@@ -1,29 +1,37 @@
-import { Channel, MessageType, MessageWithSourceType } from "./Channel";
+import { ManagementData, SocketMessageFromServer, SocketMessageToServer, StringSetDelta, GameMessage } from "novajs/nova/src/proto/nova_service_pb";
 import { Subject } from "rxjs";
-import { InitialDataType } from "./SocketChannelServer";
-import { isRight } from "fp-ts/lib/Either";
+import { Channel, MessageWithSourceType } from "./Channel";
 
 
+export class SocketChannelClient implements Channel {
+    readonly onMessage = new Subject<MessageWithSourceType>();
+    readonly onPeerConnect = new Subject<string>();
+    readonly onPeerDisconnect = new Subject<string>();
 
-class SocketChannelClient implements Channel {
-    public readonly onMessage: Subject<MessageWithSourceType>;
-    public readonly onPeerConnect: Subject<string>;
-    public readonly onPeerDisconnect: Subject<string>;
-    private _peers: Set<string>;
-    private socket: SocketIOClient.Socket;
+    private wrappedAdmins = new Set<string>();
+    get admins() {
+        return this.wrappedAdmins;
+    }
+
+    private wrappedPeers = new Set<string>();
+    get peers() {
+        return this.wrappedPeers;
+    }
+
+    private wrappedUuid?: string;
+    get uuid() {
+        if (this.wrappedUuid === undefined) {
+            throw new Error("UUID not yet available");
+        }
+        return this.wrappedUuid;
+    }
+
+    private webSocket: WebSocket;
     warn: (m: string) => void;
-    private _uuid: string | undefined;
-    private _admins: Set<string>;
-    readonly readyPromise: Promise<void>;
 
+    constructor({ webSocket, warn }: { webSocket: WebSocket, warn?: ((m: string) => void) }) {
 
-    constructor({ socket, warn }: { socket: SocketIOClient.Socket, warn?: ((m: string) => void) }) {
-
-        this.onMessage = new Subject<MessageWithSourceType>();
-        this.onPeerConnect = new Subject<string>();
-        this.onPeerDisconnect = new Subject<string>();
-        this._peers = new Set<string>();
-        this._admins = new Set<string>();
+        this.webSocket = webSocket;
 
         if (warn !== undefined) {
             this.warn = warn;
@@ -32,80 +40,93 @@ class SocketChannelClient implements Channel {
             this.warn = console.warn;
         }
 
-        this.socket = socket;
-        this.socket.on("message", this._handleMessage.bind(this));
-        this.socket.on("setInitialData", this._handleSetInitialData.bind(this));
-        this.socket.on("addPeer", this._handleAddPeer.bind(this));
-        this.socket.on("removePeer", this._handleRemovePeer.bind(this));
-        this.socket.emit("ready");
-        this.readyPromise = new Promise((fulfill) => {
-            this.socket.once("setInitialData", () => fulfill());
-        });
+        this.webSocket.addEventListener("message", this.handleMessage.bind(this));
     }
 
-    send(destination: string, message: MessageType): void {
-        this.socket.emit("message", { destination, message });
+    send(destination: string, data: GameMessage): void {
+        const socketMessage = new SocketMessageToServer();
+        socketMessage.setData(data);
+        socketMessage.setDestination(destination);
+        this.webSocket.send(socketMessage.serializeBinary());
     }
 
-    broadcast(message: MessageType): void {
-        this.socket.emit("broadcast", message);
+    broadcast(message: GameMessage): void {
+        const socketMessage = new SocketMessageToServer();
+        socketMessage.setData(message);
+        socketMessage.setBroadcast(true);
+        this.webSocket.send(socketMessage.serializeBinary());
     }
 
-    private _handleMessage(message: unknown) {
-        const decodedMessage = MessageWithSourceType.decode(message)
-        if (isRight(decodedMessage)) {
-            this.onMessage.next(decodedMessage.right);
+    private handleMessage(messageEvent: MessageEvent) {
+        const data = messageEvent.data;
+        if (!(data instanceof Uint8Array)) {
+            throw new Error(
+                `Expected data to be a Uint8Array ` +
+                `but it was ${typeof data}.`);
         }
-        else {
-            this.warn("Expected message to decode as " + MessageWithSourceType.name + " but "
-                + "decoding failed with error:\n" + decodedMessage.left);
-        }
-    }
 
-    private _handleSetInitialData(data: unknown) {
-        let decoded = InitialDataType.decode(data);
-        if (isRight(decoded)) {
-            this._uuid = decoded.right.uuid;
-            this._peers = new Set(decoded.right.peers);
-            this._admins = new Set(decoded.right.admins);
-        }
-        else {
-            this.warn(decoded.left.toString());
-        }
-    }
+        const socketMessage = SocketMessageFromServer.deserializeBinary(data);
+        const source = socketMessage.getSource();
+        const managementData = socketMessage.getManagementdata();
+        const message = socketMessage.getData();
 
-    private _handleAddPeer(peer: unknown) {
-        if (typeof peer === "string") {
-            this._peers.add(peer);
-            this.onPeerConnect.next(peer);
+        if (!source) {
+            this.warn("Received a message with no source");
+            return;
         }
-        else {
-            this.warn("Expected peer to be string but got " + peer);
-        }
-    }
 
-    private _handleRemovePeer(peer: unknown) {
-        if (typeof peer === "string") {
-            this._peers.delete(peer);
-            this.onPeerDisconnect.next(peer);
+        if (managementData) {
+            if (this.admins.has(source)) {
+                this.handleManagementData(socketMessage.getManagementdata()!);
+            }
+        }
+
+        if (message) {
+            // It's a higher up layer's responsibility
+            // to decide if the message is valid coming
+            // from the source.
+            this.onMessage.next({
+                message,
+                source
+            });
         }
     }
 
-    get peers() {
-        return this._peers;
-    }
-    get uuid() {
-        if (this._uuid === undefined) {
-            throw new Error("UUID not yet available");
+    private handleManagementData(managementData: ManagementData) {
+        // Set the UUID
+        if (managementData.hasUuid()) {
+            this.wrappedUuid = managementData.getUuid()!.getValue();
         }
-        return this._uuid;
+
+        // Update admins set
+        if (managementData.hasAdmins()) {
+            this.wrappedAdmins = new Set(
+                managementData.getAdmins()!.getValueList());
+        } else if (managementData.hasAdminsdelta()) {
+            const delta = managementData.getAdminsdelta()!;
+            this.applyStringSetDelta(delta, this.admins);
+        }
+
+        // Update peers set
+        if (managementData.hasPeers()) {
+            this.wrappedPeers = new Set(
+                managementData.getPeers()!.getValueList());
+        } else if (managementData.hasPeersdelta()) {
+            const delta = managementData.getPeersdelta()!;
+            this.applyStringSetDelta(delta, this.peers);
+        }
     }
-    get admins() {
-        return this._admins;
+
+    private applyStringSetDelta(delta: StringSetDelta, stringSet: Set<string>) {
+        for (const toAdd of delta.getAddList()) {
+            stringSet.add(toAdd);
+        }
+        for (const toRemove of delta.getRemoveList()) {
+            stringSet.delete(toRemove);
+        }
     }
+
     disconnect() {
-        this.socket.disconnect();
+        this.webSocket.close();
     }
 }
-
-export { SocketChannelClient }

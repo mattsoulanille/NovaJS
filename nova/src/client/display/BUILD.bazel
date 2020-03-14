@@ -9,9 +9,12 @@ ts_library(
     srcs = [
         "Display.ts",
         "ShipDrawable.ts",
+        "PlanetDrawable.ts",
         "AnimationGraphic.ts",
         "SpriteSheetSprite.ts",
         "Drawable.ts",
+        "MainDrawable.ts",
+        "SpaceObjectDrawable.ts",
         "DrawableMap.ts",
     ],
     deps = [

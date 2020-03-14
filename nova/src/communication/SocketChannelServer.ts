@@ -1,185 +1,203 @@
-import * as t from "io-ts";
+import { ManagementData, RepeatedString, SocketMessageFromServer, SocketMessageToServer, StringSetDelta, GameMessage, StringValue } from "novajs/nova/src/proto/nova_service_pb";
 import { Subject } from "rxjs";
 import UUID from "uuid/v4";
-import { Channel, MessageType, MessageWithSourceType } from "./Channel";
-import { isRight } from "fp-ts/lib/Either";
+import * as WebSocket from "ws";
+import { Channel, MessageWithSourceType } from "./Channel";
 
 
+export class SocketChannelServer implements Channel {
+    readonly onMessage = new Subject<MessageWithSourceType>();
+    readonly onPeerConnect = new Subject<string>();
+    readonly onPeerDisconnect = new Subject<string>();
 
-const IncomingMessageType = t.type({
-    destination: t.string,
-    message: MessageType
-});
-
-const InitialDataType = t.type({
-    peers: t.array(t.string),
-    uuid: t.string,
-    admins: t.array(t.string),
-});
-
-type InitialDataType = t.TypeOf<typeof InitialDataType>;
-
-class SocketChannelServer implements Channel {
-    // Socket.io is used as a fallback from WebRTC
-    public readonly onMessage: Subject<MessageWithSourceType>;
-    public readonly onPeerConnect: Subject<string>;
-    public readonly onPeerDisconnect: Subject<string>;
-
-    private clientSockets: { [index: string]: SocketIO.Socket };
-    readonly io: SocketIO.Server;
+    private clientSockets = new Map<string, WebSocket>();
+    readonly webSocketServer: WebSocket.Server;
     readonly uuid: string;
-    private warn: (m: string) => void;
+    private warn: (m: string) => void = console.warn;
 
     readonly admins: Set<string>;
 
-    constructor({ io, warn, uuid, admins }: { io: SocketIO.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string> }) {
+    constructor({ webSocket, warn, uuid, admins }: { webSocket: WebSocket.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string> }) {
 
-        this.onMessage = new Subject<MessageWithSourceType>();
-        this.onPeerConnect = new Subject<string>();
-        this.onPeerDisconnect = new Subject<string>();
-
-        if (warn !== undefined) {
+        if (warn) {
             this.warn = warn;
         }
-        else {
-            this.warn = console.warn;
-        }
 
-        if (uuid !== undefined) {
+        if (uuid) {
             this.uuid = uuid;
         }
         else {
             this.uuid = UUID();
         }
 
-        if (admins !== undefined) {
+        if (admins) {
             this.admins = new Set([...admins, this.uuid]);
         }
         else {
             this.admins = new Set([this.uuid]);
         }
 
-        this.clientSockets = {};
-
-        this.io = io;
-        this.io.on("connection", this._onConnect.bind(this));
-
+        this.webSocketServer = webSocket;
+        this.webSocketServer.on("connection", this.onConnect.bind(this));
     }
 
     get peers() {
         return new Set(Object.keys(this.clientSockets));
     }
 
-    // Handles when a client first connects
-    // It might be better to abstract all this out with an object for each client.
-    private _onConnect(socket: SocketIO.Socket) {
-        const clientUUID = UUID();
-        // This uuid is used only for communication and
-        // has nothing to do with the game engine's uuid
-        this.clientSockets[clientUUID] = socket;
+    private sendRawIfOpen(destination: string,
+        socketMessage: SocketMessageFromServer): boolean {
 
-        socket.on("ready", this._handleClientReady.bind(this, clientUUID, socket));
-        socket.on("message", this._handleMessageFromClient.bind(this, clientUUID));
-        socket.on("broadcast", this._handleBroadcastFromClient.bind(this, clientUUID, socket));
-        socket.on("disconnect", this._onDisconnect.bind(this, clientUUID));
-
+        const destinationSocket = this.clientSockets.get(destination);
+        if (!destinationSocket) {
+            this.warn(`No such peer ${destination}`);
+        } else if (destinationSocket.readyState === WebSocket.OPEN) {
+            destinationSocket.send(socketMessage.serializeBinary());
+            return true;
+        }
+        return false;
     }
 
-    private _handleClientReady(clientUUID: string, socket: SocketIO.Socket) {
-        this.onPeerConnect.next(clientUUID);
+    private sendIfOpen(source: string, destination: string, message: GameMessage) {
+        const socketMessage = new SocketMessageFromServer();
+        socketMessage.setSource(source);
+        socketMessage.setData(message);
+        return this.sendRawIfOpen(destination, socketMessage);
+    }
 
-        let peersSet = new Set(this.peers);
+    send(destination: string, message: GameMessage) {
+        this.sendIfOpen(this.uuid, destination, message);
+    }
+
+    private rebroadcastRaw(exclude: string,
+        socketMessage: SocketMessageFromServer) {
+        for (const id of this.clientSockets.keys()) {
+            if (id !== exclude) {
+                this.sendRawIfOpen(id, socketMessage);
+            }
+        }
+    }
+
+    private rebroadast(source: string, message: GameMessage) {
+        const socketMessage = new SocketMessageFromServer();
+        socketMessage.setSource(source);
+        socketMessage.setBroadcast(true);
+        socketMessage.setData(message);
+
+        this.rebroadcastRaw(source, socketMessage);
+    }
+
+    private broadcastRaw(message: SocketMessageFromServer) {
+        for (const id of this.clientSockets.keys()) {
+            this.sendRawIfOpen(id, message)
+        }
+    }
+
+    broadcast(message: GameMessage) {
+        this.rebroadast(this.uuid, message)
+    }
+
+    // Handles when a client first connects
+    // It might be better to abstract all this out with an object for each client.
+    private onConnect(webSocket: WebSocket) {
+        const clientUUID = UUID();
+        // This uuid is used only for communication and
+        // has nothing to do with the game engine's uuids
+        this.clientSockets.set(clientUUID, webSocket);
+
+        webSocket.on("open", this.handleClientOpen.bind(this, clientUUID));
+        webSocket.on("message", this.handleMessageFromClient.bind(this, clientUUID));
+        webSocket.on("close", this.onClose.bind(this, clientUUID));
+    }
+
+    private handleClientOpen(clientUUID: string) {
+        // Create the set of peers for this peer
+        const peersSet = new Set(this.peers);
+        // It is not a peer of itself
         peersSet.delete(clientUUID);
+        // It is a peer of this server
         peersSet.add(this.uuid);
 
-        let initialData: InitialDataType = {
-            peers: [...peersSet],
-            uuid: clientUUID,
-            admins: [...this.admins]
-        };
-        socket.emit("setInitialData", initialData);
+        // Send the new client its UUID
+        const managementData = new ManagementData();
+        const uuidValue = new StringValue();
+        uuidValue.setValue(clientUUID);
+        managementData.setUuid(uuidValue);
 
-        socket.broadcast.emit("addPeer", clientUUID);
+        // Send the new client the current list of peers
+        const peers = new RepeatedString();
+        peers.setValueList([...peersSet]);
+        managementData.setPeers(peers);
+
+        // Ditto for admins
+        const admins = new RepeatedString();
+        admins.setValueList([...this.admins]);
+        managementData.setAdmins(admins);
+
+        // Actually send the message to the new client
+        const messageToNewPeer = new SocketMessageFromServer();
+        messageToNewPeer.setManagementdata(managementData);
+        if (!this.sendRawIfOpen(clientUUID, messageToNewPeer)) {
+            this.warn("Failed to send message to the new peer");
+        }
+
+        // Send an update to all other peers that a new peer connected
+        const messageToOthers = new SocketMessageFromServer();
+        const managementDataToOthers = new ManagementData();
+        const peerDelta = new StringSetDelta();
+        peerDelta.setAddList([clientUUID]);
+        managementDataToOthers.setPeersdelta(peerDelta);
+        messageToOthers.setManagementdata(managementDataToOthers);
+
+        this.rebroadcastRaw(clientUUID, messageToOthers);
+        this.onPeerConnect.next(clientUUID);
     }
 
     // Handles messages received from clients. Forwards messages to their destination.
-    private _handleMessageFromClient(clientUUID: string, message: unknown) {
-        const decoded = IncomingMessageType.decode(message);
-        if (isRight(decoded)) {
-            const decodedMessage = decoded.right;
+    private handleMessageFromClient(clientUUID: string, serialized: Uint8Array) {
+        const message = SocketMessageToServer.deserializeBinary(serialized);
+        const data = message.getData();
+        const destination = message.getDestination();
+        if (!data) {
+            console.warn(`Message from ${clientUUID} had no data`);
+            return;
+        }
 
-            // The message formatted for forwarding
-            const toForward: MessageWithSourceType = {
+        if (message.getBroadcast()) {
+            // Rebroadcast the message
+            this.rebroadast(clientUUID, data);
+            this.onMessage.next({
+                message: data,
                 source: clientUUID,
-                message: decodedMessage.message
-            };
-
-            if (decodedMessage.destination === this.uuid) {
-                this.onMessage.next(toForward);
-            }
-            else {
-                let destinationSocket = this.clientSockets[decodedMessage.destination];
-                if (destinationSocket !== undefined) {
-                    destinationSocket.emit("message", toForward);
-                }
-            }
-        }
-        else {
-            this.warn(
-                "Expected message to decode as " + IncomingMessageType.name + " but "
-                + "decoding failed with error:\n" + decoded.left);
+            });
+        } else if (destination === this.uuid) {
+            this.onMessage.next({
+                message: data,
+                source: clientUUID,
+            });
+        } else if (destination) {
+            this.sendIfOpen(clientUUID, destination, data);
+        } else {
+            console.warn(`Message from ${clientUUID} had no destination and was not for broadcasting`);
         }
     }
-
-    // Handles broadcast requests from the client.
-    private _handleBroadcastFromClient(clientUUID: string, socket: SocketIO.Socket, message: unknown) {
-        const decoded = MessageType.decode(message);
-        if (isRight(decoded)) {
-            const toBroadcast: MessageWithSourceType = {
-                message: decoded.right,
-                source: clientUUID
-            };
-            socket.broadcast.emit("message", toBroadcast);
-            this.onMessage.next(toBroadcast);
-        }
-        else {
-            this.warn(
-                "Expected message to decode as " + MessageType.name + " but "
-                + "decoding failed with error:\n" + decoded.left);
-        }
-    }
-
 
     // Handles when a client disconnects
-    private _onDisconnect(clientUUID: string) {
-        delete this.clientSockets[clientUUID];
-        this.io.emit("removePeer", clientUUID);
+    private onClose(clientUUID: string) {
+        this.clientSockets.delete(clientUUID);
+        const managementData = new ManagementData();
+        const peersDelta = new StringSetDelta();
+        peersDelta.addRemove(clientUUID);
+        managementData.setPeersdelta(peersDelta);
+        const message = new SocketMessageFromServer();
+        message.setBroadcast(true);
+        message.setManagementdata(managementData);
+
+        this.broadcastRaw(message);
         this.onPeerDisconnect.next(clientUUID);
     }
 
-    private _constructMessage(message: unknown): MessageWithSourceType {
-        return {
-            message: message,
-            source: this.uuid
-        }
-    }
-
-    send(uuid: string, message: MessageType) {
-        const socket = this.clientSockets[uuid];
-        if (socket !== undefined) {
-            socket.emit("message", this._constructMessage(message));
-        }
-        else {
-            this.warn("Tried to send message to non-existent peer " + uuid);
-        }
-    }
-
-    broadcast(message: MessageType) {
-        this.io.emit("message", this._constructMessage(message));
-    }
     disconnect() {
         this.warn("Called disconnect on the server");
     }
 }
-
-export { SocketChannelServer, InitialDataType };

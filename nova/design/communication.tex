@@ -9,6 +9,10 @@
 \begin{document}
 \maketitle
 
+\section{Why not gRPC?}
+
+gRPC in the browser is not mature enough for NovaJS's communication needs. Neither Google's nor Improbable's implementation supports bidirectional streaming yet.\footnote{\url{https://grpc.io/blog/state-of-grpc-web/\#f19}} Instead of gRPC, NovaJS uses SocketIO as its realtime communication channel but still communicates with protobufs over the wire. It is also not difficult to hook in a new communication channel, and webRTC seems like a good candidate.
+
 \section{Channel}
 A channel is the interface used by clients and the server to communicate. A channel has the following external methods and properties:
 \begin{enumerate}

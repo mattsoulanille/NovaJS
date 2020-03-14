@@ -2,7 +2,6 @@ package(default_visibility = ["//visibility:public"])
 load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@rules_typescript_proto//:index.bzl", "typescript_proto_library")
 
-
 proto_library(
     name = "vector_state_proto",
     srcs = ["vector_state.proto"],
@@ -78,6 +77,16 @@ proto_library(
     ],
 )
 
+proto_library(
+    name = "nova_service_proto",
+    srcs = ["nova_service.proto"],
+    deps = [
+        ":engine_state_proto",
+#        "@com_google_protobuf//:any_proto",
+#        "@com_google_protobuf//:wrappers_proto",
+    ]
+)
+
 typescript_proto_library(
     name = "vector_state_ts_proto",
     proto = ":vector_state_proto",
@@ -128,6 +137,12 @@ typescript_proto_library(
     proto = ":equipment_state_proto",
 )
 
+typescript_proto_library(
+    name = "nova_service_ts_proto",
+    proto = ":nova_service_proto",
+)
+
+# Needed for bundling since protos are like externs
 filegroup(
     name = "proto_ts_srcs",
     srcs = [
@@ -141,5 +156,6 @@ filegroup(
         ":outfit_state_ts_proto",
         ":armament_state_ts_proto",
         ":equipment_state_ts_proto",
+        ":nova_service_ts_proto",
     ]
 )

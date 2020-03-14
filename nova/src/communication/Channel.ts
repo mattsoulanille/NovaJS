@@ -1,21 +1,23 @@
-import * as t from "io-ts";
 import { Subject } from "rxjs";
+import { GameMessage } from "novajs/nova/src/proto/nova_service_pb";
 
-const MessageType = t.unknown;
-type MessageType = t.TypeOf<typeof MessageType>;
+export interface MessageWithSourceType {
+    message: GameMessage;
+    source: string;
+}
 
-const MessageWithSourceType = t.type({
-    source: t.string,
-    message: MessageType
-});
-type MessageWithSourceType = t.TypeOf<typeof MessageWithSourceType>;
-
-interface Channel {
-    send(destination: string, message: MessageType): void,
-    broadcast(message: MessageType): void,
+/**
+ * This is a basic communication channel. It isn't supposed
+ * to be fancy. Other fancier abstractions use it to make
+ * interfaces with, for example, multiple different rooms
+ * and some guarantee about what data is transferred.
+ */
+export interface Channel {
+    send(destination: string, message: GameMessage): void,
+    broadcast(message: GameMessage): void,
     disconnect(): void
     // Broadcast is necessary so that when communicating
-    // via socket.io, the client doesn't spam the server with
+    // via websockets, the client doesn't spam the server with
     // individual messages to each other client.
 
     // Message source should not be spoofable.
@@ -32,5 +34,3 @@ interface Channel {
     readonly uuid: string;
 }
 
-
-export { Channel, MessageType, MessageWithSourceType } 

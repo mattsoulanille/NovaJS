@@ -3,8 +3,6 @@ import { GameState, GameStateComparator } from "../engine/GameState";
 import { SystemState } from "../engine/SystemState";
 import { Channel } from "./Channel";
 import { PathReporter } from "io-ts/lib/PathReporter";
-import { PartialState, PartialGameState, RecursivePartial } from "../engine/Stateful";
-import { mergeStates } from "../engine/mergeStates";
 import { filterUUIDs } from "./filterUUIDs";
 import { SetType } from "../common/SetType"
 import { Subject, Observable } from "rxjs";

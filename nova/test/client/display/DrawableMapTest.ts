@@ -65,7 +65,7 @@ describe("AnimationGraphic", function() {
         ]);
     });
 
-    it("Should delete drawables", () => {
+    it("Should remove drawables that aren't in the state", () => {
         const drawableMap = new DrawableMap(factory);
         const states: [string, TestState][] = [
             ["uuid1", { foo: "uuid 1 foo" }],

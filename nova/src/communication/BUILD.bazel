@@ -3,22 +3,50 @@ package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 
+ts_library(
+    name = "channel_lib",
+    srcs = [
+        "Channel.ts",
+    ],
+    deps = [
+        "@npm//rxjs",
+        "//nova/src/proto:nova_service_ts_proto",
+    ]
+)
+
 
 ts_library(
-    name = "communication",
-    srcs = glob(["*.ts"]),
+    name = "communication_server_lib",
+    srcs = [
+        "SocketChannelServer.ts",
+    ],
     deps = [
+        ":channel_lib",
         "@npm//@types/node",
-        "@npm//io-ts",
-        "@npm//fp-ts",
-        "@npm//socket.io-client",
-        "@npm//@types/socket.io-client",
-        "@npm//socket.io",
-        "@npm//@types/socket.io",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//rxjs",
-        "//nova/src/common",
-        "//nova/src/engine",
+        "@npm//ws",
+        "@npm//@types/ws",
+#        "//nova/src/common",
+#        "//nova/src/engine",
+        "//nova/src/proto:nova_service_ts_proto",
+    ]
+)
+
+ts_library(
+    name = "communication_client_lib",
+    srcs = [
+        "SocketChannelClient.ts",
+    ],
+    deps = [
+        ":channel_lib",
+        "@npm//@types/node",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//rxjs",
+#        "//nova/src/common",
+#        "//nova/src/engine",
+        "//nova/src/proto:nova_service_ts_proto",
     ]
 )

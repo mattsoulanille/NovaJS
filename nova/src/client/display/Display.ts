@@ -3,29 +3,36 @@ import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { Position } from "../../engine/Position";
 import { Vector } from "../../engine/Vector";
-import { GameData } from "../gamedata/GameData";
+import { DrawableMap } from "./DrawableMap";
+import { ShipDrawable } from "./ShipDrawable";
+import { PlanetDrawable } from "./PlanetDrawable";
+import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
+import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
 
-class Display {
-    readonly container: PIXI.Container;
-    readonly systemContainer: PIXI.Container;
+export class Display {
+    readonly displayObject = new PIXI.Container();
+    readonly systemContainer = new PIXI.Container();
     private readonly gameData: GameDataInterface;
     //private statusBar: StatusBar;
     readonly buildPromise: Promise<unknown>;
     //    private activeShip: string | undefined; // The uuid of the ship to render from.
     built: boolean;
 
-    //private readonly shipDrawer: PersistentMultiDrawer<ShipDrawable, ShipState>;
-    //private readonly planetDrawer: PersistentMultiDrawer<PlanetDrawable, PlanetState>;
+    private readonly ships =
+        new DrawableMap<ShipDrawable, ShipState>(
+            () => new ShipDrawable(this.gameData));
+    private readonly planets =
+        new DrawableMap<PlanetDrawable, PlanetState>(
+            () => new PlanetDrawable(this.gameData));
 
     private _target!: string | Position;
     private targetPosition: Position;
-    private dimensions: Vector; // To be used for the starfield
 
-    constructor({ container, gameData, target }: { container: PIXI.Container, gameData: GameData, target?: Position | string }) {
+    constructor({ gameData, target }: { gameData: GameDataInterface, target?: Position | string }) {
         this.gameData = gameData;
-        this.container = container;
-        this.systemContainer = new PIXI.Container();
-        this.container.addChild(this.systemContainer);
+        this.displayObject.addChild(this.systemContainer);
+        this.systemContainer.addChild(this.ships.displayObject);
+        this.systemContainer.addChild(this.planets.displayObject);
 
         // this.statusBar = new StatusBar({
         //     gameData: gameData
@@ -38,8 +45,6 @@ class Display {
         //this.shipDrawer = new PersistentMultiDrawer(ShipDrawable.getFactory(gameData));
         //this.systemContainer.addChild(this.shipDrawer.displayObject);
 
-
-        this.dimensions = new Vector(10, 10);
         this.built = false;
         this.buildPromise = Promise.resolve();
         //this.buildPromise = Promise.all([this.statusBar.buildPromise])
@@ -54,8 +59,7 @@ class Display {
         }
     }
 
-    draw(state: SystemState) {
-
+    private setTargetPosition(state: SystemState) {
         if (!(this.target instanceof Vector)) {
             const ships = state.getShipsMap();
             let targetShip = ships.get(this.target);
@@ -71,17 +75,16 @@ class Display {
                 }
             }
         }
+    }
 
-        // this.shipDrawer.clear();
-        // for (const [_shipUUID, shipState] of state.getShipsMap().getEntryList()) {
-        //     this.shipDrawer.draw(shipState, this.targetPosition);
-        // }
+    draw(state: SystemState) {
+        this.setTargetPosition(state);
 
-        // this.planetDrawer.clear();
-        // for (const [_planetUUID, planetState] of state.getPlanetsMap().getEntryList()) {
-        //     this.planetDrawer.draw(planetState, this.targetPosition);
-        // }
+        this.ships.draw(state.getShipsMap().getEntryList(),
+            this.targetPosition);
 
+        this.planets.draw(state.getPlanetsMap().getEntryList(),
+            this.targetPosition);
         //this.statusBar.draw(state, this.targetPosition)
     }
 
@@ -96,12 +99,10 @@ class Display {
         return this._target;
     }
 
-    resize(x: number, y: number) {
-        this.dimensions = new Vector(x, y);
+    resize(_x: number, _y: number) {
+        //this.dimensions = new Vector(x, y);
         //this.statusBar.resize(x, y);
         //this.systemContainer.position.x = (x - this.statusBar.width) / 2;
         //this.systemContainer.position.y = y / 2;
     }
 }
-
-export { Display };

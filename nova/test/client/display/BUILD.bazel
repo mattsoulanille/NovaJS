@@ -5,7 +5,7 @@ load("@npm_bazel_typescript//:index.bzl", "ts_library")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 load("@npm_bazel_karma//:index.bzl", "karma_web_test")
 load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
-load("@novajs//:web_bundle.bzl", "web_bundle")
+load("@novajs//:bundlers.bzl", "web_bundle")
 
 ts_library(
     name = "ship_drawable_test_lib",
@@ -29,6 +29,30 @@ web_bundle(
     name = "ship_drawable_test_bundle",
     deps = [":ship_drawable_test_lib"],
     entry_point = "ShipDrawableTest.ts",
+)
+
+ts_library(
+    name = "planet_drawable_test_lib",
+    srcs = [
+        "PlanetDrawableTest.ts",
+     ],
+    deps = [
+        "@npm//@types/node",
+        "@npm//@types/jasmine",
+        "@npm//jasmine",
+        "@npm//pixi.js",
+        "//nova/src/client/display",
+        "//nova/src/common",
+        "//novadatainterface",
+        "//nova/src/proto:planet_state_ts_proto",
+        "//nova/src/engine",
+    ]
+)
+
+web_bundle(
+    name = "planet_drawable_test_bundle",
+    deps = [":planet_drawable_test_lib"],
+    entry_point = "PlanetDrawableTest.ts",
 )
 
 ts_library(
@@ -78,12 +102,63 @@ web_bundle(
     entry_point = "DrawableMapTest.ts",
 )
 
+ts_library(
+    name = "space_object_drawable_test_lib",
+    srcs = [
+        "SpaceObjectDrawableTest.ts",
+     ],
+    deps = [
+        "@npm//@types/node",
+        "@npm//@types/jasmine",
+        "@npm//jasmine",
+        "@npm//pixi.js",
+        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/client/display",
+        "//nova/src/common",
+        "//novadatainterface",
+        "//nova/src/engine",
+    ]
+)
+
+web_bundle(
+    name = "space_object_drawable_test_bundle",
+    deps = [":space_object_drawable_test_lib"],
+    entry_point = "SpaceObjectDrawableTest.ts",
+)
+
+ts_library(
+    name = "display_test_lib",
+    srcs = [
+        "DisplayTest.ts",
+     ],
+    deps = [
+        "@npm//@types/node",
+        "@npm//@types/jasmine",
+        "@npm//jasmine",
+        "@npm//pixi.js",
+        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/client/display",
+        "//nova/src/common",
+        "//novadatainterface",
+        "//nova/src/engine",
+    ]
+)
+
+web_bundle(
+    name = "display_test_bundle",
+    deps = [":display_test_lib"],
+    entry_point = "DisplayTest.ts",
+)
+
 karma_web_test(
     name = "display_test",
     srcs = [
         ":ship_drawable_test_bundle",
+        ":planet_drawable_test_bundle",
         ":animation_graphic_test_bundle",
         ":drawable_map_test_bundle",
+        ":space_object_drawable_test_bundle",
+        ":display_test_bundle",
     ],
 )
 

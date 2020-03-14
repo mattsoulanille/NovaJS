@@ -18,6 +18,7 @@ describe("ShipDrawable", function() {
         expect(shipDrawable).toBeDefined();
     })
 
+    // TODO: Test this better
     it("Should draw on the screen", () => {
         gameData.data.Ship.map.set("nova:128", DefaultShipData);
         const shipDrawable = new ShipDrawable(gameData);
