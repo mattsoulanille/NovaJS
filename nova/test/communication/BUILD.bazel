@@ -19,10 +19,14 @@ ts_library(
      ],
     deps = [
         "//nova/src/communication:communication_server_lib",
-        "@npm//@types/jasmine",
         "@npm//@types/node",
         "@npm//typescript",
+        "@npm//uuid",
+        "@npm//@types/uuid",
         "@npm//ws",
         "@npm//@types/ws",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
+        "//nova/src/proto:nova_service_ts_proto",
     ]
 )

@@ -1,9 +1,10 @@
 import { ManagementData, RepeatedString, SocketMessageFromServer, SocketMessageToServer, StringSetDelta, GameMessage, StringValue } from "novajs/nova/src/proto/nova_service_pb";
 import { Subject } from "rxjs";
-import UUID from "uuid/v4";
+import * as UUID from "uuid/v4";
 import * as WebSocket from "ws";
 import { Channel, MessageWithSourceType } from "./Channel";
-
+import http from "http";
+import { Socket } from "net";
 
 export class SocketChannelServer implements Channel {
     readonly onMessage = new Subject<MessageWithSourceType>();
@@ -11,13 +12,13 @@ export class SocketChannelServer implements Channel {
     readonly onPeerDisconnect = new Subject<string>();
 
     private clientSockets = new Map<string, WebSocket>();
-    readonly webSocketServer: WebSocket.Server;
+    readonly wss: WebSocket.Server;
     readonly uuid: string;
     private warn: (m: string) => void = console.warn;
 
     readonly admins: Set<string>;
 
-    constructor({ webSocket, warn, uuid, admins }: { webSocket: WebSocket.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string> }) {
+    constructor({ httpServer, warn, uuid, admins, wss }: { httpServer?: http.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string>, wss?: WebSocket.Server }) {
 
         if (warn) {
             this.warn = warn;
@@ -37,12 +38,28 @@ export class SocketChannelServer implements Channel {
             this.admins = new Set([this.uuid]);
         }
 
-        this.webSocketServer = webSocket;
-        this.webSocketServer.on("connection", this.onConnect.bind(this));
+        if (wss) {
+            this.wss = wss;
+        }
+        else if (httpServer) {
+            this.wss = new WebSocket.Server({ noServer: true });
+            httpServer.on(
+                "upgrade",
+                (request: http.IncomingMessage, socket: Socket, head: Buffer) => {
+                    this.wss.handleUpgrade(request, socket, head, (ws) => {
+                        this.wss.emit("connection", ws, request);
+                    })
+                });
+        }
+        else {
+            throw new Error("httpServer or wss must be defined");
+        }
+
+        this.wss.on("connection", this.onConnect.bind(this));
     }
 
     get peers() {
-        return new Set(Object.keys(this.clientSockets));
+        return new Set(this.clientSockets.keys());
     }
 
     private sendRawIfOpen(destination: string,
@@ -52,6 +69,7 @@ export class SocketChannelServer implements Channel {
         if (!destinationSocket) {
             this.warn(`No such peer ${destination}`);
         } else if (destinationSocket.readyState === WebSocket.OPEN) {
+            debugger;
             destinationSocket.send(socketMessage.serializeBinary());
             return true;
         }
@@ -104,13 +122,17 @@ export class SocketChannelServer implements Channel {
         // This uuid is used only for communication and
         // has nothing to do with the game engine's uuids
         this.clientSockets.set(clientUUID, webSocket);
-
+        debugger;
         webSocket.on("open", this.handleClientOpen.bind(this, clientUUID));
         webSocket.on("message", this.handleMessageFromClient.bind(this, clientUUID));
-        webSocket.on("close", this.onClose.bind(this, clientUUID));
+        webSocket.on("close", this.handleClientClose.bind(this, clientUUID));
     }
 
     private handleClientOpen(clientUUID: string) {
+        // The peer is added to this.peers implicitly
+        // by the socket getting added to clientSockets
+        // in onConnect. this.peers is a getter.
+
         // Create the set of peers for this peer
         const peersSet = new Set(this.peers);
         // It is not a peer of itself
@@ -158,6 +180,7 @@ export class SocketChannelServer implements Channel {
         const message = SocketMessageToServer.deserializeBinary(serialized);
         const data = message.getData();
         const destination = message.getDestination();
+        console.log(message);
         if (!data) {
             console.warn(`Message from ${clientUUID} had no data`);
             return;
@@ -183,7 +206,7 @@ export class SocketChannelServer implements Channel {
     }
 
     // Handles when a client disconnects
-    private onClose(clientUUID: string) {
+    private handleClientClose(clientUUID: string) {
         this.clientSockets.delete(clientUUID);
         const managementData = new ManagementData();
         const peersDelta = new StringSetDelta();
