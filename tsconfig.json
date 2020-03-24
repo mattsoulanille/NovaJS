@@ -29,7 +29,7 @@
 				"dist/bin/*"
 			]
 		},
-		"allowSyntheticDefaultImports": true,
+		"esModuleInterop": true,
 		"incremental": false
     }
 }
