@@ -1,26 +1,17 @@
+import * as http from "http";
 import "jasmine";
 import { SocketChannelServer } from "novajs/nova/src/communication/SocketChannelServer";
+import { GameMessage, SocketMessageFromServer, SocketMessageToServer } from "novajs/nova/src/proto/nova_service_pb";
 import * as WebSocket from "ws";
-import { IncomingMessage } from "http";
-import * as http from "http";
-import * as uuid from "uuid/v4";
-import { ManagementData, RepeatedString, StringValue, SocketMessageFromServer, StringSetDelta } from "novajs/nova/src/proto/nova_service_pb";
+import { Callbacks, MessageBuilder, On, trackOn } from "./test_utils";
+import { take } from "rxjs/operators";
+import { Subject } from "rxjs";
+import { EngineState } from "novajs/nova/src/proto/engine_state_pb";
 
-
-type Callbacks = { [event: string]: ((...args: unknown[]) => unknown)[] };
-type On = (event: string, cb: (...args: any[]) => unknown) => any;
-function trackOn(): [Callbacks, On] {
-    let callbacks: Callbacks = {}
-
-    function on(event: string, cb: (...args: unknown[]) => unknown) {
-
-        if (!callbacks[event]) {
-            callbacks[event] = [];
-        }
-        callbacks[event].push(cb);
-    }
-    return [callbacks, on]
-}
+const testGameMessage = new GameMessage();
+const testEngineState = new EngineState();
+testEngineState.setSystemskeysList(["foo", "bar", "baz"]);
+testGameMessage.setEnginestate(testEngineState);
 
 describe("SocketChannelServer", function() {
 
@@ -97,33 +88,52 @@ describe("SocketChannelServer", function() {
         const server = new SocketChannelServer({
             wss
         });
-        const client1 = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send"]);
-        const [client1Callbacks, client1On] = trackOn();
-        client1.on.and.callFake(client1On);
-        wssCallbacks["connection"][0](client1);
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
         const client1Uuid = [...server.peers][0];
+        client1.open();
 
-        const client2 = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
-        wssCallbacks["connection"][0](client2);
-
+        // Connect client 2
+        const client2 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client2.websocket);
         const uuids = [...server.peers];
         expect(uuids[0]).toEqual(client1Uuid);
         const client2Uuid = uuids[1];
+        client2.open();
 
-        const client1Message = new MessageBuilder()
+        // Check the message sent to client2
+        const client2Message = new MessageBuilder()
             .setAdmins([server.uuid])
-            .setPeers([client2Uuid, server.uuid])
-            .setUuid(client1Uuid)
-            .build();
+            .setPeers([client1Uuid, server.uuid])
+            .setUuid(client2Uuid)
+            .buildFromServer();
 
-        client1.readyState = WebSocket.OPEN;
-        client1Callbacks["open"][0]();
-
-        expect(client1.send).toHaveBeenCalledTimes(1);
+        expect(client2.websocket.send).toHaveBeenCalledTimes(1);
 
         expect(SocketMessageFromServer.deserializeBinary(
-            client1.send.calls.mostRecent().args[0]))
-            .toEqual(client1Message);
+            client2.websocket.send.calls.mostRecent().args[0]))
+            .toEqual(client2Message);
+    });
+
+    it("emits when a peer connects", async () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+
+        const peerConnectPromise = server.onPeerConnect
+            .pipe(take(1)).toPromise();
+
+        client1.open();
+
+        const peerConnect = await peerConnectPromise;
+        expect(peerConnect).toEqual(client1Uuid);
     });
 
     it("reports new peers to existing clients", () => {
@@ -132,38 +142,51 @@ describe("SocketChannelServer", function() {
         });
 
         // Connect client 1
-        const client1 = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send"]);
-        const [client1Callbacks, client1On] = trackOn();
-        client1.on.and.callFake(client1On);
-        wssCallbacks["connection"][0](client1);
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
         const client1Uuid = [...server.peers][0];
-        client1.readyState = WebSocket.OPEN;
-        client1Callbacks["open"][0]();
-
+        client1.open();
 
         // Connect client 2
-        const client2 = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send"]);
-        const [client2Callbacks, client2On] = trackOn();
-        client2.on.and.callFake(client2On);
-        wssCallbacks["connection"][0](client2);
-        client2.readyState = WebSocket.OPEN;
+        const client2 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client2.websocket);
         const uuids = [...server.peers];
         expect(uuids[0]).toEqual(client1Uuid);
         const client2Uuid = uuids[1];
-        client2Callbacks["open"][0]();
+        client2.open();
 
         // Expected message reporting client2's connection to client1
         const client1Message = new MessageBuilder()
             .addPeers([client2Uuid])
-            .build();
+            .buildFromServer();
 
         // First call is for the initial onconnection data
         // Second is to report that client2 connected
-        expect(client1.send).toHaveBeenCalledTimes(2);
+        expect(client1.websocket.send).toHaveBeenCalledTimes(2);
 
         expect(SocketMessageFromServer.deserializeBinary(
-            client1.send.calls.mostRecent().args[0]))
+            client1.websocket.send.calls.mostRecent().args[0]))
             .toEqual(client1Message);
+    });
+
+    it("emits when a peer disconnects", async () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        const peerDisconnectPromise = server.onPeerDisconnect
+            .pipe(take(1)).toPromise();
+
+        client1.close();
+
+        const peerDisconnect = await peerDisconnectPromise;
+        expect(peerDisconnect).toEqual(client1Uuid);
     });
 
     it("reports disconnecting peers to existing peers", () => {
@@ -172,96 +195,209 @@ describe("SocketChannelServer", function() {
         });
 
         // Connect client 1
-        const client1 = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send"]);
-        const [client1Callbacks, client1On] = trackOn();
-        client1.on.and.callFake(client1On);
-        wssCallbacks["connection"][0](client1);
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
         const client1Uuid = [...server.peers][0];
-        client1.readyState = WebSocket.OPEN;
-        client1Callbacks["open"][0]();
-
+        client1.open();
 
         // Connect client 2
-        const client2 = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send", "close"]);
-        const [client2Callbacks, client2On] = trackOn();
-        client2.on.and.callFake(client2On);
-        wssCallbacks["connection"][0](client2);
-        client2.readyState = WebSocket.OPEN;
+        const client2 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client2.websocket);
+
         const uuids = [...server.peers];
         expect(uuids[0]).toEqual(client1Uuid);
         const client2Uuid = uuids[1];
-        client2Callbacks["open"][0]();
+        client2.open();
 
         // Disconnect client 2
-        client2Callbacks["close"][0]()
+        client2.close();
 
         // Expected message reporting client2's connection to client1
         const client1Message = new MessageBuilder()
             .removePeers([client2Uuid])
             .setBroadcast(true)
-            .build();
+            .buildFromServer();
 
         // First call is for the initial onconnection data
         // Second is to report that client2 connected
         // Third is to report that client2 disconnected
-        expect(client1.send).toHaveBeenCalledTimes(3);
+        expect(client1.websocket.send).toHaveBeenCalledTimes(3);
 
         expect(SocketMessageFromServer.deserializeBinary(
-            client1.send.calls.mostRecent().args[0]))
+            client1.websocket.send.calls.mostRecent().args[0]))
             .toEqual(client1Message);
+    });
+
+    it("send() sends a message to a peer", () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        server.send(client1Uuid, testGameMessage);
+
+        expect(client1.lastMessage!.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
+        expect(client1.lastMessage!.getSource())
+            .toEqual(server.uuid);
+    });
+
+    it("emits messages addressed to the server", async () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        const message = new MessageBuilder()
+            .setData(testGameMessage)
+            .setDestination(server.uuid)
+            .buildToServer();
+
+
+        const serverEmitsPromise = server.onMessage
+            .pipe(take(1))
+            .toPromise();
+
+        client1.sendMessage(message);
+
+        const serverEmits = await serverEmitsPromise;
+        //console.log(serverEmits.message.toObject());
+
+        expect(serverEmits.message.toObject()).toEqual(testGameMessage.toObject());
+        expect(serverEmits.source).toEqual(client1Uuid);
+    });
+
+    it("forwards messages addressed to another peer", async () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        // Connect client 2
+        const client2 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client2.websocket);
+        expect([...server.peers][0]).toEqual(client1Uuid);
+        const client2Uuid = [...server.peers][1];
+        client2.open();
+
+        const messageToServer = new MessageBuilder()
+            .setData(testGameMessage)
+            .setDestination(client2Uuid)
+            .buildToServer();
+
+        client1.sendMessage(messageToServer);
+
+        expect(client2.lastMessage!.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
+        expect(client2.lastMessage!.getSource()).toEqual(client1Uuid);
+    });
+
+    it("broadcast() broadcasts a message to all peers", () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        client1.open();
+
+        // Connect client 2
+        const client2 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client2.websocket);
+        client2.open();
+
+        server.broadcast(testGameMessage);
+
+        expect(client1.lastMessage!.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
+        expect(client1.lastMessage!.getSource())
+            .toEqual(server.uuid);
+
+        expect(client2.lastMessage!.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
+        expect(client2.lastMessage!.getSource())
+            .toEqual(server.uuid);
+    });
+
+    it("emits and forwards when a peer broadcasts", async () => {
+        const server = new SocketChannelServer({
+            wss
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        // Connect client 2
+        const client2 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client2.websocket);
+        client2.open();
+
+        const messageToServer = new MessageBuilder()
+            .setData(testGameMessage)
+            .setBroadcast(true)
+            .buildToServer();
+
+        const serverReceivesMessagePromise = server.onMessage.pipe(take(1)).toPromise();
+        client1.sendMessage(messageToServer);
+        const serverReceivedMessage = await serverReceivesMessagePromise;
+
+        expect(client2.lastMessage!.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
+        expect(client2.lastMessage!.getSource()).toEqual(client1Uuid);
+
+        expect(serverReceivedMessage.message.toObject())
+            .toEqual(testGameMessage.toObject());
+        expect(serverReceivedMessage.source).toEqual(client1Uuid);
     });
 });
 
-class MessageBuilder {
-    private readonly management = new ManagementData();
-    private broadcast?: boolean = undefined;
+class ClientHarness {
+    readonly websocket: jasmine.SpyObj<WebSocket>;
+    readonly callbacks: Callbacks;
+    readonly messagesFromServer = new Subject<SocketMessageFromServer>();
+    lastMessage?: SocketMessageFromServer;
 
-    setBroadcast(broadcast: boolean) {
-        this.broadcast = broadcast;
-        return this;
+    constructor(private server: SocketChannelServer) {
+        this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send"]);
+        const [callbacks, on] = trackOn();
+        this.websocket.on.and.callFake(on);
+        this.callbacks = callbacks;
+        this.websocket.send.and.callFake((data: any) => {
+            const deserialized =
+                SocketMessageFromServer.deserializeBinary(data);
+            this.messagesFromServer.next(deserialized);
+            this.lastMessage = deserialized;
+        });
     }
-
-    addPeers(peersList: string[]) {
-        const delta = new StringSetDelta();
-        delta.setAddList(peersList);
-        this.management.setPeersdelta(delta);
-        return this;
+    open() {
+        this.websocket.readyState = WebSocket.OPEN;
+        this.callbacks["open"][0]();
     }
-
-    removePeers(peersList: string[]) {
-        const delta = new StringSetDelta();
-        delta.setRemoveList(peersList);
-        this.management.setPeersdelta(delta);
-        return this;
+    close() {
+        this.websocket.readyState = WebSocket.CLOSING;
+        this.callbacks["close"][0]();
+        this.websocket.readyState = WebSocket.CLOSED;
     }
-
-    setPeers(peersList: string[]) {
-        const peers = new RepeatedString();
-        peers.setValueList(peersList);
-        this.management.setPeers(peers);
-        return this;
-    }
-
-    setAdmins(adminsList: string[]) {
-        const admins = new RepeatedString();
-        admins.setValueList(adminsList);
-        this.management.setAdmins(admins);
-        return this;
-    }
-
-    setUuid(uuidString: string) {
-        const uuid = new StringValue();
-        uuid.setValue(uuidString);
-        this.management.setUuid(uuid);
-        return this;
-    }
-
-    build() {
-        const message = new SocketMessageFromServer();
-        message.setManagementdata(this.management);
-        if (this.broadcast !== undefined) {
-            message.setBroadcast(this.broadcast);
-        }
-        return message;
+    sendMessage(message: SocketMessageToServer) {
+        this.callbacks["message"][0](message.serializeBinary());
     }
 }

@@ -1,7 +1,7 @@
 import { ManagementData, RepeatedString, SocketMessageFromServer, SocketMessageToServer, StringSetDelta, GameMessage, StringValue } from "novajs/nova/src/proto/nova_service_pb";
 import { Subject } from "rxjs";
-import * as UUID from "uuid/v4";
-import * as WebSocket from "ws";
+import UUID from "uuid/v4";
+import WebSocket from "ws";
 import { Channel, MessageWithSourceType } from "./Channel";
 import http from "http";
 import { Socket } from "net";
@@ -180,7 +180,7 @@ export class SocketChannelServer implements Channel {
         const message = SocketMessageToServer.deserializeBinary(serialized);
         const data = message.getData();
         const destination = message.getDestination();
-        console.log(message);
+
         if (!data) {
             console.warn(`Message from ${clientUUID} had no data`);
             return;

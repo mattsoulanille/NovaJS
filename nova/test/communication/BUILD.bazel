@@ -11,6 +11,17 @@ jasmine_node_test(
 )
 
 ts_library(
+    name = "test_utils",
+    testonly = True,
+    srcs = [
+        "test_utils.ts",
+    ],
+    deps = [
+        "//nova/src/proto:nova_service_ts_proto",
+    ]
+)
+
+ts_library(
     name = "unit_test_sources",
     testonly = True,
     # All tests must end in "_test.ts" or jasmine won't recognize them!
@@ -18,15 +29,18 @@ ts_library(
         "SocketChannelServer_test.ts",
      ],
     deps = [
+        ":test_utils",
         "//nova/src/communication:communication_server_lib",
         "@npm//@types/node",
         "@npm//typescript",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//rxjs",
         "@npm//ws",
         "@npm//@types/ws",
         "@npm//jasmine",
         "@npm//@types/jasmine",
         "//nova/src/proto:nova_service_ts_proto",
+        "//nova/src/proto:engine_state_ts_proto",
     ]
 )
