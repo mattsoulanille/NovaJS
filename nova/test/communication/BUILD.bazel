@@ -4,15 +4,16 @@ load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 load("@novajs//:bundlers.bzl", "web_bundle", "node_bundle")
+load("@npm_bazel_karma//:index.bzl", "karma_web_test")
+
 
 jasmine_node_test(
     name = "unit_tests",
-    srcs = [":unit_test_sources"]
+    srcs = [":unit_test_sources"],
 )
 
 ts_library(
     name = "test_utils",
-    testonly = True,
     srcs = [
         "test_utils.ts",
     ],
@@ -44,3 +45,39 @@ ts_library(
         "//nova/src/proto:engine_state_ts_proto",
     ]
 )
+
+ts_library(
+    name = "socket_channel_client_test_lib",
+    srcs = [
+        "SocketChannelClient_test.ts",
+    ],
+    deps = [
+        "@npm//@types/node",
+        "@npm//@types/jasmine",
+        "@npm//google-protobuf",
+        #"@npm//jasmine",
+        ":test_utils",
+        "//nova/src/communication:communication_client_lib",
+        #"@npm//uuid",
+        #"@npm//@types/uuid",
+        "@npm//rxjs",
+        "//nova/src/proto:nova_service_ts_proto",
+        "//nova/src/proto:engine_state_ts_proto",
+    ]
+)
+
+web_bundle(
+    name = "socket_channel_client_test_bundle",
+    deps = [":socket_channel_client_test_lib"],
+    entry_point = "SocketChannelClient_test.ts",
+)
+
+karma_web_test(
+    name = "browser_tests",
+    srcs = [
+        ":socket_channel_client_test_bundle",
+    ],
+)
+
+
+
