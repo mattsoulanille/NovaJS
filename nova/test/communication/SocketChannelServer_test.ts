@@ -271,7 +271,6 @@ describe("SocketChannelServer", function() {
         client1.sendMessage(message);
 
         const serverEmits = await serverEmitsPromise;
-        //console.log(serverEmits.message.toObject());
 
         expect(serverEmits.message.toObject()).toEqual(testGameMessage.toObject());
         expect(serverEmits.source).toEqual(client1Uuid);
