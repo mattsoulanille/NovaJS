@@ -37,8 +37,10 @@ export class MessageBuilder {
     }
 
     private broadcast?: boolean = undefined;
+    private source?: string;
     private destination?: string;
-
+    private ping?: boolean;
+    private pong?: boolean;
 
     setBroadcast(broadcast: boolean) {
         this.broadcast = broadcast;
@@ -46,14 +48,20 @@ export class MessageBuilder {
     }
 
     addPeers(peersList: string[]) {
-        const delta = new StringSetDelta();
+        if (!this.management.hasPeersdelta()) {
+            this.management.setPeersdelta(new StringSetDelta());
+        }
+        const delta = this.management.getPeersdelta()!;
         delta.setAddList(peersList);
         this.management.setPeersdelta(delta);
         return this;
     }
 
     removePeers(peersList: string[]) {
-        const delta = new StringSetDelta();
+        if (!this.management.hasPeersdelta()) {
+            this.management.setPeersdelta(new StringSetDelta());
+        }
+        const delta = this.management.getPeersdelta()!;
         delta.setRemoveList(peersList);
         this.management.setPeersdelta(delta);
         return this;
@@ -85,8 +93,23 @@ export class MessageBuilder {
         return this;
     }
 
+    setSource(source: string) {
+        this.source = source;
+        return this;
+    }
+
     setDestination(destination: string) {
         this.destination = destination;
+        return this;
+    }
+
+    setPing(val: boolean) {
+        this.ping = val;
+        return this;
+    }
+
+    setPong(val: boolean) {
+        this.pong = val;
         return this;
     }
 
@@ -103,6 +126,15 @@ export class MessageBuilder {
         if (this.broadcast !== undefined) {
             message.setBroadcast(this.broadcast);
         }
+
+        if (this.source) {
+            message.setSource(this.source);
+        }
+
+        if (this.ping) {
+            message.setPing(this.ping);
+        }
+
         return message;
     }
 
@@ -118,6 +150,10 @@ export class MessageBuilder {
 
         if (this.destination) {
             message.setDestination(this.destination);
+        }
+
+        if (this.pong) {
+            message.setPong(this.pong);
         }
 
         return message;

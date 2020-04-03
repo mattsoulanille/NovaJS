@@ -89,14 +89,16 @@ export class SocketChannelClient implements Channel {
             return;
         }
 
-        const source = socketMessage.getSource();
-        const managementData = socketMessage.getManagementdata();
-        const message = socketMessage.getData();
-
-        if (!source) {
-            this.warn("Received a message with no source");
+        if (socketMessage.getPing()) {
+            // Reply with pong
+            const messageToServer = new SocketMessageToServer();
+            messageToServer.setPong(true);
+            this.webSocket.send(messageToServer.serializeBinary());
             return;
         }
+
+        const managementData = socketMessage.getManagementdata();
+        const message = socketMessage.getData();
 
         if (managementData) {
             // Management data is known to come from the server
@@ -105,6 +107,13 @@ export class SocketChannelClient implements Channel {
         }
 
         if (message) {
+            const source = socketMessage.getSource();
+            if (!source) {
+                this.warn(`Received a message with no `
+                    + `source: ${message?.toObject()}`);
+                return;
+            }
+
             // It's a higher up layer's responsibility
             // to decide if the message is valid coming
             // from the source.

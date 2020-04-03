@@ -16,7 +16,7 @@ describe("SocketChannelClient", function() {
     let warn: jasmine.Spy<(m: string) => void>;
     let callbacks: Callbacks;
     beforeEach(() => {
-        webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy", ["addEventListener"]);
+        webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy", ["addEventListener", "send"]);
         warn = jasmine.createSpy<(m: string) => void>("mockWarn");
 
         let on: On;
@@ -77,13 +77,15 @@ describe("SocketChannelClient", function() {
             .toMatch("Failed to deserialize");
     });
 
-    it("warns if it receives a message with no source", async () => {
+    it("warns if it receives a message with data but no source", async () => {
         const client = new SocketChannelClient({ webSocket, warn });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
         const messageWithoutSource = new MessageBuilder()
-            .buildFromServer().serializeBinary();
+            .setData(testGameMessage)
+            .buildFromServer()
+            .serializeBinary();
 
         const blob = new Blob([messageWithoutSource]);
         const messageEvent =
@@ -214,6 +216,81 @@ describe("SocketChannelClient", function() {
 
         expect(peersAdded).toEqual(["peer 3"]);
         expect(peersRemoved).toEqual(["peer 1"]);
+    });
+
+    it("replies to pings", async () => {
+        const client = new SocketChannelClient({ webSocket, warn });
+        let sendMessage = callbacks["message"][0];
+        expect(sendMessage).toBeTruthy();
+
+        const message = new MessageBuilder()
+            .setPing(true)
+            .buildFromServer()
+            .serializeBinary();
+
+        const blob = new Blob([message]);
+        const messageEvent =
+            new MessageEvent("testMessage", { data: blob });
+
+        const pongPromise = new Promise<unknown>((resolve) => {
+            webSocket.send.and.callFake(resolve);
+        });
+
+        sendMessage(messageEvent);
+        const pong = await pongPromise;
+        if (!(pong instanceof Uint8Array)) {
+            throw new Error("pongPromise was not a Uint8Array");
+        }
+        const deserialized = SocketMessageToServer.deserializeBinary(pong);
+        expect(deserialized.getPong()).toBe(true);
+    });
+
+    it("sends a message to a specific client", async () => {
+        const client = new SocketChannelClient({ webSocket, warn });
+        let sendMessage = callbacks["message"][0];
+        expect(sendMessage).toBeTruthy();
+
+        const messagePromise = new Promise<unknown>((resolve) => {
+            webSocket.send.and.callFake(resolve);
+        });
+
+        client.send("destination uuid", testGameMessage);
+        const sentMessage = await messagePromise;
+
+        if (!(sentMessage instanceof Uint8Array)) {
+            throw new Error("pongPromise was not a Uint8Array");
+        }
+        const deserialized = SocketMessageToServer
+            .deserializeBinary(sentMessage);
+
+        expect(deserialized.getBroadcast()).toBe(false);
+        expect(deserialized.getDestination()).toEqual("destination uuid");
+        expect(deserialized.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
+    });
+
+    it("broadcasts a message", async () => {
+        const client = new SocketChannelClient({ webSocket, warn });
+        let sendMessage = callbacks["message"][0];
+        expect(sendMessage).toBeTruthy();
+
+        const messagePromise = new Promise<unknown>((resolve) => {
+            webSocket.send.and.callFake(resolve);
+        });
+
+        client.broadcast(testGameMessage);
+        const sentMessage = await messagePromise;
+
+        if (!(sentMessage instanceof Uint8Array)) {
+            throw new Error("pongPromise was not a Uint8Array");
+        }
+        const deserialized = SocketMessageToServer
+            .deserializeBinary(sentMessage);
+
+        expect(deserialized.getBroadcast()).toBe(true);
+        expect(deserialized.getDestination()).toEqual("");
+        expect(deserialized.getData()!.toObject())
+            .toEqual(testGameMessage.toObject());
     });
 });
 

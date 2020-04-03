@@ -28,6 +28,8 @@ ts_library(
         "@npm//rxjs",
         "@npm//ws",
         "@npm//@types/ws",
+        "@npm//google-protobuf",
+        "@npm//@types/google-protobuf",
 #        "//nova/src/common",
 #        "//nova/src/engine",
         "//nova/src/proto:nova_service_ts_proto",

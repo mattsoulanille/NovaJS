@@ -62,6 +62,7 @@ describe("SocketChannelServer", function() {
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
+        webSocket.readyState = WebSocket.CONNECTING;
 
         expect(wssCallbacks["connection"][0]).toBeDefined();
         wssCallbacks["connection"][0](webSocket);
@@ -78,6 +79,7 @@ describe("SocketChannelServer", function() {
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
+        webSocket.readyState = WebSocket.CONNECTING;
         wssCallbacks["connection"][0](webSocket);
 
         const uuids = [...server.peers];
@@ -111,7 +113,7 @@ describe("SocketChannelServer", function() {
             .buildFromServer();
 
         expect(client2.websocket.send).toHaveBeenCalledTimes(1);
-
+        debugger;
         expect(SocketMessageFromServer.deserializeBinary(
             client2.websocket.send.calls.mostRecent().args[0]))
             .toEqual(client2Message);
@@ -367,6 +369,82 @@ describe("SocketChannelServer", function() {
             .toEqual(testGameMessage.toObject());
         expect(serverReceivedMessage.source).toEqual(client1Uuid);
     });
+
+    it("pings a client if it hasn't received a message in a while", async () => {
+        jasmine.clock().install();
+
+        const server = new SocketChannelServer({
+            wss,
+            timeout: 10, // 10 ms
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        jasmine.clock().tick(11);
+        expect(client1.lastMessage!.getPing()).toBe(true);
+
+        jasmine.clock().tick(11)
+
+        jasmine.clock().uninstall();
+    });
+
+    it("does not disconnect a client if it replies", async () => {
+        jasmine.clock().install();
+
+        const server = new SocketChannelServer({
+            wss,
+            timeout: 10, // 10 ms
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        jasmine.clock().tick(11);
+        expect(client1.lastMessage!.getPing()).toBe(true);
+
+        const pongMessage = new MessageBuilder()
+            .setPong(true)
+            .buildToServer();
+
+        client1.sendMessage(pongMessage);
+
+        jasmine.clock().tick(11);
+
+        expect([...server.peers]).toEqual([client1Uuid]);
+
+        jasmine.clock().uninstall();
+    });
+
+    it("disconnects a client if it doesn't reply in time", async () => {
+        jasmine.clock().install();
+
+        const server = new SocketChannelServer({
+            wss,
+            timeout: 10, // 10 ms
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        const peerDisconnectPromise = server.onPeerDisconnect
+            .pipe(take(1)).toPromise();
+
+        jasmine.clock().tick(25);
+
+        const peerDisconnect = await peerDisconnectPromise;
+        expect(peerDisconnect).toEqual(client1Uuid);
+        jasmine.clock().uninstall();
+    });
 });
 
 class ClientHarness {
@@ -376,9 +454,10 @@ class ClientHarness {
     lastMessage?: SocketMessageFromServer;
 
     constructor(private server: SocketChannelServer) {
-        this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send"]);
+        this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send", "removeAllListeners"]);
         const [callbacks, on] = trackOn();
         this.websocket.on.and.callFake(on);
+        this.websocket.readyState = WebSocket.CONNECTING;
         this.callbacks = callbacks;
         this.websocket.send.and.callFake((data: any) => {
             const deserialized =

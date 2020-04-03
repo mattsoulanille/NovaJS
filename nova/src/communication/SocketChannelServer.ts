@@ -6,19 +6,27 @@ import { Channel, MessageWithSourceType } from "./Channel";
 import http from "http";
 import { Socket } from "net";
 
+interface Client {
+    socket: WebSocket;
+    keepaliveTimeout?: NodeJS.Timeout;
+}
+
 export class SocketChannelServer implements Channel {
     readonly onMessage = new Subject<MessageWithSourceType>();
     readonly onPeerConnect = new Subject<string>();
     readonly onPeerDisconnect = new Subject<string>();
 
-    private clientSockets = new Map<string, WebSocket>();
+    private clients = new Map<string, Client>();
     readonly wss: WebSocket.Server;
     readonly uuid: string;
     private warn: (m: string) => void = console.warn;
 
     readonly admins: Set<string>;
+    // Send a ping if a packet hasn't been received in this long
+    // If the ping doesn't get back in this much time, disconnect them.
+    readonly timeout: number;
 
-    constructor({ httpServer, warn, uuid, admins, wss }: { httpServer?: http.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string>, wss?: WebSocket.Server }) {
+    constructor({ httpServer, warn, uuid, admins, wss, timeout }: { httpServer?: http.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string>, wss?: WebSocket.Server, timeout?: number }) {
 
         if (warn) {
             this.warn = warn;
@@ -55,21 +63,27 @@ export class SocketChannelServer implements Channel {
             throw new Error("httpServer or wss must be defined");
         }
 
+        if (timeout) {
+            this.timeout = timeout;
+        } else {
+            this.timeout = 1000;
+        }
+
         this.wss.on("connection", this.onConnect.bind(this));
     }
 
     get peers() {
-        return new Set(this.clientSockets.keys());
+        return new Set(this.clients.keys());
     }
 
     private sendRawIfOpen(destination: string,
         socketMessage: SocketMessageFromServer): boolean {
 
-        const destinationSocket = this.clientSockets.get(destination);
-        if (!destinationSocket) {
+        const client = this.clients.get(destination);
+        if (!client) {
             this.warn(`No such peer ${destination}`);
-        } else if (destinationSocket.readyState === WebSocket.OPEN) {
-            destinationSocket.send(socketMessage.serializeBinary());
+        } else if (client.socket.readyState === WebSocket.OPEN) {
+            client.socket.send(socketMessage.serializeBinary());
             return true;
         }
         return false;
@@ -88,7 +102,7 @@ export class SocketChannelServer implements Channel {
 
     private rebroadcastRaw(exclude: string,
         socketMessage: SocketMessageFromServer) {
-        for (const id of this.clientSockets.keys()) {
+        for (const id of this.clients.keys()) {
             if (id !== exclude) {
                 this.sendRawIfOpen(id, socketMessage);
             }
@@ -105,7 +119,7 @@ export class SocketChannelServer implements Channel {
     }
 
     private broadcastRaw(message: SocketMessageFromServer) {
-        for (const id of this.clientSockets.keys()) {
+        for (const id of this.clients.keys()) {
             this.sendRawIfOpen(id, message)
         }
     }
@@ -114,13 +128,41 @@ export class SocketChannelServer implements Channel {
         this.rebroadast(this.uuid, message)
     }
 
+    private resetClientTimeout(uuid: string) {
+        const client = this.clients.get(uuid);
+        if (!client) {
+            throw new Error(`Tried to reset keepalive timeout`
+                + ` of nonexistant client ${uuid}`);
+        }
+
+        if (client.keepaliveTimeout) {
+            clearTimeout(client.keepaliveTimeout);
+        }
+
+        client.keepaliveTimeout = setTimeout(() => {
+            // Send the client a ping
+            const message = new SocketMessageFromServer();
+            message.setPing(true);
+            this.sendRawIfOpen(uuid, message);
+            client.keepaliveTimeout = setTimeout(() => {
+                // Remove the client if it hasn't responded
+                this.handleClientClose(uuid);
+            }, this.timeout);
+        }, this.timeout);
+    }
+
     // Handles when a client first connects
     // It might be better to abstract all this out with an object for each client.
     private onConnect(webSocket: WebSocket) {
         const clientUUID = UUID();
         // This uuid is used only for communication and
         // has nothing to do with the game engine's uuids
-        this.clientSockets.set(clientUUID, webSocket);
+        const client: Client = {
+            socket: webSocket,
+        };
+        this.clients.set(clientUUID, client);
+        this.resetClientTimeout(clientUUID);
+
         if (webSocket.readyState === WebSocket.CONNECTING) {
             webSocket.on("open", this.handleClientOpen.bind(this, clientUUID));
         } else if (webSocket.readyState === WebSocket.OPEN) {
@@ -166,7 +208,6 @@ export class SocketChannelServer implements Channel {
         // Actually send the message to the new client
         const messageToNewPeer = new SocketMessageFromServer();
         messageToNewPeer.setManagementdata(managementData);
-        messageToNewPeer.setSource(this.uuid);
         if (!this.sendRawIfOpen(clientUUID, messageToNewPeer)) {
             this.warn("Failed to send message to the new peer");
         }
@@ -185,7 +226,19 @@ export class SocketChannelServer implements Channel {
 
     // Handles messages received from clients. Forwards messages to their destination.
     private handleMessageFromClient(clientUUID: string, serialized: Uint8Array) {
+        this.resetClientTimeout(clientUUID);
+        const client = this.clients.get(clientUUID);
+        if (!client) {
+            throw new Error(`Missing client object for ${clientUUID}`);
+        }
+
+
         const message = SocketMessageToServer.deserializeBinary(serialized);
+        if (message.getPong()) {
+            // We already reset the client timeout above
+            return;
+        }
+
         const data = message.getData();
         const destination = message.getDestination();
 
@@ -215,7 +268,17 @@ export class SocketChannelServer implements Channel {
 
     // Handles when a client disconnects
     private handleClientClose(clientUUID: string) {
-        this.clientSockets.delete(clientUUID);
+        const client = this.clients.get(clientUUID);
+        if (!client) {
+            throw new Error(
+                `Tried to remove nonexistant client ${clientUUID}`);
+        }
+        if (client.keepaliveTimeout !== undefined) {
+            clearTimeout(client.keepaliveTimeout);
+        }
+
+        client.socket.removeAllListeners();
+        this.clients.delete(clientUUID);
         const managementData = new ManagementData();
         const peersDelta = new StringSetDelta();
         peersDelta.addRemove(clientUUID);
