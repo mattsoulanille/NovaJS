@@ -69,7 +69,6 @@ export class SocketChannelServer implements Channel {
         if (!destinationSocket) {
             this.warn(`No such peer ${destination}`);
         } else if (destinationSocket.readyState === WebSocket.OPEN) {
-            debugger;
             destinationSocket.send(socketMessage.serializeBinary());
             return true;
         }
@@ -122,8 +121,16 @@ export class SocketChannelServer implements Channel {
         // This uuid is used only for communication and
         // has nothing to do with the game engine's uuids
         this.clientSockets.set(clientUUID, webSocket);
-        debugger;
-        webSocket.on("open", this.handleClientOpen.bind(this, clientUUID));
+        if (webSocket.readyState === WebSocket.CONNECTING) {
+            webSocket.on("open", this.handleClientOpen.bind(this, clientUUID));
+        } else if (webSocket.readyState === WebSocket.OPEN) {
+            this.handleClientOpen(clientUUID);
+        } else {
+            const state = webSocket.readyState === WebSocket.CLOSING
+                ? "CLOSING" : "CLOSED";
+            throw new Error(`Expected socket to be in CONNECTING or CONNECTED state but it was ${state}`);
+        }
+
         webSocket.on("message", this.handleMessageFromClient.bind(this, clientUUID));
         webSocket.on("close", this.handleClientClose.bind(this, clientUUID));
     }
@@ -159,6 +166,7 @@ export class SocketChannelServer implements Channel {
         // Actually send the message to the new client
         const messageToNewPeer = new SocketMessageFromServer();
         messageToNewPeer.setManagementdata(managementData);
+        messageToNewPeer.setSource(this.uuid);
         if (!this.sendRawIfOpen(clientUUID, messageToNewPeer)) {
             this.warn("Failed to send message to the new peer");
         }
@@ -182,7 +190,7 @@ export class SocketChannelServer implements Channel {
         const destination = message.getDestination();
 
         if (!data) {
-            console.warn(`Message from ${clientUUID} had no data`);
+            this.warn(`Message from ${clientUUID} had no data`);
             return;
         }
 
@@ -201,7 +209,7 @@ export class SocketChannelServer implements Channel {
         } else if (destination) {
             this.sendIfOpen(clientUUID, destination, data);
         } else {
-            console.warn(`Message from ${clientUUID} had no destination and was not for broadcasting`);
+            this.warn(`Message from ${clientUUID} had no destination and was not for broadcasting`);
         }
     }
 
