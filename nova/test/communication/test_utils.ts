@@ -36,16 +36,10 @@ export class MessageBuilder {
         this.wrappedData = data;
     }
 
-    private broadcast?: boolean = undefined;
     private source?: string;
     private destination?: string;
     private ping?: boolean;
     private pong?: boolean;
-
-    setBroadcast(broadcast: boolean) {
-        this.broadcast = broadcast;
-        return this;
-    }
 
     addPeers(peersList: string[]) {
         if (!this.management.hasPeersdelta()) {
@@ -123,10 +117,6 @@ export class MessageBuilder {
             message.setData(this.wrappedData);
         }
 
-        if (this.broadcast !== undefined) {
-            message.setBroadcast(this.broadcast);
-        }
-
         if (this.source) {
             message.setSource(this.source);
         }
@@ -146,10 +136,6 @@ export class MessageBuilder {
         const message = new SocketMessageToServer();
         if (this.wrappedData) {
             message.setData(this.wrappedData);
-        }
-
-        if (this.broadcast !== undefined) {
-            message.setBroadcast(this.broadcast);
         }
 
         if (this.destination) {

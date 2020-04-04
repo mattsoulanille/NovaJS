@@ -4,15 +4,18 @@ package(default_visibility = ["//visibility:public"])
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 
 ts_library(
-    name = "channel_lib",
+    name = "communication_lib",
     srcs = [
         "Channel.ts",
+        "FilterMessage.ts"
     ],
     deps = [
         "@npm//rxjs",
         "//nova/src/proto:nova_service_ts_proto",
     ]
 )
+
+ts_library
 
 
 ts_library(
@@ -21,7 +24,7 @@ ts_library(
         "SocketChannelServer.ts",
     ],
     deps = [
-        ":channel_lib",
+        ":communication_lib",
         "@npm//@types/node",
         "@npm//uuid",
         "@npm//@types/uuid",
@@ -42,7 +45,7 @@ ts_library(
         "SocketChannelClient.ts",
     ],
     deps = [
-        ":channel_lib",
+        ":communication_lib",
         "@npm//@types/node",
         "@npm//uuid",
         "@npm//@types/uuid",

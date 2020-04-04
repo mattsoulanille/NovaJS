@@ -235,32 +235,7 @@ describe("SocketChannelClient", function() {
         const deserialized = SocketMessageToServer
             .deserializeBinary(sentMessage);
 
-        expect(deserialized.getBroadcast()).toBe(false);
         expect(deserialized.getDestination()).toEqual("destination uuid");
-        expect(deserialized.getData()!.toObject())
-            .toEqual(testGameMessage.toObject());
-    });
-
-    it("broadcasts a message", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        const messagePromise = new Promise<unknown>((resolve) => {
-            webSocket.send.and.callFake(resolve);
-        });
-
-        client.broadcast(testGameMessage);
-        const sentMessage = await messagePromise;
-
-        if (!(sentMessage instanceof Uint8Array)) {
-            throw new Error("pongPromise was not a Uint8Array");
-        }
-        const deserialized = SocketMessageToServer
-            .deserializeBinary(sentMessage);
-
-        expect(deserialized.getBroadcast()).toBe(true);
-        expect(deserialized.getDestination()).toEqual("");
         expect(deserialized.getData()!.toObject())
             .toEqual(testGameMessage.toObject());
     });

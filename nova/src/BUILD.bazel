@@ -8,9 +8,17 @@ filegroup(
     name = "static_files",
     srcs = [
         "index.html",
-    ]
+    ],
 )
 
+ts_library(
+    name = "gameloop_lib",
+    srcs = ["GameLoop.ts"],
+    deps = [
+        "//nova/src/engine",
+        "//nova/src/communication:communication_lib",
+    ],
+)
 
 ts_library(
     name = "browser_lib",

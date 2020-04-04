@@ -14,7 +14,6 @@ export interface MessageWithSourceType {
  */
 export interface Channel {
     send(destination: string, message: GameMessage): void,
-    broadcast(message: GameMessage): void,
     disconnect(): void
     // Broadcast is necessary so that when communicating
     // via websockets, the client doesn't spam the server with

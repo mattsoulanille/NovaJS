@@ -34,23 +34,19 @@ message ManagementData { // next = 5
   }
 }
 
-message SocketMessageToServer { // next = 6
-  // TODO: Make this a oneof?
+message SocketMessageToServer { // next = 5
   string destination = 1;
-  bool broadcast = 2;
-  GameMessage data = 3;
-  bool ping = 4;
-  bool pong = 5;
+  GameMessage data = 2;
+  bool ping = 3;
+  bool pong = 4;
 }
 
-message SocketMessageFromServer { // next = 7
-  // TODO: Make this a oneof?
+message SocketMessageFromServer { // next = 6
   string source = 1;
-  bool broadcast = 2;
-  GameMessage data = 3;
-  ManagementData managementData = 4;
-  bool ping = 5;
-  bool pong = 6;
+  GameMessage data = 2;
+  ManagementData managementData = 3;
+  bool ping = 4;
+  bool pong = 5;
 }
 
 message GameMessage { // next = 2

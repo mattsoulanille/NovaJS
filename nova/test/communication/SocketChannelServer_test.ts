@@ -216,7 +216,6 @@ describe("SocketChannelServer", function() {
         // Expected message reporting client2's connection to client1
         const client1Message = new MessageBuilder()
             .removePeers([client2Uuid])
-            .setBroadcast(true)
             .buildFromServer();
 
         // First call is for the initial onconnection data
@@ -305,68 +304,6 @@ describe("SocketChannelServer", function() {
         expect(client2.lastMessage!.getData()!.toObject())
             .toEqual(testGameMessage.toObject());
         expect(client2.lastMessage!.getSource()).toEqual(client1Uuid);
-    });
-
-    it("broadcast() broadcasts a message to all peers", () => {
-        const server = new SocketChannelServer({
-            wss
-        });
-
-        // Connect client 1
-        const client1 = new ClientHarness(server);
-        wssCallbacks["connection"][0](client1.websocket);
-        client1.open();
-
-        // Connect client 2
-        const client2 = new ClientHarness(server);
-        wssCallbacks["connection"][0](client2.websocket);
-        client2.open();
-
-        server.broadcast(testGameMessage);
-
-        expect(client1.lastMessage!.getData()!.toObject())
-            .toEqual(testGameMessage.toObject());
-        expect(client1.lastMessage!.getSource())
-            .toEqual(server.uuid);
-
-        expect(client2.lastMessage!.getData()!.toObject())
-            .toEqual(testGameMessage.toObject());
-        expect(client2.lastMessage!.getSource())
-            .toEqual(server.uuid);
-    });
-
-    it("emits and forwards when a peer broadcasts", async () => {
-        const server = new SocketChannelServer({
-            wss
-        });
-
-        // Connect client 1
-        const client1 = new ClientHarness(server);
-        wssCallbacks["connection"][0](client1.websocket);
-        const client1Uuid = [...server.peers][0];
-        client1.open();
-
-        // Connect client 2
-        const client2 = new ClientHarness(server);
-        wssCallbacks["connection"][0](client2.websocket);
-        client2.open();
-
-        const messageToServer = new MessageBuilder()
-            .setData(testGameMessage)
-            .setBroadcast(true)
-            .buildToServer();
-
-        const serverReceivesMessagePromise = server.onMessage.pipe(take(1)).toPromise();
-        client1.sendMessage(messageToServer);
-        const serverReceivedMessage = await serverReceivesMessagePromise;
-
-        expect(client2.lastMessage!.getData()!.toObject())
-            .toEqual(testGameMessage.toObject());
-        expect(client2.lastMessage!.getSource()).toEqual(client1Uuid);
-
-        expect(serverReceivedMessage.message.toObject())
-            .toEqual(testGameMessage.toObject());
-        expect(serverReceivedMessage.source).toEqual(client1Uuid);
     });
 
     it("pings a client if it hasn't received a message in a while", async () => {

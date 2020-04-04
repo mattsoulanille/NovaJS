@@ -91,14 +91,6 @@ export class SocketChannelClient implements Channel {
         this.webSocket.send(socketMessage.serializeBinary());
     }
 
-    broadcast(message: GameMessage): void {
-        this.reconnectIfClosed();
-        const socketMessage = new SocketMessageToServer();
-        socketMessage.setData(message);
-        socketMessage.setBroadcast(true);
-        this.webSocket.send(socketMessage.serializeBinary());
-    }
-
     resetTimeout() {
         if (this.keepaliveTimeout !== undefined) {
             clearTimeout(this.keepaliveTimeout);

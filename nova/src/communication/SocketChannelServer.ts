@@ -94,32 +94,12 @@ export class SocketChannelServer implements Channel {
         this.sendIfOpen(this.uuid, destination, message);
     }
 
-    private rebroadcastRaw(exclude: string,
-        socketMessage: SocketMessageFromServer) {
+    private broadcastRaw(message: SocketMessageFromServer, omit: string[] = []) {
         for (const id of this.clients.keys()) {
-            if (id !== exclude) {
-                this.sendRawIfOpen(id, socketMessage);
+            if (!omit.includes(id)) {
+                this.sendRawIfOpen(id, message)
             }
         }
-    }
-
-    private rebroadast(source: string, message: GameMessage) {
-        const socketMessage = new SocketMessageFromServer();
-        socketMessage.setSource(source);
-        socketMessage.setBroadcast(true);
-        socketMessage.setData(message);
-
-        this.rebroadcastRaw(source, socketMessage);
-    }
-
-    private broadcastRaw(message: SocketMessageFromServer) {
-        for (const id of this.clients.keys()) {
-            this.sendRawIfOpen(id, message)
-        }
-    }
-
-    broadcast(message: GameMessage) {
-        this.rebroadast(this.uuid, message)
     }
 
     private resetClientTimeout(uuid: string) {
@@ -214,7 +194,7 @@ export class SocketChannelServer implements Channel {
         managementDataToOthers.setPeersdelta(peerDelta);
         messageToOthers.setManagementdata(managementDataToOthers);
 
-        this.rebroadcastRaw(clientUUID, messageToOthers);
+        this.broadcastRaw(messageToOthers, [clientUUID]);
         this.onPeerConnect.next(clientUUID);
     }
 
@@ -249,14 +229,7 @@ export class SocketChannelServer implements Channel {
             return;
         }
 
-        if (message.getBroadcast()) {
-            // Rebroadcast the message
-            this.rebroadast(clientUUID, data);
-            this.onMessage.next({
-                message: data,
-                source: clientUUID,
-            });
-        } else if (destination === this.uuid) {
+        if (destination === this.uuid) {
             this.onMessage.next({
                 message: data,
                 source: clientUUID,
@@ -264,7 +237,7 @@ export class SocketChannelServer implements Channel {
         } else if (destination) {
             this.sendIfOpen(clientUUID, destination, data);
         } else {
-            this.warn(`Message from ${clientUUID} had no destination and was not for broadcasting`);
+            this.warn(`Message from ${clientUUID} had no destination`);
         }
     }
 
@@ -286,7 +259,6 @@ export class SocketChannelServer implements Channel {
         peersDelta.addRemove(clientUUID);
         managementData.setPeersdelta(peersDelta);
         const message = new SocketMessageFromServer();
-        message.setBroadcast(true);
         message.setManagementdata(managementData);
 
         this.broadcastRaw(message);
