@@ -39,10 +39,12 @@ export class SocketChannelClient implements Channel {
 
     constructor({ webSocket, warn }: { webSocket?: WebSocket, warn?: ((m: string) => void) }) {
         if (webSocket) {
+            // Mostly for testing
             this.webSocket = webSocket;
         }
         else {
-            this.webSocket = new WebSocket(`ws://${location.host}`);
+            // TODO: Use wss instead of ws
+            this.webSocket = new WebSocket(`wss://${location.host}`);
         }
 
         if (warn !== undefined) {

@@ -27,7 +27,7 @@ ts_library(
         "//nova/src/client",
         "//nova/src/client/display",
         "//nova/src/engine",
-        "//nova/src/communication",
+        "//nova/src/communication:communication_client_lib",
         "//nova/src/client/gamedata",
         "//nova/src/proto:vector_state_ts_proto",
         "//nova/src/proto:space_object_state_ts_proto",

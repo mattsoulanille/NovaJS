@@ -1,4 +1,4 @@
-import * as http from "http";
+import * as https from "https";
 import "jasmine";
 import { SocketChannelServer } from "novajs/nova/src/communication/SocketChannelServer";
 import { GameMessage, SocketMessageFromServer, SocketMessageToServer } from "novajs/nova/src/proto/nova_service_pb";
@@ -33,15 +33,15 @@ describe("SocketChannelServer", function() {
     });
 
     it("binds to the `upgrade` event on the http server", () => {
-        const httpServer =
-            jasmine.createSpyObj<http.Server>("http.Server Spy", ["on"]);
-
+        const httpsServer =
+            jasmine.createSpyObj<https.Server>("http.Server Spy", ["on"]);
+        debugger;
         const [callbacks, on] = trackOn();
-        httpServer.on.and.callFake(on);
+        httpsServer.on.and.callFake(on);
         new SocketChannelServer({
-            httpServer
+            httpsServer
         });
-
+        debugger;
         expect(callbacks["upgrade"].length).toBe(1);
     });
 
@@ -113,7 +113,6 @@ describe("SocketChannelServer", function() {
             .buildFromServer();
 
         expect(client2.websocket.send).toHaveBeenCalledTimes(1);
-        debugger;
         expect(SocketMessageFromServer.deserializeBinary(
             client2.websocket.send.calls.mostRecent().args[0]))
             .toEqual(client2Message);

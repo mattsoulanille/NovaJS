@@ -4,12 +4,14 @@ import { Stateful } from "./Stateful";
 export function setMapStates<Obj extends Stateful<State>, State>({ objects, states, keys, factory }:
     {
         objects: Map<string, Obj>,
-        states: [string, State][],
+        states: jspb.Map<string, State>,
         keys: string[],
         factory: (state: State) => Obj
     }) {
 
-    for (const [uuid, state] of states) {
+    // For some reason, states.entries is not iterable
+    // Hence the forEach instead of a for loop.
+    states.forEach((state, uuid) => {
         if (objects.has(uuid)) {
             // Update existing objects
             objects.get(uuid)?.setState(state);
@@ -17,7 +19,7 @@ export function setMapStates<Obj extends Stateful<State>, State>({ objects, stat
             // Create objects that don't exist
             objects.set(uuid, factory(state));
         }
-    }
+    });
 
     for (const uuid of objects.keys()) {
         if (!keys.includes(uuid)) {

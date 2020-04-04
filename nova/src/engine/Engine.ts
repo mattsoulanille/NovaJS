@@ -67,7 +67,7 @@ export class Engine implements Stateful<EngineState>, Steppable {
     setState(state: EngineState) {
         setMapStates({
             objects: this.systems,
-            states: state.getSystemsMap().getEntryList(),
+            states: state.getSystemsMap(),
             keys: state.getSystemskeysList(),
             factory: this.systemFactory
         });

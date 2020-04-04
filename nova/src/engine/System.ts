@@ -56,7 +56,7 @@ class System implements Stateful<SystemState>, Steppable {
         // Update planets
         setMapStates({
             objects: this.planets,
-            states: state.getPlanetsMap().getEntryList(),
+            states: state.getPlanetsMap(),
             keys: state.getPlanetskeysList(),
             factory: this.planetFactory
         });
@@ -64,7 +64,7 @@ class System implements Stateful<SystemState>, Steppable {
         // Update ships
         setMapStates({
             objects: this.ships,
-            states: state.getShipsMap().getEntryList(),
+            states: state.getShipsMap(),
             keys: state.getShipskeysList(),
             factory: this.shipFactory
         });

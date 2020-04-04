@@ -4,6 +4,7 @@ import UUID from "uuid/v4";
 import WebSocket from "ws";
 import { Channel, MessageWithSourceType } from "./Channel";
 import http from "http";
+import https from "https";
 import { Socket } from "net";
 
 interface Client {
@@ -26,7 +27,7 @@ export class SocketChannelServer implements Channel {
     // If the ping doesn't get back in this much time, disconnect them.
     readonly timeout: number;
 
-    constructor({ httpServer, warn, uuid, admins, wss, timeout }: { httpServer?: http.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string>, wss?: WebSocket.Server, timeout?: number }) {
+    constructor({ httpsServer, warn, uuid, admins, wss, timeout }: { httpsServer?: https.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string>, wss?: WebSocket.Server, timeout?: number }) {
 
         if (warn) {
             this.warn = warn;
@@ -49,18 +50,11 @@ export class SocketChannelServer implements Channel {
         if (wss) {
             this.wss = wss;
         }
-        else if (httpServer) {
-            this.wss = new WebSocket.Server({ noServer: true });
-            httpServer.on(
-                "upgrade",
-                (request: http.IncomingMessage, socket: Socket, head: Buffer) => {
-                    this.wss.handleUpgrade(request, socket, head, (ws) => {
-                        this.wss.emit("connection", ws, request);
-                    })
-                });
+        else if (httpsServer) {
+            this.wss = new WebSocket.Server({ server: httpsServer });
         }
         else {
-            throw new Error("httpServer or wss must be defined");
+            throw new Error("httpsServer or wss must be defined");
         }
 
         if (timeout) {

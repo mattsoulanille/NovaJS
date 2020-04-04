@@ -12,7 +12,7 @@ import { Planet } from "./engine/Planet";
 import { Ship } from "./engine/Ship";
 import { System } from "./engine/System";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
-import { Communicator } from "./communication/Communicator";
+//import { Communicator } from "./communication/Communicator";
 import { first } from "rxjs/operators";
 import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
 import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
@@ -23,16 +23,20 @@ import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 (window as any).SpaceObjectState = SpaceObjectState;
 (window as any).SystemState = SystemState;
 
-const socket = io();
-(window as any).socket = socket;
-
-
-
-const socketChannel = new SocketChannelClient({ socket });
-const communicator = new Communicator({
-    channel: socketChannel
+const socketChannel = new SocketChannelClient({});
+socketChannel.onMessage.subscribe(console.log);
+socketChannel.onPeerConnect.subscribe((uuid) => {
+    console.log(`new peer ${uuid}`);
 });
-(window as any).communicator = communicator;
+socketChannel.onPeerDisconnect.subscribe((uuid) => {
+    console.log(`peer disconnected ${uuid}`);
+});
+(window as any).socketChannel = socketChannel;
+
+//const communicator = new Communicator({
+//    channel: socketChannel
+//});
+//(window as any).communicator = communicator;
 
 // Temporary
 const gameData = new GameData();
@@ -52,7 +56,8 @@ const app = new PIXI.Application({
 document.body.appendChild(app.view);
 
 
-const display = new Display({ container: app.stage, gameData: gameData });
+const display = new Display({ gameData: gameData });
+app.stage.addChild(display.displayObject);
 (window as any).display = display;
 
 window.onresize = function() {
@@ -72,7 +77,7 @@ var engine = new Engine({
 });
 (window as any).engine = engine;
 
-
+/*
 // Handle when the player's ship changes.
 communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefined, string]) {
     if (oldUUID) {
@@ -81,15 +86,15 @@ communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefin
     engine.activeShips.add(newUUID);
     display.target = newUUID;
 });
-
+*/
 
 let controller: Controller;
 let shipController: ShipController;
 async function startGame() {
-    if (!communicator.shipUUID) {
-        throw new Error("Game started before communicator ready");
-    }
-    engine.setState(communicator.getStateChanges());
+    //    if (!communicator.shipUUID) {
+    //        throw new Error("Game started before communicator ready");
+    //    }
+    //    engine.setState(communicator.getStateChanges());
 
     controller = await setupControls(gameData);
     (window as any).controller = controller;
@@ -101,25 +106,26 @@ async function startGame() {
 
 function gameLoop() {
     const delta = app.ticker.elapsedMS;
-    if (communicator.shipUUID !== undefined) {
-        engine.setShipState(communicator.shipUUID, shipController.generateShipState());
-    }
+    // if (communicator.shipUUID !== undefined) {
+    //     engine.setShipState(communicator.shipUUID, shipController.generateShipState());
+    // }
     engine.step(delta);
-
-    if (communicator.shipUUID !== undefined) {
-        let currentState = engine.getFullState();
-        let currentSystemState = engine.getSystemFullState(
-            engine.getShipSystemID(communicator.shipUUID));
-
-        display.draw(currentSystemState);
-        communicator.notifyPeers(currentState);
-
-        const stateChanges = communicator.getStateChanges();
-        engine.setState(stateChanges);
-    }
+    /*
+        if (communicator.shipUUID !== undefined) {
+            let currentState = engine.getFullState();
+            let currentSystemState = engine.getSystemFullState(
+                engine.getShipSystemID(communicator.shipUUID));
+    
+            display.draw(currentSystemState);
+            communicator.notifyPeers(currentState);
+    
+            const stateChanges = communicator.getStateChanges();
+            engine.setState(stateChanges);
+        }
+    */
 }
 
-communicator.onReady.pipe(first()).subscribe(startGame);
+//communicator.onReady.pipe(first()).subscribe(startGame);
 
 
 

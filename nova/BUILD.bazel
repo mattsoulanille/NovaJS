@@ -34,7 +34,7 @@ ts_library(
         "//novaparse",
         "//nova/src/common",
         "//nova/src/engine",
-        "//nova/src/communication",
+        "//nova/src/communication:communication_server_lib",
         "//nova/src/server",
         "//nova/src/server/parsing",
         "//nova/src/proto:vector_state_ts_proto",
@@ -76,6 +76,7 @@ nodejs_binary(
         "//nova/settings",
         "//novadatainterface:defaults",
         ":nova_data",
+        "//nova/test_keys",
         "//nova/src:static_files",
         "//nova/src:browser_bundle",
         # TODO: Understand why this makes protos
