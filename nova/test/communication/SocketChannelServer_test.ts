@@ -35,13 +35,13 @@ describe("SocketChannelServer", function() {
     it("binds to the `upgrade` event on the http server", () => {
         const httpsServer =
             jasmine.createSpyObj<https.Server>("http.Server Spy", ["on"]);
-        debugger;
+
         const [callbacks, on] = trackOn();
         httpsServer.on.and.callFake(on);
         new SocketChannelServer({
             httpsServer
         });
-        debugger;
+
         expect(callbacks["upgrade"].length).toBe(1);
     });
 
@@ -443,6 +443,24 @@ describe("SocketChannelServer", function() {
         const peerDisconnect = await peerDisconnectPromise;
         expect(peerDisconnect).toEqual(client1Uuid);
         jasmine.clock().uninstall();
+    });
+
+    it("replies to pings", async () => {
+        const server = new SocketChannelServer({
+            wss,
+        });
+
+        // Connect client 1
+        const client1 = new ClientHarness(server);
+        wssCallbacks["connection"][0](client1.websocket);
+        const client1Uuid = [...server.peers][0];
+        client1.open();
+
+        client1.sendMessage(new MessageBuilder()
+            .setPing(true)
+            .buildToServer());
+
+        expect(client1.lastMessage!.getPong()).toBe(true);
     });
 });
 

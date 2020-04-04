@@ -135,6 +135,10 @@ export class MessageBuilder {
             message.setPing(this.ping);
         }
 
+        if (this.pong) {
+            message.setPong(this.pong);
+        }
+
         return message;
     }
 
@@ -150,6 +154,10 @@ export class MessageBuilder {
 
         if (this.destination) {
             message.setDestination(this.destination);
+        }
+
+        if (this.ping) {
+            message.setPing(this.ping);
         }
 
         if (this.pong) {

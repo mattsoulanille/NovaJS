@@ -229,7 +229,15 @@ export class SocketChannelServer implements Channel {
 
         const message = SocketMessageToServer.deserializeBinary(serialized);
         if (message.getPong()) {
-            // We already reset the client timeout above
+            // We already reset the client timeout above.
+            // No need to do anything if it's a pong.
+            return;
+        }
+
+        if (message.getPing()) {
+            const pong = new SocketMessageFromServer();
+            pong.setPong(true);
+            this.sendRawIfOpen(clientUUID, pong);
             return;
         }
 

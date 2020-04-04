@@ -1,9 +1,8 @@
 import { SocketChannelClient } from "novajs/nova/src/communication/SocketChannelClient";
-import { GameMessage, SocketMessageFromServer, SocketMessageToServer } from "novajs/nova/src/proto/nova_service_pb";
-import { Callbacks, MessageBuilder, On, trackOn } from "./test_utils";
-import { take } from "rxjs/operators";
-import { Subject, ReplaySubject } from "rxjs";
 import { EngineState } from "novajs/nova/src/proto/engine_state_pb";
+import { GameMessage, SocketMessageToServer } from "novajs/nova/src/proto/nova_service_pb";
+import { take } from "rxjs/operators";
+import { Callbacks, MessageBuilder, On, trackOn } from "./test_utils";
 
 const testGameMessage = new GameMessage();
 const testEngineState = new EngineState();
@@ -16,7 +15,7 @@ describe("SocketChannelClient", function() {
     let warn: jasmine.Spy<(m: string) => void>;
     let callbacks: Callbacks;
     beforeEach(() => {
-        webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy", ["addEventListener", "send"]);
+        webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy", ["addEventListener", "send", "close", "removeEventListener"]);
         warn = jasmine.createSpy<(m: string) => void>("mockWarn");
 
         let on: On;
@@ -218,33 +217,6 @@ describe("SocketChannelClient", function() {
         expect(peersRemoved).toEqual(["peer 1"]);
     });
 
-    it("replies to pings", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        const message = new MessageBuilder()
-            .setPing(true)
-            .buildFromServer()
-            .serializeBinary();
-
-        const blob = new Blob([message]);
-        const messageEvent =
-            new MessageEvent("testMessage", { data: blob });
-
-        const pongPromise = new Promise<unknown>((resolve) => {
-            webSocket.send.and.callFake(resolve);
-        });
-
-        sendMessage(messageEvent);
-        const pong = await pongPromise;
-        if (!(pong instanceof Uint8Array)) {
-            throw new Error("pongPromise was not a Uint8Array");
-        }
-        const deserialized = SocketMessageToServer.deserializeBinary(pong);
-        expect(deserialized.getPong()).toBe(true);
-    });
-
     it("sends a message to a specific client", async () => {
         const client = new SocketChannelClient({ webSocket, warn });
         let sendMessage = callbacks["message"][0];
@@ -292,6 +264,72 @@ describe("SocketChannelClient", function() {
         expect(deserialized.getData()!.toObject())
             .toEqual(testGameMessage.toObject());
     });
+
+    it("replies to pings", async () => {
+        const client = new SocketChannelClient({ webSocket, warn });
+        let sendMessage = callbacks["message"][0];
+        expect(sendMessage).toBeTruthy();
+
+        const message = new MessageBuilder()
+            .setPing(true)
+            .buildFromServer()
+            .serializeBinary();
+
+        const blob = new Blob([message]);
+        const messageEvent =
+            new MessageEvent("testMessage", { data: blob });
+
+        const pongPromise = new Promise<unknown>((resolve) => {
+            webSocket.send.and.callFake(resolve);
+        });
+
+        sendMessage(messageEvent);
+        const pong = await pongPromise;
+        if (!(pong instanceof Uint8Array)) {
+            throw new Error("pongPromise was not a Uint8Array");
+        }
+        const deserialized = SocketMessageToServer.deserializeBinary(pong);
+        expect(deserialized.getPong()).toBe(true);
+    });
+
+    it("sends a ping if it hasn't heard from the server", async () => {
+        jasmine.clock().install();
+
+        const client = new SocketChannelClient({
+            webSocket,
+            warn,
+            timeout: 10,
+        });
+
+        const pingPromise = new Promise<unknown>((resolve) => {
+            webSocket.send.and.callFake(resolve);
+        });
+
+        jasmine.clock().tick(11);
+
+        const ping = await pingPromise;
+        if (!(ping instanceof Uint8Array)) {
+            throw new Error("pingPromise was not a Uint8Array");
+        }
+        const deserialized = SocketMessageToServer.deserializeBinary(ping);
+        expect(deserialized.getPing()).toBe(true);
+
+        jasmine.clock().uninstall();
+    });
+
+    it("attempts to reconnect if there is no pong", () => {
+        jasmine.clock().install();
+        (webSocket as any).readyState = WebSocket.OPEN;
+        const client = new SocketChannelClient({
+            webSocket,
+            warn,
+            timeout: 10,
+        });
+        debugger;
+        jasmine.clock().tick(21);
+
+        expect(webSocket.close).toHaveBeenCalled();
+
+        jasmine.clock().uninstall();
+    });
 });
-
-

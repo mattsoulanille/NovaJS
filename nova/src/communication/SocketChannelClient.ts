@@ -1,6 +1,6 @@
+import { GameMessage, ManagementData, SocketMessageFromServer, SocketMessageToServer } from "novajs/nova/src/proto/nova_service_pb";
 import { Subject } from "rxjs";
 import { Channel, MessageWithSourceType } from "./Channel";
-import { ManagementData, SocketMessageFromServer, SocketMessageToServer, StringSetDelta, GameMessage } from "novajs/nova/src/proto/nova_service_pb";
 
 interface Delta<T> {
     add: Set<T>;
@@ -34,30 +34,57 @@ export class SocketChannelClient implements Channel {
         return this.wrappedUuid;
     }
 
-    private webSocket: WebSocket;
+    webSocket: WebSocket;
     warn: (m: string) => void;
+    readonly timeout: number;
+    private keepaliveTimeout?: NodeJS.Timeout;
+    private messageListener: (m: MessageEvent) => void;
 
-    constructor({ webSocket, warn }: { webSocket?: WebSocket, warn?: ((m: string) => void) }) {
+    constructor({ webSocket, warn, timeout }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number }) {
         if (webSocket) {
             // Mostly for testing
             this.webSocket = webSocket;
-        }
-        else {
-            // TODO: Use wss instead of ws
+        } else {
             this.webSocket = new WebSocket(`wss://${location.host}`);
         }
 
         if (warn !== undefined) {
             this.warn = warn;
-        }
-        else {
+        } else {
             this.warn = console.warn;
         }
 
-        this.webSocket.addEventListener("message", this.handleMessage.bind(this));
+        if (timeout !== undefined) {
+            this.timeout = timeout;
+        } else {
+            this.timeout = 1200;
+        }
+
+        this.messageListener = this.handleMessage.bind(this)
+        this.webSocket.addEventListener("message", this.messageListener);
+        this.resetTimeout();
+    }
+
+    reconnect() {
+        this.webSocket.removeEventListener("message", this.messageListener);
+        if (this.webSocket.readyState === WebSocket.CONNECTING
+            || this.webSocket.readyState === WebSocket.OPEN) {
+            this.webSocket.close();
+        }
+        this.webSocket = new WebSocket(`wss://${location.host}`);
+        this.webSocket.addEventListener("message", this.messageListener);
+        this.resetTimeout();
+    }
+
+    reconnectIfClosed() {
+        if (this.webSocket.readyState === WebSocket.CLOSED
+            || this.webSocket.readyState === WebSocket.CLOSING) {
+            this.reconnect();
+        }
     }
 
     send(destination: string, data: GameMessage): void {
+        this.reconnectIfClosed();
         const socketMessage = new SocketMessageToServer();
         socketMessage.setData(data);
         socketMessage.setDestination(destination);
@@ -65,13 +92,38 @@ export class SocketChannelClient implements Channel {
     }
 
     broadcast(message: GameMessage): void {
+        this.reconnectIfClosed();
         const socketMessage = new SocketMessageToServer();
         socketMessage.setData(message);
         socketMessage.setBroadcast(true);
         this.webSocket.send(socketMessage.serializeBinary());
     }
 
+    resetTimeout() {
+        if (this.keepaliveTimeout !== undefined) {
+            clearTimeout(this.keepaliveTimeout);
+        }
+
+        this.keepaliveTimeout = setTimeout(() => {
+            if (this.webSocket.readyState === WebSocket.CLOSED
+                || this.webSocket.readyState === WebSocket.CLOSING) {
+                this.warn("Lost connection. Reconnecting...");
+                this.reconnect();
+                return;
+            }
+
+            const message = new SocketMessageToServer();
+            message.setPing(true);
+            this.webSocket.send(message.serializeBinary());
+            this.keepaliveTimeout = setTimeout(() => {
+                this.warn("Lost connection. Reconnecting...");
+                this.reconnect();
+            }, this.timeout);
+        }, this.timeout);
+    }
+
     private async handleMessage(messageEvent: MessageEvent) {
+        this.resetTimeout();
         const dataBlob = messageEvent.data;
         if (!(dataBlob instanceof Blob)) {
             this.warn(
@@ -190,6 +242,8 @@ export class SocketChannelClient implements Channel {
     }
 
     disconnect() {
+        this.webSocket.removeEventListener(
+            "message", this.messageListener);
         this.webSocket.close();
     }
 }
