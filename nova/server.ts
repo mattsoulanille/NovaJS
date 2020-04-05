@@ -40,15 +40,15 @@ const app = express();
 const httpsServer = https.createServer(httpsKeys, app);
 
 const socketChannel = new SocketChannelServer({ httpsServer });
-socketChannel.onPeerConnect.subscribe((peer) => {
-    console.log(`New peer: ${peer}`);
+socketChannel.clientConnect.subscribe((client) => {
+    console.log(`New client: ${client}`);
 });
 
-socketChannel.onPeerDisconnect.subscribe((peer) => {
-    console.log(`Peer disconnected: ${peer}`);
+socketChannel.clientDisconnect.subscribe((client) => {
+    console.log(`Client disconnected: ${client}`);
 });
 
-socketChannel.onMessage.subscribe((message) => {
+socketChannel.message.subscribe((message) => {
     console.log(message);
 });
 

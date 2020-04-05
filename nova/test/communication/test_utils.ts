@@ -1,4 +1,4 @@
-import { ManagementData, RepeatedString, StringValue, SocketMessageFromServer, StringSetDelta, SocketMessageToServer, GameMessage } from "novajs/nova/src/proto/nova_service_pb";
+import { SocketMessage, GameMessage } from "novajs/nova/src/proto/nova_service_pb";
 
 export type Callbacks = { [event: string]: ((...args: unknown[]) => unknown)[] };
 export type On = (event: string, cb: (...args: any[]) => unknown) => any;
@@ -17,83 +17,12 @@ export function trackOn(): [Callbacks, On] {
 
 
 export class MessageBuilder {
-    private wrappedManagement?: ManagementData;
-    private get management(): ManagementData {
-        if (!this.wrappedManagement) {
-            this.wrappedManagement = new ManagementData();
-        }
-        return this.wrappedManagement;
-    }
-
-    private wrappedData?: GameMessage;
-    private get data(): GameMessage {
-        if (!this.wrappedData) {
-            this.wrappedData = new GameMessage();
-        }
-        return this.wrappedData;
-    }
-    private set data(data: GameMessage) {
-        this.wrappedData = data;
-    }
-
-    private source?: string;
-    private destination?: string;
+    private data?: GameMessage;
     private ping?: boolean;
     private pong?: boolean;
 
-    addPeers(peersList: string[]) {
-        if (!this.management.hasPeersdelta()) {
-            this.management.setPeersdelta(new StringSetDelta());
-        }
-        const delta = this.management.getPeersdelta()!;
-        delta.setAddList(peersList);
-        this.management.setPeersdelta(delta);
-        return this;
-    }
-
-    removePeers(peersList: string[]) {
-        if (!this.management.hasPeersdelta()) {
-            this.management.setPeersdelta(new StringSetDelta());
-        }
-        const delta = this.management.getPeersdelta()!;
-        delta.setRemoveList(peersList);
-        this.management.setPeersdelta(delta);
-        return this;
-    }
-
-    setPeers(peersList: string[]) {
-        const peers = new RepeatedString();
-        peers.setValueList(peersList);
-        this.management.setPeers(peers);
-        return this;
-    }
-
-    setAdmins(adminsList: string[]) {
-        const admins = new RepeatedString();
-        admins.setValueList(adminsList);
-        this.management.setAdmins(admins);
-        return this;
-    }
-
-    setUuid(uuidString: string) {
-        const uuid = new StringValue();
-        uuid.setValue(uuidString);
-        this.management.setUuid(uuid);
-        return this;
-    }
-
     setData(data: GameMessage) {
         this.data = data;
-        return this;
-    }
-
-    setSource(source: string) {
-        this.source = source;
-        return this;
-    }
-
-    setDestination(destination: string) {
-        this.destination = destination;
         return this;
     }
 
@@ -107,39 +36,11 @@ export class MessageBuilder {
         return this;
     }
 
-    buildFromServer() {
-        const message = new SocketMessageFromServer();
-        if (this.wrappedManagement) {
-            message.setManagementdata(this.wrappedManagement);
-        }
+    build() {
+        const message = new SocketMessage();
 
-        if (this.wrappedData) {
-            message.setData(this.wrappedData);
-        }
-
-        if (this.source) {
-            message.setSource(this.source);
-        }
-
-        if (this.ping) {
-            message.setPing(this.ping);
-        }
-
-        if (this.pong) {
-            message.setPong(this.pong);
-        }
-
-        return message;
-    }
-
-    buildToServer() {
-        const message = new SocketMessageToServer();
-        if (this.wrappedData) {
-            message.setData(this.wrappedData);
-        }
-
-        if (this.destination) {
-            message.setDestination(this.destination);
+        if (this.data) {
+            message.setData(this.data);
         }
 
         if (this.ping) {

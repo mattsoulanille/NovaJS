@@ -88,7 +88,7 @@ describe("Socket Communication Channel", function() {
             let peer = clientChannels[peerUUID];
             promises.push(waitForEvent(peer.onPeerConnect));
         }
-        promises.push(waitForEvent(serverChannel.onPeerConnect));
+        promises.push(waitForEvent(serverChannel.clientConnect));
         const client = new SocketChannelClient({ socket: await connectSocketIOClient() });
 
         let results = await Promise.all(promises);
@@ -117,7 +117,7 @@ describe("Socket Communication Channel", function() {
                     promises.push(waitForEvent(peer.onPeerDisconnect));
                 }
             }
-            promises.push(waitForEvent(serverChannel.onPeerDisconnect));
+            promises.push(waitForEvent(serverChannel.clientDisconnect));
 
             client.disconnect();
             let results = await Promise.all(promises);
@@ -168,7 +168,7 @@ describe("Socket Communication Channel", function() {
         }
         else {
             // .have.keys also fails if it has keys we don't mention.
-            serverChannel.peers.should.have.keys(client1.uuid, client2.uuid, client3.uuid);
+            serverChannel.clients.should.have.keys(client1.uuid, client2.uuid, client3.uuid);
 
             client1.peers.should.have.keys(serverChannel.uuid, client2.uuid, client3.uuid);
             client2.peers.should.have.keys(client1.uuid, serverChannel.uuid, client3.uuid);
@@ -176,14 +176,14 @@ describe("Socket Communication Channel", function() {
 
             await disconnectClient(client2.uuid);
 
-            serverChannel.peers.should.have.keys(client1.uuid, client3.uuid);
+            serverChannel.clients.should.have.keys(client1.uuid, client3.uuid);
             client1.peers.should.have.keys(serverChannel.uuid, client3.uuid);
             client3.peers.should.have.keys(client1.uuid, serverChannel.uuid);
         }
     });
 
     it("serverChannel should be cleared of peers between tests", function() {
-        serverChannel.peers.should.be.empty;
+        serverChannel.clients.should.be.empty;
     });
 
     it("Should allow messages to be sent between clients", async function() {
@@ -226,7 +226,7 @@ describe("Socket Communication Channel", function() {
 
         var client3Promise = waitForEvent(client3.onMessage, 100);
         var toServer = "Hello from client1 " + Math.random();
-        var toServerPromise = waitForEvent(serverChannel.onMessage);
+        var toServerPromise = waitForEvent(serverChannel.message);
         client1.send(serverChannel.uuid, toServer);
 
         (await toServerPromise).should.deep.equal({
@@ -267,7 +267,7 @@ describe("Socket Communication Channel", function() {
 
         let client2ReceiveClient1 = waitForEvent(client2.onMessage);
         let client3ReceiveClient1 = waitForEvent(client3.onMessage);
-        let serverReceiveClient1 = waitForEvent(serverChannel.onMessage);
+        let serverReceiveClient1 = waitForEvent(serverChannel.message);
 
         let client1Message = "Broadcast from client1 " + Math.random();
         client1.broadcast(client1Message);

@@ -1,8 +1,8 @@
-import { ManagementData, RepeatedString, SocketMessageFromServer, SocketMessageToServer, StringSetDelta, GameMessage, StringValue } from "novajs/nova/src/proto/nova_service_pb";
+import { GameMessage, SocketMessage } from "novajs/nova/src/proto/nova_service_pb";
 import { Subject } from "rxjs";
 import UUID from "uuid/v4";
 import WebSocket from "ws";
-import { Channel, MessageWithSourceType } from "./Channel";
+import { ChannelServer, MessageWithSourceType } from "./Channel";
 import http from "http";
 import https from "https";
 import { Socket } from "net";
@@ -12,39 +12,23 @@ interface Client {
     keepaliveTimeout?: NodeJS.Timeout;
 }
 
-export class SocketChannelServer implements Channel {
-    readonly onMessage = new Subject<MessageWithSourceType>();
-    readonly onPeerConnect = new Subject<string>();
-    readonly onPeerDisconnect = new Subject<string>();
+export class SocketChannelServer implements ChannelServer {
+    readonly message = new Subject<MessageWithSourceType>();
+    readonly clientConnect = new Subject<string>();
+    readonly clientDisconnect = new Subject<string>();
 
-    private clients = new Map<string, Client>();
+    private clientMap = new Map<string, Client>();
     readonly wss: WebSocket.Server;
-    readonly uuid: string;
     private warn: (m: string) => void = console.warn;
 
-    readonly admins: Set<string>;
     // Send a ping if a packet hasn't been received in this long
     // If the ping doesn't get back in this much time, disconnect them.
     readonly timeout: number;
 
-    constructor({ httpsServer, warn, uuid, admins, wss, timeout }: { httpsServer?: https.Server, warn?: ((m: string) => void), uuid?: string, admins?: Set<string>, wss?: WebSocket.Server, timeout?: number }) {
+    constructor({ httpsServer, warn, wss, timeout }: { httpsServer?: https.Server, warn?: ((m: string) => void), wss?: WebSocket.Server, timeout?: number }) {
 
         if (warn) {
             this.warn = warn;
-        }
-
-        if (uuid) {
-            this.uuid = uuid;
-        }
-        else {
-            this.uuid = UUID();
-        }
-
-        if (admins) {
-            this.admins = new Set([...admins, this.uuid]);
-        }
-        else {
-            this.admins = new Set([this.uuid]);
         }
 
         if (wss) {
@@ -66,16 +50,16 @@ export class SocketChannelServer implements Channel {
         this.wss.on("connection", this.onConnect.bind(this));
     }
 
-    get peers() {
-        return new Set(this.clients.keys());
+    get clients() {
+        return new Set(this.clientMap.keys());
     }
 
     private sendRawIfOpen(destination: string,
-        socketMessage: SocketMessageFromServer): boolean {
+        socketMessage: SocketMessage): boolean {
 
-        const client = this.clients.get(destination);
+        const client = this.clientMap.get(destination);
         if (!client) {
-            this.warn(`No such peer ${destination}`);
+            this.warn(`No such client ${destination}`);
         } else if (client.socket.readyState === WebSocket.OPEN) {
             client.socket.send(socketMessage.serializeBinary());
             return true;
@@ -83,27 +67,14 @@ export class SocketChannelServer implements Channel {
         return false;
     }
 
-    private sendIfOpen(source: string, destination: string, message: GameMessage) {
-        const socketMessage = new SocketMessageFromServer();
-        socketMessage.setSource(source);
+    send(destination: string, message: GameMessage) {
+        const socketMessage = new SocketMessage();
         socketMessage.setData(message);
         return this.sendRawIfOpen(destination, socketMessage);
     }
 
-    send(destination: string, message: GameMessage) {
-        this.sendIfOpen(this.uuid, destination, message);
-    }
-
-    private broadcastRaw(message: SocketMessageFromServer, omit: string[] = []) {
-        for (const id of this.clients.keys()) {
-            if (!omit.includes(id)) {
-                this.sendRawIfOpen(id, message)
-            }
-        }
-    }
-
     private resetClientTimeout(uuid: string) {
-        const client = this.clients.get(uuid);
+        const client = this.clientMap.get(uuid);
         if (!client) {
             throw new Error(`Tried to reset keepalive timeout`
                 + ` of nonexistant client ${uuid}`);
@@ -115,7 +86,7 @@ export class SocketChannelServer implements Channel {
 
         client.keepaliveTimeout = setTimeout(() => {
             // Send the client a ping
-            const message = new SocketMessageFromServer();
+            const message = new SocketMessage();
             message.setPing(true);
             this.sendRawIfOpen(uuid, message);
             client.keepaliveTimeout = setTimeout(() => {
@@ -125,8 +96,7 @@ export class SocketChannelServer implements Channel {
         }, this.timeout);
     }
 
-    // Handles when a client first connects
-    // It might be better to abstract all this out with an object for each client.
+    /** Handles when a client first connects */
     private onConnect(webSocket: WebSocket) {
         const clientUUID = UUID();
         // This uuid is used only for communication and
@@ -134,13 +104,15 @@ export class SocketChannelServer implements Channel {
         const client: Client = {
             socket: webSocket,
         };
-        this.clients.set(clientUUID, client);
+        this.clientMap.set(clientUUID, client);
         this.resetClientTimeout(clientUUID);
 
         if (webSocket.readyState === WebSocket.CONNECTING) {
-            webSocket.on("open", this.handleClientOpen.bind(this, clientUUID));
+            webSocket.on("open", () => {
+                this.clientConnect.next(clientUUID);
+            });
         } else if (webSocket.readyState === WebSocket.OPEN) {
-            this.handleClientOpen(clientUUID);
+            this.clientConnect.next(clientUUID);
         } else {
             const state = webSocket.readyState === WebSocket.CLOSING
                 ? "CLOSING" : "CLOSED";
@@ -151,63 +123,15 @@ export class SocketChannelServer implements Channel {
         webSocket.on("close", this.handleClientClose.bind(this, clientUUID));
     }
 
-    private handleClientOpen(clientUUID: string) {
-        // The peer is added to this.peers implicitly
-        // by the socket getting added to clientSockets
-        // in onConnect. this.peers is a getter.
-
-        // Create the set of peers for this peer
-        const peersSet = new Set(this.peers);
-        // It is not a peer of itself
-        peersSet.delete(clientUUID);
-        // It is a peer of this server
-        peersSet.add(this.uuid);
-
-        // Send the new client its UUID
-        const managementData = new ManagementData();
-        const uuidValue = new StringValue();
-        uuidValue.setValue(clientUUID);
-        managementData.setUuid(uuidValue);
-
-        // Send the new client the current list of peers
-        const peers = new RepeatedString();
-        peers.setValueList([...peersSet]);
-        managementData.setPeers(peers);
-
-        // Ditto for admins
-        const admins = new RepeatedString();
-        admins.setValueList([...this.admins]);
-        managementData.setAdmins(admins);
-
-        // Actually send the message to the new client
-        const messageToNewPeer = new SocketMessageFromServer();
-        messageToNewPeer.setManagementdata(managementData);
-        if (!this.sendRawIfOpen(clientUUID, messageToNewPeer)) {
-            this.warn("Failed to send message to the new peer");
-        }
-
-        // Send an update to all other peers that a new peer connected
-        const messageToOthers = new SocketMessageFromServer();
-        const managementDataToOthers = new ManagementData();
-        const peerDelta = new StringSetDelta();
-        peerDelta.setAddList([clientUUID]);
-        managementDataToOthers.setPeersdelta(peerDelta);
-        messageToOthers.setManagementdata(managementDataToOthers);
-
-        this.broadcastRaw(messageToOthers, [clientUUID]);
-        this.onPeerConnect.next(clientUUID);
-    }
-
     // Handles messages received from clients. Forwards messages to their destination.
     private handleMessageFromClient(clientUUID: string, serialized: Uint8Array) {
         this.resetClientTimeout(clientUUID);
-        const client = this.clients.get(clientUUID);
+        const client = this.clientMap.get(clientUUID);
         if (!client) {
             throw new Error(`Missing client object for ${clientUUID}`);
         }
 
-
-        const message = SocketMessageToServer.deserializeBinary(serialized);
+        const message = SocketMessage.deserializeBinary(serialized);
         if (message.getPong()) {
             // We already reset the client timeout above.
             // No need to do anything if it's a pong.
@@ -215,57 +139,38 @@ export class SocketChannelServer implements Channel {
         }
 
         if (message.getPing()) {
-            const pong = new SocketMessageFromServer();
+            const pong = new SocketMessage();
             pong.setPong(true);
             this.sendRawIfOpen(clientUUID, pong);
             return;
         }
 
         const data = message.getData();
-        const destination = message.getDestination();
 
         if (!data) {
             this.warn(`Message from ${clientUUID} had no data`);
             return;
         }
 
-        if (destination === this.uuid) {
-            this.onMessage.next({
-                message: data,
-                source: clientUUID,
-            });
-        } else if (destination) {
-            this.sendIfOpen(clientUUID, destination, data);
-        } else {
-            this.warn(`Message from ${clientUUID} had no destination`);
-        }
+        this.message.next({
+            message: data,
+            source: clientUUID,
+        });
     }
 
-    // Handles when a client disconnects
     private handleClientClose(clientUUID: string) {
-        const client = this.clients.get(clientUUID);
+        const client = this.clientMap.get(clientUUID);
         if (!client) {
             throw new Error(
                 `Tried to remove nonexistant client ${clientUUID}`);
         }
+
         if (client.keepaliveTimeout !== undefined) {
             clearTimeout(client.keepaliveTimeout);
         }
 
         client.socket.removeAllListeners();
-        this.clients.delete(clientUUID);
-        const managementData = new ManagementData();
-        const peersDelta = new StringSetDelta();
-        peersDelta.addRemove(clientUUID);
-        managementData.setPeersdelta(peersDelta);
-        const message = new SocketMessageFromServer();
-        message.setManagementdata(managementData);
-
-        this.broadcastRaw(message);
-        this.onPeerDisconnect.next(clientUUID);
-    }
-
-    disconnect() {
-        this.warn("Called disconnect on the server");
+        this.clientMap.delete(clientUUID);
+        this.clientDisconnect.next(clientUUID);
     }
 }

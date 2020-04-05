@@ -24,13 +24,7 @@ import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 (window as any).SystemState = SystemState;
 
 const socketChannel = new SocketChannelClient({});
-socketChannel.onMessage.subscribe(console.log);
-socketChannel.onPeerConnect.subscribe((uuid) => {
-    console.log(`new peer ${uuid}`);
-});
-socketChannel.onPeerDisconnect.subscribe((uuid) => {
-    console.log(`peer disconnected ${uuid}`);
-});
+socketChannel.message.subscribe(console.log);
 (window as any).socketChannel = socketChannel;
 
 //const communicator = new Communicator({

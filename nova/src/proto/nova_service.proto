@@ -5,48 +5,12 @@ import "nova/src/proto/engine_state.proto";
 //import "google/protobuf/any.proto";
 //import "google/protobuf/wrappers.proto";
 
-message RepeatedString { // next = 2
-  repeated string value = 1;
-}
-
-message StringSetDelta { // next = 3
-  repeated string add = 1;
-  repeated string remove = 2;
-}
-
-message StringValue {
-  // TODO: Replace with google's version
-  // when the bug is fixed.
-  string value = 1;
-}
-
-message ManagementData { // next = 5
-  // Sets the client's UUID
-  StringValue uuid = 1;
-  
-  oneof peersUpdate {
-	StringSetDelta peersDelta = 2;
-	RepeatedString peers = 3;
+message SocketMessage { // next = 5
+  oneof contents {
+	GameMessage data = 2;
+	bool ping = 3;
+	bool pong = 4;
   }
-  oneof adminsUpdate {
-	StringSetDelta adminsDelta = 4;
-	RepeatedString admins = 5;
-  }
-}
-
-message SocketMessageToServer { // next = 5
-  string destination = 1;
-  GameMessage data = 2;
-  bool ping = 3;
-  bool pong = 4;
-}
-
-message SocketMessageFromServer { // next = 6
-  string source = 1;
-  GameMessage data = 2;
-  ManagementData managementData = 3;
-  bool ping = 4;
-  bool pong = 5;
 }
 
 message GameMessage { // next = 2

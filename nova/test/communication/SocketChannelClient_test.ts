@@ -1,6 +1,6 @@
 import { SocketChannelClient } from "novajs/nova/src/communication/SocketChannelClient";
 import { EngineState } from "novajs/nova/src/proto/engine_state_pb";
-import { GameMessage, SocketMessageToServer } from "novajs/nova/src/proto/nova_service_pb";
+import { GameMessage, SocketMessage } from "novajs/nova/src/proto/nova_service_pb";
 import { take } from "rxjs/operators";
 import { Callbacks, MessageBuilder, On, trackOn } from "./test_utils";
 
@@ -76,167 +76,25 @@ describe("SocketChannelClient", function() {
             .toMatch("Failed to deserialize");
     });
 
-    it("warns if it receives a message with data but no source", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        const messageWithoutSource = new MessageBuilder()
-            .setData(testGameMessage)
-            .buildFromServer()
-            .serializeBinary();
-
-        const blob = new Blob([messageWithoutSource]);
-        const messageEvent =
-            new MessageEvent("testMessage", { data: blob });
-
-        let warnPromise = new Promise((resolve) => {
-            warn.and.callFake(resolve);
-        });
-        sendMessage(messageEvent);
-        await warnPromise;
-
-        expect(warn).toHaveBeenCalled();
-        expect(warn.calls.mostRecent().args[0])
-            .toMatch("with no source");
-    });
-
     it("emits when it receives a valid message", async () => {
         const client = new SocketChannelClient({ webSocket, warn });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
         const message = new MessageBuilder()
-            .setSource("test source")
             .setData(testGameMessage)
-            .buildFromServer()
+            .build()
             .serializeBinary();
 
         const blob = new Blob([message]);
         const messageEvent =
             new MessageEvent("testMessage", { data: blob });
-        const dataPromise = client.onMessage.pipe(take(1)).toPromise();
+        const messagePromise = client.message.pipe(take(1)).toPromise();
 
         sendMessage(messageEvent);
 
-        const data = await dataPromise;
-        expect(data.source).toEqual("test source");
-        expect(data.message.toObject()).toEqual(testGameMessage.toObject());
-    });
-
-    it("server can set initial data", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        const message = new MessageBuilder()
-            .setSource("test source")
-            .setUuid("peer 2")
-            .setAdmins(["admin 1"])
-            .setPeers(["admin 1", "peer 1"])
-            .setData(testGameMessage)
-            .buildFromServer()
-            .serializeBinary();
-
-        const connectedPeers: string[] = [];
-        client.onPeerConnect.subscribe((peer) => {
-            connectedPeers.push(peer);
-        });
-
-        const blob = new Blob([message]);
-        const messageEvent =
-            new MessageEvent("testMessage", { data: blob });
-
-        const dataPromise = client.onMessage.pipe(take(1)).toPromise();
-        sendMessage(messageEvent);
-
-        // Wait for the message to be received.
-        await dataPromise;
-
-        expect(client.uuid).toEqual("peer 2");
-        expect([...client.admins]).toEqual(["admin 1"]);
-        expect([...client.peers]).toEqual(["admin 1", "peer 1"]);
-        expect(connectedPeers).toEqual(["admin 1", "peer 1"]);
-    });
-
-    it("emits when peers connect or disconnect", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        // Set up initial peers
-        const message1 = new MessageBuilder()
-            .setSource("test source")
-            .setUuid("peer 2")
-            .setAdmins(["admin 1"])
-            .setPeers(["admin 1", "peer 1"])
-            .buildFromServer()
-            .serializeBinary();
-
-        const blob1 = new Blob([message1]);
-        const messageEvent1 =
-            new MessageEvent("testMessage", { data: blob1 });
-
-        const newPeersPromise1 = client.onPeerConnect
-            .pipe(take(2)).toPromise();
-        sendMessage(messageEvent1);
-        // Make sure the client gets the peers.
-        await newPeersPromise1;
-
-        // Make some changes to peers
-        const message2 = new MessageBuilder()
-            .setSource("test source")
-            .addPeers(["peer 3"])
-            .removePeers(["peer 1"])
-            .buildFromServer()
-            .serializeBinary();
-
-        const blob2 = new Blob([message2]);
-        const messageEvent2 =
-            new MessageEvent("testMessage", { data: blob2 });
-
-        const peersAdded: string[] = [];
-        client.onPeerConnect.subscribe((peer) => {
-            peersAdded.push(peer);
-        });
-
-        const peersRemoved: string[] = [];
-        client.onPeerDisconnect.subscribe((peer) => {
-            peersRemoved.push(peer);
-        });
-
-        const newPeersPromise2 = client.onPeerConnect
-            .pipe(take(1)).toPromise();
-        const removePeersPromise = client.onPeerDisconnect
-            .pipe(take(1)).toPromise();
-        sendMessage(messageEvent2);
-        await newPeersPromise2;
-        await removePeersPromise;
-
-        expect(peersAdded).toEqual(["peer 3"]);
-        expect(peersRemoved).toEqual(["peer 1"]);
-    });
-
-    it("sends a message to a specific client", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        const messagePromise = new Promise<unknown>((resolve) => {
-            webSocket.send.and.callFake(resolve);
-        });
-
-        client.send("destination uuid", testGameMessage);
-        const sentMessage = await messagePromise;
-
-        if (!(sentMessage instanceof Uint8Array)) {
-            throw new Error("pongPromise was not a Uint8Array");
-        }
-        const deserialized = SocketMessageToServer
-            .deserializeBinary(sentMessage);
-
-        expect(deserialized.getDestination()).toEqual("destination uuid");
-        expect(deserialized.getData()!.toObject())
+        const messageReceived = await messagePromise;
+        expect(messageReceived.toObject())
             .toEqual(testGameMessage.toObject());
     });
 
@@ -247,7 +105,7 @@ describe("SocketChannelClient", function() {
 
         const message = new MessageBuilder()
             .setPing(true)
-            .buildFromServer()
+            .build()
             .serializeBinary();
 
         const blob = new Blob([message]);
@@ -263,7 +121,7 @@ describe("SocketChannelClient", function() {
         if (!(pong instanceof Uint8Array)) {
             throw new Error("pongPromise was not a Uint8Array");
         }
-        const deserialized = SocketMessageToServer.deserializeBinary(pong);
+        const deserialized = SocketMessage.deserializeBinary(pong);
         expect(deserialized.getPong()).toBe(true);
     });
 
@@ -286,7 +144,7 @@ describe("SocketChannelClient", function() {
         if (!(ping instanceof Uint8Array)) {
             throw new Error("pingPromise was not a Uint8Array");
         }
-        const deserialized = SocketMessageToServer.deserializeBinary(ping);
+        const deserialized = SocketMessage.deserializeBinary(ping);
         expect(deserialized.getPing()).toBe(true);
 
         jasmine.clock().uninstall();
