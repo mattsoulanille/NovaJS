@@ -1,23 +1,33 @@
 package(default_visibility = ["//visibility:public"])
 
-
+load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
-mocha_ts_test(
-    name = "engine_test",
-    srcs = glob(["*.ts"]),
+jasmine_node_test(
+    name = "unit_tests",
+    srcs = [":unit_test_sources"],
+)
+
+ts_library(
+    name = "unit_test_sources",
+    testonly = True,
+    # All tests must end in "_test.ts" or jasmine won't recognize them!
+    srcs = [
+        "SpaceObject_test.ts",
+    ],
     deps = [
         "@npm//@types/node",
-        "@npm//chai",
-        "@npm//chai-as-promised",
-        "@npm//@types/chai",
-        "@npm//@types/chai-as-promised",
-        "@npm//io-ts",
-        "@npm//fp-ts",
-        "@npm//@types/mocha",
-        "//nova/src/communication",
+        "@npm//typescript",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//rxjs",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
+        "//nova/src/proto:engine_state_ts_proto",
+        "//nova/src/proto:vector_state_ts_proto",
+        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/proto:ship_state_ts_proto",
         "//nova/src/engine",
-        "//novaparse",
+        "//novadatainterface",
     ]
 )

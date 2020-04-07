@@ -122,9 +122,9 @@ export type VectorLike = { x: number, y: number };
 
 
 export class Angle implements Stateful<number> {
-    private _angle!: number
+    private wrappedAngle!: number
     constructor(angle: number) {
-        this.angle = angle
+        this.angle = angle;
     }
 
     private static mod(val: number) {
@@ -132,11 +132,11 @@ export class Angle implements Stateful<number> {
     }
 
     set angle(val: number) {
-        this._angle = Angle.mod(val);
+        this.wrappedAngle = Angle.mod(val);
     }
 
     get angle() {
-        return this._angle;
+        return this.wrappedAngle;
     }
 
     add(other: Angle | number) {

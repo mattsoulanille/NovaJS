@@ -6,7 +6,6 @@ import { Stateful } from "./Stateful";
 import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
 
 
-
 export class SpaceObject implements Stateful<SpaceObjectState>, Steppable {
     private position: Position = new Position(0, 0);
     private velocity: Vector = new Vector(0, 0);
