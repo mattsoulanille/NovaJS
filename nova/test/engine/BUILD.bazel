@@ -14,6 +14,8 @@ ts_library(
     # All tests must end in "_test.ts" or jasmine won't recognize them!
     srcs = [
         "SpaceObject_test.ts",
+        "Ship_test.ts",
+        "StatefulMap_test.ts",
     ],
     deps = [
         "@npm//@types/node",
@@ -23,10 +25,13 @@ ts_library(
         "@npm//rxjs",
         "@npm//jasmine",
         "@npm//@types/jasmine",
+        "@npm//google-protobuf",
+        "@npm//@types/google-protobuf",
         "//nova/src/proto:engine_state_ts_proto",
         "//nova/src/proto:vector_state_ts_proto",
         "//nova/src/proto:space_object_state_ts_proto",
         "//nova/src/proto:ship_state_ts_proto",
+        "//nova/src/proto:map_keys_ts_proto",
         "//nova/src/engine",
         "//novadatainterface",
     ]
