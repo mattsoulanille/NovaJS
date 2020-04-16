@@ -1,20 +1,17 @@
 import { BaseData } from "../../../novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
 import { BaseResource } from "../resource_parsers/NovaResourceBase";
-import { SpriteSheetData, DefaultSpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, ConvexHulls, DefaultConvexHulls, FrameInfo, ConvexHull, DefaultImageLocation } from "../../../novadatainterface/SpriteSheetData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, ConvexHulls, FrameInfo, ConvexHull, DefaultImageLocation } from "novajs/novadatainterface/SpriteSheetData";
 import { RledResource } from "../resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
-
-//import hull = require("hull.js");
-//import hull from "hull.js";
+import { Defaults } from "novajs/novadatainterface/Defaults";
 
 
-
-type SpriteSheetMulti = {
-    spriteSheet: SpriteSheetData,
-    spriteSheetImage: SpriteSheetImageData,
-    spriteSheetFrames: SpriteSheetFramesData
+export interface SpriteSheetMulti {
+    spriteSheet: SpriteSheetData;
+    spriteSheetImage: SpriteSheetImageData;
+    spriteSheetFrames: SpriteSheetFramesData;
 }
 
 
@@ -166,7 +163,7 @@ function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
 
 // Parses SpriteSheet, SpriteSheetImage, and SpriteSheetFrames at the same time
 // They are separated from each other due to PIXI.js peculiarities.
-async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction: (m: string) => void): Promise<SpriteSheetMulti> {
+export async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction: (m: string) => void): Promise<SpriteSheetMulti> {
     var base: BaseData = await BaseParse(rled, notFoundFunction);
 
 
@@ -191,6 +188,3 @@ async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction: (m: s
         spriteSheetFrames
     };
 };
-
-
-export { SpriteSheetMultiParse, SpriteSheetMulti }

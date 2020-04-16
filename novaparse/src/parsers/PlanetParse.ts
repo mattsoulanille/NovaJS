@@ -1,15 +1,17 @@
+import { Animation, getDefaultAnimationImage, getDefaultExitPoints } from "novajs/novadatainterface/Animation";
+import { BaseData } from "novajs/novadatainterface/BaseData";
+import { getDefaultPictData } from "novajs/novadatainterface/PictData";
+import { PlanetData } from "novajs/novadatainterface/PlanetData";
+import { DamageType } from "novajs/novadatainterface/WeaponData";
 import { SpobResource } from "../resource_parsers/SpobResource";
-import { PlanetData } from "../../../novadatainterface/PlanetData";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "../../../novadatainterface/BaseData";
-import { DefaultPictData } from "../../../novadatainterface/PictData";
-import { DamageType } from "../../../novadatainterface/WeaponData";
-import { Animation, DefaultExitPoints, DefaultAnimationImage } from "../../../novadatainterface/Animation";
 
 
-
-async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => void): Promise<PlanetData> {
+export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => void): Promise<PlanetData> {
     var base: BaseData = await BaseParse(spob, notFoundFunction);
+
+    const defaultPictData = getDefaultPictData();
+    const defaultAnimationImage = getDefaultAnimationImage();
 
     var desc: string;
     var descResource = spob.idSpace.dësc[spob.landingDescID];
@@ -28,7 +30,7 @@ async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => 
     }
     else {
         notFoundFunction("No matching PICT for spöb of id " + base.id);
-        pictID = DefaultPictData.id;
+        pictID = defaultPictData.id;
     }
 
     var rledResource = spob.idSpace.rlëD[spob.graphic];
@@ -38,13 +40,13 @@ async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => 
     }
     else {
         notFoundFunction("No matching rlëd id " + spob.graphic + " for spöb of id " + base.id);
-        rledID = DefaultAnimationImage.id;
+        rledID = defaultAnimationImage.id;
     }
 
 
 
     var animation: Animation = {
-        exitPoints: DefaultExitPoints,
+        exitPoints: getDefaultExitPoints(),
         id: base.id,
         name: base.name,
         prefix: base.prefix,
@@ -82,5 +84,3 @@ async function PlanetParse(spob: SpobResource, notFoundFunction: (m: string) => 
         position: [spob.position[0], spob.position[1]]
     }
 }
-
-export { PlanetParse };

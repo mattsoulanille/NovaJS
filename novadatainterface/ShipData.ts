@@ -1,20 +1,22 @@
-import { Animation, DefaultAnimation } from "./Animation";
-import { BaseData, DefaultBaseData } from "./BaseData";
-import { SpaceObjectPhysics, SpaceObjectData, DefaultSpaceObjectPhysics, DefaultSpaceObjectData } from "./SpaceObjectData";
+import { Animation, getDefaultAnimation } from "./Animation";
+import { BaseData, getDefaultBaseData } from "./BaseData";
+import { SpaceObjectPhysics, SpaceObjectData, getDefaultSpaceObjectPhysics, getDefaultSpaceObjectData } from "./SpaceObjectData";
 
 
-type ShipPhysics = SpaceObjectPhysics & {
+export interface ShipPhysics extends SpaceObjectPhysics {
     freeMass: number;
     freeCargo: number;
 }
 
-const DefaultShipPhysics: ShipPhysics = {
-    ...DefaultSpaceObjectPhysics,
-    freeMass: 0,
-    freeCargo: 0
+export function getDefaultShipPhysics(): ShipPhysics {
+    return {
+        ...getDefaultSpaceObjectPhysics(),
+        freeMass: 0,
+        freeCargo: 0
+    }
 }
 
-interface ShipData extends SpaceObjectData {
+export interface ShipData extends SpaceObjectData {
     physics: ShipPhysics;
     pict: string;
     desc: string;
@@ -26,19 +28,17 @@ interface ShipData extends SpaceObjectData {
     displayWeight: number;
 };
 
-
-const DefaultShipData: ShipData = {
-    ...DefaultSpaceObjectData,
-    physics: DefaultShipPhysics,
-    pict: "default",
-    desc: "default",
-    outfits: {},
-    initialExplosion: null,
-    finalExplosion: null,
-    largeExplosion: false,
-    deathDelay: 1,
-    displayWeight: 1
+export function getDefaultShipData(): ShipData {
+    return {
+        ...getDefaultSpaceObjectData(),
+        physics: getDefaultShipPhysics(),
+        pict: "default",
+        desc: "default",
+        outfits: {},
+        initialExplosion: null,
+        finalExplosion: null,
+        largeExplosion: false,
+        deathDelay: 1,
+        displayWeight: 1
+    }
 }
-
-
-export { ShipData, DefaultShipData, ShipPhysics, DefaultShipPhysics };

@@ -1,16 +1,15 @@
-import { Gettable } from "./Gettable";
-import { BaseData } from "./BaseData";
-import { ShipData } from "./ShipData";
-import { OutfitData } from "./OutiftData";
 import { ExplosionData } from "./ExplosionData";
-import { WeaponData } from "./WeaponData";
+import { Gettable } from "./Gettable";
+import { OutfitData } from "./OutiftData";
 import { PictData } from "./PictData";
+import { PictImageData } from "./PictImage";
 import { PlanetData } from "./PlanetData";
+import { ShipData } from "./ShipData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "./SpriteSheetData";
+import { StatusBarData } from "./StatusBarData";
 import { SystemData } from "./SystemData";
 import { TargetCornersData } from "./TargetCornersData";
-import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "./SpriteSheetData";
-import { StatusBarData } from "./StatusBarData";
-import { PictImageData } from "./PictImage";
+import { WeaponData } from "./WeaponData";
 
 enum NovaDataType {
     Ship = "Ship",

@@ -1,10 +1,8 @@
-
 import { BaseData } from "../../../novadatainterface/BaseData";
-//import { NovaResources } from "../resource_parsers/ResourceHolderBase";
 import { BaseResource } from "../resource_parsers/NovaResourceBase";
 
 
-async function BaseParse(resource: BaseResource, _notFoundFunction: (message: string) => void): Promise<BaseData> {
+export async function BaseParse(resource: BaseResource, _notFoundFunction: (message: string) => void): Promise<BaseData> {
     if (typeof resource === "undefined") {
         // Why can't I make the typechecker do this?
         throw new Error("Resource was undefined");
@@ -24,6 +22,3 @@ async function BaseParse(resource: BaseResource, _notFoundFunction: (message: st
         prefix: resource.prefix
     };
 }
-
-
-export { BaseParse };

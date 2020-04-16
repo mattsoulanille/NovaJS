@@ -1,8 +1,8 @@
 import { OutfResource } from "../resource_parsers/OutfResource";
-import { BaseData } from "../../../novadatainterface/BaseData";
+import { BaseData } from "novajs/novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { OutfitData, OutfitPhysics } from "../../../novadatainterface/OutiftData";
-import { DefaultPictData } from "../../../novadatainterface/PictData";
+import { OutfitData, OutfitPhysics } from "novajs/novadatainterface/OutiftData";
+import { getDefaultPictData } from "novajs/novadatainterface/PictData";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
 
@@ -12,7 +12,7 @@ type NoUnitConversion = "freeCargo" | "shield" | "armor" | "energy" | "ionizatio
 const perFrameTimes1000 = new Set(["shieldRecharge", "armorRecharge"]);
 type PerFrameTimes1000 = "shieldRecharge" | "armorRecharge";
 
-async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => void): Promise<OutfitData> {
+export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => void): Promise<OutfitData> {
     var base: BaseData = await BaseParse(outf, notFoundFunction);
 
     // Unlike during parsing, these are objects instead of
@@ -89,7 +89,7 @@ async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => 
     }
     else {
         notFoundFunction("No matching PICT for oütf of id " + base.id);
-        pict = DefaultPictData.id;
+        pict = getDefaultPictData().id;
     }
 
     var desc: string;
@@ -113,5 +113,3 @@ async function OutfitParse(outf: OutfResource, notFoundFunction: (m: string) => 
         max: outf.max
     }
 }
-
-export { OutfitParse }

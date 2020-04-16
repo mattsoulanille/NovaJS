@@ -1,10 +1,7 @@
-import { BaseData, DefaultBaseData } from "./BaseData";
+import { BaseData, getDefaultBaseData } from "./BaseData";
 
-interface PictData extends BaseData { }
+export interface PictData extends BaseData { }
 
-
-const DefaultPictData: PictData = DefaultBaseData;
-
-
-
-export { PictData, DefaultPictData }
+export function getDefaultPictData(): PictData {
+    return getDefaultBaseData();
+}

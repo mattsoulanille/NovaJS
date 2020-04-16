@@ -1,13 +1,12 @@
-import * as t from "io-ts";
-import { GameState, GameStateComparator } from "../engine/GameState";
+
 import { SystemState } from "../engine/SystemState";
 import { Channel } from "./Channel";
 import { PathReporter } from "io-ts/lib/PathReporter";
 import { filterUUIDs } from "./filterUUIDs";
-import { SetType } from "../common/SetType"
+
 import { Subject, Observable } from "rxjs";
-import { isEmptyObject } from "../engine/EmptyObject";
-import { isLeft } from "fp-ts/lib/Either";
+
+
 
 // const SetUUIDsMessage = t.type({
 //     messageType: t.literal("setUUIDs"),

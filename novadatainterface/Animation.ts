@@ -1,67 +1,76 @@
-import { BaseData, DefaultBaseData } from "./BaseData";
+import { BaseData, getDefaultBaseData } from "./BaseData";
 
 
-type AnimationImageIndex = { start: number, length: number }
+export interface AnimationImageIndex {
+    start: number;
+    length: number;
+}
 
-const DefaultAnimationImageIndex = { start: 0, length: 1 }
+export function getDefaultAnimationImageIndex() {
+    return { start: 0, length: 1 };
+}
 
-type AnimationImagePurposes = {
+export type AnimationImagePurposes = {
     [index: string]: AnimationImageIndex,
     normal: AnimationImageIndex
 }
 
-
-const DefaultAnimationImagePurposes: AnimationImagePurposes = {
-    normal: { start: 0, length: 1 }
+export function getDefaultAnimationImagePurposes(): AnimationImagePurposes {
+    return {
+        normal: getDefaultAnimationImageIndex()
+    };
 }
 
-type AnimationImage = {
-    id: string,
-    imagePurposes: AnimationImagePurposes
+export interface AnimationImage {
+    id: string;
+    imagePurposes: AnimationImagePurposes;
 }
 
-const DefaultAnimationImage: AnimationImage = {
-    id: "default",
-    imagePurposes: DefaultAnimationImagePurposes
+export function getDefaultAnimationImage(): AnimationImage {
+    return {
+        id: "default",
+        imagePurposes: getDefaultAnimationImagePurposes()
+    };
 }
 
-type AnimationImages = {
+export type AnimationImages = {
     [index: string]: AnimationImage,
     baseImage: AnimationImage
 }
 
-type ExitPoint = Array<Array<number>>;
-type ExitPoints = {
-    gun: ExitPoint,
-    turret: ExitPoint,
-    guided: ExitPoint,
-    beam: ExitPoint,
-    upCompress: Array<number>,
-    downCompress: Array<number>
+export type ExitPoint = Array<Array<number>>;
+export interface ExitPoints {
+    gun: ExitPoint;
+    turret: ExitPoint;
+    guided: ExitPoint;
+    beam: ExitPoint;
+    upCompress: Array<number>;
+    downCompress: Array<number>;
 };
 
-var DefaultExitPoints: ExitPoints = {
-    gun: [],
-    turret: [],
-    guided: [],
-    beam: [],
-    upCompress: [],
-    downCompress: []
+export function getDefaultExitPoints(): ExitPoints {
+    return {
+        gun: [],
+        turret: [],
+        guided: [],
+        beam: [],
+        upCompress: [],
+        downCompress: []
+    }
 }
 
 // This probably actually shouldn't extend BaseData
-interface Animation extends BaseData {
+export interface Animation extends BaseData {
     images: AnimationImages;
     exitPoints: ExitPoints;
 }
 
-const DefaultAnimation: Animation = {
-    images: {
-        baseImage: DefaultAnimationImage
-    },
-    exitPoints: DefaultExitPoints,
-    ...DefaultBaseData
+export function getDefaultAnimation(): Animation {
+    return {
+        images: {
+            baseImage: getDefaultAnimationImage()
+        },
+        exitPoints: getDefaultExitPoints(),
+        ...getDefaultBaseData()
+    }
 }
-
-
-export { Animation, DefaultAnimation, AnimationImages, AnimationImagePurposes, AnimationImageIndex, ExitPoints, ExitPoint, DefaultExitPoints, DefaultAnimationImage, AnimationImage };

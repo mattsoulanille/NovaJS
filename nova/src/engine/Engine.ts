@@ -2,7 +2,7 @@ import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 import { EngineState } from "novajs/nova/src/proto/engine_state_pb";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import UUID from "uuid/v4";
-import { getMapStatesToProto, setMapStates } from "./MapStates";
+//import { getMapStatesToProto, setMapStates } from "./StatefulMap";
 import { Stateful } from "./Stateful";
 import { Steppable } from "./Steppable";
 import { System } from "./System";
@@ -54,23 +54,23 @@ export class Engine implements Stateful<EngineState>, Steppable {
     // Serializes the current state of the game
     getState(): EngineState {
         const engineState = new EngineState();
-        getMapStatesToProto({
-            fromMap: this.systems,
-            toMap: engineState.getSystemsMap(),
-            addKey: (key) => engineState.addSystemskeys(key)
-        });
+        // getMapStatesToProto({
+        //     fromMap: this.systems,
+        //     toMap: engineState.getSystemsMap(),
+        //     addKey: (key) => engineState.addSystemskeys(key)
+        // });
 
         return engineState;
     }
 
     // Set the current state of the game
-    setState(state: EngineState) {
-        setMapStates({
-            objects: this.systems,
-            states: state.getSystemsMap(),
-            keys: state.getSystemskeysList(),
-            factory: this.systemFactory
-        });
+    setState(_state: EngineState) {
+        // setMapStates({
+        //     objects: this.systems,
+        //     states: state.getSystemsMap(),
+        //     keys: state.getSystemskeysList(),
+        //     factory: this.systemFactory
+        // });
     }
 
     // private searchForShipSystem(shipUUID: string): string {
@@ -157,7 +157,7 @@ export class Engine implements Stateful<EngineState>, Steppable {
         // resource ID to generate multiple instance IDs per system.
         for (const id of systemIDs) {
             systemsMap.set(id, await System.fromID(id, gameData));
-            state.addSystemskeys(id);
+            //state.addSystemskeys(id);
         }
 
         return new Engine({

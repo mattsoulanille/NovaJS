@@ -1,18 +1,17 @@
-import { BaseData, DefaultBaseData } from "./BaseData";
+import { BaseData, getDefaultBaseData } from "./BaseData";
 
 
-
-interface SystemData extends BaseData {
+export interface SystemData extends BaseData {
     position: [number, number],
     links: Array<string>,
     planets: Array<string>
 }
 
-const DefaultSystemData: SystemData = {
-    ...DefaultBaseData,
-    position: [0, 0],
-    links: [],
-    planets: []
+export function getDefaultSystemData(): SystemData {
+    return {
+        ...getDefaultBaseData(),
+        position: [0, 0],
+        links: [],
+        planets: []
+    };
 }
-
-export { SystemData, DefaultSystemData }

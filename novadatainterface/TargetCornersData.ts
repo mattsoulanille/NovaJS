@@ -1,9 +1,7 @@
-import { BaseData, DefaultBaseData } from "./BaseData";
+import { BaseData, getDefaultBaseData } from "./BaseData";
 
 
-
-
-interface TargetCornersData extends BaseData {
+export interface TargetCornersData extends BaseData {
     images: {
         neutral: string,
         hostile: string,
@@ -12,14 +10,14 @@ interface TargetCornersData extends BaseData {
     }
 }
 
-const DefaultTargetCornersData: TargetCornersData = {
-    ...DefaultBaseData,
-    images: {
-        neutral: "default",
-        hostile: "default",
-        friendly: "default",
-        disabled: "default"
+export function getDefaultTargetCornersData(): TargetCornersData {
+    return {
+        ...getDefaultBaseData(),
+        images: {
+            neutral: "default",
+            hostile: "default",
+            friendly: "default",
+            disabled: "default"
+        }
     }
 }
-
-export { TargetCornersData, DefaultTargetCornersData }

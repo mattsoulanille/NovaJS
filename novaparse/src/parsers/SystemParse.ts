@@ -1,13 +1,11 @@
 import { SystResource } from "../resource_parsers/SystResource";
-import { SystemData } from "../../../novadatainterface/SystemData";
+import { SystemData } from "novajs/novadatainterface/SystemData";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "../../../novadatainterface/BaseData";
-
-
+import { BaseData } from "novajs/novadatainterface/BaseData";
 
 
 // TODO: Refactor redundant code
-async function SystemParse(syst: SystResource, notFoundFunction: (m: string) => void): Promise<SystemData> {
+export async function SystemParse(syst: SystResource, notFoundFunction: (m: string) => void): Promise<SystemData> {
     var base: BaseData = await BaseParse(syst, notFoundFunction);
 
     var links: Array<string> = [];
@@ -46,4 +44,3 @@ async function SystemParse(syst: SystResource, notFoundFunction: (m: string) => 
     }
 
 }
-export { SystemParse }

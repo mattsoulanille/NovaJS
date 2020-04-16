@@ -1,10 +1,11 @@
 syntax = "proto3";
 import "nova/src/proto/outfit_state.proto";
 import "nova/src/proto/armament_state.proto";
+import "nova/src/proto/map_keys.proto";
 
 message EquipmentState {
   map<string, OutfitState> outfits = 1;
-  repeated string outfitsKeys = 2;
+  MapKeys outfitsKeys = 2;
 
   ArmamentState armament = 3;  
 }

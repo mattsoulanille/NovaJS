@@ -7,16 +7,12 @@ ts_library(
     name = "communication_lib",
     srcs = [
         "Channel.ts",
-        "FilterMessage.ts"
     ],
     deps = [
         "@npm//rxjs",
         "//nova/src/proto:nova_service_ts_proto",
     ]
 )
-
-ts_library
-
 
 ts_library(
     name = "communication_server_lib",

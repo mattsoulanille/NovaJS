@@ -79,8 +79,10 @@ nodejs_binary(
         "//nova/test_keys",
         "//nova/src:static_files",
         "//nova/src:browser_bundle",
-        # TODO: Understand why this makes protos
-        # work on the server.
+        # TODO: Understand why you need to include the
+        # compiled libraries in 'data'
         "//nova/src/proto:proto_ts_srcs",
+        "//novadatainterface",
+        "//novaparse",
     ],
 )

@@ -9,8 +9,8 @@ import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
 import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
 import { Stateful } from "./Stateful";
-import { getMapStatesToProto, setMapStates } from "./MapStates";
-
+//import { getMapStatesToProto, setMapStates } from "./StatefulMap";
+import { StatefulMap } from "./StatefulMap";
 
 class System implements Stateful<SystemState>, Steppable {
     readonly ships: Map<string, Ship> = new Map();
@@ -37,37 +37,37 @@ class System implements Stateful<SystemState>, Steppable {
     getState(): SystemState {
         const systemState = new SystemState();
 
-        getMapStatesToProto({
-            fromMap: this.planets,
-            toMap: systemState.getPlanetsMap(),
-            addKey: (key) => systemState.addPlanetskeys(key)
-        });
+        // getMapStatesToProto({
+        //     fromMap: this.planets,
+        //     toMap: systemState.getPlanetsMap(),
+        //     addKey: (key) => systemState.addPlanetskeys(key)
+        // });
 
-        getMapStatesToProto({
-            fromMap: this.ships,
-            toMap: systemState.getShipsMap(),
-            addKey: (key) => systemState.addShipskeys(key)
-        });
+        // getMapStatesToProto({
+        //     fromMap: this.ships,
+        //     toMap: systemState.getShipsMap(),
+        //     addKey: (key) => systemState.addShipskeys(key)
+        // });
 
         return systemState;
     }
 
-    setState(state: SystemState) {
+    setState(_state: SystemState) {
         // Update planets
-        setMapStates({
-            objects: this.planets,
-            states: state.getPlanetsMap(),
-            keys: state.getPlanetskeysList(),
-            factory: this.planetFactory
-        });
+        // setMapStates({
+        //     objects: this.planets,
+        //     states: state.getPlanetsMap(),
+        //     keys: state.getPlanetskeysList(),
+        //     factory: this.planetFactory
+        // });
 
-        // Update ships
-        setMapStates({
-            objects: this.ships,
-            states: state.getShipsMap(),
-            keys: state.getShipskeysList(),
-            factory: this.shipFactory
-        });
+        // // Update ships
+        // setMapStates({
+        //     objects: this.ships,
+        //     states: state.getShipsMap(),
+        //     keys: state.getShipskeysList(),
+        //     factory: this.shipFactory
+        // });
     }
 
     static async fromID(id: string, gameData: GameDataInterface, makeUUID: () => string = UUID): Promise<SystemState> {
@@ -84,7 +84,7 @@ class System implements Stateful<SystemState>, Steppable {
             planetsMap.set(
                 uuid,
                 await Planet.fromID(planetID, gameData));
-            systemState.addPlanetskeys(uuid);
+            //systemState.addPlanetskeys(uuid);
         }
 
         return systemState;

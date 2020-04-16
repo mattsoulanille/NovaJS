@@ -1,7 +1,8 @@
 syntax = "proto3";
 import "nova/src/proto/system_state.proto";
+import "nova/src/proto/map_keys.proto";
 
 message EngineState { // Next = 3
   map<string, SystemState> systems = 1;
-  repeated string systemsKeys = 2;
+  MapKeys systemsKeys = 2;
 }

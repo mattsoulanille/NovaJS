@@ -1,11 +1,11 @@
-import { BaseData, DefaultBaseData } from "./BaseData";
-import { SpaceObjectPhysics, SpaceObjectData, DefaultSpaceObjectData } from "./SpaceObjectData";
-import { DefaultShipData } from "./ShipData";
+import { BaseData, getDefaultBaseData } from "./BaseData";
+import { getDefaultShipData } from "./ShipData";
+import { getDefaultSpaceObjectData, SpaceObjectData } from "./SpaceObjectData";
 
-type DamageType = "normal" | "pointDefense" | "planetBuster";
+export type DamageType = "normal" | "pointDefense" | "planetBuster";
 
 
-type ProjectileGuidanceType =
+export type ProjectileGuidanceType =
     "unguided" |
     "turret" |
     "guided" |
@@ -16,7 +16,7 @@ type ProjectileGuidanceType =
     "pointDefense";
 
 // I would use an enum but you can't union those
-const ProjectileGuidanceSet: Set<string> = new Set(<Array<ProjectileGuidanceType>>[
+export const ProjectileGuidanceSet: Set<string> = new Set(<Array<ProjectileGuidanceType>>[
     "unguided",
     "turret",
     "guided",
@@ -27,31 +27,29 @@ const ProjectileGuidanceSet: Set<string> = new Set(<Array<ProjectileGuidanceType
     "pointDefense"
 ]);
 
-type BeamGuidanceType =
+export type BeamGuidanceType =
     "beam" |
     "beamTurret" |
     "pointDefenseBeam";
 
-const BeamGuidanceSet: Set<any> = new Set(<Array<BeamGuidanceType>>[
+export const BeamGuidanceSet: Set<any> = new Set(<Array<BeamGuidanceType>>[
     "beam",
     "beamTurret",
     "pointDefenseBeam"
 ]);
 
 
+export type BayGuidanceType = "bay";
 
+export const BayGuidanceSet: Set<any> = new Set(<Array<BayGuidanceType>>["bay"]);
 
-type BayGuidanceType = "bay";
-
-const BayGuidanceSet: Set<any> = new Set(<Array<BayGuidanceType>>["bay"]);
-
-type GuidanceType =
+export type GuidanceType =
     ProjectileGuidanceType |
     BeamGuidanceType |
     BayGuidanceType;
 
 
-type ExitType =
+export type ExitType =
     "center" |
     "gun" |
     "turret" |
@@ -59,113 +57,121 @@ type ExitType =
     "beam";
 
 
-type BeamAnimation = {
-    length: number,
-    width: number,
-    beamColor: number,
-    coronaColor: number,
-    coronaFalloff: number // Pixels of corona on each side
+export interface BeamAnimation {
+    length: number;
+    width: number;
+    beamColor: number;
+    coronaColor: number;
+    coronaFalloff: number; // Pixels of corona on each side
 }
 
-const DefaultBeamAnimation: BeamAnimation = {
-    length: 100,
-    width: 6,
-    beamColor: 0xffffff,
-    coronaColor: 0x8888ff,
-    coronaFalloff: 4
-}
-
-
-type AmmoType = "unlimited" | ["energy", number] | ["outfit", string];
-
-type SubmunitionType = {
-    id: string,
-    count: number,
-    theta: number, // Conical angle they fly out at
-    limit: number, // Recursion limit for recursive submunitions
-    fireAtNearest: boolean, // Set target to nearest ship
-    subIfExpire: boolean // Sub if the shot expires before the prox fuse is triggered
+export function getDefaultBeamAnimation(): BeamAnimation {
+    return {
+        length: 100,
+        width: 6,
+        beamColor: 0xffffff,
+        coronaColor: 0x8888ff,
+        coronaFalloff: 4
+    }
 }
 
 
-type WeaponDamageList = {
-    [index: string]: number,
-    shield: number,
-    armor: number,
-    ionization: number,
-    passThroughShield: number // Factor of damage that passes through shield. 1 means all
-}
+export type AmmoType = "unlimited" | ["energy", number] | ["outfit", string];
 
-type FireGroup = "primary" | "secondary" | "pointDefense";
-
-interface BaseWeaponData extends BaseData {
-    fireRate: number,
-    shotSpeed: number,
-    fireGroup: FireGroup,
-    exitType: ExitType,
-    accuracy: number,
-    burstCount: number,
-    burstReload: number,
-    ammoType: AmmoType,
-    useFiringAnimation: boolean,
-    fireSimultaneously: boolean,
-    destroyShipWhenFiring: boolean
-}
-
-const DefaultBaseWeaponData: BaseWeaponData = {
-    ...DefaultBaseData,
-    fireRate: 5,
-    shotSpeed: 50,
-    fireGroup: "primary",
-    exitType: "gun",
-    accuracy: 0,
-    burstCount: 1,
-    burstReload: 1,
-    ammoType: "unlimited",
-    useFiringAnimation: true,
-    fireSimultaneously: false,
-    destroyShipWhenFiring: false,
+export interface SubmunitionType {
+    id: string;
+    count: number;
+    theta: number; // Conical angle they fly out at
+    limit: number; // Recursion limit for recursive submunitions
+    fireAtNearest: boolean; // Set target to nearest ship
+    subIfExpire: boolean; // Sub if the shot expires before the prox fuse is triggered
 }
 
 
-interface NotBayWeaponData extends BaseWeaponData {
-    oneAmmoPerBurst: boolean,
-    ionizationColor: number,
-    shotDuration: number,
-    primaryExplosion: string | null,
-    secondaryExplosion: string | null,
-    knockback: number,
-    damageType: DamageType // Should this be a set?
+export interface WeaponDamageList {
+    [index: string]: number;
+    shield: number;
+    armor: number;
+    ionization: number;
+    passThroughShield: number; // Factor of damage that passes through shield. 1 means all
 }
 
-const DefaultNotBayWeaponData: NotBayWeaponData = {
-    ...DefaultBaseWeaponData,
-    oneAmmoPerBurst: false,
-    ionizationColor: 0xffffff,
-    shotDuration: 7,
-    primaryExplosion: null,
-    secondaryExplosion: null,
-    knockback: 0,
-    damageType: "normal",
+export type FireGroup = "primary" | "secondary" | "pointDefense";
+
+export interface BaseWeaponData extends BaseData {
+    fireRate: number;
+    shotSpeed: number;
+    fireGroup: FireGroup;
+    exitType: ExitType;
+    accuracy: number;
+    burstCount: number;
+    burstReload: number;
+    ammoType: AmmoType;
+    useFiringAnimation: boolean;
+    fireSimultaneously: boolean;
+    destroyShipWhenFiring: boolean;
+}
+
+export function getDefaultBaseWeaponData(): BaseWeaponData {
+    return {
+        ...getDefaultBaseData(),
+        fireRate: 5,
+        shotSpeed: 50,
+        fireGroup: "primary",
+        exitType: "gun",
+        accuracy: 0,
+        burstCount: 1,
+        burstReload: 1,
+        ammoType: "unlimited",
+        useFiringAnimation: true,
+        fireSimultaneously: false,
+        destroyShipWhenFiring: false,
+    };
+}
+
+export interface NotBayWeaponData extends BaseWeaponData {
+    oneAmmoPerBurst: boolean;
+    ionizationColor: number;
+    shotDuration: number;
+    primaryExplosion: string | null;
+    secondaryExplosion: string | null;
+    knockback: number;
+    damageType: DamageType; // Should this be a set?
+}
+
+export function getDefaultNotBayWeaponData(): NotBayWeaponData {
+    return {
+        ...getDefaultBaseWeaponData(),
+        oneAmmoPerBurst: false,
+        ionizationColor: 0xffffff,
+        shotDuration: 7,
+        primaryExplosion: null,
+        secondaryExplosion: null,
+        knockback: 0,
+        damageType: "normal",
+    }
 }
 
 
-type Particles = {
-    count: number,
-    velocity: number,
-    lifeMin: number,
-    lifeMax: number,
-    color: number
-}
-const DefaultParticles: Particles = {
-    count: 0,
-    velocity: 0,
-    lifeMin: 0,
-    lifeMax: 0,
-    color: 0
+export interface Particles {
+    count: number;
+    velocity: number;
+    lifeMin: number;
+    lifeMax: number;
+    color: number;
 }
 
-interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData {
+export function getDefaultParticles(): Particles {
+    return {
+        count: 0,
+        velocity: 0,
+        lifeMin: 0,
+        lifeMax: 0,
+        color: 0
+    };
+}
+
+export interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData {
     type: "ProjectileWeaponData",
     guidance: ProjectileGuidanceType,
     submunitions: Array<SubmunitionType>,
@@ -176,45 +182,46 @@ interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData {
 }
 
 // This extends SpaceObjectData since projectiles use sprites
-const DefaultProjectileWeaponData: ProjectileWeaponData = {
-    ...DefaultNotBayWeaponData,
-    ...DefaultSpaceObjectData,
-    type: "ProjectileWeaponData",
-    guidance: "unguided",
-    submunitions: [],
-    proxRadius: 1,
-    proxSafety: 0,
-    trailParticles: DefaultParticles,
-    hitParticles: DefaultParticles
+export function getDefaultProjectileWeaponData(): ProjectileWeaponData {
+    return {
+        ...getDefaultNotBayWeaponData(),
+        ...getDefaultSpaceObjectData(),
+        type: "ProjectileWeaponData",
+        guidance: "unguided",
+        submunitions: [],
+        proxRadius: 1,
+        proxSafety: 0,
+        trailParticles: getDefaultParticles(),
+        hitParticles: getDefaultParticles()
+    };
 }
 
-interface BeamWeaponData extends NotBayWeaponData {
+export interface BeamWeaponData extends NotBayWeaponData {
     type: "BeamWeaponData",
     guidance: BeamGuidanceType,
     beamAnimation: BeamAnimation,
 }
 
-const DefaultBeamWeaponData: BeamWeaponData = {
-    ...DefaultNotBayWeaponData,
-    type: "BeamWeaponData",
-    guidance: "beam",
-    beamAnimation: DefaultBeamAnimation
+export function getDefaultBeamWeaponData(): BeamWeaponData {
+    return {
+        ...getDefaultNotBayWeaponData(),
+        type: "BeamWeaponData",
+        guidance: "beam",
+        beamAnimation: getDefaultBeamAnimation()
+    };
 }
 
-interface BayWeaponData extends BaseWeaponData {
+export interface BayWeaponData extends BaseWeaponData {
     type: "BayWeaponData",
     shipID: string
 }
 
-const DefaultBayWeaponData: BayWeaponData = {
-    ...DefaultBaseWeaponData,
-    type: "BayWeaponData",
-    shipID: DefaultShipData.id
+export function getDefaultBayWeaponData(): BayWeaponData {
+    return {
+        ...getDefaultBaseWeaponData(),
+        type: "BayWeaponData",
+        shipID: getDefaultShipData().id
+    };
 }
 
-
-
-
-type WeaponData = ProjectileWeaponData | BeamWeaponData | BayWeaponData;
-
-export { WeaponData, DefaultBeamWeaponData, DefaultProjectileWeaponData, DefaultBayWeaponData, BeamWeaponData, ProjectileWeaponData, BayWeaponData, GuidanceType, BeamAnimation, Particles, DefaultParticles, DamageType, SubmunitionType, BaseWeaponData, DefaultBaseWeaponData, ExitType, FireGroup, NotBayWeaponData, DefaultNotBayWeaponData, ProjectileGuidanceType, ProjectileGuidanceSet, BeamGuidanceType, BeamGuidanceSet, BayGuidanceType, BayGuidanceSet }
+export type WeaponData = ProjectileWeaponData | BeamWeaponData | BayWeaponData;

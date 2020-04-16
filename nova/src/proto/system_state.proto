@@ -1,11 +1,14 @@
 syntax = "proto3";
 import "nova/src/proto/planet_state.proto";
 import "nova/src/proto/ship_state.proto";
+import "nova/src/proto/map_keys.proto";
 
 message SystemState { // Next = 5
   map<string, ShipState> ships = 1;
-  repeated string shipsKeys = 2;
+  MapKeys shipsKeys = 2;
 
   map<string, PlanetState> planets = 3;
-  repeated string planetsKeys = 4;
+  MapKeys planetsKeys = 4;
+
+  // TODO: Add Asteroids and Projectiles
 }

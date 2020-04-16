@@ -1,11 +1,11 @@
+import { Animation, AnimationImage, getDefaultAnimationImage, getDefaultExitPoints } from "../../../novadatainterface/Animation";
+import { BaseData } from "../../../novadatainterface/BaseData";
 import { ExplosionData } from "../../../novadatainterface/ExplosionData";
 import { BoomResource } from "../resource_parsers/BoomResource";
-import { BaseData } from "../../../novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { Animation, DefaultExitPoints, AnimationImage, DefaultAnimationImage } from "../../../novadatainterface/Animation";
 
 
-async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) => void): Promise<ExplosionData> {
+export async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) => void): Promise<ExplosionData> {
     var base: BaseData = await BaseParse(boom, notFoundFunction);
 
 
@@ -24,12 +24,12 @@ async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) 
         }
         else {
             notFoundFunction("Missing rled " + spin.spriteID + " for bööm " + base.id);
-            animationImage = DefaultAnimationImage
+            animationImage = getDefaultAnimationImage();
         }
     }
     else {
         notFoundFunction("Missing spin " + boom.graphic + " for bööm " + base.id);
-        animationImage = DefaultAnimationImage
+        animationImage = getDefaultAnimationImage();
     }
 
 
@@ -37,11 +37,9 @@ async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) 
         images: {
             baseImage: animationImage
         },
-        exitPoints: DefaultExitPoints, // Unused. Refactor???
+        exitPoints: getDefaultExitPoints(), // Unused. Refactor???
         ...base
     };
-
-
 
     var soundID: string | null = null;
     /*
@@ -57,7 +55,6 @@ async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) 
     }
     */
 
-
     return {
         ...base,
         animation,
@@ -65,5 +62,3 @@ async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) 
         rate: boom.animationRate / 100
     }
 };
-
-export { ExplosionParse };

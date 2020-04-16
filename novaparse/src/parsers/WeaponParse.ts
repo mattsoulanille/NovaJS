@@ -1,11 +1,10 @@
+import { Animation, getDefaultAnimation, getDefaultExitPoints } from "novajs/novadatainterface/Animation";
+import { BaseData } from "novajs/novadatainterface/BaseData";
+import { getDefaultShipData } from "novajs/novadatainterface/ShipData";
+import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponData } from "novajs/novadatainterface/WeaponData";
 import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "../../../novadatainterface/BaseData";
-import { WeaponData, ProjectileWeaponData, BeamWeaponData, BaseWeaponData, NotBayWeaponData, DamageType, SubmunitionType, ProjectileGuidanceSet, GuidanceType, BeamGuidanceSet, BayGuidanceSet, ProjectileGuidanceType, BayWeaponData, BeamGuidanceType } from "../../../novadatainterface/WeaponData";
 import { FPS, TurnRateConversionFactor } from "./Constants";
-import { SpaceObjectPhysics } from "../../../novadatainterface/SpaceObjectData";
-import { Animation, DefaultExitPoints, DefaultAnimation } from "../../../novadatainterface/Animation";
-import { DefaultShipData } from "../../../novadatainterface/ShipData";
 
 
 
@@ -116,7 +115,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
             // because spins will eventually allow picts to be used
             // instead of rleds
             animation = {
-                exitPoints: DefaultExitPoints,
+                exitPoints: getDefaultExitPoints(),
                 id: baseWeapon.id,
                 name: baseWeapon.name,
                 prefix: baseWeapon.prefix,
@@ -132,12 +131,12 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         }
         else {
             notFoundFunction("Missing rlëD id " + spinResource.spriteID + " for spïn " + weap.graphic);
-            animation = DefaultAnimation
+            animation = getDefaultAnimation()
         }
     }
     else {
         notFoundFunction("Missing spïn id " + weap.graphic + " for wëap " + notBayBase.id);
-        animation = DefaultAnimation
+        animation = getDefaultAnimation()
     }
 
 
@@ -224,7 +223,7 @@ async function BayWeaponParse(weap: WeapResource, notFoundFunction: (m: string) 
     }
     else {
         notFoundFunction("Missing shïp " + weap.ammoType + " for bay weapon " + baseWeapon.id);
-        shipID = DefaultShipData.id;
+        shipID = getDefaultShipData().id;
     }
 
     return {
@@ -234,8 +233,7 @@ async function BayWeaponParse(weap: WeapResource, notFoundFunction: (m: string) 
     }
 }
 
-
-async function WeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void): Promise<WeaponData> {
+export async function WeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void): Promise<WeaponData> {
     var base: BaseData = await BaseParse(weap, notFoundFunction);
 
     var baseWeapon: BaseWeaponData = await BaseWeaponParse(weap, notFoundFunction, base);
@@ -258,5 +256,3 @@ async function WeaponParse(weap: WeapResource, notFoundFunction: (m: string) => 
 
     return await parseFunc(weap, notFoundFunction, baseWeapon);
 }
-
-export { WeaponParse };

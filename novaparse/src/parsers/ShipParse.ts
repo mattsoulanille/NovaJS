@@ -1,21 +1,18 @@
-
-import { NovaDataInterface, NovaDataType } from "../../../novadatainterface/NovaDataInterface";
-import { ShipData, ShipPhysics } from "../../../novadatainterface/ShipData";
-import { DefaultPictData } from "../../../novadatainterface/PictData";
-import { ExplosionData } from "../../../novadatainterface/ExplosionData";
-import { BaseParse } from "./BaseParse";
+import { Animation, getDefaultAnimation } from "novajs/novadatainterface/Animation";
+import { BaseData } from "novajs/novadatainterface/BaseData";
+import { getDefaultPictData } from "novajs/novadatainterface/PictData";
+import { ShipData, ShipPhysics } from "novajs/novadatainterface/ShipData";
 import { NovaResources } from "../resource_parsers/ResourceHolderBase";
 import { ShipResource } from "../resource_parsers/ShipResource";
-import { BaseData } from "../../../novadatainterface/BaseData";
-import { Animation, DefaultAnimation } from "../../../novadatainterface/Animation";
-import { ShanParse } from "./ShanParse";
-import { DescResource } from "../resource_parsers/DescResource";
+import { BaseParse } from "./BaseParse";
 import { FPS, TurnRateConversionFactor } from "./Constants";
+import { ShanParse } from "./ShanParse";
 
-type ShipPictMap = Promise<{ [index: string]: string }>;
-type WeaponOutfitMap = ShipPictMap;
 
-function ShipParseClosure(shipPictMap: ShipPictMap,
+export type ShipPictMap = Promise<{ [index: string]: string }>;
+export type WeaponOutfitMap = ShipPictMap;
+
+export function ShipParseClosure(shipPictMap: ShipPictMap,
     weaponOutfitMap: WeaponOutfitMap,
     globalIDSpacePromise: Promise<NovaResources | Error>): (s: ShipResource, m: (message: string) => void) => Promise<ShipData> {
 
@@ -26,9 +23,7 @@ function ShipParseClosure(shipPictMap: ShipPictMap,
 
 }
 
-
-
-async function ShipParse(ship: ShipResource,
+export async function ShipParse(ship: ShipResource,
     notFoundFunction: (message: string) => void,
     shipPictMap: ShipPictMap,
     weaponOutfitMap: WeaponOutfitMap,
@@ -85,7 +80,7 @@ async function ShipParse(ship: ShipResource,
     }
     else {
         notFoundFunction("No matching shän for shïp of id " + base.id);
-        animation = DefaultAnimation;
+        animation = getDefaultAnimation();
     }
 
 
@@ -99,7 +94,7 @@ async function ShipParse(ship: ShipResource,
         pictID = (await shipPictMap)[base.id];
         if (!pictID) {
             notFoundFunction("No matching PICT for ship of id " + base.id);
-            pictID = DefaultPictData.id;
+            pictID = getDefaultPictData().id;
         }
     }
 
@@ -196,5 +191,3 @@ async function ShipParse(ship: ShipResource,
         ...base
     }
 }
-
-export { ShipParse, ShipParseClosure, ShipPictMap, WeaponOutfitMap };

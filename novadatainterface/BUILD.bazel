@@ -15,7 +15,7 @@ ts_library(
     name = "novadatainterface",
 #    data = [":defaults"],
     srcs = glob(["*.ts"]),
-    module_name = "novadatainterface", # for npm
+#    module_name = "novadatainterface", # for npm
     deps = [
 #        "@npm//pngjs",
         "@npm//@types/node",

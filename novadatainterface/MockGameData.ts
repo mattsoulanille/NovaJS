@@ -1,18 +1,17 @@
+import { getDefaultExplosionData } from "./ExplosionData";
 import { GameDataInterface } from "./GameDataInterface";
 import { Gettable } from "./Gettable";
 import { NovaDataInterface } from "./NovaDataInterface";
 import { NovaIDs } from "./NovaIDs";
-import { DefaultExplosionData } from "./ExplosionData";
-import { DefaultOutfitData } from "./OutiftData";
-import { DefaultPictData } from "./PictData";
-import { DefaultPictImageData } from "./PictImage";
-import { DefaultPlanetData } from "./PlanetData";
-import { DefaultShipData } from "./ShipData";
-import { DefaultSpriteSheetData, DefaultSpriteSheetFrames } from "./SpriteSheetData";
-import { DefaultStatusBarData } from "./StatusBarData";
-import { DefaultSystemData } from "./SystemData";
-import { DefaultTargetCornersData } from "./TargetCornersData";
-import { DefaultNotBayWeaponData, DefaultProjectileWeaponData } from "./WeaponData";
+import { getDefaultOutfitData } from "./OutiftData";
+import { getDefaultPictData } from "./PictData";
+import { getDefaultPlanetData } from "./PlanetData";
+import { getDefaultShipData } from "./ShipData";
+import { getDefaultSpriteSheetData, getDefaultSpriteSheetFrames } from "./SpriteSheetData";
+import { getDefaultStatusBarData } from "./StatusBarData";
+import { getDefaultSystemData } from "./SystemData";
+import { getDefaultTargetCornersData } from "./TargetCornersData";
+import { getDefaultProjectileWeaponData } from "./WeaponData";
 
 // TODO: Make gettable an interface so you
 // don't have to do this awkward extension
@@ -47,19 +46,19 @@ type MockNovaDataInterface = {
 
 export class MockGameData implements GameDataInterface {
     data: MockNovaDataInterface = {
-        Explosion: new MockGettable(DefaultExplosionData),
-        Outfit: new MockGettable(DefaultOutfitData),
-        Pict: new MockGettable(DefaultPictData),
+        Explosion: new MockGettable(getDefaultExplosionData()),
+        Outfit: new MockGettable(getDefaultOutfitData()),
+        Pict: new MockGettable(getDefaultPictData()),
         PictImage: new MockGettable(new Uint8Array(0) as Buffer),
-        Planet: new MockGettable(DefaultPlanetData),
-        Ship: new MockGettable(DefaultShipData),
-        SpriteSheet: new MockGettable(DefaultSpriteSheetData),
-        SpriteSheetFrames: new MockGettable(DefaultSpriteSheetFrames),
+        Planet: new MockGettable(getDefaultPlanetData()),
+        Ship: new MockGettable(getDefaultShipData()),
+        SpriteSheet: new MockGettable(getDefaultSpriteSheetData()),
+        SpriteSheetFrames: new MockGettable(getDefaultSpriteSheetFrames()),
         SpriteSheetImage: new MockGettable(new Uint8Array(0) as Buffer),
-        StatusBar: new MockGettable(DefaultStatusBarData),
-        System: new MockGettable(DefaultSystemData),
-        TargetCorners: new MockGettable(DefaultTargetCornersData),
-        Weapon: new MockGettable(DefaultProjectileWeaponData),
+        StatusBar: new MockGettable(getDefaultStatusBarData()),
+        System: new MockGettable(getDefaultSystemData()),
+        TargetCorners: new MockGettable(getDefaultTargetCornersData()),
+        Weapon: new MockGettable(getDefaultProjectileWeaponData()),
     };
     get ids(): Promise<NovaIDs> {
         const ids: NovaIDs = {} as NovaIDs;

@@ -1,8 +1,9 @@
 syntax = "proto3";
 import "nova/src/proto/weapon_state.proto";
+import "nova/src/proto/map_keys.proto";
 
 message ArmamentState {
   map<string, WeaponState> weapons = 1;
-  repeated string weaponsKeys = 2;
+  MapKeys weaponsKeys = 2;
   
 }

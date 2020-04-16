@@ -1,15 +1,15 @@
-import { BaseParse } from "./BaseParse";
+import { Animation, AnimationImagePurposes, AnimationImages, getDefaultAnimationImage } from "novajs/novadatainterface/Animation";
+import { BaseData } from "novajs/novadatainterface/BaseData";
+import { NovaIDNotFoundError } from "novajs/novadatainterface/NovaDataInterface";
 import { ShanResource } from "../resource_parsers/ShanResource";
-import { Animation, AnimationImagePurposes, AnimationImages, DefaultAnimation, DefaultAnimationImage } from "../../../novadatainterface/Animation";
-import { BaseData } from "../../../novadatainterface/BaseData";
-import { NovaIDNotFoundError } from "../../../novadatainterface/NovaDataInterface";
+import { BaseParse } from "./BaseParse";
 
 
-async function ShanParse(shan: ShanResource, notFoundFunction: (message: string) => void): Promise<Animation> {
+export async function ShanParse(shan: ShanResource, notFoundFunction: (message: string) => void): Promise<Animation> {
     var base: BaseData = await BaseParse(shan, notFoundFunction);
 
     var images: AnimationImages = {
-        baseImage: DefaultAnimationImage
+        baseImage: getDefaultAnimationImage()
     };
 
     var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage', 'weapImage'];
@@ -54,8 +54,9 @@ async function ShanParse(shan: ShanResource, notFoundFunction: (message: string)
         // The rled contains the ID of the image that is used.
         var rled = shan.idSpace.rlëD[imageInfo.ID];
         if (!rled) {
-            notFoundFunction("shän id " + base.id + " has no corresponding rlëD for " + imageName
-                + ", which expects rlëD id " + imageInfo.ID + " to be available.");
+            notFoundFunction(`shän id ${base.id} has no corresponding`
+                + ` rlëD for ${imageName}, which expects`
+                + ` rlëD id ${imageInfo.ID} to be available.`);
 
             if (imageName == "baseImage") { // Everything must have a baseImage.
                 throw new NovaIDNotFoundError("Base image not found for rlëD id " + imageInfo.ID);
@@ -69,7 +70,6 @@ async function ShanParse(shan: ShanResource, notFoundFunction: (message: string)
             id: rled.globalID,
             imagePurposes
         }
-
     }
 
     return {
@@ -77,7 +77,4 @@ async function ShanParse(shan: ShanResource, notFoundFunction: (message: string)
         images,
         exitPoints: shan.exitPoints
     }
-
 }
-
-export { ShanParse };

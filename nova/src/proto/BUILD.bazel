@@ -39,6 +39,7 @@ proto_library(
     deps = [
         ":ship_state_proto",
         ":planet_state_proto",
+        ":map_keys_proto",
     ]
 )
 
@@ -46,7 +47,8 @@ proto_library(
     name = "engine_state_proto",
     srcs = ["engine_state.proto"],
     deps = [
-        ":system_state_proto"
+        ":system_state_proto",
+        ":map_keys_proto",
     ]
 )
 
@@ -65,6 +67,7 @@ proto_library(
     srcs = ["armament_state.proto"],
     deps = [
         ":weapon_state_proto",
+        ":map_keys_proto",
     ],
 )
 
@@ -74,7 +77,8 @@ proto_library(
     deps = [
         ":outfit_state_proto",
         ":armament_state_proto",
-    ],
+        ":map_keys_proto",
+   ],
 )
 
 proto_library(
@@ -86,6 +90,12 @@ proto_library(
 #        "@com_google_protobuf//:wrappers_proto",
     ]
 )
+
+proto_library(
+    name = "map_keys_proto",
+    srcs = ["map_keys.proto"],
+)
+
 
 typescript_proto_library(
     name = "vector_state_ts_proto",
@@ -142,6 +152,12 @@ typescript_proto_library(
     proto = ":nova_service_proto",
 )
 
+typescript_proto_library(
+    name = "map_keys_ts_proto",
+    proto = ":map_keys_proto",
+)
+
+
 # Needed for bundling since protos are like externs
 filegroup(
     name = "proto_ts_srcs",
@@ -157,5 +173,6 @@ filegroup(
         ":armament_state_ts_proto",
         ":equipment_state_ts_proto",
         ":nova_service_ts_proto",
+        ":map_keys_ts_proto",
     ]
 )
