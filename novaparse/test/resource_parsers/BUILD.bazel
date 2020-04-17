@@ -12,11 +12,10 @@ ts_library(
     ],
     deps = [
         "@npm//@types/node",
-        "@npm//@types/chai",
-        "@npm//bluebird",
-        "@npm//@types/bluebird",
         "@npm//pngjs",
         "@npm//@types/pngjs",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
         "//novaparse/src/resource_parsers",
     ]
 )
@@ -26,12 +25,24 @@ ts_library(
     testonly = True,
     # All tests must end in "_test.ts" or jasmine won't recognize them!
     srcs = [
+        "BoomResource_test.ts",
+        "DescResource_test.ts",
+        "OutfResource_test.ts",
+        "PictResource_test.ts",
+        "RledResource_test.ts",
+        "ShanResource_test.ts",
+        "ShipResource_test.ts",
+        "SpinResource_test.ts",
+        "SpobResource_test.ts",
         "SystResource_test.ts",
+        "WeapResource_test.ts",
     ],
     deps = [
         "//novaparse/src/resource_parsers",
         "@npm//@types/node",
         "@npm//typescript",
+        "@npm//pngjs",
+        "@npm//@types/pngjs",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//rxjs",

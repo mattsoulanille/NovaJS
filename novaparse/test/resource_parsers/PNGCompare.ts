@@ -1,10 +1,9 @@
-global.Promise = require("bluebird"); // For stacktraces
+import "jasmine";
 import * as fs from "fs";
 import { PNG } from "pngjs";
-import { assert } from "chai";
 
 
-function getPNG(path: string): Promise<PNG> {
+export function getPNG(path: string): Promise<PNG> {
     return new Promise(function(fulfill, reject) {
         var pngObj = new PNG({ filterType: 4 });
         fs.createReadStream(path)
@@ -16,11 +15,11 @@ function getPNG(path: string): Promise<PNG> {
     });
 };
 
-function getFrames(png: PNG, dim: { width: number, height: number }) {
+export function getFrames(png: PNG, dim: { width: number, height: number }) {
 
     // dim is dim of each frame;
-    assert.equal(png.height % dim.height, 0);
-    assert.equal(png.width % dim.width, 0);
+    //assert.equal(png.height % dim.height, 0);
+    //assert.equal(png.width % dim.width, 0);
 
     var out = [];
 
@@ -46,35 +45,68 @@ function getFrames(png: PNG, dim: { width: number, height: number }) {
 
 };
 
-function comparePNGs(png1: PNG, png2: PNG) {
-    assert(png1 instanceof PNG);
-    assert(png2 instanceof PNG);
-    assert.equal(png1.width, png2.width);
-    assert.equal(png1.height, png2.height);
-    assert.equal(png1.gamma, png2.gamma);
-    //	assert(png1.data.equals(png2.data));
 
-    // fuzzy compare
-    for (var y = 0; y < png1.height; y++) {
-        for (var x = 0; x < png1.width; x++) {
-            var idx = (png1.width * y + x) << 2;
+export const PNGCustomMatchers: jasmine.CustomMatcherFactories = {
+    toEqualPNG: function() {
+        return {
+            compare: function(actual: unknown, expected: unknown):
+                jasmine.CustomMatcherResult {
+                if (!(actual instanceof PNG)) {
+                    throw new Error(`${actual} is not a PNG object`);
+                }
+                if (!(expected instanceof PNG)) {
+                    throw new Error(`${expected} is not a PNG object`);
+                }
 
-            if ((png1.data[idx + 3] !== 0) || (png2.data[idx + 3]) !== 0) {
-                assert.equal(png1.data[idx] >> 3, png2.data[idx] >> 3);
-                assert.equal(png1.data[idx + 1] >> 3, png2.data[idx + 1] >> 3);
-                assert.equal(png1.data[idx + 2] >> 3, png2.data[idx + 2] >> 3);
-                assert.equal(png1.data[idx + 3], png2.data[idx + 3]);
+                if (expected.width != actual.width) {
+                    return {
+                        pass: false,
+                        message: `expected width ${actual.width} to be ${expected.width}.`,
+                    }
+                }
 
+                if (expected.height != actual.height) {
+                    return {
+                        pass: false,
+                        message: `expected height ${actual.height} to be ${expected.height}.`,
+                    }
+                }
+
+                if (expected.gamma != actual.gamma) {
+                    return {
+                        pass: false,
+                        message: `expected gamma ${actual.gamma} to be ${expected.gamma}.`,
+                    }
+                }
+
+                for (var y = 0; y < expected.height; y++) {
+                    for (var x = 0; x < expected.width; x++) {
+                        var idx = (expected.width * y + x) << 2;
+
+                        // Ignore the color if alpha is zero
+                        if ((expected.data[idx + 3] !== 0) || (actual.data[idx + 3]) !== 0) {
+                            for (let color = idx; color <= idx + 3; color++) {
+                                const expectedColor = expected.data[color];
+                                const actualColor = actual.data[color];
+                                if (expectedColor >> 3 !== actualColor >> 3) {
+                                    return {
+                                        pass: false,
+                                        message: `expected color ${actualColor} to be ${expectedColor}.`,
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+                return {
+                    pass: true
+                }
             }
-
         }
     }
-};
+}
 
-function applyMask(image: PNG, mask: PNG) {
-    assert.equal(image.width, mask.width);
-    assert.equal(image.height, mask.height);
-
+export function applyMask(image: PNG, mask: PNG) {
     var out = new PNG({
         filterType: 4,
         width: image.width,
@@ -102,4 +134,3 @@ function applyMask(image: PNG, mask: PNG) {
 
     return out;
 };
-export { getPNG, getFrames, comparePNGs, applyMask }
