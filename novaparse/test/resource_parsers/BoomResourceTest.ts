@@ -36,8 +36,6 @@ describe("BoomResource", function() {
 
     it("should parse all inherited properties", function() {
         expect(firstBoom.id).to.equal(128);
-
-
     });
 
 

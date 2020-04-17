@@ -2,7 +2,6 @@ package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 load("@novajs//:bundlers.bzl", "web_bundle", "node_bundle")
 load("@npm_bazel_karma//:index.bzl", "karma_web_test")
 
