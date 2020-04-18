@@ -1,8 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
-
+load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 
 # WARNING: Using directory labels here. That means bazel can't
 # detect changes to files within these directories. It only
@@ -22,26 +21,35 @@ filegroup(
     ]
 )
 
-
-mocha_ts_test(
-    name = "novaparse_test",
-    srcs = glob(["*.ts"]),
-    data = [
-        "//novaparse/test/resource_parsers:resource_parsers_files",
-        ":novaparse_test_files",
+ts_library(
+    name = "unit_test_sources",
+    testonly = True,
+    srcs = [
+        "IDSpaceHandler_test.ts",
+        "NovaParse_test.ts",
+        "readNovaFile_test.ts",
     ],
     deps = [
         "//novaparse/src:novaparse_libraries",
+        "//novaparse/src/resource_parsers",
+        "//novaparse/src/parsers",
         "//novaparse",
-        "@npm//bluebird",
-        "@npm//@types/bluebird",
-        "@npm//chai",
-        "@npm//chai-as-promised",
+        "//novadatainterface",
         "@npm//@types/node",
-        "@npm//@types/mocha",
-        "@npm//@types/chai",
-        "@npm//@types/chai-as-promised",
-        "//novaparse/test/resource_parsers:png_compare",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
+        "@npm//pngjs",
+        "@npm//@types/pngjs",
+        "//novaparse/test/resource_parsers:test_utils",
     ]
 )
 
+jasmine_node_test(
+    name = "unit_tests",
+    srcs = [":unit_test_sources"],
+    data = [
+        "//novaparse/test/resource_parsers/files",
+        ":novaparse_test_files",
+        "//novadatainterface:defaults",
+    ]
+)

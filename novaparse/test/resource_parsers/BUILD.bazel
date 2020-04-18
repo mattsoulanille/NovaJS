@@ -1,7 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 
 ts_library(
@@ -40,12 +39,8 @@ ts_library(
     deps = [
         "//novaparse/src/resource_parsers",
         "@npm//@types/node",
-        "@npm//typescript",
         "@npm//pngjs",
         "@npm//@types/pngjs",
-        "@npm//uuid",
-        "@npm//@types/uuid",
-        "@npm//rxjs",
         "@npm//jasmine",
         "@npm//@types/jasmine",
         "@npm//resourceforkjs",
