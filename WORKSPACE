@@ -16,19 +16,26 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "build_bazel_rules_nodejs",
-    sha256 = "3d7296d834208792fa3b2ded8ec04e75068e3de172fae79db217615bd75a6ff7",
-    #    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/1.0.0/rules_nodejs-1.0.0.tar.gz"],
-    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/0.39.1/rules_nodejs-0.39.1.tar.gz"],
+    sha256 = "f9e7b9f42ae202cc2d2ce6d698ccb49a9f7f7ea572a78fd451696d03ef2ee116",
+    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/1.6.0/rules_nodejs-1.6.0.tar.gz"],
 )
 
-# # Force node 13.5
-# load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
-# node_repositories(
-#     node_version = "13.5.0",
-#     node_repositories = {
-#         "13.5.0-darwin_amd64": ("node-v13.5.0-darwin-x64.tar.gz", "node-v13.5.0-darwin-x64", "3322c601dc032677e5b5f87f393d4b1d70073bcab24fe74378eff8eb49364001")
-#     }
-# )
+#load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
+
+#node_repositories(package_json = ["//:package.json"])
+
+# Force node 14
+load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
+node_repositories(
+    node_version = "14.0.0",
+    node_repositories = {
+        "14.0.0-darwin_amd64": ("node-v14.0.0-darwin-x64.tar.gz", "node-v14.0.0-darwin-x64", "4e50cec7aeef91c6d00d08a3bab938358da182984aa549c2aeab9868e3342f55"),
+        "14.0.0-linux_amd64": ("node-v14.0.0-linux-x64.tar.gz", "node-v14.0.0-linux-x64", "0c3224a9e946e46793e81bced623bb7c0c06538aebea6383ca318a62ac1f49fd"),
+    },
+    node_urls = [
+        "https://nodejs.org/dist/v{version}/{filename}",
+    ]
+)
 
 # The yarn_install rule runs yarn anytime the package.json or yarn.lock file changes.
 # It also extracts and installs any Bazel rules distributed in an npm package.
@@ -43,42 +50,42 @@ yarn_install(
 )
 
 # Install closure
-http_archive(
-    name = "io_bazel_rules_closure",
-    sha256 = "7d206c2383811f378a5ef03f4aacbcf5f47fd8650f6abbc3fa89f3a27dd8b176",
-    strip_prefix = "rules_closure-0.10.0",
-    urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
-        "https://github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
-    ],
-)
+# http_archive(
+#     name = "io_bazel_rules_closure",
+#     sha256 = "7d206c2383811f378a5ef03f4aacbcf5f47fd8650f6abbc3fa89f3a27dd8b176",
+#     strip_prefix = "rules_closure-0.10.0",
+#     urls = [
+#         "https://mirror.bazel.build/github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
+#         "https://github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
+#     ],
+# )
 
-load("@io_bazel_rules_closure//closure:repositories.bzl", "rules_closure_dependencies", "rules_closure_toolchains")
+# load("@io_bazel_rules_closure//closure:repositories.bzl", "rules_closure_dependencies", "rules_closure_toolchains")
 
-rules_closure_dependencies()
-rules_closure_toolchains()
+# rules_closure_dependencies()
+# rules_closure_toolchains()
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 
 git_repository(
     name = "com_google_protobuf",
     remote = "https://github.com/protocolbuffers/protobuf",
-    tag = "v3.11.4",
+    #    tag = "v3.11.4",
+    commit = "d0bfd5221182da1a7cc280f3337b5e41a89539cf",
+    shallow_since = "1581711200 -0800",
 )
 
 load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
 
 protobuf_deps()
 
-# rules_proto defines abstract rules for building Protocol Buffers.
-# Note that all the [lang]_proto_library rules are deprecated and you should use this now.
 http_archive(
     name = "rules_proto",
-    sha256 = "57001a3b33ec690a175cdf0698243431ef27233017b9bed23f96d44b9c98242f",
-    strip_prefix = "rules_proto-9cd4f8f1ede19d81c6d48910429fe96776e567b1",
+    sha256 = "602e7161d9195e50246177e7c55b2f39950a9cf7366f74ed5f22fd45750cd208",
+    strip_prefix = "rules_proto-97d8af4dc474595af3900dd85cb3a29ad28cc313",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_proto/archive/9cd4f8f1ede19d81c6d48910429fe96776e567b1.tar.gz",
-        "https://github.com/bazelbuild/rules_proto/archive/9cd4f8f1ede19d81c6d48910429fe96776e567b1.tar.gz",
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
+        "https://github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
     ],
 )
 
@@ -87,18 +94,18 @@ load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_
 rules_proto_dependencies()
 rules_proto_toolchains()
 
-http_archive(
-    name = "rules_typescript_proto",
-    sha256 = "0c76ae0d04eaa4d4c5f12556615cb70d294082ee672aee6dd849fea4ec2075ee",
-    strip_prefix = "rules_typescript_proto-0.0.3",
-    urls = [
-        "https://github.com/Dig-Doug/rules_typescript_proto/archive/0.0.3.tar.gz",
-    ],
-)
+# http_archive(
+#     name = "rules_typescript_proto",
+#     sha256 = "56dce48f816ae5ad239b0ca5a55e7f774ca6866d3bd2306b26874445bc247eb7",
+#     strip_prefix = "rules_typescript_proto-0.0.4",
+#     urls = [
+#         "https://github.com/Dig-Doug/rules_typescript_proto/archive/0.0.4.tar.gz",
+#     ],
+# )
 
-load("@rules_typescript_proto//:index.bzl", "rules_typescript_proto_dependencies")
+# load("@rules_typescript_proto//:index.bzl", "rules_typescript_proto_dependencies")
 
-rules_typescript_proto_dependencies()
+# rules_typescript_proto_dependencies()
 
 # http_archive(
 #     name = "com_derivita_rules_ts_closure",
@@ -139,6 +146,11 @@ browser_repositories(
     chromium = True,
     firefox = True,
 )
+
+# Bazel labs. Contains the ts proto generator
+load("@npm_bazel_labs//:package.bzl", "npm_bazel_labs_dependencies")
+
+npm_bazel_labs_dependencies()
 
 # Setup TypeScript toolchain
 load("@npm_bazel_typescript//:index.bzl", "ts_setup_workspace")
