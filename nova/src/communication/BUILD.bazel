@@ -7,10 +7,16 @@ ts_library(
     name = "communication_lib",
     srcs = [
         "Channel.ts",
+        "GetChanges.ts",
+        "OverwriteState.ts",
+        "FilterState.ts",
     ],
     deps = [
         "@npm//rxjs",
-        "//nova/src/proto:nova_service_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
+        "//nova/src/engine",
+        "//nova/src/engine:utils",
+        "//nova/src/common",
     ]
 )
 
@@ -18,6 +24,7 @@ ts_library(
     name = "communication_server_lib",
     srcs = [
         "SocketChannelServer.ts",
+        "CommunicatorServer.ts",
     ],
     deps = [
         ":communication_lib",
@@ -30,8 +37,10 @@ ts_library(
         "@npm//google-protobuf",
         "@npm//@types/google-protobuf",
 #        "//nova/src/common",
-#        "//nova/src/engine",
-        "//nova/src/proto:nova_service_ts_proto",
+        "//nova/src/engine",
+        "//nova/src/engine:utils",
+        "//nova/src/engine/space_object:space_object_mods",
+        "//nova/src/proto:protobufjs_bundle",
     ]
 )
 
@@ -39,6 +48,7 @@ ts_library(
     name = "communication_client_lib",
     srcs = [
         "SocketChannelClient.ts",
+        "CommunicatorClient.ts",
     ],
     deps = [
         ":communication_lib",
@@ -48,6 +58,7 @@ ts_library(
         "@npm//rxjs",
 #        "//nova/src/common",
 #        "//nova/src/engine",
-        "//nova/src/proto:nova_service_ts_proto",
+        "//nova/src/engine:utils",
+        "//nova/src/proto:protobufjs_bundle",
     ]
 )

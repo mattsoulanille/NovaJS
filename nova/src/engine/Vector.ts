@@ -1,8 +1,7 @@
-import { Stateful } from "./Stateful";
-import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
+import { IVectorState, VectorState } from "novajs/nova/src/proto/protobufjs_bundle";
 
 const TWO_PI = 2 * Math.PI;
-export class Vector implements Stateful<VectorState>, VectorLike {
+export class Vector implements VectorLike {
 
     x: number
     y: number
@@ -16,8 +15,17 @@ export class Vector implements Stateful<VectorState>, VectorLike {
         return new Vector(v.x, v.y);
     }
 
-    static fromProto(v: VectorState) {
-        return new Vector(v.getX(), v.getY());
+    static fromProto(v?: IVectorState | null) {
+        return new Vector(v?.x ?? 0, v?.y ?? 0);
+    }
+
+    toProto() {
+        // Don't return new VectorState(this)
+        // because if x is a getter, it breaks.
+        return new VectorState({
+            x: this.x,
+            y: this.y
+        });
     }
 
     add(other: VectorLike) {
@@ -63,9 +71,11 @@ export class Vector implements Stateful<VectorState>, VectorLike {
         return v;
     }
 
-    // Possible divide by zero
     scaleToLength(targetLength: number) {
         const length = this.getLength();
+        if (length === 0) {
+            throw new Error("Divide by zero");
+        }
         const ratio = targetLength / length;
         this.scaleBy(ratio);
     }
@@ -96,18 +106,6 @@ export class Vector implements Stateful<VectorState>, VectorLike {
         }
     }
 
-    getState() {
-        const state = new VectorState();
-        state.setX(this.x);
-        state.setY(this.y);
-        return state;
-    }
-
-    setState(state: VectorState) {
-        this.x = state.getX();
-        this.y = state.getY();
-    }
-
     // Remember that we use clock angles
     // with y inverted, which means
     // we are using the unit circle rotated 
@@ -121,7 +119,7 @@ export class Vector implements Stateful<VectorState>, VectorLike {
 export type VectorLike = { x: number, y: number };
 
 
-export class Angle implements Stateful<number> {
+export class Angle {
     private wrappedAngle!: number
     constructor(angle: number) {
         this.angle = angle;
@@ -184,12 +182,5 @@ export class Angle implements Stateful<number> {
             Math.sin(this.angle),
             -Math.cos(this.angle)
         );
-    }
-
-    getState(): number {
-        return this.angle;
-    }
-    setState(state: number) {
-        this.angle = state;
     }
 }

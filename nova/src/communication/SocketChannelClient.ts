@@ -1,4 +1,4 @@
-import { GameMessage, SocketMessage } from "novajs/nova/src/proto/nova_service_pb";
+import { GameMessage, SocketMessage } from "novajs/nova/src/proto/protobufjs_bundle";
 import { Subject } from "rxjs";
 import { ChannelClient } from "./Channel";
 
@@ -57,8 +57,9 @@ export class SocketChannelClient implements ChannelClient {
     send(data: GameMessage): void {
         this.reconnectIfClosed();
         const socketMessage = new SocketMessage();
-        socketMessage.setData(data);
-        this.webSocket.send(socketMessage.serializeBinary());
+        socketMessage.data = data;
+
+        this.webSocket.send(SocketMessage.encode(socketMessage).finish());
     }
 
     resetTimeout() {
@@ -75,8 +76,8 @@ export class SocketChannelClient implements ChannelClient {
             }
 
             const message = new SocketMessage();
-            message.setPing(true);
-            this.webSocket.send(message.serializeBinary());
+            message.ping = true;
+            this.webSocket.send(SocketMessage.encode(message).finish());
             this.keepaliveTimeout = setTimeout(() => {
                 this.warn("Lost connection. Reconnecting...");
                 this.reconnect();
@@ -99,23 +100,23 @@ export class SocketChannelClient implements ChannelClient {
 
         let socketMessage: SocketMessage;
         try {
-            socketMessage = SocketMessage.deserializeBinary(data);
+            socketMessage = SocketMessage.decode(data);
         } catch (e) {
             this.warn(`Failed to deserialize message from server. Error: ${e}`);
             return;
         }
 
-        if (socketMessage.getPing()) {
+        if (socketMessage.ping) {
             // Reply with pong
             const messageToServer = new SocketMessage();
-            messageToServer.setPong(true);
-            this.webSocket.send(messageToServer.serializeBinary());
+            messageToServer.pong = true;
+            this.webSocket.send(SocketMessage.encode(messageToServer).finish());
             return;
         }
 
-        const message = socketMessage.getData();
+        const message = socketMessage.data;
         if (message) {
-            this.message.next(message);
+            this.message.next(new GameMessage(message));
         }
     }
 

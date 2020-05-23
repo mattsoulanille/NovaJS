@@ -1,14 +1,8 @@
 syntax = "proto3";
-import "nova/src/proto/planet_state.proto";
-import "nova/src/proto/ship_state.proto";
+import "nova/src/proto/space_object_state.proto";
 import "nova/src/proto/map_keys.proto";
 
-message SystemState { // Next = 5
-  map<string, ShipState> ships = 1;
-  MapKeys shipsKeys = 2;
-
-  map<string, PlanetState> planets = 3;
-  MapKeys planetsKeys = 4;
-
-  // TODO: Add Asteroids and Projectiles
+message SystemState { // Next = 3
+  map<string, SpaceObjectState> spaceObjects = 1;
+  MapKeys spaceObjectsKeys = 2;
 }

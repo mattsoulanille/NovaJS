@@ -4,32 +4,41 @@ package(default_visibility = ["//visibility:public"])
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
-
-
+ts_library(
+    name = "utils",
+    srcs = [
+        "Mod.ts",
+        "Stateful.ts",
+        "StateSpreader.ts",
+        "Vector.ts",
+        "CopyState.ts",
+        "TreeView.ts",
+    ],
+    deps = [
+        "//nova/src/proto:protobufjs_bundle",
+    ]
+)
+    
 ts_library(
     name = "engine",
-    srcs = glob(["*.ts"]),
+    srcs = [
+        "Engine.ts",
+        "StatefulMap.ts",
+        "System.ts",
+        "EngineFactory.ts",
+        "SystemFactory.ts",
+    ],
     deps = [
+        ":utils",
         "@npm//@types/node",
-        "@npm//io-ts",
         "@npm//uuid",
         "@npm//@types/uuid",
-        "@npm//fp-ts",
         "@npm//google-protobuf",
         "@npm//@types/google-protobuf",
         "@npm//rxjs",
+        "//nova/src/engine/space_object:space_object_mods",
         "//nova/src/common",
-        "//nova/src/proto:vector_state_ts_proto",
-        "//nova/src/proto:space_object_state_ts_proto",
-        "//nova/src/proto:ship_state_ts_proto",
-        "//nova/src/proto:planet_state_ts_proto",
-        "//nova/src/proto:system_state_ts_proto",
-        "//nova/src/proto:engine_state_ts_proto",
-        "//nova/src/proto:weapon_state_ts_proto",
-        "//nova/src/proto:outfit_state_ts_proto",
-        "//nova/src/proto:armament_state_ts_proto",
-        "//nova/src/proto:equipment_state_ts_proto",
-        "//nova/src/proto:map_keys_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "//novadatainterface",
     ]
 )

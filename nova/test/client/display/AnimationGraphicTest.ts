@@ -1,7 +1,7 @@
 import { AnimationGraphic } from "novajs/nova/src/client/display/AnimationGraphic";
 import { Position } from "novajs/nova/src/engine/Position";
 import { MockGameData } from "novajs/novadatainterface/MockGameData";
-import { DefaultAnimation } from "novajs/novadatainterface/Animation";
+import { getDefaultAnimation } from "novajs/novadatainterface/Animation";
 import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
 import * as PIXI from "pixi.js";
 
@@ -16,7 +16,7 @@ describe("AnimationGraphic", function() {
     it("Should be created", () => {
         const animationGraphic = new AnimationGraphic({
             gameData: gameData,
-            animation: DefaultAnimation
+            animation: getDefaultAnimation()
         });
         expect(animationGraphic).toBeDefined();
     })

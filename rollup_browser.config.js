@@ -21,27 +21,36 @@ export default {
 		// }),
 	    json(),
 //	    typescript(),
-	    commonjs({
+//	    commonjs({
 		    // NOTE: This plugin has to be before resolve or else
 		    // all the commonjs imports it rewrites don't work!
 			// Actually, if it comes before resolve, you get a bunch of hidden failures,
 			// of modules not being resolved, so don't do that.
-			include: 'node_modules/**',
+//			include: 'node_modules/**',
 //			include: /node_modules/,
-			namedExports: {
+//			namedExports: {
 				//				"es6-promise-polyfill": ["Polyfill"]
 				//"node_modules/pixi.js/lib/pixi.es.js": ["default"]
+				//"node_modules/protobufjs/minimal.js": ["default"]
+				//"protobufjs/minimal": [""]
+//			}
+//		}),
+
+        resolve({
+			//mainFields: ['module', 'main', 'name'],
+			browser: true,
+			//preferBuiltins: false,
+		}),
+		commonjs({
+			namedExports: {
+				// This is a complete hack:
+				// https://github.com/rollup/rollup-plugin-commonjs/issues/211
+				//"protobufjs/minimal": ["roots", "BufferReader", "BufferWriter", "Reader", "Writer", "build", "configure", "rpc", "util"]
+				"protobufjs/minimal": ["roots", "BufferReader", "BufferWriter", "Reader", "Writer", "build", "configure", "rpc", "util"]
 			}
 		}),
-
-	    nodeGlobals(),
 	    builtins(),
-        resolve({
-			mainFields: ['module', 'main', 'name'],
-			browser: true,
-			preferBuiltins: false
-		}),
-
+	    nodeGlobals(),
 		sourcemaps(),
 // 		compiler({
 // 			language_in: "ECMASCRIPT_2015",
@@ -50,5 +59,5 @@ export default {
 // //			debug: true,
 // //			create_source_map: true
 // 		}),
-    ]
+    ],
 }

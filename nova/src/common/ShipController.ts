@@ -1,5 +1,5 @@
 import { Controller, ControlEvent } from "./Controller";
-import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
+import { ShipState } from "novajs/nova/src/proto/protobufjs_bundle";
 
 
 

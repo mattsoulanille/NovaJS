@@ -16,6 +16,7 @@ ts_library(
         "SpaceObject_test.ts",
         "Ship_test.ts",
         "StatefulMap_test.ts",
+        "System_test.ts",
     ],
     deps = [
         "@npm//@types/node",
@@ -31,6 +32,8 @@ ts_library(
         "//nova/src/proto:vector_state_ts_proto",
         "//nova/src/proto:space_object_state_ts_proto",
         "//nova/src/proto:ship_state_ts_proto",
+        "//nova/src/proto:system_state_ts_proto",
+        "//nova/src/proto:planet_state_ts_proto",
         "//nova/src/proto:map_keys_ts_proto",
         "//nova/src/engine",
         "//novadatainterface",

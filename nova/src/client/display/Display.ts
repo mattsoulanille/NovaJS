@@ -1,13 +1,10 @@
-import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
-import { Position } from "../../engine/Position";
+import { Position } from "../../engine/space_object/Position";
+import { SpaceObjectView, SystemView } from "../../engine/TreeView";
 import { Vector } from "../../engine/Vector";
 import { DrawableMap } from "./DrawableMap";
-import { ShipDrawable } from "./ShipDrawable";
-import { PlanetDrawable } from "./PlanetDrawable";
-import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
-import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
+import { SpaceObjectDrawable } from "./SpaceObjectDrawable";
 
 export class Display {
     readonly displayObject = new PIXI.Container();
@@ -16,23 +13,19 @@ export class Display {
     //private statusBar: StatusBar;
     readonly buildPromise: Promise<unknown>;
     //    private activeShip: string | undefined; // The uuid of the ship to render from.
-    built: boolean;
+    built: boolean; // Is this necessary or used?
 
-    private readonly ships =
-        new DrawableMap<ShipDrawable, ShipState>(
-            () => new ShipDrawable(this.gameData));
-    private readonly planets =
-        new DrawableMap<PlanetDrawable, PlanetState>(
-            () => new PlanetDrawable(this.gameData));
+    private readonly spaceObjects =
+        new DrawableMap<SpaceObjectDrawable, SpaceObjectView>(
+            () => new SpaceObjectDrawable(this.gameData));
 
-    private _target!: string | Position;
+    private wrappedTarget!: string | Position;
     private targetPosition: Position;
 
     constructor({ gameData, target }: { gameData: GameDataInterface, target?: Position | string }) {
         this.gameData = gameData;
         this.displayObject.addChild(this.systemContainer);
-        this.systemContainer.addChild(this.ships.displayObject);
-        this.systemContainer.addChild(this.planets.displayObject);
+        this.systemContainer.addChild(this.spaceObjects.displayObject);
 
         // this.statusBar = new StatusBar({
         //     gameData: gameData
@@ -59,31 +52,21 @@ export class Display {
         }
     }
 
-    private setTargetPosition(state: SystemState) {
+    private setTargetPosition(view: SystemView) {
         if (!(this.target instanceof Vector)) {
-            const ships = state.getShipsMap();
-            let targetShip = ships.get(this.target);
-            if (targetShip !== undefined) {
-                const positionProto = targetShip
-                    .getSpaceobjectstate()?.getPosition();
-
-                if (positionProto) {
-                    this.targetPosition = Position.fromProto(positionProto);
-                }
-                else {
-                    this.targetPosition = new Position(0, 0);
-                }
+            const spaceObjects = view.families.spaceObjects.getChildrenView().children;
+            let targetObject = spaceObjects.get(this.target);
+            if (targetObject !== undefined) {
+                this.targetPosition = Position.fromProto(targetObject.value.position);
             }
         }
     }
 
-    draw(state: SystemState) {
+    draw(state: SystemView) {
         this.setTargetPosition(state);
 
-        this.ships.draw(state.getShipsMap().getEntryList(),
-            this.targetPosition);
-
-        this.planets.draw(state.getPlanetsMap().getEntryList(),
+        this.spaceObjects.draw(
+            state.families.spaceObjects.getChildrenView().children,
             this.targetPosition);
         //this.statusBar.draw(state, this.targetPosition)
     }
@@ -92,17 +75,18 @@ export class Display {
         if (target instanceof Position) {
             this.targetPosition = target;
         }
-        this._target = target;
+        this.wrappedTarget = target;
     }
 
     get target() {
-        return this._target;
+        return this.wrappedTarget;
     }
 
-    resize(_x: number, _y: number) {
+    resize(x: number, y: number) {
         //this.dimensions = new Vector(x, y);
         //this.statusBar.resize(x, y);
         //this.systemContainer.position.x = (x - this.statusBar.width) / 2;
-        //this.systemContainer.position.y = y / 2;
+        this.systemContainer.position.x = x / 2;
+        this.systemContainer.position.y = y / 2;
     }
 }

@@ -2,14 +2,15 @@ package(default_visibility = ["//visibility:public"])
 
 
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 
 
 ts_library(
-    name = "common",
+    name = "space_object_mods",
     srcs = glob(["*.ts"]),
     deps = [
         "@npm//@types/node",
         "//nova/src/proto:protobufjs_bundle",
-        "@npm//ts-enum-util",
+        "//nova/src/engine:utils",
     ]
 )

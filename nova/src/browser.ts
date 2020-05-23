@@ -1,36 +1,31 @@
+import { SpaceObjectState, SystemState, VectorState } from "novajs/nova/src/proto/protobufjs_bundle";
 import * as PIXI from "pixi.js";
-//import 'pixi-display'; // Must be imported after PIXI
-//import * as io from "socket.io-client";
-import io from "socket.io-client";
-import { Controller } from "./common/Controller";
 import { Display } from "./client/display/Display";
 import { GameData } from "./client/gamedata/GameData";
 import { setupControls } from "./client/setupControls";
+//import 'pixi-display'; // Must be imported after PIXI
+//import * as io from "socket.io-client";
+import { Controller } from "./common/Controller";
 import { ShipController } from "./common/ShipController";
-import { Engine } from "./engine/Engine";
-import { Planet } from "./engine/Planet";
-import { Ship } from "./engine/Ship";
-import { System } from "./engine/System";
+import { CommunicatorClient } from "./communication/CommunicatorClient";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
-//import { Communicator } from "./communication/Communicator";
-import { first } from "rxjs/operators";
-import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
-import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
+import { EngineView } from "./engine/TreeView";
+import { GameLoop } from "./GameLoop";
 
-import { SystemState } from "novajs/nova/src/proto/system_state_pb";
 
 (window as any).VectorState = VectorState;
 (window as any).SpaceObjectState = SpaceObjectState;
 (window as any).SystemState = SystemState;
 
 const socketChannel = new SocketChannelClient({});
-socketChannel.message.subscribe(console.log);
+socketChannel.message.subscribe((m) => {
+    console.log("Got a message");
+    console.log(m);
+});
 (window as any).socketChannel = socketChannel;
 
-//const communicator = new Communicator({
-//    channel: socketChannel
-//});
-//(window as any).communicator = communicator;
+const communicator = new CommunicatorClient(socketChannel);
+(window as any).communicator = communicator;
 
 // Temporary
 const gameData = new GameData();
@@ -45,10 +40,8 @@ const app = new PIXI.Application({
     autoDensity: true
 });
 
-
 (window as any).app = app;
 document.body.appendChild(app.view);
-
 
 const display = new Display({ gameData: gameData });
 app.stage.addChild(display.displayObject);
@@ -65,12 +58,6 @@ display.buildPromise.then(function() {
 });
 
 
-
-var engine = new Engine({
-    gameData
-});
-(window as any).engine = engine;
-
 /*
 // Handle when the player's ship changes.
 communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefined, string]) {
@@ -82,6 +69,8 @@ communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefin
 });
 */
 
+
+let gameLoop: GameLoop;
 let controller: Controller;
 let shipController: ShipController;
 async function startGame() {
@@ -89,35 +78,51 @@ async function startGame() {
     //        throw new Error("Game started before communicator ready");
     //    }
     //    engine.setState(communicator.getStateChanges());
+    const engineView = new EngineView();
+    gameLoop = new GameLoop({
+        engineView,
+        communicator,
+        display: (engineView) => {
+            // Hardcoded System for now
+            const system = engineView.families.systems.
+                getChildrenView().children.get("nova:130");
+            if (system) {
+                display.draw(system);
+            }
+        }
+    });
+
+    (window as any).gameLoop = gameLoop;
 
     controller = await setupControls(gameData);
     (window as any).controller = controller;
     shipController = new ShipController(controller);
-    app.ticker.add(gameLoop);
+    app.ticker.add(() => {
+        gameLoop.step(app.ticker.elapsedMS);
+    });
+
 }
 
-(window as any).Ship = Ship;
+//function gameLoop() {
+//    const delta = app.ticker.elapsedMS;
+// if (communicator.shipUUID !== undefined) {
+//     engine.setShipState(communicator.shipUUID, shipController.generateShipState());
+// }
+//    engine.step(delta);
+/*
+    if (communicator.shipUUID !== undefined) {
+        let currentState = engine.getFullState();
+        let currentSystemState = engine.getSystemFullState(
+            engine.getShipSystemID(communicator.shipUUID));
+      display.draw(currentSystemState);
+        communicator.notifyPeers(currentState);
+      const stateChanges = communicator.getStateChanges();
+        engine.setState(stateChanges);
+    }
+*/
+//}
 
-function gameLoop() {
-    const delta = app.ticker.elapsedMS;
-    // if (communicator.shipUUID !== undefined) {
-    //     engine.setShipState(communicator.shipUUID, shipController.generateShipState());
-    // }
-    engine.step(delta);
-    /*
-        if (communicator.shipUUID !== undefined) {
-            let currentState = engine.getFullState();
-            let currentSystemState = engine.getSystemFullState(
-                engine.getShipSystemID(communicator.shipUUID));
-    
-            display.draw(currentSystemState);
-            communicator.notifyPeers(currentState);
-    
-            const stateChanges = communicator.getStateChanges();
-            engine.setState(stateChanges);
-        }
-    */
-}
+startGame()
 
 //communicator.onReady.pipe(first()).subscribe(startGame);
 

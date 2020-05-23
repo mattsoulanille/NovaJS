@@ -1,11 +1,10 @@
 import { Drawable } from "./Drawable";
-import { Position } from "../../engine/Position";
+import { Position } from "../../engine/space_object/Position";
 import * as PIXI from "pixi.js";
 
 
-
-export class DrawableMap<D extends Drawable<State>, State>
-    implements Drawable<[string, State][]> {
+export class DrawableMap<D extends Drawable<View>, View>
+    implements Drawable<[string, View][]> {
 
     readonly displayObject = new PIXI.Container()
     private readonly uuidMap =
@@ -13,9 +12,8 @@ export class DrawableMap<D extends Drawable<State>, State>
 
     constructor(private readonly factory: () => D) { }
 
-
-    draw(states: Iterable<[string, State]>, center: Position): boolean {
-        for (const [uuid, state] of states) {
+    draw(views: Iterable<[string, View]>, center: Position): boolean {
+        for (const [uuid, view] of views) {
             if (!this.uuidMap.has(uuid)) {
                 const item = this.factory();
                 this.displayObject.addChild(item.displayObject);
@@ -25,7 +23,7 @@ export class DrawableMap<D extends Drawable<State>, State>
                 });
             }
             const val = this.uuidMap.get(uuid)!;
-            val.item.draw(state, center);
+            val.item.draw(view, center);
             val.drawn = true;
         }
 

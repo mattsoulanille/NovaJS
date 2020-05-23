@@ -3,6 +3,8 @@ package(default_visibility = ["//visibility:public"])
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
+load("@novajs//:bundlers.bzl", "web_bundle")
+
 
 filegroup(
     name = "static_files",
@@ -16,6 +18,7 @@ ts_library(
     srcs = ["GameLoop.ts"],
     deps = [
         "//nova/src/engine",
+        "//nova/src/engine:utils",
         "//nova/src/communication:communication_lib",
     ],
 )
@@ -24,6 +27,7 @@ ts_library(
     name = "browser_lib",
     srcs = ["browser.ts"],
     deps = [
+        ":gameloop_lib",
         "@npm//@types/node",
         "@npm//io-ts",
         "@npm//fp-ts",
@@ -35,29 +39,37 @@ ts_library(
         "//nova/src/client",
         "//nova/src/client/display",
         "//nova/src/engine",
+        "//nova/src/engine:utils",
         "//nova/src/communication:communication_client_lib",
         "//nova/src/client/gamedata",
-        "//nova/src/proto:vector_state_ts_proto",
-        "//nova/src/proto:space_object_state_ts_proto",
-        "//nova/src/proto:system_state_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "@npm//google-protobuf",
     ]
 )
 
-
-rollup_bundle(
+web_bundle(
     name = "browser_bundle",
     deps = [
         ":browser_lib",
-        "@npm//@rollup/plugin-node-resolve",
-        "@npm//@rollup/plugin-commonjs",
-        "@npm//rollup-plugin-sourcemaps",
-        "@npm//@rollup/plugin-json",
-        "@npm//rollup-plugin-node-globals",
-        "@npm//rollup-plugin-node-builtins"
+        "@npm//protobufjs",
     ],
     entry_point = "browser.ts",
-    config_file = "//:rollup_browser.config.js",
-    sourcemap = "inline",
-    format = "iife",
 )
+
+# rollup_bundle(
+#     name = "browser_bundle",
+#     deps = [
+#         ":browser_lib",
+#         "@npm//@rollup/plugin-node-resolve",
+#         "@npm//@rollup/plugin-commonjs",
+#         "@npm//rollup-plugin-sourcemaps",
+#         "@npm//@rollup/plugin-json",
+#         "@npm//rollup-plugin-node-globals",
+#         "@npm//rollup-plugin-node-builtins",
+#         "@npm//protobufjs",
+#     ],
+#     entry_point = "browser.ts",
+#     config_file = "//:rollup_browser.config.js",
+#     sourcemap = "inline",
+#     format = "iife",
+# )

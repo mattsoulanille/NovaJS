@@ -1,100 +1,77 @@
-import { GameDataInterface } from "../../../novadatainterface/GameDataInterface";
+import { SystemState } from "novajs/nova/src/proto/protobufjs_bundle";
+import { spaceObject } from "./space_object/SpaceObject";
+import { GetNextState } from "./Stateful";
+import { makeNextChildrenState } from "./StatefulMap";
+import { SystemView } from "./TreeView";
 
-import { Planet } from "./Planet";
-import { Ship } from "./Ship";
-import { Steppable } from "./Steppable";
-import UUID from "uuid/v4";
 
-import { SystemState } from "novajs/nova/src/proto/system_state_pb";
-import { ShipState } from "novajs/nova/src/proto/ship_state_pb";
-import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
-import { Stateful } from "./Stateful";
-//import { getMapStatesToProto, setMapStates } from "./StatefulMap";
-import { StatefulMap } from "./StatefulMap";
+const nextSpaceObjectsState = makeNextChildrenState(spaceObject);
 
-class System implements Stateful<SystemState>, Steppable {
-    readonly ships: Map<string, Ship> = new Map();
-    readonly planets: Map<string, Planet> = new Map();
-    readonly shipFactory: (shipState: ShipState) => Ship;
-    readonly planetFactory: (planetState: PlanetState) => Planet;
+export const system: GetNextState<SystemView> = function({ state, nextState, delta }) {
+    nextState = nextState ?? new SystemView();
 
-    private gameData: GameDataInterface;
+    nextState.families.spaceObjects.setChildrenView(
+        nextSpaceObjectsState({
+            state: state.families.spaceObjects.getChildrenView(),
+            nextState: nextState.families.spaceObjects.getChildrenView(),
+            delta
+        })
+    )
 
-    constructor({ gameData, state }: { gameData: GameDataInterface, state: SystemState }) {
-        this.gameData = gameData;
-
-        this.shipFactory = Ship.makeFactory(gameData);
-        this.planetFactory = Planet.makeFactory(gameData);
-
-        this.setState(state);
-    }
-
-    step(milliseconds: number): void {
-        this.ships.forEach((ship) => ship.step(milliseconds));
-        this.planets.forEach((planet) => planet.step(milliseconds));
-    }
-
-    getState(): SystemState {
-        const systemState = new SystemState();
-
-        // getMapStatesToProto({
-        //     fromMap: this.planets,
-        //     toMap: systemState.getPlanetsMap(),
-        //     addKey: (key) => systemState.addPlanetskeys(key)
-        // });
-
-        // getMapStatesToProto({
-        //     fromMap: this.ships,
-        //     toMap: systemState.getShipsMap(),
-        //     addKey: (key) => systemState.addShipskeys(key)
-        // });
-
-        return systemState;
-    }
-
-    setState(_state: SystemState) {
-        // Update planets
-        // setMapStates({
-        //     objects: this.planets,
-        //     states: state.getPlanetsMap(),
-        //     keys: state.getPlanetskeysList(),
-        //     factory: this.planetFactory
-        // });
-
-        // // Update ships
-        // setMapStates({
-        //     objects: this.ships,
-        //     states: state.getShipsMap(),
-        //     keys: state.getShipskeysList(),
-        //     factory: this.shipFactory
-        // });
-    }
-
-    static async fromID(id: string, gameData: GameDataInterface, makeUUID: () => string = UUID): Promise<SystemState> {
-
-        const data = await gameData.data.System.get(id);
-
-        const systemState = new SystemState();
-        const planetsMap = systemState.getPlanetsMap();
-
-        // Make sure the UUIDs match up with the
-        // server if you call this on the client!
-        for (let planetID of data.planets) {
-            const uuid = makeUUID();
-            planetsMap.set(
-                uuid,
-                await Planet.fromID(planetID, gameData));
-            //systemState.addPlanetskeys(uuid);
-        }
-
-        return systemState;
-    }
-
-    static makeFactory(gameData: GameDataInterface): (s: SystemState) => System {
-        return function(state: SystemState) {
-            return new System({ gameData, state });
-        }
-    }
+    return nextState;
 }
 
-export { System }
+
+// export class System implements Stateful<SystemView> {
+
+//     readonly spaceObjects = new StatefulMap(SpaceObjectFactory.spaceObjectFactory);
+
+//     getNextState({ state, nextState, delta }:
+//         { state: SystemView; nextState?: SystemView; delta: number; }): SystemView {
+
+//         nextState = nextState ?? new SystemView(new SystemState());
+//         nextState.families.spaceObjects.setChildrenView(
+//             this.spaceObjects.getNextState({
+//                 state: state.families.spaceObjects.getChildrenView(),
+//                 nextState: nextState.families.spaceObjects.getChildrenView(),
+//                 delta
+//             }));
+
+//         return nextState;
+//     }
+
+//     static factory(_view?: TreeView<ISystemState, SystemChildren>): System {
+//         return new System();
+//     }
+//     /*
+//         static async fromID(id: string, gameData: GameDataInterface, makeUUID: () => string = UUID): Promise<SystemState> {
+
+//             const data = await gameData.data.System.get(id);
+
+//             const systemState = new SystemState();
+//             const planetsMap = systemState.getPlanetsMap();
+//             const planetsKeys = new MapKeys();
+//             const planetsKeyset = new MapKeys.KeySet();
+//             planetsKeys.setKeyset(planetsKeyset);
+//             systemState.setPlanetskeys(planetsKeys);
+
+//             // Make sure the UUIDs match up with the
+//             // server if you call this on the client!
+//             for (let planetID of data.planets) {
+//                 const uuid = makeUUID();
+//                 planetsMap.set(
+//                     uuid,
+//                     await Planet.fromID(planetID, gameData));
+//                 planetsKeyset.addKey(uuid);
+//             }
+
+//             // Empty keyset for ships
+//             const shipsKeys = new MapKeys();
+//             const shipsKeyset = new MapKeys.KeySet();
+//             shipsKeys.setKeyset(shipsKeyset);
+//             systemState.setShipskeys(shipsKeys);
+
+//             return systemState;
+//         }
+//     */
+// }

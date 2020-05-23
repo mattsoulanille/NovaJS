@@ -1,11 +1,9 @@
-import { GameMessage, SocketMessage } from "novajs/nova/src/proto/nova_service_pb";
+import https from "https";
+import { GameMessage, SocketMessage } from "novajs/nova/src/proto/protobufjs_bundle";
 import { Subject } from "rxjs";
 import UUID from "uuid/v4";
 import WebSocket from "ws";
 import { ChannelServer, MessageWithSourceType } from "./Channel";
-import http from "http";
-import https from "https";
-import { Socket } from "net";
 
 interface Client {
     socket: WebSocket;
@@ -61,7 +59,7 @@ export class SocketChannelServer implements ChannelServer {
         if (!client) {
             this.warn(`No such client ${destination}`);
         } else if (client.socket.readyState === WebSocket.OPEN) {
-            client.socket.send(socketMessage.serializeBinary());
+            client.socket.send(SocketMessage.encode(socketMessage).finish());
             return true;
         }
         return false;
@@ -69,7 +67,7 @@ export class SocketChannelServer implements ChannelServer {
 
     send(destination: string, message: GameMessage) {
         const socketMessage = new SocketMessage();
-        socketMessage.setData(message);
+        socketMessage.data = message;
         return this.sendRawIfOpen(destination, socketMessage);
     }
 
@@ -87,7 +85,7 @@ export class SocketChannelServer implements ChannelServer {
         client.keepaliveTimeout = setTimeout(() => {
             // Send the client a ping
             const message = new SocketMessage();
-            message.setPing(true);
+            message.ping = true;
             this.sendRawIfOpen(uuid, message);
             client.keepaliveTimeout = setTimeout(() => {
                 // Remove the client if it hasn't responded
@@ -131,21 +129,21 @@ export class SocketChannelServer implements ChannelServer {
             throw new Error(`Missing client object for ${clientUUID}`);
         }
 
-        const message = SocketMessage.deserializeBinary(serialized);
-        if (message.getPong()) {
+        const message = SocketMessage.decode(serialized);
+        if (message.pong) {
             // We already reset the client timeout above.
             // No need to do anything if it's a pong.
             return;
         }
 
-        if (message.getPing()) {
+        if (message.ping) {
             const pong = new SocketMessage();
-            pong.setPong(true);
+            pong.pong = true;
             this.sendRawIfOpen(clientUUID, pong);
             return;
         }
 
-        const data = message.getData();
+        const data = message.data;
 
         if (!data) {
             this.warn(`Message from ${clientUUID} had no data`);
@@ -153,7 +151,7 @@ export class SocketChannelServer implements ChannelServer {
         }
 
         this.message.next({
-            message: data,
+            message: new GameMessage(data),
             source: clientUUID,
         });
     }

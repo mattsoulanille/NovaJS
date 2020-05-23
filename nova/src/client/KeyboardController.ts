@@ -1,4 +1,3 @@
-
 import * as t from "io-ts";
 import { Controller, ControlEvent, ControlState, makeControlState, ControlEventInfo } from "../common/Controller";
 import { $enum } from "ts-enum-util";

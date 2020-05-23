@@ -15,6 +15,7 @@ def web_bundle(name, deps, entry_point):
         config_file = "//:rollup_browser.config.js",
         sourcemap = "inline",
         format = "iife",
+        #format = "cjs",
     )
 
 def node_bundle(name, deps, entry_point):

@@ -1,13 +1,15 @@
 syntax = "proto3";
 import "nova/src/proto/vector_state.proto";
-
+import "nova/src/proto/equipment_state.proto";
+import "nova/src/proto/ship_state.proto";
+import "nova/src/proto/planet_state.proto";
 
 /**
  * SpaceObjectState contains information on the location and movement
  * of an object in a system. This includes information on planets, 
  * ships, and (in the future) asteroids, and projectiles.
  */
-message SpaceObjectState { // Next = 11
+message SpaceObjectState { // Next = 15
   VectorState position = 1;
   VectorState velocity = 2;
   double maxVelocity = 3;
@@ -24,4 +26,12 @@ message SpaceObjectState { // Next = 11
   MovementType movementType = 8;
   double acceleration = 9;
   double accelerating = 10;
+  EquipmentState equipmentState = 11;
+
+  oneof extraState {
+	ShipState shipState = 12;
+	PlanetState planetState = 13;
+  }
+
+  bool changes = 14;
 }

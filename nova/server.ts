@@ -1,25 +1,15 @@
 import express from "express";
-import https from "https";
-import socket from "socket.io";
 import fs from "fs";
+import https from "https";
 import path from "path";
+import { NovaParse } from "../novaparse/NovaParse";
+import { CommunicatorServer } from "./src/communication/CommunicatorServer";
+import { SocketChannelServer } from "./src/communication/SocketChannelServer";
+import { EngineFactory } from "./src/engine/EngineFactory";
+import { GameLoop } from "./src/GameLoop";
+import { FilesystemData } from "./src/server/parsing/FilesystemData";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
-import { FilesystemData } from "./src/server/parsing/FilesystemData";
-import { Engine } from "./src/engine/Engine";
-import { SocketChannelServer } from "./src/communication/SocketChannelServer";
-//import { Communicator, StateMessage } from "./src/communication/Communicator";
-import { object } from "io-ts";
-import { PilotData } from "./src/server/PilotData";
-import { Ship } from "./src/engine/Ship";
-import { NovaParse } from "../novaparse/NovaParse";
-import { VectorState } from "novajs/nova/src/proto/vector_state_pb";
-
-
-const testv = new VectorState();
-testv.setX(4);
-testv.setY(5);
-console.log(testv.serializeBinary());
 
 //import { NovaParse } from "../novaparse/NovaParse";
 
@@ -53,10 +43,7 @@ socketChannel.message.subscribe((message) => {
 });
 
 
-
-//const communicator = new Communicator({
-//    channel: socketChannel
-//});
+const communicator = new CommunicatorServer(socketChannel);
 
 const port: number = settings.port;
 const novaDataPath = path.join(__dirname, settings["relative data path"]);
@@ -65,7 +52,7 @@ const novaFileData = new NovaParse(novaDataPath, false);
 const filesystemDataPath = path.join(__dirname, "objects");
 const filesystemData = new FilesystemData(filesystemDataPath);
 
-filesystemData.data.SpriteSheet.get("planetNeutral").then(console.log);
+//filesystemData.data.SpriteSheet.get("planetNeutral").then(console.log);
 
 //console.log(novaFileData);
 //novaFileData.data.Ship.get("nova:128").then(console.log);
@@ -77,35 +64,35 @@ const bundlePath = require.resolve("novajs/nova/src/browser_bundle.js");
 const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json");
 setupRoutes(gameData, app, htmlPath, bundlePath, clientSettingsPath);
 
-let engine: Engine;
+const engineFactory = new EngineFactory(gameData);
 
+let gameLoop: GameLoop;
+let lastTimeNano: bigint;
 async function startGame() {
-    engine = await Engine.fromGameData(gameData);
-    /*
-        communicator.bindServerConnectionHandler(
-            engine.getFullState.bind(engine),
-            addClientToGame
-        );
-    */
+    const engineView = await engineFactory.newView();
+    gameLoop = new GameLoop({ engineView, communicator })
+
     httpsServer.listen(port, function() {
         console.log("listening at port " + port);
     });
 
     lastTimeNano = process.hrtime.bigint();
-    gameLoop();
+    stepper();
 }
 
-let lastTimeNano: bigint;
-function gameLoop() {
+function stepper() {
     const timeNano = process.hrtime.bigint();
     const delta = Number((timeNano - lastTimeNano) / BigInt(1e6));
     lastTimeNano = timeNano;
-    engine.step(delta);
 
-    //    const stateChanges = communicator.getStateChanges();
-    //    engine.setState(stateChanges);
-    //    setTimeout(gameLoop, 0);
+    gameLoop.step(delta);
+    setTimeout(stepper, 0);
 }
+
+//    const stateChanges = communicator.getStateChanges();
+//    engine.setState(stateChanges);
+//    setTimeout(gameLoop, 0);
+
 /*
 async function addClientToGame() {
     const shipID = (await new PilotData().getShip()).id;

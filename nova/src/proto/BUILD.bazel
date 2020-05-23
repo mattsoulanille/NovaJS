@@ -1,6 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 load("@rules_proto//proto:defs.bzl", "proto_library")
-load("@rules_typescript_proto//:index.bzl", "typescript_proto_library")
+#load("@rules_typescript_proto//:index.bzl", "typescript_proto_library")
+load("@npm_bazel_labs//:index.bzl", "ts_proto_library", "protobufjs_ts_library")
 
 proto_library(
     name = "vector_state_proto",
@@ -12,33 +13,29 @@ proto_library(
     srcs = ["space_object_state.proto"],
     deps = [
         ":vector_state_proto",
+        ":equipment_state_proto",
+        ":ship_state_proto",
+        ":planet_state_proto",
     ]
 )
 
 proto_library(
     name = "ship_state_proto",
     srcs = ["ship_state.proto"],
-    deps = [
-        ":space_object_state_proto",
-        ":equipment_state_proto",
-    ]
+    deps = []
 )
 
 proto_library(
     name = "planet_state_proto",
     srcs = ["planet_state.proto"],
-    deps = [
-        ":space_object_state_proto",
-        ":equipment_state_proto",
-    ]
+    deps = []
 )
 
 proto_library(
     name = "system_state_proto",
     srcs = ["system_state.proto"],
     deps = [
-        ":ship_state_proto",
-        ":planet_state_proto",
+        ":space_object_state_proto",
         ":map_keys_proto",
     ]
 )
@@ -96,83 +93,20 @@ proto_library(
     srcs = ["map_keys.proto"],
 )
 
-
-typescript_proto_library(
-    name = "vector_state_ts_proto",
-    proto = ":vector_state_proto",
-)
-
-typescript_proto_library(
-    name = "space_object_state_ts_proto",
-    proto = ":space_object_state_proto",
-)
-
-typescript_proto_library(
-    name = "ship_state_ts_proto",
-    proto = ":ship_state_proto",
-)
-
-typescript_proto_library(
-    name = "planet_state_ts_proto",
-    proto = ":planet_state_proto",
-)
-
-typescript_proto_library(
-    name = "system_state_ts_proto",
-    proto = ":system_state_proto",
-)
-
-typescript_proto_library(
-    name = "engine_state_ts_proto",
-    proto = ":engine_state_proto",
-)
-
-typescript_proto_library(
-    name = "weapon_state_ts_proto",
-    proto = ":weapon_state_proto",
-)
-
-typescript_proto_library(
-    name = "outfit_state_ts_proto",
-    proto = ":outfit_state_proto",
-)
-
-typescript_proto_library(
-    name = "armament_state_ts_proto",
-    proto = ":armament_state_proto",
-)
-
-typescript_proto_library(
-    name = "equipment_state_ts_proto",
-    proto = ":equipment_state_proto",
-)
-
-typescript_proto_library(
-    name = "nova_service_ts_proto",
-    proto = ":nova_service_proto",
-)
-
-typescript_proto_library(
-    name = "map_keys_ts_proto",
-    proto = ":map_keys_proto",
-)
-
-
-# Needed for bundling since protos are like externs
-filegroup(
-    name = "proto_ts_srcs",
-    srcs = [
-        ":vector_state_ts_proto",
-        ":space_object_state_ts_proto",
-        ":ship_state_ts_proto",
-        ":planet_state_ts_proto",
-        ":system_state_ts_proto",
-        ":engine_state_ts_proto",
-        ":weapon_state_ts_proto",
-        ":outfit_state_ts_proto",
-        ":armament_state_ts_proto",
-        ":equipment_state_ts_proto",
-        ":nova_service_ts_proto",
-        ":map_keys_ts_proto",
-    ]
+protobufjs_ts_library(
+    name = "protobufjs_bundle",
+    deps = [
+        ":vector_state_proto",
+        ":space_object_state_proto",
+        ":ship_state_proto",
+        ":planet_state_proto",
+        ":system_state_proto",
+        ":engine_state_proto",
+        ":weapon_state_proto",
+        ":outfit_state_proto",
+        ":armament_state_proto",
+        ":equipment_state_proto",
+        ":nova_service_proto",
+        ":map_keys_proto",
+    ],
 )

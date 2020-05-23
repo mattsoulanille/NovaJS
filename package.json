@@ -58,9 +58,12 @@
     "scripts": {
         "build": "bazel build //...",
         "test": "bazel test //...",
-		"test-watch": "ibazel test //...",
+        "test-watch": "ibazel test //...",
+        "test-only": "ibazel test",
+        "test-brk": "ibazel test --test_arg=--node_options=--inspect-brk --test_output=streamed --test_timeout=9999 --nocache_test_results",
         "start": "bazel run nova",
         "watch": "ibazel run nova",
+        "watch-brk": "ibazel run nova --config=debug --node_options=--inspect-brk",
         "debug": "bazel run nova --verbose_failures --sandbox_debug"
     },
     "dependencies": {
@@ -76,6 +79,7 @@
         "pixi-layers": "^0.2.3",
         "pixi.js": "^5.2.2",
         "pngjs": "^5.0.0",
+        "protobufjs": "^6.9.0",
         "resourceforkjs": "^0.1.0",
         "rxjs": "^6.5.5",
         "socket.io": "^2.3.0",

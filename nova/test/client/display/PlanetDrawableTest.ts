@@ -2,7 +2,7 @@ import { PlanetDrawable } from "novajs/nova/src/client/display/PlanetDrawable";
 import { Position } from "novajs/nova/src/engine/Position";
 import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
 import { MockGameData } from "novajs/novadatainterface/MockGameData";
-import { DefaultPlanetData } from "novajs/novadatainterface/PlanetData";
+import { getDefaultPlanetData } from "novajs/novadatainterface/PlanetData";
 
 describe("PlanetDrawable", function() {
 
@@ -19,7 +19,7 @@ describe("PlanetDrawable", function() {
     })
 
     it("Should draw on the screen", () => {
-        gameData.data.Planet.map.set("nova:128", DefaultPlanetData);
+        gameData.data.Planet.map.set("nova:128", getDefaultPlanetData());
         const planetDrawable = new PlanetDrawable(gameData);
         const planetState = new PlanetState();
         planetState.setId("nova:128");

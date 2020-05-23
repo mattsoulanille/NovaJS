@@ -1,9 +1,6 @@
 syntax = "proto3";
-import "nova/src/proto/space_object_state.proto";
-import "nova/src/proto/equipment_state.proto";
 
-message PlanetState { // Next = 4
-  SpaceObjectState spaceObjectState = 1;
-  EquipmentState equipmentState = 2;
-  string id = 3;
+
+message PlanetState { // Next = 2
+  string id = 1;
 }

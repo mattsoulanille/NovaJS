@@ -24,11 +24,6 @@ ts_library(
     srcs = ["server.ts"],
     deps = [
         "@npm//@types/node",
-        "@npm//io-ts",
-        "@npm//fp-ts",
-        "@npm//pixi.js",
-        "@npm//socket.io",
-        "@npm//@types/socket.io",
         "@npm//express",
         "@npm//@types/express",
         "//novaparse",
@@ -37,8 +32,8 @@ ts_library(
         "//nova/src/communication:communication_server_lib",
         "//nova/src/server",
         "//nova/src/server/parsing",
-        "//nova/src/proto:vector_state_ts_proto",
-        "@npm//google-protobuf",
+        "//nova/src:gameloop_lib",
+        #"@npm//protobufjs",
     ],
     data = [
         "//:tsconfig.json"
@@ -79,10 +74,14 @@ nodejs_binary(
         "//nova/test_keys",
         "//nova/src:static_files",
         "//nova/src:browser_bundle",
+        "//nova/src/engine",
         # TODO: Understand why you need to include the
         # compiled libraries in 'data'
-        "//nova/src/proto:proto_ts_srcs",
+        "//nova/src/proto:protobufjs_bundle",
+        "@npm//protobufjs",
+        #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
         "//novadatainterface",
         "//novaparse",
+        "//nova/src/common",
     ],
 )

@@ -1,18 +1,19 @@
 import { Subject } from "rxjs";
-import { GameMessage } from "novajs/nova/src/proto/nova_service_pb";
+import { GameMessage, IGameMessage } from "novajs/nova/src/proto/protobufjs_bundle";
+
 
 export interface MessageWithSourceType {
-    message: GameMessage;
+    message: IGameMessage;
     source: string;
 }
 
-/**
+/** 
  * This is a basic communication channel. It isn't supposed
  * to be fancy. Other fancier abstractions use it to make
  * interfaces with, for example, multiple different rooms.
  */
 export interface ChannelServer {
-    send(destination: string, message: GameMessage): void;
+    send(destination: string, message: IGameMessage): void;
 
     readonly message: Subject<MessageWithSourceType>;
     readonly clientConnect: Subject<string>;
@@ -21,7 +22,7 @@ export interface ChannelServer {
 }
 
 export interface ChannelClient {
-    send(message: GameMessage): void,
+    send(message: IGameMessage): void,
     disconnect(): void
 
     readonly message: Subject<GameMessage>;

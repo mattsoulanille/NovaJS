@@ -24,8 +24,8 @@ class Foo implements Stateful<FooState> {
     }
 }
 
-function fooFactory() {
-    return new Foo();
+function fooFactory(state: FooState) {
+    return new Foo(state.val);
 }
 
 

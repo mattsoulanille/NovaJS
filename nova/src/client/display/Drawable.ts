@@ -1,5 +1,5 @@
 import * as PIXI from "pixi.js";
-import { Position } from "../../engine/Position";
+import { Position } from "../../engine/space_object/Position";
 
 // It's probably okay to extend PIXI.DisplayObject since it has a relatively stable interface, and it would be a pain to implement all the methods that simply pass through to 
 export interface Drawable<State> {
