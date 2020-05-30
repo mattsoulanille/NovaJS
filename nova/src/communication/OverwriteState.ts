@@ -1,15 +1,19 @@
-import { TreeView, compareChildren, compareFamilies } from "../engine/TreeView";
-import { setDifference, setUnion, setIntersection } from "../common/SetUtils";
 import { MapKeys } from "novajs/nova/src/proto/protobufjs_bundle";
-
+import { setDifference, setUnion } from "../common/SetUtils";
+import { compareChildren, compareFamilies, TreeType, TreeView } from "../engine/TreeView";
 
 
 /**
  * Overwrites one state on top of another. 
  */
-export function overwriteState<V, C extends string, T extends TreeView<V, C>>(state: T, overwriteWith: T) {
+export function overwriteState<T extends TreeType>
+    (state: TreeView<T>, overwriteWith: TreeView<T>) {
 
-    Object.assign(state.value, overwriteWith.withoutChildren().value);
+    // TODO: Fix this it's broken.
+    // Object.assign(state.protobuf,
+    //     overwriteWith.withoutChildren().protobuf);
+
+    state.shallowCopyFrom(overwriteWith)
 
     // Handle adding and removing objects
     compareFamilies(state, overwriteWith, (family, overwriteFamily) => {
@@ -30,7 +34,7 @@ export function overwriteState<V, C extends string, T extends TreeView<V, C>>(st
                 const removeSet = new Set(remove);
                 family.keySet.keys = [...setDifference(keys, removeSet)];
                 for (const key of removeSet) {
-                    family.children.delete(key);
+                    family.delete(key);
                 }
             }
 
@@ -41,19 +45,19 @@ export function overwriteState<V, C extends string, T extends TreeView<V, C>>(st
                 const addSet = new Set(add);
                 family.keySet.keys = [...setUnion(keys, addSet)];
                 for (const key of addSet) {
-                    family.children.set(key, family.childFactory());
+                    family.set(key, family.childFactory());
                 }
             }
         }
     });
 
     // Update existing objects
-    compareChildren<V, C, T>(state, overwriteWith, (child, overwriteChild, familyType, childId) => {
-        const familyChildrenView = state.families[familyType].getChildrenView();
+    compareChildren(state, overwriteWith, (child, overwriteChild, familyType, childId) => {
+        const family = state.families[familyType];
         if (!child) {
             //console.warn(`child ${childId} missing`);
-            child = familyChildrenView.childFactory();
-            familyChildrenView.children.set(childId, child);
+            child = family.childFactory();
+            family.set(childId, child);
         }
         if (overwriteChild) {
             overwriteState(child, overwriteChild);

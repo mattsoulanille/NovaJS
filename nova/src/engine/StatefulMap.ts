@@ -1,5 +1,5 @@
 import { Stateful, GetNextState } from "./Stateful";
-import { ChildrenView, TreeView } from "./TreeView";
+import { ChildrenView, TreeView, TreeType } from "./TreeView";
 
 
 //export type MapState<State> = { [index: string]: State };
@@ -11,18 +11,18 @@ import { ChildrenView, TreeView } from "./TreeView";
 //export class StatefulMap<T extends Stateful<State>, State extends TreeView<V, C>, V, C extends string> extends Map<string, T> implements Stateful<ChildrenView<V>> {
 
 
-export function makeNextChildrenState<T extends TreeView<V, C>, V, C extends string>(nextChildState: GetNextState<T>): GetNextState<ChildrenView<V, C, T>> {
+export function makeNextChildrenState<T extends TreeType>(nextChildState: GetNextState<TreeView<T>>): GetNextState<ChildrenView<T>> {
     return function({ state, nextState, delta }) {
         nextState = nextState ?? state.factory();
         nextState.keySet = state.keySet;
 
-        for (const [key, substate] of state.children) {
+        for (const [key, substate] of state) {
             const nextSubstate = nextChildState({
                 state: substate,
-                nextState: nextState.children.get(key),
+                nextState: nextState.get(key),
                 delta
             });
-            nextState.children.set(key, nextSubstate);
+            nextState.set(key, nextSubstate);
         }
         return nextState;
     }

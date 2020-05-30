@@ -25,9 +25,9 @@ const planetNextState = stateSpreader([
 ], newSpaceObjectView);
 
 export const spaceObject: GetNextState<SpaceObjectView> = function(args) {
-    if (args.state.value.shipState) {
+    if (args.state.protobuf.shipState) {
         return shipNextState(args);
-    } else if (args.state.value.planetState) {
+    } else if (args.state.protobuf.planetState) {
         return planetNextState(args);
     } else {
         throw new Error(`Unknown spaceObject type.`);

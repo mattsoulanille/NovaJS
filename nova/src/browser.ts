@@ -84,8 +84,8 @@ async function startGame() {
         communicator,
         display: (engineView) => {
             // Hardcoded System for now
-            const system = engineView.families.systems.
-                getChildrenView().children.get("nova:130");
+            const system = engineView.families
+                .systems.get("nova:130");
             if (system) {
                 display.draw(system);
             }

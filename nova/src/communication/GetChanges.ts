@@ -1,50 +1,54 @@
 import { MapKeys } from "novajs/nova/src/proto/protobufjs_bundle";
 import { setDifference } from "../common/SetUtils";
-import { TreeView, EngineView, compareChildren, compareFamilies } from "../engine/TreeView";
+import { compareChildren, compareFamilies, TreeType, TreeView } from "../engine/TreeView";
 
 /**
  * Extracts changes that were marked on 
  * a state and unmarks them.
  */
-export function getChanges<V, C extends string, T extends TreeView<V, C>>(state: T, newState: T): T | null {
-    let changes: T;
+export function getChanges<T extends TreeType>
+    (state: TreeView<T>, newState: TreeView<T>): TreeView<T> | null {
+
+    let changes: TreeView<T>;
     if (newState.changed) {
-        changes = newState.withoutChildren() as T;
+        changes = newState.withoutChildren();
         changes.changed = true;
     } else {
-        changes = newState.factory() as T;
+        changes = newState.factory();
     }
 
     // Update keys
     let hadKeyChanges = false
-    compareFamilies<V, C, T>(state, newState, (family, newFamily, familyType) => {
-        const changesFamilyChildrenView = changes.families[familyType].getChildrenView();
-        changesFamilyChildrenView.keyDelta =
+    compareFamilies(state, newState, (family, newFamily, familyType) => {
+        const changesFamily = changes.families[familyType];
+        changesFamily.keyDelta =
             getKeyDelta(family.keySet, newFamily.keySet);
-        if (changesFamilyChildrenView.keyDelta.add?.length ||
-            changesFamilyChildrenView.keyDelta.remove?.length) {
+        if (changesFamily.keyDelta.add?.length ||
+            changesFamily.keyDelta.remove?.length) {
             hadKeyChanges = true;
         }
     });
 
     let hadChildChanges = false;
-    compareChildren<V, C, T>(state, newState, (child, newChild, familyType, childId) => {
-        const familyChildrenView = changes.families[familyType].getChildrenView();
-        if (!newChild) {
-            return; // Keys delta has already been computed
-        }
+    compareChildren(state, newState,
+        (child, newChild, familyType, childId) => {
 
-        if (!child) {
-            familyChildrenView.children.set(childId, newChild);
-            hadChildChanges = true;
-        } else {
-            const childChanges = getChanges(child, newChild);
-            if (childChanges) {
-                hadChildChanges = true;
-                familyChildrenView.children.set(childId, childChanges);
+            const family = changes.families[familyType];
+            if (!newChild) {
+                return; // Keys delta has already been computed
             }
-        }
-    });
+
+            if (!child) {
+                family.set(childId, newChild);
+                hadChildChanges = true;
+            } else {
+                const childChanges = getChanges(child, newChild);
+                if (childChanges) {
+                    hadChildChanges = true;
+                    family.set(childId, childChanges);
+                }
+            }
+        });
 
     if (changes.changed || hadChildChanges || hadKeyChanges) {
         return changes;

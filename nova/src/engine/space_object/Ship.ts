@@ -3,7 +3,7 @@ import { SpaceObjectView } from "../TreeView";
 
 export const ship: GetNextState<SpaceObjectView> = function({ state, nextState }) {
     nextState = nextState ?? state.factory();
-    nextState.value.shipState = state.value.shipState;
+    nextState.protobuf.shipState = state.protobuf.shipState;
     return nextState;
 }
 

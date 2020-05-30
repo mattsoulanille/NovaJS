@@ -1,56 +1,113 @@
-import { IMapKeys, ISystemState, MapKeys, ISpaceObjectState, IEngineState, EngineState, SystemState, SpaceObjectState } from "novajs/nova/src/proto/protobufjs_bundle";
+import { EngineState, IEngineState, IMapKeys, ISpaceObjectState, ISystemState, MapKeys, SpaceObjectState, SystemState } from "novajs/nova/src/proto/protobufjs_bundle";
+import { copyState } from "./CopyState";
 
-export type ChildrenView<V = unknown, C extends string = string, T extends TreeView<V, C> = TreeView<V, C>> = {
+export type FamilyType = {
+    treeType: TreeType,
+    treeView: TreeView<TreeType>
+}
+
+export type TreeType = {
+    protobuf: unknown,
+    localData: unknown,
+    families: { [family: string]: TreeType }
+}
+
+
+export type TreeTypeProtobuf<T extends TreeType>
+    = T extends { protobuf: (infer P) } ? P : never;
+
+export type TreeTypeFamilies<T extends TreeType>
+    = T extends { families: (infer F) } ? F : never;
+
+export type TreeTypeLocalData<T extends TreeType>
+    = T extends { localData: (infer D) } ? D : never;
+
+type ValueOf<T> = T[keyof T];
+
+export type FamilyTreeTypes<T extends TreeType> =
+    ValueOf<TreeTypeFamilies<T>>;
+
+export type AllTreeTypes<T extends TreeType> = T
+    | ValueOf<{
+        [family in keyof TreeTypeFamilies<T>]:
+        AllTreeTypes<TreeTypeFamilies<T>[family]>
+    }>
+
+export interface ChildrenView<T extends TreeType> extends Map<string, TreeView<T>> {
     keySet?: MapKeys.IKeySet;
     keyDelta?: MapKeys.IKeyDelta;
-    children: Map<string, T>;
-    childFactory: () => T;
-    factory: () => ChildrenView<V, C, T>;
+    //children: Map<string, TreeView<T>>;
+    childFactory: () => TreeView<T>;
+    factory: () => ChildrenView<T>;
 }
 
-export interface Family {
-    // Necessary to make types work out nicely. Can't have
-    // a getter and setter with different types.
-    getChildrenView(): ChildrenView;
-    setChildrenView(c: ChildrenView): void;
-}
-export interface TreeView<V = unknown, C extends string = string> {
-    readonly familyTypes: Set<C>;
+export interface TreeView<T extends TreeType> {
+    readonly familyTypes: Set<keyof TreeTypeFamilies<T>>;
     readonly families: {
         // Not a map because there's a discrete set of keys
-        [childType in C]: Family;
+        [familyType in keyof TreeTypeFamilies<T>]:
+        ChildrenView<TreeTypeFamilies<T>[familyType]>;
     };
-    value: V;
-    factory: () => TreeView<V, C>;
+    protobuf: TreeTypeProtobuf<T>;
+    localData: TreeTypeLocalData<T>;
+    factory: () => TreeView<T>;
     changed: boolean;
-    withoutChildren: () => TreeView<V, C>;
-    //shallowCopyTo: (other: TreeView<V, C>) => void;
+    withoutChildren: () => TreeView<T>;
+    shallowCopyFrom: (other: TreeView<T>) => void;
 }
 
-function getChildrenViewValues<State, Children extends string>(childrenView: ChildrenView<State, Children>) {
-    return Object.fromEntries([...childrenView.children].map(([key, child]) => {
-        return [key, child.value];
+function getChildrenViewValues<T extends TreeType>(childrenView: ChildrenView<T>) {
+    return Object.fromEntries([...childrenView].map(([key, child]) => {
+        return [key, child.protobuf];
     }));
 }
 
 
-class ChildrenMap<V, C extends string, ChildView extends TreeView<V, C> = TreeView<V, C>> implements Map<string, ChildView> {
+class MapChildrenView<T extends TreeType> implements ChildrenView<T> {
+    constructor(
+        private map: { [index: string]: TreeTypeProtobuf<T> },
+        private mapKeys: IMapKeys,
+        public childFactory: () => TreeView<T>) {
 
-    constructor(private map: { [index: string]: V },
-        private childFactory: () => ChildView) { }
+        this.mapKeys.keySet =
+            this.mapKeys.keySet ?? new MapKeys.KeySet();
+        this.mapKeys.keySet.keys = this.mapKeys.keySet.keys ?? [];
+    }
 
-    get(key: string): ChildView | undefined {
+
+    // Not necessarily equal to the keys in the map
+    get keySet() {
+        return this.mapKeys.keySet ?? undefined;
+    }
+    set keySet(keySet: MapKeys.IKeySet | undefined) {
+        this.mapKeys.keySet = keySet;
+    }
+
+    get keyDelta() {
+        return this.mapKeys.keyDelta ?? undefined;
+    }
+    set keyDelta(keyDelta: MapKeys.IKeyDelta | undefined) {
+        this.mapKeys.keyDelta = keyDelta;
+    }
+
+
+    factory() {
+        return new MapChildrenView(
+            {}, new MapKeys(), this.childFactory);
+    }
+
+    get(key: string): TreeView<T> | undefined {
         const val = this.map[key];
         if (val) {
             const childView = this.childFactory();
-            childView.value = this.map[key];
+            childView.protobuf = this.map[key];
             return childView;
         }
         return undefined;
     }
 
-    set(key: string, value: ChildView): this {
-        this.map[key] = value.value;
+    set(key: string, value: TreeView<T>): this {
+        this.map[key] = value.protobuf;
         return this;
     }
 
@@ -74,8 +131,8 @@ class ChildrenMap<V, C extends string, ChildView extends TreeView<V, C> = TreeVi
         }
     }
 
-    forEach(callbackfn: (value: ChildView, key: string,
-        map: Map<string, ChildView>) => void, thisArg?: any): void {
+    forEach(callbackfn: (value: TreeView<T>, key: string,
+        map: Map<string, TreeView<T>>) => void, thisArg?: any): void {
         if (thisArg) {
             callbackfn = callbackfn.bind(thisArg);
         }
@@ -85,13 +142,13 @@ class ChildrenMap<V, C extends string, ChildView extends TreeView<V, C> = TreeVi
         }
     }
 
-    *[Symbol.iterator](): IterableIterator<[string, ChildView]> {
+    *[Symbol.iterator](): IterableIterator<[string, TreeView<T>]> {
         for (const key of this.keys()) {
             yield [key, this.get(key)!];
         }
     }
 
-    *entries(): IterableIterator<[string, ChildView]> {
+    *entries(): IterableIterator<[string, TreeView<T>]> {
         yield* this[Symbol.iterator]();
     }
     *keys(): IterableIterator<string> {
@@ -99,7 +156,7 @@ class ChildrenMap<V, C extends string, ChildView extends TreeView<V, C> = TreeVi
             yield key;
         }
     }
-    *values(): IterableIterator<ChildView> {
+    *values(): IterableIterator<TreeView<T>> {
         for (const [, val] of this) {
             yield val;
         }
@@ -108,68 +165,44 @@ class ChildrenMap<V, C extends string, ChildView extends TreeView<V, C> = TreeVi
 }
 
 
-class MapChildrenView<V, C extends string, ChildView extends TreeView<V, C> = TreeView<V, C>>
-    implements ChildrenView<V, C> {
-    readonly children: ChildrenMap<V, C, ChildView>;
-    constructor(private map: { [index: string]: V },
-        private mapKeys: IMapKeys,
-        public childFactory: () => ChildView) {
-        //private setChildren: (children: { [id: string]: V }) => void) {
+export type IEngineView = TreeView<EngineTreeType>;
 
-        this.children = new ChildrenMap(this.map, this.childFactory);
-    }
-
-    factory() {
-        return new MapChildrenView({}, new MapKeys(), this.childFactory);
-    }
-
-    get keySet() {
-        return this.mapKeys.keySet ?? undefined;
-    }
-
-    set keySet(keySet: MapKeys.IKeySet | undefined) {
-        this.mapKeys.keySet = keySet;
-        delete this.mapKeys.keyDelta;
-    }
-
-    get keyDelta() {
-        return this.mapKeys.keyDelta ?? undefined;
-    }
-
-    set keyDelta(keyDelta: MapKeys.IKeyDelta | undefined) {
-        this.mapKeys.keyDelta = keyDelta;
-        delete this.mapKeys.keySet;
+type EngineTreeType = {
+    protobuf: IEngineState,
+    localData: {},
+    families: {
+        systems: SystemTreeType
     }
 }
 
-type EngineChildren = "systems";
-export class EngineView implements TreeView<IEngineState, EngineChildren> {
-    readonly familyTypes = new Set<EngineChildren>(["systems"]);
+export class EngineView implements IEngineView {
+    readonly familyTypes =
+        new Set<keyof TreeTypeFamilies<EngineTreeType>>(["systems"]);
     public changed = false;
+    localData = {};
 
+    constructor(public protobuf: IEngineState = new EngineState()) { }
 
-    constructor(public value: IEngineState = new EngineState()) { }
-
-    get systems() {
-        return this.families.systems.getChildrenView().children;
-    }
+    // get systems() {
+    //     return this.families.systems.children;
+    // }
 
     private get valueSystems() {
-        if (!this.value.systems) {
-            this.value.systems = {};
+        if (!this.protobuf.systems) {
+            this.protobuf.systems = {};
         }
-        return this.value.systems;
+        return this.protobuf.systems;
     }
 
     private get systemKeys() {
-        if (!this.value.systemsKeys) {
-            this.value.systemsKeys = new MapKeys();
+        if (!this.protobuf.systemsKeys) {
+            this.protobuf.systemsKeys = new MapKeys();
         }
-        return this.value.systemsKeys;
+        return this.protobuf.systemsKeys;
     }
 
     private set systemKeys(systemKeys) {
-        this.value.systemsKeys = systemKeys;
+        this.protobuf.systemsKeys = systemKeys;
     }
 
     get families() {
@@ -177,22 +210,26 @@ export class EngineView implements TreeView<IEngineState, EngineChildren> {
         return {
             // TODO: Engine et al assign to systems, which is not okay
             // because that change doesn't get propogated.
-            systems: {
-                getChildrenView() {
-                    return new MapChildrenView<ISystemState, SystemChildren, SystemView>(
-                        self.valueSystems,
-                        self.systemKeys,
-                        () => new SystemView()
-                        //(children) => { this.value.systems = children; }
-                    )
-                },
-                setChildrenView(children: ChildrenView<ISystemState, SystemChildren>) {
-                    self.value.systems = getChildrenViewValues(children);
-                    self.systemKeys.keyDelta = children.keyDelta;
-                    self.systemKeys.keySet = children.keySet;
-                }
+            get systems() {
+                return new MapChildrenView<SystemTreeType>(
+                    self.valueSystems,
+                    self.systemKeys,
+                    () => new SystemView()
+                    //(children) => { this.value.systems = children; }
+                )
+            },
+            set systems(children: ChildrenView<SystemTreeType>) {
+                self.protobuf.systems = getChildrenViewValues(children);
+                self.systemKeys.keyDelta = children.keyDelta;
+                self.systemKeys.keySet = children.keySet;
             }
         }
+    }
+
+
+    shallowCopyFrom(_other: TreeView<EngineTreeType>) {
+        // Nothing to copy
+        return;
     }
 
     withoutChildren() {
@@ -204,50 +241,64 @@ export class EngineView implements TreeView<IEngineState, EngineChildren> {
     }
 }
 
-export type SystemChildren = "spaceObjects";
-export class SystemView implements TreeView<ISystemState, SystemChildren> {
-    readonly familyTypes = new Set<SystemChildren>(["spaceObjects"]);
-    changed = false;
+export type ISystemView = TreeView<SystemTreeType>;
 
-    constructor(public value: ISystemState = new SystemState()) { }
-
-    get spaceObjects() {
-        return this.families.spaceObjects.getChildrenView().children;
+type SystemTreeType = {
+    protobuf: ISystemState;
+    localData: {};
+    families: {
+        spaceObjects: SpaceObjectTreeType
     }
+}
+
+export class SystemView implements ISystemView {
+    readonly familyTypes =
+        new Set<keyof TreeTypeFamilies<SystemTreeType>>(["spaceObjects"]);
+    changed = false;
+    localData = {};
+
+    constructor(public protobuf: ISystemState = new SystemState()) { }
+
+    // get spaceObjects() {
+    //     return this.families.spaceObjects.children;
+    // }
 
     private get valueSpaceObjects() {
-        if (!this.value.spaceObjects) {
-            this.value.spaceObjects = {};
+        if (!this.protobuf.spaceObjects) {
+            this.protobuf.spaceObjects = {};
         }
-        return this.value.spaceObjects;
+        return this.protobuf.spaceObjects;
     }
 
 
     private get spaceObjectsKeys() {
-        if (!this.value.spaceObjectsKeys) {
-            this.value.spaceObjectsKeys = new MapKeys();
+        if (!this.protobuf.spaceObjectsKeys) {
+            this.protobuf.spaceObjectsKeys = new MapKeys();
         }
-        return this.value.spaceObjectsKeys;
+        return this.protobuf.spaceObjectsKeys;
     }
 
     get families() {
         const self = this;
         return {
-            spaceObjects: {
-                getChildrenView() {
-                    return new MapChildrenView<ISpaceObjectState, SpaceObjectChildren, SpaceObjectView>(
-                        self.valueSpaceObjects,
-                        self.spaceObjectsKeys,
-                        () => new SpaceObjectView()
-                    )
-                },
-                setChildrenView(children: ChildrenView<ISpaceObjectState, SpaceObjectChildren>) {
-                    self.value.spaceObjects = getChildrenViewValues(children);
-                    self.spaceObjectsKeys.keyDelta = children.keyDelta;
-                    self.spaceObjectsKeys.keySet = children.keySet;
-                }
+            get spaceObjects() {
+                return new MapChildrenView<SpaceObjectTreeType>(
+                    self.valueSpaceObjects,
+                    self.spaceObjectsKeys,
+                    () => new SpaceObjectView()
+                )
+            },
+            set spaceObjects(children: ChildrenView<SpaceObjectTreeType>) {
+                self.protobuf.spaceObjects = getChildrenViewValues(children);
+                self.spaceObjectsKeys.keyDelta = children.keyDelta;
+                self.spaceObjectsKeys.keySet = children.keySet;
             }
         }
+    }
+
+    shallowCopyFrom(_other: TreeView<SystemTreeType>) {
+        // Nothing to copy
+        return;
     }
 
     withoutChildren() {
@@ -259,21 +310,54 @@ export class SystemView implements TreeView<ISystemState, SystemChildren> {
     }
 }
 
+
+export type ISpaceObjectView = TreeView<SpaceObjectTreeType>;
+
 // Don't instantiate children for it!
-type SpaceObjectChildren = string;
+type SpaceObjectTreeType = {
+    protobuf: ISpaceObjectState;
+    localData: {};
+    families: {};
+};
+
 export class SpaceObjectView
-    implements TreeView<ISpaceObjectState, SpaceObjectChildren> {
+    implements TreeView<SpaceObjectTreeType> {
     changed = false;
     families = {};
-    familyTypes = new Set<string>();
+    familyTypes = new Set<never>();
+    localData = {};
 
-    constructor(public value: ISpaceObjectState = new SpaceObjectState()) { }
+    constructor(public protobuf: ISpaceObjectState = new SpaceObjectState()) { }
+
+    shallowCopyFrom(other: TreeView<SpaceObjectTreeType>) {
+        copyState(
+            other.protobuf,
+            this.protobuf,
+            [
+                "accelerating",
+                "acceleration",
+                "changes",
+                "equipmentState",
+                "maxVelocity",
+                "movementType",
+                "planetState",
+                "position",
+                "rotation",
+                "shipState",
+                "turnBack",
+                "turning",
+                "turnRate",
+                "velocity"
+            ],
+            true
+        );
+    }
 
     withoutChildren() {
         const newView = this.factory();
-        const newVal = newView.value;
+        const newVal = newView.protobuf;
 
-        Object.assign(newVal, this.value);
+        Object.assign(newVal, this.protobuf);
         // Children would then be deleted, but
         // SpaceObject does not have children.
         return newView;
@@ -284,25 +368,36 @@ export class SpaceObjectView
     }
 }
 
+export function compareFamilies<T extends TreeType>(
+    a: TreeView<T>, b: TreeView<T>,
+    f: (ac: ChildrenView<FamilyTreeTypes<T>>,
+        bc: ChildrenView<FamilyTreeTypes<T>>,
+        familyType: keyof TreeTypeFamilies<T>) => unknown) {
 
-export function compareFamilies<V, C extends string, T extends TreeView<V, C>>(a: T, b: T, f: (a: ChildrenView, b: ChildrenView, familyType: C) => unknown) {
     for (const familyType of a.familyTypes) {
-        const aFamilyChildren = a.families[familyType].getChildrenView();
-        const bFamilyChildren = b.families[familyType].getChildrenView();
+        const aFamilyChildren = a.families[familyType];
+        const bFamilyChildren = b.families[familyType];
         f(aFamilyChildren, bFamilyChildren, familyType);
     }
 }
 
-export function compareChildren<V, C extends string, T extends TreeView<V, C>>(a: T, b: T, f: (a: TreeView | undefined, b: TreeView | undefined, familyType: C, childId: string) => unknown) {
-    compareFamilies<V, C, T>(a, b, (aFamily, bFamily, familyType) => {
+export function compareChildren<T extends TreeType>(
+    a: TreeView<T>,
+    b: TreeView<T>,
+    f: (af: TreeView<FamilyTreeTypes<T>> | undefined,
+        bf: TreeView<FamilyTreeTypes<T>> | undefined,
+        familyType: keyof TreeTypeFamilies<T>,
+        childId: string) => unknown) {
+
+    compareFamilies(a, b, (aFamily, bFamily, familyType) => {
         const childrenIDs = new Set([
-            ...aFamily.children.keys(),
-            ...bFamily.children.keys()
+            ...aFamily.keys(),
+            ...bFamily.keys()
         ]);
 
         for (const childId of childrenIDs) {
-            const aChild = aFamily.children.get(childId);
-            const bChild = bFamily.children.get(childId);
+            const aChild = aFamily.get(childId);
+            const bChild = bFamily.get(childId);
             f(aChild, bChild, familyType, childId);
         }
     });

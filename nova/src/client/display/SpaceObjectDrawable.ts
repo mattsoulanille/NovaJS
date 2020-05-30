@@ -70,10 +70,10 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
     }
 
     draw(state: SpaceObjectView, center: Position) {
-        if (state.value.shipState) {
-            this.setDrawTypeAndId(NovaDataType.Ship, state.value.shipState.id);
-        } else if (state.value.planetState) {
-            this.setDrawTypeAndId(NovaDataType.Planet, state.value.planetState.id)
+        if (state.protobuf.shipState) {
+            this.setDrawTypeAndId(NovaDataType.Ship, state.protobuf.shipState.id);
+        } else if (state.protobuf.planetState) {
+            this.setDrawTypeAndId(NovaDataType.Planet, state.protobuf.planetState.id)
         } else {
             console.warn("SpaceObjectDrawable had no extraState");
             return false;
@@ -92,24 +92,24 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
             return false;
         }
 
-        if (!state.value.position) {
+        if (!state.protobuf.position) {
             console.warn("State had no position")
             return false;
         }
 
-        const realPosition = Position.fromProto(state.value.position);
+        const realPosition = Position.fromProto(state.protobuf.position);
         const screenPosition = realPosition
             .getClosestRelativeTo(center)
             .subtract(center);
 
         this.animationGraphic.position.x = screenPosition.x;
         this.animationGraphic.position.y = screenPosition.y;
-        this.animationGraphic.rotation = state.value.rotation ?? 0;
+        this.animationGraphic.rotation = state.protobuf.rotation ?? 0;
 
         // TODO: Make glow alpha gradually increase and decrease
-        this.animationGraphic.glowAlpha = state.value.accelerating ?? 0;
+        this.animationGraphic.glowAlpha = state.protobuf.accelerating ?? 0;
 
-        const turning = state.value.turning ?? 0;
+        const turning = state.protobuf.turning ?? 0;
         if (turning < 0) {
             this.animationGraphic.setFramesToUse("left");
         } else if (turning > 0) {
