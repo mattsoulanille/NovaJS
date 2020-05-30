@@ -61,7 +61,7 @@
         "test-watch": "ibazel test //...",
         "test-only": "ibazel test",
         "test-brk": "ibazel test --test_arg=--node_options=--inspect-brk --test_output=streamed --test_timeout=9999 --nocache_test_results",
-        "start": "bazel run nova",
+        "start": "bazel build nova && ./bazel-out/k8-fastbuild/bin/nova/nova.sh",
         "watch": "ibazel run nova",
         "watch-brk": "ibazel run nova --config=debug --node_options=--inspect-brk",
         "debug": "bazel run nova --verbose_failures --sandbox_debug"

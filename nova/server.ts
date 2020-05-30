@@ -10,6 +10,7 @@ import { GameLoop } from "./src/GameLoop";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
+import { NovaRepl } from "./src/server/NovaRepl";
 
 //import { NovaParse } from "../novaparse/NovaParse";
 
@@ -76,6 +77,7 @@ async function startGame() {
         console.log("listening at port " + port);
     });
 
+    const novaRepl = new NovaRepl(gameLoop, gameData, communicator);
     lastTimeNano = process.hrtime.bigint();
     stepper();
 }
