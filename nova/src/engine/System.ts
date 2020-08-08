@@ -1,13 +1,12 @@
 import { spaceObject } from "./space_object/SpaceObject";
-import { GetNextState } from "./Stateful";
+import { StepState } from "./Stateful";
 import { makeNextChildrenState } from "./StatefulMap";
-import { ISystemView, SystemView } from "./TreeView";
-
+import { SystemView, systemViewFactory } from "./TreeView";
 
 const nextSpaceObjectsState = makeNextChildrenState(spaceObject);
 
-export const system: GetNextState<ISystemView> = function({ state, nextState, delta }) {
-    nextState = nextState ?? new SystemView();
+export const system: StepState<SystemView> = function({ state, nextState, delta }) {
+    nextState = nextState ?? systemViewFactory();
 
     nextState.families.spaceObjects =
         nextSpaceObjectsState({

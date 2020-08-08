@@ -9,7 +9,7 @@ import { Controller } from "./common/Controller";
 import { ShipController } from "./common/ShipController";
 import { CommunicatorClient } from "./communication/CommunicatorClient";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
-import { EngineView } from "./engine/TreeView";
+import { EngineView, engineViewFactory } from "./engine/TreeView";
 import { GameLoop } from "./GameLoop";
 
 
@@ -78,7 +78,7 @@ async function startGame() {
     //        throw new Error("Game started before communicator ready");
     //    }
     //    engine.setState(communicator.getStateChanges());
-    const engineView = new EngineView();
+    const engineView = engineViewFactory();
     gameLoop = new GameLoop({
         engineView,
         communicator,

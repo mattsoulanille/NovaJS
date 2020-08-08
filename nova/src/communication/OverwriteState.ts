@@ -1,6 +1,7 @@
 import { MapKeys } from "novajs/nova/src/proto/protobufjs_bundle";
-import { setDifference, setUnion } from "../common/SetUtils";
+import { setDifference } from "../common/SetUtils";
 import { compareChildren, compareFamilies, TreeType, TreeView } from "../engine/TreeView";
+import { getKeyDelta } from "./getKeyDelta";
 
 
 /**
@@ -9,19 +10,15 @@ import { compareChildren, compareFamilies, TreeType, TreeView } from "../engine/
 export function overwriteState<T extends TreeType>
     (state: TreeView<T>, overwriteWith: TreeView<T>) {
 
-    // TODO: Fix this it's broken.
-    // Object.assign(state.protobuf,
-    //     overwriteWith.withoutChildren().protobuf);
-
-    state.shallowCopyFrom(overwriteWith)
+    state.shallowCopyFrom(overwriteWith);
 
     // Handle adding and removing objects
     compareFamilies(state, overwriteWith, (family, overwriteFamily) => {
         let keyDelta: MapKeys.IKeyDelta | undefined;
-        if (overwriteFamily.keySet) {
-            //family.keySet = overwriteFamily.keySet;
-            keyDelta = getDelta(family.keySet ?? { keys: [] },
-                overwriteFamily.keySet);
+        const overwriteKeys = overwriteFamily.getMapKeys();
+        if (overwriteKeys.keySet) {
+            keyDelta = getKeyDelta(family.getMapKeys().keySet ?? { keys: [] },
+                overwriteFamily.getMapKeys().keySet ?? { keys: [] });
         } else if (overwriteFamily.keyDelta) {
             keyDelta = overwriteFamily.keyDelta;
         }
@@ -29,22 +26,14 @@ export function overwriteState<T extends TreeType>
         if (keyDelta) {
             const remove = keyDelta.remove;
             if (remove) {
-                const keys = new Set(family.keySet?.keys ?? []);
-                family.keySet = family.keySet ?? new MapKeys.KeySet();
-                const removeSet = new Set(remove);
-                family.keySet.keys = [...setDifference(keys, removeSet)];
-                for (const key of removeSet) {
+                for (const key of remove) {
                     family.delete(key);
                 }
             }
 
             const add = keyDelta.add;
             if (add) {
-                const keys = new Set(family.keySet?.keys ?? []);
-                family.keySet = family.keySet ?? new MapKeys.KeySet();
-                const addSet = new Set(add);
-                family.keySet.keys = [...setUnion(keys, addSet)];
-                for (const key of addSet) {
+                for (const key of add) {
                     family.set(key, family.childFactory());
                 }
             }
@@ -65,16 +54,4 @@ export function overwriteState<T extends TreeType>
     });
 
     return state;
-}
-
-function getDelta(keys: MapKeys.IKeySet, newKeys: MapKeys.IKeySet): MapKeys.KeyDelta {
-    const keysSet = new Set(keys.keys ?? []);
-    const newKeysSet = new Set(newKeys.keys ?? []);
-
-    const add = setDifference(newKeysSet, keysSet);
-    const remove = setDifference(keysSet, newKeysSet);
-    return new MapKeys.KeyDelta({
-        add: [...add],
-        remove: [...remove]
-    })
 }

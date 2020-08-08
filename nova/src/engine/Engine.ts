@@ -1,14 +1,14 @@
-import { GetNextState } from "./Stateful";
+import { StepState } from "./Stateful";
 import { makeNextChildrenState } from "./StatefulMap";
 import { system } from "./System";
-import { EngineView } from "./TreeView";
+import { engineViewFactory, EngineView } from "./TreeView";
 
 
 const nextSystemsState = makeNextChildrenState(system);
 
-export const engine: GetNextState<EngineView> = function({ state, nextState, delta }) {
+export const engine: StepState<EngineView> = function({ state, nextState, delta }) {
 
-    nextState = nextState ?? new EngineView();
+    nextState = nextState ?? engineViewFactory();
 
     nextState.families.systems =
         nextSystemsState({

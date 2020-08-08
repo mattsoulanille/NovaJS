@@ -14,7 +14,7 @@ export function copyState<T>(fromState: T, toState: T, keys: Iterable<keyof T>, 
 
 export class CopyState<T> implements Stateful<T> {
 
-    getNextState({ state, nextState }:
+    stepState({ state, nextState }:
         { state: T; nextState: T; delta: number; }): T {
         // NOTE: This is not necessarily true since state may
         // have more keys than appear in its interface, such as

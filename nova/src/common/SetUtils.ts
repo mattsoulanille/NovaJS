@@ -2,7 +2,7 @@ export function setUnion<T>(a: Set<T>, b: Set<T>): Set<T> {
     return new Set([...a, ...b]);
 }
 
-function filterSet<T>(a: Set<T>, f: (x: T) => boolean): Set<T> {
+export function filterSet<T>(a: Set<T>, f: (x: T) => boolean): Set<T> {
     return new Set([...a].filter(f));
 }
 

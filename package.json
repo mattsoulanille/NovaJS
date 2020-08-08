@@ -9,7 +9,7 @@
     "devDependencies": {
         "@bazel/bazel": "^2.1.0",
         "@bazel/buildifier": "2.2.1",
-        "@bazel/ibazel": "0.12.4",
+        "@bazel/ibazel": "^0.13.1",
         "@bazel/jasmine": "^1.6.0",
         "@bazel/karma": "^1.6.0",
         "@bazel/rollup": "^1.6.0",
@@ -64,13 +64,14 @@
         "start": "bazel build nova && ./bazel-out/k8-fastbuild/bin/nova/nova.sh",
         "watch": "ibazel run nova",
         "watch-brk": "ibazel run nova --config=debug --node_options=--inspect-brk",
-        "debug": "bazel run nova --verbose_failures --sandbox_debug"
+        "debug-bazel": "bazel run nova --verbose_failures --sandbox_debug"
     },
     "dependencies": {
         "@bazel/labs": "^1.6.0",
         "@types/uuid": "^7.0.2",
         "express": "^4.17.1",
         "fp-ts": "^2.5.3",
+        "global": "^4.4.0",
         "google-protobuf": "^3.11.4",
         "grpc": "^1.24.2",
         "hull.js": "^1.0.0",

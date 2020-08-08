@@ -1,8 +1,10 @@
 syntax = "proto3";
+import "nova/src/proto/system_state_value.proto";
 import "nova/src/proto/space_object_state.proto";
 import "nova/src/proto/map_keys.proto";
 
-message SystemState { // Next = 3
-  map<string, SpaceObjectState> spaceObjects = 1;
-  MapKeys spaceObjectsKeys = 2;
+message SystemState { // Next = 4
+  SystemStateValue value = 1;
+  map<string, SpaceObjectState> spaceObjects = 2;
+  MapKeys spaceObjectsKeys = 3;
 }

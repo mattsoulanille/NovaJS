@@ -1,5 +1,5 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { ShipState, SpaceObjectState } from "novajs/nova/src/proto/protobufjs_bundle";
+import { ShipState, SpaceObjectState, SpaceObjectStateValue } from "novajs/nova/src/proto/protobufjs_bundle";
 import { ShipData } from "novajs/novadatainterface/ShipData";
 
 export class ShipFactory {
@@ -20,12 +20,14 @@ export class ShipFactory {
 
     private fromData(data: ShipData) {
         const spaceObject = new SpaceObjectState();
-        spaceObject.shipState = new ShipState();
-        spaceObject.shipState.id = data.id;
-        spaceObject.acceleration = data.physics.acceleration;
-        spaceObject.maxVelocity = data.physics.speed;
-        spaceObject.movementType = SpaceObjectState.MovementType.INERTIAL;
-        spaceObject.turnRate = data.physics.turnRate;
+        const value = new SpaceObjectStateValue();;
+        spaceObject.value = value;
+        value.shipState = new ShipState();
+        value.shipState.id = data.id;
+        value.acceleration = data.physics.acceleration;
+        value.maxVelocity = data.physics.speed;
+        value.movementType = SpaceObjectStateValue.MovementType.INERTIAL;
+        value.turnRate = data.physics.turnRate;
         return spaceObject;
     }
 }

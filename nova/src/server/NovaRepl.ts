@@ -24,7 +24,7 @@ export class NovaRepl {
                     const ships = (await Promise.all(
                         [...system.families.spaceObjects]
                             .map(async ([_, spaceObject]) => {
-                                const proto = spaceObject.protobuf;
+                                const proto = spaceObject.sharedData;
                                 const id = proto.shipState?.id
                                 if (id) {
                                     const ship = await this.gameData.data.Ship.get(id);
@@ -55,7 +55,7 @@ export class NovaRepl {
 
             for (const { id, ships, system } of systemsWithShips) {
                 console.log(`${id}:`);
-                const keySet = system.families.spaceObjects.keySet?.keys;
+                const keySet = system.families.spaceObjects.getMapKeys().keySet?.keys;
                 console.log(`  spaceObjects keySet: ${keySet}`);
                 for (const [name, count] of ships) {
                     console.log(`\t ${name}: ${count}`);

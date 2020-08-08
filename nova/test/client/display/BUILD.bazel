@@ -20,7 +20,7 @@ ts_library(
         "//nova/src/client/display",
         "//nova/src/common",
         "//novadatainterface",
-        "//nova/src/proto:ship_state_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "//nova/src/engine",
     ]
 )
@@ -44,7 +44,7 @@ ts_library(
         "//nova/src/client/display",
         "//nova/src/common",
         "//novadatainterface",
-        "//nova/src/proto:planet_state_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "//nova/src/engine",
     ]
 )
@@ -68,7 +68,7 @@ ts_library(
         "//nova/src/client/display",
         "//nova/src/common",
         "//novadatainterface",
-        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "//nova/src/engine",
     ]
 )
@@ -112,7 +112,7 @@ ts_library(
         "@npm//@types/jasmine",
         "@npm//jasmine",
         "@npm//pixi.js",
-        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "//nova/src/client/display",
         "//nova/src/common",
         "//novadatainterface",
@@ -136,7 +136,7 @@ ts_library(
         "@npm//@types/jasmine",
         "@npm//jasmine",
         "@npm//pixi.js",
-        "//nova/src/proto:space_object_state_ts_proto",
+        "//nova/src/proto:protobufjs_bundle",
         "//nova/src/client/display",
         "//nova/src/common",
         "//novadatainterface",

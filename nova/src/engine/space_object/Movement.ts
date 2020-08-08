@@ -1,12 +1,12 @@
 import { copyState } from "../CopyState";
-import { GetNextState } from "../Stateful";
+import { StepState } from "../Stateful";
 import { SpaceObjectView } from "../TreeView";
 import { Angle, Vector } from "../Vector";
 import { Position } from "./Position";
 
-export const movement: GetNextState<SpaceObjectView> = function({ state, nextState, delta }) {
+export const movement: StepState<SpaceObjectView> = function({ state, nextState, delta }) {
     nextState = nextState ?? state.factory();
-    copyState(state.protobuf, nextState.protobuf, [
+    copyState(state.sharedData, nextState.sharedData, [
         "accelerating",
         "acceleration",
         "maxVelocity",
@@ -27,13 +27,13 @@ export const movement: GetNextState<SpaceObjectView> = function({ state, nextSta
 function doInertialControls({ nextState, delta }:
     { nextState: SpaceObjectView, delta: number }): SpaceObjectView {
     // Turning
-    const position = Position.fromProto(nextState.protobuf.position);
-    const velocity = Vector.fromProto(nextState.protobuf.velocity);
-    const rotation = new Angle(nextState.protobuf.rotation ?? 0);
+    const position = Position.fromProto(nextState.sharedData.position);
+    const velocity = Vector.fromProto(nextState.sharedData.velocity);
+    const rotation = new Angle(nextState.sharedData.rotation ?? 0);
 
     const seconds = delta / 1000;
 
-    if (nextState.protobuf.turnBack) {
+    if (nextState.sharedData.turnBack) {
         if (velocity.getLength() > 0) {
             let reverseAngle = velocity.getAngle();
             reverseAngle.add(Math.PI);
@@ -42,50 +42,50 @@ function doInertialControls({ nextState, delta }:
     }
 
     rotation.add(
-        (nextState.protobuf.turning ?? 0)
-        * (nextState.protobuf.turnRate ?? 1)
+        (nextState.sharedData.turning ?? 0)
+        * (nextState.sharedData.turnRate ?? 1)
         * seconds);
 
     // Acceleration
-    if ((nextState.protobuf.accelerating ?? 0) > 0) {
+    if ((nextState.sharedData.accelerating ?? 0) > 0) {
         const unitAngle = rotation.getUnitVector();
         unitAngle.scaleToLength(
-            (nextState.protobuf.accelerating!)
-            * (nextState.protobuf.acceleration ?? 0)
+            (nextState.sharedData.accelerating!)
+            * (nextState.sharedData.acceleration ?? 0)
             * seconds);
 
         velocity.add(unitAngle);
     }
 
-    velocity.shortenToLength(nextState.protobuf.maxVelocity ?? 0);
+    velocity.shortenToLength(nextState.sharedData.maxVelocity ?? 0);
     position.add(Vector.scale(velocity, seconds));
 
-    nextState.protobuf.velocity = velocity.toProto();
-    nextState.protobuf.position = position.toProto();
-    nextState.protobuf.rotation = rotation.angle;
+    nextState.sharedData.velocity = velocity.toProto();
+    nextState.sharedData.position = position.toProto();
+    nextState.sharedData.rotation = rotation.angle;
     return nextState;
 }
 
 function turnToDirection({ nextState, delta }:
     { nextState: SpaceObjectView, delta: number }, target: Angle) {
     // Used for turning retrograde and pointing at a target
-    const rotation = new Angle(nextState.protobuf.rotation ?? 0);
+    const rotation = new Angle(nextState.sharedData.rotation ?? 0);
     const seconds = delta / 1000;
     let difference = rotation.distanceTo(target);
 
     // If we would turn past
     // the target direction,
     // just go to the target direction
-    if ((nextState.protobuf.turnRate ?? 1) * seconds
+    if ((nextState.sharedData.turnRate ?? 1) * seconds
         > Math.abs(difference)) {
-        nextState.protobuf.turning = 0;
-        nextState.protobuf.rotation = target.angle;
+        nextState.sharedData.turning = 0;
+        nextState.sharedData.rotation = target.angle;
     }
     else if (difference > 0) {
-        nextState.protobuf.turning = 1;
+        nextState.sharedData.turning = 1;
     }
     else {
-        nextState.protobuf.turning = -1;
+        nextState.sharedData.turning = -1;
     }
     return nextState;
 }

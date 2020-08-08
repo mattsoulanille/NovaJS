@@ -1,10 +1,11 @@
 import * as PIXI from "pixi.js";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import { Animation } from "../../../../novadatainterface/Animation";
-import { Position } from "../../engine/Position";
+import { Position } from "../../engine/space_object/Position";
 import { Drawable } from "./Drawable";
 import { SpaceObjectDrawable } from "./SpaceObjectDrawable";
-import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
+import { SpaceObjectState } from "novajs/dist/bin/nova/src/proto/protobufjs_bundle";
+
 
 export abstract class MainDrawable<State> implements Drawable<State> {
     readonly displayObject = new PIXI.Container();

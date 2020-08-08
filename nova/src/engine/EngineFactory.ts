@@ -1,7 +1,7 @@
 import { EngineState, MapKeys } from "novajs/nova/src/proto/protobufjs_bundle";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import { SystemFactory } from "./SystemFactory";
-import { EngineView } from "./TreeView";
+import { EngineView, engineViewFactory } from "./TreeView";
 
 export class EngineFactory {
     readonly systemFactory: SystemFactory;
@@ -10,7 +10,7 @@ export class EngineFactory {
         this.systemFactory = new SystemFactory(gameData);
     }
 
-    async newView() {
+    async newView(): Promise<EngineView> {
         const engineState = new EngineState();
         const systems = (await this.gameData.ids).System;
 
@@ -23,6 +23,6 @@ export class EngineFactory {
         for (const id of systems) {
             engineState.systems[id] = await this.systemFactory.stateFromId(id);
         }
-        return new EngineView(engineState);
+        return engineViewFactory(engineState);
     }
 }

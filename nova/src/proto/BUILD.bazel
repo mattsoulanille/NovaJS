@@ -9,13 +9,24 @@ proto_library(
 )
 
 proto_library(
+    name = "space_object_state_value_proto",
+    srcs = ["space_object_state_value.proto"],
+    deps = [
+        ":vector_state_proto",
+        ":ship_state_proto",
+        ":planet_state_proto",
+    ],
+)
+
+proto_library(
     name = "space_object_state_proto",
     srcs = ["space_object_state.proto"],
     deps = [
-        ":vector_state_proto",
-        ":equipment_state_proto",
+        ":space_object_state_value_proto",
+        ":outfit_state_proto",
         ":ship_state_proto",
         ":planet_state_proto",
+        ":map_keys_proto",
     ]
 )
 
@@ -32,12 +43,23 @@ proto_library(
 )
 
 proto_library(
+    name = "system_state_value_proto",
+    srcs = ["system_state_value.proto"],
+)
+
+proto_library(
     name = "system_state_proto",
     srcs = ["system_state.proto"],
     deps = [
+        ":system_state_value_proto",
         ":space_object_state_proto",
         ":map_keys_proto",
-    ]
+     ]
+)
+
+proto_library(
+    name = "engine_state_value_proto",
+    srcs = ["engine_state_value.proto"],
 )
 
 proto_library(
@@ -46,7 +68,8 @@ proto_library(
     deps = [
         ":system_state_proto",
         ":map_keys_proto",
-    ]
+        ":engine_state_value_proto",
+    ],
 )
 
 proto_library(
@@ -55,27 +78,18 @@ proto_library(
 )
 
 proto_library(
-    name = "outfit_state_proto",
-    srcs = ["outfit_state.proto"],
+    name = "outfit_state_value_proto",
+    srcs = ["outfit_state_value.proto"],
 )
 
 proto_library(
-    name = "armament_state_proto",
-    srcs = ["armament_state.proto"],
+    name = "outfit_state_proto",
+    srcs = ["outfit_state.proto"],
     deps = [
+        ":outfit_state_value_proto",
         ":weapon_state_proto",
         ":map_keys_proto",
     ],
-)
-
-proto_library(
-    name = "equipment_state_proto",
-    srcs = ["equipment_state.proto"],
-    deps = [
-        ":outfit_state_proto",
-        ":armament_state_proto",
-        ":map_keys_proto",
-   ],
 )
 
 proto_library(
@@ -98,14 +112,15 @@ protobufjs_ts_library(
     deps = [
         ":vector_state_proto",
         ":space_object_state_proto",
+        ":space_object_state_value_proto",
         ":ship_state_proto",
         ":planet_state_proto",
         ":system_state_proto",
         ":engine_state_proto",
+        ":engine_state_value_proto",
         ":weapon_state_proto",
         ":outfit_state_proto",
-        ":armament_state_proto",
-        ":equipment_state_proto",
+        ":outfit_state_value_proto",
         ":nova_service_proto",
         ":map_keys_proto",
     ],

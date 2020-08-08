@@ -10,6 +10,7 @@ ts_library(
         "GetChanges.ts",
         "OverwriteState.ts",
         "FilterState.ts",
+        "getKeyDelta.ts",
     ],
     deps = [
         "@npm//rxjs",

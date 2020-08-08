@@ -1,7 +1,7 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { Position } from "../../engine/space_object/Position";
-import { SpaceObjectView, SystemView, ISystemView } from "../../engine/TreeView";
+import { SpaceObjectView, SystemView } from "../../engine/TreeView";
 import { Vector } from "../../engine/Vector";
 import { DrawableMap } from "./DrawableMap";
 import { SpaceObjectDrawable } from "./SpaceObjectDrawable";
@@ -53,17 +53,17 @@ export class Display {
         }
     }
 
-    private setTargetPosition(view: ISystemView) {
+    private setTargetPosition(view: SystemView) {
         if (!(this.target instanceof Vector)) {
             const spaceObjects = view.families.spaceObjects;
             let targetObject = spaceObjects.get(this.target);
             if (targetObject !== undefined) {
-                this.targetPosition = Position.fromProto(targetObject.protobuf.position);
+                this.targetPosition = Position.fromProto(targetObject.sharedData.position);
             }
         }
     }
 
-    draw(state: ISystemView) {
+    draw(state: SystemView) {
         this.setTargetPosition(state);
 
         this.spaceObjects.draw(

@@ -1,21 +1,21 @@
 import { engine } from "novajs/nova/src/engine/Engine";
-import { Stateful, GetNextState } from "./engine/Stateful";
+import { Stateful, StepState } from "./engine/Stateful";
 import { stateSpreader } from "./engine/StateSpreader";
-import { EngineView, IEngineView } from "./engine/TreeView";
+import { EngineView, engineViewFactory } from "./engine/TreeView";
 
 
 export class GameLoop {
-    state: IEngineView;
-    readonly display?: (engineView: IEngineView) => unknown;
+    state: EngineView;
+    readonly display?: (engineView: EngineView) => unknown;
 
-    private getNextState: GetNextState<IEngineView>;
+    private getNextState: StepState<EngineView>;
 
-    constructor({ engineView, communicator, display }: { engineView?: IEngineView, communicator: Stateful<IEngineView>, display?: (engineView: IEngineView) => unknown }) {
-        this.state = engineView ?? new EngineView();
+    constructor({ engineView, communicator, display }: { engineView?: EngineView, communicator: Stateful<EngineView>, display?: (engineView: EngineView) => unknown }) {
+        this.state = engineView ?? engineViewFactory();
         this.getNextState = stateSpreader([
             engine,
-            communicator.getNextState.bind(communicator)
-        ], () => new EngineView());
+            communicator.stepState.bind(communicator)
+        ], engineViewFactory);
 
         this.display = display;
     }
@@ -23,7 +23,7 @@ export class GameLoop {
     step(delta: number): void {
         this.state = this.getNextState({
             state: this.state,
-            nextState: new EngineView(),
+            nextState: engineViewFactory(),
             delta
         });
 

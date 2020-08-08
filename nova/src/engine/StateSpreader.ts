@@ -1,6 +1,6 @@
-import { GetNextState } from "./Stateful";
+import { StepState } from "./Stateful";
 
-export function stateSpreader<T>(stateTransformers: GetNextState<T>[], emptyStateFactory: () => T): GetNextState<T> {
+export function stateSpreader<T>(stateTransformers: StepState<T>[], emptyStateFactory: () => T): StepState<T> {
     return function({ state, nextState, delta }) {
         nextState = nextState ?? emptyStateFactory();
         for (const transformer of stateTransformers) {

@@ -31,6 +31,8 @@ class GameDataServer {
 
         // The order in which these routes are set up matters.
         // Earlier routes take precedence over later ones.
+        // NOTE: This can not be converted to RPCs because PIXI.js
+        // expects assets to be loaded from URLs.
 
         this.app.get(path.join(dataPath, ":name/:item.png"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item.json"), this.requestFulfiller.bind(this));

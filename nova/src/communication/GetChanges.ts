@@ -1,6 +1,5 @@
-import { MapKeys } from "novajs/nova/src/proto/protobufjs_bundle";
-import { setDifference } from "../common/SetUtils";
 import { compareChildren, compareFamilies, TreeType, TreeView } from "../engine/TreeView";
+import { getKeyDelta } from "./getKeyDelta";
 
 /**
  * Extracts changes that were marked on 
@@ -12,19 +11,26 @@ export function getChanges<T extends TreeType>
     let changes: TreeView<T>;
     if (newState.changed) {
         changes = newState.withoutChildren();
-        changes.changed = true;
     } else {
         changes = newState.factory();
+        // Don't set changes.changed because
+        // in this case, `changes` only exists to
+        // hold its childrens' changes.
     }
 
-    // Update keys
-    let hadKeyChanges = false
+    let hadKeyChanges = false;
     compareFamilies(state, newState, (family, newFamily, familyType) => {
         const changesFamily = changes.families[familyType];
+        const familyKeys = family.getMapKeys();
+        const newFamilyKeys = newFamily.getMapKeys();
+        if (familyKeys.keyDelta || newFamilyKeys.keyDelta) {
+            console.warn(`getChanges given state with key delta`);
+        }
         changesFamily.keyDelta =
-            getKeyDelta(family.keySet, newFamily.keySet);
-        if (changesFamily.keyDelta.add?.length ||
-            changesFamily.keyDelta.remove?.length) {
+            getKeyDelta(familyKeys.keySet, newFamilyKeys.keySet)
+
+        if (changesFamily.keyDelta?.add?.length ||
+            changesFamily.keyDelta?.remove?.length) {
             hadKeyChanges = true;
         }
     });
@@ -32,10 +38,13 @@ export function getChanges<T extends TreeType>
     let hadChildChanges = false;
     compareChildren(state, newState,
         (child, newChild, familyType, childId) => {
-
             const family = changes.families[familyType];
             if (!newChild) {
-                return; // Keys delta has already been computed
+                // The next state does not have this key, so
+                // this delta should indicate it will be removed.
+                // That's done by keyDelta, though, so there's
+                // nothing to do here.
+                return;
             }
 
             if (!child) {
@@ -55,14 +64,4 @@ export function getChanges<T extends TreeType>
     }
 
     return null;
-}
-
-
-function getKeyDelta(keys: MapKeys.IKeySet = {}, newKeys: MapKeys.IKeySet = {}) {
-    const keysSet = new Set(keys.keys);
-    const newKeysSet = new Set(newKeys.keys);
-    const keysDelta = new MapKeys.KeyDelta();
-    keysDelta.add = [...setDifference(newKeysSet, keysSet)];
-    keysDelta.remove = [...setDifference(keysSet, newKeysSet)];
-    return keysDelta;
 }

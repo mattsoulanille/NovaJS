@@ -1,18 +1,8 @@
-import { GetNextState } from "../Stateful";
+import { StepState } from "../Stateful";
 import { SpaceObjectView } from "../TreeView";
 
-export const planet: GetNextState<SpaceObjectView> = function({ state, nextState }) {
+export const planet: StepState<SpaceObjectView> = function({ state, nextState }) {
     nextState = nextState ?? state.factory();
-    nextState.protobuf.planetState = state.protobuf.planetState;
+    nextState.sharedData.planetState = state.sharedData.planetState;
     return nextState;
 }
-
-
-// export class Planet implements Stateful<SpaceObjectView> {
-//     getNextState({ state, nextState }: { state: SpaceObjectView; nextState?: SpaceObjectView }): SpaceObjectView {
-
-//         nextState = nextState ?? state.factory();
-//         nextState.value.planetState = state.value.planetState;
-//         return nextState;
-//     }
-// }

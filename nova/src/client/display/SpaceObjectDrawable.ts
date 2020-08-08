@@ -70,10 +70,10 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
     }
 
     draw(state: SpaceObjectView, center: Position) {
-        if (state.protobuf.shipState) {
-            this.setDrawTypeAndId(NovaDataType.Ship, state.protobuf.shipState.id);
-        } else if (state.protobuf.planetState) {
-            this.setDrawTypeAndId(NovaDataType.Planet, state.protobuf.planetState.id)
+        if (state.sharedData.shipState) {
+            this.setDrawTypeAndId(NovaDataType.Ship, state.sharedData.shipState.id);
+        } else if (state.sharedData.planetState) {
+            this.setDrawTypeAndId(NovaDataType.Planet, state.sharedData.planetState.id)
         } else {
             console.warn("SpaceObjectDrawable had no extraState");
             return false;
@@ -92,24 +92,24 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
             return false;
         }
 
-        if (!state.protobuf.position) {
+        if (!state.sharedData.position) {
             console.warn("State had no position")
             return false;
         }
 
-        const realPosition = Position.fromProto(state.protobuf.position);
+        const realPosition = Position.fromProto(state.sharedData.position);
         const screenPosition = realPosition
             .getClosestRelativeTo(center)
             .subtract(center);
 
         this.animationGraphic.position.x = screenPosition.x;
         this.animationGraphic.position.y = screenPosition.y;
-        this.animationGraphic.rotation = state.protobuf.rotation ?? 0;
+        this.animationGraphic.rotation = state.sharedData.rotation ?? 0;
 
         // TODO: Make glow alpha gradually increase and decrease
-        this.animationGraphic.glowAlpha = state.protobuf.accelerating ?? 0;
+        this.animationGraphic.glowAlpha = state.sharedData.accelerating ?? 0;
 
-        const turning = state.protobuf.turning ?? 0;
+        const turning = state.sharedData.turning ?? 0;
         if (turning < 0) {
             this.animationGraphic.setFramesToUse("left");
         } else if (turning > 0) {

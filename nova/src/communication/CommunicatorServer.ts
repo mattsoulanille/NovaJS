@@ -1,6 +1,6 @@
-import { GameMessage, EngineState, SpaceObjectState, ShipState } from "novajs/nova/src/proto/protobufjs_bundle";
+import { GameMessage, EngineState, SpaceObjectState, ShipState, SpaceObjectStateValue } from "novajs/nova/src/proto/protobufjs_bundle";
 import { Stateful } from "../engine/Stateful";
-import { EngineView, SpaceObjectView, IEngineView } from "../engine/TreeView";
+import { EngineView, SpaceObjectView, engineViewFactory, spaceObjectViewFactory } from "../engine/TreeView";
 import { ChannelServer } from "./Channel";
 import { Position } from "../engine/space_object/Position";
 import { Vector } from "../engine/Vector";
@@ -12,11 +12,11 @@ import { getChanges } from "./GetChanges";
 // TODO: Use a proper RPC
 interface Client {
     ownedUuids: Set<string>;
-    filteredStates: IEngineView[];
+    filteredStates: EngineView[];
 }
 
 
-export class CommunicatorServer implements Stateful<IEngineView> {
+export class CommunicatorServer implements Stateful<EngineView> {
     clientsToAdd: string[] = [];
     clientsToRemove: string[] = [];
     clients = new Map<string, Client>();
@@ -37,7 +37,7 @@ export class CommunicatorServer implements Stateful<IEngineView> {
                     + ` but no such client is connected.`);
             }
             if (message.engineState) {
-                const engineView = new EngineView(message.engineState);
+                const engineView = engineViewFactory(message.engineState);
                 const filtered = filterState(engineView, (id) => {
                     return client.ownedUuids.has(id);
                 });
@@ -46,7 +46,7 @@ export class CommunicatorServer implements Stateful<IEngineView> {
                 // Rebroadcast messages
                 for (const otherId of this.channel.clients) {
                     const message = new GameMessage();
-                    message.engineState = filtered.protobuf;
+                    message.engineState = filtered.serialize();
                     if (otherId !== source) {
                         this.channel.send(otherId, message);
                     }
@@ -60,7 +60,7 @@ export class CommunicatorServer implements Stateful<IEngineView> {
 	 * previously received from the clients. Should be called
 	 * after the engine computes the next state.
 	 */
-    getNextState({ state, nextState }: { state: IEngineView; nextState: IEngineView; delta: number; }): IEngineView {
+    stepState({ state, nextState }: { state: EngineView; nextState: EngineView; delta: number; }): EngineView {
 
         const system =
             nextState.families.systems.get("nova:130");
@@ -68,6 +68,8 @@ export class CommunicatorServer implements Stateful<IEngineView> {
             throw new Error("system nova:130 not defined");
         }
 
+
+        const serializedNextState = nextState.serialize();
         for (const clientId of this.clientsToAdd) {
             // TODO: Tell clients what ships they own.
             const ship = this.makeNewShip();
@@ -78,7 +80,7 @@ export class CommunicatorServer implements Stateful<IEngineView> {
             });
 
             system.families.spaceObjects.set(shipId, ship);
-            this.channel.send(clientId, { engineState: nextState.protobuf });
+            this.channel.send(clientId, { engineState: serializedNextState });
         }
         this.clientsToAdd.length = 0;
 
@@ -104,18 +106,18 @@ export class CommunicatorServer implements Stateful<IEngineView> {
 	 * Sends changes that only the server knows about to the clients. 
 	 * Does not send changes that clients made.
 	 */
-    private reportChanges(state: IEngineView, nextState: IEngineView) {
+    private reportChanges(state: EngineView, nextState: EngineView) {
         const changes = getChanges(state, nextState);
         if (changes) {
             const message = new GameMessage();
-            message.engineState = changes.protobuf;
+            message.engineState = changes.serialize();
             for (const client of this.channel.clients) {
                 this.channel.send(client, message);
             }
         }
     }
 
-    private applyReceivedStates(nextState: IEngineView) {
+    private applyReceivedStates(nextState: EngineView) {
         for (const [, client] of this.clients) {
             for (const state of client.filteredStates) {
                 nextState = overwriteState(nextState, state);
@@ -125,17 +127,20 @@ export class CommunicatorServer implements Stateful<IEngineView> {
         return nextState;
     }
 
+    // TODO: Move this somewhere else
     private makeNewShip() {
         const ship = new SpaceObjectState();
-        ship.position = new Position(
+        ship.value = new SpaceObjectStateValue();
+        ship.value.position = new Position(
             (Math.random() - 0.5) * 400,
             (Math.random() - 0.5) * 400
         ).toProto();
-        ship.shipState = new ShipState();
+        const shipState = new ShipState();
         const shipId = Math.floor(Math.random() * 40) + 128;
-        ship.shipState.id = `nova:${shipId}`;
-        ship.rotation = Math.random() * 2 * Math.PI;
-        ship.velocity = new Vector(0, 0);
-        return new SpaceObjectView(ship);
+        shipState.id = `nova:${shipId}`;
+        ship.value.shipState = shipState;
+        ship.value.rotation = Math.random() * 2 * Math.PI;
+        ship.value.velocity = new Vector(0, 0);
+        return spaceObjectViewFactory(ship);
     }
 } 
