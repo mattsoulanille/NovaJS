@@ -36,6 +36,7 @@
         "bluebird": "^3.7.2",
         "chai": "^4.2.0",
         "chai-as-promised": "^7.1.1",
+        "immer": "^7.0.7",
         "jasmine": "^3.5.0",
         "jasmine-core": "^3.5.0",
         "karma": "^5.0.2",

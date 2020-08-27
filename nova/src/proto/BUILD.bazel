@@ -4,90 +4,90 @@ load("@rules_proto//proto:defs.bzl", "proto_library")
 load("@npm_bazel_labs//:index.bzl", "ts_proto_library", "protobufjs_ts_library")
 
 proto_library(
-    name = "vector_state_proto",
-    srcs = ["vector_state.proto"],
+    name = "vector_proto",
+    srcs = ["vector.proto"],
 )
 
 proto_library(
-    name = "space_object_state_value_proto",
-    srcs = ["space_object_state_value.proto"],
+    name = "space_object_delta_value_proto",
+    srcs = ["space_object_delta_value.proto"],
     deps = [
-        ":vector_state_proto",
-        ":ship_state_proto",
-        ":planet_state_proto",
+        ":vector_proto",
+        ":ship_delta_proto",
+        ":planet_delta_proto",
     ],
 )
 
 proto_library(
-    name = "space_object_state_proto",
-    srcs = ["space_object_state.proto"],
+    name = "space_object_delta_proto",
+    srcs = ["space_object_delta.proto"],
     deps = [
-        ":space_object_state_value_proto",
-        ":outfit_state_proto",
-        ":ship_state_proto",
-        ":planet_state_proto",
+        ":space_object_delta_value_proto",
+        ":outfit_delta_proto",
+        ":ship_delta_proto",
+        ":planet_delta_proto",
         ":map_keys_proto",
     ]
 )
 
 proto_library(
-    name = "ship_state_proto",
-    srcs = ["ship_state.proto"],
+    name = "ship_delta_proto",
+    srcs = ["ship_delta.proto"],
     deps = []
 )
 
 proto_library(
-    name = "planet_state_proto",
-    srcs = ["planet_state.proto"],
+    name = "planet_delta_proto",
+    srcs = ["planet_delta.proto"],
     deps = []
 )
 
 proto_library(
-    name = "system_state_value_proto",
-    srcs = ["system_state_value.proto"],
+    name = "system_delta_value_proto",
+    srcs = ["system_delta_value.proto"],
 )
 
 proto_library(
-    name = "system_state_proto",
-    srcs = ["system_state.proto"],
+    name = "system_delta_proto",
+    srcs = ["system_delta.proto"],
     deps = [
-        ":system_state_value_proto",
-        ":space_object_state_proto",
+        ":system_delta_value_proto",
+        ":space_object_delta_proto",
         ":map_keys_proto",
      ]
 )
 
 proto_library(
-    name = "engine_state_value_proto",
-    srcs = ["engine_state_value.proto"],
+    name = "engine_delta_value_proto",
+    srcs = ["engine_delta_value.proto"],
 )
 
 proto_library(
-    name = "engine_state_proto",
-    srcs = ["engine_state.proto"],
+    name = "engine_delta_proto",
+    srcs = ["engine_delta.proto"],
     deps = [
-        ":system_state_proto",
+        ":system_delta_proto",
         ":map_keys_proto",
-        ":engine_state_value_proto",
+        ":engine_delta_value_proto",
     ],
 )
 
 proto_library(
-    name = "weapon_state_proto",
-    srcs = ["weapon_state.proto"],
+    name = "weapon_delta_proto",
+    srcs = ["weapon_delta.proto"],
 )
 
 proto_library(
-    name = "outfit_state_value_proto",
-    srcs = ["outfit_state_value.proto"],
+    name = "outfit_delta_value_proto",
+    srcs = ["outfit_delta_value.proto"],
 )
 
 proto_library(
-    name = "outfit_state_proto",
-    srcs = ["outfit_state.proto"],
+    name = "outfit_delta_proto",
+    srcs = ["outfit_delta.proto"],
     deps = [
-        ":outfit_state_value_proto",
-        ":weapon_state_proto",
+        ":outfit_delta_value_proto",
+        ":weapon_delta_proto",
         ":map_keys_proto",
     ],
 )
@@ -96,7 +96,7 @@ proto_library(
     name = "nova_service_proto",
     srcs = ["nova_service.proto"],
     deps = [
-        ":engine_state_proto",
+        ":engine_delta_proto",
 #        "@com_google_protobuf//:any_proto",
 #        "@com_google_protobuf//:wrappers_proto",
     ]
@@ -110,17 +110,17 @@ proto_library(
 protobufjs_ts_library(
     name = "protobufjs_bundle",
     deps = [
-        ":vector_state_proto",
-        ":space_object_state_proto",
-        ":space_object_state_value_proto",
-        ":ship_state_proto",
-        ":planet_state_proto",
-        ":system_state_proto",
-        ":engine_state_proto",
-        ":engine_state_value_proto",
-        ":weapon_state_proto",
-        ":outfit_state_proto",
-        ":outfit_state_value_proto",
+        ":vector_proto",
+        ":space_object_delta_proto",
+        ":space_object_delta_value_proto",
+        ":ship_delta_proto",
+        ":planet_delta_proto",
+        ":system_delta_proto",
+        ":engine_delta_proto",
+        ":engine_delta_value_proto",
+        ":weapon_delta_proto",
+        ":outfit_delta_proto",
+        ":outfit_delta_value_proto",
         ":nova_service_proto",
         ":map_keys_proto",
     ],

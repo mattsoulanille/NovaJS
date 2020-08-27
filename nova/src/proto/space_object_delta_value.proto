@@ -1,0 +1,28 @@
+syntax = "proto3";
+import "nova/src/proto/vector.proto";
+import "nova/src/proto/ship_delta.proto";
+import "nova/src/proto/planet_delta.proto";
+
+message SpaceObjectDeltaValue { // next = 13
+  Vector position = 1;
+  Vector velocity = 2;
+  double maxVelocity = 3;
+  double rotation = 4;
+  double turning = 5;
+  bool turnBack = 6;
+  double turnRate = 7;
+
+  enum MovementType {
+	INERTIAL = 0;
+	INERTIALESS = 1;
+	STATIONARY = 2;
+  }
+  MovementType movementType = 8;
+  double acceleration = 9;
+  double accelerating = 10;
+
+  oneof extraDelta {
+	ShipDelta shipDelta = 11;
+	PlanetDelta planetDelta = 12;
+  }
+}

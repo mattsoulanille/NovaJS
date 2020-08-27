@@ -1,0 +1,10 @@
+syntax = "proto3";
+import "nova/src/proto/outfit_delta_value.proto";
+import "nova/src/proto/weapon_delta.proto";
+import "nova/src/proto/map_keys.proto";
+
+message OutfitDelta { // next = 4
+  OutfitDeltaValue value = 1;
+  map<string, WeaponDelta> weapons = 2;
+  MapKeys weaponsKeys = 3;
+}

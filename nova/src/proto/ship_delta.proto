@@ -1,7 +1,7 @@
 syntax = "proto3";
 
 
-message ShipState { // Next = 2
+message ShipDelta { // Next = 2
   // The resource's ID. Not a UUID. Used for rendering
   // and when building from a resource.
   string id = 1;
