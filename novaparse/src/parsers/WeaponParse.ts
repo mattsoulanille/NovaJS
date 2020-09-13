@@ -1,17 +1,16 @@
 import { Animation, getDefaultAnimation, getDefaultExitPoints } from "novajs/novadatainterface/Animation";
 import { BaseData } from "novajs/novadatainterface/BaseData";
+import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
 import { getDefaultShipData } from "novajs/novadatainterface/ShipData";
 import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponData } from "novajs/novadatainterface/WeaponData";
+import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
 import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
 
-
 async function BaseWeaponParse(weap: WeapResource, _notFoundFunction: (m: string) => void, base: BaseData): Promise<BaseWeaponData> {
-
     // TODO: Implement ammo
-
     return {
         ...base,
         accuracy: weap.accuracy,
@@ -78,7 +77,6 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
 async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, baseWeapon: BaseWeaponData): Promise<ProjectileWeaponData> {
     var notBayBase = await NotBayWeaponParse(weap, notFoundFunction, baseWeapon);
 
-
     // Parse Submunition if it exists
     var submunitions: Array<SubmunitionType> = [];
     if (weap.submunition) {
@@ -98,11 +96,9 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         }
     }
 
-
     if (!weap.graphic) {
         throw new Error("ProjectileWeapon " + baseWeapon.id + " had no graphic listed");
     }
-
 
     // Parse the weapon's animation (the projectile it fires)
     var animation: Animation;
@@ -122,7 +118,9 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
                 images: {
                     baseImage: {
                         id: rledResource.globalID,
-                        imagePurposes: {
+                        dataType: NovaDataType.SpriteSheetImage,
+                        blendMode: weap.translucent ? BLEND_MODES.ADD : BLEND_MODES.NORMAL,
+                        frames: {
                             normal: { start: 0, length: rledResource.numberOfFrames }
                         }
                     }

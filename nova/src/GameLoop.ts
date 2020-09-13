@@ -1,31 +1,43 @@
-import { engine } from "novajs/nova/src/engine/Engine";
-import { Stateful, StepState } from "./engine/Stateful";
+import produce, { enableMapSet } from "immer";
+import { EngineFactory } from "./engine/EngineFactory";
+import { engineStep } from "./engine/EngineStep";
+import { Engine, Step } from "./engine/State";
 import { stateSpreader } from "./engine/StateSpreader";
-import { EngineView, engineViewFactory } from "./engine/TreeView";
 
+// Allow immer to use maps
+enableMapSet();
 
 export class GameLoop {
-    state: EngineView;
-    readonly display?: (engineView: EngineView) => unknown;
+    state: Engine;
+    readonly display?: (engine: Engine) => unknown;
 
-    private getNextState: StepState<EngineView>;
+    private getNextState: Step<Engine>;
 
-    constructor({ engineView, communicator, display }: { engineView?: EngineView, communicator: Stateful<EngineView>, display?: (engineView: EngineView) => unknown }) {
-        this.state = engineView ?? engineViewFactory();
+    constructor({ engine, display }:
+        {
+            engine?: Engine,
+            //communicator: Step<Engine>,
+            display?: (engine: Engine) => unknown
+        }
+    ) {
+        this.state = engine ?? EngineFactory.base()
+
+        // TODO: Keep state in sync with the server.
         this.getNextState = stateSpreader([
-            engine,
-            communicator.stepState.bind(communicator)
-        ], engineViewFactory);
+            engineStep,
+            //            communicator,
+        ]);
 
         this.display = display;
     }
 
     step(delta: number): void {
-        this.state = this.getNextState({
-            state: this.state,
-            nextState: engineViewFactory(),
-            delta
-        });
+        this.state = produce(this.state, draft => {
+            this.getNextState({
+                state: draft,
+                delta
+            });
+        })
 
         if (this.display) {
             this.display(this.state);

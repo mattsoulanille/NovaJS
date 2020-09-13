@@ -1,3 +1,5 @@
+import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
+import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
 import { Animation, AnimationImage, getDefaultAnimationImage, getDefaultExitPoints } from "../../../novadatainterface/Animation";
 import { BaseData } from "../../../novadatainterface/BaseData";
 import { ExplosionData } from "../../../novadatainterface/ExplosionData";
@@ -7,8 +9,6 @@ import { BaseParse } from "./BaseParse";
 
 export async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: string) => void): Promise<ExplosionData> {
     var base: BaseData = await BaseParse(boom, notFoundFunction);
-
-
     var spin = boom.idSpace.spïn[boom.graphic];
     var animationImage: AnimationImage;
 
@@ -17,7 +17,9 @@ export async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: s
         if (rled) {
             animationImage = {
                 id: rled.globalID,
-                imagePurposes: {
+                dataType: NovaDataType.SpriteSheetImage,
+                blendMode: BLEND_MODES.ADD,
+                frames: {
                     normal: { start: 0, length: rled.numberOfFrames }
                 }
             }

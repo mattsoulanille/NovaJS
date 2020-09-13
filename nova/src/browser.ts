@@ -1,4 +1,3 @@
-import { SpaceObjectState, SystemState, VectorState } from "novajs/nova/src/proto/protobufjs_bundle";
 import * as PIXI from "pixi.js";
 import { Display } from "./client/display/Display";
 import { GameData } from "./client/gamedata/GameData";
@@ -7,27 +6,21 @@ import { setupControls } from "./client/setupControls";
 //import * as io from "socket.io-client";
 import { Controller } from "./common/Controller";
 import { ShipController } from "./common/ShipController";
-import { CommunicatorClient } from "./communication/CommunicatorClient";
-import { SocketChannelClient } from "./communication/SocketChannelClient";
-import { EngineView, engineViewFactory } from "./engine/TreeView";
+import { EngineFactory } from "./engine/EngineFactory";
 import { GameLoop } from "./GameLoop";
 
+// const socketChannel = new SocketChannelClient({});
+// socketChannel.message.subscribe((m) => {
+//     console.log("Got a message");
+//     console.log(m);
+// });
+// (window as any).socketChannel = socketChannel;
 
-(window as any).VectorState = VectorState;
-(window as any).SpaceObjectState = SpaceObjectState;
-(window as any).SystemState = SystemState;
-
-const socketChannel = new SocketChannelClient({});
-socketChannel.message.subscribe((m) => {
-    console.log("Got a message");
-    console.log(m);
-});
-(window as any).socketChannel = socketChannel;
-
-const communicator = new CommunicatorClient(socketChannel);
-(window as any).communicator = communicator;
+// const communicator = new CommunicatorClient(socketChannel);
+// (window as any).communicator = communicator;
 
 // Temporary
+
 const gameData = new GameData();
 (window as any).gameData = gameData;
 (window as any).PIXI = PIXI;
@@ -70,6 +63,7 @@ communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefin
 */
 
 
+const engineFactory = new EngineFactory(gameData);
 let gameLoop: GameLoop;
 let controller: Controller;
 let shipController: ShipController;
@@ -78,14 +72,13 @@ async function startGame() {
     //        throw new Error("Game started before communicator ready");
     //    }
     //    engine.setState(communicator.getStateChanges());
-    const engineView = engineViewFactory();
+    let engine = await engineFactory.newWithSystems();
     gameLoop = new GameLoop({
-        engineView,
-        communicator,
+        engine,
+        //communicator,
         display: (engineView) => {
             // Hardcoded System for now
-            const system = engineView.families
-                .systems.get("nova:130");
+            const system = engineView.systems.get("nova:130");
             if (system) {
                 display.draw(system);
             }
@@ -100,7 +93,6 @@ async function startGame() {
     app.ticker.add(() => {
         gameLoop.step(app.ticker.elapsedMS);
     });
-
 }
 
 //function gameLoop() {

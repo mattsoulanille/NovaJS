@@ -1,6 +1,8 @@
-import { Animation, AnimationImagePurposes, AnimationImages, getDefaultAnimationImage } from "novajs/novadatainterface/Animation";
+import { Animation, AnimationFrames, AnimationImages, getDefaultAnimationImage } from "novajs/novadatainterface/Animation";
 import { BaseData } from "novajs/novadatainterface/BaseData";
+import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
 import { NovaIDNotFoundError } from "novajs/novadatainterface/NovaDataInterface";
+import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
 import { ShanResource } from "../resource_parsers/ShanResource";
 import { BaseParse } from "./BaseParse";
 
@@ -12,35 +14,38 @@ export async function ShanParse(shan: ShanResource, notFoundFunction: (message: 
         baseImage: getDefaultAnimationImage()
     };
 
-    var imageNames = ['baseImage', 'altImage', 'glowImage', 'lightImage', 'weapImage'];
-    for (var index in imageNames) {
-        var imageName = imageNames[index];
-        var imageInfo = shan.images[imageName];
-
-        if (imageInfo === null) {
+    for (const [imageName, imageInfo] of Object.entries(shan.images)) {
+        if (!imageInfo) {
             continue; // That image does not exist for this Shan
         }
 
-        var imagePurposes: AnimationImagePurposes = {
+        var frames: AnimationFrames = {
             normal: {
                 start: 0,
                 length: shan.framesPer
             }
         }
 
+        let blendMode = BLEND_MODES.NORMAL;
+        if (imageName === "lightImage"
+            || imageName === "glowImage"
+            || imageName === "weapImage") {
+            blendMode = BLEND_MODES.ADD;
+        }
+
         switch (shan.flags.extraFramePurpose) {
             case ('banking'):
-                imagePurposes.left = {
+                frames.left = {
                     start: shan.framesPer,
                     length: shan.framesPer,
                 }
-                imagePurposes.right = {
+                frames.right = {
                     start: shan.framesPer * 2,
                     length: shan.framesPer
                 };
                 break;
             case ('animation'):
-                imagePurposes.animation = {
+                frames.animation = {
                     start: shan.framesPer,
                     // The rest of the frames are for the animation
                     length: shan.framesPer *
@@ -68,8 +73,10 @@ export async function ShanParse(shan: ShanResource, notFoundFunction: (message: 
         // Store the image in images
         images[imageName] = {
             id: rled.globalID,
-            imagePurposes
-        }
+            dataType: NovaDataType.SpriteSheetImage,
+            blendMode,
+            frames,
+        };
     }
 
     return {

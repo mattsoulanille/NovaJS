@@ -1,4 +1,6 @@
+import { BLEND_MODES } from "./BlendModes";
 import { BaseData, getDefaultBaseData } from "./BaseData";
+import { NovaDataType } from "./NovaDataInterface";
 
 
 export interface AnimationImageIndex {
@@ -10,12 +12,12 @@ export function getDefaultAnimationImageIndex() {
     return { start: 0, length: 1 };
 }
 
-export type AnimationImagePurposes = {
+export type AnimationFrames = {
     [index: string]: AnimationImageIndex,
     normal: AnimationImageIndex
 }
 
-export function getDefaultAnimationImagePurposes(): AnimationImagePurposes {
+export function getDefaultAnimationFrames(): AnimationFrames {
     return {
         normal: getDefaultAnimationImageIndex()
     };
@@ -23,13 +25,18 @@ export function getDefaultAnimationImagePurposes(): AnimationImagePurposes {
 
 export interface AnimationImage {
     id: string;
-    imagePurposes: AnimationImagePurposes;
+    // TODO: Add a datatype for using picts here.
+    dataType: NovaDataType.SpriteSheetImage;
+    blendMode: BLEND_MODES;
+    frames: AnimationFrames;
 }
 
 export function getDefaultAnimationImage(): AnimationImage {
     return {
         id: "default",
-        imagePurposes: getDefaultAnimationImagePurposes()
+        dataType: NovaDataType.SpriteSheetImage,
+        blendMode: BLEND_MODES.NORMAL,
+        frames: getDefaultAnimationFrames()
     };
 }
 

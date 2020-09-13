@@ -1,31 +1,36 @@
-import { IVectorState, VectorState } from "novajs/nova/src/proto/protobufjs_bundle";
+import { immerable } from "immer";
+
+export type VectorLike = { x: number, y: number };
 
 const TWO_PI = 2 * Math.PI;
 export class Vector implements VectorLike {
-
-    x: number
-    y: number
+    [immerable] = true;
+    protected wrappedX!: number;
+    protected wrappedY!: number;
 
     constructor(x: number, y: number) {
         this.x = x;
         this.y = y;
     }
 
+    // Setters and getters are used so space_object/Position.ts
+    // can override the setters on x and y.
+    set x(x: number) {
+        this.wrappedX = x;
+    }
+    get x() {
+        return this.wrappedX;
+    }
+
+    set y(y: number) {
+        this.wrappedY = y;
+    }
+    get y() {
+        return this.wrappedY;
+    }
+
     static fromVectorLike(v: VectorLike) {
         return new Vector(v.x, v.y);
-    }
-
-    static fromProto(v?: IVectorState | null) {
-        return new Vector(v?.x ?? 0, v?.y ?? 0);
-    }
-
-    toProto() {
-        // Don't return new VectorState(this)
-        // because if x is a getter, it breaks.
-        return new VectorState({
-            x: this.x,
-            y: this.y
-        });
     }
 
     add(other: VectorLike) {
@@ -34,14 +39,14 @@ export class Vector implements VectorLike {
         return this;
     }
 
-    static minus(a: VectorLike, b: VectorLike) {
-        return new Vector(a.x - b.x, a.y - b.y);
-    }
-
     subtract(other: VectorLike) {
         this.x -= other.x;
         this.y -= other.y;
         return this;
+    }
+
+    static minus(a: VectorLike, b: VectorLike) {
+        return new Vector(a.x - b.x, a.y - b.y);
     }
 
     rotate(radians: number) {
@@ -52,58 +57,52 @@ export class Vector implements VectorLike {
         return this;
     }
 
-    copy() {
-        return new Vector(this.x, this.y);
+    scaled(scale: number) {
+        return new Vector(this.x * scale, this.y * scale);
     }
 
-    static scale(vec: Vector, scale: number) {
-        return new Vector(vec.x * scale, vec.y * scale);
-    }
-
-    scaleBy(scale: number) {
+    scale(scale: number) {
         this.x *= scale;
         this.y *= scale;
+        return this;
     }
 
-    scaledBy(scale: number) {
-        const v = this.copy();
-        v.scaleBy(scale);
-        return v;
-    }
-
-    scaleToLength(targetLength: number) {
-        const length = this.getLength();
+    normalize(targetLength = 1) {
+        const length = this.length;
         if (length === 0) {
             throw new Error("Divide by zero");
         }
         const ratio = targetLength / length;
-        this.scaleBy(ratio);
+        this.scale(ratio);
+        return this;
     }
 
-    getLengthSquared(): number {
+    get lengthSquared(): number {
         return this.x ** 2 + this.y ** 2;
     }
 
-    getLength(): number {
-        return Math.sqrt(this.getLengthSquared());
+    get length(): number {
+        return Math.sqrt(this.lengthSquared);
     }
 
-    getUnitVector() {
-        const l = this.getLength();
+    get unitVector() {
+        const l = this.length;
         return new Vector(this.x / l, this.y / l);
     }
 
     lengthenBy(c: number) {
-        const u = this.getUnitVector();
-        u.scaleBy(c);
+        const u = this.unitVector
+        u.scale(c);
         this.add(u);
+        return this;
     }
 
     shortenToLength(c: number) {
-        const length = this.getLength();
+        const length = this.length;
         if (length > c) {
-            this.scaleToLength(c);
+            this.normalize(c);
         }
+        return this;
     }
 
     // Remember that we use clock angles
@@ -111,13 +110,15 @@ export class Vector implements VectorLike {
     // we are using the unit circle rotated 
     // clockwise pi/4. In these new coordinates,
     // x <- -y and y <- x
-    getAngle(): Angle {
+    get angle(): Angle {
         return new Angle(Math.atan2(this.x, -this.y));
     }
 }
-//const VectorType = t.type({ x: t.number, y: t.number });
-export type VectorLike = { x: number, y: number };
 
+
+export interface AngleLike {
+    angle: number
+}
 
 export class Angle {
     private wrappedAngle!: number
@@ -125,8 +126,14 @@ export class Angle {
         this.angle = angle;
     }
 
+    // Returns a number in [-pi, pi)
     private static mod(val: number) {
-        return ((val % TWO_PI) + TWO_PI) % TWO_PI;
+        val = ((val % TWO_PI) + TWO_PI) % TWO_PI;
+        if (val >= Math.PI) {
+            val -= TWO_PI;
+        }
+        return val;
+
     }
 
     set angle(val: number) {
@@ -155,18 +162,13 @@ export class Angle {
         }
     }
 
-    // Returns a number in [-pi, pi)
-    static minus(a: Angle, b: Angle): number {
-        let difference = Angle.mod(a.angle - b.angle);
-        if (difference >= Math.PI) {
-            difference -= TWO_PI;
-        }
-        return difference;
+    static minus(a: AngleLike, b: AngleLike): Angle {
+        return new Angle(a.angle - b.angle);
     }
 
     // What you would need to add to this angle
     // to turn it into the other angle
-    distanceTo(other: Angle) {
+    distanceTo(other: AngleLike) {
         return Angle.minus(other, this);
     }
 

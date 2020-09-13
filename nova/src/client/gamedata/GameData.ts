@@ -1,30 +1,26 @@
 import * as PIXI from "pixi.js";
 import * as path from "path";
-import { GameDataInterface } from "../../../../novadatainterface/GameDataInterface";
-import { NovaDataInterface, NovaDataType } from "../../../../novadatainterface/NovaDataInterface";
-import { NovaIDs } from "../../../../novadatainterface/NovaIDs";
-import { BaseData } from "../../../../novadatainterface/BaseData";
-import { PictImageData } from "../../../../novadatainterface/PictImage";
-import { SpriteSheetImageData, SpriteSheetFramesData, SpriteSheetData } from "../../../../novadatainterface/SpriteSheetData";
-import { ExplosionData } from "../../../../novadatainterface/ExplosionData";
-import { StatusBarData } from "../../../../novadatainterface/StatusBarData";
-import { TargetCornersData } from "../../../../novadatainterface/TargetCornersData";
-import { SystemData } from "../../../../novadatainterface/SystemData";
-import { PlanetData } from "../../../../novadatainterface/PlanetData";
-import { PictData } from "../../../../novadatainterface/PictData";
-import { WeaponData } from "../../../../novadatainterface/WeaponData";
-import { OutfitData } from "../../../../novadatainterface/OutiftData";
-import { ShipData } from "../../../../novadatainterface/ShipData";
-import { Gettable } from "../../../../novadatainterface/Gettable";
+import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { NovaDataInterface, NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
+import { NovaIDs } from "novajs/novadatainterface/NovaIDs";
+import { BaseData } from "novajs/novadatainterface/BaseData";
+import { PictImageData } from "novajs/novadatainterface/PictImage";
+import { SpriteSheetImageData, SpriteSheetFramesData, SpriteSheetData } from "novajs/novadatainterface/SpriteSheetData";
+import { ExplosionData } from "novajs/novadatainterface/ExplosionData";
+import { StatusBarData } from "novajs/novadatainterface/StatusBarData";
+import { TargetCornersData } from "novajs/novadatainterface/TargetCornersData";
+import { SystemData } from "novajs/novadatainterface/SystemData";
+import { PlanetData } from "novajs/novadatainterface/PlanetData";
+import { PictData } from "novajs/novadatainterface/PictData";
+import { WeaponData } from "novajs/novadatainterface/WeaponData";
+import { OutfitData } from "novajs/novadatainterface/OutiftData";
+import { ShipData } from "novajs/novadatainterface/ShipData";
+import { Gettable } from "novajs/novadatainterface/Gettable";
 import { dataPath, idsPath } from "../../common/GameDataPaths";
-
-
 
 /**
  * Retrieves game data from the server
  */
-
-
 class GameData implements GameDataInterface {
     public readonly data: NovaDataInterface;
     public readonly ids: Promise<NovaIDs>;
@@ -113,7 +109,6 @@ class GameData implements GameDataInterface {
     }
 
     private async getIds(): Promise<NovaIDs> {
-        // Working with PIXI is weird
         return ((await this.getUrl(idsPath + ".json")) as unknown) as NovaIDs;
         //return JSON.parse(idsBuffer.toString('utf8'));
     }
