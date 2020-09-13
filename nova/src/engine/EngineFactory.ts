@@ -1,7 +1,6 @@
-import { EngineState, MapKeys } from "novajs/nova/src/proto/protobufjs_bundle";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { Engine } from "./State";
 import { SystemFactory } from "./SystemFactory";
-import { EngineView, engineViewFactory } from "./TreeView";
 
 export class EngineFactory {
     readonly systemFactory: SystemFactory;
@@ -10,19 +9,20 @@ export class EngineFactory {
         this.systemFactory = new SystemFactory(gameData);
     }
 
-    async newView(): Promise<EngineView> {
-        const engineState = new EngineState();
+    async newWithSystems(): Promise<Engine> {
+        const engine = EngineFactory.base();
         const systems = (await this.gameData.ids).System;
 
-        // System IDs are also their UUIDs because they're only
-        // ever instantiated once. 
-        engineState.systemsKeys = new MapKeys();
-        engineState.systemsKeys.keySet = new MapKeys.KeySet();
-        engineState.systemsKeys.keySet.keys = systems;
-
         for (const id of systems) {
-            engineState.systems[id] = await this.systemFactory.stateFromId(id);
+            engine.systems.set(id, await this.systemFactory.stateFromId(id));
         }
-        return engineViewFactory(engineState);
+
+        return engine;
+    }
+
+    static base(): Engine {
+        return {
+            systems: new Map()
+        }
     }
 }

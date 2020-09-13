@@ -77,7 +77,6 @@ type Blink = {
     d: number
 }
 
-
 type ShanImages = {
     [index: string]: ImageInfo | null,
     baseImage: ImageInfo, // All Shans must have a base image

@@ -5,25 +5,23 @@ import { idsPath, dataPath, settingsPrefix } from "../common/GameDataPaths";
 import { GameDataInterface } from "../../../novadatainterface/GameDataInterface";
 import { NovaDataType } from "../../../novadatainterface/NovaDataInterface";
 
+
 /**
  * Serves GameData to the client
  * Maybe consider https://github.com/RioloGiuseppe/byte-serializer in the future?
  */
-
-
-function setupRoutes(gameData: GameDataInterface, app: Express, htmlPath: string, bundlePath: string, settingsPath: string) {
+export function setupRoutes(gameData: GameDataInterface, app: Express, htmlPath: string, bundlePath: string, settingsPath: string) {
     return new GameDataServer(gameData, app, htmlPath, bundlePath, settingsPath);
 }
 
+// This is a helper class used by `setupRoutes`
 class GameDataServer {
-
     constructor(
         private readonly gameData: GameDataInterface,
         private readonly app: Express,
         private readonly htmlPath: string,
         private readonly bundlePath: string,
         private readonly settingsPath: string) {
-
         this.setupRoutes();
     }
 
@@ -41,8 +39,6 @@ class GameDataServer {
 
         this.app.use(settingsPrefix,
             express.static(this.settingsPath));
-
-
 
         //        // This has to be here or else sourcemaps don't work!
         //        const staticPath = path.join(this.appRoot, "build", "static");
@@ -79,10 +75,4 @@ class GameDataServer {
     private async idRequestFulfiller(_req: express.Request, res: express.Response): Promise<void> {
         res.send(await this.gameData.ids);
     }
-
-    // http://artsy.github.io/blog/2018/11/21/conditional-types-in-typescript/
-    //	private async test<T extends NovaDataType>(dataType: NovaDataType,
 }
-
-
-export { setupRoutes };

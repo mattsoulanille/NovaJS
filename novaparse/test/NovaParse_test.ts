@@ -1,10 +1,11 @@
-import "jasmine";
 import fs from "fs";
+import "jasmine";
 import path from "path";
+import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
+import { PNG } from "pngjs";
 import { getDefaultExitPoints } from "../../novadatainterface/Animation";
-import { BaseData } from "../../novadatainterface/BaseData";
 import { ExplosionData } from "../../novadatainterface/ExplosionData";
-import { NovaDataType, NovaIDNotFoundError } from "../../novadatainterface/NovaDataInterface";
+import { NovaDataType } from "../../novadatainterface/NovaDataInterface";
 import { OutfitData } from "../../novadatainterface/OutiftData";
 import { PictImageData } from "../../novadatainterface/PictImage";
 import { PlanetData } from "../../novadatainterface/PlanetData";
@@ -12,9 +13,7 @@ import { ShipData } from "../../novadatainterface/ShipData";
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "../../novadatainterface/SpriteSheetData";
 import { getDefaultStatusBarColors, getDefaultStatusBarDataAreas } from "../../novadatainterface/StatusBarData";
 import { WeaponData } from "../../novadatainterface/WeaponData";
-import { PNG } from "pngjs";
 import { NovaParse } from "../NovaParse";
-import { BadDirectoryStructureError } from "../src/IDSpaceHandler";
 import { FPS, TurnRateConversionFactor } from "../src/parsers/Constants";
 import { getPNG } from "./resource_parsers/PNGCompare";
 
@@ -104,7 +103,9 @@ describe("NovaParse", function() {
         expect(anim.id).toEqual("nova:128");
         expect(anim.images.baseImage).toEqual({
             id: 'nova:1000',
-            imagePurposes:
+            dataType: NovaDataType.SpriteSheetImage,
+            blendMode: BLEND_MODES.NORMAL,
+            frames:
             {
                 normal: { start: 0, length: 36 },
                 left: { start: 36, length: 36 },
@@ -128,7 +129,9 @@ describe("NovaParse", function() {
         expect(e132.animation.images).toEqual({
             baseImage: {
                 id: "nova:1600",
-                imagePurposes: {
+                dataType: NovaDataType.SpriteSheetImage,
+                blendMode: BLEND_MODES.ADD,
+                frames: {
                     normal: { start: 0, length: 108 }
                 }
             }
@@ -187,7 +190,9 @@ describe("NovaParse", function() {
                 images: {
                     baseImage: {
                         id: "nova:1600",
-                        imagePurposes: {
+                        dataType: NovaDataType.SpriteSheetImage,
+                        blendMode: BLEND_MODES.NORMAL,
+                        frames: {
                             "normal": { start: 0, length: 108 }
                         }
                     }

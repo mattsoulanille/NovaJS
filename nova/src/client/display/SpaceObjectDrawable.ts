@@ -1,31 +1,24 @@
+import { Animation } from "novajs/novadatainterface/Animation";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
+import * as PIXI from "pixi.js";
+import { Position } from "../../engine/Position";
+import { ObjectType, SpaceObject } from "../../engine/State";
 import { AnimationGraphic } from "./AnimationGraphic";
 import { Drawable } from "./Drawable";
-import { Position } from "../../engine/space_object/Position";
-import { Animation } from "novajs/novadatainterface/Animation";
-import * as PIXI from "pixi.js";
-import { SpaceObjectView } from "../../engine/TreeView";
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
 
 type DrawType = NovaDataType.Ship | NovaDataType.Planet;
 
 /** 
  * Responsible for drawing a spaceobject state
  */
-export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
+export class SpaceObjectDrawable implements Drawable<SpaceObject> {
 
     private drawType?: DrawType;
     private id?: string;
     readonly displayObject = new PIXI.Container();
     private animationGraphic?: AnimationGraphic;
 
-    // The id of the animation to use isn't encoded directly in
-    // the SpaceObjectState because there are several different
-    // types of objects, like planets and ships, that render
-    // using SpaceObjectDrawable and have different namespaces
-    // for the animations they use. The id is instead stored
-    // in the extraState field, which is a oneof field with
-    // ship / planet / etc. information.
     private wrappedAnimation?: Animation | Promise<Animation>;
     set animation(animation: Animation | Promise<Animation> | undefined) {
         if (this.wrappedAnimation === animation) {
@@ -35,13 +28,13 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
         this.wrappedAnimation = animation;
         if (animation) {
             if (this.animationGraphic) {
-                this.displayObject.removeChild(this.animationGraphic);
+                this.displayObject.removeChild(this.animationGraphic.displayObject);
             }
             this.animationGraphic = new AnimationGraphic({
                 gameData: this.gameData,
                 animation: animation,
             });
-            this.displayObject.addChild(this.animationGraphic);
+            this.displayObject.addChild(this.animationGraphic.displayObject);
         }
     }
     get animation() {
@@ -69,13 +62,13 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
         }
     }
 
-    draw(state: SpaceObjectView, center: Position) {
-        if (state.sharedData.shipState) {
-            this.setDrawTypeAndId(NovaDataType.Ship, state.sharedData.shipState.id);
-        } else if (state.sharedData.planetState) {
-            this.setDrawTypeAndId(NovaDataType.Planet, state.sharedData.planetState.id)
+    draw(state: SpaceObject, center: Position) {
+        if (state.objectType === ObjectType.SHIP) {
+            this.setDrawTypeAndId(NovaDataType.Ship, state.id);
+        } else if (state.objectType === ObjectType.PLANET) {
+            this.setDrawTypeAndId(NovaDataType.Planet, state.id);
         } else {
-            console.warn("SpaceObjectDrawable had no extraState");
+            console.warn(`Can't draw object of type ${ObjectType[state.objectType]}`);
             return false;
         }
 
@@ -92,24 +85,19 @@ export class SpaceObjectDrawable implements Drawable<SpaceObjectView> {
             return false;
         }
 
-        if (!state.sharedData.position) {
-            console.warn("State had no position")
-            return false;
-        }
-
-        const realPosition = Position.fromProto(state.sharedData.position);
-        const screenPosition = realPosition
+        const screenPosition = state.position
             .getClosestRelativeTo(center)
             .subtract(center);
 
-        this.animationGraphic.position.x = screenPosition.x;
-        this.animationGraphic.position.y = screenPosition.y;
-        this.animationGraphic.rotation = state.sharedData.rotation ?? 0;
+        // TODO: Maybe add a setter for position to AnimationGraphic?
+        this.animationGraphic.displayObject.position.x = screenPosition.x;
+        this.animationGraphic.displayObject.position.y = screenPosition.y;
+        this.animationGraphic.rotation = state.rotation.angle;
 
         // TODO: Make glow alpha gradually increase and decrease
-        this.animationGraphic.glowAlpha = state.sharedData.accelerating ?? 0;
+        this.animationGraphic.glowAlpha = state.accelerating;
 
-        const turning = state.sharedData.turning ?? 0;
+        const turning = state.turning;
         if (turning < 0) {
             this.animationGraphic.setFramesToUse("left");
         } else if (turning > 0) {

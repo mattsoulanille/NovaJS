@@ -8,38 +8,39 @@ ts_library(
     name = "utils",
     srcs = [
         "Mod.ts",
-        "Stateful.ts",
+        "State.ts",
         "StateSpreader.ts",
         "Vector.ts",
-        "CopyState.ts",
-        "TreeView.ts",
+        "Position.ts",
     ],
     deps = [
         "//nova/src/proto:protobufjs_bundle",
+        "@npm//immer",
     ]
 )
     
 ts_library(
     name = "engine",
     srcs = [
-        "Engine.ts",
-        "StatefulMap.ts",
-        "System.ts",
+        "EngineStep.ts",
+        "StepMap.ts",
+        "SystemStep.ts",
         "EngineFactory.ts",
         "SystemFactory.ts",
     ],
     deps = [
         ":utils",
-        "@npm//@types/node",
-        "@npm//uuid",
-        "@npm//@types/uuid",
-        "@npm//google-protobuf",
-        "@npm//@types/google-protobuf",
-        "@npm//rxjs",
         "//nova/src/engine/space_object:space_object_mods",
         "//nova/src/common",
         "//nova/src/proto:protobufjs_bundle",
         "//novadatainterface",
+        # "@npm//@types/node",
+        # "@npm//uuid",
+        # "@npm//@types/uuid",
+        # "@npm//google-protobuf",
+        # "@npm//@types/google-protobuf",
+        # "@npm//rxjs",
+        "@npm//immer",
     ]
 )
 

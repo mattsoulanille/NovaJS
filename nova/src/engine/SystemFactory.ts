@@ -1,6 +1,6 @@
-import { SystemState } from "novajs/nova/src/proto/protobufjs_bundle";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-//import { SpaceObjectFactory } from "./SpaceObjectFactory";
+import { System } from "./State";
+
 
 export class SystemFactory {
     //    readonly spaceObjectFactory: SpaceObjectFactory;
@@ -9,8 +9,15 @@ export class SystemFactory {
         //        this.spaceObjectFactory = new SpaceObjectFactory(gameData);
     }
 
-    async stateFromId(_id: string) {
-        const system = new SystemState();
-        return system;
+    async stateFromId(_id: string): Promise<System> {
+        return {
+            spaceObjects: new Map()
+        }
+    }
+
+    static base(): System {
+        return {
+            spaceObjects: new Map()
+        }
     }
 }

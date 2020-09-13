@@ -1,7 +1,7 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
-import { Position } from "../../engine/space_object/Position";
-import { SpaceObjectView, SystemView } from "../../engine/TreeView";
+import { Position } from "../../engine/Position";
+import { SpaceObject, System } from "../../engine/State";
 import { Vector } from "../../engine/Vector";
 import { DrawableMap } from "./DrawableMap";
 import { SpaceObjectDrawable } from "./SpaceObjectDrawable";
@@ -17,7 +17,7 @@ export class Display {
     built: boolean; // Is this necessary or used?
 
     private readonly spaceObjects =
-        new DrawableMap<SpaceObjectDrawable, SpaceObjectView>(
+        new DrawableMap<SpaceObjectDrawable, SpaceObject>(
             () => new SpaceObjectDrawable(this.gameData));
 
     private wrappedTarget!: string | Position;
@@ -53,21 +53,21 @@ export class Display {
         }
     }
 
-    private setTargetPosition(view: SystemView) {
+    private setTargetPosition(system: System) {
         if (!(this.target instanceof Vector)) {
-            const spaceObjects = view.families.spaceObjects;
-            let targetObject = spaceObjects.get(this.target);
+            const spaceObjects = system.spaceObjects;
+            const targetObject = spaceObjects.get(this.target);
             if (targetObject !== undefined) {
-                this.targetPosition = Position.fromProto(targetObject.sharedData.position);
+                this.targetPosition = targetObject.position;
             }
         }
     }
 
-    draw(state: SystemView) {
-        this.setTargetPosition(state);
+    draw(system: System) {
+        this.setTargetPosition(system);
 
         this.spaceObjects.draw(
-            state.families.spaceObjects,
+            system.spaceObjects,
             this.targetPosition);
         //this.statusBar.draw(state, this.targetPosition)
     }

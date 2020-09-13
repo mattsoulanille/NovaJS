@@ -1,46 +1,39 @@
+import { AnimationImage } from "novajs/novadatainterface/Animation";
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
-import { AnimationImageIndex, AnimationImagePurposes } from "../../../../novadatainterface/Animation";
+import { AnimationImageIndex } from "../../../../novadatainterface/Animation";
+import { mod } from "../../engine/Mod";
 
 const TWO_PI = 2 * Math.PI;
 
-function mod(a: number, b: number) {
-    return ((a % b) + b) % b;
-}
-
-// This extends PIXI.Sprite since it doesn't really implement Drawable.
-// It has no associated state. In this case, I think it's fine to extend.
-// But be careful of changes to PIXI.Sprite.
-class SpriteSheetSprite extends PIXI.Sprite {
+export class SpriteSheetSprite {
+    readonly pixiSprite = new PIXI.Sprite();
     private readonly gameData: GameDataInterface;
-    private readonly id: string;
+    private readonly image: AnimationImage;
     private textures: PIXI.Texture[] | undefined;
     readonly buildPromise: Promise<SpriteSheetSprite>;
-    private readonly imagePurposes: AnimationImagePurposes;
     private textureSet: AnimationImageIndex;
-    private _rotation: number;
+    private wrappedRotation: number;
 
-
-    constructor({ id, gameData, imagePurposes }: { id: string, gameData: GameDataInterface, imagePurposes: AnimationImagePurposes }) {
-        super();
-        this.gameData = gameData
-        this.id = id;
-        this.imagePurposes = imagePurposes;
-        this.textureSet = imagePurposes.normal;
-        this._rotation = 0;
+    constructor({ gameData, image }: { gameData: GameDataInterface, image: AnimationImage }) {
+        this.gameData = gameData;
+        this.image = image;
+        this.textureSet = this.image.frames.normal;
+        this.wrappedRotation = 0;
+        this.pixiSprite.blendMode = image.blendMode;
 
         const loadTextures = async () => {
-            this.textures = await this.texturesFromSpriteSheet(this.id)
+            this.textures = await this.texturesFromSpriteSheet(this.image.id)
             return this;
         }
-        this.anchor.x = 0.5;
-        this.anchor.y = 0.5;
+
+        this.pixiSprite.anchor.x = 0.5;
+        this.pixiSprite.anchor.y = 0.5;
         this.buildPromise = loadTextures();
     }
 
     private async texturesFromSpriteSheet(id: string): Promise<PIXI.Texture[]> {
         const spriteSheetFrames = await this.gameData.data.SpriteSheetFrames.get(id);
-
         const allTextures: PIXI.Texture[] = [];
         const frameNames = Object.keys(spriteSheetFrames.frames);
         for (let frameIndex = 0; frameIndex < frameNames.length; frameIndex++) {
@@ -54,7 +47,7 @@ class SpriteSheetSprite extends PIXI.Sprite {
     private setTexture(index: number) {
         if (this.textures) {
             if (index < this.textures.length) {
-                this.texture = this.textures[index];
+                this.pixiSprite.texture = this.textures[index];
             }
             else {
                 console.warn("Requested texture index " + index
@@ -64,13 +57,12 @@ class SpriteSheetSprite extends PIXI.Sprite {
     }
 
     setFramesToUse(frames: string) {
-        if (frames in this.imagePurposes) {
-            this.textureSet = this.imagePurposes[frames];
+        if (frames in this.image.frames) {
+            this.textureSet = this.image.frames[frames];
         }
     }
 
     private getAngleAndPartition(angle: number, resolution: number) {
-
         const index = mod(
             Math.round((angle / TWO_PI) * resolution),
             resolution
@@ -102,21 +94,17 @@ class SpriteSheetSprite extends PIXI.Sprite {
 
         }
 
-        super.rotation = r.angle;
-        this._rotation = angle;
+        this.pixiSprite.rotation = r.angle;
+        this.wrappedRotation = angle;
     }
 
     get rotation() {
-        return this._rotation;
+        return this.wrappedRotation;
     }
 
     static getFactory(gameData: GameDataInterface) {
-        return (id: string, imagePurposes: AnimationImagePurposes) => {
-            return new SpriteSheetSprite({
-                gameData, id, imagePurposes
-            }).buildPromise;
+        return (image: AnimationImage) => {
+            return new SpriteSheetSprite({ gameData, image }).buildPromise;
         }
     }
 }
-
-export { SpriteSheetSprite };

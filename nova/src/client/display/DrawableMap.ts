@@ -1,19 +1,24 @@
 import { Drawable } from "./Drawable";
-import { Position } from "../../engine/space_object/Position";
+import { Position } from "../../engine/Position";
 import * as PIXI from "pixi.js";
 
 
-export class DrawableMap<D extends Drawable<View>, View>
-    implements Drawable<[string, View][]> {
+export class DrawableMap<D extends Drawable<State>, State>
+    implements Drawable<[string, State][]> {
 
-    readonly displayObject = new PIXI.Container()
+    readonly displayObject = new PIXI.Container();
+
+    // A map of all objects drawn on the screen. `drawn`
+    // keeps track of which objects were actually drawn
+    // in a given frame so the ones that weren't can be
+    // removed.
     private readonly uuidMap =
         new Map<string, { item: D, drawn: boolean }>();
 
     constructor(private readonly factory: () => D) { }
 
-    draw(views: Iterable<[string, View]>, center: Position): boolean {
-        for (const [uuid, view] of views) {
+    draw(states: Iterable<[string, State]>, center: Position): boolean {
+        for (const [uuid, state] of states) {
             if (!this.uuidMap.has(uuid)) {
                 const item = this.factory();
                 this.displayObject.addChild(item.displayObject);
@@ -23,7 +28,7 @@ export class DrawableMap<D extends Drawable<View>, View>
                 });
             }
             const val = this.uuidMap.get(uuid)!;
-            val.item.draw(view, center);
+            val.item.draw(state, center);
             val.drawn = true;
         }
 

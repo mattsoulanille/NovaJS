@@ -1,6 +1,3 @@
-
-//import { ExplosionData } from "../novadatainterface"
-//import { ExplosionData } from "../novadatainterface/ExplosionData";
 import * as path from "path";
 import { ExplosionData } from "../novadatainterface/ExplosionData";
 import { GameDataInterface } from "../novadatainterface/GameDataInterface";

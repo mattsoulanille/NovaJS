@@ -1,8 +1,10 @@
 import { Animation, getDefaultAnimationImage, getDefaultExitPoints } from "novajs/novadatainterface/Animation";
 import { BaseData } from "novajs/novadatainterface/BaseData";
+import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
 import { getDefaultPictData } from "novajs/novadatainterface/PictData";
 import { PlanetData } from "novajs/novadatainterface/PlanetData";
 import { DamageType } from "novajs/novadatainterface/WeaponData";
+import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
 import { SpobResource } from "../resource_parsers/SpobResource";
 import { BaseParse } from "./BaseParse";
 
@@ -43,9 +45,7 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         rledID = defaultAnimationImage.id;
     }
 
-
-
-    var animation: Animation = {
+    const animation: Animation = {
         exitPoints: getDefaultExitPoints(),
         id: base.id,
         name: base.name,
@@ -53,7 +53,9 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         images: {
             baseImage: {
                 id: rledID,
-                imagePurposes: {
+                dataType: NovaDataType.SpriteSheetImage,
+                blendMode: BLEND_MODES.NORMAL,
+                frames: {
                     normal: { start: 0, length: 1 }
                 }
             }

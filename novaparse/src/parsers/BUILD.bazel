@@ -6,12 +6,12 @@ ts_library(
     name = "parsers",
     srcs = glob(["*.ts"]),
     deps = [
-        "@npm//@types/node",
         "//novadatainterface",
+        "//novaparse/src/resource_parsers:resource_parsers",
+        "//novaparse/src/hull",
+        "@npm//@types/node",
         "@npm//resourceforkjs",
         "@npm//pngjs",
         "@npm//@types/pngjs",
-        "//novaparse/src/resource_parsers:resource_parsers",
-        "//novaparse/src/hull",
     ],
 )

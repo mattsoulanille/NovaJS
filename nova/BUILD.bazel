@@ -29,7 +29,7 @@ ts_library(
         "//novaparse",
         "//nova/src/common",
         "//nova/src/engine",
-        "//nova/src/communication:communication_server_lib",
+        #"//nova/src/communication:communication_server_lib",
         "//nova/src/server",
         "//nova/src/server/parsing",
         "//nova/src:gameloop_lib",
