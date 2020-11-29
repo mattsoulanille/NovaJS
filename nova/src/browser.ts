@@ -7,7 +7,32 @@ import { setupControls } from "./client/setupControls";
 import { Controller } from "./common/Controller";
 import { ShipController } from "./common/ShipController";
 import { EngineFactory } from "./engine/EngineFactory";
+import { SpaceObjectFactory } from "./engine/SpaceObjectFactory";
 import { GameLoop } from "./GameLoop";
+import { SocketRpcChannelClient } from "./communication/SocketRpcChannelClient";
+import { EngineDelta, EngineService } from "novajs/nova/src/proto/protobufjs_bundle";
+
+const rpc = new SocketRpcChannelClient();
+(window as any).rpc = rpc;
+const engineService = new EngineService(rpc.call.bind(rpc));
+//const engineService = EngineService.create
+
+(window as any).engineService = engineService;
+engineService.update(new EngineDelta({
+    systems: {
+        "foo": {
+            spaceObjects: {
+                "bar": {
+                    value: {
+                        accelerating: 0,
+                        acceleration: 124,
+                        maxVelocity: 8
+                    }
+                }
+            }
+        }
+    }
+}));
 
 // const socketChannel = new SocketChannelClient({});
 // socketChannel.message.subscribe((m) => {
@@ -51,28 +76,9 @@ display.buildPromise.then(function() {
 });
 
 
-/*
-// Handle when the player's ship changes.
-communicator.onShipUUID.subscribe(function([oldUUID, newUUID]: [string | undefined, string]) {
-    if (oldUUID) {
-        engine.activeShips.delete(oldUUID);
-    }
-    engine.activeShips.add(newUUID);
-    display.target = newUUID;
-});
-*/
-
-
-const engineFactory = new EngineFactory(gameData);
 let gameLoop: GameLoop;
-let controller: Controller;
-let shipController: ShipController;
 async function startGame() {
-    //    if (!communicator.shipUUID) {
-    //        throw new Error("Game started before communicator ready");
-    //    }
-    //    engine.setState(communicator.getStateChanges());
-    let engine = await engineFactory.newWithSystems();
+
     gameLoop = new GameLoop({
         engine,
         //communicator,

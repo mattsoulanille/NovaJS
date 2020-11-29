@@ -41,10 +41,12 @@ ts_library(
         "//nova/src/client/display",
         "//nova/src/engine",
         "//nova/src/engine:utils",
-        #"//nova/src/communication:communication_client_lib",
+        "//nova/src/communication:communication_client_lib",
         "//nova/src/client/gamedata",
         "//nova/src/proto:protobufjs_bundle",
         "@npm//google-protobuf",
+        "@npm//uuid",
+        "@npm//@types/uuid",
     ]
 )
 

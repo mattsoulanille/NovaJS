@@ -1,9 +1,10 @@
+import { isLeft } from "fp-ts/lib/Either";
 import https from "https";
-import { GameMessage, SocketMessage } from "novajs/nova/src/proto/protobufjs_bundle";
 import { Subject } from "rxjs";
 import UUID from "uuid/v4";
 import WebSocket from "ws";
 import { ChannelServer, MessageWithSourceType } from "./Channel";
+import { SocketMessage } from "./SocketMessage";
 
 interface Client {
     socket: WebSocket;
@@ -11,7 +12,7 @@ interface Client {
 }
 
 export class SocketChannelServer implements ChannelServer {
-    readonly message = new Subject<MessageWithSourceType>();
+    readonly message = new Subject<MessageWithSourceType<unknown>>();
     readonly clientConnect = new Subject<string>();
     readonly clientDisconnect = new Subject<string>();
 
@@ -59,16 +60,14 @@ export class SocketChannelServer implements ChannelServer {
         if (!client) {
             this.warn(`No such client ${destination}`);
         } else if (client.socket.readyState === WebSocket.OPEN) {
-            client.socket.send(SocketMessage.encode(socketMessage).finish());
+            client.socket.send(JSON.stringify(SocketMessage.encode(socketMessage)));
             return true;
         }
         return false;
     }
 
-    send(destination: string, message: GameMessage) {
-        const socketMessage = new SocketMessage();
-        socketMessage.data = message;
-        return this.sendRawIfOpen(destination, socketMessage);
+    send(destination: string, message: unknown) {
+        return this.sendRawIfOpen(destination, { message });
     }
 
     private resetClientTimeout(uuid: string) {
@@ -84,9 +83,7 @@ export class SocketChannelServer implements ChannelServer {
 
         client.keepaliveTimeout = setTimeout(() => {
             // Send the client a ping
-            const message = new SocketMessage();
-            message.ping = true;
-            this.sendRawIfOpen(uuid, message);
+            this.sendRawIfOpen(uuid, { ping: true });
             client.keepaliveTimeout = setTimeout(() => {
                 // Remove the client if it hasn't responded
                 this.handleClientClose(uuid);
@@ -122,36 +119,39 @@ export class SocketChannelServer implements ChannelServer {
     }
 
     // Handles messages received from clients. Forwards messages to their destination.
-    private handleMessageFromClient(clientUUID: string, serialized: Uint8Array) {
+    private handleMessageFromClient(clientUUID: string, serialized: string) {
         this.resetClientTimeout(clientUUID);
         const client = this.clientMap.get(clientUUID);
         if (!client) {
             throw new Error(`Missing client object for ${clientUUID}`);
         }
 
-        const message = SocketMessage.decode(serialized);
-        if (message.pong) {
+        const maybeSocketMessage = SocketMessage.decode(JSON.parse(serialized));
+
+        if (isLeft(maybeSocketMessage)) {
+            console.warn(`Received bad message from client ${clientUUID}: ${maybeSocketMessage.left}`);
+            return;
+        }
+
+        const socketMessage = maybeSocketMessage.right;
+        if (socketMessage.pong) {
             // We already reset the client timeout above.
             // No need to do anything if it's a pong.
             return;
         }
 
-        if (message.ping) {
-            const pong = new SocketMessage();
-            pong.pong = true;
-            this.sendRawIfOpen(clientUUID, pong);
+        if (socketMessage.ping) {
+            this.sendRawIfOpen(clientUUID, { pong: true });
             return;
         }
 
-        const data = message.data;
-
-        if (!data) {
+        if (!socketMessage.message) {
             this.warn(`Message from ${clientUUID} had no data`);
             return;
         }
 
         this.message.next({
-            message: new GameMessage(data),
+            message: socketMessage.message,
             source: clientUUID,
         });
     }

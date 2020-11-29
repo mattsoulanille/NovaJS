@@ -1,46 +1,22 @@
 import produce, { enableMapSet } from "immer";
-import { EngineFactory } from "./engine/EngineFactory";
-import { engineStep } from "./engine/EngineStep";
-import { Engine, Step } from "./engine/State";
-import { stateSpreader } from "./engine/StateSpreader";
+import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+//import { Display } from "./display/Display";
+import { Engine } from "./engine/Engine";
 
-// Allow immer to use maps
-enableMapSet();
 
 export class GameLoop {
-    state: Engine;
-    readonly display?: (engine: Engine) => unknown;
+    //readonly display?: (engine: EngineState) => unknown;
+    engine: Engine;
+    ownedUUIDs = new Set<string>();
+    //display: Display;
 
-    private getNextState: Step<Engine>;
-
-    constructor({ engine, display }:
-        {
-            engine?: Engine,
-            //communicator: Step<Engine>,
-            display?: (engine: Engine) => unknown
-        }
-    ) {
-        this.state = engine ?? EngineFactory.base()
-
-        // TODO: Keep state in sync with the server.
-        this.getNextState = stateSpreader([
-            engineStep,
-            //            communicator,
-        ]);
-
-        this.display = display;
+    constructor(gameData: GameDataInterface) {
+        this.engine = new Engine([], gameData);
     }
 
-    step(delta: number): void {
-        this.state = produce(this.state, draft => {
-            this.getNextState({
-                state: draft,
-                delta
-            });
-        })
+    step(time: number): void {
 
-        if (this.display) {
-            this.display(this.state);
-        }
+
+        const deltaToSend = this.engine.step({ time, ownedUUIDs: this.ownedUUIDs });
     }
 }

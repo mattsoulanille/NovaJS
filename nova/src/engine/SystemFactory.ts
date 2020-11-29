@@ -1,11 +1,9 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { System } from "./State";
-
 
 export class SystemFactory {
     //    readonly spaceObjectFactory: SpaceObjectFactory;
 
-    constructor(private gameData: GameDataInterface) {
+    constructor(private gameData: GameDataInterface,) {
         //        this.spaceObjectFactory = new SpaceObjectFactory(gameData);
     }
 

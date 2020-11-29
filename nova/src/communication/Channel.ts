@@ -1,9 +1,7 @@
 import { Subject } from "rxjs";
-import { GameMessage, IGameMessage } from "novajs/nova/src/proto/protobufjs_bundle";
 
-
-export interface MessageWithSourceType {
-    message: IGameMessage;
+export interface MessageWithSourceType<M> {
+    message: M;
     source: string;
 }
 
@@ -13,19 +11,19 @@ export interface MessageWithSourceType {
  * interfaces with, for example, multiple different rooms.
  */
 export interface ChannelServer {
-    send(destination: string, message: IGameMessage): void;
+    send(destination: string, message: unknown): void;
 
-    readonly message: Subject<MessageWithSourceType>;
+    readonly message: Subject<MessageWithSourceType<unknown>>;
     readonly clientConnect: Subject<string>;
     readonly clientDisconnect: Subject<string>;
     readonly clients: Set<string>;
 }
 
 export interface ChannelClient {
-    send(message: IGameMessage): void,
+    send(message: unknown): void,
     disconnect(): void
 
-    readonly message: Subject<GameMessage>;
+    readonly message: Subject<unknown>;
 }
 
 

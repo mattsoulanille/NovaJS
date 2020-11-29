@@ -6,6 +6,7 @@ import { NovaParse } from "../novaparse/NovaParse";
 //import { CommunicatorServer } from "./src/communication/CommunicatorServer";
 //import { SocketChannelServer } from "./src/communication/SocketChannelServer";
 import { EngineFactory } from "./src/engine/EngineFactory";
+import { SpaceObjectFactory } from "./src/engine/SpaceObjectFactory";
 import { GameLoop } from "./src/GameLoop";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
@@ -66,11 +67,15 @@ const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json")
 setupRoutes(gameData, app, htmlPath, bundlePath, clientSettingsPath);
 
 const engineFactory = new EngineFactory(gameData);
+const spaceObjectFactory = new SpaceObjectFactory(gameData);
 
 let gameLoop: GameLoop;
 let lastTimeNano: bigint;
 async function startGame() {
     const engine = await engineFactory.newWithSystems();
+    engine.systems.get("nova:130")?.spaceObjects.set("test object",
+        await spaceObjectFactory.shipFromId("nova:128"));
+
     gameLoop = new GameLoop({ engine, });//communicator })
 
     httpsServer.listen(port, function() {
@@ -82,13 +87,14 @@ async function startGame() {
     stepper();
 }
 
+const STEP_TIME = 1000 / 60;
 function stepper() {
     const timeNano = process.hrtime.bigint();
     const delta = Number((timeNano - lastTimeNano) / BigInt(1e6));
     lastTimeNano = timeNano;
 
     gameLoop.step(delta);
-    setTimeout(stepper, 0);
+    setTimeout(stepper, STEP_TIME);
 }
 
 //    const stateChanges = communicator.getStateChanges();

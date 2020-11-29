@@ -4,7 +4,7 @@ import { Angle, Vector } from "./Vector";
 
 export type Step<T> = ({ state, delta }: { state: Draft<T>, delta: number }) => void;
 
-export interface Engine {
+export interface EngineState {
     systems: Map<string, System>;
 }
 

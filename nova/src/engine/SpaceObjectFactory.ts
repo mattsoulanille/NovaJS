@@ -1,4 +1,5 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { Position } from "./Position";
 import { MovementType, ObjectType, SpaceObject, vectorFactory } from "./State";
 import { Angle } from "./Vector";
 
@@ -34,7 +35,7 @@ export class SpaceObjectFactory {
             objectType: ObjectType.NONE,
 
             // Physics
-            position: vectorFactory(),
+            position: new Position(0, 0),
             velocity: vectorFactory(),
             maxVelocity: 100,
             rotation: new Angle(0),

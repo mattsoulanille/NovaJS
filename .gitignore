@@ -1,4 +1,3 @@
-
 # Created by https://www.gitignore.io/api/emacs
 
 ### Emacs ###
@@ -55,7 +54,6 @@ node_modules
 
 .DS_Store
 
-Nova/
 Nova Data*
 Nova_Data*
 Nova Plug*

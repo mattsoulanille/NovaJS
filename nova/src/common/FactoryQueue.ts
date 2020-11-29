@@ -4,12 +4,12 @@ export class FactoryQueue<Item> implements Queue<Item> {
     buildingPromise: Promise<unknown>;
     private queue = new QueueImpl<Item>();
 
-    constructor(private readonly buildFunction: () => Promise<Item>, public minimum = 0) {
+    constructor(private readonly buildFunction: () => Promise<Item> | Item, public minimum = 0) {
         this.buildingPromise = this.buildToCountNoCheck(minimum);
     }
 
     private async prebuild(c: number) {
-        let promises: Promise<Item>[] = Array(c);
+        let promises: Array<Promise<Item> | Item> = Array(c);
         for (let i = 0; i < c; i++) {
             promises[i] = this.buildFunction();
         }
@@ -44,7 +44,21 @@ export class FactoryQueue<Item> implements Queue<Item> {
     }
 
     dequeue(): Item | null {
-        const maybeItem = this.queue.dequeue();
+        let maybeItem = this.queue.dequeue();
+
+        // If the queue is empty, try to synchronously build a new item.
+        if (maybeItem === null) {
+            const builtItem = this.buildFunction();
+
+            // Can't return a promise, so stick it in the queue when it's built.
+            if (builtItem instanceof Promise) {
+                this.buildingPromise = this.buildingPromise.then(async () => {
+                    this.queue.enqueue(await builtItem);
+                });
+            } else {
+                maybeItem = builtItem;
+            }
+        }
         this.buildToCount(this.minimum);
         return maybeItem;
     }

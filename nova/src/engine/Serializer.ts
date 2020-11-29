@@ -15,7 +15,7 @@ import {
 import { setDifference } from "../common/SetUtils";
 import { EngineFactory } from "./EngineFactory";
 import { SpaceObjectFactory } from "./SpaceObjectFactory";
-import { Engine, SpaceObject, System, vectorFactory } from "./State";
+import { EngineState, SpaceObject, System, vectorFactory } from "./State";
 import { SystemFactory } from "./SystemFactory";
 import { Vector } from "./Vector";
 
@@ -212,7 +212,7 @@ const systemDeltaFunctions: DeltaFunctions<System, ISystemDelta> = {
 };
 
 const systemMapDeltaFunctions = makeMapDeltaFunctions(systemDeltaFunctions);
-export const engineDeltaFunctions: DeltaFunctions<Engine, IEngineDelta> = {
+export const engineDeltaFunctions: DeltaFunctions<EngineState, IEngineDelta> = {
     deltaFactory() {
         return new EngineDelta();
     },

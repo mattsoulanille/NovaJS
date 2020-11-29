@@ -25,8 +25,8 @@
 		"baseUrl": ".",
 		"paths": {
 			"novajs/*": [
-				"*",
-				"dist/bin/*"
+			  "*",
+			  "dist/bin/*"
 			]
 		},
 		"esModuleInterop": true,

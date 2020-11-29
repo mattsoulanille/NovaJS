@@ -1,22 +1,17 @@
-import { GameMessage, EngineState, SpaceObjectState, ShipState, SpaceObjectStateValue } from "novajs/nova/src/proto/protobufjs_bundle";
-import { Stateful } from "../engine/Stateful";
-import { EngineView, SpaceObjectView, engineViewFactory, spaceObjectViewFactory } from "../engine/TreeView";
 import { ChannelServer } from "./Channel";
-import { Position } from "../engine/space_object/Position";
+import { Position } from "../engine/Position";
 import { Vector } from "../engine/Vector";
 import { v4 as UUID } from "uuid";
 import { filterState } from "./FilterState";
 import { overwriteState } from "./OverwriteState";
 import { getChanges } from "./GetChanges";
 
-// TODO: Use a proper RPC
 interface Client {
     ownedUuids: Set<string>;
-    filteredStates: EngineView[];
+    filteredStates: unknown[];
 }
 
-
-export class CommunicatorServer implements Stateful<EngineView> {
+export class CommunicatorServer {
     clientsToAdd: string[] = [];
     clientsToRemove: string[] = [];
     clients = new Map<string, Client>();
@@ -36,8 +31,8 @@ export class CommunicatorServer implements Stateful<EngineView> {
                 throw new Error(`Got a message for client ${source}`
                     + ` but no such client is connected.`);
             }
-            if (message.engineState) {
-                const engineView = engineViewFactory(message.engineState);
+            if (message.engineDelta) {
+                const engineView = engineViewFactory(message.engineDelta);
                 const filtered = filterState(engineView, (id) => {
                     return client.ownedUuids.has(id);
                 });
@@ -46,7 +41,7 @@ export class CommunicatorServer implements Stateful<EngineView> {
                 // Rebroadcast messages
                 for (const otherId of this.channel.clients) {
                     const message = new GameMessage();
-                    message.engineState = filtered.serialize();
+                    message.engineDelta = filtered.serialize();
                     if (otherId !== source) {
                         this.channel.send(otherId, message);
                     }
@@ -55,11 +50,11 @@ export class CommunicatorServer implements Stateful<EngineView> {
         });
     }
 
-	/**
-	 * Reports changes to the clients. Then, applies changes
-	 * previously received from the clients. Should be called
-	 * after the engine computes the next state.
-	 */
+    /**
+     * Reports changes to the clients. Then, applies changes
+     * previously received from the clients. Should be called
+     * after the engine computes the next state.
+     */
     stepState({ state, nextState }: { state: EngineView; nextState: EngineView; delta: number; }): EngineView {
 
         const system =
@@ -102,10 +97,10 @@ export class CommunicatorServer implements Stateful<EngineView> {
         return nextState;
     }
 
-	/**
-	 * Sends changes that only the server knows about to the clients. 
-	 * Does not send changes that clients made.
-	 */
+    /**
+     * Sends changes that only the server knows about to the clients. 
+     * Does not send changes that clients made.
+     */
     private reportChanges(state: EngineView, nextState: EngineView) {
         const changes = getChanges(state, nextState);
         if (changes) {

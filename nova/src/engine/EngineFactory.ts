@@ -1,5 +1,5 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { Engine } from "./State";
+import { EngineState } from "./State";
 import { SystemFactory } from "./SystemFactory";
 
 export class EngineFactory {
@@ -9,7 +9,7 @@ export class EngineFactory {
         this.systemFactory = new SystemFactory(gameData);
     }
 
-    async newWithSystems(): Promise<Engine> {
+    async newWithSystems(): Promise<EngineState> {
         const engine = EngineFactory.base();
         const systems = (await this.gameData.ids).System;
 
@@ -20,7 +20,7 @@ export class EngineFactory {
         return engine;
     }
 
-    static base(): Engine {
+    static base(): EngineState {
         return {
             systems: new Map()
         }

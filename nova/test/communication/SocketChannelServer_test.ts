@@ -1,17 +1,12 @@
+import { isLeft } from "fp-ts/lib/Either";
 import * as https from "https";
 import "jasmine";
 import { SocketChannelServer } from "novajs/nova/src/communication/SocketChannelServer";
-import { GameMessage, SocketMessage } from "novajs/nova/src/proto/nova_service_pb";
-import * as WebSocket from "ws";
-import { Callbacks, MessageBuilder, On, trackOn } from "./test_utils";
-import { take } from "rxjs/operators";
+import { SocketMessage } from "novajs/nova/src/communication/SocketMessage";
 import { Subject } from "rxjs";
-import { EngineState } from "novajs/nova/src/proto/engine_state_pb";
-
-const testGameMessage = new GameMessage();
-const testEngineState = new EngineState();
-testEngineState.setSystemskeysList(["foo", "bar", "baz"]);
-testGameMessage.setEnginestate(testEngineState);
+import { take } from "rxjs/operators";
+import * as WebSocket from "ws";
+import { Callbacks, On, trackOn } from "./test_utils";
 
 describe("SocketChannelServer", function() {
 
@@ -72,7 +67,7 @@ describe("SocketChannelServer", function() {
         expect(webSocketCallbacks["close"].length).toBe(1);
     });
 
-    it("creates a entry for a new client in the clients set", () => {
+    it("creates an entry for a new client in the clients set", () => {
         const server = new SocketChannelServer({
             wss
         });
@@ -130,16 +125,21 @@ describe("SocketChannelServer", function() {
             wss
         });
 
+        const testMessage = {
+            foo: 'bar',
+            cat: 'dog',
+        };
+
         // Connect client 1
         const client1 = new ClientHarness(server);
         wssCallbacks["connection"][0](client1.websocket);
-        const client1Uuid = [...server.clients][0];
+        const client1UUID = [...server.clients][0];
         client1.open();
 
-        server.send(client1Uuid, testGameMessage);
+        server.send(client1UUID, testMessage);
 
-        expect(client1.lastMessage!.getData()!.toObject())
-            .toEqual(testGameMessage.toObject());
+        expect(client1.lastMessage!.message)
+            .toEqual(testMessage);
     });
 
     it("emits messages sent by clients", async () => {
@@ -153,19 +153,20 @@ describe("SocketChannelServer", function() {
         const client1Uuid = [...server.clients][0];
         client1.open();
 
-        const message = new MessageBuilder()
-            .setData(testGameMessage)
-            .build();
+        const testMessage = {
+            foo: 'bar',
+            cat: 'dog',
+        };
 
         const serverEmitsPromise = server.message
             .pipe(take(1))
             .toPromise();
 
-        client1.sendMessage(message);
+        client1.sendMessage({ message: testMessage });
 
         const serverEmits = await serverEmitsPromise;
 
-        expect(serverEmits.message.toObject()).toEqual(testGameMessage.toObject());
+        expect(serverEmits.message).toEqual(testMessage);
         expect(serverEmits.source).toEqual(client1Uuid);
     });
 
@@ -180,11 +181,11 @@ describe("SocketChannelServer", function() {
         // Connect client 1
         const client1 = new ClientHarness(server);
         wssCallbacks["connection"][0](client1.websocket);
-        const client1Uuid = [...server.clients][0];
+
         client1.open();
 
         jasmine.clock().tick(11);
-        expect(client1.lastMessage!.getPing()).toBe(true);
+        expect(client1.lastMessage!.ping).toBe(true);
 
         jasmine.clock().tick(11)
 
@@ -206,13 +207,9 @@ describe("SocketChannelServer", function() {
         client1.open();
 
         jasmine.clock().tick(11);
-        expect(client1.lastMessage!.getPing()).toBe(true);
+        expect(client1.lastMessage?.ping).toBe(true);
 
-        const pongMessage = new MessageBuilder()
-            .setPong(true)
-            .build();
-
-        client1.sendMessage(pongMessage);
+        client1.sendMessage({ pong: true });
 
         jasmine.clock().tick(11);
 
@@ -253,14 +250,11 @@ describe("SocketChannelServer", function() {
         // Connect client 1
         const client1 = new ClientHarness(server);
         wssCallbacks["connection"][0](client1.websocket);
-        const client1Uuid = [...server.clients][0];
         client1.open();
 
-        client1.sendMessage(new MessageBuilder()
-            .setPing(true)
-            .build());
+        client1.sendMessage({ ping: true });
 
-        expect(client1.lastMessage!.getPong()).toBe(true);
+        expect(client1.lastMessage!.pong).toBe(true);
     });
 });
 
@@ -277,10 +271,14 @@ class ClientHarness {
         this.websocket.readyState = WebSocket.CONNECTING;
         this.callbacks = callbacks;
         this.websocket.send.and.callFake((data: any) => {
-            const deserialized =
-                SocketMessage.deserializeBinary(data);
-            this.messagesFromServer.next(deserialized);
-            this.lastMessage = deserialized;
+            const socketMessage =
+                SocketMessage.decode(JSON.parse(data));
+            if (isLeft(socketMessage)) {
+                throw new Error(`Failed to parse SocketMessage: ${data}`);
+            }
+
+            this.messagesFromServer.next(socketMessage.right);
+            this.lastMessage = socketMessage.right;
         });
     }
     open() {
@@ -293,6 +291,6 @@ class ClientHarness {
         this.websocket.readyState = WebSocket.CLOSED;
     }
     sendMessage(message: SocketMessage) {
-        this.callbacks["message"][0](message.serializeBinary());
+        this.callbacks["message"][0](JSON.stringify(SocketMessage.encode(message)));
     }
 }

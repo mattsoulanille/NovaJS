@@ -12,13 +12,8 @@ jasmine_node_test(
 )
 
 ts_library(
-    name = "test_utils",
-    srcs = [
-        "test_utils.ts",
-    ],
-    deps = [
-        "//nova/src/proto:nova_service_ts_proto",
-    ]
+    name = "test_utils_lib",
+    srcs = ["test_utils.ts"],
 )
 
 ts_library(
@@ -29,8 +24,10 @@ ts_library(
         "SocketChannelServer_test.ts",
      ],
     deps = [
-        ":test_utils",
+        ":test_utils_lib",
         "//nova/src/communication:communication_server_lib",
+        "//nova/src/communication:communication_lib",
+        "@npm//fp-ts",
         "@npm//@types/node",
         "@npm//typescript",
         "@npm//uuid",
@@ -40,8 +37,6 @@ ts_library(
         "@npm//@types/ws",
         "@npm//jasmine",
         "@npm//@types/jasmine",
-        "//nova/src/proto:nova_service_ts_proto",
-        "//nova/src/proto:engine_state_ts_proto",
     ]
 )
 
@@ -53,15 +48,14 @@ ts_library(
     deps = [
         "@npm//@types/node",
         "@npm//@types/jasmine",
-        "@npm//google-protobuf",
         #"@npm//jasmine",
-        ":test_utils",
+        "@npm//fp-ts",
+        ":test_utils_lib",
         "//nova/src/communication:communication_client_lib",
+        "//nova/src/communication:communication_lib",
         #"@npm//uuid",
         #"@npm//@types/uuid",
         "@npm//rxjs",
-        "//nova/src/proto:nova_service_ts_proto",
-        "//nova/src/proto:engine_state_ts_proto",
     ]
 )
 

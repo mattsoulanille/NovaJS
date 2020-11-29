@@ -1,13 +1,8 @@
+import { isLeft } from "fp-ts/lib/Either";
 import { SocketChannelClient } from "novajs/nova/src/communication/SocketChannelClient";
-import { EngineState } from "novajs/nova/src/proto/engine_state_pb";
-import { GameMessage, SocketMessage } from "novajs/nova/src/proto/nova_service_pb";
+import { SocketMessage } from "novajs/nova/src/communication/SocketMessage";
 import { take } from "rxjs/operators";
-import { Callbacks, MessageBuilder, On, trackOn } from "./test_utils";
-
-const testGameMessage = new GameMessage();
-const testEngineState = new EngineState();
-testEngineState.setSystemskeysList(["foo", "bar", "baz"]);
-testGameMessage.setEnginestate(testEngineState);
+import { Callbacks, On, trackOn } from "./test_utils";
 
 describe("SocketChannelClient", function() {
 
@@ -34,36 +29,14 @@ describe("SocketChannelClient", function() {
             .toEqual("message");
     });
 
-    it("warns if the MessageEvent is not a Blob", async () => {
-        const client = new SocketChannelClient({ webSocket, warn });
-        let sendMessage = callbacks["message"][0];
-        expect(sendMessage).toBeTruthy();
-
-        const bogusMessage = "badmessage";
-        const messageEvent =
-            new MessageEvent("testMessage", { data: bogusMessage });
-
-        let warnPromise = new Promise((resolve) => {
-            warn.and.callFake(resolve);
-        });
-
-        sendMessage(messageEvent);
-        await warnPromise;
-
-        expect(warn).toHaveBeenCalled();
-        expect(warn.calls.mostRecent().args[0])
-            .toMatch("Expected data to be a Blob");
-
-    });
-
     it("warns if it can't decode a received message", async () => {
         const client = new SocketChannelClient({ webSocket, warn });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
-        const blob = new Blob([new Uint8Array([1, 2, 0]).buffer]);
+        const badMessage = "foobar";
         const messageEvent =
-            new MessageEvent("testMessage", { data: blob });
+            new MessageEvent("testMessage", { data: JSON.stringify(badMessage) });
 
         let warnPromise = new Promise((resolve) => {
             warn.and.callFake(resolve);
@@ -76,26 +49,46 @@ describe("SocketChannelClient", function() {
             .toMatch("Failed to deserialize");
     });
 
+    it("warns if the message has no body", async () => {
+        const client = new SocketChannelClient({ webSocket, warn });
+        let sendMessage = callbacks["message"][0];
+        expect(sendMessage).toBeTruthy();
+
+        const badMessage = { foo: 'bar' };
+        const messageEvent =
+            new MessageEvent("testMessage", { data: JSON.stringify(badMessage) });
+
+        let warnPromise = new Promise((resolve) => {
+            warn.and.callFake(resolve);
+        });
+        sendMessage(messageEvent);
+        await warnPromise;
+
+        expect(warn).toHaveBeenCalled();
+        expect(warn.calls.mostRecent().args[0])
+            .toMatch("Message had no body");
+    });
+
+
     it("emits when it receives a valid message", async () => {
         const client = new SocketChannelClient({ webSocket, warn });
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
-        const message = new MessageBuilder()
-            .setData(testGameMessage)
-            .build()
-            .serializeBinary();
+        const testMessage = {
+            foo: 'foo message',
+            bar: 'bar message',
+        };
 
-        const blob = new Blob([message]);
+        const message = SocketMessage.encode({ message: testMessage });
         const messageEvent =
-            new MessageEvent("testMessage", { data: blob });
-        const messagePromise = client.message.pipe(take(1)).toPromise();
+            new MessageEvent("testMessage", { data: JSON.stringify(message) })
 
+        const messagePromise = client.message.pipe(take(1)).toPromise();
         sendMessage(messageEvent);
 
         const messageReceived = await messagePromise;
-        expect(messageReceived.toObject())
-            .toEqual(testGameMessage.toObject());
+        expect(messageReceived).toEqual(testMessage);
     });
 
     it("replies to pings", async () => {
@@ -103,14 +96,9 @@ describe("SocketChannelClient", function() {
         let sendMessage = callbacks["message"][0];
         expect(sendMessage).toBeTruthy();
 
-        const message = new MessageBuilder()
-            .setPing(true)
-            .build()
-            .serializeBinary();
-
-        const blob = new Blob([message]);
+        const message = SocketMessage.encode({ ping: true });
         const messageEvent =
-            new MessageEvent("testMessage", { data: blob });
+            new MessageEvent("testMessage", { data: JSON.stringify(message) });
 
         const pongPromise = new Promise<unknown>((resolve) => {
             webSocket.send.and.callFake(resolve);
@@ -118,11 +106,11 @@ describe("SocketChannelClient", function() {
 
         sendMessage(messageEvent);
         const pong = await pongPromise;
-        if (!(pong instanceof Uint8Array)) {
-            throw new Error("pongPromise was not a Uint8Array");
+        const pongMessage = SocketMessage.decode(JSON.parse(pong as string));
+        if (isLeft(pongMessage)) {
+            throw new Error("pongPromise was not a SocketMessage");
         }
-        const deserialized = SocketMessage.deserializeBinary(pong);
-        expect(deserialized.getPong()).toBe(true);
+        expect(pongMessage.right.pong).toBe(true);
     });
 
     it("sends a ping if it hasn't heard from the server", async () => {
@@ -141,11 +129,11 @@ describe("SocketChannelClient", function() {
         jasmine.clock().tick(11);
 
         const ping = await pingPromise;
-        if (!(ping instanceof Uint8Array)) {
-            throw new Error("pingPromise was not a Uint8Array");
+        const pingMessage = SocketMessage.decode(JSON.parse(ping as string));
+        if (isLeft(pingMessage)) {
+            throw new Error("pingPromise was not a SocketMessage");
         }
-        const deserialized = SocketMessage.deserializeBinary(ping);
-        expect(deserialized.getPing()).toBe(true);
+        expect(pingMessage.right.ping).toBe(true);
 
         jasmine.clock().uninstall();
     });
@@ -158,7 +146,7 @@ describe("SocketChannelClient", function() {
             warn,
             timeout: 10,
         });
-        debugger;
+
         jasmine.clock().tick(21);
 
         expect(webSocket.close).toHaveBeenCalled();

@@ -1,5 +1,6 @@
 import { Vector, VectorLike } from "./Vector";
 import { mod } from "./Mod";
+import { immerable } from "immer";
 
 export const BOUNDARY = 10000;
 
@@ -8,13 +9,19 @@ function wrap(n: number): number {
 }
 
 export class Position extends Vector {
-
+    [immerable] = true;
     set x(x: number) {
         this.wrappedX = wrap(x);
+    }
+    get x() {
+        return this.wrappedX;
     }
 
     set y(y: number) {
         this.wrappedY = wrap(y);
+    }
+    get y() {
+        return this.wrappedY;
     }
 
     static fromVectorLike(v: VectorLike) {
@@ -45,3 +52,5 @@ export class Position extends Vector {
         )
     }
 }
+
+Position.prototype[immerable] = true;

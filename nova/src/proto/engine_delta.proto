@@ -8,3 +8,7 @@ message EngineDelta { // Next = 4
   map<string, SystemDelta> systems = 2;
   MapKeys systemsKeys = 3;
 }
+
+service EngineService {
+  rpc Update(stream EngineDelta) returns (stream EngineDelta) {}
+}
