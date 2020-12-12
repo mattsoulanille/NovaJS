@@ -1,6 +1,13 @@
 import { Entity } from "./entity";
+import { System } from "./system";
 
-export class World {
-    entities = new Map<string, Entity>();
-    systems = new Map<string, System>();
+export class World<Systems extends System> {
+    //entities = new Map<string /* UUID */, Entity>();
+    //systems = new Map<string, System>();
+
+    constructor(private systems: Set<Systems>)
+
+    function spawn() {
+
+}
 }

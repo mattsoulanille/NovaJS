@@ -7,9 +7,9 @@ type UnionToIntersection<T> =
     (x: infer V) => any ? V : never;
 
 // Get the type for a map from a component's name to its data
-type ComponentNameDataMap<C> = UnionToIntersection<
-    C extends Component<infer Name, infer Data, any>
-    ? Record<Name, Data> : never>;
+type ComponentNameDataMap<C> = {
+    [K in keyof C]: C[K] extends Component<infer Data, any> ? Data : never
+}
 
 type QueryResults<Q> =
     Q extends Query<infer Components> ? ComponentNameDataMap<Components> : never;
@@ -18,30 +18,32 @@ type QueryNameResultsMap<Queries> = {
     [Name in keyof Queries]: QueryResults<Queries[Name]>
 }
 
-type SystemStepArgs<Components, Queries> = ComponentNameDataMap<Components>
-    & QueryNameResultsMap<Queries>
-    & { world: World; }
+type SystemStepArgs<Args> = ComponentNameDataMap<Args>
+//& QueryNameResultsMap<Args>
+//& { world: World; }
 
-interface SystemArgs<Components extends Component<string, any, any>,
-    QueryNames extends string,
-    Queries extends { [Q in QueryNames]: Query<Component<Q, any, any>> }> {
-    components: Set<Components>;
-    queries: Queries;
-    step: (args: SystemStepArgs<Components, Queries>) => void;
+
+
+interface SystemArgs<StepKeys extends string,
+    StepArgs extends {
+        [key in StepKeys]:
+        Component<any, any> | Query<Component<any, any>[]> }> {
+
+    args: StepArgs;
+    step: (args: SystemStepArgs<StepArgs>) => void;
     multiplayer?: boolean;
 }
 
-export class System<Components extends Component<string, any, any>,
-    QueryNames extends string,
-    Queries extends { [Q in QueryNames]: Query<Component<Q, any, any>> }> {
-    readonly components: Set<Components>;
-    readonly queries: Queries;
-    readonly step: (args: SystemStepArgs<Components, Queries>) => void;
+export class System<StepKeys extends string,
+    StepArgs extends { [key in StepKeys]:
+        Component<any, any> | Query<Component<any, any>[]> }> {
+
+    readonly args: StepArgs;
+    readonly step: (args: SystemStepArgs<StepArgs>) => void;
     readonly multiplayer: boolean;
 
-    constructor({ components, queries, step, multiplayer }: SystemArgs<Components, QueryNames, Queries>) {
-        this.components = components;
-        this.queries = queries;
+    constructor({ args, step, multiplayer }: SystemArgs<StepKeys, StepArgs>) {
+        this.args = args;
         this.step = step;
         this.multiplayer = multiplayer ?? true;
     }
@@ -51,12 +53,14 @@ export class System<Components extends Component<string, any, any>,
  * A query provides a way of iterating over all the Entities that have
  * a specified set of components.
  */
-export class Query<Components extends Component<string, any, any>> {
-    constructor(readonly components: Set<Components>) { }
+export class Query<ComponentTuple extends Component<any, any>[]> {
+    constructor(readonly components: ComponentTuple) {
+
+    }
 }
 
+
 const FooComponent = new Component({
-    name: 'foo',
     type: t.type({ x: t.number }),
     getDelta(a) {
         return a;
@@ -67,7 +71,6 @@ const FooComponent = new Component({
 });
 
 const BarComponent = new Component({
-    name: 'bar',
     type: t.type({ y: t.string }),
     getDelta(a) {
         return a;
@@ -77,12 +80,11 @@ const BarComponent = new Component({
     }
 });
 
-const FooBarQuery = new Query(new Set([FooComponent, BarComponent]));
+//const FooBarQuery = new Query(new Set([FooComponent, BarComponent]));
 
 const b = new System({
-    components: new Set([FooComponent, BarComponent]),
-    queries: { bla: FooBarQuery },
-    step: ({ bar, foo, bla }) { }
+    args: { foo: FooComponent, bar: BarComponent },
+    step: ({ bar, foo, }) { }
 });
 
 // const a: System = {

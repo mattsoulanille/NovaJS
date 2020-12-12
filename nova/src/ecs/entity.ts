@@ -1,7 +1,7 @@
-import v4 from "uuid/v4";
+import { Component } from "./component";
 
 export class Entity {
-    constructor(readonly uuid = v4()) {
+    constructor(public components: Set<Component<string, unknown, unknown>>) {
 
     }
 }
