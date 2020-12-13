@@ -13,11 +13,15 @@ export interface ResourceArgs<Data, Delta> extends ComponentArgs<Data, Delta> {
 export class Resource<Data, Delta = Partial<Data>>
     extends Component<Data, Delta> {
 
-    readonly multiplayer: boolean
+    readonly multiplayer: boolean;
 
-    constructor({ type, getDelta, applyDelta, multiplayer }: ResourceArgs<Data, Delta>) {
-        super({ type, getDelta, applyDelta });
+    constructor({ name, type, getDelta, applyDelta, multiplayer }: ResourceArgs<Data, Delta>) {
+        super({ name, type, getDelta, applyDelta });
         this.multiplayer = multiplayer ?? true;
+    }
+
+    toString() {
+        return `Resource(${this.name ?? this.type.name})`;
     }
 }
 

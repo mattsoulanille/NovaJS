@@ -12,7 +12,9 @@ export type QueryResults<Q> =
  * a specified set of components.
  */
 export class Query<Components extends readonly Component<any, any>[]> {
-    constructor(readonly components: Components) {
+    constructor(readonly components: Components, readonly name?: string) { }
 
+    toString() {
+        return `Query(${this.name ?? this.components.map(c => c.toString())})`;
     }
 }

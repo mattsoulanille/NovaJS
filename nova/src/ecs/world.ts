@@ -40,6 +40,12 @@ export class World {
     }
 
     addSystem(system: System) {
+        for (const resource of system.resources) {
+            if (!this.resources.has(resource)) {
+                throw new Error(
+                    `World is missing ${resource} needed for ${system}`);
+            }
+        }
         this.systems.add(system);
     }
 
