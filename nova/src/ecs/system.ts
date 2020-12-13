@@ -1,67 +1,58 @@
-import { Component } from "./component";
-import { World } from "./world";
+import { Draft } from "immer";
 import * as t from 'io-ts';
+import { Component, ComponentData } from "./component";
+import { Query, QueryResults } from "./query";
+import { Resource, ResourceData } from "./resource";
 
-type UnionToIntersection<T> =
-    (T extends any ? (x: T) => any : never) extends
-    (x: infer V) => any ? V : never;
-
-// Get the type for a map from a component's name to its data
-
-type ComponentData<C> = C extends Component<infer Data, any> ? Data : never;
-
-type ComponentDataArgs<C> = {
-    [K in keyof C]: ComponentData<C[K]>
-}
-
-type QueryResults<Q> =
-    Q extends Query<infer Components> ? ComponentDataArgs<Components>[] : never;
-
-
-type StepArg<T> = QueryResults<T> | ComponentData<T>;
-type SystemStepArgs<Args> = {
+// The arguments that `step` is called with
+type StepArg<T> = Draft<QueryResults<T> | ComponentData<T> | ResourceData<T>>;
+export type SystemStepArgs<Args> = {
     [K in keyof Args]: StepArg<Args[K]>
 }
-//ComponentDataArgs<Args>
-//    | QueryResultArgs<Args>
-//& { world: World; }
 
-type ArgTypes = Component<any, any> | Query<readonly Component<any, any>[]>;
+// Types for args that are used to define a system. Passed in a tuple.
+export type ArgTypes = Component<any, any>
+    | Query<readonly Component<any, any>[]>
+    | Resource<any, any>;
 
-interface SystemArgs<StepArgs extends readonly ArgTypes[]> {
-    readonly args: StepArgs;
-    step: (...args: SystemStepArgs<StepArgs>) => void;
+type ResourcesOnly<T extends readonly [...unknown[]]> =
+    Extract<T[number], Resource<any, any>>;
+
+type QueriesOnly<T extends readonly [...unknown[]]> =
+    Extract<T[number], Query<any>>;
+
+type ComponentsOnly<T extends readonly [...unknown[]]> =
+    Exclude<Extract<T[number], Component<any, any>>, Resource<any, any>>;
+
+interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
+    readonly args: StepArgTypes;
+    step: (...args: SystemStepArgs<StepArgTypes>) => void;
 }
 
-export class System<StepArgs extends readonly ArgTypes[]> {
-    readonly args: StepArgs;
-    readonly step: (...args: SystemStepArgs<StepArgs>) => void;
+export class System<StepArgTypes extends readonly ArgTypes[] = ArgTypes[]> {
+    readonly args: StepArgTypes;
+    readonly components: Set<ComponentsOnly<StepArgTypes>>;
+    readonly resources: Set<ResourcesOnly<StepArgTypes>>;
+    readonly queries: Set<QueriesOnly<StepArgTypes>>;
+    readonly step: (...args: SystemStepArgs<StepArgTypes>) => void;
 
-    constructor({ args, step }: SystemArgs<StepArgs>) {
+    constructor({ args, step }: SystemArgs<StepArgTypes>) {
         this.args = args;
         this.step = step;
+
+        this.components = new Set(this.args.filter(
+            a => (a instanceof Component) && !(a instanceof Resource))
+        ) as Set<ComponentsOnly<StepArgTypes>>;
+
+        this.resources = new Set(this.args.filter(
+            a => (a instanceof Resource))
+        ) as Set<ResourcesOnly<StepArgTypes>>;
+
+        this.queries = new Set(this.args.filter(
+            a => (a instanceof Resource))
+        ) as Set<QueriesOnly<StepArgTypes>>;
     }
 }
-
-/**
- * A query provides a way of iterating over all the Entities that have
- * a specified set of components.
- */
-export class Query<Components extends readonly Component<any, any>[]> {
-    constructor(readonly components: Components) {
-
-    }
-}
-
-/**
- * Resources are not attached to Entities, and there is only a single instance
- * of each Resource in a world.
- */
-export class Resource<Data, Delta = Partial<Data>> {
-
-}
-
-
 
 const FooComponent = new Component({
     type: t.type({ x: t.number }),
@@ -83,19 +74,31 @@ const BarComponent = new Component({
     }
 });
 
+const BazResource = new Resource({
+    type: t.type({ z: t.array(t.string) }),
+    getDelta(a) {
+        return a;
+    },
+    applyDelta(data) {
+        return data
+    },
+    multiplayer: true
+})
+
 const FooBarQuery = new Query([FooComponent, BarComponent] as const);
 
 const b = new System({
-    args: [FooComponent, BarComponent, FooBarQuery] as const,
-    step: (foo, bar, a) => {
-        for (let q of a) {
-
+    args: [FooComponent, BarComponent, FooBarQuery, BazResource] as const,
+    step: (foo, bar, a, baz) => {
+        bar.y = foo.x.toString();
+        for (let f of a) {
+            baz.z.push(f[1].y)
         }
     }
 });
+type Test = [typeof FooComponent, typeof BarComponent, typeof BazResource, typeof FooBarQuery];
+type R = ResourcesOnly<Test>;
+type C = ComponentsOnly<Test>;
+type Q = QueriesOnly<Test>;
+type O = R | C;
 
-// const a: System = {
-//     components: ['foo', 'bar'],
-//     multiplayer: true,
-//     step: ({}:{ foo:})
-// }

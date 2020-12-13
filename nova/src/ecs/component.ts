@@ -1,6 +1,8 @@
 import * as t from 'io-ts';
 
-interface ComponentArgs<Data, Delta = Partial<Data>> {
+export type ComponentData<C> = C extends Component<infer Data, any> ? Data : never;
+
+export interface ComponentArgs<Data, Delta = Partial<Data>> {
     type: t.Type<Data>;
     getDelta: (a: Data, b: Data) => Delta | undefined;
     applyDelta: (data: Data, delta: Delta) => Data;
