@@ -8,6 +8,7 @@ import { UUID, World } from './world';
 import { Entity } from './entity';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
+import { original } from 'immer';
 
 const FOO_COMPONENT = new Component({
     type: t.type({ x: t.number }),
@@ -243,5 +244,36 @@ describe('world', () => {
 
         await expectAsync(stepData.pipe(take(4), toArray()).toPromise())
             .toBeResolvedTo(['first', 'second', 'third', 'fourth']);
+    });
+
+    it('allows getting the original state for a given step', async () => {
+        const stepData = new ReplaySubject<string>();
+
+        const firstSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = 'first';
+            },
+        });
+        const secondSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                stepData.next(bar.y);
+                const orig = original(bar);
+                stepData.next(orig?.y ?? 'no original found');
+            },
+            after: new Set([firstSystem]),
+        });
+
+        world.commands.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'original value' }));
+
+        world.addSystem(firstSystem)
+            .addSystem(secondSystem);
+
+        world.step();
+
+        await expectAsync(stepData.pipe(take(2), toArray()).toPromise())
+            .toBeResolvedTo(['first', 'original value'])
     });
 });

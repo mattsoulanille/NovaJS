@@ -1,11 +1,11 @@
 import produce, { Draft, enableMapSet, Immutable } from "immer";
 import { Subscription } from "rxjs";
 import { Component } from "./component";
-import { ComponentsMap, ComponentTypes, Entity } from "./entity";
+import { ComponentsMap, Entity } from "./entity";
 import { Query, QueryResults } from "./query";
 import { Resource } from "./resource";
-import { topologicalSort } from './utils';
 import { System } from "./system";
+import { topologicalSort } from './utils';
 
 export const Commands = Symbol();
 export const UUID = Symbol();
@@ -143,7 +143,7 @@ export class World {
         });
     }
 
-    addSystem(system: System) {
+    addSystem(system: System): this {
         for (const resource of system.resources) {
             if (!this.state.resources.has(resource)) {
                 throw new Error(
@@ -201,6 +201,7 @@ export class World {
 
         // Topologically sort the graph
         this.systems = topologicalSort(graph);
+        return this;
     }
 
     step() {
