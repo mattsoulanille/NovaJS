@@ -4,32 +4,8 @@ import { Component } from "./component";
 import { ComponentsMap, ComponentTypes, Entity } from "./entity";
 import { Query, QueryResults } from "./query";
 import { Resource } from "./resource";
-import { subset } from "./set_utils";
+import { topologicalSort } from './utils';
 import { System } from "./system";
-
-/**
- * Topologically sort a directed graph stored as a map from nodes to incoming edges.
- */
-function topologicalSort<T>(graph: Map<T, Set<T>>): T[] {
-    const usedNodes = new Set<T>();
-    const sorted: T[] = [];
-
-    while (sorted.length !== graph.size) {
-        const lastLength = sorted.length;
-        for (const [node, incomingEdges] of graph) {
-            // Check if all nodes this node must come after are already in the list.
-            if (subset(incomingEdges, usedNodes)) {
-                sorted.push(node);
-                usedNodes.add(node);
-            }
-        }
-        if (sorted.length === lastLength) {
-            throw new Error('Graph contains a cycle');
-        }
-    }
-
-    return sorted;
-}
 
 export const Commands = Symbol();
 export const UUID = Symbol();
@@ -47,6 +23,14 @@ export interface CommandsInterface {
 // How do you keep entities mostly like data while also allowing to
 // add and remove components from them efficiently?
 
+// How do you create new entities that need to asynchronously load data for their
+// components from gameData?
+// - Serialize ship to id + outfits. Deserialize takes long time and requires reconstruction
+//   of properties from outfits. Just send the whole thing? How big is it?
+
+// How does ecs draw stuff?
+// - Can't store PIXI stuff as components since they're not immerable. Store references instead?
+
 // Have a Multiplayer system that runs after other systems and uses the Delta component,
 // which other systems can add their deltas to. Then, that system sends and
 // receives multiplayer messages. Solves Projectiles by not adding the Delta component
@@ -61,6 +45,7 @@ export interface CommandsInterface {
 // What about resources?
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
+
 
 interface WrappedSystem {
     system: System;
@@ -167,8 +152,7 @@ export class World {
         }
 
         const entities = new Set([...this.state.entities.values()]
-            .filter(entity => subset(system.allComponents,
-                new Set(entity.components.keys())))
+            .filter(entity => system.supportsEntity(entity))
             .map(entity => entity.uuid));
 
         // Add queries from the system
@@ -272,21 +256,3 @@ export class World {
         }) as unknown as QueryResults<Query<C>>;
     }
 }
-    // private entityNewComponents(wrappedEntity: WrappedEntity, components: ComponentTypes) {
-
-    //     for (const { system, entities } of this.systems) {
-    //         if (subset(system.allComponents, components)) {
-    //             entities.add(wrappedEntity);
-    //         } else {
-    //             entities.delete(wrappedEntity);
-    //         }
-    //     }
-    //     for (const [query, entities] of this.queries) {
-    //         if (subset(new Set(query.components), components)) {
-    //             entities.add(wrappedEntity);
-    //         } else {
-    //             entities.delete(wrappedEntity);
-    //         }
-    //     }
-    // }
-

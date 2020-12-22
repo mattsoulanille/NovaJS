@@ -12,8 +12,7 @@ ts_library(
         "query.ts",
         "resource.ts",
         "world.ts",
-        "set_utils.ts",
-        "util.ts",
+        "utils.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -29,6 +28,7 @@ ts_library(
     srcs = [
         "system_test.ts",
         "world_test.ts",
+        "utils_test.ts",
     ],
     deps = [
         ":ecs",

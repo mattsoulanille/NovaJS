@@ -1,7 +1,7 @@
 import { Component, ComponentData } from "./component";
 import { ComponentsMap } from "./entity";
-import { subset } from "./set_utils";
-import { WithComponents } from "./util";
+import { subset } from "./utils";
+import { WithComponents } from "./utils";
 
 export type ComponentDataArgs<C> = {
     [K in keyof C]: ComponentData<C[K]>

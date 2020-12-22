@@ -5,8 +5,8 @@ import { Resource, ResourceData } from "./resource";
 import * as t from 'io-ts';
 import { CommandsInterface, Commands, UUID } from "./world";
 import { ComponentsMap } from "./entity";
-import { subset } from "./set_utils";
-import { WithComponents } from "./util";
+import { subset } from "./utils";
+import { WithComponents } from "./utils";
 
 // The arguments that `step` is called with
 type StepArg<T> = Draft<QueryResults<T> | ComponentData<T> | ResourceData<T>> | CommandsObject<T> | UUIDData<T>;

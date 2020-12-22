@@ -190,4 +190,58 @@ describe('world', () => {
         await expectAsync(stepData.pipe(take(1)).toPromise())
             .toBeResolvedTo('entityUuid');
     });
+
+    it('runs systems in topological order', async () => {
+        const stepData = new ReplaySubject<string>();
+
+        const secondSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = 'second';
+                stepData.next(bar.y);
+            }
+        });
+        const firstSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = 'first';
+                stepData.next(bar.y);
+            },
+            before: new Set([secondSystem]),
+        });
+        const fourthSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = 'fourth';
+                stepData.next(bar.y);
+            },
+        });
+        const thirdSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = 'third';
+                stepData.next(bar.y);
+            },
+            after: new Set([secondSystem]),
+            before: new Set([fourthSystem]),
+        });
+
+        const world = new World();
+
+        // Add systems in a random order
+        let systems = [firstSystem, secondSystem, thirdSystem, fourthSystem];
+        while (systems.length > 0) {
+            const index = Math.floor(Math.random() * systems.length);
+            world.addSystem(systems[index]);
+            systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
+        }
+
+        world.commands.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'unset' }));
+
+        world.step();
+
+        await expectAsync(stepData.pipe(take(4), toArray()).toPromise())
+            .toBeResolvedTo(['first', 'second', 'third', 'fourth']);
+    });
 });
