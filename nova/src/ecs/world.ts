@@ -1,88 +1,292 @@
-import v4 from "uuid/v4";
+import produce, { Draft, enableMapSet, Immutable } from "immer";
+import { Subscription } from "rxjs";
 import { Component } from "./component";
-import { Entity } from "./entity";
+import { ComponentsMap, ComponentTypes, Entity } from "./entity";
 import { Query, QueryResults } from "./query";
 import { Resource } from "./resource";
+import { subset } from "./set_utils";
 import { System } from "./system";
 
-type ComponentDataPair<T> = [Component<T, unknown>, T];
+/**
+ * Topologically sort a directed graph stored as a map from nodes to incoming edges.
+ */
+function topologicalSort<T>(graph: Map<T, Set<T>>): T[] {
+    const usedNodes = new Set<T>();
+    const sorted: T[] = [];
 
-// Returns true if a is a subset of b
-function subset(a: Set<unknown>, b: Set<unknown>) {
-    if (a.size > b.size) {
-        return false;
-    }
-
-    for (const element of a) {
-        if (!b.has(element)) {
-            return false;
+    while (sorted.length !== graph.size) {
+        const lastLength = sorted.length;
+        for (const [node, incomingEdges] of graph) {
+            // Check if all nodes this node must come after are already in the list.
+            if (subset(incomingEdges, usedNodes)) {
+                sorted.push(node);
+                usedNodes.add(node);
+            }
+        }
+        if (sorted.length === lastLength) {
+            throw new Error('Graph contains a cycle');
         }
     }
-    return true;
+
+    return sorted;
 }
 
+export const Commands = Symbol();
+export const UUID = Symbol();
+
+export interface CommandsInterface {
+    addEntity: (entity: Entity) => void;
+    removeEntity: (entity: Entity | string) => void;
+}
+
+// How do you serialize components and make sure the receiver
+// knows which is which?
+
+// How do you use immer and make patches when you step the state?
+
+// How do you keep entities mostly like data while also allowing to
+// add and remove components from them efficiently?
+
+// Have a Multiplayer system that runs after other systems and uses the Delta component,
+// which other systems can add their deltas to. Then, that system sends and
+// receives multiplayer messages. Solves Projectiles by not adding the Delta component
+// to them (Wait, this doesn't actually work. If they don't have the Delta component,
+// then the systems that add to Delta won't run). Add the ability to make
+// components optional for a system to fix this? Seems good to me.
+// It also solves the display systems since they simply don't add anything to the
+// Delta component.
+// To notify when an entity is added, it just sends that new Entity's delta.
+// To notify when an entity is removed, we need some kind of teardown system?
+// This loses the ease of use of immer patches, though.
+// What about resources?
+// Idea: Run other nova systems in webworkers and pass the state to the main
+// thread when you jump between systems.
+
+interface WrappedSystem {
+    system: System;
+    entities: Set<string /* uuid */>;
+}
+
+interface WrappedEntity {
+    entity: Entity;
+    componentsSubscription?: Subscription;
+}
+
+interface State {
+    entities: Map<string, EntityState>;
+    resources: Map<Resource<unknown, unknown>, unknown>;
+}
+
+interface EntityState {
+    components: ComponentsMap,
+    uuid: string,
+    name?: string,
+    multiplayer: boolean,
+}
+
+enableMapSet();
+
 export class World {
-    private entities = new Map<string /* UUID */, Entity<Component<any, any>>>();
-    private resources = new Map<Resource<unknown, unknown>, unknown>();
-    private systems = new Set<System>();
+    private state: Immutable<State> = {
+        entities: new Map<string /* UUID */, EntityState>(),
+        resources: new Map<Resource<unknown, unknown>, unknown /* resource data */>(),
+    };
 
-    constructor() { }
+    //private wrappedEntities = new Map<string, WrappedEntity>();
 
-    addEntity(components: Iterable<ComponentDataPair<unknown>>, multiplayer = true) {
-        // TODO: Pass through UUIDs?
-        const entity = new Entity(new Map(components), multiplayer, v4());
-        this.entities.set(entity.uuid, entity);
+    private systems: Array<WrappedSystem> = []; // Not a map because order matters.
+    private queries = new Map<Query, Set<string /* entity uuid */>>();
+
+    readonly commands: CommandsInterface = {
+        addEntity: this.addEntity.bind(this),
+        removeEntity: this.removeEntity.bind(this),
+    }
+
+    private addEntity(entity: Entity) {
+        this.state = produce(this.state, draft => {
+            draft.entities.set(entity.uuid, {
+                components: entity.components,
+                multiplayer: entity.multiplayer,
+                uuid: entity.uuid,
+                name: entity.name
+            });
+        });
+
+        for (const { system, entities } of this.systems) {
+            if (system.supportsEntity(entity)) {
+                entities.add(entity.uuid);
+            }
+        }
+        for (const [query, entities] of this.queries) {
+            if (query.supportsEntity(entity)) {
+                entities.add(entity.uuid);
+            }
+        }
+    }
+
+    private removeEntity(entity: Entity | string): Entity {
+        const entityUUID = entity instanceof Entity ? entity.uuid : entity;
+
+        const entityData = this.state.entities.get(entityUUID);
+        if (!entityData) {
+            throw new Error(`No such entity ${entity}`);
+        }
+
+        for (const { entities } of this.systems) {
+            entities.delete(entityUUID);
+        }
+        for (const [, entities] of this.queries) {
+            entities.delete(entityUUID);
+        }
+
+        this.state = produce(this.state, draft => {
+            draft.entities.delete(entityUUID);
+        });
+
+        const removedEntity = new Entity(entityData);
+        for (const [component, data] of entityData.components) {
+            removedEntity.addComponent(component, data);
+        }
+        return removedEntity;
+        // TODO: Notify peers or server?
     }
 
     addResource<Data, Delta>(resource: Resource<Data, Delta>, value: Data) {
         // TODO: Fix these types. Maybe pass resources in the World constructor?
-        this.resources.set(resource as Resource<unknown, unknown>, value);
+        this.state = produce(this.state, draft => {
+            draft.resources.set(resource as Resource<unknown, unknown>, value);
+        });
     }
 
     addSystem(system: System) {
         for (const resource of system.resources) {
-            if (!this.resources.has(resource)) {
+            if (!this.state.resources.has(resource)) {
                 throw new Error(
                     `World is missing ${resource} needed for ${system}`);
             }
         }
-        this.systems.add(system);
+
+        const entities = new Set([...this.state.entities.values()]
+            .filter(entity => subset(system.allComponents,
+                new Set(entity.components.keys())))
+            .map(entity => entity.uuid));
+
+        // Add queries from the system
+        for (const query of system.queries) {
+            if (this.queries.has(query)) {
+                continue;
+            }
+
+            const queryEntities = new Set([...this.state.entities.values()]
+                .filter(query.supportsEntity)
+                .map(entity => entity.uuid));
+
+            this.queries.set(query, queryEntities);
+        }
+
+        // ---- Topologically insert the new system ----
+
+        // Construct a graph with no edges. 
+        const graph = new Map<WrappedSystem, Set<WrappedSystem>>(
+            this.systems.map(val => [val, new Set()]));
+        graph.set({ system, entities }, new Set());
+
+        // Add all edges to the graph. Store directed edges from node A to B on node B.
+        const wrappedSystemMap = new Map<System, WrappedSystem>(
+            [...graph.keys()].map(key => [key.system, key]));
+
+        for (const [wrappedSystem, incomingEdges] of graph) {
+            // Systems that this system runs before have incoming edges from this
+            // system in the graph.
+            for (const beforeSystem of wrappedSystem.system.before) {
+                const beforeVal = wrappedSystemMap.get(beforeSystem);
+                if (beforeVal) {
+                    const incomingBeforeEdges = graph.get(beforeVal);
+                    incomingBeforeEdges?.add(wrappedSystem)
+                }
+            }
+
+            // This system has incoming edges from the systems that it runs after.
+            for (const afterSystem of wrappedSystem.system.after) {
+                const afterVal = wrappedSystemMap.get(afterSystem);
+                if (afterVal) {
+                    incomingEdges.add(afterVal);
+                }
+            }
+        }
+
+        // Topologically sort the graph
+        this.systems = topologicalSort(graph);
     }
 
     step() {
-        // TODO: Cache this info
-        for (const system of this.systems) {
-            for (const entity of this.getMatchingEntities(system.components)) {
-                const args = system.args.map((arg) => {
-                    if (arg instanceof Resource) {
-                        if (!this.resources.has(arg)) {
-                            throw new Error(`Missing resource ${arg}`);
-                        }
-                        return this.resources.get(arg);
-                    } else if (arg instanceof Component) {
-                        return entity.components.get(arg);
-                    } else { // query
-                        return this.fulfillQuery(arg);
+        this.state = produce(this.state, draft => {
+            for (const { system, entities } of this.systems) {
+                for (const entityUUID of entities) {
+                    if (!draft.entities.has(entityUUID)) {
+                        throw new Error(`Internal error: Missing entity ${entityUUID}`);
                     }
-                });
+                    const entity = draft.entities.get(entityUUID)!;
 
-                // TODO: system.step accepts ...any[]. Fix this.
-                system.step(...args);
+                    const args = system.args.map(arg => {
+                        if (arg instanceof Resource) {
+                            if (!draft.resources.has(arg)) {
+                                throw new Error(`Missing resource ${arg}`);
+                            }
+                            return draft.resources.get(arg);
+                        } else if (arg instanceof Component) {
+                            return entity.components.get(arg);
+                        } else if (arg instanceof Query) {
+                            return this.fulfillQuery(arg, draft);
+                        } else if (arg === Commands) {
+                            return this.commands;
+                        } else if (arg === UUID) {
+                            return entityUUID;
+                        } else {
+                            throw new Error(`Internal error: unrecognized arg ${arg}`);
+                        }
+                    });
+                    // TODO: system.step accepts ...any[]. Fix this.
+                    system.step(...args);
+                }
             }
+        });
+    }
+
+    private fulfillQuery<C extends readonly Component<any, any>[]>(
+        query: Query<C>, draft: Draft<State>): QueryResults<Query<C>> {
+
+        const entityUUIDs = this.queries.get(query);
+        if (!entityUUIDs) {
+            throw new Error(`Internal Error: ${query} was not registered in the world`);
         }
-    }
 
-    private getMatchingEntities<C extends Component<any, any>>(components: Set<C>) {
-        //Entity<C>[] {
-        return [...this.entities.values()].filter(
-            entity => subset(components, new Set(entity.components.keys())))
-    }
+        return [...entityUUIDs].map(entityUUID => {
+            if (!draft.entities.has(entityUUID)) {
+                throw new Error(`Missing entity ${entityUUID}`);
+            }
+            const entity = draft.entities.get(entityUUID)!;
 
-    private fulfillQuery<C extends readonly Component<any, any>[]>(query: Query<C>): QueryResults<Query<C>> {
-        const entities = this.getMatchingEntities(new Set(query.components));
-
-        return entities.map(entity =>
-            query.components.map(component => entity.components.get(component))
-        ) as unknown as QueryResults<Query<C>>;
+            return query.components.map(component =>
+                entity.components.get(component))
+        }) as unknown as QueryResults<Query<C>>;
     }
 }
+    // private entityNewComponents(wrappedEntity: WrappedEntity, components: ComponentTypes) {
+
+    //     for (const { system, entities } of this.systems) {
+    //         if (subset(system.allComponents, components)) {
+    //             entities.add(wrappedEntity);
+    //         } else {
+    //             entities.delete(wrappedEntity);
+    //         }
+    //     }
+    //     for (const [query, entities] of this.queries) {
+    //         if (subset(new Set(query.components), components)) {
+    //             entities.add(wrappedEntity);
+    //         } else {
+    //             entities.delete(wrappedEntity);
+    //         }
+    //     }
+    // }
+

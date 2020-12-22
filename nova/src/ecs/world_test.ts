@@ -4,7 +4,10 @@ import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
 import * as t from 'io-ts';
-import { World } from './world';
+import { UUID, World } from './world';
+import { Entity } from './entity';
+import { ReplaySubject } from 'rxjs';
+import { take, toArray } from 'rxjs/operators';
 
 const FOO_COMPONENT = new Component({
     type: t.type({ x: t.number }),
@@ -59,5 +62,132 @@ describe('world', () => {
     it('throws an error if a system is added before its resources', () => {
         expect(() => world.addSystem(FOO_BAR_SYSTEM))
             .toThrowError('World is missing Resource(baz) needed for System(foobar)');
+    });
+
+    it('passes components to a system', async () => {
+        const stepData = new ReplaySubject<[number, string]>();
+        const testSystem = new System({
+            args: [FOO_COMPONENT, BAR_COMPONENT] as const,
+            step: (fooData, barData) => {
+                stepData.next([fooData.x, barData.y]);
+            }
+        });
+
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'asdf' })
+        );
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1), toArray()).toPromise())
+            .toBeResolvedTo([[123, 'asdf']]);
+    });
+
+    it('passes components to a system added after the components', async () => {
+        const stepData = new ReplaySubject<[number, string]>();
+        const testSystem = new System({
+            args: [FOO_COMPONENT, BAR_COMPONENT] as const,
+            step: (fooData, barData) => {
+                stepData.next([fooData.x, barData.y]);
+            }
+        });
+
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'asdf' })
+        );
+        world.addSystem(testSystem);
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1), toArray()).toPromise())
+            .toBeResolvedTo([[123, 'asdf']]);
+    });
+
+    it('allows systems to modify components', async () => {
+        const stepData = new ReplaySubject<number>();
+        const testSystem = new System({
+            args: [FOO_COMPONENT] as const,
+            step: (fooData) => {
+                fooData.x += 1;
+                stepData.next(fooData.x);
+            }
+        });
+
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+
+        world.step();
+        world.step();
+        world.step();
+
+        await expectAsync(stepData.pipe(take(3), toArray()).toPromise())
+            .toBeResolvedTo([1, 2, 3]);
+    });
+
+    it('fulfills queries', async () => {
+        const query = new Query([FOO_COMPONENT, BAR_COMPONENT] as const, "TestQuery");
+        const stepData = new ReplaySubject<[number, string]>();
+        const testSystem = new System({
+            args: [query] as const,
+            step: (queryData) => {
+                for (let [{ x }, { y }] of queryData) {
+                    stepData.next([x, y]);
+                }
+            }
+        });
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'asdf' }));
+
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo([123, 'asdf']);
+
+    });
+
+    it('passes resources to systems', async () => {
+        const stepData = new ReplaySubject<string[]>();
+        const testSystem = new System({
+            args: [BAZ_RESOURCE, FOO_COMPONENT] as const,
+            step: ({ z }) => {
+                stepData.next([...z]);
+            }
+        });
+
+        world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo(['foo', 'bar']);
+    })
+
+    it('passes uuid to systems', async () => {
+        const stepData = new ReplaySubject<string>();
+        const testSystem = new System({
+            args: [UUID, FOO_COMPONENT] as const,
+            step: (uuid) => {
+                stepData.next(uuid);
+            }
+        });
+
+        world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity({ uuid: 'entityUuid' })
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo('entityUuid');
     });
 });

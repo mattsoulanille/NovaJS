@@ -12,12 +12,15 @@ ts_library(
         "query.ts",
         "resource.ts",
         "world.ts",
+        "set_utils.ts",
+        "util.ts",
     ],
     deps = [
         "@npm//io-ts",
         "@npm//immer",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//rxjs",
     ]
 )
 
@@ -31,6 +34,7 @@ ts_library(
         ":ecs",
         "@npm//@types/jasmine",
         "@npm//io-ts",
+        "@npm//rxjs",
     ]
 )
 

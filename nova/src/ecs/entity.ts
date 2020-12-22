@@ -1,6 +1,41 @@
-import { Component, ComponentData } from "./component";
+import produce, { enableMapSet, Immutable } from "immer";
+import { BehaviorSubject } from "rxjs";
+import { v4 } from "uuid";
+import { Component } from "./component";
 
-export class Entity<C extends Component<any, any>> {
-    constructor(readonly components: Map<C, ComponentData<C>>,
-        readonly multiplayer: boolean, readonly uuid: string) { }
+interface EntityArgs {
+    multiplayer?: boolean;
+    uuid?: string;
+    name?: string;
+}
+
+export type ComponentsMap = Map<Component<unknown, unknown>, unknown>;
+export type ComponentTypes = Set<Component<unknown, unknown>>;
+
+// This is a handle for the entity that the world creates.
+export class Entity {
+    readonly components: ComponentsMap = new Map();
+    readonly multiplayer: boolean;
+    readonly uuid: string;
+    readonly name?: string;
+
+    constructor(args?: EntityArgs) {
+        this.multiplayer = args?.multiplayer ?? true;
+        this.uuid = args?.uuid ?? v4();
+        this.name = args?.name;
+    }
+
+    addComponent<Data>(component: Component<Data, any>, data: Data): this {
+        this.components.set(component as Component<unknown, unknown>, data);
+        return this;
+    }
+
+    removeComponent(component: Component<any, any>) {
+        this.components.delete(component);
+        return this;
+    }
+
+    toString() {
+        return `Entity(${this.name ?? this.uuid})`;
+    }
 }
