@@ -128,27 +128,27 @@ describe('world', () => {
     });
 
     it('fulfills queries', async () => {
-        const query = new Query([FOO_COMPONENT, BAR_COMPONENT] as const, "TestQuery");
-        const stepData = new ReplaySubject<[number, string]>();
+        const query = new Query([FOO_COMPONENT, BAR_COMPONENT, UUID] as const, "TestQuery");
+        const stepData = new ReplaySubject<[number, string, string]>();
         const testSystem = new System({
             args: [query] as const,
             step: (queryData) => {
-                for (let [{ x }, { y }] of queryData) {
-                    stepData.next([x, y]);
+                for (let [{ x }, { y }, uuid] of queryData) {
+                    stepData.next([x, y, uuid]);
                 }
             }
         });
         world.addSystem(testSystem);
         world.commands.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.commands.addEntity(new Entity()
+        world.commands.addEntity(new Entity({ uuid: 'example uuid' })
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
         world.step();
 
         await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo([123, 'asdf']);
+            .toBeResolvedTo([123, 'asdf', 'example uuid']);
 
     });
 
@@ -275,5 +275,14 @@ describe('world', () => {
 
         await expectAsync(stepData.pipe(take(2), toArray()).toPromise())
             .toBeResolvedTo(['first', 'original value'])
+    });
+
+
+    it('removes entities', async () => {
+        const e1 = world.commands.addEntity(new Entity());
+        const e2 = world.commands.addEntity(new Entity());
+
+
+
     });
 });

@@ -20,7 +20,7 @@ export type SystemStepArgs<Args> = {
 
 // Types for args that are used to define a system. Passed in a tuple.
 export type ArgTypes = Component<any, any>
-    | Query<readonly Component<any, any>[]>
+    | Query
     | Resource<any, any>
     | typeof Commands
     | typeof UUID;
@@ -31,7 +31,7 @@ type ResourcesOnly<T extends readonly [...unknown[]]> =
 type QueriesOnly<T extends readonly [...unknown[]]> =
     Extract<T[number], Query<any>>;
 
-type ComponentsOnly<T extends readonly [...unknown[]]> =
+export type ComponentsOnly<T extends readonly [...unknown[]]> =
     Exclude<Extract<T[number], Component<any, any>>, Resource<any, any>>;
 
 type QueryComponents<T> =

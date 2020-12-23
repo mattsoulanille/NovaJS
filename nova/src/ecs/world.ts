@@ -2,17 +2,19 @@ import produce, { Draft, enableMapSet, Immutable } from "immer";
 import { Subscription } from "rxjs";
 import { Component } from "./component";
 import { ComponentsMap, Entity } from "./entity";
-import { Query, QueryResults } from "./query";
+import { Query, QueryArgTypes, QueryResults } from "./query";
 import { Resource } from "./resource";
 import { System } from "./system";
 import { topologicalSort } from './utils';
+import { v4 } from "uuid";
+import { Plugin } from './plugin';
 
 export const Commands = Symbol();
 export const UUID = Symbol();
 
 export interface CommandsInterface {
-    addEntity: (entity: Entity) => void;
-    removeEntity: (entity: Entity | string) => void;
+    addEntity: (entity: Entity) => string;
+    removeEntity: (entity: string) => Entity | undefined;
 }
 
 // How do you serialize components and make sure the receiver
@@ -42,7 +44,9 @@ export interface CommandsInterface {
 // To notify when an entity is added, it just sends that new Entity's delta.
 // To notify when an entity is removed, we need some kind of teardown system?
 // This loses the ease of use of immer patches, though.
-// What about resources?
+// What about resources? Use an entity to update their deltas and put them onto the
+// multiplayer component.
+
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
 
@@ -50,11 +54,6 @@ export interface CommandsInterface {
 interface WrappedSystem {
     system: System;
     entities: Set<string /* uuid */>;
-}
-
-interface WrappedEntity {
-    entity: Entity;
-    componentsSubscription?: Subscription;
 }
 
 interface State {
@@ -77,9 +76,8 @@ export class World {
         resources: new Map<Resource<unknown, unknown>, unknown /* resource data */>(),
     };
 
-    //private wrappedEntities = new Map<string, WrappedEntity>();
-
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
+
     private queries = new Map<Query, Set<string /* entity uuid */>>();
 
     readonly commands: CommandsInterface = {
@@ -87,34 +85,40 @@ export class World {
         removeEntity: this.removeEntity.bind(this),
     }
 
+    constructor(private name?: string) { }
+
+    addPlugin(plugin: Plugin) {
+        plugin.build(this);
+    }
+
     private addEntity(entity: Entity) {
+        const uuid = entity.uuid ?? v4();
         this.state = produce(this.state, draft => {
-            draft.entities.set(entity.uuid, {
+            draft.entities.set(uuid, {
                 components: entity.components,
                 multiplayer: entity.multiplayer,
-                uuid: entity.uuid,
+                uuid,
                 name: entity.name
             });
         });
 
         for (const { system, entities } of this.systems) {
             if (system.supportsEntity(entity)) {
-                entities.add(entity.uuid);
+                entities.add(uuid);
             }
         }
         for (const [query, entities] of this.queries) {
             if (query.supportsEntity(entity)) {
-                entities.add(entity.uuid);
+                entities.add(uuid);
             }
         }
+        return uuid;
     }
 
-    private removeEntity(entity: Entity | string): Entity {
-        const entityUUID = entity instanceof Entity ? entity.uuid : entity;
-
+    private removeEntity(entityUUID: string): Entity | undefined {
         const entityData = this.state.entities.get(entityUUID);
         if (!entityData) {
-            throw new Error(`No such entity ${entity}`);
+            return;
         }
 
         for (const { entities } of this.systems) {
@@ -238,7 +242,33 @@ export class World {
         });
     }
 
-    private fulfillQuery<C extends readonly Component<any, any>[]>(
+    // private findArg<Data, Delta>(arg: Resource<Data, Delta>
+    //     | Component<Data, Delta> | Query | typeof Commands | typeof UUID) {
+
+    //     const args = system.args.map(arg => {
+    //         if (arg instanceof Resource) {
+    //             if (!draft.resources.has(arg)) {
+    //                 throw new Error(`Missing resource ${arg}`);
+    //             }
+    //             return draft.resources.get(arg);
+    //         } else if (arg instanceof Component) {
+    //             return entity.components.get(arg);
+    //         } else if (arg instanceof Query) {
+    //             return this.fulfillQuery(arg, draft);
+    //         } else if (arg === Commands) {
+    //             return this.commands;
+    //         } else if (arg === UUID) {
+    //             return entityUUID;
+    //         } else {
+    //             throw new Error(`Internal error: unrecognized arg ${arg}`);
+    //         }
+    //     });
+
+
+
+    // }
+
+    private fulfillQuery<C extends readonly QueryArgTypes[]>(
         query: Query<C>, draft: Draft<State>): QueryResults<Query<C>> {
 
         const entityUUIDs = this.queries.get(query);
@@ -252,8 +282,19 @@ export class World {
             }
             const entity = draft.entities.get(entityUUID)!;
 
-            return query.components.map(component =>
-                entity.components.get(component))
+            return query.args.map(arg => {
+                if (arg === UUID) {
+                    return entity.uuid;
+                } else if (arg instanceof Component) {
+                    return entity.components.get(arg)
+                } else {
+                    throw new Error(`Internal error: unrecognized arg ${arg}`);
+                }
+            })
         }) as unknown as QueryResults<Query<C>>;
+    }
+
+    toString() {
+        return `World(${this.name ?? 'unnamed'})`;
     }
 }

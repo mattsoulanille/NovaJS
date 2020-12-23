@@ -14,14 +14,14 @@ export type ComponentTypes = Set<Component<unknown, unknown>>;
 
 // This is a handle for the entity that the world creates.
 export class Entity {
-    readonly components: ComponentsMap = new Map();
-    readonly multiplayer: boolean;
-    readonly uuid: string;
-    readonly name?: string;
+    components: ComponentsMap = new Map();
+    multiplayer: boolean;
+    uuid?: string;
+    name?: string;
 
     constructor(args?: EntityArgs) {
         this.multiplayer = args?.multiplayer ?? true;
-        this.uuid = args?.uuid ?? v4();
+        this.uuid = args?.uuid;
         this.name = args?.name;
     }
 

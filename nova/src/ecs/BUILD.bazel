@@ -13,6 +13,7 @@ ts_library(
         "resource.ts",
         "world.ts",
         "utils.ts",
+        "plugin.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -20,6 +21,16 @@ ts_library(
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//rxjs",
+    ]
+)
+
+ts_library(
+    name = "plugins",
+    srcs = [
+        "multiplayer_plugin.ts"
+    ],
+    deps = [
+        ":ecs",
     ]
 )
 
