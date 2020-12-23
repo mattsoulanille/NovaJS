@@ -374,8 +374,10 @@ describe('world', () => {
         const fooBarSystem = new System({
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (foo, bar) => {
+                bar.y = 'changed by foo';
                 fooBarData.next([foo.x, bar.y]);
-            }
+            },
+            before: new Set([barSystem])
         });
 
         world.addSystem(fooBarSystem);
@@ -393,11 +395,46 @@ describe('world', () => {
         world.step();
 
         await expectAsync(barData.pipe(take(3), toArray()).toPromise())
-            .toBeResolvedTo(['added bar', 'added bar', 'added bar']);
+            .toBeResolvedTo(['added bar', 'changed by foo', 'changed by foo']);
+        await expectAsync(fooBarData.pipe(take(1)).toPromise())
+            .toBeResolvedTo([123, 'changed by foo']);
     });
 
     it('removes entities', async () => {
-        const e1 = world.commands.addEntity(new Entity());
-        const e2 = world.commands.addEntity(new Entity());
+        const stepData = new ReplaySubject<[string, number]>();
+
+        const testSystem = new System({
+            args: [BAR_COMPONENT, FOO_COMPONENT] as const,
+            step: ({ y }, foo) => {
+                foo.x += 1;
+                stepData.next([y, foo.x]);
+            }
+        });
+
+        const e1 = world.commands.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'e1' })
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+        world.commands.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'e2' })
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+
+        world.addSystem(testSystem);
+        world.step();
+        const entityBlueprint = world.commands.removeEntity(e1);
+        expect(entityBlueprint).toBeDefined();
+        world.step();
+        world.commands.addEntity(entityBlueprint!);
+        world.step();
+
+        await expectAsync(stepData.pipe(take(5), toArray()).toPromise())
+            .toBeResolvedTo([
+                ['e1', 1],
+                ['e2', 1],
+                // e1 removed
+                ['e2', 2],
+                // e1 added back in
+                ['e2', 3],
+                ['e1', 2]
+            ]);
     });
 });
