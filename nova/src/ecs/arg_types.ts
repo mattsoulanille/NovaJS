@@ -10,12 +10,14 @@ export type CommandsObject<T> = T extends typeof Commands ? CommandsInterface : 
 export const UUID = Symbol();
 export type UUIDData<T> = T extends typeof UUID ? string : never;
 
-export class OptionalClass<V> {
+export class OptionalClass<V extends Optionable> {
     constructor(readonly value: V) { };
+    toString() {
+        return `Optional(${this.value})`;
+    }
 }
-export type OptionalValue<O> = O extends OptionalClass<infer V> ? V : never;
 
-export function Optional<V>(value: V) {
+export function Optional<V extends Optionable>(value: V) {
     return new OptionalClass(value);
 }
 
@@ -26,16 +28,27 @@ type ValueType = Component<any, any>
     | typeof Commands
     | typeof UUID;
 
-//export type ArgTypes = ValueType | OptionalClass<ValueType>;
-export type ArgTypes = ValueType;
+type Optionable = Component<any, any> | Resource<any, any>;
+export type ArgTypes = ValueType | OptionalClass<Optionable>;
 
+export type QueryArgTypes = Component<any, any>
+    | OptionalClass<Component<any, any>> | typeof UUID;
+
+type DefiniteArgData<T> =
+    Draft<ComponentData<T> | ResourceData<T>>
+    | CommandsObject<T>
+    | UUIDData<T>;
+
+type OptionalArgData<T> = T extends OptionalClass<infer V>
+    ? DefiniteArgData<V> | undefined
+    : never
 
 // The type for recursive queries is not allowed in TypeScript,
 // so separate them out here.
-type QueryArgData<T> = Draft<ComponentData<T> | ResourceData<T>> | CommandsObject<T> | UUIDData<T>;
+type QueryArgData<T> = DefiniteArgData<T> | OptionalArgData<T>;
 
 // The data type corresponding to an argument type.
-type ArgData<T> = QueryArgData<T> | Draft<QueryResults<T>>
+export type ArgData<T> = QueryArgData<T> | QueryResults<T>
 
 export type ArgsToData<Args> = {
     [K in keyof Args]: ArgData<Args[K]>

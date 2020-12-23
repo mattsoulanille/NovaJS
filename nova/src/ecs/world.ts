@@ -1,13 +1,13 @@
 import produce, { Draft, enableMapSet, Immutable } from "immer";
-import { Component } from "./component";
+import { Component, ComponentData } from "./component";
 import { ComponentsMap, Entity } from "./entity";
-import { Query, QueryArgTypes } from "./query";
-import { Resource } from "./resource";
+import { Query } from "./query";
+import { Resource, ResourceData } from "./resource";
 import { System } from "./system";
 import { topologicalSort } from './utils';
 import { v4 } from "uuid";
 import { Plugin } from './plugin';
-import { Commands, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Commands, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 
 
 export interface CommandsInterface {
@@ -215,24 +215,9 @@ export class World {
                     }
                     const entity = draft.entities.get(entityUUID)!;
 
-                    const args = system.args.map(arg => {
-                        if (arg instanceof Resource) {
-                            if (!draft.resources.has(arg)) {
-                                throw new Error(`Missing resource ${arg}`);
-                            }
-                            return draft.resources.get(arg);
-                        } else if (arg instanceof Component) {
-                            return entity.components.get(arg);
-                        } else if (arg instanceof Query) {
-                            return this.fulfillQuery(arg, draft);
-                        } else if (arg === Commands) {
-                            return this.commands;
-                        } else if (arg === UUID) {
-                            return entityUUID;
-                        } else {
-                            throw new Error(`Internal error: unrecognized arg ${arg}`);
-                        }
-                    });
+                    const args = system.args.map(arg =>
+                        this.getArg(arg, draft, entity));
+
                     // TODO: system.step accepts ...any[]. Fix this.
                     system.step(...args);
                 }
@@ -240,31 +225,27 @@ export class World {
         });
     }
 
-    // private findArg<Data, Delta>(arg: Resource<Data, Delta>
-    //     | Component<Data, Delta> | Query | typeof Commands | typeof UUID) {
-
-    //     const args = system.args.map(arg => {
-    //         if (arg instanceof Resource) {
-    //             if (!draft.resources.has(arg)) {
-    //                 throw new Error(`Missing resource ${arg}`);
-    //             }
-    //             return draft.resources.get(arg);
-    //         } else if (arg instanceof Component) {
-    //             return entity.components.get(arg);
-    //         } else if (arg instanceof Query) {
-    //             return this.fulfillQuery(arg, draft);
-    //         } else if (arg === Commands) {
-    //             return this.commands;
-    //         } else if (arg === UUID) {
-    //             return entityUUID;
-    //         } else {
-    //             throw new Error(`Internal error: unrecognized arg ${arg}`);
-    //         }
-    //     });
-
-
-
-    // }
+    private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
+        entity: Draft<EntityState>): ArgData<T> {
+        if (arg instanceof Resource) {
+            if (!draft.resources.has(arg)) {
+                throw new Error(`Missing resource ${arg}`);
+            }
+            return draft.resources.get(arg) as ResourceData<T>;
+        } else if (arg instanceof Component) {
+            return entity.components.get(arg) as ComponentData<T>;
+        } else if (arg instanceof Query) {
+            return this.fulfillQuery(arg, draft) as QueryResults<T>;
+        } else if (arg === Commands) {
+            // TODO: Don't cast to ArgData<T>?
+            return this.commands as ArgData<T>;
+        } else if (arg === UUID) {
+            // TODO: Don't cast to ArgData<T>?
+            return entity.uuid as ArgData<T>;
+        } else {
+            throw new Error(`Internal error: unrecognized arg ${arg}`);
+        }
+    }
 
     private fulfillQuery<C extends readonly QueryArgTypes[]>(
         query: Query<C>, draft: Draft<State>): QueryResults<Query<C>> {
@@ -280,15 +261,9 @@ export class World {
             }
             const entity = draft.entities.get(entityUUID)!;
 
-            return query.args.map(arg => {
-                if (arg === UUID) {
-                    return entity.uuid;
-                } else if (arg instanceof Component) {
-                    return entity.components.get(arg)
-                } else {
-                    throw new Error(`Internal error: unrecognized arg ${arg}`);
-                }
-            })
+            return query.args.map(arg =>
+                this.getArg(arg, draft, entity));
+
         }) as unknown as QueryResults<Query<C>>;
     }
 

@@ -1,11 +1,9 @@
-import { UUID } from "./arg_types";
+import { QueryArgTypes } from "./arg_types";
 import { Component } from "./component";
 import { Resource } from "./resource";
 import { ComponentsOnly } from "./system";
 import { subset, WithComponents } from "./utils";
 
-
-export type QueryArgTypes = Component<any, any> | typeof UUID;
 
 /**
  * A query provides a way of iterating over all the Entities that have

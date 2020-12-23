@@ -9,7 +9,7 @@ import { Entity } from './entity';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { original } from 'immer';
-import { UUID } from './arg_types';
+import { Optional, UUID } from './arg_types';
 
 const FOO_COMPONENT = new Component({
     type: t.type({ x: t.number }),
@@ -277,6 +277,32 @@ describe('world', () => {
 
         await expectAsync(stepData.pipe(take(2), toArray()).toPromise())
             .toBeResolvedTo(['first', 'original value'])
+    });
+
+    it('supports optional arguments in systems', async () => {
+        const stepData = new ReplaySubject<[number, string | undefined]>();
+
+        const testSystem = new System({
+            args: [FOO_COMPONENT, Optional(BAR_COMPONENT)] as const,
+            step: (foo, maybeBar) => {
+                stepData.next([foo.x, maybeBar?.y]);
+            },
+        });
+
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'FooBar' }));
+
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 456 }));
+
+        world.step();
+
+        const stepDataContents = await stepData.pipe(take(2), toArray()).toPromise();
+
+        expect(stepDataContents).toContain([123, 'FooBar']);
+        expect(stepDataContents).toContain([456, undefined]);
     });
 
 
