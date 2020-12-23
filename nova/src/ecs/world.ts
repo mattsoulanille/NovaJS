@@ -7,7 +7,7 @@ import { System } from "./system";
 import { topologicalSort } from './utils';
 import { v4 } from "uuid";
 import { Plugin } from './plugin';
-import { ArgData, ArgTypes, Commands, QueryArgTypes, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Commands, Optional, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 
 
 export interface CommandsInterface {
@@ -215,6 +215,8 @@ export class World {
                     }
                     const entity = draft.entities.get(entityUUID)!;
 
+                    // TODO: The types here don't quite work out since
+                    // getArg returns ArgData<T> | undefined.
                     const args = system.args.map(arg =>
                         this.getArg(arg, draft, entity));
 
@@ -226,14 +228,14 @@ export class World {
     }
 
     private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
-        entity: Draft<EntityState>): ArgData<T> {
+        entity: Draft<EntityState>): ArgData<T> | undefined {
         if (arg instanceof Resource) {
             if (!draft.resources.has(arg)) {
                 throw new Error(`Missing resource ${arg}`);
             }
-            return draft.resources.get(arg) as ResourceData<T>;
+            return draft.resources.get(arg) as ResourceData<T> | undefined;
         } else if (arg instanceof Component) {
-            return entity.components.get(arg) as ComponentData<T>;
+            return entity.components.get(arg) as ComponentData<T> | undefined;
         } else if (arg instanceof Query) {
             return this.fulfillQuery(arg, draft) as QueryResults<T>;
         } else if (arg === Commands) {
@@ -242,6 +244,8 @@ export class World {
         } else if (arg === UUID) {
             // TODO: Don't cast to ArgData<T>?
             return entity.uuid as ArgData<T>;
+        } else if (arg instanceof OptionalClass) {
+            return this.getArg(arg.value, draft, entity);
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }

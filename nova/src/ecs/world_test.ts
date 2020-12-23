@@ -305,14 +305,39 @@ describe('world', () => {
         expect(stepDataContents).toContain([456, undefined]);
     });
 
+    it('supports optional arguments in queries', async () => {
+        const query = new Query([FOO_COMPONENT, Optional(BAR_COMPONENT), UUID] as const);
+        const stepData = new ReplaySubject<[number, number, string | undefined]>();
+        const testSystem = new System({
+            args: [FOO_COMPONENT, query] as const,
+            step: (foo, queryData) => {
+                for (let [{ x }, maybeBar] of queryData) {
+                    stepData.next([foo.x, x, maybeBar?.y]);
+                }
+            }
+        });
 
+        world.addSystem(testSystem);
+        world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+        world.commands.addEntity(new Entity({ uuid: 'example uuid' })
+            .addComponent(FOO_COMPONENT, { x: 456 })
+            .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
+        world.step();
+
+        const stepDataContents = await stepData.pipe(take(4), toArray()).toPromise();
+
+        // On each run of testSystem (which runs for both entities), the query
+        // iterates over each matching entity, which is why there are four results.
+        expect(stepDataContents).toContain([123, 123, undefined]);
+        expect(stepDataContents).toContain([123, 456, 'asdf']);
+        expect(stepDataContents).toContain([456, 123, undefined]);
+        expect(stepDataContents).toContain([456, 456, 'asdf']);
+    });
 
     it('removes entities', async () => {
         const e1 = world.commands.addEntity(new Entity());
         const e2 = world.commands.addEntity(new Entity());
-
-
-
     });
 });
