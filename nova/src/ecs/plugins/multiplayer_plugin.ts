@@ -1,10 +1,10 @@
-import { Component } from './component';
-import { Plugin } from './plugin';
-import { Resource } from './resource';
-import { UUID, World } from './world';
+import { Component } from '../component';
+import { Plugin } from '../plugin';
+import { World } from '../world';
 import * as t from 'io-ts';
-import { System } from './system';
-import { Query } from './query';
+import { System } from '../system';
+import { Query } from '../query';
+import { UUID } from '../arg_types';
 
 export const MultiplayerComponent = new Component({
     name: 'multiplayer',

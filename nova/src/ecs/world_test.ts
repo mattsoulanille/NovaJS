@@ -10,6 +10,7 @@ import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { original } from 'immer';
 import { Optional, UUID } from './arg_types';
+import { Plugin } from './plugin';
 
 const FOO_COMPONENT = new Component({
     type: t.type({ x: t.number }),
@@ -334,6 +335,30 @@ describe('world', () => {
         expect(stepDataContents).toContain([123, 456, 'asdf']);
         expect(stepDataContents).toContain([456, 123, undefined]);
         expect(stepDataContents).toContain([456, 456, 'asdf']);
+    });
+
+    it('loads plugins', async () => {
+        const stepData = new ReplaySubject<string>();
+
+        const plugin: Plugin = {
+            name: 'Test Plugin',
+            build: (world) => {
+                world.commands.addEntity(new Entity()
+                    .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
+                world.addSystem(new System({
+                    args: [BAR_COMPONENT],
+                    step: (bar) => {
+                        stepData.next(bar.y);
+                    }
+                }));
+            }
+        };
+
+        world.addPlugin(plugin);
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo('plugin component');
     });
 
     it('removes entities', async () => {

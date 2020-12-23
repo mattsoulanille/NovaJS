@@ -26,16 +26,6 @@ ts_library(
 )
 
 ts_library(
-    name = "plugins",
-    srcs = [
-        "multiplayer_plugin.ts"
-    ],
-    deps = [
-        ":ecs",
-    ]
-)
-
-ts_library(
     name = "ecs_test_lib",
     srcs = [
         "system_test.ts",
