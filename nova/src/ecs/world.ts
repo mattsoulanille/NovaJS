@@ -95,7 +95,7 @@ class EntityHandle {
 enableMapSet();
 
 export class World {
-    private state: Immutable<State> = {
+    state: Immutable<State> = {
         entities: new Map<string /* UUID */, EntityState>(),
         resources: new Map<Resource<unknown, unknown>, unknown /* resource data */>(),
     };

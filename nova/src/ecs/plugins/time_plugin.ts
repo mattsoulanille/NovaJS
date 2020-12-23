@@ -3,7 +3,6 @@ import { Component } from '../component';
 import { Resource } from '../resource';
 import { System } from '../system';
 import { Plugin } from '../plugin';
-import { Entity } from '../entity';
 
 export const TimeResource = new Resource({
     name: 'time',
@@ -40,7 +39,6 @@ export const TimePlugin: Plugin = {
     build: (world) => {
         world.addResource(TimeResource, { delta: 0, time: new Date().getTime() });
         world.addSystem(TimeSystem);
-        world.commands.addEntity(new Entity()
-            .addComponent(TimeSingleton, undefined));
+        world.singletonEntity.addComponent(TimeSingleton, undefined);
     }
 }
