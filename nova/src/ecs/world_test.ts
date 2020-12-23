@@ -437,4 +437,22 @@ describe('world', () => {
                 ['e1', 2]
             ]);
     });
+
+    it('destroys entity handles when the entity is removed', () => {
+        const handle1 = world.commands.addEntity(new Entity());
+        world.commands.removeEntity(handle1);
+
+        const handle2 = world.commands.addEntity(new Entity());
+        world.commands.removeEntity(handle2.uuid);
+
+        expect(() => handle1.addComponent(FOO_COMPONENT, { x: 123 }))
+            .toThrowError('Entity not in system');
+        expect(() => handle1.removeComponent(FOO_COMPONENT))
+            .toThrowError('Entity not in system');
+
+        expect(() => handle2.addComponent(FOO_COMPONENT, { x: 123 }))
+            .toThrowError('Entity not in system');
+        expect(() => handle2.removeComponent(FOO_COMPONENT))
+            .toThrowError('Entity not in system');
+    });
 });

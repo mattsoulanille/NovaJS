@@ -101,13 +101,15 @@ export class World {
     };
 
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
-
     private queries = new Map<Query, Set<string /* entity uuid */>>();
+    private entityHandles = new Map<string /* uuid */, EntityHandle>();
 
     readonly commands: CommandsInterface = {
         addEntity: this.addEntity.bind(this),
         removeEntity: this.removeEntity.bind(this),
     }
+
+    singletonEntity = this.addEntity(new Entity());
 
     constructor(private name?: string) { }
 
@@ -131,7 +133,7 @@ export class World {
             systems: this.systems, queries: this.queries, entities: [entityState]
         });
 
-        return new EntityHandle(uuid,
+        const handle = new EntityHandle(uuid,
             (component, data) => {
                 this.state = produce(this.state, draft => {
                     const entity = draft.entities.get(uuid);
@@ -161,6 +163,9 @@ export class World {
                 });
             }
         );
+        this.entityHandles.set(uuid, handle);
+        return handle;
+
     }
 
     private recomputeEntities({ systems, queries, entities, removedEntities }: {
@@ -197,17 +202,19 @@ export class World {
     }
 
     private removeEntity(entityOrUuid: string | EntityHandle): Entity | undefined {
-        let entityUUID: string;
-        if (entityOrUuid instanceof EntityHandle) {
-            entityUUID = entityOrUuid.uuid;
-            const erf = () => { throw new Error('Entity not in system'); }
-            entityOrUuid.addComponent = erf;
-            entityOrUuid.removeComponent = erf;
-        } else {
-            entityUUID = entityOrUuid;
+        const entityHandle = entityOrUuid instanceof EntityHandle
+            ? entityOrUuid
+            : this.entityHandles.get(entityOrUuid);
+
+        if (!entityHandle) {
+            return; // No entity to remove
         }
 
-        const entityState = this.state.entities.get(entityUUID);
+        const erf = () => { throw new Error('Entity not in system'); }
+        entityHandle.addComponent = erf;
+        entityHandle.removeComponent = erf;
+
+        const entityState = this.state.entities.get(entityHandle.uuid);
         if (!entityState) {
             return;
         }
@@ -217,7 +224,7 @@ export class World {
         });
 
         this.state = produce(this.state, draft => {
-            draft.entities.delete(entityUUID);
+            draft.entities.delete(entityHandle.uuid);
         });
 
         const removedEntity = new Entity(entityState);
