@@ -210,6 +210,10 @@ export class World {
             return; // No entity to remove
         }
 
+        if (entityHandle === this.singletonEntity) {
+            throw new Error('Cannot remove singleton entity');
+        }
+
         const erf = () => { throw new Error('Entity not in system'); }
         entityHandle.addComponent = erf;
         entityHandle.removeComponent = erf;

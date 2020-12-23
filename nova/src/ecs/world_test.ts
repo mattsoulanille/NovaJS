@@ -83,8 +83,8 @@ describe('world', () => {
         );
         world.step();
 
-        await expectAsync(stepData.pipe(take(1), toArray()).toPromise())
-            .toBeResolvedTo([[123, 'asdf']]);
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo([123, 'asdf']);
     });
 
     it('passes entities to a system added after the entities', async () => {
@@ -103,8 +103,8 @@ describe('world', () => {
         world.addSystem(testSystem);
         world.step();
 
-        await expectAsync(stepData.pipe(take(1), toArray()).toPromise())
-            .toBeResolvedTo([[123, 'asdf']]);
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo([123, 'asdf']);
     });
 
     it('allows systems to modify components', async () => {
@@ -454,5 +454,28 @@ describe('world', () => {
             .toThrowError('Entity not in system');
         expect(() => handle2.removeComponent(FOO_COMPONENT))
             .toThrowError('Entity not in system');
+    });
+
+    it('provides a singleton entity', async () => {
+        const stepData = new ReplaySubject<string>();
+
+        const testSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: ({ y }) => {
+                stepData.next(y);
+            }
+        });
+
+        world.singletonEntity.addComponent(BAR_COMPONENT, { y: 'singleton' });
+        world.addSystem(testSystem);
+        world.step();
+
+        await expectAsync(stepData.pipe(take(1)).toPromise())
+            .toBeResolvedTo('singleton')
+    });
+
+    it('does not permit the singleton entity to be removed', () => {
+        expect(() => world.commands.removeEntity(world.singletonEntity))
+            .toThrowError('Cannot remove singleton entity');
     });
 });

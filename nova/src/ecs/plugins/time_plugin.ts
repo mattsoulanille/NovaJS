@@ -38,8 +38,8 @@ export const TimeSystem = new System({
 export const TimePlugin: Plugin = {
     name: 'time',
     build: (world) => {
-        world.addSystem(TimeSystem);
         world.addResource(TimeResource, { delta: 0, time: new Date().getTime() });
+        world.addSystem(TimeSystem);
         world.commands.addEntity(new Entity()
             .addComponent(TimeSingleton, undefined));
     }

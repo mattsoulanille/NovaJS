@@ -41,7 +41,6 @@ ts_library(
     ]
 )
 
-
 jasmine_node_test(
     name = "ecs_test",
     srcs = [
