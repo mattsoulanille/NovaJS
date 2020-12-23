@@ -1,5 +1,5 @@
-import 'jasmine';
 import * as t from 'io-ts';
+import 'jasmine';
 import { Component } from './component';
 import { Query } from './query';
 import { Resource } from './resource';
@@ -37,7 +37,6 @@ const XYZZY_COMPONENT = new Component({
     },
     applyDelta() { }
 });
-
 
 const FOO_XYZZY_QUERY = new Query([FOO_COMPONENT, XYZZY_COMPONENT] as const);
 

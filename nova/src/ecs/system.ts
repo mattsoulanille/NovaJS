@@ -1,29 +1,9 @@
-import { Draft } from "immer";
-import { Component, ComponentData } from "./component";
-import { Query, QueryResults } from "./query";
-import { Resource, ResourceData } from "./resource";
-import * as t from 'io-ts';
-import { CommandsInterface, Commands, UUID } from "./world";
-import { ComponentsMap } from "./entity";
-import { subset } from "./utils";
-import { WithComponents } from "./utils";
+import { ArgsToData, ArgTypes } from "./arg_types";
+import { Component } from "./component";
+import { Query } from "./query";
+import { Resource } from "./resource";
+import { subset, WithComponents } from "./utils";
 
-// The arguments that `step` is called with
-type StepArg<T> = Draft<QueryResults<T> | ComponentData<T> | ResourceData<T>> | CommandsObject<T> | UUIDData<T>;
-
-type CommandsObject<T> = T extends typeof Commands ? CommandsInterface : never;
-type UUIDData<T> = T extends typeof UUID ? string : never;
-
-export type SystemStepArgs<Args> = {
-    [K in keyof Args]: StepArg<Args[K]>
-}
-
-// Types for args that are used to define a system. Passed in a tuple.
-export type ArgTypes = Component<any, any>
-    | Query
-    | Resource<any, any>
-    | typeof Commands
-    | typeof UUID;
 
 type ResourcesOnly<T extends readonly [...unknown[]]> =
     Extract<T[number], Resource<any, any>>;
@@ -37,31 +17,13 @@ export type ComponentsOnly<T extends readonly [...unknown[]]> =
 type QueryComponents<T> =
     T extends Query<infer Components> ? Components[number] : never;
 
-const foo = new Component({
-    name: 'foo',
-    type: t.type({ foo: t.string }),
-    getDelta: () => { return },
-    applyDelta: () => { }
-});
-
-const bar = new Component({
-    name: 'bar',
-    type: t.type({ bar: t.string }),
-    getDelta: () => { return },
-    applyDelta: () => { }
-});
-
-const q = new Query([foo, bar]);
-type f = QueryComponents<typeof q>
-type g = ComponentsOnly<[typeof foo, typeof bar]>;
-
 type AllComponents<T extends readonly [...unknown[]]> =
     ComponentsOnly<T> | QueryComponents<T[number]>
 
 interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     name?: string;
     readonly args: StepArgTypes;
-    step: (...args: SystemStepArgs<StepArgTypes>) => void;
+    step: (...args: ArgsToData<StepArgTypes>) => void;
     before?: Set<System>; // Systems that this system runs before
     after?: Set<System>; // Systems that this system runs after
 }
@@ -73,7 +35,7 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     readonly resources: Set<ResourcesOnly<StepArgTypes>>;
     readonly queries: Set<QueriesOnly<StepArgTypes>>;
     readonly allComponents: Set<AllComponents<StepArgTypes>>;
-    readonly step: (...args: SystemStepArgs<StepArgTypes>) => void;
+    readonly step: (...args: ArgsToData<StepArgTypes>) => void;
     readonly before: Set<System>;
     readonly after: Set<System>;
 

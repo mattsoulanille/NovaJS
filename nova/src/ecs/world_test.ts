@@ -4,11 +4,12 @@ import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
 import * as t from 'io-ts';
-import { UUID, World } from './world';
+import { World } from './world';
 import { Entity } from './entity';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { original } from 'immer';
+import { UUID } from './arg_types';
 
 const FOO_COMPONENT = new Component({
     type: t.type({ x: t.number }),
@@ -138,6 +139,7 @@ describe('world', () => {
                 }
             }
         });
+
         world.addSystem(testSystem);
         world.commands.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
@@ -276,6 +278,8 @@ describe('world', () => {
         await expectAsync(stepData.pipe(take(2), toArray()).toPromise())
             .toBeResolvedTo(['first', 'original value'])
     });
+
+
 
 
     it('removes entities', async () => {

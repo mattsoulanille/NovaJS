@@ -1,16 +1,14 @@
 import produce, { Draft, enableMapSet, Immutable } from "immer";
-import { Subscription } from "rxjs";
 import { Component } from "./component";
 import { ComponentsMap, Entity } from "./entity";
-import { Query, QueryArgTypes, QueryResults } from "./query";
+import { Query, QueryArgTypes } from "./query";
 import { Resource } from "./resource";
 import { System } from "./system";
 import { topologicalSort } from './utils';
 import { v4 } from "uuid";
 import { Plugin } from './plugin';
+import { Commands, QueryResults, UUID } from "./arg_types";
 
-export const Commands = Symbol();
-export const UUID = Symbol();
 
 export interface CommandsInterface {
     addEntity: (entity: Entity) => string;

@@ -14,6 +14,7 @@ ts_library(
         "world.ts",
         "utils.ts",
         "plugin.ts",
+        "arg_types.ts",
     ],
     deps = [
         "@npm//io-ts",

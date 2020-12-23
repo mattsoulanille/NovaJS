@@ -1,16 +1,9 @@
-import { Component, ComponentData } from "./component";
+import { UUID } from "./arg_types";
+import { Component } from "./component";
 import { Resource } from "./resource";
 import { ComponentsOnly } from "./system";
-import { subset } from "./utils";
-import { WithComponents } from "./utils";
-import { UUID } from "./world";
+import { subset, WithComponents } from "./utils";
 
-export type ComponentDataArgs<C> = {
-    [K in keyof C]: ComponentData<C[K]>
-}
-
-export type QueryResults<Q> =
-    Q extends Query<infer Components> ? ComponentDataArgs<Components>[] : never;
 
 export type QueryArgTypes = Component<any, any> | typeof UUID;
 
@@ -18,14 +11,14 @@ export type QueryArgTypes = Component<any, any> | typeof UUID;
  * A query provides a way of iterating over all the Entities that have
  * a specified set of components.
  */
-export class Query<ArgTypes extends readonly QueryArgTypes[]
+export class Query<QueryArgs extends readonly QueryArgTypes[]
     = readonly QueryArgTypes[]> {
-    readonly components: Set<ComponentsOnly<ArgTypes>>;
+    readonly components: Set<ComponentsOnly<QueryArgs>>;
 
-    constructor(readonly args: ArgTypes, readonly name?: string) {
+    constructor(readonly args: QueryArgs, readonly name?: string) {
         this.components = new Set(this.args.filter(
             a => (a instanceof Component) && !(a instanceof Resource))
-        ) as Set<ComponentsOnly<ArgTypes>>;
+        ) as Set<ComponentsOnly<QueryArgs>>;
     }
 
     supportsEntity(entity: WithComponents) {
