@@ -361,6 +361,41 @@ describe('world', () => {
             .toBeResolvedTo('plugin component');
     });
 
+    it('supports modifying an existing entity\'s components', async () => {
+        const barData = new ReplaySubject<string>();
+        const fooBarData = new ReplaySubject<[number, string]>();
+        const barSystem = new System({
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                barData.next(bar.y);
+            }
+        });
+
+        const fooBarSystem = new System({
+            args: [FOO_COMPONENT, BAR_COMPONENT] as const,
+            step: (foo, bar) => {
+                fooBarData.next([foo.x, bar.y]);
+            }
+        });
+
+        world.addSystem(fooBarSystem);
+        world.addSystem(barSystem);
+
+        const entity = world.commands.addEntity(new Entity());
+        world.step();
+        entity.addComponent(BAR_COMPONENT, { y: 'added bar' });
+        world.step();
+        entity.addComponent(FOO_COMPONENT, { x: 123 });
+        world.step();
+        entity.removeComponent(FOO_COMPONENT);
+        world.step();
+        entity.removeComponent(BAR_COMPONENT);
+        world.step();
+
+        await expectAsync(barData.pipe(take(3), toArray()).toPromise())
+            .toBeResolvedTo(['added bar', 'added bar', 'added bar']);
+    });
+
     it('removes entities', async () => {
         const e1 = world.commands.addEntity(new Entity());
         const e2 = world.commands.addEntity(new Entity());

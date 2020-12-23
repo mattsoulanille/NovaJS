@@ -130,7 +130,37 @@ export class World {
         this.recomputeEntities({
             systems: this.systems, queries: this.queries, entities: [entityState]
         });
-        return new EntityHandle(uuid, () => { }, () => { });
+
+        return new EntityHandle(uuid,
+            (component, data) => {
+                this.state = produce(this.state, draft => {
+                    const entity = draft.entities.get(uuid);
+                    if (!entity) {
+                        throw new Error(`Missing entity ${uuid}`);
+                    }
+                    entity.components.set(component as Component<unknown, unknown>, data);
+                    this.recomputeEntities({
+                        systems: this.systems,
+                        queries: this.queries,
+                        entities: [entity]
+                    });
+                });
+            },
+            (component) => {
+                this.state = produce(this.state, draft => {
+                    const entity = draft.entities.get(uuid);
+                    if (!entity) {
+                        throw new Error(`Missing entity ${uuid}`);
+                    }
+                    entity.components.delete(component);
+                    this.recomputeEntities({
+                        systems: this.systems,
+                        queries: this.queries,
+                        entities: [entity]
+                    });
+                });
+            }
+        );
     }
 
     private recomputeEntities({ systems, queries, entities, removedEntities }: {
@@ -143,11 +173,15 @@ export class World {
             for (const { system, entities } of systems) {
                 if (system.supportsEntity(entity)) {
                     entities.add(entity.uuid);
+                } else {
+                    entities.delete(entity.uuid);
                 }
             }
             for (const [query, entities] of queries) {
                 if (query.supportsEntity(entity)) {
                     entities.add(entity.uuid);
+                } else {
+                    entities.delete(entity.uuid);
                 }
             }
         }
