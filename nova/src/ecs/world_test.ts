@@ -87,7 +87,7 @@ describe('world', () => {
             .toBeResolvedTo([[123, 'asdf']]);
     });
 
-    it('passes components to a system added after the components', async () => {
+    it('passes entities to a system added after the entities', async () => {
         const stepData = new ReplaySubject<[number, string]>();
         const testSystem = new System({
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,

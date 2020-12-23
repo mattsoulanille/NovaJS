@@ -1,19 +1,14 @@
 import produce, { Draft, enableMapSet, Immutable } from "immer";
+import { v4 } from "uuid";
+import { ArgData, ArgTypes, Commands, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { Component, ComponentData } from "./component";
 import { ComponentsMap, Entity } from "./entity";
+import { Plugin } from './plugin';
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
 import { System } from "./system";
 import { topologicalSort } from './utils';
-import { v4 } from "uuid";
-import { Plugin } from './plugin';
-import { ArgData, ArgTypes, Commands, Optional, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 
-
-export interface CommandsInterface {
-    addEntity: (entity: Entity) => string;
-    removeEntity: (entity: string) => Entity | undefined;
-}
 
 // How do you serialize components and make sure the receiver
 // knows which is which?
@@ -48,6 +43,21 @@ export interface CommandsInterface {
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
 
+// Idea: Load async stuff by adding components to the entity as the data becomes
+// available?
+
+type RecomputeEntitiesArgs = {
+} | {
+    systems: Iterable<WrappedSystem>,
+    queries: Iterable<[Query, Set<string>]>,
+    removedEntities: Iterable<EntityState>,
+}
+
+
+export interface CommandsInterface {
+    addEntity: (entity: Entity) => EntityHandle;
+    removeEntity: (entity: string | EntityHandle) => Entity | undefined;
+}
 
 interface WrappedSystem {
     system: System;
@@ -64,6 +74,22 @@ interface EntityState {
     uuid: string,
     name?: string,
     multiplayer: boolean,
+}
+
+class EntityHandle {
+    constructor(readonly uuid: string,
+        private add: <Data>(component: Component<Data, any>, data: Data) => void,
+        private remove: (component: Component<any, any>) => void) { }
+
+    addComponent<Data>(component: Component<Data, any>, data: Data) {
+        this.add(component, data);
+        return this;
+    }
+
+    removeComponent(component: Component<any, any>) {
+        this.remove(component);
+        return this;
+    }
 }
 
 enableMapSet();
@@ -89,49 +115,79 @@ export class World {
         plugin.build(this);
     }
 
-    private addEntity(entity: Entity) {
+    private addEntity(entity: Entity): EntityHandle {
         const uuid = entity.uuid ?? v4();
+        const entityState: EntityState = {
+            components: entity.components,
+            multiplayer: entity.multiplayer,
+            uuid,
+            name: entity.name
+        };
         this.state = produce(this.state, draft => {
-            draft.entities.set(uuid, {
-                components: entity.components,
-                multiplayer: entity.multiplayer,
-                uuid,
-                name: entity.name
-            });
+            draft.entities.set(uuid, entityState);
         });
 
-        for (const { system, entities } of this.systems) {
-            if (system.supportsEntity(entity)) {
-                entities.add(uuid);
-            }
-        }
-        for (const [query, entities] of this.queries) {
-            if (query.supportsEntity(entity)) {
-                entities.add(uuid);
-            }
-        }
-        return uuid;
+        this.recomputeEntities({
+            systems: this.systems, queries: this.queries, entities: [entityState]
+        });
+        return new EntityHandle(uuid, () => { }, () => { });
     }
 
-    private removeEntity(entityUUID: string): Entity | undefined {
-        const entityData = this.state.entities.get(entityUUID);
-        if (!entityData) {
+    private recomputeEntities({ systems, queries, entities, removedEntities }: {
+        systems: Iterable<WrappedSystem>,
+        queries: Iterable<[Query, Set<string>]>,
+        entities?: Iterable<Immutable<EntityState>>,
+        removedEntities?: Iterable<Immutable<EntityState>>,
+    }) {
+        for (const entity of entities ?? []) {
+            for (const { system, entities } of systems) {
+                if (system.supportsEntity(entity)) {
+                    entities.add(entity.uuid);
+                }
+            }
+            for (const [query, entities] of queries) {
+                if (query.supportsEntity(entity)) {
+                    entities.add(entity.uuid);
+                }
+            }
+        }
+
+        for (const entity of removedEntities ?? []) {
+            for (const { entities } of systems) {
+                entities.delete(entity.uuid);
+            }
+            for (const [, entities] of queries) {
+                entities.delete(entity.uuid);
+            }
+        }
+    }
+
+    private removeEntity(entityOrUuid: string | EntityHandle): Entity | undefined {
+        let entityUUID: string;
+        if (entityOrUuid instanceof EntityHandle) {
+            entityUUID = entityOrUuid.uuid;
+            const erf = () => { throw new Error('Entity not in system'); }
+            entityOrUuid.addComponent = erf;
+            entityOrUuid.removeComponent = erf;
+        } else {
+            entityUUID = entityOrUuid;
+        }
+
+        const entityState = this.state.entities.get(entityUUID);
+        if (!entityState) {
             return;
         }
 
-        for (const { entities } of this.systems) {
-            entities.delete(entityUUID);
-        }
-        for (const [, entities] of this.queries) {
-            entities.delete(entityUUID);
-        }
+        this.recomputeEntities({
+            systems: this.systems, queries: this.queries, removedEntities: [entityState]
+        });
 
         this.state = produce(this.state, draft => {
             draft.entities.delete(entityUUID);
         });
 
-        const removedEntity = new Entity(entityData);
-        for (const [component, data] of entityData.components) {
+        const removedEntity = new Entity(entityState);
+        for (const [component, data] of entityState.components) {
             removedEntity.addComponent(component, data);
         }
         return removedEntity;
@@ -153,29 +209,24 @@ export class World {
             }
         }
 
-        const entities = new Set([...this.state.entities.values()]
-            .filter(entity => system.supportsEntity(entity))
-            .map(entity => entity.uuid));
+        const wrappedSystem: WrappedSystem = { system, entities: new Set() };
+        const queries: [Query, Set<string>][] = [...system.queries]
+            .filter(query => !this.queries.has(query))
+            .map(query => [query, new Set()]);
 
-        // Add queries from the system
-        for (const query of system.queries) {
-            if (this.queries.has(query)) {
-                continue;
-            }
+        this.recomputeEntities({
+            systems: [wrappedSystem], queries, entities: this.state.entities.values()
+        });
 
-            const queryEntities = new Set([...this.state.entities.values()]
-                .filter(query.supportsEntity)
-                .map(entity => entity.uuid));
-
-            this.queries.set(query, queryEntities);
+        for (const [query, entities] of queries) {
+            this.queries.set(query, entities);
         }
 
         // ---- Topologically insert the new system ----
-
         // Construct a graph with no edges. 
         const graph = new Map<WrappedSystem, Set<WrappedSystem>>(
             this.systems.map(val => [val, new Set()]));
-        graph.set({ system, entities }, new Set());
+        graph.set(wrappedSystem, new Set());
 
         // Add all edges to the graph. Store directed edges from node A to B on node B.
         const wrappedSystemMap = new Map<System, WrappedSystem>(
