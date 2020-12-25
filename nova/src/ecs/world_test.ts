@@ -13,6 +13,7 @@ import { Optional, UUID } from './arg_types';
 import { Plugin } from './plugin';
 
 const FOO_COMPONENT = new Component({
+    name: 'foo',
     type: t.type({ x: t.number }),
     getDelta(a) {
         return a;
@@ -23,6 +24,7 @@ const FOO_COMPONENT = new Component({
 });
 
 const BAR_COMPONENT = new Component({
+    name: 'bar',
     type: t.type({ y: t.string }),
     getDelta(a) {
         return a;
@@ -70,6 +72,7 @@ describe('world', () => {
     it('passes components to a system', async () => {
         const stepData = new ReplaySubject<[number, string]>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (fooData, barData) => {
                 stepData.next([fooData.x, barData.y]);
@@ -90,6 +93,7 @@ describe('world', () => {
     it('passes entities to a system added after the entities', async () => {
         const stepData = new ReplaySubject<[number, string]>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (fooData, barData) => {
                 stepData.next([fooData.x, barData.y]);
@@ -110,6 +114,7 @@ describe('world', () => {
     it('allows systems to modify components', async () => {
         const stepData = new ReplaySubject<number>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [FOO_COMPONENT] as const,
             step: (fooData) => {
                 fooData.x += 1;
@@ -133,6 +138,7 @@ describe('world', () => {
         const query = new Query([FOO_COMPONENT, BAR_COMPONENT, UUID] as const, "TestQuery");
         const stepData = new ReplaySubject<[number, string, string]>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [query] as const,
             step: (queryData) => {
                 for (let [{ x }, { y }, uuid] of queryData) {
@@ -158,6 +164,7 @@ describe('world', () => {
     it('passes resources to systems', async () => {
         const stepData = new ReplaySubject<string[]>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [BAZ_RESOURCE, FOO_COMPONENT] as const,
             step: ({ z }) => {
                 stepData.next([...z]);
@@ -178,6 +185,7 @@ describe('world', () => {
     it('passes uuid to systems', async () => {
         const stepData = new ReplaySubject<string>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [UUID, FOO_COMPONENT] as const,
             step: (uuid) => {
                 stepData.next(uuid);
@@ -199,6 +207,7 @@ describe('world', () => {
         const stepData = new ReplaySubject<string>();
 
         const secondSystem = new System({
+            name: 'SecondSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 bar.y = 'second';
@@ -206,6 +215,7 @@ describe('world', () => {
             }
         });
         const firstSystem = new System({
+            name: 'FirstSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 bar.y = 'first';
@@ -214,6 +224,7 @@ describe('world', () => {
             before: new Set([secondSystem]),
         });
         const fourthSystem = new System({
+            name: 'FourthSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 bar.y = 'fourth';
@@ -221,6 +232,7 @@ describe('world', () => {
             },
         });
         const thirdSystem = new System({
+            name: 'ThirdSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 bar.y = 'third';
@@ -253,12 +265,14 @@ describe('world', () => {
         const stepData = new ReplaySubject<string>();
 
         const firstSystem = new System({
+            name: 'FirstSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 bar.y = 'first';
             },
         });
         const secondSystem = new System({
+            name: 'SecondSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 stepData.next(bar.y);
@@ -284,6 +298,7 @@ describe('world', () => {
         const stepData = new ReplaySubject<[number, string | undefined]>();
 
         const testSystem = new System({
+            name: 'TestSystem',
             args: [FOO_COMPONENT, Optional(BAR_COMPONENT)] as const,
             step: (foo, maybeBar) => {
                 stepData.next([foo.x, maybeBar?.y]);
@@ -310,6 +325,7 @@ describe('world', () => {
         const query = new Query([FOO_COMPONENT, Optional(BAR_COMPONENT), UUID] as const);
         const stepData = new ReplaySubject<[number, number, string | undefined]>();
         const testSystem = new System({
+            name: 'TestSystem',
             args: [FOO_COMPONENT, query] as const,
             step: (foo, queryData) => {
                 for (let [{ x }, maybeBar] of queryData) {
@@ -346,6 +362,7 @@ describe('world', () => {
                 world.commands.addEntity(new Entity()
                     .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
                 world.addSystem(new System({
+                    name: 'TestSystem',
                     args: [BAR_COMPONENT],
                     step: (bar) => {
                         stepData.next(bar.y);
@@ -365,6 +382,7 @@ describe('world', () => {
         const barData = new ReplaySubject<string>();
         const fooBarData = new ReplaySubject<[number, string]>();
         const barSystem = new System({
+            name: 'BarSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
                 barData.next(bar.y);
@@ -372,6 +390,7 @@ describe('world', () => {
         });
 
         const fooBarSystem = new System({
+            name: 'FooBarSystem',
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (foo, bar) => {
                 bar.y = 'changed by foo';
@@ -404,6 +423,7 @@ describe('world', () => {
         const stepData = new ReplaySubject<[string, number]>();
 
         const testSystem = new System({
+            name: 'TestSystem',
             args: [BAR_COMPONENT, FOO_COMPONENT] as const,
             step: ({ y }, foo) => {
                 foo.x += 1;
@@ -460,6 +480,7 @@ describe('world', () => {
         const stepData = new ReplaySubject<string>();
 
         const testSystem = new System({
+            name: 'TestSystem',
             args: [BAR_COMPONENT] as const,
             step: ({ y }) => {
                 stepData.next(y);

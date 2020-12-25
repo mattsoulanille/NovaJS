@@ -26,8 +26,9 @@ import { topologicalSort } from './utils';
 // How does ecs draw stuff?
 // - Can't store PIXI stuff as components since they're not immerable. Store references instead?
 
-// Have a Multiplayer system that runs after other systems and uses the Delta component,
-// which other systems can add their deltas to. Then, that system sends and
+// Have each system that wants to be multiplayer use the Multiplayer component. Then,
+// have a Multiplayer system that runs after other systems and queries for all systems
+// that have multiplayer components. Then, that system sends and
 // receives multiplayer messages. Solves Projectiles by not adding the Delta component
 // to them (Wait, this doesn't actually work. If they don't have the Delta component,
 // then the systems that add to Delta won't run). Add the ability to make
@@ -45,14 +46,6 @@ import { topologicalSort } from './utils';
 
 // Idea: Load async stuff by adding components to the entity as the data becomes
 // available?
-
-type RecomputeEntitiesArgs = {
-} | {
-    systems: Iterable<WrappedSystem>,
-    queries: Iterable<[Query, Set<string>]>,
-    removedEntities: Iterable<EntityState>,
-}
-
 
 export interface CommandsInterface {
     addEntity: (entity: Entity) => EntityHandle;
@@ -95,7 +88,7 @@ class EntityHandle {
 enableMapSet();
 
 export class World {
-    state: Immutable<State> = {
+    private state: Immutable<State> = {
         entities: new Map<string /* UUID */, EntityState>(),
         resources: new Map<Resource<unknown, unknown>, unknown /* resource data */>(),
     };

@@ -6,6 +6,7 @@ import { Resource } from './resource';
 import { System } from './system';
 
 const FOO_COMPONENT = new Component({
+    name: 'foo',
     type: t.type({ x: t.number }),
     getDelta(a) {
         return a;
@@ -14,6 +15,7 @@ const FOO_COMPONENT = new Component({
 });
 
 const BAR_COMPONENT = new Component({
+    name: 'bar',
     type: t.type({ y: t.string }),
     getDelta(a) {
         return a;
@@ -22,6 +24,7 @@ const BAR_COMPONENT = new Component({
 });
 
 const BAZ_RESOURCE = new Resource({
+    name: 'baz',
     type: t.type({ z: t.array(t.string) }),
     getDelta(a) {
         return a;
@@ -31,6 +34,7 @@ const BAZ_RESOURCE = new Resource({
 })
 
 const XYZZY_COMPONENT = new Component({
+    name: 'xyzzy',
     type: t.type({ z: t.string }),
     getDelta(a) {
         return a;
@@ -42,6 +46,7 @@ const FOO_XYZZY_QUERY = new Query([FOO_COMPONENT, XYZZY_COMPONENT] as const);
 
 describe('system', () => {
     const testSystem = new System({
+        name: 'TestSystem',
         args: [FOO_COMPONENT, BAR_COMPONENT, FOO_XYZZY_QUERY, BAZ_RESOURCE] as const,
         step: (foo, bar, a, baz) => {
             bar.y = foo.x.toString();

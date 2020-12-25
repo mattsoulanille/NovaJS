@@ -16,6 +16,7 @@ describe('time plugin', () => {
         const times: Array<{ delta: number, time: number }> = [];
         // Runs once (on the singleton entity) since there's only one entity.
         const readClockSystem = new System({
+            name: 'ReadClock',
             args: [TimeResource],
             step: (time) => {
                 times.push({

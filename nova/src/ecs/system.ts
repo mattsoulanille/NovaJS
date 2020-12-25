@@ -21,7 +21,7 @@ type AllComponents<T extends readonly [...unknown[]]> =
     ComponentsOnly<T> | QueryComponents<T[number]>
 
 interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
-    name?: string;
+    name: string;
     readonly args: StepArgTypes;
     step: (...args: ArgsToData<StepArgTypes>) => void;
     before?: Set<System>; // Systems that this system runs before
@@ -29,7 +29,7 @@ interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
 }
 
 export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> {
-    readonly name?: string;
+    readonly name: string;
     readonly args: StepArgTypes;
     readonly components: Set<ComponentsOnly<StepArgTypes>>;
     readonly resources: Set<ResourcesOnly<StepArgTypes>>;
