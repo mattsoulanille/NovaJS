@@ -93,6 +93,11 @@ export class World {
         resources: new Map<Resource<unknown, unknown>, unknown /* resource data */>(),
     };
 
+    // These maps exist in part to make sure there are no name collisions
+    private nameComponentMap = new Map<string, Component<unknown, unknown>>();
+    private nameSystemMap = new Map<string, System>();
+    private nameResourceMap = new Map<string, Resource<unknown, unknown>>();
+
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
     private queries = new Map<Query, Set<string /* entity uuid */>>();
     private entityHandles = new Map<string /* uuid */, EntityHandle>();
@@ -107,11 +112,16 @@ export class World {
     constructor(private name?: string) { }
 
     addPlugin(plugin: Plugin) {
+        // TODO: Namespace component and system names.
         plugin.build(this);
     }
 
     private addEntity(entity: Entity): EntityHandle {
         const uuid = entity.uuid ?? v4();
+        for (const [component] of entity.components) {
+            this.addComponent(component);
+        }
+
         const entityState: EntityState = {
             components: entity.components,
             multiplayer: entity.multiplayer,
@@ -122,19 +132,22 @@ export class World {
             draft.entities.set(uuid, entityState);
         });
 
-        this.recomputeEntities({
+        World.recomputeEntities({
             systems: this.systems, queries: this.queries, entities: [entityState]
         });
 
         const handle = new EntityHandle(uuid,
             (component, data) => {
+                if (!this.state.entities.has(uuid)) {
+                    throw new Error(`Missing entity ${uuid}`);
+                }
+
+                this.addComponent(component);
                 this.state = produce(this.state, draft => {
-                    const entity = draft.entities.get(uuid);
-                    if (!entity) {
-                        throw new Error(`Missing entity ${uuid}`);
-                    }
+                    const entity = draft.entities.get(uuid)!;
+
                     entity.components.set(component as Component<unknown, unknown>, data);
-                    this.recomputeEntities({
+                    World.recomputeEntities({
                         systems: this.systems,
                         queries: this.queries,
                         entities: [entity]
@@ -148,7 +161,7 @@ export class World {
                         throw new Error(`Missing entity ${uuid}`);
                     }
                     entity.components.delete(component);
-                    this.recomputeEntities({
+                    World.recomputeEntities({
                         systems: this.systems,
                         queries: this.queries,
                         entities: [entity]
@@ -158,10 +171,9 @@ export class World {
         );
         this.entityHandles.set(uuid, handle);
         return handle;
-
     }
 
-    private recomputeEntities({ systems, queries, entities, removedEntities }: {
+    static recomputeEntities({ systems, queries, entities, removedEntities }: {
         systems: Iterable<WrappedSystem>,
         queries: Iterable<[Query, Set<string>]>,
         entities?: Iterable<Immutable<EntityState>>,
@@ -216,7 +228,7 @@ export class World {
             return;
         }
 
-        this.recomputeEntities({
+        World.recomputeEntities({
             systems: this.systems, queries: this.queries, removedEntities: [entityState]
         });
 
@@ -233,6 +245,12 @@ export class World {
     }
 
     addResource<Data, Delta>(resource: Resource<Data, Delta>, value: Data) {
+        if (this.nameResourceMap.has(resource.name)
+            && this.nameResourceMap.get(resource.name) !== resource) {
+            throw new Error(`A resource with name ${resource.name} already exists`);
+        }
+        this.nameResourceMap.set(resource.name, resource as Resource<unknown, unknown>);
+
         // TODO: Fix these types. Maybe pass resources in the World constructor?
         this.state = produce(this.state, draft => {
             draft.resources.set(resource as Resource<unknown, unknown>, value);
@@ -247,18 +265,19 @@ export class World {
             }
         }
 
+        if (this.nameSystemMap.has(system.name)
+            && this.nameSystemMap.get(system.name) !== system) {
+            throw new Error(`A system with name ${system.name} already exists`)
+        }
+
         const wrappedSystem: WrappedSystem = { system, entities: new Set() };
         const queries: [Query, Set<string>][] = [...system.queries]
             .filter(query => !this.queries.has(query))
             .map(query => [query, new Set()]);
 
-        this.recomputeEntities({
+        World.recomputeEntities({
             systems: [wrappedSystem], queries, entities: this.state.entities.values()
         });
-
-        for (const [query, entities] of queries) {
-            this.queries.set(query, entities);
-        }
 
         // ---- Topologically insert the new system ----
         // Construct a graph with no edges. 
@@ -292,7 +311,26 @@ export class World {
 
         // Topologically sort the graph
         this.systems = topologicalSort(graph);
+
+        for (const [query, entities] of queries) {
+            this.queries.set(query, entities);
+        }
+
+        this.nameSystemMap.set(system.name, system);
+        for (const component of system.components) {
+            this.addComponent(component);
+        }
         return this;
+    }
+
+    private addComponent<Data, Delta>(component: Component<Data, Delta>) {
+        if (this.nameComponentMap.has(component.name)
+            && this.nameComponentMap.get(component.name) !== component) {
+            throw new Error(`A component with name ${component.name} already exists`);
+        }
+
+        this.nameComponentMap.set(component.name,
+            component as Component<unknown, unknown>);
     }
 
     step() {

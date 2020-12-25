@@ -499,4 +499,90 @@ describe('world', () => {
         expect(() => world.commands.removeEntity(world.singletonEntity))
             .toThrowError('Cannot remove singleton entity');
     });
+
+    it('does not allow systems to have the same name', () => {
+        const system1 = new System({
+            name: 'TestSystem',
+            args: [FOO_COMPONENT],
+            step: () => { }
+        });
+
+        const system2 = new System({
+            name: 'TestSystem',
+            args: [FOO_COMPONENT],
+            step: () => { }
+        });
+
+        world.addSystem(system1);
+
+        expect(() => world.addSystem(system2))
+            .toThrowError(`A system with name ${system2.name} already exists`);
+    });
+
+    it('does not allow resources to have the same name', () => {
+        const resource1 = new Resource({
+            name: 'TestResource',
+            type: t.string,
+            getDelta: () => { },
+            applyDelta: () => { },
+        });
+
+        const resource2 = new Resource({
+            name: 'TestResource',
+            type: t.string,
+            getDelta: () => { },
+            applyDelta: () => { },
+        });
+
+        world.addResource(resource1, 'foobar');
+        expect(() => world.addResource(resource2, 'foobar'))
+            .toThrowError(`A resource with name ${resource2.name} already exists`);
+    });
+
+    it('does not allow components to have the same name', () => {
+        const component1 = new Component({
+            name: 'TestComponent',
+            type: t.string,
+            getDelta: () => { },
+            applyDelta: () => { },
+        });
+
+        const component2 = new Component({
+            name: 'TestComponent',
+            type: t.string,
+            getDelta: () => { },
+            applyDelta: () => { },
+        });
+
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [component1, component2] as const,
+            step: () => { }
+        });
+
+        expect(() => world.addSystem(testSystem))
+            .toThrowError(`A component with name ${component1.name} already exists`);
+    });
+
+    it('catches component name conflicts when adding them to entities', () => {
+        const component1 = new Component({
+            name: 'TestComponent',
+            type: t.string,
+            getDelta: () => { },
+            applyDelta: () => { },
+        });
+
+        const component2 = new Component({
+            name: 'TestComponent',
+            type: t.string,
+            getDelta: () => { },
+            applyDelta: () => { },
+        });
+
+        const handle = world.commands.addEntity(new Entity()
+            .addComponent(component1, 'foobar'));
+
+        expect(() => handle.addComponent(component2, 'foobar'))
+            .toThrowError(`A component with name ${component1.name} already exists`);
+    })
 });
