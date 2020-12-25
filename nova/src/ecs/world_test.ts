@@ -4,12 +4,12 @@ import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
 import * as t from 'io-ts';
-import { World } from './world';
+import { EntityHandle, World } from './world';
 import { Entity } from './entity';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { original } from 'immer';
-import { Optional, UUID } from './arg_types';
+import { Commands, Optional, UUID } from './arg_types';
 import { Plugin } from './plugin';
 
 const FOO_COMPONENT = new Component({
@@ -585,4 +585,31 @@ describe('world', () => {
         expect(() => handle.addComponent(component2, 'foobar'))
             .toThrowError(`A component with name ${component1.name} already exists`);
     })
+
+    it('provides access to entities in \'commands\'', () => {
+        const uuids = new Set<string>();
+        const entities = new Set<EntityHandle>();
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [Commands, FOO_COMPONENT] as const,
+            step: (commands) => {
+                for (const [uuid, entity] of commands.entities) {
+                    uuids.add(uuid);
+                    entities.add(entity);
+                }
+            }
+        });
+
+        const e1 = world.commands.addEntity(new Entity({ uuid: 'entity1' }));
+        const e2 = world.commands.addEntity(new Entity({ uuid: 'entity2' }));
+        const e3 = world.commands.addEntity(new Entity({ uuid: 'entity3' })
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(uuids).toEqual(new Set(
+            [e1.uuid, e2.uuid, e3.uuid, world.singletonEntity.uuid]));
+        expect(entities).toEqual(new Set([e1, e2, e3, world.singletonEntity]));
+    });
 });

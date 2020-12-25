@@ -50,6 +50,7 @@ import { topologicalSort } from './utils';
 export interface CommandsInterface {
     addEntity: (entity: Entity) => EntityHandle;
     removeEntity: (entity: string | EntityHandle) => Entity | undefined;
+    entities: ReadonlyMap<string /* uuid */, EntityHandle>;
 }
 
 interface WrappedSystem {
@@ -69,7 +70,7 @@ interface EntityState {
     multiplayer: boolean,
 }
 
-class EntityHandle {
+export class EntityHandle {
     constructor(readonly uuid: string,
         private add: <Data>(component: Component<Data, any>, data: Data) => void,
         private remove: (component: Component<any, any>) => void) { }
@@ -105,6 +106,7 @@ export class World {
     readonly commands: CommandsInterface = {
         addEntity: this.addEntity.bind(this),
         removeEntity: this.removeEntity.bind(this),
+        entities: this.entityHandles,
     }
 
     singletonEntity = this.addEntity(new Entity());
@@ -112,7 +114,8 @@ export class World {
     constructor(private name?: string) { }
 
     addPlugin(plugin: Plugin) {
-        // TODO: Namespace component and system names.
+        // TODO: Namespace component and system names. Perhaps use ':' or '/' to
+        // denote namespace vs name. Use a proxy like NovaData uses.
         plugin.build(this);
     }
 
