@@ -2,13 +2,16 @@ import { Draft } from "immer";
 import { Component, ComponentData } from "./component";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
-import { CommandsInterface } from "./world";
+import { CommandsInterface, EntityHandle } from "./world";
 
 export const Commands = Symbol();
 export type CommandsObject<T> = T extends typeof Commands ? CommandsInterface : never;
 
 export const UUID = Symbol();
 export type UUIDData<T> = T extends typeof UUID ? string : never;
+
+export const GetEntity = Symbol();
+export type GetEntityObject<T> = T extends typeof GetEntity ? EntityHandle : never;
 
 export class OptionalClass<V extends Optionable> {
     constructor(readonly value: V) { };
@@ -26,18 +29,22 @@ type ValueType = Component<any, any>
     | Query
     | Resource<any, any>
     | typeof Commands
-    | typeof UUID;
+    | typeof UUID
+    | typeof GetEntity;
 
 type Optionable = Component<any, any> | Resource<any, any>;
 export type ArgTypes = ValueType | OptionalClass<Optionable>;
 
 export type QueryArgTypes = Component<any, any>
-    | OptionalClass<Component<any, any>> | typeof UUID;
+    | OptionalClass<Component<any, any>>
+    | typeof UUID
+    | typeof GetEntity;
 
 type DefiniteArgData<T> =
     Draft<ComponentData<T> | ResourceData<T>>
     | CommandsObject<T>
-    | UUIDData<T>;
+    | UUIDData<T>
+    | GetEntityObject<T>;
 
 type OptionalArgData<T> = T extends OptionalClass<infer V>
     ? DefiniteArgData<V> | undefined

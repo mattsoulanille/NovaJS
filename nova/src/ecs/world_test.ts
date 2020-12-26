@@ -9,7 +9,7 @@ import { Entity } from './entity';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { original } from 'immer';
-import { Commands, Optional, UUID } from './arg_types';
+import { Commands, GetEntity, Optional, UUID } from './arg_types';
 import { Plugin } from './plugin';
 
 const FOO_COMPONENT = new Component({
@@ -611,5 +611,53 @@ describe('world', () => {
         expect(uuids).toEqual(new Set(
             [e1.uuid, e2.uuid, e3.uuid, world.singletonEntity.uuid]));
         expect(entities).toEqual(new Set([e1, e2, e3, world.singletonEntity]));
+    });
+
+    it('provides systems with access to the entity handle', () => {
+        const handles = new Set<EntityHandle>();
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [GetEntity, FOO_COMPONENT] as const,
+            step: (entity) => {
+                handles.add(entity);
+            }
+        });
+
+        const e1 = world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 4 })
+        );
+        const e2 = world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 7 })
+        );
+
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(handles).toEqual(new Set([e1, e2]));
+    });
+
+    it('provides queries with access to the entity handle', () => {
+        const handles = new Set<EntityHandle>();
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [new Query([GetEntity]), FOO_COMPONENT] as const,
+            step: (query) => {
+                for (const [entity] of query) {
+                    handles.add(entity);
+                }
+            }
+        });
+
+        const e1 = world.commands.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 4 })
+        );
+        const e2 = world.commands.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' })
+        );
+
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(handles).toEqual(new Set([e1, e2, world.singletonEntity]));
     });
 });

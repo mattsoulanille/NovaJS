@@ -1,6 +1,6 @@
 import produce, { Draft, enableMapSet, Immutable } from "immer";
 import { v4 } from "uuid";
-import { ArgData, ArgTypes, Commands, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Commands, GetEntity, GetEntityObject, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { Component, ComponentData } from "./component";
 import { ComponentsMap, Entity } from "./entity";
 import { Plugin } from './plugin';
@@ -376,6 +376,9 @@ export class World {
             return entity.uuid as ArgData<T>;
         } else if (arg instanceof OptionalClass) {
             return this.getArg(arg.value, draft, entity);
+        } else if (arg === GetEntity) {
+            // TODO: Don't cast to ArgData<T>?
+            return this.entityHandles.get(entity.uuid) as ArgData<T>;
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
