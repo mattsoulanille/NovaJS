@@ -323,8 +323,9 @@ export class World {
         graph.set(wrappedSystem, new Set());
 
         // Add all edges to the graph. Store directed edges from node A to B on node B.
-        const wrappedSystemMap = new Map<System, WrappedSystem>(
-            [...graph.keys()].map(key => [key.system, key]));
+        const wrappedSystemMap = new Map<System | string, WrappedSystem>(
+            [...[...graph.keys()].map(key => [key.system, key] as const),
+            ...[...graph.keys()].map(key => [key.system.name, key] as const)]);
 
         for (const [wrappedSystem, incomingEdges] of graph) {
             // Systems that this system runs before have incoming edges from this
