@@ -46,8 +46,6 @@ const BAZ_RESOURCE = new Resource({
     multiplayer: true
 })
 
-const FOO_BAR_QUERY = new Query([FOO_COMPONENT, BAR_COMPONENT] as const);
-
 const FOO_BAR_SYSTEM = new System({
     name: 'foobar',
     args: [FOO_COMPONENT, BAR_COMPONENT, BAZ_RESOURCE] as const,
@@ -80,7 +78,7 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' })
         );
@@ -100,7 +98,7 @@ describe('world', () => {
             }
         });
 
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' })
         );
@@ -123,7 +121,7 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -148,9 +146,9 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.commands.addEntity(new Entity({ uuid: 'example uuid' })
+        world.addEntity(new Entity({ uuid: 'example uuid' })
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
@@ -173,7 +171,7 @@ describe('world', () => {
 
         world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         world.step();
@@ -194,7 +192,7 @@ describe('world', () => {
 
         world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity({ uuid: 'entityUuid' })
+        world.addEntity(new Entity({ uuid: 'entityUuid' })
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         world.step();
@@ -252,7 +250,7 @@ describe('world', () => {
             systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
         }
 
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(BAR_COMPONENT, { y: 'unset' }));
 
         world.step();
@@ -282,7 +280,7 @@ describe('world', () => {
             after: new Set([firstSystem]),
         });
 
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(BAR_COMPONENT, { y: 'original value' }));
 
         world.addSystem(firstSystem)
@@ -306,11 +304,11 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'FooBar' }));
 
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 }));
 
         world.step();
@@ -335,9 +333,9 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
-        world.commands.addEntity(new Entity({ uuid: 'example uuid' })
+        world.addEntity(new Entity({ uuid: 'example uuid' })
             .addComponent(FOO_COMPONENT, { x: 456 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
@@ -359,7 +357,7 @@ describe('world', () => {
         const plugin: Plugin = {
             name: 'Test Plugin',
             build: (world) => {
-                world.commands.addEntity(new Entity()
+                world.addEntity(new Entity()
                     .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
                 world.addSystem(new System({
                     name: 'TestSystem',
@@ -402,7 +400,7 @@ describe('world', () => {
         world.addSystem(fooBarSystem);
         world.addSystem(barSystem);
 
-        const entity = world.commands.addEntity(new Entity());
+        const entity = world.addEntity(new Entity());
         world.step();
         entity.addComponent(BAR_COMPONENT, { y: 'added bar' });
         world.step();
@@ -431,19 +429,19 @@ describe('world', () => {
             }
         });
 
-        const e1 = world.commands.addEntity(new Entity()
+        const e1 = world.addEntity(new Entity()
             .addComponent(BAR_COMPONENT, { y: 'e1' })
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.commands.addEntity(new Entity()
+        world.addEntity(new Entity()
             .addComponent(BAR_COMPONENT, { y: 'e2' })
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.addSystem(testSystem);
         world.step();
-        const entityBlueprint = world.commands.removeEntity(e1);
+        const entityBlueprint = world.removeEntity(e1);
         expect(entityBlueprint).toBeDefined();
         world.step();
-        world.commands.addEntity(entityBlueprint!);
+        world.addEntity(entityBlueprint!);
         world.step();
 
         await expectAsync(stepData.pipe(take(5), toArray()).toPromise())
@@ -459,11 +457,11 @@ describe('world', () => {
     });
 
     it('destroys entity handles when the entity is removed', () => {
-        const handle1 = world.commands.addEntity(new Entity());
-        world.commands.removeEntity(handle1);
+        const handle1 = world.addEntity(new Entity());
+        world.removeEntity(handle1);
 
-        const handle2 = world.commands.addEntity(new Entity());
-        world.commands.removeEntity(handle2.uuid);
+        const handle2 = world.addEntity(new Entity());
+        world.removeEntity(handle2.uuid);
 
         expect(() => handle1.addComponent(FOO_COMPONENT, { x: 123 }))
             .toThrowError('Entity not in system');
@@ -496,7 +494,7 @@ describe('world', () => {
     });
 
     it('does not permit the singleton entity to be removed', () => {
-        expect(() => world.commands.removeEntity(world.singletonEntity))
+        expect(() => world.removeEntity(world.singletonEntity))
             .toThrowError('Cannot remove singleton entity');
     });
 
@@ -579,85 +577,90 @@ describe('world', () => {
             applyDelta: () => { },
         });
 
-        const handle = world.commands.addEntity(new Entity()
+        const handle = world.addEntity(new Entity()
             .addComponent(component1, 'foobar'));
 
         expect(() => handle.addComponent(component2, 'foobar'))
             .toThrowError(`A component with name ${component1.name} already exists`);
     })
 
-    it('provides access to entities in \'commands\'', () => {
-        const uuids = new Set<string>();
-        const entities = new Set<EntityHandle>();
-        const testSystem = new System({
-            name: 'TestSystem',
-            args: [Commands, FOO_COMPONENT] as const,
-            step: (commands) => {
-                for (const [uuid, entity] of commands.entities) {
-                    uuids.add(uuid);
-                    entities.add(entity);
-                }
-            }
-        });
-
-        const e1 = world.commands.addEntity(new Entity({ uuid: 'entity1' }));
-        const e2 = world.commands.addEntity(new Entity({ uuid: 'entity2' }));
-        const e3 = world.commands.addEntity(new Entity({ uuid: 'entity3' })
-            .addComponent(FOO_COMPONENT, { x: 0 }));
-
-        world.addSystem(testSystem);
-        world.step();
-
-        expect(uuids).toEqual(new Set(
-            [e1.uuid, e2.uuid, e3.uuid, world.singletonEntity.uuid]));
-        expect(entities).toEqual(new Set([e1, e2, e3, world.singletonEntity]));
-    });
-
     it('provides systems with access to the entity handle', () => {
-        const handles = new Set<EntityHandle>();
+        const uuids = new Set<string>();
         const testSystem = new System({
             name: 'TestSystem',
             args: [GetEntity, FOO_COMPONENT] as const,
             step: (entity) => {
-                handles.add(entity);
+                uuids.add(entity.uuid);
             }
         });
 
-        const e1 = world.commands.addEntity(new Entity()
+        const e1 = world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
-        const e2 = world.commands.addEntity(new Entity()
+        const e2 = world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 7 })
         );
 
         world.addSystem(testSystem);
         world.step();
 
-        expect(handles).toEqual(new Set([e1, e2]));
+        expect(uuids).toEqual(new Set([e1.uuid, e2.uuid]));
+    });
+
+    it('supports adding a component to an entity within a system', () => {
+        const results: Array<[number, string]> = [];
+        const fooSystem = new System({
+            name: 'FooSystem',
+            args: [GetEntity, FOO_COMPONENT] as const,
+            step: (entity, foo) => {
+                entity.addComponent(BAR_COMPONENT, { y: 'added bar' });
+                foo.x = 123;
+            }
+        });
+
+        const reportSystem = new System({
+            name: 'ReportSystem',
+            args: [FOO_COMPONENT, BAR_COMPONENT] as const,
+            step: (foo, bar) => {
+                results.push([foo.x, bar.y]);
+            },
+            after: new Set([fooSystem])
+        });
+
+        world.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 4 })
+        );
+
+        world.addSystem(fooSystem);
+        world.addSystem(reportSystem);
+        world.step();
+
+        expect(results).toEqual([[123, 'added bar']]);
+
     });
 
     it('provides queries with access to the entity handle', () => {
-        const handles = new Set<EntityHandle>();
+        const uuids = new Set<string>();
         const testSystem = new System({
             name: 'TestSystem',
             args: [new Query([GetEntity]), FOO_COMPONENT] as const,
             step: (query) => {
                 for (const [entity] of query) {
-                    handles.add(entity);
+                    uuids.add(entity.uuid);
                 }
             }
         });
 
-        const e1 = world.commands.addEntity(new Entity()
+        const e1 = world.addEntity(new Entity()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
-        const e2 = world.commands.addEntity(new Entity()
+        const e2 = world.addEntity(new Entity()
             .addComponent(BAR_COMPONENT, { y: 'hello' })
         );
 
         world.addSystem(testSystem);
         world.step();
 
-        expect(handles).toEqual(new Set([e1, e2, world.singletonEntity]));
+        expect(uuids).toEqual(new Set([e1.uuid, e2.uuid, world.singletonEntity.uuid]));
     });
 });

@@ -53,3 +53,21 @@ export function subset(a: Set<unknown>, b: Set<unknown>) {
 export function setEqual(a: Set<unknown>, b: Set<unknown>) {
     return a === b || a.size === b.size && subset(a, b) && subset(b, a);
 }
+
+export function filterSet<T>(a: Set<T>, f: (x: T) => boolean): Set<T> {
+    return new Set([...a].filter(f));
+}
+
+// All elements of a that are not in b
+export function setDifference<T>(a: Set<T>, b: Set<T>): Set<T> {
+    return filterSet(a, function(x) {
+        return !b.has(x);
+    });
+}
+
+// All elements of a that are also in b
+export function setIntersection<T>(a: Set<T>, b: Set<T>): Set<T> {
+    return filterSet(a, function(x) {
+        return b.has(x);
+    });
+}
