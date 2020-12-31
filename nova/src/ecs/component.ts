@@ -1,21 +1,21 @@
-import { Draft, immerable, Patch } from 'immer';
+import { Draft, immerable, Immutable, Patch } from 'immer';
 import * as t from 'io-ts';
 
 export type ComponentData<C> = C extends Component<infer Data, any> ? Data : never;
 
-export interface ComponentArgs<Data, Delta = Partial<Data>> {
+export interface ComponentArgs<Data, Delta = unknown> {
     name: string;
-    type: t.Type<Data>;
-    getDelta: (a: Data, b: Data, patches: Patch[]) => Delta | undefined;
-    applyDelta: (data: Draft<Data>, delta: Delta) => void;
+    type?: t.Type<Data>;
+    getDelta?: (a: Immutable<Data>, b: Immutable<Data>) => Delta | undefined;
+    applyDelta?: (data: Draft<Data>, delta: Delta) => void;
 }
 
-export class Component<Data, Delta = Patch[]> {
+export class Component<Data, Delta = unknown> {
     [immerable] = true;
     readonly name: string;
-    readonly type: t.Type<Data>;
-    readonly getDelta: (a: Data, b: Data, patches: Patch[]) => Delta | undefined;
-    readonly applyDelta: (data: Draft<Data>, delta: Delta) => void;
+    readonly type?: t.Type<Data>;
+    readonly getDelta?: (a: Immutable<Data>, b: Immutable<Data>) => Delta | undefined;
+    readonly applyDelta?: (data: Draft<Data>, delta: Delta) => void;
 
     constructor({ name, type, getDelta, applyDelta }: ComponentArgs<Data, Delta>) {
         this.name = name;

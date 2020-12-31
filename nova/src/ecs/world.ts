@@ -374,7 +374,7 @@ export class World {
         return this;
     }
 
-    private addComponent<Data, Delta>(component: Component<Data, Delta>) {
+    addComponent<Data, Delta>(component: Component<Data, Delta>) {
         // Adds a component to the map of known components. Does not add to an entity.
         if (this.nameComponentMap.has(component.name)
             && this.nameComponentMap.get(component.name) !== component) {

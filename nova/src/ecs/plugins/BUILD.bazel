@@ -7,10 +7,13 @@ ts_library(
     name = "plugins",
     srcs = [
         "time_plugin.ts",
+        "multiplayer_plugin.ts",
     ],
     deps = [
         "//nova/src/ecs",
         "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//immer",
     ]
 )
 
@@ -18,12 +21,14 @@ ts_library(
     name = "plugins_test_lib",
     srcs = [
         "time_plugin_test.ts",
+        "multiplayer_plugin_test.ts",
     ],
     deps = [
         ":plugins",
         "//nova/src/ecs",
         "@npm//@types/jasmine",
         "@npm//io-ts",
+        "@npm//io-ts-types",
         "@npm//immer",
     ]
 )

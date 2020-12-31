@@ -22,7 +22,7 @@ export class Resource<Data, Delta = Patch[]>
     }
 
     toString() {
-        return `Resource(${this.name ?? this.type.name})`;
+        return `Resource(${this.name})`;
     }
 }
 
