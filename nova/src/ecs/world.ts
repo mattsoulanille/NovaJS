@@ -71,7 +71,8 @@ interface EntityState {
 }
 
 export class EntityHandle {
-    constructor(readonly uuid: string, private getComponents: () => ReadonlySet<string>,
+    constructor(readonly uuid: string,
+        private getComponents: () => ReadonlyComponentMap,
         private add: <Data>(component: Component<Data, any>, data: Data) => void,
         private remove: (component: Component<any, any>) => void) { }
 
@@ -88,6 +89,10 @@ export class EntityHandle {
         this.remove(component);
         return this;
     }
+}
+
+interface ReadonlyComponentMap extends ReadonlyMap<Component<unknown, unknown>, unknown> {
+    get<Data>(component: Component<Data, any>): Data | undefined;
 }
 
 enableMapSet();
@@ -118,11 +123,13 @@ export class World {
     }
 
     addEntity(entity: Entity): EntityHandle {
-        return this.addEntityToDraft(entity, (callback) => {
+        const handle = this.addEntityToDraft(entity, (callback) => {
             // Can't directly pass the draft because addEntity binds
             // functions to edit the draft that can be called later.
             this.state = produce(this.state, callback);
         })
+        this.entityHandles.set(handle.uuid, handle);
+        return handle;
     }
 
     private addEntityToDraft(entity: Entity,
@@ -146,29 +153,33 @@ export class World {
             systems: this.systems, queries: this.queries, entities: [entityState]
         });
 
-        const handle = this.makeEntityHandle(uuid, callWithDraft);
-        this.entityHandles.set(uuid, handle);
-        return handle;
+        return this.makeEntityHandle(uuid, callWithDraft);
     }
 
     private makeEntityHandle(uuid: string,
         callWithDraft: (callback: (draft: Draft<State>) => void) => void) {
         return new EntityHandle(uuid,
             () => {
-                const entity = this.state.entities.get(uuid);
-                if (!entity) {
-                    throw new Error(`Missing entity ${uuid}`);
+                let components: ReadonlyComponentMap | undefined;
+                callWithDraft(draft => {
+                    const entity = draft.entities.get(uuid);
+                    if (!entity) {
+                        throw new Error(`entity '${uuid}' not in system`);
+                    }
+                    components = entity.components as ReadonlyComponentMap;
+                })
+                if (!components) {
+                    throw new Error('Failed to get components');
                 }
-                return new Set([...entity.components.keys()]
-                    .map(component => component.name));
+                return components;
             },
             (component, data) => {
-                if (!this.state.entities.has(uuid)) {
-                    throw new Error(`Missing entity ${uuid}`);
-                }
-
-                this.addComponent(component);
                 callWithDraft(draft => {
+                    if (!draft.entities.has(uuid)) {
+                        throw new Error(`entity '${uuid}' not in system`);
+                    }
+                    this.addComponent(component);
+
                     const entity = draft.entities.get(uuid)!;
 
                     entity.components.set(component as Component<unknown, unknown>, data);
@@ -183,7 +194,7 @@ export class World {
                 callWithDraft(draft => {
                     const entity = draft.entities.get(uuid);
                     if (!entity) {
-                        throw new Error(`Missing entity ${uuid}`);
+                        throw new Error(`entity '${uuid}' not in system`);
                     }
                     entity.components.delete(component);
                     World.recomputeEntities({
@@ -241,19 +252,22 @@ export class World {
             ? entityOrUuid
             : this.entityHandles.get(entityOrUuid);
 
-        if (!entityHandle) {
-            return; // No entity to remove
+        const uuid = entityOrUuid instanceof EntityHandle
+            ? entityOrUuid.uuid
+            : entityOrUuid;
+
+        // Delete the entity handle and remove its methods
+        if (entityHandle && entityHandle === this.singletonEntity) {
+            if (entityHandle === this.singletonEntity) {
+                throw new Error('Cannot remove singleton entity');
+            }
+            const erf = () => { throw new Error(`entity '${entityHandle.uuid}' not in system`); }
+            entityHandle.addComponent = erf;
+            entityHandle.removeComponent = erf;
+            this.entityHandles.delete(uuid);
         }
 
-        if (entityHandle === this.singletonEntity) {
-            throw new Error('Cannot remove singleton entity');
-        }
-
-        const erf = () => { throw new Error('Entity not in system'); }
-        entityHandle.addComponent = erf;
-        entityHandle.removeComponent = erf;
-
-        const entityState = this.state.entities.get(entityHandle.uuid);
+        const entityState = this.state.entities.get(uuid);
         if (!entityState) {
             return;
         }
@@ -263,7 +277,7 @@ export class World {
         });
 
         callWithDraft(draft => {
-            draft.entities.delete(entityHandle.uuid);
+            draft.entities.delete(uuid);
         });
 
         const removedEntity = new Entity(entityState);
@@ -271,7 +285,6 @@ export class World {
             removedEntity.addComponent(component, data);
         }
         return removedEntity;
-        // TODO: Notify peers or server?
     }
 
     addResource<Data, Delta>(resource: Resource<Data, Delta>, value: Data) {

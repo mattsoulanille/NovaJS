@@ -3,14 +3,14 @@ import * as t from 'io-ts';
 import 'jasmine';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
-import { GetEntity, Optional, UUID } from './arg_types';
+import { Commands, GetEntity, Optional, UUID } from './arg_types';
 import { Component } from './component';
 import { Entity } from './entity';
 import { Plugin } from './plugin';
 import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
-import { World } from './world';
+import { EntityHandle, World } from './world';
 
 const FOO_COMPONENT = new Component({
     name: 'foo',
@@ -432,14 +432,14 @@ describe('world', () => {
             .toBeResolvedTo('plugin component');
     });
 
-    it('supports modifying an existing entity\'s components', async () => {
-        const barData = new ReplaySubject<string>();
-        const fooBarData = new ReplaySubject<[number, string]>();
+    it('supports modifying an existing entity\'s components', () => {
+        const barData: string[] = [];
+        const fooBarData: [number, string][] = [];
         const barSystem = new System({
             name: 'BarSystem',
             args: [BAR_COMPONENT] as const,
             step: (bar) => {
-                barData.next(bar.y);
+                barData.push(bar.y);
             }
         });
 
@@ -448,7 +448,7 @@ describe('world', () => {
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (foo, bar) => {
                 bar.y = 'changed by foo';
-                fooBarData.next([foo.x, bar.y]);
+                fooBarData.push([foo.x, bar.y]);
             },
             before: new Set([barSystem])
         });
@@ -467,10 +467,8 @@ describe('world', () => {
         entity.removeComponent(BAR_COMPONENT);
         world.step();
 
-        await expectAsync(barData.pipe(take(3), toArray()).toPromise())
-            .toBeResolvedTo(['added bar', 'changed by foo', 'changed by foo']);
-        await expectAsync(fooBarData.pipe(take(1)).toPromise())
-            .toBeResolvedTo([123, 'changed by foo']);
+        expect(barData).toEqual(['added bar', 'changed by foo', 'changed by foo']);
+        expect(fooBarData).toEqual([[123, 'changed by foo']])
     });
 
     it('removes entities', async () => {
@@ -512,22 +510,42 @@ describe('world', () => {
             ]);
     });
 
-    it('destroys entity handles when the entity is removed', () => {
-        const handle1 = world.addEntity(new Entity());
-        world.removeEntity(handle1);
+    it('entity handles stop working when the entity is removed', () => {
+        const handle1 = world.addEntity(new Entity({ uuid: 'entity uuid' })
+            .addComponent(FOO_COMPONENT, { x: 123 }));
 
-        const handle2 = world.addEntity(new Entity());
-        world.removeEntity(handle2.uuid);
+        let addMessage: string | undefined;
+        let removeMessage: string | undefined;
+        const getHandleSystem = new System({
+            name: 'GetHandle',
+            args: [GetEntity, Commands, FOO_COMPONENT] as const,
+            step: (entity, commands) => {
+                commands.removeEntity(entity);
+                try {
+                    entity.addComponent(FOO_COMPONENT, { x: 123 });
+                } catch (e) {
+                    addMessage = e instanceof Error ? e.message : 'not an error object?';
+                }
+
+                try {
+                    entity.removeComponent(FOO_COMPONENT);
+                } catch (e) {
+                    removeMessage = e instanceof Error ? e.message : 'not an error object?';
+                }
+            }
+        });
+
+        world.addSystem(getHandleSystem);
+        world.step();
+
+        const expectedMessage = `entity '${handle1.uuid}' not in system`;
 
         expect(() => handle1.addComponent(FOO_COMPONENT, { x: 123 }))
-            .toThrowError('Entity not in system');
+            .toThrowError(expectedMessage);
         expect(() => handle1.removeComponent(FOO_COMPONENT))
-            .toThrowError('Entity not in system');
-
-        expect(() => handle2.addComponent(FOO_COMPONENT, { x: 123 }))
-            .toThrowError('Entity not in system');
-        expect(() => handle2.removeComponent(FOO_COMPONENT))
-            .toThrowError('Entity not in system');
+            .toThrowError(expectedMessage);
+        expect(addMessage).toEqual(expectedMessage);
+        expect(removeMessage).toEqual(expectedMessage);
     });
 
     it('provides a singleton entity', async () => {
@@ -663,6 +681,101 @@ describe('world', () => {
         expect(uuids).toEqual(new Set([e1.uuid, e2.uuid]));
     });
 
+    it('provides access to components in the entity handle', () => {
+        const barData: string[] = [];
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [GetEntity, FOO_COMPONENT] as const,
+            step: (entity) => {
+                // Entity is known to have foo. Get bar from it too.
+                const data = entity.components.get(BAR_COMPONENT);
+                if (data) {
+                    barData.push(data.y);
+                }
+            }
+        });
+
+        world.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 7 })
+            .addComponent(BAR_COMPONENT, { y: 'bar component data' })
+        );
+
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(barData).toEqual(['bar component data']);
+    });
+
+    it('entity handle provides access to components added in the same step', () => {
+        const barData: string[] = [];
+        const addBarSystem = new System({
+            name: 'AddBar',
+            args: [GetEntity, FOO_COMPONENT] as const,
+            step: (entity) => {
+                entity.addComponent(BAR_COMPONENT, { y: 'bar component data' });
+            }
+        });
+
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [GetEntity, FOO_COMPONENT] as const,
+            step: (entity) => {
+                // Entity is known to have foo. Get bar from it too.
+                const data = entity.components.get(BAR_COMPONENT);
+                if (data) {
+                    barData.push(data.y);
+                }
+            },
+            after: [addBarSystem]
+        });
+
+        world.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 7 })
+        );
+
+        world.addSystem(addBarSystem);
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(barData).toEqual(['bar component data']);
+    });
+
+    it('entity handle provides access to entities added in the same step', () => {
+        const barData: string[] = [];
+        const addEntitySystem = new System({
+            name: 'AddEntity',
+            args: [Commands, BAR_COMPONENT] as const,
+            step: (commands) => {
+                commands.addEntity(new Entity()
+                    .addComponent(FOO_COMPONENT, { x: 123 }));
+            }
+        });
+
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [GetEntity, FOO_COMPONENT] as const,
+            step: (entity) => {
+                entity.addComponent(BAR_COMPONENT, { y: 'bar component data' });
+                entity.removeComponent(FOO_COMPONENT);
+                const data = entity.components.get(BAR_COMPONENT);
+                if (data) {
+                    barData.push(data.y);
+                }
+            },
+            after: [addEntitySystem]
+        });
+
+        world.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'not the right bar' })
+        );
+
+        world.addSystem(addEntitySystem);
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(barData).toEqual(['bar component data']);
+    });
+
     it('supports adding a component to an entity within a system', () => {
         const results: Array<[number, string]> = [];
         const fooSystem = new System({
@@ -692,7 +805,6 @@ describe('world', () => {
         world.step();
 
         expect(results).toEqual([[123, 'added bar']]);
-
     });
 
     it('provides queries with access to the entity handle', () => {
