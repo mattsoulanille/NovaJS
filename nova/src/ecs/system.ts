@@ -68,7 +68,7 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     }
 
     supportsEntity(entity: WithComponents) {
-        return subset(this.allComponents, new Set(entity.components.keys()));
+        return subset(this.components, new Set(entity.components.keys()));
     }
 
     toString() {

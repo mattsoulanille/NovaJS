@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import 'jasmine';
 import { Component } from './component';
+import { Entity } from './entity';
 import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
@@ -80,5 +81,13 @@ describe('system', () => {
             BAR_COMPONENT,
             XYZZY_COMPONENT
         ]));
+    });
+
+    it('supports any entity that has all its required components', () => {
+        const entity = new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'foobar' });
+
+        expect(testSystem.supportsEntity(entity)).toBeTrue();
     });
 });
