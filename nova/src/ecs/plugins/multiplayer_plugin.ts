@@ -111,8 +111,11 @@ export function multiplayer(getMessages: () => Message[],
                         (entityMap.get(uuid)?.data.owner === message.source || isAdmin)) {
                         commands.removeEntity(uuid);
                         fullStateRequests.delete(uuid);
+                        comms.added.delete(uuid);
+                        comms.removed.add(uuid);
+                        entityMap.delete(uuid);
                     } else {
-                        console.warn(`${message.source} tried to remove ${uuid}`);
+                        console.warn(`'${message.source}' tried to remove ${uuid}`);
                     }
                 }
 
@@ -121,7 +124,7 @@ export function multiplayer(getMessages: () => Message[],
                     if (entityMap.has(uuid)
                         && entityMap.get(uuid)?.data.owner !== message.source
                         && !isAdmin) {
-                        console.warn(`${message.source} tried to edit existing entity ${uuid}`);
+                        console.warn(`'${message.source}' tried to replace existing entity ${uuid}`);
                         continue;
                     }
 
@@ -146,10 +149,16 @@ export function multiplayer(getMessages: () => Message[],
                         }
                         entity.addComponent(component, state.right);
                     }
-                    entity.addComponent(MultiplayerData, {
+                    const multiplayerData = {
                         owner: entityState.owner,
-                    });
-                    commands.addEntity(entity);
+                    };
+                    entity.addComponent(MultiplayerData, multiplayerData);
+                    const handle = commands.addEntity(entity);
+                    comms.added.add(uuid);
+                    comms.removed.delete(uuid);
+                    // Add the newly added entity to the entityMap so we don't
+                    // accidentally request its state in `apply deltas`.
+                    entityMap.set(uuid, { entity: handle, data: multiplayerData });
                 }
 
                 // Set UUIDs
@@ -165,13 +174,14 @@ export function multiplayer(getMessages: () => Message[],
                 // Apply deltas
                 for (const [uuid, entityDelta] of Object.entries(message.delta ?? {})) {
                     if (!entityMap.has(uuid)) {
+                        debugger;
                         fullStateRequests.add(uuid);
                         continue;
                     }
                     const { entity, data } = entityMap.get(uuid)!;
 
                     if (message.source !== data.owner && !comms.admins.has(message.source)) {
-                        console.warn(`${message.source} tried to modify entity ${entity.uuid}`);
+                        console.warn(`'${message.source}' tried to modify entity ${entity.uuid}`);
                         continue;
                     }
 
@@ -225,12 +235,15 @@ export function multiplayer(getMessages: () => Message[],
                 new Set([...comms.lastEntities, ...comms.added]));
             const removedEntities = setDifference(comms.lastEntities,
                 new Set([...entities, ...comms.removed]));
-
+            comms.added = new Set();
+            comms.removed = new Set();
+            comms.lastEntities = entities;
             changes.remove = [...removedEntities];
 
             // Get states for new entities
             const entityMap = new Map(query.map(([entity, data]) =>
                 [entity.uuid, { entity, data }]));
+
             for (const uuid of addedEntities) {
                 const val = entityMap.get(uuid);
                 if (!val) {
@@ -245,8 +258,9 @@ export function multiplayer(getMessages: () => Message[],
             }
 
             // Get deltas
+            const newStates = new Set(Object.keys(changes.state ?? {}));
             for (const [entity, multiplayer] of query) {
-                if (multiplayer.owner !== comms.uuid) {
+                if (multiplayer.owner !== comms.uuid || newStates.has(entity.uuid)) {
                     continue;
                 }
                 const entityDelta: EntityDelta = {};
@@ -260,9 +274,23 @@ export function multiplayer(getMessages: () => Message[],
                 }
                 changes.delta![entity.uuid] = entityDelta;
             }
+            if (Object.keys(changes.delta ?? {}).length === 0) {
+                delete changes.delta;
+            }
+            if (Object.keys(changes.state ?? {}).length === 0) {
+                delete changes.state;
+            }
+            if (changes.remove?.length === 0) {
+                delete changes.remove;
+            }
+            if (changes.ownedUuids?.length === 0) {
+                delete changes.ownedUuids;
+            }
 
-            comms.lastEntities = entities;
-            sendMessage(changes);
+            if (Object.keys(changes).length > 1) {
+                // Only send if there's something to send.
+                sendMessage(changes);
+            }
 
             // Reply to requests for state
             for (const [peer, entityUuids] of comms.stateRequests) {

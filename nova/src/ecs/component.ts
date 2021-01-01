@@ -10,7 +10,7 @@ export interface ComponentArgs<Data, Delta = unknown> {
     applyDelta?: (data: Draft<Data>, delta: Delta) => void;
 }
 
-export class Component<Data, Delta = unknown> {
+export class Component<Data, Delta = Partial<Data>> {
     [immerable] = true;
     readonly name: string;
     readonly type?: t.Type<Data>;

@@ -4,12 +4,16 @@ import { Resource } from '../resource';
 import { System } from '../system';
 import { Plugin } from '../plugin';
 
+export const Time = t.type({
+    delta: t.number,
+    time: t.number,
+});
+
+export type Time = t.TypeOf<typeof Time>;
+
 export const TimeResource = new Resource({
     name: 'time',
-    type: t.type({
-        delta: t.number,
-        time: t.number,
-    }),
+    type: Time,
     getDelta: () => undefined,
     applyDelta: () => undefined,
 });
