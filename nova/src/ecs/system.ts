@@ -6,13 +6,13 @@ import { subset, WithComponents } from "./utils";
 
 
 type ResourcesOnly<T extends readonly [...unknown[]]> =
-    Extract<T[number], Resource<any, any>>;
+    Extract<T[number], Resource<any, any, any, any>>;
 
 type QueriesOnly<T extends readonly [...unknown[]]> =
     Extract<T[number], Query<any>>;
 
 export type ComponentsOnly<T extends readonly [...unknown[]]> =
-    Exclude<Extract<T[number], Component<any, any>>, Resource<any, any>>;
+    Exclude<Extract<T[number], Component<any, any, any, any>>, Resource<any, any, any, any>>;
 
 type QueryComponents<T> =
     T extends Query<infer Components> ? Components[number] : never;

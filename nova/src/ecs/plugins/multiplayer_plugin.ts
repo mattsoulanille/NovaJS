@@ -191,7 +191,7 @@ export function multiplayer(getMessages: () => Message[],
                             console.warn(`No such component ${componentName}`);
                             continue;
                         }
-                        const componentData = entity.components.get(component);
+                        const componentData = entity.components.get<unknown>(component);
                         if (!componentData) {
                             console.warn(`Entity ${entity.uuid} does not have component ${component.name}`);
                             fullStateRequests.add(entity.uuid);

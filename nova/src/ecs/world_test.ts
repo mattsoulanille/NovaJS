@@ -10,7 +10,7 @@ import { Plugin } from './plugin';
 import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
-import { EntityHandle, World } from './world';
+import { World } from './world';
 
 const FOO_COMPONENT = new Component({
     name: 'foo',

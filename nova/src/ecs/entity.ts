@@ -1,4 +1,4 @@
-import { Component } from "./component";
+import { Component, UnknownComponent } from "./component";
 
 interface EntityArgs {
     multiplayer?: boolean;
@@ -6,8 +6,8 @@ interface EntityArgs {
     name?: string;
 }
 
-export type ComponentsMap = Map<Component<unknown, unknown>, unknown>;
-export type ComponentTypes = Set<Component<unknown, unknown>>;
+export type ComponentsMap = Map<UnknownComponent, unknown>;
+export type ComponentTypes = Set<UnknownComponent>;
 
 // This is a handle for the entity that the world creates.
 export class Entity {
@@ -22,12 +22,12 @@ export class Entity {
         this.name = args?.name;
     }
 
-    addComponent<Data>(component: Component<Data, any>, data: Data): this {
-        this.components.set(component as Component<unknown, unknown>, data);
+    addComponent<Data>(component: Component<Data, any, any, any>, data: Data): this {
+        this.components.set(component as UnknownComponent, data);
         return this;
     }
 
-    removeComponent(component: Component<any, any>) {
+    removeComponent(component: Component<any, any, any, any>) {
         this.components.delete(component);
         return this;
     }

@@ -8,7 +8,7 @@ import { World } from '../world';
 import { Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
 
 
-const BarComponent = new Component<{ y: string }, { y: string }>({
+const BarComponent = new Component<{ y: string }, { y: string }, { y: string }, { y: string }>({
     name: "Bar",
     type: t.type({ y: t.string }),
     getDelta: (a, b) => {

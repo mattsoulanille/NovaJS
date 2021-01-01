@@ -1,11 +1,11 @@
 import produce, { Draft, enableMapSet, Immutable } from "immer";
 import { v4 } from "uuid";
 import { ArgData, ArgTypes, Commands, GetEntity, GetEntityObject, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
-import { Component, ComponentData } from "./component";
+import { Component, ComponentData, UnknownComponent } from "./component";
 import { ComponentsMap, Entity } from "./entity";
 import { Plugin } from './plugin';
 import { Query } from "./query";
-import { Resource, ResourceData } from "./resource";
+import { Resource, ResourceData, UnknownResource } from "./resource";
 import { System } from "./system";
 import { topologicalSort } from './utils';
 
@@ -50,7 +50,7 @@ import { topologicalSort } from './utils';
 export interface CommandsInterface {
     addEntity: (entity: Entity) => EntityHandle;
     removeEntity: (entity: string | EntityHandle) => Entity | undefined;
-    components: ReadonlyMap<string /* name */, Component<unknown, unknown>>;
+    components: ReadonlyMap<string /* name */, UnknownComponent>;
 }
 
 interface WrappedSystem {
@@ -60,7 +60,7 @@ interface WrappedSystem {
 
 interface State {
     entities: Map<string, EntityState>;
-    resources: Map<Resource<unknown, unknown>, unknown>;
+    resources: Map<UnknownResource, unknown>;
 }
 
 interface EntityState {
@@ -73,26 +73,26 @@ interface EntityState {
 export class EntityHandle {
     constructor(readonly uuid: string,
         private getComponents: () => ReadonlyComponentMap,
-        private add: <Data>(component: Component<Data, any>, data: Data) => void,
-        private remove: (component: Component<any, any>) => void) { }
+        private add: <Data>(component: Component<Data, any, any, any>, data: Data) => void,
+        private remove: (component: UnknownComponent) => void) { }
 
     get components() {
         return this.getComponents();
     }
 
-    addComponent<Data>(component: Component<Data, any>, data: Data) {
+    addComponent<Data>(component: Component<Data, any, any, any>, data: Data) {
         this.add(component, data);
         return this;
     }
 
-    removeComponent(component: Component<any, any>) {
+    removeComponent(component: Component<any, any, any, any>) {
         this.remove(component);
         return this;
     }
 }
 
-interface ReadonlyComponentMap extends ReadonlyMap<Component<unknown, unknown>, unknown> {
-    get<Data>(component: Component<Data, any>): Data | undefined;
+interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unknown> {
+    get<Data>(component: Component<Data, any, any, any>): Data | undefined;
 }
 
 enableMapSet();
@@ -100,13 +100,13 @@ enableMapSet();
 export class World {
     private state: Immutable<State> = {
         entities: new Map<string /* UUID */, EntityState>(),
-        resources: new Map<Resource<unknown, unknown>, unknown /* resource data */>(),
+        resources: new Map<UnknownResource, unknown /* resource data */>(),
     };
 
     // These maps exist in part to make sure there are no name collisions
-    private nameComponentMap = new Map<string, Component<unknown, unknown>>();
+    private nameComponentMap = new Map<string, UnknownComponent>();
     private nameSystemMap = new Map<string, System>();
-    private nameResourceMap = new Map<string, Resource<unknown, unknown>>();
+    private nameResourceMap = new Map<string, UnknownResource>();
 
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
     private queries = new Map<Query, Set<string /* entity uuid */>>();
@@ -178,11 +178,11 @@ export class World {
                     if (!draft.entities.has(uuid)) {
                         throw new Error(`entity '${uuid}' not in system`);
                     }
-                    this.addComponent(component);
+                    this.addComponent(component as UnknownComponent);
 
                     const entity = draft.entities.get(uuid)!;
 
-                    entity.components.set(component as Component<unknown, unknown>, data);
+                    entity.components.set(component as UnknownComponent, data);
                     World.recomputeEntities({
                         systems: this.systems,
                         queries: this.queries,
@@ -196,7 +196,7 @@ export class World {
                     if (!entity) {
                         throw new Error(`entity '${uuid}' not in system`);
                     }
-                    entity.components.delete(component);
+                    entity.components.delete(component as UnknownComponent);
                     World.recomputeEntities({
                         systems: this.systems,
                         queries: this.queries,
@@ -287,23 +287,23 @@ export class World {
         return removedEntity;
     }
 
-    addResource<Data, Delta>(resource: Resource<Data, Delta>, value: Data) {
+    addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
         this.addResourceToDraft(resource, value, (callback) => {
             this.state = produce(this.state, callback);
         });
     }
 
-    private addResourceToDraft<Data, Delta>(resource: Resource<Data, Delta>, value: Data,
-        callWithDraft: (callback: (draft: Draft<State>) => void) => void) {
+    private addResourceToDraft<Data>(resource: Resource<Data, any, any, any>,
+        value: Data, callWithDraft: (callback: (draft: Draft<State>) => void) => void) {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
         }
-        this.nameResourceMap.set(resource.name, resource as Resource<unknown, unknown>);
+        this.nameResourceMap.set(resource.name, resource as UnknownResource);
 
         // TODO: Fix these types. Maybe pass resources in the World constructor?
         callWithDraft(draft => {
-            draft.resources.set(resource as Resource<unknown, unknown>, value);
+            draft.resources.set(resource as UnknownResource, value);
         });
     }
 
@@ -374,15 +374,14 @@ export class World {
         return this;
     }
 
-    addComponent<Data, Delta>(component: Component<Data, Delta>) {
+    addComponent(component: Component<any, any, any, any>) {
         // Adds a component to the map of known components. Does not add to an entity.
         if (this.nameComponentMap.has(component.name)
             && this.nameComponentMap.get(component.name) !== component) {
             throw new Error(`A component with name ${component.name} already exists`);
         }
 
-        this.nameComponentMap.set(component.name,
-            component as Component<unknown, unknown>);
+        this.nameComponentMap.set(component.name, component);
     }
 
     step() {

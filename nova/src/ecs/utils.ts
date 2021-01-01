@@ -1,7 +1,7 @@
-import { Component } from "./component";
+import { UnknownComponent } from "./component";
 
 export interface WithComponents {
-    components: ReadonlyMap<Component<unknown, unknown>, unknown>;
+    components: ReadonlyMap<UnknownComponent, unknown>;
 }
 
 /**

@@ -25,18 +25,18 @@ export function Optional<V extends Optionable>(value: V) {
 }
 
 // Types for args that are used to define a system or query. Passed in a tuple.
-type ValueType = Component<any, any>
+type ValueType = Component<any, any, any, any>
     | Query
-    | Resource<any, any>
+    | Resource<any, any, any, any>
     | typeof Commands
     | typeof UUID
     | typeof GetEntity;
 
-type Optionable = Component<any, any> | Resource<any, any>;
+type Optionable = Component<any, any, any, any> | Resource<any, any>;
 export type ArgTypes = ValueType | OptionalClass<Optionable>;
 
-export type QueryArgTypes = Component<any, any>
-    | OptionalClass<Component<any, any>>
+export type QueryArgTypes = Component<any, any, any, any>
+    | OptionalClass<Component<any, any, any, any>>
     | typeof UUID
     | typeof GetEntity;
 
