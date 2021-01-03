@@ -3,6 +3,7 @@ import { current, isDraft, original } from 'immer';
 import * as t from 'io-ts';
 import { Commands, GetEntity } from '../arg_types';
 import { Component } from '../component';
+import { set } from '../datatypes/set';
 import { Entity } from '../entity';
 import { Plugin } from '../plugin';
 import { Query } from '../query';
@@ -27,7 +28,8 @@ const Message = t.intersection([t.type({
     requestState: t.array(t.string),
     remove: t.array(t.string),
     ownedUuids: t.array(t.string),
-    admins: t.array(t.string),
+    admins: set(t.string),
+    peers: set(t.string),
     playerShip: t.string,
 })]);
 
@@ -42,6 +44,7 @@ export const MultiplayerData = new Component({
 
 const Comms = new Component<{
     ownedUuids: Set<string>,
+    peers: Set<string>,
     admins: Set<string>,
     uuid: string,
     stateRequests: Map<string /* peer uuid */, Set<string /* Entity uuid */>>,
@@ -87,7 +90,7 @@ export function multiplayer(getMessages: () => Message[],
 
                 // Set admins
                 if (isAdmin && message.admins) {
-                    comms.admins = new Set(message.admins);
+                    comms.admins = message.admins;
                 }
 
                 // Set requested states
@@ -325,6 +328,7 @@ export function multiplayer(getMessages: () => Message[],
         world.singletonEntity.addComponent(Comms, {
             ownedUuids: new Set<string>(),
             uuid,
+            peers: new Set<string>(),
             admins: new Set<string>(['server']),
             lastEntities: new Set<string>(),
             stateRequests: new Map(),
