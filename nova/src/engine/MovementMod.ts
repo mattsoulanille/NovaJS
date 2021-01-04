@@ -1,8 +1,10 @@
 import { Draft, Patch } from "immer";
-import { ImmerStepper, immerStepperFactory, makeImmerMod } from "./ImmerStepper";
+import { makeImmerMod } from "./ImmerStepper";
 import { Position } from "./Position";
-import { StateTreeMod } from "./StateTreeMod";
-import { Angle, Vector } from "./Vector";
+import { Angle, AngleLike, Vector, VectorLike } from "./Vector";
+import * as t from 'io-ts';
+
+type ForSomeReasonThisIsRequired = Patch;
 
 export enum MovementType {
     INERTIAL = 0,
@@ -10,22 +12,30 @@ export enum MovementType {
     STATIONARY = 2,
 }
 
-export interface MovementFactoryData {
-    maxVelocity: number;
-    turnRate: number;
-    acceleration: number;
-    movementType: MovementType;
-}
+export const MovementFactoryData = t.type({
+    maxVelocity: t.number,
+    turnRate: t.number,
+    acceleration: t.number,
+    movementType: t.union([
+        t.literal(MovementType.INERTIAL),
+        t.literal(MovementType.INERTIALESS),
+        t.literal(MovementType.STATIONARY)]),
+});
 
-export type MovementState = MovementFactoryData & {
-    position: Position;
-    velocity: Vector;
-    rotation: Angle;
-    turning: number;
-    turnBack: boolean;
-    accelerating: number;
-}
+export type MovementFactoryData = t.TypeOf<typeof MovementFactoryData>;
 
+// This state must be JSON.stringify -able.
+export const MovementState = t.intersection([MovementFactoryData,
+    t.type({
+        position: VectorLike,
+        velocity: VectorLike,
+        rotation: AngleLike,
+        turning: t.number,
+        turnBack: t.boolean,
+        accelerating: t.number,
+    })]);
+
+export type MovementState = t.TypeOf<typeof MovementState>;
 
 function stepState({ state, time }:
     { state: Draft<MovementState>, time: number }) {
@@ -41,50 +51,61 @@ function inertialControls({ state, time }:
     // Turning
     // Handle the case where the ship is turning to point opposite
     // its velocity vector.
+
+    let velocity = Vector.fromVectorLike(state.velocity);
     if (state.turnBack) {
-        if (state.velocity.length > 0) {
-            let reverseAngle = state.velocity.angle;
-            reverseAngle.add(Math.PI);
+        if (velocity.length > 0) {
+            let reverseAngle = velocity.angle.add(Math.PI);
             turnToDirection({ state, time }, reverseAngle);
         }
     }
 
     // Acceleration
+    const rotation = Angle.fromAngleLike(state.rotation);
     if (state.accelerating > 0) {
-        const unitAngle = state.rotation.getUnitVector();
-        unitAngle.normalize(state.accelerating * state.acceleration * time);
-        state.velocity.add(unitAngle);
+        velocity = velocity.add(
+            rotation.getUnitVector()
+                .normalize(state.accelerating * state.acceleration * time));
     }
-    state.velocity.shortenToLength(state.maxVelocity);
+    velocity = velocity.shortenToLength(state.maxVelocity);
 
     // Velocity
-    state.position.add(state.velocity.scaled(time));
+    // TODO: Make it so you don't have to cast
+    let position = Position.fromVectorLike(state.position);
+    position = position.add(velocity.scale(time)) as Position;
+
+    state.position = position;
+    state.velocity = velocity;
 }
 
 function inertialessControls({ state, time }:
     { state: Draft<MovementState>, time: number }) {
-
-    state.rotation.add(state.turning * state.turnRate * time);
+    let rotation = Angle.fromAngleLike(state.rotation);
+    rotation = rotation.add(state.turning * state.turnRate * time);
 
     // Yes, it's inefficient, but it keeps a single source of
     // truth for velocity / speed.
-    let speed = state.velocity.length;
+    let velocity = Vector.fromVectorLike(state.velocity);
+    let speed = velocity.length;
     speed += state.accelerating * state.acceleration * time;
-    state.velocity = state.rotation.getUnitVector()
+    state.velocity = rotation.getUnitVector()
         .scale(speed)
         .shortenToLength(state.maxVelocity);
 
-    state.position.add(state.velocity.scaled(time));
+    let position = Position.fromVectorLike(state.position);
+    position = position.add(velocity.scale(time)) as Position;
+
+    state.position = position;
+    state.velocity = velocity;
 }
 
 function turnToDirection({ state, time }:
     { state: Draft<MovementState>, time: number }, target: Draft<Angle>) {
     // Used for turning retrograde and pointing at a target
-    let difference = state.rotation.distanceTo(target);
+    const rotation = Angle.fromAngleLike(state.rotation);
+    let difference = rotation.distanceTo(target);
 
-    // If we would turn past
-    // the target direction,
-    // just go to the target direction
+    // If we would turn past the target direction, just go to the target direction.
     if (state.turnRate * time > Math.abs(difference.angle)) {
         state.turning = 0;
         state.rotation = target;
@@ -112,4 +133,5 @@ function stateFactory(movementFactoryData: MovementFactoryData): MovementState {
     }
 }
 
-export const MovementMod = makeImmerMod("movement", stateFactory, stepState, [["position"]]);
+export const MovementMod = makeImmerMod("movement", stateFactory, stepState,
+    [["position"], ["velocity"]]);

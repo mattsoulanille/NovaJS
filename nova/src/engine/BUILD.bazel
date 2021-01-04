@@ -16,6 +16,7 @@ ts_library(
     deps = [
         #"//nova/src/proto:protobufjs_bundle",
         "@npm//immer",
+        "@npm//io-ts",
     ]
 )
     
@@ -30,6 +31,7 @@ ts_library(
         "ShipMod.ts",
         "SystemMod.ts",
         "ImmerStepper.ts",
+        "StateTreeDeclarations.ts",
     ],
     deps = [
         ":utils",

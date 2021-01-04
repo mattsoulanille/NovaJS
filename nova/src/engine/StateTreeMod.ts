@@ -9,10 +9,13 @@ export interface StateTreeMod<Delta = unknown> {
     name: string;
     buildPromise: Promise<void>;
     built: boolean;
+    applyDelta(delta: Delta): void;
     step(args: {
         time: number,
-        delta?: Delta
         makeDelta: boolean,
     }): Delta | undefined;
-    destroy(): void;
+
+    // Returns a delta that, when applied to a new object,
+    // puts that object in this object's state.
+    getState(): Delta;
 }

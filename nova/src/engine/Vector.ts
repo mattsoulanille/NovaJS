@@ -1,70 +1,51 @@
-import { immerable } from "immer";
+import * as t from 'io-ts';
+export const VectorLike = t.type({
+    x: t.number,
+    y: t.number,
+});
 
-export type VectorLike = { x: number, y: number };
+export type VectorLike = t.TypeOf<typeof VectorLike>;
 
 const TWO_PI = 2 * Math.PI;
 export class Vector implements VectorLike {
-    [immerable] = true;
-    protected wrappedX!: number;
-    protected wrappedY!: number;
+    x: number;
+    y: number;
 
     constructor(x: number, y: number) {
         this.x = x;
         this.y = y;
     }
 
-    // Setters and getters are used so space_object/Position.ts
-    // can override the setters on x and y.
-    set x(x: number) {
-        this.wrappedX = x;
-    }
-    get x() {
-        return this.wrappedX;
-    }
-
-    set y(y: number) {
-        this.wrappedY = y;
-    }
-    get y() {
-        return this.wrappedY;
-    }
-
     static fromVectorLike(v: VectorLike) {
         return new Vector(v.x, v.y);
     }
 
+    protected factory(x: number, y: number) {
+        return new Vector(x, y);
+    }
+
+    private apply(other: VectorLike, f: (a: number, b: number) => number) {
+        return this.factory(f(this.x, other.x), f(this.y, other.y));
+    }
+
     add(other: VectorLike) {
-        this.x += other.x;
-        this.y += other.y;
-        return this;
+        return this.apply(other, (a, b) => a + b);
     }
 
     subtract(other: VectorLike) {
-        this.x -= other.x;
-        this.y -= other.y;
-        return this;
-    }
-
-    static minus(a: VectorLike, b: VectorLike) {
-        return new Vector(a.x - b.x, a.y - b.y);
+        return this.apply(other, (a, b) => a - b);
     }
 
     rotate(radians: number) {
-        var cos = Math.cos(radians);
-        var sin = Math.sin(radians);
-        this.x = cos * this.x - sin * this.y;
-        this.y = sin * this.x + cos * this.y;
-        return this;
-    }
-
-    scaled(scale: number) {
-        return new Vector(this.x * scale, this.y * scale);
+        const cos = Math.cos(radians);
+        const sin = Math.sin(radians);
+        const x = cos * this.x - sin * this.y;
+        const y = sin * this.x + cos * this.y;
+        return this.factory(x, y);
     }
 
     scale(scale: number) {
-        this.x *= scale;
-        this.y *= scale;
-        return this;
+        return this.factory(this.x * scale, this.y * scale);
     }
 
     normalize(targetLength = 1) {
@@ -73,8 +54,7 @@ export class Vector implements VectorLike {
             throw new Error("Divide by zero");
         }
         const ratio = targetLength / length;
-        this.scale(ratio);
-        return this;
+        return this.scale(ratio);
     }
 
     get lengthSquared(): number {
@@ -93,14 +73,13 @@ export class Vector implements VectorLike {
     lengthenBy(c: number) {
         const u = this.unitVector
         u.scale(c);
-        this.add(u);
-        return this;
+        return this.add(u);
     }
 
     shortenToLength(c: number) {
         const length = this.length;
         if (length > c) {
-            this.normalize(c);
+            return this.normalize(c);
         }
         return this;
     }
@@ -115,15 +94,21 @@ export class Vector implements VectorLike {
     }
 }
 
+export const AngleLike = t.type({
+    angle: t.number,
+});
 
-export interface AngleLike {
-    angle: number
-}
+export type AngleLike = t.TypeOf<typeof AngleLike>;
 
-export class Angle {
-    private wrappedAngle!: number
+export class Angle implements AngleLike {
+    readonly angle: number;
+
     constructor(angle: number) {
-        this.angle = angle;
+        this.angle = Angle.mod(angle);
+    }
+
+    static fromAngleLike(angleLike: AngleLike) {
+        return new Angle(angleLike.angle);
     }
 
     // Returns a number in [-pi, pi)
@@ -133,32 +118,23 @@ export class Angle {
             val -= TWO_PI;
         }
         return val;
-
-    }
-
-    set angle(val: number) {
-        this.wrappedAngle = Angle.mod(val);
-    }
-
-    get angle() {
-        return this.wrappedAngle;
     }
 
     add(other: Angle | number) {
         if (other instanceof Angle) {
-            this.angle += other.angle;
+            return new Angle(this.angle + other.angle);
         }
         else {
-            this.angle += other
+            return new Angle(this.angle + other);
         }
     }
 
     subtract(other: Angle | number) {
         if (other instanceof Angle) {
-            this.angle -= other.angle
+            return new Angle(this.angle - other.angle);
         }
         else {
-            this.angle -= other
+            return new Angle(this.angle - other);
         }
     }
 
@@ -168,8 +144,8 @@ export class Angle {
 
     // What you would need to add to this angle
     // to turn it into the other angle
-    distanceTo(other: AngleLike) {
-        return Angle.minus(other, this);
+    distanceTo(other: Angle) {
+        return other.subtract(this);
     }
 
     // Remember that we use clock angles

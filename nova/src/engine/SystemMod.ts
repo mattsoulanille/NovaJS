@@ -1,6 +1,6 @@
 import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
 import { EngineMod } from "./EngineMod";
-import { StateTreeDeclaration } from "./StateTree";
+import { StateTreeDeclaration, StateTreeNode } from "./StateTree";
 
 export const systemTree: StateTreeDeclaration<NovaDataType.System> = {
     name: 'System',

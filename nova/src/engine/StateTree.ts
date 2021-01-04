@@ -3,6 +3,7 @@ import { Gettable } from "novajs/novadatainterface/Gettable";
 import { NovaDataInterface, NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
 import { StateTreeMod, StateTreeModFactory } from "./StateTreeMod";
 import * as t from 'io-ts';
+import { setDifference, setUnion } from "../common/SetUtils";
 
 type GettableDataType<T> = T extends Gettable<infer D> ? D : never;
 type GetFactoryData<T extends NovaDataType> = GettableDataType<NovaDataInterface[T]>;
@@ -31,12 +32,11 @@ type StateTreeFactory<FactoryData = unknown>
     = (id: string, uuid?: string) => StateTree<FactoryData>;
 export type StateTreeFactories = Map<string /* StateTree name */, StateTreeFactory>;
 
-
 export interface StateTreeDelta {
     name: string;
-    modDeltas: { [name: string]: unknown };
-    childrenDeltas: { [uuid: string]: StateTreeDelta };
-    add?: { [uuid: string]: { name: string, id: string } };
+    id: string;
+    modDeltas?: { [name: string]: unknown };
+    childrenDeltas?: { [uuid: string]: StateTreeDelta };
     remove?: string[];
 }
 
@@ -44,12 +44,12 @@ export const StateTreeDelta = t.recursion<StateTreeDelta>('StateTreeDelta', Stat
     t.intersection([
         t.type({
             name: t.string,
-            modDeltas: t.record(t.string, t.unknown),
-            childrenDeltas: t.record(t.string, StateTreeDelta),
+            id: t.string,
         }),
         t.partial({
-            add: t.union([t.record(t.string, t.type({ name: t.string, id: t.string })), t.undefined]),
             remove: t.array(t.string),
+            modDeltas: t.record(t.string, t.unknown),
+            childrenDeltas: t.record(t.string, StateTreeDelta),
         }),
     ])
 );
@@ -57,6 +57,7 @@ export const StateTreeDelta = t.recursion<StateTreeDelta>('StateTreeDelta', Stat
 export interface StateTree<FactoryData = unknown> {
     readonly name: string;
     readonly uuid: string;
+    readonly id: string;
     readonly factoryData?: FactoryData;
     mods: Map<string /* name */, StateTreeMod>;
     children: Map<string /* uuid */, StateTree>;
@@ -72,19 +73,22 @@ export interface StateTree<FactoryData = unknown> {
         ownedUUIDs: Set<string>,
     }): StateTreeDelta | undefined;
 
+    applyDelta(delta: StateTreeDelta): void;
+    getState(): StateTreeDelta;
     addChild(child: StateTree): void;
     removeChild(child: StateTree): void;
-    destroy(): void;
 }
 
 class StateTreeBase<FactoryData = unknown> implements StateTree<FactoryData> {
     readonly name: string;
     readonly uuid: string;
+    id = "no id";
     factoryData?: FactoryData;
     mods = new Map<string, StateTreeMod>();
     children = new Map<string, StateTree<unknown>>();
+    private lastChildren = new Set<string>();
     parent?: StateTree;
-    buildPromise: Promise<void> = Promise.reject('A superclass must build this.');
+    buildPromise: Promise<void> = Promise.resolve();
     built = false;
     gameData: GameDataInterface;
     stateTreeFactories: StateTreeFactories;
@@ -123,60 +127,134 @@ class StateTreeBase<FactoryData = unknown> implements StateTree<FactoryData> {
         return new Map(mods);
     }
 
-    step({ time, delta, ownedUUIDs }: {
-        time: number;
-        delta?: StateTreeDelta;
-        ownedUUIDs: Set<string>;
-    }): StateTreeDelta | undefined {
-        // Remove children
-        for (const remove of delta?.remove ?? []) {
-            this.children.get(remove)?.destroy();
-            this.children.delete(remove);
+    getState(): StateTreeDelta {
+        return {
+            name: this.name,
+            id: this.id,
+            modDeltas: Object.fromEntries([...this.mods.entries()]
+                .map(([name, mod]) => [name, mod.getState()])),
+            childrenDeltas: Object.fromEntries([...this.children.entries()]
+                .map(([uuid, child]) => [uuid, child.getState()]))
         }
+    }
 
-        // Add children
-        for (const [uuid, addDelta] of Object.entries(delta?.add ?? {})) {
-            const factory = this.stateTreeFactories.get(addDelta.name);
-            if (factory) {
-                this.children.set(uuid, factory(addDelta.id, uuid));
-            } else {
-                console.warn(`Factory for ${addDelta.name} not found.`);
-            }
+    applyDelta(delta: StateTreeDelta) {
+        if (delta.name !== this.name) {
+            console.warn(`Can not apply delta for ${delta.name} to ${this.name}`);
+            return;
         }
-
-        if (!this.built) {
+        if (delta.id !== this.id) {
+            console.warn(`Can not apply delta for ${delta.id} to ${this.id}`);
             return;
         }
 
-        const newDelta: StateTreeDelta = {
+        // Apply the delta only if it's built. If not, wait
+        // for it to be built.
+        if (!this.built) {
+            this.buildPromise = this.buildPromise.then(() => {
+                this.applyDelta(delta);
+            });
+            return;
+        }
+
+        // Remove children
+        for (const remove of delta?.remove ?? []) {
+            this.children.delete(remove);
+        }
+
+        // Create children that we don't have.
+        for (const [uuid, childDelta] of Object.entries(delta.childrenDeltas ?? {})) {
+            if (!this.children.has(uuid)) {
+                const factory = this.stateTreeFactories.get(childDelta.name);
+                if (factory) {
+                    const child = factory(childDelta.id, uuid);
+                    this.children.set(uuid, child);
+                } else {
+                    console.warn(`Factory for StateTree ${childDelta.name} not found`);
+                }
+            }
+        }
+
+        // Apply mod deltas
+        for (const [name, modDelta] of Object.entries(delta.modDeltas ?? {})) {
+            this.mods.get(name)?.applyDelta(modDelta);
+        }
+
+        // Apply children deltas
+        for (const [uuid, childDelta] of Object.entries(delta.childrenDeltas ?? {})) {
+            this.children.get(uuid)?.applyDelta(childDelta);
+        }
+
+        // Add / remove the children from the delta so the set difference between
+        // children and lastChildren is the children added by local operations only and
+        // the set difference between lastChildren and children is the children removed
+        // by local operations only.
+        this.lastChildren = setUnion(
+            setDifference(this.lastChildren, new Set(delta.remove ?? [])),
+            new Set(Object.keys(delta.childrenDeltas ?? {})))
+    }
+
+    step({ time, ownedUUIDs }: {
+        time: number;
+        ownedUUIDs: Set<string>;
+    }): StateTreeDelta | undefined {
+        // Only step once it's built
+        if (!this.built) {
+            this.buildPromise = this.buildPromise.then(() => {
+                this.step({ time, ownedUUIDs });
+            });
+            return;
+        }
+
+        const delta: StateTreeDelta = {
             name: this.name,
+            id: this.id,
             modDeltas: {},
             childrenDeltas: {},
         };
 
+        // Step mods
         const makeDelta = ownedUUIDs.has(this.uuid);
         for (const [name, mod] of this.mods) {
-            const modDelta = mod.step({ time, delta: delta?.modDeltas[name], makeDelta });
+            const modDelta = mod.step({ time, makeDelta });
             if (modDelta) {
-                newDelta.modDeltas[name] = modDelta;
+                delta.modDeltas![name] = modDelta;
             }
         }
 
+        // Step children
         for (const [uuid, child] of this.children) {
-            const childDelta = delta?.childrenDeltas[uuid];
-            const newChildDelta = child.step({ time, delta: childDelta, ownedUUIDs });
-            if (newChildDelta) {
-                newDelta.childrenDeltas[uuid] = newChildDelta;
+            const childDelta = child.step({ time, ownedUUIDs });
+            if (childDelta) {
+                delta.childrenDeltas![uuid] = childDelta;
             }
         }
 
-        if (Object.keys(newDelta.modDeltas).length === 0 &&
-            Object.keys(newDelta.childrenDeltas).length === 0) {
+        const children = new Set(this.children.keys());
+        const addedChildren = setDifference(children, this.lastChildren);
+        const removedChildren = setDifference(this.lastChildren, children);
+        this.lastChildren = new Set([...this.children.keys()]);
+
+        for (const newChildUUID of addedChildren) {
+            // TODO: Filter with ownedUUIDs?
+            const newChild = this.children.get(newChildUUID);
+            delta.childrenDeltas![newChildUUID] = newChild!.getState();
+        }
+
+        if (removedChildren.size > 0) {
+            delta.remove = [...removedChildren];
+        }
+
+        // If nothing changed, don't return a delta
+        if (Object.keys(delta.modDeltas!).length === 0 &&
+            Object.keys(delta.childrenDeltas!).length === 0 &&
+            !delta.remove) {
             return;
         }
 
-        return newDelta;
+        return delta;
     }
+
     addChild(child: StateTree) {
         this.children.set(child.uuid, child);
         child.parent = this;
@@ -185,15 +263,6 @@ class StateTreeBase<FactoryData = unknown> implements StateTree<FactoryData> {
     removeChild(child: StateTree) {
         this.children.delete(child.uuid);
         child.parent = undefined;
-    }
-
-    destroy() {
-        for (const child of this.children.values()) {
-            child.destroy();
-        }
-        for (const mod of this.mods.values()) {
-            mod.destroy();
-        }
     }
 }
 
@@ -236,7 +305,7 @@ export class StateTreeNode<DataType extends NovaDataType = NovaDataType>
         parent?: StateTree,
 
     }) {
-        super({ name, uuid, stateTreeFactories, gameData, parent });
+        super({ name: declaration.name, uuid, stateTreeFactories, gameData, parent });
         this.id = id;
 
         this.buildPromise = this.build({

@@ -7,6 +7,8 @@ export class DefaultMap<K, V> extends Map<K, V> {
         if (super.has(key)) {
             return super.get(key)!;
         }
-        return this.factory();
+        const val = this.factory();
+        this.set(key, val);
+        return val;
     }
 }

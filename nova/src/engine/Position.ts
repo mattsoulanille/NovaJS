@@ -1,6 +1,5 @@
-import { Vector, VectorLike } from "./Vector";
 import { mod } from "./Mod";
-import { immerable } from "immer";
+import { Vector, VectorLike } from "./Vector";
 
 export const BOUNDARY = 10000;
 
@@ -9,27 +8,20 @@ function wrap(n: number): number {
 }
 
 export class Position extends Vector {
-    [immerable] = true;
-    set x(x: number) {
-        this.wrappedX = wrap(x);
-    }
-    get x() {
-        return this.wrappedX;
-    }
-
-    set y(y: number) {
-        this.wrappedY = wrap(y);
-    }
-    get y() {
-        return this.wrappedY;
-    }
-
     static fromVectorLike(v: VectorLike) {
         return new Position(v.x, v.y);
     }
 
+    constructor(x: number, y: number) {
+        super(wrap(x), wrap(y));
+    }
+
+    protected factory(x: number, y: number) {
+        return new Position(x, y);
+    }
+
     getClosestRelativeTo(other: Position) {
-        let relativeToZero = Vector.minus(this, other);
+        let relativeToZero = this.subtract(other);
         let xOffset = 0;
         let yOffset = 0;
 
@@ -52,5 +44,3 @@ export class Position extends Vector {
         )
     }
 }
-
-Position.prototype[immerable] = true;

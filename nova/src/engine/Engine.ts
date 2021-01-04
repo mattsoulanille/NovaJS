@@ -1,6 +1,7 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
 import { v4 } from "uuid";
 import { CustomStateTreeDeclaration, StateTree, StateTreeDeclaration, StateTreeDelta, StateTreeFactories, StateTreeNode, StateTreeRoot } from "./StateTree";
+import { STATE_TREE_DECLARATIONS } from "./StateTreeDeclarations";
 
 const rootDeclaration: CustomStateTreeDeclaration<null> = {
     name: 'root',
@@ -13,9 +14,9 @@ export class Engine {
     stateTreeFactories: StateTreeFactories;
     rootNode: StateTree;
 
-    constructor(stateTreeDeclarations: Iterable<StateTreeDeclaration>, gameData: GameDataInterface) {
+    constructor(gameData: GameDataInterface) {
         // Merge all declarations for the same tree node into a single declaration.
-        for (const { name, dataType, mods } of stateTreeDeclarations) {
+        for (const { name, dataType, mods } of STATE_TREE_DECLARATIONS) {
             if (!this.stateTreeDeclarations.has(name)) {
                 this.stateTreeDeclarations.set(name, { name, dataType, mods: new Set() });
             }
@@ -39,7 +40,6 @@ export class Engine {
                     })
                 ]));
 
-
         this.rootNode = new StateTreeRoot({
             declaration: rootDeclaration,
             gameData,
@@ -47,11 +47,39 @@ export class Engine {
         });
     }
 
-    step({ time, delta, ownedUUIDs }: {
+    applyDelta(delta: StateTreeDelta) {
+        this.rootNode.applyDelta(delta);
+    }
+
+    step({ time, ownedUUIDs }: {
         time: number,
-        delta?: StateTreeDelta,
         ownedUUIDs: Set<string>,
     }) {
-        return this.rootNode.step({ time, delta, ownedUUIDs });
+        return this.rootNode.step({ time, ownedUUIDs });
+    }
+
+    private getNodeRecursive(uuid: string, node: StateTree): StateTree | undefined {
+        if (node.uuid === uuid) {
+            return node;
+        }
+
+        for (const child of node.children.values()) {
+            const result = this.getNodeRecursive(uuid, child);
+            if (result) {
+                return result;
+            }
+        }
+
+        return undefined;
+    }
+
+    getNode(uuid: string): StateTree | undefined {
+        // TODO: Make this log(n)?
+        return this.getNodeRecursive(uuid, this.rootNode);
+    }
+
+    removeNode(uuid: string) {
+        const node = this.getNode(uuid);
+        node?.parent?.removeChild(node);
     }
 }
