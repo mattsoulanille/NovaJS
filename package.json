@@ -37,6 +37,7 @@
         "chai": "^4.2.0",
         "chai-as-promised": "^7.1.1",
         "immer": "^7.0.7",
+        "io-ts-types": "^0.5.12",
         "jasmine": "^3.5.0",
         "jasmine-core": "^3.5.0",
         "karma": "^5.0.2",
@@ -64,7 +65,7 @@
         "test-watch": "ibazel test //...",
         "test-only": "ibazel test",
         "test-brk": "ibazel test --test_arg=--node_options=--inspect-brk --test_output=streamed --test_timeout=9999 --nocache_test_results",
-        "start": "bazel build nova && ./bazel-out/k8-fastbuild/bin/nova/nova.sh",
+        "start": "bazel build nova && ./dist/bin/nova/nova.sh",
         "watch": "ibazel run nova",
         "watch-brk": "ibazel run nova --config=debug --node_options=--inspect-brk",
         "debug-bazel": "bazel run nova --verbose_failures --sandbox_debug"
