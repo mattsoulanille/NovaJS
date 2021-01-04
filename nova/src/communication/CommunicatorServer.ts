@@ -1,141 +1,67 @@
+import { isLeft } from "fp-ts/lib/Either";
+import { Message } from "../ecs/plugins/multiplayer_plugin";
 import { ChannelServer } from "./Channel";
-import { Position } from "../engine/Position";
-import { Vector } from "../engine/Vector";
-import { v4 as UUID } from "uuid";
-import { filterState } from "./FilterState";
-import { overwriteState } from "./OverwriteState";
-import { getChanges } from "./GetChanges";
+import { Communicator } from "./Communicator";
 
-interface Client {
-    ownedUuids: Set<string>;
-    filteredStates: unknown[];
-}
 
-export class CommunicatorServer {
-    clientsToAdd: string[] = [];
-    clientsToRemove: string[] = [];
-    clients = new Map<string, Client>();
+export class CommunicatorServer implements Communicator {
+    peers = new Set<string>();
+    private messages: Message[] = [];
 
     constructor(private channel: ChannelServer) {
         channel.clientConnect.subscribe((clientId) => {
-            this.clientsToAdd.push(clientId);
+            this.peers.add(clientId);
+            this.messages.push({
+                source: 'server',
+                peers: new Set([...this.peers])
+            });
         });
 
         channel.clientDisconnect.subscribe((clientId) => {
-            this.clientsToRemove.push(clientId);
+            this.peers.delete(clientId);
+            this.messages.push({
+                source: 'server',
+                peers: new Set([...this.peers])
+            });
         });
 
         channel.message.subscribe(({ message, source }) => {
-            const client = this.clients.get(source);
-            if (!client) {
-                throw new Error(`Got a message for client ${source}`
-                    + ` but no such client is connected.`);
+            const maybeMessage = Message.decode(message);
+            if (isLeft(maybeMessage)) {
+                console.warn(`Failed to decode message ${maybeMessage} from ${source}`);
+                return;
             }
-            if (message.engineDelta) {
-                const engineView = engineViewFactory(message.engineDelta);
-                const filtered = filterState(engineView, (id) => {
-                    return client.ownedUuids.has(id);
-                });
-                client.filteredStates.push(filtered);
 
-                // Rebroadcast messages
-                for (const otherId of this.channel.clients) {
-                    const message = new GameMessage();
-                    message.engineDelta = filtered.serialize();
-                    if (otherId !== source) {
-                        this.channel.send(otherId, message);
-                    }
+            maybeMessage.right.source = source;
+            this.messages.push(maybeMessage.right);
+
+            // Rebroadcast messages
+            for (const otherId of this.channel.clients) {
+                if (otherId !== source) {
+                    this.send(maybeMessage.right, otherId);
                 }
             }
         });
     }
-
-    /**
-     * Reports changes to the clients. Then, applies changes
-     * previously received from the clients. Should be called
-     * after the engine computes the next state.
-     */
-    stepState({ state, nextState }: { state: EngineView; nextState: EngineView; delta: number; }): EngineView {
-
-        const system =
-            nextState.families.systems.get("nova:130");
-        if (!system) {
-            throw new Error("system nova:130 not defined");
-        }
-
-
-        const serializedNextState = nextState.serialize();
-        for (const clientId of this.clientsToAdd) {
-            // TODO: Tell clients what ships they own.
-            const ship = this.makeNewShip();
-            const shipId = UUID();
-            this.clients.set(clientId, {
-                ownedUuids: new Set([shipId]),
-                filteredStates: []
-            });
-
-            system.families.spaceObjects.set(shipId, ship);
-            this.channel.send(clientId, { engineState: serializedNextState });
-        }
-        this.clientsToAdd.length = 0;
-
-        for (const clientId of this.clientsToRemove) {
-            const client = this.clients.get(clientId);
-            if (!client) {
-                break;
-            }
-            nextState = filterState(nextState, (id) => {
-                return !client.ownedUuids.has(id);
-            });
-            this.clients.delete(clientId);
-        }
-        this.clientsToRemove.length = 0;
-
-        this.reportChanges(state, nextState);
-        nextState = this.applyReceivedStates(nextState);
-
-        return nextState;
+    private send(message: Message, destination: string) {
+        this.channel.send(destination, Message.encode(message));
     }
 
-    /**
-     * Sends changes that only the server knows about to the clients. 
-     * Does not send changes that clients made.
-     */
-    private reportChanges(state: EngineView, nextState: EngineView) {
-        const changes = getChanges(state, nextState);
-        if (changes) {
-            const message = new GameMessage();
-            message.engineState = changes.serialize();
-            for (const client of this.channel.clients) {
-                this.channel.send(client, message);
+    sendMessage(message: Message, destination?: string) {
+        message.source = 'server';
+        if (destination) {
+            this.send(message, destination);
+        } else {
+            for (const clientId of this.channel.clients) {
+                this.send(message, clientId);
             }
         }
     }
 
-    private applyReceivedStates(nextState: EngineView) {
-        for (const [, client] of this.clients) {
-            for (const state of client.filteredStates) {
-                nextState = overwriteState(nextState, state);
-            }
-            client.filteredStates.length = 0;
-        }
-        return nextState;
+    getMessages() {
+        const messages = this.messages;
+        this.messages = [];
+        return messages;
     }
+}
 
-    // TODO: Move this somewhere else
-    private makeNewShip() {
-        const ship = new SpaceObjectState();
-        ship.value = new SpaceObjectStateValue();
-        ship.value.position = new Position(
-            (Math.random() - 0.5) * 400,
-            (Math.random() - 0.5) * 400
-        ).toProto();
-        const shipState = new ShipState();
-        const shipId = Math.floor(Math.random() * 40) + 128;
-        shipState.id = `nova:${shipId}`;
-        ship.value.shipState = shipState;
-        ship.value.rotation = Math.random() * 2 * Math.PI;
-        ship.value.velocity = new Vector(0, 0);
-        return spaceObjectViewFactory(ship);
-    }
-} 

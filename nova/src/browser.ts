@@ -1,38 +1,11 @@
 import * as PIXI from "pixi.js";
-import { Display } from "./client/display/Display";
 import { GameData } from "./client/gamedata/GameData";
-import { setupControls } from "./client/setupControls";
-//import 'pixi-display'; // Must be imported after PIXI
-//import * as io from "socket.io-client";
-import { Controller } from "./common/Controller";
-import { ShipController } from "./common/ShipController";
-import { EngineFactory } from "./engine/EngineFactory";
-import { SpaceObjectFactory } from "./engine/SpaceObjectFactory";
-import { GameLoop } from "./GameLoop";
-import { SocketRpcChannelClient } from "./communication/SocketRpcChannelClient";
-import { EngineDelta, EngineService } from "novajs/nova/src/proto/protobufjs_bundle";
-
-const rpc = new SocketRpcChannelClient();
-(window as any).rpc = rpc;
-const engineService = new EngineService(rpc.call.bind(rpc));
-//const engineService = EngineService.create
-
-(window as any).engineService = engineService;
-engineService.update(new EngineDelta({
-    systems: {
-        "foo": {
-            spaceObjects: {
-                "bar": {
-                    value: {
-                        accelerating: 0,
-                        acceleration: 124,
-                        maxVelocity: 8
-                    }
-                }
-            }
-        }
-    }
-}));
+import { CommunicatorClient } from "./communication/CommunicatorClient";
+import { SocketChannelClient } from "./communication/SocketChannelClient";
+import { multiplayer } from "./ecs/plugins/multiplayer_plugin";
+import { World } from "./ecs/world";
+import { GameDataResource } from "./nova_plugin/game_data_resource";
+import { Nova } from "./nova_plugin/nova_plugin";
 
 // const socketChannel = new SocketChannelClient({});
 // socketChannel.message.subscribe((m) => {
@@ -61,43 +34,44 @@ const app = new PIXI.Application({
 (window as any).app = app;
 document.body.appendChild(app.view);
 
-const display = new Display({ gameData: gameData });
-app.stage.addChild(display.displayObject);
-(window as any).display = display;
+//const display = new Display({ gameData: gameData });
+//app.stage.addChild(display.displayObject);
+//(window as any).display = display;
 
 window.onresize = function() {
     app.renderer.resize(window.innerWidth, window.innerHeight);
-    display.resize(window.innerWidth, window.innerHeight);
+    //display.resize(window.innerWidth, window.innerHeight);
 }
 
-display.buildPromise.then(function() {
-    // Set the window size once everything is built
-    display.resize(window.innerWidth, window.innerHeight);
-});
+// display.buildPromise.then(function() {
+//     // Set the window size once everything is built
+//     display.resize(window.innerWidth, window.innerHeight);
+// });
 
 
-let gameLoop: GameLoop;
+//const engine = new Engine(gameData);
+const channel = new SocketChannelClient({});
+const communicator = new CommunicatorClient(channel);
+const world = new World('test world');
+(window as any).world = world;
+//const gameLoop = new GameLoop(engine, communicator);
+//(window as any).engine = engine;
+(window as any).communicator = communicator;
+//(window as any).gameLoop = gameLoop;
+
 async function startGame() {
+    //controller = await setupControls(gameData);
+    //(window as any).controller = controller;
+    //shipController = new ShipController(controller);
+    const multiplayerPlugin = multiplayer(communicator.getMessages.bind(communicator),
+        communicator.sendMessage.bind(communicator), 'server');
 
-    gameLoop = new GameLoop({
-        engine,
-        //communicator,
-        display: (engineView) => {
-            // Hardcoded System for now
-            const system = engineView.systems.get("nova:130");
-            if (system) {
-                display.draw(system);
-            }
-        }
-    });
+    world.addResource(GameDataResource, gameData);
+    world.addPlugin(multiplayerPlugin);
+    world.addPlugin(Nova);
 
-    (window as any).gameLoop = gameLoop;
-
-    controller = await setupControls(gameData);
-    (window as any).controller = controller;
-    shipController = new ShipController(controller);
     app.ticker.add(() => {
-        gameLoop.step(app.ticker.elapsedMS);
+        world.step();
     });
 }
 

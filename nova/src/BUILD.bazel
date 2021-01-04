@@ -13,38 +13,36 @@ filegroup(
     ],
 )
 
-ts_library(
-    name = "gameloop_lib",
-    srcs = ["GameLoop.ts"],
-    deps = [
-        "//nova/src/engine",
-        "//nova/src/engine:utils",
-        #"//nova/src/communication:communication_lib",
-        "@npm//immer",
-    ],
-)
+# ts_library(
+#     name = "gameloop_lib",
+#     srcs = ["GameLoop.ts"],
+#     deps = [
+#         "//nova/src/engine",
+#         "//nova/src/engine:utils",
+#         "//novadatainterface",
+#         "//nova/src/communication:communication_lib",
+#         "@npm//immer",
+#     ],
+# )
 
 ts_library(
     name = "browser_lib",
     srcs = ["browser.ts"],
     deps = [
-        ":gameloop_lib",
+        #":gameloop_lib",
         "@npm//@types/node",
-        "@npm//io-ts",
-        "@npm//fp-ts",
-        "@npm//socket.io-client",
-        "@npm//@types/socket.io-client",
         "@npm//pixi.js",
         "@npm//rxjs",
         "//nova/src/common",
-        "//nova/src/client",
-        "//nova/src/client/display",
-        "//nova/src/engine",
-        "//nova/src/engine:utils",
+        #"//nova/src/client",
+        #"//nova/src/client/display",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+        "//nova/src/ecs",
+        "//nova/src/ecs/plugins",
+        "//nova/src/nova_plugin",
         "//nova/src/communication:communication_client_lib",
         "//nova/src/client/gamedata",
-        "//nova/src/proto:protobufjs_bundle",
-        "@npm//google-protobuf",
         "@npm//uuid",
         "@npm//@types/uuid",
     ]
@@ -54,7 +52,7 @@ web_bundle(
     name = "browser_bundle",
     deps = [
         ":browser_lib",
-        "@npm//protobufjs",
+        #"@npm//protobufjs",
     ],
     entry_point = "browser.ts",
 )

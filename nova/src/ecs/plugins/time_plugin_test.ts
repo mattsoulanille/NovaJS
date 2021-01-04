@@ -1,26 +1,33 @@
 import 'jasmine';
 import { System } from '../system';
 import { World } from '../world';
-import { TimePlugin, TimeResource, TimeSystem } from './time_plugin';
+import { Time, TimePlugin, TimeResource, TimeSystem } from './time_plugin';
 
 describe('time plugin', () => {
-    it('ticks the time', () => {
-        const clock = jasmine.clock();
+    let clock: jasmine.Clock;
+    beforeEach(() => {
+        clock = jasmine.clock();
         clock.install();
+    });
+    afterEach(() => {
+        clock.uninstall();
+    });
 
+    it('ticks the time', () => {
         clock.mockDate(new Date(100));
 
         const world = new World();
         world.addPlugin(TimePlugin);
 
-        const times: Array<{ delta: number, time: number }> = [];
+        const times: Array<Time> = [];
         // Runs once (on the singleton entity) since there's only one entity.
         const readClockSystem = new System({
             name: 'ReadClock',
             args: [TimeResource],
             step: (time) => {
                 times.push({
-                    delta: time.delta,
+                    delta_ms: time.delta_ms,
+                    delta_s: time.delta_s,
                     time: time.time,
                 });
             },
@@ -36,10 +43,10 @@ describe('time plugin', () => {
         world.step();
 
         expect(times).toEqual([
-            { time: 100, delta: 0 },
-            { time: 100, delta: 0 },
-            { time: 150, delta: 50 },
-            { time: 150, delta: 0 },
+            { time: 100, delta_ms: 0, delta_s: 0 },
+            { time: 100, delta_ms: 0, delta_s: 0 },
+            { time: 150, delta_ms: 50, delta_s: 0.05 },
+            { time: 150, delta_ms: 0, delta_s: 0 },
         ])
     });
 });

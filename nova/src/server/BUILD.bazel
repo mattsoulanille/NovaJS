@@ -8,6 +8,7 @@ ts_library(
     name = "server",
     srcs = [
         "setupRoutes.ts",
+        "nova_repl.ts",
     ],
     deps = [
         "@npm//@types/node",
@@ -15,12 +16,12 @@ ts_library(
         "@npm//@types/uuid",
         "@npm//express",
         "@npm//@types/express",
-        "//nova/src/proto:protobufjs_bundle",
+        #"//nova/src/proto:protobufjs_bundle",
         "//novadatainterface",
         "//nova/src/server/parsing",
-        "//nova/src/engine",
+        #"//nova/src/engine",
         "//nova/src/common",
         #"//nova/src/communication:communication_server_lib",
-        "//nova/src:gameloop_lib",
+        #"//nova/src:gameloop_lib",
     ]
 )

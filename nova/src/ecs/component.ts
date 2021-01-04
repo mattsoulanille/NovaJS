@@ -9,7 +9,7 @@ export interface ComponentArgs<Data, DataSerialized = Data,
     name: string;
     type?: t.Type<Data, DataSerialized>;
     deltaType?: t.Type<Delta, DeltaSerialized>;
-    getDelta?: (a: Immutable<Data>, b: Immutable<Data>) => Delta | undefined;
+    getDelta?: (a: Data, b: Data) => Delta | undefined;
     applyDelta?: (data: Draft<Data>, delta: Delta) => void;
 }
 
@@ -19,7 +19,7 @@ export class Component<Data, DataSerialized = Data,
     readonly name: string;
     readonly type?: t.Type<Data, DataSerialized>;
     readonly deltaType?: t.Type<Delta, DeltaSerialized>;
-    readonly getDelta?: (a: Immutable<Data>, b: Immutable<Data>) => Delta | undefined;
+    readonly getDelta?: (a: Data, b: Data) => Delta | undefined;
     readonly applyDelta?: (data: Draft<Data>, delta: Delta) => void;
 
     constructor({ name, type, getDelta, applyDelta }:

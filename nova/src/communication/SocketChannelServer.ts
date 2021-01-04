@@ -1,7 +1,7 @@
 import { isLeft } from "fp-ts/lib/Either";
 import https from "https";
 import { Subject } from "rxjs";
-import UUID from "uuid/v4";
+import { v4 } from "uuid";
 import WebSocket from "ws";
 import { ChannelServer, MessageWithSourceType } from "./Channel";
 import { SocketMessage } from "./SocketMessage";
@@ -93,7 +93,7 @@ export class SocketChannelServer implements ChannelServer {
 
     /** Handles when a client first connects */
     private onConnect(webSocket: WebSocket) {
-        const clientUUID = UUID();
+        const clientUUID = v4();
         // This uuid is used only for communication and
         // has nothing to do with the game engine's uuids
         const client: Client = {

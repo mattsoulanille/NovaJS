@@ -8,9 +8,12 @@ ts_library(
     srcs = [
         "time_plugin.ts",
         "multiplayer_plugin.ts",
+        "movement_plugin.ts",
+        "delta.ts",
     ],
     deps = [
         "//nova/src/ecs",
+        "//nova/src/ecs/datatypes",
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
@@ -22,10 +25,12 @@ ts_library(
     srcs = [
         "time_plugin_test.ts",
         "multiplayer_plugin_test.ts",
+        "movement_plugin_test.ts",
     ],
     deps = [
         ":plugins",
         "//nova/src/ecs",
+        "//nova/src/ecs/datatypes",
         "@npm//@types/jasmine",
         "@npm//io-ts",
         "@npm//io-ts-types",

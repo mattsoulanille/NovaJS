@@ -8,20 +8,23 @@ ts_library(
     srcs = [
         #"RpcChannel.ts",
         "Channel.ts",
+        "Communicator.ts",
         "SocketMessage.ts",
         #"GetChanges.ts",
         #"OverwriteState.ts",
-        #"FilterState.ts",
+        #"FilterDelta.ts",
         #"getKeyDelta.ts",
     ],
     deps = [
         "@npm//rxjs",
-        "@npm//protobufjs",
+        #"@npm//protobufjs",
         "@npm//io-ts",
-        "//nova/src/proto:protobufjs_bundle",
-        "//nova/src/engine",
-        "//nova/src/engine:utils",
-        "//nova/src/common",
+        "@npm//immer",
+        "//nova/src/ecs/plugins",
+        #"//nova/src/proto:protobufjs_bundle",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+        #"//nova/src/common",
     ]
 )
 
@@ -29,7 +32,7 @@ ts_library(
     name = "communication_server_lib",
     srcs = [
         "SocketChannelServer.ts",
-        #"CommunicatorServer.ts",
+        "CommunicatorServer.ts",
     ],
     deps = [
         ":communication_lib",
@@ -39,33 +42,34 @@ ts_library(
         "@npm//rxjs",
         "@npm//ws",
         "@npm//@types/ws",
-        "@npm//google-protobuf",
-        "@npm//@types/google-protobuf",
+        #"@npm//google-protobuf",
+        #"@npm//@types/google-protobuf",
         "@npm//fp-ts",
-#        "//nova/src/common",
-        "//nova/src/engine",
-        "//nova/src/engine:utils",
+        "//nova/src/ecs/plugins",
+        #"//nova/src/common",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
     ]
 )
 
 ts_library(
     name = "communication_client_lib",
     srcs = [
-        #"SocketRpcChannelClient.ts"
         "SocketChannelClient.ts",
-        #"CommunicatorClient.ts",
+        "CommunicatorClient.ts",
     ],
     deps = [
         ":communication_lib",
-        "@npm//protobufjs",
+        #"@npm//protobufjs",
         "@npm//@types/node",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//rxjs",
         "@npm//fp-ts",
-#        "//nova/src/common",
-#        "//nova/src/engine",
-        "//nova/src/engine:utils",
-        "//nova/src/proto:protobufjs_bundle",
+        "//nova/src/ecs/plugins",
+        #"//nova/src/common",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+        #"//nova/src/proto:protobufjs_bundle",
     ]
 )

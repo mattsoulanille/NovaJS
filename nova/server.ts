@@ -3,21 +3,18 @@ import fs from "fs";
 import https from "https";
 import path from "path";
 import { NovaParse } from "../novaparse/NovaParse";
-//import { CommunicatorServer } from "./src/communication/CommunicatorServer";
-//import { SocketChannelServer } from "./src/communication/SocketChannelServer";
-import { EngineFactory } from "./src/engine/EngineFactory";
-import { SpaceObjectFactory } from "./src/engine/SpaceObjectFactory";
-import { GameLoop } from "./src/GameLoop";
+import { CommunicatorServer } from "./src/communication/CommunicatorServer";
+import { SocketChannelServer } from "./src/communication/SocketChannelServer";
+import { multiplayer } from "./src/ecs/plugins/multiplayer_plugin";
+import { World } from "./src/ecs/world";
+import { GameDataResource } from "./src/nova_plugin/game_data_resource";
+import { Nova } from "./src/nova_plugin/nova_plugin";
+import { ServerPlugin } from "./src/nova_plugin/server_plugin";
+import { NovaRepl } from "./src/server/nova_repl";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
 //import { NovaRepl } from "./src/server/NovaRepl";
-
-//import { NovaParse } from "../novaparse/NovaParse";
-
-//import * as RootPath from "app-root-path"; // Doesn't work with lerna
-
-//console.log(__dirname);
 
 const serverSettingsPath = require.resolve("novajs/nova/settings/server.json");
 const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8"));
@@ -31,21 +28,6 @@ const httpsKeys: https.ServerOptions = {
 const app = express();
 const httpsServer = https.createServer(httpsKeys, app);
 
-//const socketChannel = new SocketChannelServer({ httpsServer });
-// socketChannel.clientConnect.subscribe((client) => {
-//     console.log(`New client: ${client}`);
-// });
-
-// socketChannel.clientDisconnect.subscribe((client) => {
-//     console.log(`Client disconnected: ${client}`);
-// });
-
-// socketChannel.message.subscribe((message) => {
-//     console.log(message);
-// });
-
-
-//const communicator = new CommunicatorServer(socketChannel);
 
 const port: number = settings.port;
 const novaDataPath = path.join(__dirname, settings["relative data path"]);
@@ -54,11 +36,6 @@ const novaFileData = new NovaParse(novaDataPath, false);
 const filesystemDataPath = path.join(__dirname, "objects");
 const filesystemData = new FilesystemData(filesystemDataPath);
 
-//filesystemData.data.SpriteSheet.get("planetNeutral").then(console.log);
-
-//console.log(novaFileData);
-//novaFileData.data.Ship.get("nova:128").then(console.log);
-
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 
 const htmlPath = require.resolve("novajs/nova/src/index.html");
@@ -66,34 +43,57 @@ const bundlePath = require.resolve("novajs/nova/src/browser_bundle.js");
 const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json");
 setupRoutes(gameData, app, htmlPath, bundlePath, clientSettingsPath);
 
-const engineFactory = new EngineFactory(gameData);
-const spaceObjectFactory = new SpaceObjectFactory(gameData);
+const channel = new SocketChannelServer({ httpsServer });
 
-let gameLoop: GameLoop;
-let lastTimeNano: bigint;
+// async function makeSystems() {
+//     const systemIds = (await gameData.ids).System;
+//     const systemFactory = engine.stateTreeFactories.get('System');
+//     if (!systemFactory) {
+//         debugger;
+//         throw new Error('Missing system factory');
+//     }
+
+//     for (const id of systemIds) {
+//         // Using id as uuid since systems are unique.
+//         const system = systemFactory(id, id);
+//         engine.rootNode.addChild(system);
+//     }
+// }
+
+
+
+const world = new World('test world')
+const repl = new NovaRepl();
+repl.repl.context.world = world;
+
+let communicator: CommunicatorServer;
 async function startGame() {
-    const engine = await engineFactory.newWithSystems();
-    engine.systems.get("nova:130")?.spaceObjects.set("test object",
-        await spaceObjectFactory.shipFromId("nova:128"));
-
-    gameLoop = new GameLoop({ engine, });//communicator })
-
     httpsServer.listen(port, function() {
         console.log("listening at port " + port);
     });
 
+    // Make the communicator after the systems are built so clients can't connect
+    // until everthing is ready.
+    communicator = new CommunicatorServer(channel);
+    // TODO: Don't just give the server the 'server' uuid
+    const multiplayerPlugin = multiplayer(communicator.getMessages.bind(communicator),
+        communicator.sendMessage.bind(communicator), 'server');
+
+    world.addResource(GameDataResource, gameData);
+    world.addPlugin(multiplayerPlugin);
+    world.addPlugin(ServerPlugin);
+    world.addPlugin(Nova);
+
     //const novaRepl = new NovaRepl(gameLoop, gameData, communicator);
-    lastTimeNano = process.hrtime.bigint();
     stepper();
 }
 
 const STEP_TIME = 1000 / 60;
 function stepper() {
-    const timeNano = process.hrtime.bigint();
-    const delta = Number((timeNano - lastTimeNano) / BigInt(1e6));
-    lastTimeNano = timeNano;
-
-    gameLoop.step(delta);
+    // const timeNano = process.hrtime.bigint();
+    // const delta = Number((timeNano - lastTimeNano) / BigInt(1e6));
+    // lastTimeNano = timeNano;
+    world.step();
     setTimeout(stepper, STEP_TIME);
 }
 

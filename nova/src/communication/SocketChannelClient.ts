@@ -56,7 +56,6 @@ export class SocketChannelClient implements ChannelClient {
     }
 
     send(message: unknown): void {
-        this.reconnectIfClosed();
         this.sendRaw({ message });
     }
 
@@ -82,7 +81,10 @@ export class SocketChannelClient implements ChannelClient {
     }
 
     private sendRaw(message: SocketMessage) {
-        this.webSocket.send(JSON.stringify(SocketMessage.encode(message)));
+        this.reconnectIfClosed();
+        if (this.webSocket.readyState === this.webSocket.OPEN) {
+            this.webSocket.send(JSON.stringify(SocketMessage.encode(message)));
+        }
     }
 
     private async handleMessage(messageEvent: MessageEvent) {
@@ -96,6 +98,12 @@ export class SocketChannelClient implements ChannelClient {
         } else {
             this.warn(`Failed to deserialize message from server. `
                 + `Errors: ${maybeSocketMessage.left}`);
+            return;
+        }
+
+        if (socketMessage.pong) {
+            // We already reset the timeout above.
+            // No need to do anything if it's a pong.
             return;
         }
 

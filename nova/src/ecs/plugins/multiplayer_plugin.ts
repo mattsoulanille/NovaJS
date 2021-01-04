@@ -20,7 +20,7 @@ type EntityState = t.TypeOf<typeof EntityState>;
 const EntityDelta = t.record(t.string /* Component Name */, t.unknown /* Delta */);
 type EntityDelta = t.TypeOf<typeof EntityDelta>;
 
-const Message = t.intersection([t.type({
+export const Message = t.intersection([t.type({
     source: t.string, // UUID of the client or server the message came from.
 }), t.partial({
     delta: t.record(t.string /* Entity UUID */, EntityDelta),
@@ -42,7 +42,7 @@ export const MultiplayerData = new Component({
     }),
 });
 
-const Comms = new Component<{
+export const Comms = new Component<{
     ownedUuids: Set<string>,
     peers: Set<string>,
     admins: Set<string>,
@@ -91,6 +91,11 @@ export function multiplayer(getMessages: () => Message[],
                 // Set admins
                 if (isAdmin && message.admins) {
                     comms.admins = message.admins;
+                }
+
+                // Set peers
+                if (isAdmin && message.peers) {
+                    comms.peers = message.peers;
                 }
 
                 // Set requested states
