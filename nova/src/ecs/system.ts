@@ -24,6 +24,7 @@ interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     name: string;
     readonly args: StepArgTypes;
     step: (...args: ArgsToData<StepArgTypes>) => void;
+    asynchronous?: boolean;
     before?: Iterable<System | string>; // Systems that this system runs before
     after?: Iterable<System | string>; // Systems that this system runs after
 }
@@ -36,13 +37,15 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     readonly queries: Set<QueriesOnly<StepArgTypes>>;
     readonly allComponents: Set<AllComponents<StepArgTypes>>;
     readonly step: (...args: ArgsToData<StepArgTypes>) => void;
+    readonly asynchronous: boolean;
     readonly before: Set<System | string>;
     readonly after: Set<System | string>;
 
-    constructor({ name, args, step, before, after }: SystemArgs<StepArgTypes>) {
+    constructor({ name, args, step, asynchronous, before, after }: SystemArgs<StepArgTypes>) {
         this.name = name;
         this.args = args;
         this.step = step;
+        this.asynchronous = asynchronous ?? false;
         this.before = new Set([...before ?? []]);
         this.after = new Set([...after ?? []]);
 

@@ -17,6 +17,7 @@ ts_library(
         "arg_types.ts",
     ],
     deps = [
+        "//nova/src/common",
         "@npm//io-ts",
         "@npm//immer",
         "@npm//uuid",

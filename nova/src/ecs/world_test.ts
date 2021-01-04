@@ -12,6 +12,13 @@ import { Resource } from './resource';
 import { System } from './system';
 import { World } from './world';
 
+
+async function sleep(ms: number) {
+    return new Promise(resolve => {
+        setTimeout(resolve, ms);
+    });
+}
+
 const FOO_COMPONENT = new Component({
     name: 'foo',
     type: t.type({ x: t.number }),
@@ -60,6 +67,10 @@ describe('world', () => {
     let world: World;
     beforeEach(() => {
         world = new World();
+    });
+
+    it('can step an empty world', () => {
+        world.step();
     });
 
     it('throws an error if a system is added before its resources', () => {
@@ -830,5 +841,77 @@ describe('world', () => {
         world.step();
 
         expect(uuids).toEqual(new Set([e1.uuid, e2.uuid, world.singletonEntity.uuid]));
+    });
+
+    it('entity handle components are not part of a draft', () => {
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [BAR_COMPONENT],
+            step: (bar) => {
+                bar.y = 'changed bar';
+            }
+        });
+
+        const handle = world.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'not changed' }));
+
+        world.addSystem(testSystem);
+        world.step();
+
+        expect(handle.components.get(BAR_COMPONENT)?.y)
+            .toEqual('changed bar');
+    });
+
+    it('supports async systems', async () => {
+        const asyncSystem = new System({
+            name: 'AsyncSystem',
+            args: [BAR_COMPONENT],
+            asynchronous: true,
+            step: async (bar) => {
+                await sleep(0);
+                bar.y = 'changed bar asynchronously';
+            }
+        });
+
+        const handle = world.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'not changed' }));
+
+        world.addSystem(asyncSystem);
+        world.step();
+
+        await world.asyncDone;
+
+        expect(handle.components.get(BAR_COMPONENT)?.y)
+            .toEqual('changed bar asynchronously');
+    });
+
+    it('does not throw an error if the async system is working on a deleted entity', async () => {
+        const asyncSystem = new System({
+            name: 'AsyncSystem',
+            args: [BAR_COMPONENT],
+            asynchronous: true,
+            step: async (bar) => {
+                await sleep(0);
+                bar.y = 'changed bar asynchronously';
+            }
+        });
+
+        const removeBarSystem = new System({
+            name: 'RemoveBar',
+            args: [UUID, Commands, BAR_COMPONENT] as const,
+            step: (uuid, commands) => {
+                commands.removeEntity(uuid);
+            },
+            after: [asyncSystem],
+        });
+
+        world.addEntity(new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'not changed' }));
+
+        world.addSystem(asyncSystem);
+        world.addSystem(removeBarSystem);
+        world.step();
+
+        await world.asyncDone;
     });
 });
