@@ -13,7 +13,8 @@ export const manageClientsSystem = new System({
     name: 'ManageClients',
     args: [Comms, GameDataResource, new Query([MultiplayerData, UUID] as const),
         Commands] as const,
-    step: (comms, _gameData, entities, commands) => {
+    asynchronous: true,
+    step: async (comms, gameData, entities, commands) => {
         if (!isDraft(comms)) {
             // Then there's no way we have new peers since
             // peers can only be added by drafting
@@ -37,14 +38,14 @@ export const manageClientsSystem = new System({
         // TODO: Give them back the entitiy they disconnected with.
         for (const newPeer of newPeers) {
             console.log(`TODO: Add ship for peer ${newPeer}`);
-            // const ids = await gameData.ids;
-            // const randomShip = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
-            // const shipData = await gameData.data.Ship.get(randomShip);
-            // const shipEntity = makeShip(shipData);
-            // shipEntity.addComponent(MultiplayerData, {
-            //     owner: newPeer
-            // });
-            // commands.addEntity(shipEntity);
+            const ids = await gameData.ids;
+            const randomShip = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
+            const shipData = await gameData.data.Ship.get(randomShip);
+            const shipEntity = makeShip(shipData);
+            shipEntity.addComponent(MultiplayerData, {
+                owner: newPeer
+            });
+            commands.addEntity(shipEntity);
         }
     },
     after: ['ApplyChanges'],

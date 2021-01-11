@@ -140,9 +140,13 @@ describe('Multiplayer Plugin', () => {
         world1.step();
         world2.step();
 
+        world1.step();
+        world2.step();
+
         expect(reports).toEqual([
             'a test component stepped',
             'a test component stepped stepped',
+            'a test component stepped stepped stepped',
         ]);
     });
 

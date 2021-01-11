@@ -40,6 +40,6 @@ export const TimePlugin: Plugin = {
         world.addResource(TimeResource,
             { delta_ms: 0, delta_s: 0, time: new Date().getTime() });
         world.addSystem(TimeSystem);
-        world.singletonEntity.addComponent(TimeSingleton, undefined);
+        world.singletonEntity.components.set(TimeSingleton, undefined);
     }
 }

@@ -20,7 +20,7 @@ type QueryComponents<T> =
 type AllComponents<T extends readonly [...unknown[]]> =
     ComponentsOnly<T> | QueryComponents<T[number]>
 
-interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
+export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     name: string;
     readonly args: StepArgTypes;
     step: (...args: ArgsToData<StepArgTypes>) => void;

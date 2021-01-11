@@ -4,6 +4,7 @@ import 'jasmine';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { Commands, GetEntity, Optional, UUID } from './arg_types';
+import { AsyncSystem, AsyncSystemData } from './async_system';
 import { Component } from './component';
 import { Entity } from './entity';
 import { Plugin } from './plugin';
@@ -459,6 +460,7 @@ describe('world', () => {
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (foo, bar) => {
                 bar.y = 'changed by foo';
+                debugger;
                 fooBarData.push([foo.x, bar.y]);
             },
             before: new Set([barSystem])
@@ -469,13 +471,13 @@ describe('world', () => {
 
         const entity = world.addEntity(new Entity());
         world.step();
-        entity.addComponent(BAR_COMPONENT, { y: 'added bar' });
+        entity.components.set(BAR_COMPONENT, { y: 'added bar' });
         world.step();
-        entity.addComponent(FOO_COMPONENT, { x: 123 });
+        entity.components.set(FOO_COMPONENT, { x: 123 });
         world.step();
-        entity.removeComponent(FOO_COMPONENT);
+        entity.components.delete(FOO_COMPONENT);
         world.step();
-        entity.removeComponent(BAR_COMPONENT);
+        entity.components.delete(BAR_COMPONENT);
         world.step();
 
         expect(barData).toEqual(['added bar', 'changed by foo', 'changed by foo']);
@@ -533,13 +535,13 @@ describe('world', () => {
             step: (entity, commands) => {
                 commands.removeEntity(entity);
                 try {
-                    entity.addComponent(FOO_COMPONENT, { x: 123 });
+                    entity.components.set(FOO_COMPONENT, { x: 123 });
                 } catch (e) {
                     addMessage = e instanceof Error ? e.message : 'not an error object?';
                 }
 
                 try {
-                    entity.removeComponent(FOO_COMPONENT);
+                    entity.components.delete(FOO_COMPONENT);
                 } catch (e) {
                     removeMessage = e instanceof Error ? e.message : 'not an error object?';
                 }
@@ -549,11 +551,11 @@ describe('world', () => {
         world.addSystem(getHandleSystem);
         world.step();
 
-        const expectedMessage = `entity '${handle1.uuid}' not in system`;
+        const expectedMessage = `Entity '${handle1.uuid}' not in the world`;
 
-        expect(() => handle1.addComponent(FOO_COMPONENT, { x: 123 }))
+        expect(() => handle1.components.set(FOO_COMPONENT, { x: 123 }))
             .toThrowError(expectedMessage);
-        expect(() => handle1.removeComponent(FOO_COMPONENT))
+        expect(() => handle1.components.delete(FOO_COMPONENT))
             .toThrowError(expectedMessage);
         expect(addMessage).toEqual(expectedMessage);
         expect(removeMessage).toEqual(expectedMessage);
@@ -570,7 +572,7 @@ describe('world', () => {
             }
         });
 
-        world.singletonEntity.addComponent(BAR_COMPONENT, { y: 'singleton' });
+        world.singletonEntity.components.set(BAR_COMPONENT, { y: 'singleton' });
         world.addSystem(testSystem);
         world.step();
 
@@ -580,7 +582,7 @@ describe('world', () => {
 
     it('does not permit the singleton entity to be removed', () => {
         expect(() => world.removeEntity(world.singletonEntity))
-            .toThrowError('Cannot remove singleton entity');
+            .toThrowError('Cannot remove the singleton entity');
     });
 
     it('does not allow systems to have the same name', () => {
@@ -665,7 +667,7 @@ describe('world', () => {
         const handle = world.addEntity(new Entity()
             .addComponent(component1, 'foobar'));
 
-        expect(() => handle.addComponent(component2, 'foobar'))
+        expect(() => handle.components.set(component2, 'foobar'))
             .toThrowError(`A component with name ${component1.name} already exists`);
     })
 
@@ -723,7 +725,7 @@ describe('world', () => {
             name: 'AddBar',
             args: [GetEntity, FOO_COMPONENT] as const,
             step: (entity) => {
-                entity.addComponent(BAR_COMPONENT, { y: 'bar component data' });
+                entity.components.set(BAR_COMPONENT, { y: 'bar component data' });
             }
         });
 
@@ -766,8 +768,8 @@ describe('world', () => {
             name: 'TestSystem',
             args: [GetEntity, FOO_COMPONENT] as const,
             step: (entity) => {
-                entity.addComponent(BAR_COMPONENT, { y: 'bar component data' });
-                entity.removeComponent(FOO_COMPONENT);
+                entity.components.set(BAR_COMPONENT, { y: 'bar component data' });
+                entity.components.delete(FOO_COMPONENT);
                 const data = entity.components.get(BAR_COMPONENT);
                 if (data) {
                     barData.push(data.y);
@@ -793,7 +795,7 @@ describe('world', () => {
             name: 'FooSystem',
             args: [GetEntity, FOO_COMPONENT] as const,
             step: (entity, foo) => {
-                entity.addComponent(BAR_COMPONENT, { y: 'added bar' });
+                entity.components.set(BAR_COMPONENT, { y: 'added bar' });
                 foo.x = 123;
             }
         });
@@ -866,11 +868,11 @@ describe('world', () => {
         const asyncSystem = new System({
             name: 'AsyncSystem',
             args: [BAR_COMPONENT],
-            asynchronous: true,
             step: async (bar) => {
                 await sleep(0);
                 bar.y = 'changed bar asynchronously';
-            }
+            },
+            asynchronous: true,
         });
 
         const handle = world.addEntity(new Entity()
@@ -878,7 +880,6 @@ describe('world', () => {
 
         world.addSystem(asyncSystem);
         world.step();
-
         await world.asyncDone;
 
         expect(handle.components.get(BAR_COMPONENT)?.y)

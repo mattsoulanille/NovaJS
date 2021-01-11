@@ -273,7 +273,8 @@ export function multiplayer(getMessages: () => Message[],
                 }
                 const entityDelta: EntityDelta = {};
                 for (const [component, data] of entity.components.entries()) {
-                    if (component.getDelta) {
+                    if (component.getDelta && isDraft(data)) {
+                        // If it's not a draft, there's no delta.
                         const delta = component.getDelta(original(data), data);
                         if (delta) {
                             entityDelta[component.name] = delta;
@@ -330,7 +331,7 @@ export function multiplayer(getMessages: () => Message[],
         world.addSystem(applyChangesSystem);
         world.addSystem(sendChangesSystem);
         world.addComponent(MultiplayerData);
-        world.singletonEntity.addComponent(Comms, {
+        world.singletonEntity.components.set(Comms, {
             ownedUuids: new Set<string>(),
             uuid,
             peers: new Set<string>(),

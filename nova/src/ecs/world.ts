@@ -1,7 +1,9 @@
 import produce, { applyPatches, createDraft, current, Draft, enableMapSet, enablePatches, finishDraft, Immutable, isDraft, Patch, produceWithPatches } from "immer";
+import { string } from "io-ts";
 import { v4 } from "uuid";
 import { DefaultMap } from "../common/DefaultMap";
 import { ArgData, ArgsToData, ArgTypes, Commands, GetEntity, GetEntityObject, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
+import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { ComponentsMap, Entity } from "./entity";
 import { Plugin } from './plugin';
@@ -66,6 +68,8 @@ interface State {
     resources: Map<UnknownResource, unknown>;
 }
 
+type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
+
 interface EntityState {
     components: ComponentsMap,
     uuid: string,
@@ -73,29 +77,124 @@ interface EntityState {
     multiplayer: boolean,
 }
 
-export class EntityHandle {
-    constructor(readonly uuid: string,
-        private getComponents: () => ReadonlyComponentMap,
-        private add: <Data>(component: Component<Data, any, any, any>, data: Data) => void,
-        private remove: (component: UnknownComponent) => void) { }
+class ComponentsMapHandle implements Map<UnknownComponent, unknown> {
+    constructor(private entityUuid: string,
+        private callWithDraft: CallWithDraft,
+        private addComponent: (component: Component<any, any, any, any>) => void,
+        private entityChanged: (entity: Immutable<EntityState>) => void,
+        private freeze: boolean) { }
 
-    get components() {
-        return this.getComponents();
+    private getEntity(draft: Draft<State>) {
+        const entity = draft.entities.get(this.entityUuid);
+        if (!entity) {
+            throw new Error(`Entity '${this.entityUuid}' not in the world`);
+        }
+        return entity;
     }
 
-    addComponent<Data>(component: Component<Data, any, any, any>, data: Data) {
-        this.add(component, data);
-        return this;
+    clear(): void {
+        this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            entity.components.clear();
+        });
     }
 
-    removeComponent(component: Component<any, any, any, any>) {
-        this.remove(component);
-        return this;
+    delete(key: Component<any, any, any, any>): boolean {
+        return this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            const result = entity.components.delete(key);
+            this.entityChanged(entity);
+            return result;
+        });
     }
+
+    forEach(callbackfn: (value: unknown, key: UnknownComponent,
+        map: Map<UnknownComponent, unknown>) => void, thisArg?: any): void {
+        for (const [key, val] of this) {
+            callbackfn.call(thisArg, val, key, this);
+        }
+    }
+
+    get<Data>(key: Component<Data, any, any, any>): Data | undefined {
+        return this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            const data = entity.components.get(key as UnknownComponent) as Data;
+            // In the case of 
+            if (this.freeze && isDraft(data)) {
+                return current(data);
+            } else {
+                return data;
+            }
+        });
+    }
+
+    has(key: UnknownComponent): boolean {
+        return this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            return entity.components.has(key);
+        });
+    }
+
+    set<Data>(component: Component<Data, any, any, any>, data: Data): this {
+        return this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            this.addComponent(component);
+            entity.components.set(component as UnknownComponent, data);
+            this.entityChanged(entity);
+            return this;
+        });
+    }
+
+    get size() {
+        return this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            return entity.components.size;
+        });
+    }
+
+    [Symbol.iterator](): IterableIterator<[UnknownComponent, unknown]> {
+        return this.entries();
+    }
+
+    *entries(): IterableIterator<[UnknownComponent, unknown]> {
+        for (const key of this.keys()) {
+            yield [key, this.get(key)];
+        }
+    }
+
+    *keys(): IterableIterator<UnknownComponent> {
+        yield* this.callWithDraft(draft => {
+            const entity = this.getEntity(draft);
+            return [...entity.components.keys()];
+        });
+    }
+
+    *values(): IterableIterator<unknown> {
+        for (const key of this.keys()) {
+            yield this.get(key);
+        }
+    }
+
+    [Symbol.toStringTag]: string;
 }
+
+export interface EntityHandle {
+    uuid: string;
+    components: ComponentsMapHandle;
+}
+
+export interface ReadonlyEntityHandle {
+    uuid: string;
+    components: ReadonlyComponentMap;
+}
+
 
 interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unknown> {
     get<Data>(component: Component<Data, any, any, any>): Data | undefined;
+}
+
+interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
+    get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
 }
 
 enableMapSet();
@@ -106,6 +205,16 @@ export class World {
         resources: new Map<UnknownResource, unknown /* resource data */>(),
     };
 
+    private mutableResources = new Map<UnknownResource,
+        unknown /* resource data */>();
+
+    get resources() {
+        return new Map([
+            ...this.state.resources,
+            ...this.mutableResources,
+        ]) as ReadonlyResourceMap;
+    }
+
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
     private nameSystemMap = new Map<string, System>();
@@ -113,7 +222,6 @@ export class World {
 
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
     private queries = new Map<Query, Set<string /* entity uuid */>>();
-    private entityHandles = new Map<string /* uuid */, EntityHandle>();
 
     private asyncSystemStatuses = new DefaultMap<System,
         DefaultMap<string /* Entity */, { running: boolean, promise: Promise<void> }>>(
@@ -124,7 +232,9 @@ export class World {
     singletonEntity = this.addEntity(new Entity());
     asyncDone: Promise<void> = Promise.resolve();
 
-    constructor(private name?: string) { }
+    constructor(private name?: string) {
+        this.addPlugin(AsyncSystemPlugin);
+    }
 
     addPlugin(plugin: Plugin) {
         // TODO: Namespace component and system names. Perhaps use ':' or '/' to
@@ -132,18 +242,28 @@ export class World {
         plugin.build(this);
     }
 
-    addEntity(entity: Entity): EntityHandle {
-        const handle = this.addEntityToDraft(entity, (callback) => {
-            // Can't directly pass the draft because addEntity binds
-            // functions to edit the draft that can be called later.
-            this.state = produce(this.state, callback);
-        })
-        this.entityHandles.set(handle.uuid, handle);
-        return handle;
+    private callWithNewDraft<R>(callback: (draft: Draft<State>) => R) {
+        // Can't directly pass the draft because addEntity binds
+        // functions to edit the draft that can be called later.
+        let result: R;
+        let called = false;
+        this.state = produce(this.state, draft => {
+            result = callback(draft);
+            called = true;
+        });
+        if (!called) {
+            throw new Error('Expected to be called');
+        }
+        return result!;
     }
 
-    private addEntityToDraft(entity: Entity,
-        callWithDraft: (callback: (draft: Draft<State>) => void) => void): EntityHandle {
+    addEntity(entity: Entity): EntityHandle {
+        return this.addEntityToDraft(entity, true,
+            this.callWithNewDraft.bind(this));
+    }
+
+    private addEntityToDraft(entity: Entity, freeze: boolean,
+        callWithDraft: CallWithDraft): EntityHandle {
         const uuid = entity.uuid ?? v4();
         for (const [component] of entity.components) {
             this.addComponent(component);
@@ -163,65 +283,28 @@ export class World {
             systems: this.systems, queries: this.queries, entities: [entityState]
         });
 
-        return this.makeEntityHandle(uuid, callWithDraft);
+        return this.makeEntityHandle(uuid, freeze, callWithDraft);
     }
 
-    private makeEntityHandle(uuid: string,
-        callWithDraft: (callback: (draft: Draft<State>) => void) => void) {
-        return new EntityHandle(uuid,
-            () => {
-                // TODO: Components of an entity should probably be
-                // an editable map, and there should be no 'addComponent'
-                // or 'removeComponent' functions.
-                let components: ReadonlyComponentMap | undefined;
-                callWithDraft(draft => {
-                    const entity = draft.entities.get(uuid);
-                    if (!entity) {
-                        throw new Error(`entity '${uuid}' not in system`);
-                    }
-                    if (isDraft(entity.components)) {
-                        components = current(entity.components) as ReadonlyComponentMap;
-                    } else {
-                        components = entity.components as ReadonlyComponentMap;
-                    }
-                })
-                if (!components) {
-                    throw new Error('Failed to get components');
-                }
-                return components;
-            },
-            (component, data) => {
-                callWithDraft(draft => {
-                    if (!draft.entities.has(uuid)) {
-                        throw new Error(`entity '${uuid}' not in system`);
-                    }
-                    this.addComponent(component as UnknownComponent);
+    private makeEntityHandle(uuid: string, freeze: boolean,
+        callWithDraft: CallWithDraft): EntityHandle {
 
-                    const entity = draft.entities.get(uuid)!;
-
-                    entity.components.set(component as UnknownComponent, data);
-                    World.recomputeEntities({
-                        systems: this.systems,
-                        queries: this.queries,
-                        entities: [entity]
-                    });
+        const componentsMapHandle = new ComponentsMapHandle(uuid,
+            callWithDraft, this.addComponent.bind(this),
+            (entity: Immutable<EntityState>) => {
+                World.recomputeEntities({
+                    systems: this.systems,
+                    queries: this.queries,
+                    entities: [entity]
                 });
             },
-            (component) => {
-                callWithDraft(draft => {
-                    const entity = draft.entities.get(uuid);
-                    if (!entity) {
-                        throw new Error(`entity '${uuid}' not in system`);
-                    }
-                    entity.components.delete(component as UnknownComponent);
-                    World.recomputeEntities({
-                        systems: this.systems,
-                        queries: this.queries,
-                        entities: [entity]
-                    });
-                });
-            }
+            freeze
         );
+
+        return {
+            uuid,
+            components: componentsMapHandle
+        }
     }
 
     static recomputeEntities({ systems, queries, entities, removedEntities }: {
@@ -258,30 +341,18 @@ export class World {
     }
 
     removeEntity(entityOrUuid: string | EntityHandle): Entity | undefined {
-        return this.removeEntityFromDraft(entityOrUuid, (callback) => {
-            this.state = produce(this.state, callback);
-        });
+        return this.removeEntityFromDraft(entityOrUuid,
+            this.callWithNewDraft.bind(this));
     }
 
     private removeEntityFromDraft(entityOrUuid: string | EntityHandle,
-        callWithDraft: (callback: (draft: Draft<State>) => void) => void): Entity | undefined {
-        const entityHandle = entityOrUuid instanceof EntityHandle
+        callWithDraft: CallWithDraft): Entity | undefined {
+        const uuid = typeof entityOrUuid === 'string'
             ? entityOrUuid
-            : this.entityHandles.get(entityOrUuid);
+            : entityOrUuid.uuid;
 
-        const uuid = entityOrUuid instanceof EntityHandle
-            ? entityOrUuid.uuid
-            : entityOrUuid;
-
-        // Delete the entity handle and remove its methods
-        if (entityHandle && entityHandle === this.singletonEntity) {
-            if (entityHandle === this.singletonEntity) {
-                throw new Error('Cannot remove singleton entity');
-            }
-            const erf = () => { throw new Error(`entity '${entityHandle.uuid}' not in system`); }
-            entityHandle.addComponent = erf;
-            entityHandle.removeComponent = erf;
-            this.entityHandles.delete(uuid);
+        if (uuid === this.singletonEntity.uuid) {
+            throw new Error('Cannot remove the singleton entity');
         }
 
         const entityState = this.state.entities.get(uuid);
@@ -290,7 +361,9 @@ export class World {
         }
 
         World.recomputeEntities({
-            systems: this.systems, queries: this.queries, removedEntities: [entityState]
+            systems: this.systems,
+            queries: this.queries,
+            removedEntities: [entityState]
         });
 
         callWithDraft(draft => {
@@ -305,19 +378,26 @@ export class World {
     }
 
     addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
-        this.addResourceToDraft(resource, value, (callback) => {
-            this.state = produce(this.state, callback);
-        });
+        if (resource.mutable) {
+            this.updateResourceMap(resource);
+            this.mutableResources.set(resource as UnknownResource, value);
+        } else {
+            this.addResourceToDraft(resource, value,
+                this.callWithNewDraft.bind(this));
+        }
     }
 
-    private addResourceToDraft<Data>(resource: Resource<Data, any, any, any>,
-        value: Data, callWithDraft: (callback: (draft: Draft<State>) => void) => void) {
+    private updateResourceMap(resource: Resource<any, any, any, any>) {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
         }
         this.nameResourceMap.set(resource.name, resource as UnknownResource);
+    }
 
+    private addResourceToDraft<Data>(resource: Resource<Data, any, any, any>,
+        value: Data, callWithDraft: CallWithDraft) {
+        this.updateResourceMap(resource);
         // TODO: Fix these types. Maybe pass resources in the World constructor?
         callWithDraft(draft => {
             draft.resources.set(resource as UnknownResource, value);
@@ -326,7 +406,8 @@ export class World {
 
     addSystem(system: System): this {
         for (const resource of system.resources) {
-            if (!this.state.resources.has(resource)) {
+            if (!this.state.resources.has(resource)
+                && !this.mutableResources.has(resource)) {
                 throw new Error(
                     `World is missing ${resource} needed for ${system}`);
             }
@@ -423,7 +504,6 @@ export class World {
             // TODO: Fix the types so `system.step` is known to be a promise.
             await system.step(...args);
 
-
             let patches: Patch[] | undefined;
             finishDraft(draft, (forwardPatches) => {
                 patches = forwardPatches;
@@ -493,10 +573,13 @@ export class World {
         entity: Draft<EntityState>): ArgData<T> | undefined {
         const commands = this.makeCommands(draft);
         if (arg instanceof Resource) {
-            if (!draft.resources.has(arg)) {
+            if (draft.resources.has(arg)) {
+                return draft.resources.get(arg) as ResourceData<T> | undefined;
+            } else if (this.mutableResources.has(arg)) {
+                return this.mutableResources.get(arg) as ResourceData<T> | undefined;
+            } else {
                 throw new Error(`Missing resource ${arg}`);
             }
-            return draft.resources.get(arg) as ResourceData<T> | undefined;
         } else if (arg instanceof Component) {
             return entity.components.get(arg) as ComponentData<T> | undefined;
         } else if (arg instanceof Query) {
@@ -511,8 +594,8 @@ export class World {
             return this.getArg(arg.value, draft, entity);
         } else if (arg === GetEntity) {
             // TODO: Don't cast to ArgData<T>?
-            return this.makeEntityHandle(entity.uuid, (callback) => {
-                callback(draft);
+            return this.makeEntityHandle(entity.uuid, false, (callback) => {
+                return callback(draft);
             }) as ArgData<T>;
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
@@ -522,13 +605,13 @@ export class World {
     private makeCommands(draft: Draft<State>): CommandsInterface {
         return {
             addEntity: (entity) => {
-                return this.addEntityToDraft(entity, (callback) => {
-                    callback(draft);
+                return this.addEntityToDraft(entity, false, (callback) => {
+                    return callback(draft);
                 });
             },
             removeEntity: (entityOrUuid) => {
                 return this.removeEntityFromDraft(entityOrUuid, (callback) => {
-                    callback(draft);
+                    return callback(draft);
                 });
             },
             components: this.nameComponentMap

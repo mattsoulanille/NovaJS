@@ -15,6 +15,7 @@ ts_library(
         "utils.ts",
         "plugin.ts",
         "arg_types.ts",
+        "async_system.ts",
     ],
     deps = [
         "//nova/src/common",
