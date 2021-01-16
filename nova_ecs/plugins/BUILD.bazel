@@ -5,6 +5,7 @@ load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 
 ts_library(
     name = "plugins",
+    module_name = "nova_ecs/plugins",
     srcs = [
         "time_plugin.ts",
         "multiplayer_plugin.ts",
