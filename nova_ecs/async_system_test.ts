@@ -40,7 +40,6 @@ describe('async system', () => {
         world.step();
         await world.resources.get(AsyncSystemData)?.done;
         world.step();
-        debugger;
 
         expect(handle.components.get(BAR_COMPONENT)?.y)
             .toEqual('changed bar asynchronously');

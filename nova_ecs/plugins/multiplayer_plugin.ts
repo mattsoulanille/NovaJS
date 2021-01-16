@@ -182,7 +182,6 @@ export function multiplayer(getMessages: () => Message[],
                 // Apply deltas
                 for (const [uuid, entityDelta] of Object.entries(message.delta ?? {})) {
                     if (!entityMap.has(uuid)) {
-                        debugger;
                         fullStateRequests.add(uuid);
                         continue;
                     }

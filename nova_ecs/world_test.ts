@@ -453,7 +453,6 @@ describe('world', () => {
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (foo, bar) => {
                 bar.y = 'changed by foo';
-                debugger;
                 fooBarData.push([foo.x, bar.y]);
             },
             before: new Set([barSystem])
