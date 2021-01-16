@@ -1,5 +1,5 @@
 import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { Resource } from "../ecs/resource";
+import { Resource } from "nova_ecs/resource";
 
 
 export const GameDataResource = new Resource<GameDataInterface>({

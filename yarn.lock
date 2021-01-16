@@ -2276,10 +2276,10 @@ ignore-walk@^3.0.1:
   dependencies:
     minimatch "^3.0.4"
 
-immer@^7.0.7:
-  version "7.0.7"
-  resolved "https://registry.yarnpkg.com/immer/-/immer-7.0.7.tgz#9dfe713d49bf871cc59aedfce59b1992fa37a977"
-  integrity sha512-Q8yYwVADJXrNfp1ZUAh4XDHkcoE3wpdpb4mC5abDSajs2EbW8+cGdPyAnglMyLnm7EF6ojD2xBFX7L5i4TIytw==
+immer@^8.0.0:
+  version "8.0.0"
+  resolved "https://registry.yarnpkg.com/immer/-/immer-8.0.0.tgz#08763549ba9dd7d5e2eb4bec504a8315bd9440c2"
+  integrity sha512-jm87NNBAIG4fHwouilCHIecFXp5rMGkiFrAuhVO685UnMAlOneEAnOyzPt8OnP47TC11q/E7vpzZe0WvwepFTg==
 
 indexof@0.0.1, indexof@~0.0.1:
   version "0.0.1"

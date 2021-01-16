@@ -2,8 +2,8 @@ import * as PIXI from "pixi.js";
 import { GameData } from "./client/gamedata/GameData";
 import { CommunicatorClient } from "./communication/CommunicatorClient";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
-import { multiplayer } from "./ecs/plugins/multiplayer_plugin";
-import { World } from "./ecs/world";
+import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
+import { World } from "nova_ecs/world";
 import { GameDataResource } from "./nova_plugin/game_data_resource";
 import { Nova } from "./nova_plugin/nova_plugin";
 

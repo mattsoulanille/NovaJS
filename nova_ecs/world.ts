@@ -1,7 +1,6 @@
-import produce, { applyPatches, createDraft, current, Draft, enableMapSet, enablePatches, finishDraft, Immutable, Patch } from "immer";
+import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
 import { v4 } from "uuid";
-import { DefaultMap } from "../common/DefaultMap";
-import { ArgData, ArgsToData, ArgTypes, Commands, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Commands, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { ComponentsMapHandle } from "./component_map_handle";
@@ -106,6 +105,16 @@ export class World {
     private mutableResources = new Map<UnknownResource,
         unknown /* resource data */>();
 
+    // TODO: Probably refactor so you can add / remove entities with this
+    get entities() {
+        return new Map([...this.state.entities.keys()]
+            .map(uuid => {
+                const handle = this.makeEntityHandle(uuid, true,
+                    this.callWithNewDraft.bind(this));
+                return [uuid, handle]
+            }));
+    }
+
     get resources() {
         return new Map([
             ...this.state.resources,
@@ -121,14 +130,7 @@ export class World {
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
     private queries = new Map<Query, Set<string /* entity uuid */>>();
 
-    private asyncSystemStatuses = new DefaultMap<System,
-        DefaultMap<string /* Entity */, { running: boolean, promise: Promise<void> }>>(
-            () => new DefaultMap(() => {
-                return { running: false, promise: Promise.resolve() }
-            }));
-
     singletonEntity = this.addEntity(new Entity());
-    asyncDone: Promise<void> = Promise.resolve();
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
@@ -380,88 +382,21 @@ export class World {
         this.nameComponentMap.set(component.name, component);
     }
 
-    private stepAsyncSystem<T extends readonly ArgTypes[]>(system: System<T>, entityUUID: string, state: State) {
-        const systemMap = this.asyncSystemStatuses.get(system as unknown as System);
-        const status = systemMap.get(entityUUID);
-        if (status.running) {
-            // Only run the system once
-            return;
-        }
-
-        const stepAndApplyPatches = async () => {
-            const draft = createDraft(state);
-            if (!draft.entities.has(entityUUID)) {
-                throw new Error(`Internal error: Missing entity ${entityUUID}`);
-            }
-            const entity = draft.entities.get(entityUUID)!;
-
-            const args = system.args.map(arg =>
-                this.getArg(arg, draft, entity)) as unknown as ArgsToData<T>;
-
-            status.running = true;
-            // TODO: Fix the types so `system.step` is known to be a promise.
-            await system.step(...args);
-
-            let patches: Patch[] | undefined;
-            finishDraft(draft, (forwardPatches) => {
-                patches = forwardPatches;
-            });
-
-            // Apply patches instead of assigning to state since
-            // steps may have changed state while this async system
-            // was running.
-            this.state = produce(this.state, draft => {
-                if (!patches) {
-                    throw new Error('Got no patches for async system call');
-                }
-
-                // This is not correct as the entities we're editing
-                // may no longer exist. However, rebasing introduces the same
-                // problem if the async function removes an entity that the synchronous
-                // functions have edited.
-                try {
-                    applyPatches(draft, patches);
-                } catch (e) {
-                    // TODO: This is a terrible way of detecting the type of error.
-                    const errString = "[Immer] Cannot apply patch"
-                    if (!(e instanceof Error &&
-                        e.message.substring(0, errString.length) === errString)) {
-                        throw e;
-                    }
-                }
-            });
-            status.running = false;
-        }
-
-        status.promise = stepAndApplyPatches();
-        this.asyncDone = (async () => {
-            await this.asyncDone;
-            await status.promise;
-        })();
-    }
-
     step() {
         this.state = produce(this.state, draft => {
             for (const { system, entities } of this.systems) {
-                if (system.asynchronous) {
-                    for (const entityUUID of entities) {
-                        this.stepAsyncSystem(system, entityUUID, current(draft));
+                for (const entityUUID of entities) {
+                    if (!draft.entities.has(entityUUID)) {
+                        throw new Error(`Internal error: Missing entity ${entityUUID}`);
                     }
-                } else {
-                    for (const entityUUID of entities) {
-                        if (!draft.entities.has(entityUUID)) {
-                            throw new Error(`Internal error: Missing entity ${entityUUID}`);
-                        }
-                        const entity = draft.entities.get(entityUUID)!;
+                    const entity = draft.entities.get(entityUUID)!;
 
-                        // TODO: The types here don't quite work out since
-                        // getArg returns ArgData<T> | undefined.
-                        const args = system.args.map(arg =>
-                            this.getArg(arg, draft, entity));
+                    // TODO: The types here don't quite work out since
+                    // getArg returns ArgData<T> | undefined.
+                    const args = system.args.map(arg =>
+                        this.getArg(arg, draft, entity));
 
-                        // TODO: system.step accepts ...any[]. Fix this.
-                        system.step(...args);
-                    }
+                    system.step(...args);
                 }
             }
         });

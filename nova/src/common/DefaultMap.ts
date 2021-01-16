@@ -4,9 +4,9 @@ export class DefaultMap<K, V> extends Map<K, V> {
     }
 
     get(key: K): V {
-        if (super.has(key)) {
-            return super.get(key)!;
+        if (!super.has(key)) {
+            super.set(key, this.factory());
         }
-        return this.factory();
+        return super.get(key)!;
     }
 }

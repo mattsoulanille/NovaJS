@@ -12,8 +12,8 @@ ts_library(
         "delta.ts",
     ],
     deps = [
-        "//nova/src/ecs",
-        "//nova/src/ecs/datatypes",
+        "//nova_ecs:ecs",
+        "//nova_ecs/datatypes",
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
@@ -29,8 +29,8 @@ ts_library(
     ],
     deps = [
         ":plugins",
-        "//nova/src/ecs",
-        "//nova/src/ecs/datatypes",
+        "//nova_ecs:ecs",
+        "//nova_ecs/datatypes",
         "@npm//@types/jasmine",
         "@npm//io-ts",
         "@npm//io-ts-types",

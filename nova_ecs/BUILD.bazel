@@ -5,6 +5,7 @@ load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
 
 ts_library(
     name = "ecs",
+    module_name = "nova_ecs",
     srcs = [
         "entity.ts",
         "component.ts",
@@ -19,7 +20,6 @@ ts_library(
         "component_map_handle.ts",
     ],
     deps = [
-        "//nova/src/common",
         "@npm//io-ts",
         "@npm//immer",
         "@npm//uuid",
@@ -34,6 +34,7 @@ ts_library(
         "system_test.ts",
         "world_test.ts",
         "utils_test.ts",
+        "async_system_test.ts",
     ],
     deps = [
         ":ecs",

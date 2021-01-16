@@ -1,35 +1,36 @@
 {
-	"exclude": [
-		"bazel-out",
-		"dist"
-	],
-	"bazelOptions": {
-		"devmodeTargetOverride": "esnext"
+  "exclude": [
+	"bazel-out",
+	"dist"
+  ],
+  "bazelOptions": {
+	"devmodeTargetOverride": "esnext"
+  },
+  "compilerOptions": {
+	"target": "es2017",
+	"module": "commonjs",
+	"lib": ["dom", "dom.iterable", "esnext", "scripthost"],
+	"declaration": true,
+	"sourceMap": true,
+	"outDir": "./build",
+	"strict": true,
+	"noImplicitAny": true,
+	"strictNullChecks": true,
+	"strictFunctionTypes": true,
+	"noImplicitThis": true,
+	"alwaysStrict": true,
+	"noUnusedParameters": true,
+	"noImplicitReturns": true,
+	"noFallthroughCasesInSwitch": true,
+	"baseUrl": ".",
+	"paths": {
+	  "novajs/*": [
+		"*",
+		"dist/bin/*"
+	  ],
+      "nova_ecs": ["nova_ecs"]
 	},
-    "compilerOptions": {
-		"target": "es2017",
-		"module": "commonjs",
-		"lib": ["dom", "dom.iterable", "esnext", "scripthost"],
-		"declaration": true,
-		"sourceMap": true,
-		"outDir": "./build",
-		"strict": true,
-		"noImplicitAny": true,
-		"strictNullChecks": true,
-		"strictFunctionTypes": true,
-		"noImplicitThis": true,
-		"alwaysStrict": true,
-		"noUnusedParameters": true,
-		"noImplicitReturns": true,
-		"noFallthroughCasesInSwitch": true,
-		"baseUrl": ".",
-		"paths": {
-			"novajs/*": [
-			  "*",
-			  "dist/bin/*"
-			]
-		},
-		"esModuleInterop": true,
-		"incremental": false
-    }
+	"esModuleInterop": true,
+	"incremental": false
+  }
 }

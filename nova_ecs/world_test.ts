@@ -4,7 +4,6 @@ import 'jasmine';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { Commands, GetEntity, Optional, UUID } from './arg_types';
-import { AsyncSystem, AsyncSystemData } from './async_system';
 import { Component } from './component';
 import { Entity } from './entity';
 import { Plugin } from './plugin';
@@ -13,12 +12,6 @@ import { Resource } from './resource';
 import { System } from './system';
 import { World } from './world';
 
-
-async function sleep(ms: number) {
-    return new Promise(resolve => {
-        setTimeout(resolve, ms);
-    });
-}
 
 const FOO_COMPONENT = new Component({
     name: 'foo',
@@ -862,57 +855,5 @@ describe('world', () => {
 
         expect(handle.components.get(BAR_COMPONENT)?.y)
             .toEqual('changed bar');
-    });
-
-    it('supports async systems', async () => {
-        const asyncSystem = new System({
-            name: 'AsyncSystem',
-            args: [BAR_COMPONENT],
-            step: async (bar) => {
-                await sleep(0);
-                bar.y = 'changed bar asynchronously';
-            },
-            asynchronous: true,
-        });
-
-        const handle = world.addEntity(new Entity()
-            .addComponent(BAR_COMPONENT, { y: 'not changed' }));
-
-        world.addSystem(asyncSystem);
-        world.step();
-        await world.asyncDone;
-
-        expect(handle.components.get(BAR_COMPONENT)?.y)
-            .toEqual('changed bar asynchronously');
-    });
-
-    it('does not throw an error if the async system is working on a deleted entity', async () => {
-        const asyncSystem = new System({
-            name: 'AsyncSystem',
-            args: [BAR_COMPONENT],
-            asynchronous: true,
-            step: async (bar) => {
-                await sleep(0);
-                bar.y = 'changed bar asynchronously';
-            }
-        });
-
-        const removeBarSystem = new System({
-            name: 'RemoveBar',
-            args: [UUID, Commands, BAR_COMPONENT] as const,
-            step: (uuid, commands) => {
-                commands.removeEntity(uuid);
-            },
-            after: [asyncSystem],
-        });
-
-        world.addEntity(new Entity()
-            .addComponent(BAR_COMPONENT, { y: 'not changed' }));
-
-        world.addSystem(asyncSystem);
-        world.addSystem(removeBarSystem);
-        world.step();
-
-        await world.asyncDone;
     });
 });

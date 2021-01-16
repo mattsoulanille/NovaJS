@@ -12,9 +12,9 @@ ts_library(
         "make_ship.ts",
     ],
     deps = [
-        "//nova/src/ecs",
-        "//nova/src/ecs/plugins",
-        "//nova/src/ecs/datatypes",
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
+        "//nova_ecs/datatypes",
         "//novadatainterface",
         "@npm//io-ts",
         "@npm//fp-ts",

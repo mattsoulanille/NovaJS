@@ -1,5 +1,5 @@
 import { isLeft } from "fp-ts/lib/Either";
-import { Message } from "../ecs/plugins/multiplayer_plugin";
+import { Message } from "nova_ecs/plugins/multiplayer_plugin";
 import { ChannelServer } from "./Channel";
 import { Communicator } from "./Communicator";
 

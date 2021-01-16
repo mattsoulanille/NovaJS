@@ -1,19 +1,18 @@
 import { isDraft, original } from "immer";
-import { Commands, UUID } from "../ecs/arg_types";
-import { Plugin } from "../ecs/plugin";
-import { Comms, MultiplayerData } from "../ecs/plugins/multiplayer_plugin";
-import { Query } from "../ecs/query";
-import { System } from "../ecs/system";
-import { setDifference } from "../ecs/utils";
+import { AsyncSystem } from "nova_ecs/async_system";
+import { Commands, UUID } from "nova_ecs/arg_types";
+import { Plugin } from "nova_ecs/plugin";
+import { Comms, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { Query } from "nova_ecs/query";
+import { setDifference } from "nova_ecs/utils";
 import { GameDataResource } from "./game_data_resource";
 import { makeShip } from "./make_ship";
 
 
-export const manageClientsSystem = new System({
+export const manageClientsSystem = new AsyncSystem({
     name: 'ManageClients',
     args: [Comms, GameDataResource, new Query([MultiplayerData, UUID] as const),
         Commands] as const,
-    asynchronous: true,
     step: async (comms, gameData, entities, commands) => {
         if (!isDraft(comms)) {
             // Then there's no way we have new peers since
