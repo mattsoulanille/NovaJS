@@ -96,6 +96,7 @@ export function multiplayer(getMessages: () => Message[],
                 // Set peers
                 if (isAdmin && message.peers) {
                     comms.peers = message.peers;
+                    console.log(`peers: ${[...comms.peers]}`);
                 }
 
                 // Set requested states

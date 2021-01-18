@@ -1,9 +1,9 @@
-import { applyPatches, createDraft, current, enablePatches, finishDraft, Patch } from "immer";
+import { applyPatches, createDraft, enablePatches, finishDraft, Patch } from "immer";
 import { ArgsToData, ArgTypes, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
 import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
-import { DefaultMap } from "./utils";
+import { currentIfDraft, DefaultMap } from "./utils";
 
 // TODO: This doesn't work because you can't asynchronously edit a draft if it's expected to be synchronously edited. AsyncSystemData is passed in a draft in step()
 
@@ -53,6 +53,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 if (entityStatus.running) {
                     return; // Only one run at a time per entity
                 }
+                entityStatus.running = true;
 
                 // Apply patches from the previous complete run.
                 // Note that this only runs if the entity still exists.
@@ -63,10 +64,9 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 (stepArgs as any)[Symbol.for('immer-state')] = true;
                 applyPatches(stepArgs, entityStatus.patches);
 
-                const currentArgs = stepArgs.map(arg => current(arg)) as typeof stepArgs;
+                const currentArgs = stepArgs.map(arg => currentIfDraft(arg)) as typeof stepArgs;
                 const draftArgs = createDraft(currentArgs);
 
-                entityStatus.running = true;
                 // TODO: This error handling is wrong.
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)
                     .then(() => {

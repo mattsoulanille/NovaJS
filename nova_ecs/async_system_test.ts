@@ -13,14 +13,26 @@ async function sleep(ms: number) {
     });
 }
 
+const FOO_COMPONENT = new Component<{
+    x: number;
+}>({ name: 'foo' })
+
 const BAR_COMPONENT = new Component<{
     y: string;
 }>({ name: 'bar' });
 
 describe('async system', () => {
     let world: World;
+    let clock: jasmine.Clock;
+
     beforeEach(() => {
         world = new World();
+        clock = jasmine.clock();
+        clock.install();
+    });
+
+    afterEach(() => {
+        clock.uninstall();
     });
 
     it('supports async systems', async () => {
@@ -38,6 +50,7 @@ describe('async system', () => {
 
         world.addSystem(asyncSystem);
         world.step();
+        clock.tick(1);
         await world.resources.get(AsyncSystemData)?.done;
         world.step();
 
@@ -70,8 +83,39 @@ describe('async system', () => {
         world.addSystem(asyncSystem);
         world.addSystem(removeBarSystem);
         world.step();
+        clock.tick(1);
         await world.resources.get(AsyncSystemData)?.done;
         world.step();
         expect(world.entities.has(toRemove.uuid)).toBeFalse();
+    });
+
+    it('runs only one instance (per entity) at a time', async () => {
+        const fooValues: number[] = [];
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [FOO_COMPONENT],
+            step: async (foo) => {
+                await sleep(10);
+                foo.x += 1;
+                fooValues.push(foo.x);
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.addEntity(new Entity()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+
+        expect(fooValues).toEqual([1, 2]);
     });
 });

@@ -1,7 +1,15 @@
+import { current, Draft, Immutable, isDraft } from "immer";
 import { UnknownComponent } from "./component";
 
 export interface WithComponents {
     components: ReadonlyMap<UnknownComponent, unknown>;
+}
+
+export function currentIfDraft<T>(val: T | Draft<T>): Immutable<T> {
+    if (isDraft(val)) {
+        return current(val) as Immutable<T>;
+    }
+    return val as Immutable<T>;
 }
 
 /**
