@@ -15,10 +15,10 @@ export type ComponentsOnly<T extends readonly [...unknown[]]> =
     Exclude<Extract<T[number], Component<any, any, any, any>>, Resource<any, any, any, any>>;
 
 export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
-    name: string;
+    readonly name: string;
     readonly args: StepArgTypes;
-    before?: Iterable<System | string>; // Systems that this system runs before
-    after?: Iterable<System | string>; // Systems that this system runs after
+    readonly before?: Iterable<System | string>; // Systems that this system runs before
+    readonly after?: Iterable<System | string>; // Systems that this system runs after
 }
 export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends BaseSystemArgs<StepArgTypes> {
     step: (...args: ArgsToData<StepArgTypes>) => void;

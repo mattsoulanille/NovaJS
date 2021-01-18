@@ -1,3 +1,4 @@
+import { isLeft } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
 import 'jasmine';
 import { UUID } from '../arg_types';
@@ -5,7 +6,7 @@ import { Component } from '../component';
 import { Entity } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
-import { Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
+import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
 
 
 // TODO: Test delta deserialization.
@@ -23,40 +24,59 @@ const BarComponent = new Component<{ y: string }, { y: string }, { y: string }, 
     },
 });
 
+class MockCommunicator implements Communicator {
+    incomingMessages: Message[] = [];
+    constructor(public uuid: string,
+        public peers: Map<string, MockCommunicator> = new Map()) { }
+
+    sendMessage(message: Message, destination?: string) {
+        const JSONified = Message.decode(JSON.parse(JSON.stringify(message)));
+        if (isLeft(JSONified)) {
+            throw new Error(`JSON failed to parse: ${JSONified.left}`);
+        }
+
+        const copied = JSONified.right;
+
+        if (destination) {
+            this.peers.get(destination)?.incomingMessages.push(copied);
+        } else {
+            for (const peer of this.peers.values()) {
+                if (peer.uuid !== this.uuid) {
+                    peer.incomingMessages.push(copied);
+                }
+            }
+        }
+    }
+
+    getMessages() {
+        const messages = this.incomingMessages;
+        this.incomingMessages = [];
+        return messages;
+    }
+}
+
 describe('Multiplayer Plugin', () => {
-    let toWorld1: Message[][];
-    let toWorld2: Message[][];
     let world1: World;
     let world2: World;
+    let world1Communicator: MockCommunicator;
+    let world2Communicator: MockCommunicator;
 
     beforeEach(() => {
-        toWorld1 = [[]];
-        toWorld2 = [[]];
+        world1Communicator = new MockCommunicator('world1 uuid');
+        world2Communicator = new MockCommunicator('world2 uuid');
+
+        const communicators = new Map([
+            [world1Communicator.uuid, world1Communicator],
+            [world2Communicator.uuid, world2Communicator],
+        ]);
+        world1Communicator.peers = communicators;
+        world2Communicator.peers = communicators;
+
         world1 = new World('world1');
-        world1.addPlugin(multiplayer(() => {
-            const messages = toWorld1[toWorld1.length - 1];
-            if (messages.length !== 0) {
-                toWorld1.push([]);
-            }
-            return messages;
-        }, (message) => {
-            // Sometimes the engine edits messages, so they must be new objects.
-            const JSONified = JSON.parse(JSON.stringify(message));
-            toWorld2[toWorld2.length - 1].push(JSONified);
-        }, 'world1 uuid'));
+        world1.addPlugin(multiplayer(world1Communicator));
 
         world2 = new World('world2');
-        world2.addPlugin(multiplayer(() => {
-            const messages = toWorld2[toWorld2.length - 1];
-            if (messages.length !== 0) {
-                toWorld2.push([]);
-            }
-            return messages;
-        }, (message) => {
-            // Sometimes the engine edits messages, so they must be new objects.
-            const JSONified = JSON.parse(JSON.stringify(message));
-            toWorld1[toWorld1.length - 1].push(JSONified);
-        }, 'world2 uuid'));
+        world2.addPlugin(multiplayer(world2Communicator));
     });
 
     it('adds the comms component to the singleton entity', () => {
@@ -158,7 +178,11 @@ describe('Multiplayer Plugin', () => {
         world1.step();
         world2.step();
 
-        expect(toWorld1).toEqual([[]]);
-        expect(toWorld2).toEqual([[]]);
+        expect(world1Communicator.incomingMessages).toEqual([]);
+        expect(world2Communicator.incomingMessages).toEqual([]);
+    });
+
+    it('admins send new peers their uuids', () => {
+
     });
 });

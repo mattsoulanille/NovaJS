@@ -89,7 +89,7 @@ describe('async system', () => {
         expect(world.entities.has(toRemove.uuid)).toBeFalse();
     });
 
-    it('runs only one instance (per entity) at a time', async () => {
+    it('may run multiple instances at a time', async () => {
         const fooValues: number[] = [];
         const asyncSystem = new AsyncSystem({
             name: 'AsyncSystem',
@@ -116,6 +116,6 @@ describe('async system', () => {
         clock.tick(11);
         await world.resources.get(AsyncSystemData)?.done;
 
-        expect(fooValues).toEqual([1, 2]);
+        expect(fooValues).toEqual([1, 1, 1, 2, 2, 2]);
     });
 });

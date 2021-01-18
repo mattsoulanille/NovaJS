@@ -12,6 +12,12 @@ import { setDifference } from '../utils';
 import { EntityHandle, World } from '../world';
 
 
+export interface Communicator {
+    uuid: string;
+    sendMessage(message: Message, destination?: string): void;
+    getMessages(): Message[];
+}
+
 const EntityState = t.type({
     state: t.record(t.string /* Component Name */, t.unknown /* State */),
     owner: t.string,
@@ -70,15 +76,13 @@ function getEntityState(entity: EntityHandle) {
     return componentStates;
 }
 
-export function multiplayer(getMessages: () => Message[],
-    sendMessage: (message: Message, destination?: string) => void, uuid: string): Plugin {
-
+export function multiplayer(communicator: Communicator): Plugin {
     const applyChangesSystem = new System({
         name: 'ApplyChanges',
         args: [new Query([GetEntity, MultiplayerData] as const),
             Commands, Comms] as const,
         step: (query, commands, comms) => {
-            const messages = getMessages();
+            const messages = communicator.getMessages();
             const entityMap = new Map(query.map(([entity, data]) =>
                 [entity.uuid, { entity, data }]));
 
@@ -217,7 +221,7 @@ export function multiplayer(getMessages: () => Message[],
             if (fullStateRequests.size > 0) {
                 // Request state from a trusted source
                 const randomAdmin = [...comms.admins][Math.floor(Math.random() * comms.admins.size)];
-                sendMessage({
+                communicator.sendMessage({
                     source: comms.uuid,
                     requestState: [...fullStateRequests]
                 }, randomAdmin);
@@ -298,7 +302,7 @@ export function multiplayer(getMessages: () => Message[],
 
             if (Object.keys(changes).length > 1) {
                 // Only send if there's something to send.
-                sendMessage(changes);
+                communicator.sendMessage(changes);
             }
 
             // Reply to requests for state
@@ -316,8 +320,8 @@ export function multiplayer(getMessages: () => Message[],
                     }
                 }
 
-                sendMessage({
-                    source: uuid,
+                communicator.sendMessage({
+                    source: communicator.uuid,
                     state,
                 }, peer);
             }
@@ -333,7 +337,7 @@ export function multiplayer(getMessages: () => Message[],
         world.addComponent(MultiplayerData);
         world.singletonEntity.components.set(Comms, {
             ownedUuids: new Set<string>(),
-            uuid,
+            uuid: communicator.uuid,
             peers: new Set<string>(),
             admins: new Set<string>(['server']),
             lastEntities: new Set<string>(),

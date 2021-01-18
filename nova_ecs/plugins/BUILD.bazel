@@ -35,6 +35,7 @@ ts_library(
         "@npm//@types/jasmine",
         "@npm//io-ts",
         "@npm//io-ts-types",
+        "@npm//fp-ts",
         "@npm//immer",
     ]
 )

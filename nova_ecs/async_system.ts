@@ -18,8 +18,7 @@ import { currentIfDraft, DefaultMap } from "./utils";
 export const AsyncSystemData = new Resource<{
     systems: DefaultMap<string /* system name */,
         DefaultMap<string /* entity uuid */, {
-            running: boolean,
-            patches: Patch[],
+            patches: Patch[][],
             promise: Promise<void>,
         }>>,
     done: Promise<void>,
@@ -50,11 +49,6 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                     throw new Error("Expected default map to provide entity status");
                 }
 
-                if (entityStatus.running) {
-                    return; // Only one run at a time per entity
-                }
-                entityStatus.running = true;
-
                 // Apply patches from the previous complete run.
                 // Note that this only runs if the entity still exists.
 
@@ -62,7 +56,10 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 // as if it were a draft. It greatly simplifies the rest
                 // of the code, but may break in the future.
                 (stepArgs as any)[Symbol.for('immer-state')] = true;
-                applyPatches(stepArgs, entityStatus.patches);
+                for (const patches of entityStatus.patches) {
+                    applyPatches(stepArgs, patches);
+                }
+                entityStatus.patches = [];
 
                 const currentArgs = stepArgs.map(arg => currentIfDraft(arg)) as typeof stepArgs;
                 const draftArgs = createDraft(currentArgs);
@@ -78,9 +75,9 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                         if (!patches) {
                             throw new Error('Got no patches when calling async system');
                         }
-
-                        entityStatus.patches = patches;
-                        entityStatus.running = false;
+                        if (patches.length > 0) {
+                            entityStatus.patches.push(patches);
+                        }
                     });
 
                 asyncSystemData.done = (async () => {
@@ -99,13 +96,11 @@ export const AsyncSystemPlugin: Plugin = {
             done: Promise.resolve(),
             systems: new DefaultMap<string /* system name */,
                 DefaultMap<string /* entity uuid */, {
-                    running: boolean,
-                    patches: Patch[],
+                    patches: Patch[][],
                     promise: Promise<void>,
                 }>>(
                     () => new DefaultMap(() => {
                         return {
-                            running: false,
                             patches: [],
                             promise: Promise.resolve(),
                         }
