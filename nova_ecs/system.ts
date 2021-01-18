@@ -17,9 +17,6 @@ export type ComponentsOnly<T extends readonly [...unknown[]]> =
 type QueryComponents<T> =
     T extends Query<infer Components> ? Components[number] : never;
 
-type AllComponents<T extends readonly [...unknown[]]> =
-    ComponentsOnly<T> | QueryComponents<T[number]>
-
 export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     name: string;
     readonly args: StepArgTypes;
@@ -36,7 +33,6 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     readonly components: Set<ComponentsOnly<StepArgTypes>>;
     readonly resources: Set<ResourcesOnly<StepArgTypes>>;
     readonly queries: Set<QueriesOnly<StepArgTypes>>;
-    readonly allComponents: Set<AllComponents<StepArgTypes>>;
     readonly step: SystemArgs<StepArgTypes>['step'];
     readonly before: Set<System | string>;
     readonly after: Set<System | string>;
@@ -59,14 +55,6 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
         this.queries = new Set(this.args.filter(
             a => (a instanceof Query))
         ) as Set<QueriesOnly<StepArgTypes>>;
-
-        this.allComponents = new Set([
-            ...this.components,
-            ...[...this.queries].reduce(
-                (components: Component<unknown, unknown>[], query) =>
-                    [...components, ...query.components], []
-            ),
-        ]) as Set<AllComponents<StepArgTypes>>;
     }
 
     supportsEntity(entity: WithComponents) {

@@ -75,14 +75,6 @@ describe('system', () => {
         ]));
     });
 
-    it('sets allComponents as the union of components and query components', () => {
-        expect(testSystem.allComponents).toEqual(new Set([
-            FOO_COMPONENT,
-            BAR_COMPONENT,
-            XYZZY_COMPONENT
-        ]));
-    });
-
     it('supports any entity that has all its required components', () => {
         const entity = new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
