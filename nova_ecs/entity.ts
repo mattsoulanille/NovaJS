@@ -1,4 +1,5 @@
 import { Component, UnknownComponent } from "./component";
+import { ComponentMap } from "./component_map";
 
 interface EntityArgs {
     multiplayer?: boolean;
@@ -6,12 +7,11 @@ interface EntityArgs {
     name?: string;
 }
 
-export type ComponentsMap = Map<UnknownComponent, unknown>;
 export type ComponentTypes = Set<UnknownComponent>;
 
 // This is a handle for the entity that the world creates.
 export class Entity {
-    components: ComponentsMap = new Map();
+    components: ComponentMap = new Map();
     multiplayer: boolean;
     uuid?: string;
     name?: string;

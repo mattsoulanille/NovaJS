@@ -17,7 +17,7 @@ ts_library(
         "plugin.ts",
         "arg_types.ts",
         "async_system.ts",
-        "component_map_handle.ts",
+        "component_map.ts",
     ],
     deps = [
         "@npm//io-ts",

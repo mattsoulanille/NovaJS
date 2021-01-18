@@ -118,4 +118,26 @@ describe('async system', () => {
 
         expect(fooValues).toEqual([1, 1, 1, 2, 2, 2]);
     });
+
+    // it('passes an async version of commands', async () => {
+    //     const addEntitySystem = new AsyncSystem({
+    //         name: 'AddEntity',
+    //         args: [Commands, BAR_COMPONENT] as const,
+    //         step: async (commands) => {
+    //             await sleep(10);
+    //             commands.addEntity(new Entity()
+    //                 .addComponent(FOO_COMPONENT, { x: 123 }));
+    //         }
+    //     });
+
+    //     world.addEntity(new Entity()
+    //         .addComponent(BAR_COMPONENT, { y: 'bar' })
+    //     );
+
+    //     world.addSystem(addEntitySystem);
+
+    //     world.step();
+    //     clock.tick(11);
+    //     await world.resources.get(AsyncSystemData)?.done;
+    // });
 });

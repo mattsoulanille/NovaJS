@@ -26,7 +26,7 @@ const BarComponent = new Component<{ y: string }, { y: string }, { y: string }, 
 
 class MockCommunicator implements Communicator {
     incomingMessages: Message[] = [];
-    constructor(public uuid: string,
+    constructor(public uuid: string | undefined,
         public peers: Map<string, MockCommunicator> = new Map()) { }
 
     sendMessage(message: Message, destination?: string) {
@@ -66,8 +66,8 @@ describe('Multiplayer Plugin', () => {
         world2Communicator = new MockCommunicator('world2 uuid');
 
         const communicators = new Map([
-            [world1Communicator.uuid, world1Communicator],
-            [world2Communicator.uuid, world2Communicator],
+            [world1Communicator.uuid as string, world1Communicator],
+            [world2Communicator.uuid as string, world2Communicator],
         ]);
         world1Communicator.peers = communicators;
         world2Communicator.peers = communicators;
@@ -180,9 +180,5 @@ describe('Multiplayer Plugin', () => {
 
         expect(world1Communicator.incomingMessages).toEqual([]);
         expect(world2Communicator.incomingMessages).toEqual([]);
-    });
-
-    it('admins send new peers their uuids', () => {
-
     });
 });

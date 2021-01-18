@@ -2,7 +2,16 @@ import { current, Draft, Immutable, isDraft } from "immer";
 import { Component, UnknownComponent } from "./component";
 import { CallWithDraft, EntityState, State } from "./world";
 
-export class ComponentsMapHandle implements Map<UnknownComponent, unknown> {
+export interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unknown> {
+    get<Data>(component: Component<Data, any, any, any>): Data | undefined;
+}
+
+export interface ComponentMap extends Map<UnknownComponent, unknown> {
+    get<Data>(component: Component<Data, any, any, any>): Data | undefined;
+    set<Data>(component: Component<Data, any, any, any>, data: Data): this;
+}
+
+export class ComponentMapHandle implements Map<UnknownComponent, unknown> {
     constructor(private entityUuid: string,
         private callWithDraft: CallWithDraft,
         private addComponent: (component: Component<any, any, any, any>) => void,

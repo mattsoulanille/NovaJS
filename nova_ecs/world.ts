@@ -3,8 +3,8 @@ import { v4 } from "uuid";
 import { ArgData, ArgTypes, Commands, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
-import { ComponentsMapHandle } from "./component_map_handle";
-import { ComponentsMap, Entity } from "./entity";
+import { ComponentMap, ComponentMapHandle, ReadonlyComponentMap } from "./component_map";
+import { Entity } from "./entity";
 import { Plugin } from './plugin';
 import { Query } from "./query";
 import { Resource, ResourceData, UnknownResource } from "./resource";
@@ -70,7 +70,7 @@ export interface State {
 export type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
 
 export interface EntityState {
-    components: ComponentsMap,
+    components: ComponentMap,
     uuid: string,
     name?: string,
     multiplayer: boolean,
@@ -78,16 +78,12 @@ export interface EntityState {
 
 export interface EntityHandle {
     uuid: string;
-    components: ComponentsMapHandle;
+    components: ComponentMapHandle;
 }
 
 export interface ReadonlyEntityHandle {
     uuid: string;
     components: ReadonlyComponentMap;
-}
-
-interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unknown> {
-    get<Data>(component: Component<Data, any, any, any>): Data | undefined;
 }
 
 interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
@@ -189,7 +185,7 @@ export class World {
     private makeEntityHandle(uuid: string, freeze: boolean,
         callWithDraft: CallWithDraft): EntityHandle {
 
-        const componentsMapHandle = new ComponentsMapHandle(uuid,
+        const componentsMapHandle = new ComponentMapHandle(uuid,
             callWithDraft, this.addComponent.bind(this),
             (entity: Immutable<EntityState>) => {
                 World.recomputeEntities({

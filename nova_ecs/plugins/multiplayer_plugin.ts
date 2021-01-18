@@ -13,7 +13,7 @@ import { EntityHandle, World } from '../world';
 
 
 export interface Communicator {
-    uuid: string;
+    uuid: string | undefined;
     sendMessage(message: Message, destination?: string): void;
     getMessages(): Message[];
 }
@@ -52,7 +52,7 @@ export const Comms = new Component<{
     ownedUuids: Set<string>,
     peers: Set<string>,
     admins: Set<string>,
-    uuid: string,
+    uuid: string | undefined,
     stateRequests: Map<string /* peer uuid */, Set<string /* Entity uuid */>>,
     added: Set<string>, // Entities added this step by ApplyChanges
     removed: Set<string>, // Entities removed this step by ApplyChanges
@@ -82,6 +82,12 @@ export function multiplayer(communicator: Communicator): Plugin {
         args: [new Query([GetEntity, MultiplayerData] as const),
             Commands, Comms] as const,
         step: (query, commands, comms) => {
+            comms.uuid = communicator.uuid;
+            if (!comms.uuid) {
+                // Can't do anything if we don't have a uuid.
+                return;
+            }
+
             const messages = communicator.getMessages();
             const entityMap = new Map(query.map(([entity, data]) =>
                 [entity.uuid, { entity, data }]));
@@ -100,7 +106,6 @@ export function multiplayer(communicator: Communicator): Plugin {
                 // Set peers
                 if (isAdmin && message.peers) {
                     comms.peers = message.peers;
-                    console.log(`peers: ${[...comms.peers]}`);
                 }
 
                 // Set requested states
@@ -234,6 +239,11 @@ export function multiplayer(communicator: Communicator): Plugin {
         args: [new Query([GetEntity, MultiplayerData] as const),
             Comms] as const,
         step: (query, comms) => {
+            if (!comms.uuid) {
+                // Can't send changes if we don't have a uuid
+                return;
+            }
+
             const changes: Message = {
                 source: comms.uuid,
                 delta: {},
@@ -321,7 +331,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                 }
 
                 communicator.sendMessage({
-                    source: communicator.uuid,
+                    source: comms.uuid,
                     state,
                 }, peer);
             }
