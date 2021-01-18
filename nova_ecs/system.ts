@@ -14,9 +14,6 @@ type QueriesOnly<T extends readonly [...unknown[]]> =
 export type ComponentsOnly<T extends readonly [...unknown[]]> =
     Exclude<Extract<T[number], Component<any, any, any, any>>, Resource<any, any, any, any>>;
 
-type QueryComponents<T> =
-    T extends Query<infer Components> ? Components[number] : never;
-
 export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     name: string;
     readonly args: StepArgTypes;
@@ -30,12 +27,12 @@ export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends Ba
 export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> {
     readonly name: string;
     readonly args: StepArgTypes;
-    readonly components: Set<ComponentsOnly<StepArgTypes>>;
-    readonly resources: Set<ResourcesOnly<StepArgTypes>>;
-    readonly queries: Set<QueriesOnly<StepArgTypes>>;
+    readonly components: ReadonlySet<ComponentsOnly<StepArgTypes>>;
+    readonly resources: ReadonlySet<ResourcesOnly<StepArgTypes>>;
+    readonly queries: ReadonlySet<QueriesOnly<StepArgTypes>>;
     readonly step: SystemArgs<StepArgTypes>['step'];
-    readonly before: Set<System | string>;
-    readonly after: Set<System | string>;
+    readonly before: ReadonlySet<System | string>;
+    readonly after: ReadonlySet<System | string>;
 
     constructor({ name, args, step, before, after }: SystemArgs<StepArgTypes>) {
         this.name = name;

@@ -41,7 +41,7 @@ export function topologicalSort<T>(graph: Map<T, Set<T>>): T[] {
 }
 
 // Returns true if a is a subset of b
-export function subset(a: Set<unknown>, b: Set<unknown>) {
+export function subset(a: ReadonlySet<unknown>, b: ReadonlySet<unknown>) {
     if (a === b) {
         return true;
     }
@@ -58,23 +58,23 @@ export function subset(a: Set<unknown>, b: Set<unknown>) {
     return true;
 }
 
-export function setEqual(a: Set<unknown>, b: Set<unknown>) {
+export function setEqual(a: ReadonlySet<unknown>, b: ReadonlySet<unknown>) {
     return a === b || a.size === b.size && subset(a, b) && subset(b, a);
 }
 
-export function filterSet<T>(a: Set<T>, f: (x: T) => boolean): Set<T> {
+export function filterSet<T>(a: ReadonlySet<T>, f: (x: T) => boolean): Set<T> {
     return new Set([...a].filter(f));
 }
 
 // All elements of a that are not in b
-export function setDifference<T>(a: Set<T>, b: Set<T>): Set<T> {
+export function setDifference<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): Set<T> {
     return filterSet(a, function(x) {
         return !b.has(x);
     });
 }
 
 // All elements of a that are also in b
-export function setIntersection<T>(a: Set<T>, b: Set<T>): Set<T> {
+export function setIntersection<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): Set<T> {
     return filterSet(a, function(x) {
         return b.has(x);
     });
