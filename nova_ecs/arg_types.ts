@@ -1,8 +1,9 @@
 import { Draft } from "immer";
 import { Component, ComponentData } from "./component";
+import { EntityHandle } from "./entity_map";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
-import { CommandsInterface, EntityHandle } from "./world";
+import { CommandsInterface } from "./world";
 
 export const Commands = Symbol();
 export type CommandsObject<T> = T extends typeof Commands ? CommandsInterface : never;

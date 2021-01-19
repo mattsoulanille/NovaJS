@@ -3,8 +3,9 @@ import { v4 } from "uuid";
 import { ArgData, ArgTypes, Commands, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
-import { ComponentMap, ComponentMapHandle, ReadonlyComponentMap } from "./component_map";
-import { Entity } from "./entity";
+import { ComponentMap, ComponentMapHandle } from "./component_map";
+import { Entity, EntityClass } from "./entity";
+import { EntityHandle, EntityMapHandle, EntityWithUuid } from "./entity_map";
 import { Plugin } from './plugin';
 import { Query } from "./query";
 import { Resource, ResourceData, UnknownResource } from "./resource";
@@ -52,8 +53,8 @@ import { topologicalSort } from './utils';
 enablePatches();
 
 export interface CommandsInterface {
-    addEntity: (entity: Entity) => EntityHandle;
-    removeEntity: (entity: string | EntityHandle) => Entity | undefined;
+    addEntity: (entity: EntityClass) => EntityWithUuid;
+    removeEntity: (entity: string | EntityWithUuid) => EntityWithUuid | undefined;
     components: ReadonlyMap<string /* name */, UnknownComponent>;
 }
 
@@ -76,16 +77,6 @@ export interface EntityState {
     multiplayer: boolean,
 }
 
-export interface EntityHandle {
-    uuid: string;
-    components: ComponentMapHandle;
-}
-
-export interface ReadonlyEntityHandle {
-    uuid: string;
-    components: ReadonlyComponentMap;
-}
-
 interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
     get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
 }
@@ -101,15 +92,25 @@ export class World {
     private mutableResources = new Map<UnknownResource,
         unknown /* resource data */>();
 
-    // TODO: Probably refactor so you can add / remove entities with this
-    get entities() {
-        return new Map([...this.state.entities.keys()]
-            .map(uuid => {
-                const handle = this.makeEntityHandle(uuid, true,
-                    this.callWithNewDraft.bind(this));
-                return [uuid, handle]
-            }));
-    }
+    readonly entities = new EntityMapHandle(
+        this.callWithNewDraft.bind(this),
+        this.addComponent.bind(this),
+        (entity: Immutable<EntityState>) => {
+            World.recomputeEntities({
+                systems: this.systems,
+                queries: this.queries,
+                entities: [entity]
+            });
+        },
+        (removedEntity: Immutable<EntityState>) => {
+            World.recomputeEntities({
+                systems: this.systems,
+                queries: this.queries,
+                removedEntities: [removedEntity],
+            });
+        }, true);
+
+
 
     get resources() {
         return new Map([
@@ -125,11 +126,16 @@ export class World {
 
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
     private queries = new Map<Query, Set<string /* entity uuid */>>();
-
-    singletonEntity = this.addEntity(new Entity());
+    singletonEntity: EntityWithUuid;
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
+        this.entities.set('singleton', {
+            components: new Map(),
+            multiplayer: false,
+            name: 'singleton'
+        });
+        this.singletonEntity = this.entities.get('singleton')!;
     }
 
     addPlugin(plugin: Plugin) {
@@ -154,33 +160,40 @@ export class World {
     }
 
     addEntity(entity: Entity): EntityHandle {
-        return this.addEntityToDraft(entity, true,
-            this.callWithNewDraft.bind(this));
-    }
-
-    private addEntityToDraft(entity: Entity, freeze: boolean,
-        callWithDraft: CallWithDraft): EntityHandle {
         const uuid = entity.uuid ?? v4();
-        for (const [component] of entity.components) {
-            this.addComponent(component);
-        }
-
-        const entityState: EntityState = {
-            components: entity.components,
-            multiplayer: entity.multiplayer,
+        this.entities.set(uuid, entity);
+        const added = this.entities.get(uuid)!;
+        return {
             uuid,
-            name: entity.name
-        };
-        callWithDraft(draft => {
-            draft.entities.set(uuid, entityState);
-        });
-
-        World.recomputeEntities({
-            systems: this.systems, queries: this.queries, entities: [entityState]
-        });
-
-        return this.makeEntityHandle(uuid, freeze, callWithDraft);
+            components: added.components
+        }
+        // return this.addEntityToDraft(entity, true,
+        //     this.callWithNewDraft.bind(this));
     }
+
+    // private addEntityToDraft(entity: EntityClass, freeze: boolean,
+    //     callWithDraft: CallWithDraft): EntityHandle {
+    //     const uuid = entity.uuid ?? v4();
+    //     for (const [component] of entity.components) {
+    //         this.addComponent(component);
+    //     }
+
+    //     const entityState: EntityState = {
+    //         components: entity.components,
+    //         multiplayer: entity.multiplayer,
+    //         uuid,
+    //         name: entity.name
+    //     };
+    //     callWithDraft(draft => {
+    //         draft.entities.set(uuid, entityState);
+    //     });
+
+    //     World.recomputeEntities({
+    //         systems: this.systems, queries: this.queries, entities: [entityState]
+    //     });
+
+    //     return this.makeEntityHandle(uuid, freeze, callWithDraft);
+    // }
 
     private makeEntityHandle(uuid: string, freeze: boolean,
         callWithDraft: CallWithDraft): EntityHandle {
@@ -236,42 +249,61 @@ export class World {
         }
     }
 
-    removeEntity(entityOrUuid: string | EntityHandle): Entity | undefined {
-        return this.removeEntityFromDraft(entityOrUuid,
-            this.callWithNewDraft.bind(this));
-    }
-
-    private removeEntityFromDraft(entityOrUuid: string | EntityHandle,
-        callWithDraft: CallWithDraft): Entity | undefined {
+    removeEntity(entityOrUuid: string | EntityWithUuid): Entity | undefined {
         const uuid = typeof entityOrUuid === 'string'
             ? entityOrUuid
             : entityOrUuid.uuid;
 
-        if (uuid === this.singletonEntity.uuid) {
-            throw new Error('Cannot remove the singleton entity');
-        }
-
-        const entityState = this.state.entities.get(uuid);
-        if (!entityState) {
+        const toRemove = this.entities.get(uuid);
+        if (!toRemove) {
             return;
         }
 
-        World.recomputeEntities({
-            systems: this.systems,
-            queries: this.queries,
-            removedEntities: [entityState]
-        });
-
-        callWithDraft(draft => {
-            draft.entities.delete(uuid);
-        });
-
-        const removedEntity = new Entity(entityState);
-        for (const [component, data] of entityState.components) {
-            removedEntity.addComponent(component, data);
+        const entity: Entity = {
+            name: toRemove.name,
+            multiplayer: toRemove.multiplayer,
+            components: new Map([...toRemove?.components]) as ComponentMap,
+            uuid: toRemove.uuid
         }
-        return removedEntity;
+
+        this.entities.delete(uuid);
+        return entity;
+
+        // return this.removeEntityFromDraft(entityOrUuid,
+        //     this.callWithNewDraft.bind(this));
     }
+
+    // private removeEntityFromDraft(entityOrUuid: string | WithUuid,
+    //     callWithDraft: CallWithDraft): EntityClass | undefined {
+    //     const uuid = typeof entityOrUuid === 'string'
+    //         ? entityOrUuid
+    //         : entityOrUuid.uuid;
+
+    //     if (uuid === this.singletonEntity.uuid) {
+    //         throw new Error('Cannot remove the singleton entity');
+    //     }
+
+    //     const entityState = this.state.entities.get(uuid);
+    //     if (!entityState) {
+    //         return;
+    //     }
+
+    //     World.recomputeEntities({
+    //         systems: this.systems,
+    //         queries: this.queries,
+    //         removedEntities: [entityState]
+    //     });
+
+    //     callWithDraft(draft => {
+    //         draft.entities.delete(uuid);
+    //     });
+
+    //     const removedEntity = new EntityClass(entityState);
+    //     for (const [component, data] of entityState.components) {
+    //         removedEntity.addComponent(component, data);
+    //     }
+    //     return removedEntity;
+    // }
 
     addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
         if (resource.mutable) {
@@ -432,16 +464,44 @@ export class World {
     }
 
     private makeCommands(draft: Draft<State>): CommandsInterface {
-        return {
-            addEntity: (entity) => {
-                return this.addEntityToDraft(entity, false, (callback) => {
-                    return callback(draft);
+        const entities = new EntityMapHandle(
+            callback => callback(draft),
+            this.addComponent.bind(this),
+            (entity: Immutable<EntityState>) => {
+                World.recomputeEntities({
+                    systems: this.systems,
+                    queries: this.queries,
+                    entities: [entity]
                 });
             },
-            removeEntity: (entityOrUuid) => {
-                return this.removeEntityFromDraft(entityOrUuid, (callback) => {
-                    return callback(draft);
+            (removedEntity: Immutable<EntityState>) => {
+                World.recomputeEntities({
+                    systems: this.systems,
+                    queries: this.queries,
+                    removedEntities: [removedEntity],
                 });
+            }, false);
+
+        return {
+            addEntity: (entity) => {
+                const uuid = entity.uuid ?? v4();
+                entities.set(uuid, entity);
+                const added = entities.get(uuid)!;
+                return {
+                    uuid,
+                    components: added.components,
+                    multiplayer: entity.multiplayer,
+                    name: entity.name
+                }
+            },
+            removeEntity: (entityOrUuid) => {
+                const uuid = typeof entityOrUuid === 'string'
+                    ? entityOrUuid
+                    : entityOrUuid.uuid;
+
+                const toRemove = entities.get(uuid);
+                entities.delete(uuid);
+                return toRemove;
             },
             components: this.nameComponentMap
         }

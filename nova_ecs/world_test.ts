@@ -5,7 +5,7 @@ import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { Commands, GetEntity, Optional, UUID } from './arg_types';
 import { Component } from './component';
-import { Entity } from './entity';
+import { EntityClass } from './entity';
 import { Plugin } from './plugin';
 import { Query } from './query';
 import { Resource } from './resource';
@@ -83,7 +83,7 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' })
         );
@@ -103,7 +103,7 @@ describe('world', () => {
             }
         });
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' })
         );
@@ -126,7 +126,7 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -151,9 +151,9 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.addEntity(new Entity({ uuid: 'example uuid' })
+        world.addEntity(new EntityClass({ uuid: 'example uuid' })
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
@@ -176,7 +176,7 @@ describe('world', () => {
 
         world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         world.step();
@@ -197,7 +197,7 @@ describe('world', () => {
 
         world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
-        world.addEntity(new Entity({ uuid: 'entityUuid' })
+        world.addEntity(new EntityClass({ uuid: 'entityUuid' })
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         world.step();
@@ -255,7 +255,7 @@ describe('world', () => {
             systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
         }
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'unset' }));
 
         world.step();
@@ -312,7 +312,7 @@ describe('world', () => {
             systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
         }
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'unset' }));
 
         world.step();
@@ -341,7 +341,7 @@ describe('world', () => {
             after: new Set([firstSystem]),
         });
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'original value' }));
 
         world.addSystem(firstSystem)
@@ -365,11 +365,11 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'FooBar' }));
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 456 }));
 
         world.step();
@@ -394,9 +394,9 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 123 }));
-        world.addEntity(new Entity({ uuid: 'example uuid' })
+        world.addEntity(new EntityClass({ uuid: 'example uuid' })
             .addComponent(FOO_COMPONENT, { x: 456 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
@@ -418,7 +418,7 @@ describe('world', () => {
         const plugin: Plugin = {
             name: 'Test Plugin',
             build: (world) => {
-                world.addEntity(new Entity()
+                world.addEntity(new EntityClass()
                     .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
                 world.addSystem(new System({
                     name: 'TestSystem',
@@ -461,7 +461,7 @@ describe('world', () => {
         world.addSystem(fooBarSystem);
         world.addSystem(barSystem);
 
-        const entity = world.addEntity(new Entity());
+        const entity = world.addEntity(new EntityClass());
         world.step();
         entity.components.set(BAR_COMPONENT, { y: 'added bar' });
         world.step();
@@ -488,16 +488,16 @@ describe('world', () => {
             }
         });
 
-        const e1 = world.addEntity(new Entity()
+        const e1 = world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'e1' })
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'e2' })
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.addSystem(testSystem);
         world.step();
-        const entityBlueprint = world.removeEntity(e1);
+        const entityBlueprint = world.removeEntity(e1.uuid);
         expect(entityBlueprint).toBeDefined();
         world.step();
         world.addEntity(entityBlueprint!);
@@ -516,7 +516,7 @@ describe('world', () => {
     });
 
     it('entity handles stop working when the entity is removed', () => {
-        const handle1 = world.addEntity(new Entity({ uuid: 'entity uuid' })
+        const handle1 = world.addEntity(new EntityClass({ uuid: 'entity uuid' })
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         let addMessage: string | undefined;
@@ -525,7 +525,7 @@ describe('world', () => {
             name: 'GetHandle',
             args: [GetEntity, Commands, FOO_COMPONENT] as const,
             step: (entity, commands) => {
-                commands.removeEntity(entity);
+                commands.removeEntity(entity.uuid);
                 try {
                     entity.components.set(FOO_COMPONENT, { x: 123 });
                 } catch (e) {
@@ -573,8 +573,8 @@ describe('world', () => {
     });
 
     it('does not permit the singleton entity to be removed', () => {
-        expect(() => world.removeEntity(world.singletonEntity))
-            .toThrowError('Cannot remove the singleton entity');
+        expect(() => world.removeEntity(world.singletonEntity.uuid))
+            .toThrowError('Can not delete the singleton entity');
     });
 
     it('does not allow systems to have the same name', () => {
@@ -656,7 +656,7 @@ describe('world', () => {
             applyDelta: () => { },
         });
 
-        const handle = world.addEntity(new Entity()
+        const handle = world.addEntity(new EntityClass()
             .addComponent(component1, 'foobar'));
 
         expect(() => handle.components.set(component2, 'foobar'))
@@ -673,10 +673,10 @@ describe('world', () => {
             }
         });
 
-        const e1 = world.addEntity(new Entity()
+        const e1 = world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
-        const e2 = world.addEntity(new Entity()
+        const e2 = world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 7 })
         );
 
@@ -700,7 +700,7 @@ describe('world', () => {
             }
         });
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 7 })
             .addComponent(BAR_COMPONENT, { y: 'bar component data' })
         );
@@ -734,7 +734,7 @@ describe('world', () => {
             after: [addBarSystem]
         });
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 7 })
         );
 
@@ -751,7 +751,7 @@ describe('world', () => {
             name: 'AddEntity',
             args: [Commands, BAR_COMPONENT] as const,
             step: (commands) => {
-                commands.addEntity(new Entity()
+                commands.addEntity(new EntityClass()
                     .addComponent(FOO_COMPONENT, { x: 123 }));
             }
         });
@@ -770,7 +770,7 @@ describe('world', () => {
             after: [addEntitySystem]
         });
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'not the right bar' })
         );
 
@@ -801,7 +801,7 @@ describe('world', () => {
             after: new Set([fooSystem])
         });
 
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
 
@@ -824,10 +824,10 @@ describe('world', () => {
             }
         });
 
-        const e1 = world.addEntity(new Entity()
+        const e1 = world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
-        const e2 = world.addEntity(new Entity()
+        const e2 = world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'hello' })
         );
 
@@ -846,7 +846,7 @@ describe('world', () => {
             }
         });
 
-        const handle = world.addEntity(new Entity()
+        const handle = world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
 
         world.addSystem(testSystem);

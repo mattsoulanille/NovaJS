@@ -2,7 +2,7 @@ import 'jasmine';
 import { Commands, UUID } from './arg_types';
 import { AsyncSystem, AsyncSystemData } from './async_system';
 import { Component } from './component';
-import { Entity } from './entity';
+import { EntityClass } from './entity';
 import { System } from './system';
 import { World } from './world';
 
@@ -45,7 +45,7 @@ describe('async system', () => {
             }
         });
 
-        const handle = world.addEntity(new Entity()
+        const handle = world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
 
         world.addSystem(asyncSystem);
@@ -77,7 +77,7 @@ describe('async system', () => {
             after: [asyncSystem],
         });
 
-        const toRemove = world.addEntity(new Entity()
+        const toRemove = world.addEntity(new EntityClass()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
 
         world.addSystem(asyncSystem);
@@ -102,7 +102,7 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.addEntity(new Entity()
+        world.addEntity(new EntityClass()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -122,15 +122,16 @@ describe('async system', () => {
     // it('passes an async version of commands', async () => {
     //     const addEntitySystem = new AsyncSystem({
     //         name: 'AddEntity',
-    //         args: [Commands, BAR_COMPONENT] as const,
-    //         step: async (commands) => {
+    //         args: [Commands, UUID, BAR_COMPONENT] as const,
+    //         step: async (commands, uuid) => {
     //             await sleep(10);
-    //             commands.addEntity(new Entity()
+    //             commands.addEntity(new Entity({ uuid: 'test uuid' })
     //                 .addComponent(FOO_COMPONENT, { x: 123 }));
+    //             commands.removeEntity(uuid);
     //         }
     //     });
 
-    //     world.addEntity(new Entity()
+    //     world.addEntity(new Entity({ uuid: 'remove me' })
     //         .addComponent(BAR_COMPONENT, { y: 'bar' })
     //     );
 
@@ -139,5 +140,8 @@ describe('async system', () => {
     //     world.step();
     //     clock.tick(11);
     //     await world.resources.get(AsyncSystemData)?.done;
+    //     expect(world.entities.get('test uuid')?.components
+    //         .get(FOO_COMPONENT)?.x).toEqual(123);
+    //     expect(world.entities.get('remove me')).toBeUndefined();
     // });
 });

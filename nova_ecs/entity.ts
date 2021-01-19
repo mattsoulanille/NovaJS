@@ -9,8 +9,15 @@ interface EntityArgs {
 
 export type ComponentTypes = Set<UnknownComponent>;
 
+export interface Entity {
+    components: ComponentMap,
+    multiplayer: boolean;
+    uuid?: string;
+    name?: string;
+}
+
 // This is a handle for the entity that the world creates.
-export class Entity {
+export class EntityClass {
     components: ComponentMap = new Map();
     multiplayer: boolean;
     uuid?: string;

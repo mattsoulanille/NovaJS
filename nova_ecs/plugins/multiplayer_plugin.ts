@@ -4,12 +4,13 @@ import * as t from 'io-ts';
 import { Commands, GetEntity } from '../arg_types';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
-import { Entity } from '../entity';
+import { EntityClass } from '../entity';
+import { EntityHandle } from '../entity_map';
 import { Plugin } from '../plugin';
 import { Query } from '../query';
 import { System } from '../system';
 import { setDifference } from '../utils';
-import { EntityHandle, World } from '../world';
+import { World } from '../world';
 
 
 export interface Communicator {
@@ -146,7 +147,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                         continue;
                     }
 
-                    const entity = new Entity({ uuid });
+                    const entity = new EntityClass({ uuid });
                     for (const [componentName, maybeState] of Object.entries(entityState.state)) {
                         const component = commands.components.get(componentName);
                         if (!component) {

@@ -1,19 +1,10 @@
 import { applyPatches, createDraft, enablePatches, finishDraft, Patch } from "immer";
-import { ArgsToData, ArgTypes, UUID } from "./arg_types";
+import { ArgsToData, ArgTypes, Commands, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
 import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
 import { currentIfDraft, DefaultMap } from "./utils";
-
-// TODO: This doesn't work because you can't asynchronously edit a draft if it's expected to be synchronously edited. AsyncSystemData is passed in a draft in step()
-
-// This approach is good though because it causes changes that a system would make
-// to happen at the time the changes are expected based on where the system appears
-// in the DAG. This is useful for systems that add entities, since those new entities
-// will get picked up by the multiplayer change reporter.
-
-// An option would be to make resources an escape hatch out of immer, i.e. make resources
-// not be drafted. This isn't really what I want to do, though. 
+import { CommandsInterface } from "./world";
 
 export const AsyncSystemData = new Resource<{
     systems: DefaultMap<string /* system name */,
@@ -61,8 +52,22 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 }
                 entityStatus.patches = [];
 
-                const currentArgs = stepArgs.map(arg => currentIfDraft(arg)) as typeof stepArgs;
-                const draftArgs = createDraft(currentArgs);
+                const currentArgs = stepArgs.map(currentIfDraft);
+
+                // const asyncCommand: CommandsInterface = {
+                //     addEntity: (entity) => {
+                //         this.
+                //     }
+                // }
+
+                const asyncArgs = currentArgs.map((arg, index) => {
+                    const argType = systemArgs.args[index];
+                    if (argType === Commands) {
+                        throw new Error('TODO: Commands not yet supported');
+                    }
+                    return arg;
+                }) as typeof stepArgs;
+                const draftArgs = createDraft(asyncArgs);
 
                 // TODO: This error handling is wrong.
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)

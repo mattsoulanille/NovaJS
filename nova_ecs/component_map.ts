@@ -9,11 +9,14 @@ export interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unkn
 export interface ComponentMap extends Map<UnknownComponent, unknown> {
     get<Data>(component: Component<Data, any, any, any>): Data | undefined;
     set<Data>(component: Component<Data, any, any, any>, data: Data): this;
+    delete(component: Component<any, any, any, any>): boolean;
 }
 
-export class ComponentMapHandle implements Map<UnknownComponent, unknown> {
+export class ComponentMapHandle implements ComponentMap {
     constructor(private entityUuid: string,
         private callWithDraft: CallWithDraft,
+        // addComponnet adds a component as something the world knows about.
+        // Doesn't add it to an entity.
         private addComponent: (component: Component<any, any, any, any>) => void,
         private entityChanged: (entity: Immutable<EntityState>) => void,
         private freeze: boolean) { }
@@ -53,7 +56,9 @@ export class ComponentMapHandle implements Map<UnknownComponent, unknown> {
         return this.callWithDraft(draft => {
             const entity = this.getEntity(draft);
             const data = entity.components.get(key as UnknownComponent) as Data;
-            // In the case of 
+            // If this is used outside of a current step of the system, we need to
+            // freeze the component's data so it isn't a proxy (which gets revoked
+            // once callWithDraft is done.
             if (this.freeze && isDraft(data)) {
                 return current(data);
             } else {
