@@ -3,15 +3,7 @@ import { v4 } from "uuid";
 import { Component } from "./component";
 import { ComponentMap, ComponentMapHandle } from "./component_map";
 import { Entity } from "./entity";
-import { CallWithDraft, EntityState } from "./world";
-
-
-export interface EntityHandle {
-    uuid: string;
-    components: ComponentMap;
-}
-
-export type EntityWithUuid = Entity & { uuid: string };
+import { CallWithDraft } from "./world";
 
 export interface EntityMap extends Map<string, Entity> { }
 
@@ -20,8 +12,8 @@ export class EntityMapHandle implements EntityMap {
         // addComponnet adds a component as something the world knows about.
         // Doesn't add it to an entity.
         private addComponent: (component: Component<any, any, any, any>) => void,
-        private entityChanged: (entity: Immutable<EntityState>) => void,
-        private removedEntity: (entity: Immutable<EntityState>) => void,
+        private entityChanged: (entityStringPair: [string, Immutable<Entity>]) => void,
+        private removedEntity: (uuid: string) => void,
         private freeze: boolean) { }
 
     clear(): void {
@@ -30,18 +22,18 @@ export class EntityMapHandle implements EntityMap {
         });
     }
 
-    delete(key: string): boolean {
-        if (key === 'singleton') {
+    delete(uuid: string): boolean {
+        if (uuid === 'singleton') {
             throw new Error('Can not delete the singleton entity');
         }
         return this.callWithDraft(draft => {
-            const toDelete = draft.entities.get(key);
+            const toDelete = draft.entities.get(uuid);
             if (!toDelete) {
                 return false;
             }
-            const deleted = draft.entities.delete(key);
+            const deleted = draft.entities.delete(uuid);
             if (deleted) {
-                this.removedEntity(toDelete);
+                this.removedEntity(uuid);
             }
             return deleted;
         });
@@ -54,7 +46,7 @@ export class EntityMapHandle implements EntityMap {
         }
     }
 
-    get(uuid: string): EntityWithUuid | undefined {
+    get(uuid: string): Entity | undefined {
         return this.callWithDraft(draft => {
             const entity = draft.entities.get(uuid);
             if (!entity) {
@@ -62,7 +54,6 @@ export class EntityMapHandle implements EntityMap {
                 return undefined;
             }
             return {
-                uuid,
                 components: new ComponentMapHandle(uuid,
                     this.callWithDraft,
                     this.addComponent,
@@ -80,33 +71,16 @@ export class EntityMapHandle implements EntityMap {
         );
     }
 
-    add(entity: Entity) {
-        const uuid = entity.uuid ?? v4();
-        this.set(uuid, entity);
-        return this.get(uuid);
-    }
-
     set(uuid: string, entity: Entity): this {
-        if (entity.uuid && entity.uuid !== uuid) {
-            throw new Error(`Refusing to set key ${uuid} to entity with uuid ${entity.uuid}`);
-        }
-
         for (const [component] of entity.components) {
             this.addComponent(component);
         }
 
-        const entityState: EntityState = {
-            components: entity.components,
-            multiplayer: entity.multiplayer,
-            uuid,
-            name: entity.name
-        };
-
         this.callWithDraft(draft => {
-            draft.entities.set(uuid, entityState);
+            draft.entities.set(uuid, entity);
         });
 
-        this.entityChanged(entityState);
+        this.entityChanged([uuid, entity]);
         return this;
     }
 
@@ -116,11 +90,11 @@ export class EntityMapHandle implements EntityMap {
         });
     }
 
-    [Symbol.iterator](): IterableIterator<[string, EntityWithUuid]> {
+    [Symbol.iterator](): IterableIterator<[string, Entity]> {
         return this.entries();
     }
 
-    *entries(): IterableIterator<[string, EntityWithUuid]> {
+    *entries(): IterableIterator<[string, Entity]> {
         for (const key of this.keys()) {
             yield [key, this.get(key)!];
         }
@@ -132,7 +106,7 @@ export class EntityMapHandle implements EntityMap {
         });
     }
 
-    *values(): IterableIterator<EntityWithUuid> {
+    *values(): IterableIterator<Entity> {
         for (const key of this.keys()) {
             yield this.get(key)!;
         }

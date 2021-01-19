@@ -1,6 +1,7 @@
 import { current, Draft, Immutable, isDraft } from "immer";
 import { Component, UnknownComponent } from "./component";
-import { CallWithDraft, EntityState, State } from "./world";
+import { Entity } from "./entity";
+import { CallWithDraft, State } from "./world";
 
 export interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unknown> {
     get<Data>(component: Component<Data, any, any, any>): Data | undefined;
@@ -18,7 +19,7 @@ export class ComponentMapHandle implements ComponentMap {
         // addComponnet adds a component as something the world knows about.
         // Doesn't add it to an entity.
         private addComponent: (component: Component<any, any, any, any>) => void,
-        private entityChanged: (entity: Immutable<EntityState>) => void,
+        private entityChanged: (entityStringPair: [string, Immutable<Entity>]) => void,
         private freeze: boolean) { }
 
     private getEntity(draft: Draft<State>) {
@@ -40,7 +41,7 @@ export class ComponentMapHandle implements ComponentMap {
         return this.callWithDraft(draft => {
             const entity = this.getEntity(draft);
             const result = entity.components.delete(key);
-            this.entityChanged(entity);
+            this.entityChanged([this.entityUuid, entity]);
             return result;
         });
     }
@@ -79,7 +80,7 @@ export class ComponentMapHandle implements ComponentMap {
             const entity = this.getEntity(draft);
             this.addComponent(component);
             entity.components.set(component as UnknownComponent, data);
-            this.entityChanged(entity);
+            this.entityChanged([this.entityUuid, entity]);
             return this;
         });
     }

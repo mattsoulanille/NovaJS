@@ -1,6 +1,6 @@
 import { Draft } from "immer";
 import { Component, ComponentData } from "./component";
-import { EntityHandle } from "./entity_map";
+import { Entity } from "./entity";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
 import { CommandsInterface } from "./world";
@@ -12,7 +12,7 @@ export const UUID = Symbol();
 export type UUIDData<T> = T extends typeof UUID ? string : never;
 
 export const GetEntity = Symbol();
-export type GetEntityObject<T> = T extends typeof GetEntity ? EntityHandle : never;
+export type GetEntityObject<T> = T extends typeof GetEntity ? Entity : never;
 
 export class OptionalClass<V extends Optionable> {
     constructor(readonly value: V) { };

@@ -43,6 +43,7 @@ ts_library(
         "@npm//io-ts",
         "@npm//rxjs",
         "@npm//immer",
+        "@npm//@types/uuid",
     ]
 )
 

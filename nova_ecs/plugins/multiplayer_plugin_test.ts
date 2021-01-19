@@ -3,7 +3,7 @@ import * as t from 'io-ts';
 import 'jasmine';
 import { UUID } from '../arg_types';
 import { Component } from '../component';
-import { EntityClass } from '../entity';
+import { EntityBuilder } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
 import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
@@ -107,13 +107,13 @@ describe('Multiplayer Plugin', () => {
         });
         world2.addSystem(reportSystem);
 
-        world1.addEntity(new EntityClass({ uuid: 'test entity uuid' })
+        world1.entities.set('test entity uuid', new EntityBuilder()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             })
             .addComponent(BarComponent, {
                 y: 'a test component',
-            }));
+            }).build());
 
         world1.step();
         world2.step();
@@ -146,13 +146,13 @@ describe('Multiplayer Plugin', () => {
         });
         world2.addSystem(reportSystem);
 
-        world1.addEntity(new EntityClass({ uuid: 'test entity uuid' })
+        world1.entities.set('test entity uuid', new EntityBuilder()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             })
             .addComponent(BarComponent, {
                 y: 'a test component',
-            }));
+            }).build());
 
         world1.step();
         world2.step();

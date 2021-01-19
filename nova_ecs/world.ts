@@ -1,11 +1,9 @@
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { v4 } from "uuid";
 import { ArgData, ArgTypes, Commands, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
-import { ComponentMap, ComponentMapHandle } from "./component_map";
-import { Entity, EntityClass } from "./entity";
-import { EntityHandle, EntityMapHandle, EntityWithUuid } from "./entity_map";
+import { Entity } from "./entity";
+import { EntityMap, EntityMapHandle } from "./entity_map";
 import { Plugin } from './plugin';
 import { Query } from "./query";
 import { Resource, ResourceData, UnknownResource } from "./resource";
@@ -53,8 +51,7 @@ import { topologicalSort } from './utils';
 enablePatches();
 
 export interface CommandsInterface {
-    addEntity: (entity: EntityClass) => EntityWithUuid;
-    removeEntity: (entity: string | EntityWithUuid) => EntityWithUuid | undefined;
+    entities: EntityMap;
     components: ReadonlyMap<string /* name */, UnknownComponent>;
 }
 
@@ -64,18 +61,11 @@ interface WrappedSystem {
 }
 
 export interface State {
-    entities: Map<string, EntityState>;
+    entities: EntityMap;
     resources: Map<UnknownResource, unknown>;
 }
 
 export type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
-
-export interface EntityState {
-    components: ComponentMap,
-    uuid: string,
-    name?: string,
-    multiplayer: boolean,
-}
 
 interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
     get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
@@ -85,8 +75,8 @@ enableMapSet();
 
 export class World {
     private state: Immutable<State> = {
-        entities: new Map<string /* UUID */, EntityState>(),
-        resources: new Map<UnknownResource, unknown /* resource data */>(),
+        entities: new Map(),
+        resources: new Map(),
     };
 
     private mutableResources = new Map<UnknownResource,
@@ -95,14 +85,14 @@ export class World {
     readonly entities = new EntityMapHandle(
         this.callWithNewDraft.bind(this),
         this.addComponent.bind(this),
-        (entity: Immutable<EntityState>) => {
+        ([uuid, entity]: [string, Immutable<Entity>]) => {
             World.recomputeEntities({
                 systems: this.systems,
                 queries: this.queries,
-                entities: [entity]
+                entities: [[uuid, entity]]
             });
         },
-        (removedEntity: Immutable<EntityState>) => {
+        (removedEntity: string) => {
             World.recomputeEntities({
                 systems: this.systems,
                 queries: this.queries,
@@ -126,7 +116,7 @@ export class World {
 
     private systems: Array<WrappedSystem> = []; // Not a map because order matters.
     private queries = new Map<Query, Set<string /* entity uuid */>>();
-    singletonEntity: EntityWithUuid;
+    singletonEntity: Entity;
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
@@ -159,151 +149,38 @@ export class World {
         return result!;
     }
 
-    addEntity(entity: Entity): EntityHandle {
-        const uuid = entity.uuid ?? v4();
-        this.entities.set(uuid, entity);
-        const added = this.entities.get(uuid)!;
-        return {
-            uuid,
-            components: added.components
-        }
-        // return this.addEntityToDraft(entity, true,
-        //     this.callWithNewDraft.bind(this));
-    }
-
-    // private addEntityToDraft(entity: EntityClass, freeze: boolean,
-    //     callWithDraft: CallWithDraft): EntityHandle {
-    //     const uuid = entity.uuid ?? v4();
-    //     for (const [component] of entity.components) {
-    //         this.addComponent(component);
-    //     }
-
-    //     const entityState: EntityState = {
-    //         components: entity.components,
-    //         multiplayer: entity.multiplayer,
-    //         uuid,
-    //         name: entity.name
-    //     };
-    //     callWithDraft(draft => {
-    //         draft.entities.set(uuid, entityState);
-    //     });
-
-    //     World.recomputeEntities({
-    //         systems: this.systems, queries: this.queries, entities: [entityState]
-    //     });
-
-    //     return this.makeEntityHandle(uuid, freeze, callWithDraft);
-    // }
-
-    private makeEntityHandle(uuid: string, freeze: boolean,
-        callWithDraft: CallWithDraft): EntityHandle {
-
-        const componentsMapHandle = new ComponentMapHandle(uuid,
-            callWithDraft, this.addComponent.bind(this),
-            (entity: Immutable<EntityState>) => {
-                World.recomputeEntities({
-                    systems: this.systems,
-                    queries: this.queries,
-                    entities: [entity]
-                });
-            },
-            freeze
-        );
-
-        return {
-            uuid,
-            components: componentsMapHandle
-        }
-    }
-
     static recomputeEntities({ systems, queries, entities, removedEntities }: {
         systems: Iterable<WrappedSystem>,
         queries: Iterable<[Query, Set<string>]>,
-        entities?: Iterable<Immutable<EntityState>>,
-        removedEntities?: Iterable<Immutable<EntityState>>,
+        entities?: Iterable<[string, Immutable<Entity>]>,
+        removedEntities?: Iterable<string>,
     }) {
-        for (const entity of entities ?? []) {
+        for (const [uuid, entity] of entities ?? []) {
             for (const { system, entities } of systems) {
                 if (system.supportsEntity(entity)) {
-                    entities.add(entity.uuid);
+                    entities.add(uuid);
                 } else {
-                    entities.delete(entity.uuid);
+                    entities.delete(uuid);
                 }
             }
             for (const [query, entities] of queries) {
                 if (query.supportsEntity(entity)) {
-                    entities.add(entity.uuid);
+                    entities.add(uuid);
                 } else {
-                    entities.delete(entity.uuid);
+                    entities.delete(uuid);
                 }
             }
         }
 
-        for (const entity of removedEntities ?? []) {
+        for (const uuid of removedEntities ?? []) {
             for (const { entities } of systems) {
-                entities.delete(entity.uuid);
+                entities.delete(uuid);
             }
             for (const [, entities] of queries) {
-                entities.delete(entity.uuid);
+                entities.delete(uuid);
             }
         }
     }
-
-    removeEntity(entityOrUuid: string | EntityWithUuid): Entity | undefined {
-        const uuid = typeof entityOrUuid === 'string'
-            ? entityOrUuid
-            : entityOrUuid.uuid;
-
-        const toRemove = this.entities.get(uuid);
-        if (!toRemove) {
-            return;
-        }
-
-        const entity: Entity = {
-            name: toRemove.name,
-            multiplayer: toRemove.multiplayer,
-            components: new Map([...toRemove?.components]) as ComponentMap,
-            uuid: toRemove.uuid
-        }
-
-        this.entities.delete(uuid);
-        return entity;
-
-        // return this.removeEntityFromDraft(entityOrUuid,
-        //     this.callWithNewDraft.bind(this));
-    }
-
-    // private removeEntityFromDraft(entityOrUuid: string | WithUuid,
-    //     callWithDraft: CallWithDraft): EntityClass | undefined {
-    //     const uuid = typeof entityOrUuid === 'string'
-    //         ? entityOrUuid
-    //         : entityOrUuid.uuid;
-
-    //     if (uuid === this.singletonEntity.uuid) {
-    //         throw new Error('Cannot remove the singleton entity');
-    //     }
-
-    //     const entityState = this.state.entities.get(uuid);
-    //     if (!entityState) {
-    //         return;
-    //     }
-
-    //     World.recomputeEntities({
-    //         systems: this.systems,
-    //         queries: this.queries,
-    //         removedEntities: [entityState]
-    //     });
-
-    //     callWithDraft(draft => {
-    //         draft.entities.delete(uuid);
-    //     });
-
-    //     const removedEntity = new EntityClass(entityState);
-    //     for (const [component, data] of entityState.components) {
-    //         removedEntity.addComponent(component, data);
-    //     }
-    //     return removedEntity;
-    // }
 
     addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
         if (resource.mutable) {
@@ -352,7 +229,7 @@ export class World {
             .map(query => [query, new Set()]);
 
         World.recomputeEntities({
-            systems: [wrappedSystem], queries, entities: this.state.entities.values()
+            systems: [wrappedSystem], queries, entities: this.state.entities
         });
 
         // ---- Topologically insert the new system ----
@@ -422,7 +299,7 @@ export class World {
                     // TODO: The types here don't quite work out since
                     // getArg returns ArgData<T> | undefined.
                     const args = system.args.map(arg =>
-                        this.getArg(arg, draft, entity));
+                        this.getArg(arg, draft, entity, entityUUID));
 
                     system.step(...args);
                 }
@@ -431,7 +308,7 @@ export class World {
     }
 
     private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
-        entity: Draft<EntityState>): ArgData<T> | undefined {
+        entity: Draft<Entity>, uuid: string): ArgData<T> | undefined {
         const commands = this.makeCommands(draft);
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
@@ -450,31 +327,31 @@ export class World {
             return commands as ArgData<T>;
         } else if (arg === UUID) {
             // TODO: Don't cast to ArgData<T>?
-            return entity.uuid as ArgData<T>;
+            return uuid as ArgData<T>;
         } else if (arg instanceof OptionalClass) {
-            return this.getArg(arg.value, draft, entity);
+            return this.getArg(arg.value, draft, entity, uuid);
         } else if (arg === GetEntity) {
             // TODO: Don't cast to ArgData<T>?
-            return this.makeEntityHandle(entity.uuid, false, (callback) => {
-                return callback(draft);
-            }) as ArgData<T>;
+            return commands.entities.get(uuid) as ArgData<T>;
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
     }
 
     private makeCommands(draft: Draft<State>): CommandsInterface {
+        // This handle automatically recomputes what systems run on what
+        // entities. Could use a proxy instead perhaps.
         const entities = new EntityMapHandle(
             callback => callback(draft),
             this.addComponent.bind(this),
-            (entity: Immutable<EntityState>) => {
+            ([uuid, entity]: [string, Immutable<Entity>]) => {
                 World.recomputeEntities({
                     systems: this.systems,
                     queries: this.queries,
-                    entities: [entity]
+                    entities: [[uuid, entity]]
                 });
             },
-            (removedEntity: Immutable<EntityState>) => {
+            (removedEntity: string) => {
                 World.recomputeEntities({
                     systems: this.systems,
                     queries: this.queries,
@@ -483,26 +360,7 @@ export class World {
             }, false);
 
         return {
-            addEntity: (entity) => {
-                const uuid = entity.uuid ?? v4();
-                entities.set(uuid, entity);
-                const added = entities.get(uuid)!;
-                return {
-                    uuid,
-                    components: added.components,
-                    multiplayer: entity.multiplayer,
-                    name: entity.name
-                }
-            },
-            removeEntity: (entityOrUuid) => {
-                const uuid = typeof entityOrUuid === 'string'
-                    ? entityOrUuid
-                    : entityOrUuid.uuid;
-
-                const toRemove = entities.get(uuid);
-                entities.delete(uuid);
-                return toRemove;
-            },
+            entities,
             components: this.nameComponentMap
         }
     }
@@ -522,7 +380,7 @@ export class World {
             const entity = draft.entities.get(entityUUID)!;
 
             return query.args.map(arg =>
-                this.getArg(arg, draft, entity));
+                this.getArg(arg, draft, entity, entityUUID));
 
         }) as unknown as QueryResults<Query<C>>;
     }

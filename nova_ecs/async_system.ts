@@ -4,7 +4,6 @@ import { Plugin } from "./plugin";
 import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
 import { currentIfDraft, DefaultMap } from "./utils";
-import { CommandsInterface } from "./world";
 
 export const AsyncSystemData = new Resource<{
     systems: DefaultMap<string /* system name */,

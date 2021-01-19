@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
 import 'jasmine';
 import { Component } from './component';
-import { EntityClass } from './entity';
+import { EntityBuilder } from './entity';
 import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
@@ -76,7 +76,7 @@ describe('system', () => {
     });
 
     it('supports any entity that has all its required components', () => {
-        const entity = new EntityClass()
+        const entity = new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'foobar' });
 

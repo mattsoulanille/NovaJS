@@ -1,8 +1,9 @@
 import 'jasmine';
+import { v4 } from 'uuid';
 import { Angle } from '../datatypes/angle';
 import { Position } from '../datatypes/position';
 import { Vector, VectorLike } from '../datatypes/vector';
-import { EntityClass } from '../entity';
+import { EntityBuilder } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
 import { MovementPhysicsComponent, MovementPlugin, MovementStateComponent, MovementSystem, MovementType } from './movement_plugin';
@@ -28,7 +29,7 @@ describe('Movement Plugin', () => {
     it('updates position', () => {
         const velocity = new Vector(10, -7);
 
-        world.addEntity(new EntityClass()
+        world.entities.set(v4(), new EntityBuilder()
             .addComponent(MovementStateComponent, {
                 position: new Position(0, 0),
                 accelerating: 0,
@@ -70,7 +71,7 @@ describe('Movement Plugin', () => {
 
     it('updates velocity', () => {
         const rotation = new Angle(Math.PI / 4);
-        world.addEntity(new EntityClass()
+        world.entities.set(v4(), new EntityBuilder()
             .addComponent(MovementStateComponent, {
                 position: new Position(0, 0),
                 accelerating: 1,
@@ -111,7 +112,7 @@ describe('Movement Plugin', () => {
     });
 
     it('updates rotation', () => {
-        world.addEntity(new EntityClass()
+        world.entities.set(v4(), new EntityBuilder()
             .addComponent(MovementStateComponent, {
                 position: new Position(0, 0),
                 accelerating: 1,

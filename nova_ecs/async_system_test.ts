@@ -1,8 +1,9 @@
 import 'jasmine';
+import { v4 } from 'uuid';
 import { Commands, UUID } from './arg_types';
 import { AsyncSystem, AsyncSystemData } from './async_system';
 import { Component } from './component';
-import { EntityClass } from './entity';
+import { EntityBuilder } from './entity';
 import { System } from './system';
 import { World } from './world';
 
@@ -45,8 +46,10 @@ describe('async system', () => {
             }
         });
 
-        const handle = world.addEntity(new EntityClass()
+        const uuid = v4();
+        world.entities.set(uuid, new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
+        const handle = world.entities.get(uuid)!;
 
         world.addSystem(asyncSystem);
         world.step();
@@ -72,12 +75,13 @@ describe('async system', () => {
             name: 'RemoveBar',
             args: [UUID, Commands, BAR_COMPONENT] as const,
             step: (uuid, commands) => {
-                commands.removeEntity(uuid);
+                commands.entities.delete(uuid);
             },
             after: [asyncSystem],
         });
 
-        const toRemove = world.addEntity(new EntityClass()
+        const uuid = v4();
+        world.entities.set(uuid, new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
 
         world.addSystem(asyncSystem);
@@ -86,7 +90,7 @@ describe('async system', () => {
         clock.tick(1);
         await world.resources.get(AsyncSystemData)?.done;
         world.step();
-        expect(world.entities.has(toRemove.uuid)).toBeFalse();
+        expect(world.entities.has(uuid)).toBeFalse();
     });
 
     it('may run multiple instances at a time', async () => {
@@ -102,7 +106,7 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.addEntity(new EntityClass()
+        world.entities.set(v4(), new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -125,13 +129,13 @@ describe('async system', () => {
     //         args: [Commands, UUID, BAR_COMPONENT] as const,
     //         step: async (commands, uuid) => {
     //             await sleep(10);
-    //             commands.addEntity(new Entity({ uuid: 'test uuid' })
+    //             commands.entities.set(v4(), new Entity({ uuid: 'test uuid' })
     //                 .addComponent(FOO_COMPONENT, { x: 123 }));
     //             commands.removeEntity(uuid);
     //         }
     //     });
 
-    //     world.addEntity(new Entity({ uuid: 'remove me' })
+    //     world.entities.set(v4(), new Entity({ uuid: 'remove me' })
     //         .addComponent(BAR_COMPONENT, { y: 'bar' })
     //     );
 

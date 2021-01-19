@@ -1,32 +1,33 @@
+import { immerable } from "immer";
 import { Component, UnknownComponent } from "./component";
 import { ComponentMap } from "./component_map";
-
-interface EntityArgs {
-    multiplayer?: boolean;
-    uuid?: string;
-    name?: string;
-}
 
 export type ComponentTypes = Set<UnknownComponent>;
 
 export interface Entity {
     components: ComponentMap,
     multiplayer: boolean;
-    uuid?: string;
     name?: string;
 }
 
-// This is a handle for the entity that the world creates.
-export class EntityClass {
-    components: ComponentMap = new Map();
+export class EntityBuilder {
+    [immerable] = true;
+    components: ComponentMap;
     multiplayer: boolean;
-    uuid?: string;
     name?: string;
 
-    constructor(args?: EntityArgs) {
-        this.multiplayer = args?.multiplayer ?? true;
-        this.uuid = args?.uuid;
-        this.name = args?.name;
+    constructor(entity?: Entity) {
+        this.components = new Map([...entity?.components ?? []]) as ComponentMap;
+        this.multiplayer = entity?.multiplayer ?? false;
+        this.name = entity?.name;
+    }
+
+    build(): Entity {
+        return {
+            components: this.components,
+            multiplayer: this.multiplayer,
+            name: this.name,
+        }
     }
 
     addComponent<Data>(component: Component<Data, any, any, any>, data: Data): this {
@@ -34,12 +35,13 @@ export class EntityClass {
         return this;
     }
 
-    removeComponent(component: Component<any, any, any, any>) {
+    removeComponent(component: Component<any, any, any, any>): this {
         this.components.delete(component);
         return this;
     }
 
-    toString() {
-        return `Entity(${this.name ?? this.uuid})`;
+    setName(name: string): this {
+        this.name = name;
+        return this;
     }
 }
