@@ -1,6 +1,6 @@
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Commands, UUID } from './arg_types';
+import { Entities, UUID } from './arg_types';
 import { AsyncSystem, AsyncSystemData } from './async_system';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
@@ -73,9 +73,9 @@ describe('async system', () => {
 
         const removeBarSystem = new System({
             name: 'RemoveBar',
-            args: [UUID, Commands, BAR_COMPONENT] as const,
-            step: (uuid, commands) => {
-                commands.entities.delete(uuid);
+            args: [UUID, Entities, BAR_COMPONENT] as const,
+            step: (uuid, entities) => {
+                entities.delete(uuid);
             },
             after: [asyncSystem],
         });
@@ -123,20 +123,24 @@ describe('async system', () => {
         expect(fooValues).toEqual([1, 1, 1, 2, 2, 2]);
     });
 
-    // it('passes an async version of commands', async () => {
+    // fit('passes an async version of commands', async () => {
     //     const addEntitySystem = new AsyncSystem({
     //         name: 'AddEntity',
     //         args: [Commands, UUID, BAR_COMPONENT] as const,
     //         step: async (commands, uuid) => {
+    //             // console.log(commands);
+    //             // console.log(current(commands));
+    //             // console.log(current(commands.entities));
     //             await sleep(10);
-    //             commands.entities.set(v4(), new Entity({ uuid: 'test uuid' })
-    //                 .addComponent(FOO_COMPONENT, { x: 123 }));
-    //             commands.removeEntity(uuid);
+    //             commands.entities.set('test uuid', new EntityBuilder()
+    //                 .addComponent(FOO_COMPONENT, { x: 123 }).build());
+    //             commands.entities.delete(uuid);
     //         }
     //     });
 
-    //     world.entities.set(v4(), new Entity({ uuid: 'remove me' })
+    //     world.entities.set('remove me', new EntityBuilder()
     //         .addComponent(BAR_COMPONENT, { y: 'bar' })
+    //         .build()
     //     );
 
     //     world.addSystem(addEntitySystem);

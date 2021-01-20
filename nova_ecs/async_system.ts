@@ -1,5 +1,5 @@
 import { applyPatches, createDraft, enablePatches, finishDraft, Patch } from "immer";
-import { ArgsToData, ArgTypes, Commands, UUID } from "./arg_types";
+import { ArgsToData, ArgTypes, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
 import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
@@ -59,14 +59,11 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 //     }
                 // }
 
-                const asyncArgs = currentArgs.map((arg, index) => {
-                    const argType = systemArgs.args[index];
-                    if (argType === Commands) {
-                        throw new Error('TODO: Commands not yet supported');
-                    }
-                    return arg;
-                }) as typeof stepArgs;
-                const draftArgs = createDraft(asyncArgs);
+                // const asyncArgs = currentArgs.map((arg, index) => {
+                //     //const argType = systemArgs.args[index];
+                //     return arg;
+                // }) as typeof stepArgs;
+                const draftArgs = createDraft(currentArgs);
 
                 // TODO: This error handling is wrong.
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)

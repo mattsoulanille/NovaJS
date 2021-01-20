@@ -4,7 +4,7 @@ import 'jasmine';
 import { ReplaySubject } from 'rxjs';
 import { take, toArray } from 'rxjs/operators';
 import { v4 } from 'uuid';
-import { Commands, GetEntity, Optional, UUID } from './arg_types';
+import { Entities, GetEntity, Optional, UUID } from './arg_types';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
 import { Plugin } from './plugin';
@@ -528,9 +528,9 @@ describe('world', () => {
         let removeMessage: string | undefined;
         const getHandleSystem = new System({
             name: 'GetHandle',
-            args: [GetEntity, Commands, UUID, FOO_COMPONENT] as const,
-            step: (entity, commands, uuid) => {
-                commands.entities.delete(uuid);
+            args: [GetEntity, Entities, UUID, FOO_COMPONENT] as const,
+            step: (entity, entities, uuid) => {
+                entities.delete(uuid);
                 try {
                     entity.components.set(FOO_COMPONENT, { x: 123 });
                 } catch (e) {
@@ -756,9 +756,9 @@ describe('world', () => {
         const barData: string[] = [];
         const addEntitySystem = new System({
             name: 'AddEntity',
-            args: [Commands, BAR_COMPONENT] as const,
-            step: (commands) => {
-                commands.entities.set(v4(), new EntityBuilder()
+            args: [Entities, BAR_COMPONENT] as const,
+            step: (entities) => {
+                entities.set(v4(), new EntityBuilder()
                     .addComponent(FOO_COMPONENT, { x: 123 }));
             }
         });

@@ -1,5 +1,5 @@
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { ArgData, ArgTypes, Commands, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Components, Entities, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -49,11 +49,6 @@ import { topologicalSort } from './utils';
 // available?
 
 enablePatches();
-
-export interface CommandsInterface {
-    entities: EntityMap;
-    components: ReadonlyMap<string /* name */, UnknownComponent>;
-}
 
 interface WrappedSystem {
     system: System;
@@ -309,7 +304,8 @@ export class World {
 
     private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
         entity: Draft<Entity>, uuid: string): ArgData<T> | undefined {
-        const commands = this.makeCommands(draft);
+        //console.log(current(draft));
+        const entities = this.makeEntities(draft);
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
                 return draft.resources.get(arg) as ResourceData<T> | undefined;
@@ -322,9 +318,12 @@ export class World {
             return entity.components.get(arg) as ComponentData<T> | undefined;
         } else if (arg instanceof Query) {
             return this.fulfillQuery(arg, draft) as QueryResults<T>;
-        } else if (arg === Commands) {
+        } else if (arg === Entities) {
             // TODO: Don't cast to ArgData<T>?
-            return commands as ArgData<T>;
+            return entities as ArgData<T>;
+        } else if (arg === Components) {
+            // TODO: Don't cast to ArgData<T>?
+            return this.nameComponentMap as ArgData<T>;
         } else if (arg === UUID) {
             // TODO: Don't cast to ArgData<T>?
             return uuid as ArgData<T>;
@@ -332,16 +331,18 @@ export class World {
             return this.getArg(arg.value, draft, entity, uuid);
         } else if (arg === GetEntity) {
             // TODO: Don't cast to ArgData<T>?
-            return commands.entities.get(uuid) as ArgData<T>;
+            return entities.get(uuid) as ArgData<T>;
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
     }
 
-    private makeCommands(draft: Draft<State>): CommandsInterface {
+    private makeEntities(draft: Draft<State>): EntityMap {
         // This handle automatically recomputes what systems run on what
         // entities. Could use a proxy instead perhaps.
-        const entities = new EntityMapHandle(
+        //const entities = draft.entities as EntityMap;
+        //console.log(current(entities));
+        return new EntityMapHandle(
             callback => callback(draft),
             this.addComponent.bind(this),
             ([uuid, entity]: [string, Immutable<Entity>]) => {
@@ -358,11 +359,6 @@ export class World {
                     removedEntities: [removedEntity],
                 });
             }, false);
-
-        return {
-            entities,
-            components: this.nameComponentMap
-        }
     }
 
     private fulfillQuery<C extends readonly QueryArgTypes[]>(

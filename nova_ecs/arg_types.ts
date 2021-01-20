@@ -1,12 +1,16 @@
 import { Draft } from "immer";
-import { Component, ComponentData } from "./component";
+import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
+import { EntityMap } from "./entity_map";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
-import { CommandsInterface } from "./world";
 
-export const Commands = Symbol();
-export type CommandsObject<T> = T extends typeof Commands ? CommandsInterface : never;
+export const Entities = Symbol();
+export type EntitiesObject<T> = T extends typeof Entities ? EntityMap : never;
+
+export const Components = Symbol();
+export type ComponentsObject<T> = T extends typeof Components
+    ? ReadonlyMap<string, UnknownComponent> : never;
 
 export const UUID = Symbol();
 export type UUIDData<T> = T extends typeof UUID ? string : never;
@@ -29,7 +33,8 @@ export function Optional<V extends Optionable>(value: V) {
 type ValueType = Component<any, any, any, any>
     | Query
     | Resource<any, any, any, any>
-    | typeof Commands
+    | typeof Entities
+    | typeof Components
     | typeof UUID
     | typeof GetEntity;
 
@@ -43,7 +48,8 @@ export type QueryArgTypes = Component<any, any, any, any>
 
 type DefiniteArgData<T> =
     Draft<ComponentData<T> | ResourceData<T>>
-    | CommandsObject<T>
+    | EntitiesObject<T>
+    | ComponentsObject<T>
     | UUIDData<T>
     | GetEntityObject<T>;
 

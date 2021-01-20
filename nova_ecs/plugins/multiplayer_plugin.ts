@@ -1,7 +1,7 @@
 import { isLeft } from 'fp-ts/lib/Either';
 import { current, isDraft, original } from 'immer';
 import * as t from 'io-ts';
-import { Commands, GetEntity, UUID } from '../arg_types';
+import { Components, Entities, GetEntity, UUID } from '../arg_types';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
 import { Entity, EntityBuilder } from '../entity';
@@ -80,8 +80,8 @@ export function multiplayer(communicator: Communicator): Plugin {
     const applyChangesSystem = new System({
         name: 'ApplyChanges',
         args: [new Query([UUID, GetEntity, MultiplayerData] as const),
-            Commands, Comms] as const,
-        step: (query, commands, comms) => {
+            Entities, Components, Comms] as const,
+        step: (query, entities, components, comms) => {
             comms.uuid = communicator.uuid;
             if (!comms.uuid) {
                 // Can't do anything if we don't have a uuid.
@@ -127,7 +127,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                 for (const uuid of message.remove ?? []) {
                     if (entityMap.has(uuid) &&
                         (entityMap.get(uuid)?.data.owner === message.source || isAdmin)) {
-                        commands.entities.delete(uuid);
+                        entities.delete(uuid);
                         fullStateRequests.delete(uuid);
                         comms.added.delete(uuid);
                         comms.removed.add(uuid);
@@ -148,7 +148,7 @@ export function multiplayer(communicator: Communicator): Plugin {
 
                     const entity = new EntityBuilder();
                     for (const [componentName, maybeState] of Object.entries(entityState.state)) {
-                        const component = commands.components.get(componentName);
+                        const component = components.get(componentName);
                         if (!component) {
                             console.warn(`New entity ${uuid} uses unknown component ${componentName}`);
                             continue;
@@ -171,8 +171,8 @@ export function multiplayer(communicator: Communicator): Plugin {
                         owner: entityState.owner,
                     };
                     entity.addComponent(MultiplayerData, multiplayerData);
-                    commands.entities.set(uuid, entity.build());
-                    const handle = commands.entities.get(uuid)!;
+                    entities.set(uuid, entity.build());
+                    const handle = entities.get(uuid)!;
                     comms.added.add(uuid);
                     comms.removed.delete(uuid);
                     // Add the newly added entity to the entityMap so we don't
@@ -204,7 +204,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                     }
 
                     for (const [componentName, componentDelta] of Object.entries(entityDelta)) {
-                        const component = commands.components.get(componentName);
+                        const component = components.get(componentName);
                         if (!component) {
                             console.warn(`No such component ${componentName}`);
                             continue;

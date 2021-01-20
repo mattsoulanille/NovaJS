@@ -1,7 +1,6 @@
 import { Immutable } from "immer";
-import { v4 } from "uuid";
 import { Component } from "./component";
-import { ComponentMap, ComponentMapHandle } from "./component_map";
+import { ComponentMapHandle } from "./component_map";
 import { Entity } from "./entity";
 import { CallWithDraft } from "./world";
 
