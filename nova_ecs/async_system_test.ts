@@ -1,3 +1,4 @@
+import { current } from 'immer';
 import 'jasmine';
 import { v4 } from 'uuid';
 import { Entities, UUID } from './arg_types';
@@ -123,33 +124,32 @@ describe('async system', () => {
         expect(fooValues).toEqual([1, 1, 1, 2, 2, 2]);
     });
 
-    // fit('passes an async version of commands', async () => {
-    //     const addEntitySystem = new AsyncSystem({
-    //         name: 'AddEntity',
-    //         args: [Commands, UUID, BAR_COMPONENT] as const,
-    //         step: async (commands, uuid) => {
-    //             // console.log(commands);
-    //             // console.log(current(commands));
-    //             // console.log(current(commands.entities));
-    //             await sleep(10);
-    //             commands.entities.set('test uuid', new EntityBuilder()
-    //                 .addComponent(FOO_COMPONENT, { x: 123 }).build());
-    //             commands.entities.delete(uuid);
-    //         }
-    //     });
+    it('passes an async version of entities', async () => {
+        const addEntitySystem = new AsyncSystem({
+            name: 'AddEntity',
+            args: [Entities, UUID, BAR_COMPONENT] as const,
+            step: async (entities, uuid) => {
+                await sleep(10);
+                entities.set('test uuid', new EntityBuilder()
+                    .addComponent(FOO_COMPONENT, { x: 123 }).build());
+                entities.delete(uuid);
+            }
+        });
 
-    //     world.entities.set('remove me', new EntityBuilder()
-    //         .addComponent(BAR_COMPONENT, { y: 'bar' })
-    //         .build()
-    //     );
+        world.entities.set('remove me', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'bar' })
+            .build()
+        );
 
-    //     world.addSystem(addEntitySystem);
+        world.addSystem(addEntitySystem);
 
-    //     world.step();
-    //     clock.tick(11);
-    //     await world.resources.get(AsyncSystemData)?.done;
-    //     expect(world.entities.get('test uuid')?.components
-    //         .get(FOO_COMPONENT)?.x).toEqual(123);
-    //     expect(world.entities.get('remove me')).toBeUndefined();
-    // });
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+        world.step();
+
+        expect(world.entities.get('test uuid')?.components
+            .get(FOO_COMPONENT)?.x).toEqual(123);
+        expect(world.entities.get('remove me')).toBeUndefined();
+    });
 });

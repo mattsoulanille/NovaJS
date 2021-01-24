@@ -52,17 +52,6 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 entityStatus.patches = [];
 
                 const currentArgs = stepArgs.map(currentIfDraft);
-
-                // const asyncCommand: CommandsInterface = {
-                //     addEntity: (entity) => {
-                //         this.
-                //     }
-                // }
-
-                // const asyncArgs = currentArgs.map((arg, index) => {
-                //     //const argType = systemArgs.args[index];
-                //     return arg;
-                // }) as typeof stepArgs;
                 const draftArgs = createDraft(currentArgs);
 
                 // TODO: This error handling is wrong.

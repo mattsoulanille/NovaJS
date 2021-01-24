@@ -1,5 +1,5 @@
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { ArgData, ArgTypes, Components, Entities, GetEntity, OptionalClass, QueryArgTypes, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Components, Entities, GetEntity, OptionalClass, QueryArgsToData, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -50,11 +50,6 @@ import { topologicalSort } from './utils';
 
 enablePatches();
 
-interface WrappedSystem {
-    system: System;
-    entities: Set<string /* uuid */>;
-}
-
 export interface State {
     entities: EntityMap;
     resources: Map<UnknownResource, unknown>;
@@ -79,23 +74,7 @@ export class World {
 
     readonly entities = new EntityMapHandle(
         this.callWithNewDraft.bind(this),
-        this.addComponent.bind(this),
-        ([uuid, entity]: [string, Immutable<Entity>]) => {
-            World.recomputeEntities({
-                systems: this.systems,
-                queries: this.queries,
-                entities: [[uuid, entity]]
-            });
-        },
-        (removedEntity: string) => {
-            World.recomputeEntities({
-                systems: this.systems,
-                queries: this.queries,
-                removedEntities: [removedEntity],
-            });
-        }, true);
-
-
+        this.addComponent.bind(this));
 
     get resources() {
         return new Map([
@@ -109,8 +88,8 @@ export class World {
     private nameSystemMap = new Map<string, System>();
     private nameResourceMap = new Map<string, UnknownResource>();
 
-    private systems: Array<WrappedSystem> = []; // Not a map because order matters.
-    private queries = new Map<Query, Set<string /* entity uuid */>>();
+    private systems: Array<System> = []; // Not a map because order matters.
+    private queries = new Set<Query>();
     singletonEntity: Entity;
 
     constructor(private name?: string) {
@@ -144,39 +123,7 @@ export class World {
         return result!;
     }
 
-    static recomputeEntities({ systems, queries, entities, removedEntities }: {
-        systems: Iterable<WrappedSystem>,
-        queries: Iterable<[Query, Set<string>]>,
-        entities?: Iterable<[string, Immutable<Entity>]>,
-        removedEntities?: Iterable<string>,
-    }) {
-        for (const [uuid, entity] of entities ?? []) {
-            for (const { system, entities } of systems) {
-                if (system.supportsEntity(entity)) {
-                    entities.add(uuid);
-                } else {
-                    entities.delete(uuid);
-                }
-            }
-            for (const [query, entities] of queries) {
-                if (query.supportsEntity(entity)) {
-                    entities.add(uuid);
-                } else {
-                    entities.delete(uuid);
-                }
-            }
-        }
-
-        for (const uuid of removedEntities ?? []) {
-            for (const { entities } of systems) {
-                entities.delete(uuid);
-            }
-            for (const [, entities] of queries) {
-                entities.delete(uuid);
-            }
-        }
-    }
-
+    // TODO: Resource map like entities
     addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
         if (resource.mutable) {
             this.updateResourceMap(resource);
@@ -218,52 +165,40 @@ export class World {
             throw new Error(`A system with name ${system.name} already exists`)
         }
 
-        const wrappedSystem: WrappedSystem = { system, entities: new Set() };
-        const queries: [Query, Set<string>][] = [...system.queries]
-            .filter(query => !this.queries.has(query))
-            .map(query => [query, new Set()]);
-
-        World.recomputeEntities({
-            systems: [wrappedSystem], queries, entities: this.state.entities
-        });
-
         // ---- Topologically insert the new system ----
         // Construct a graph with no edges. 
-        const graph = new Map<WrappedSystem, Set<WrappedSystem>>(
+        const graph = new Map<System, Set<System>>(
             this.systems.map(val => [val, new Set()]));
-        graph.set(wrappedSystem, new Set());
+        graph.set(system, new Set());
 
         // Add all edges to the graph. Store directed edges from node A to B on node B.
-        const wrappedSystemMap = new Map<System | string, WrappedSystem>(
-            [...[...graph.keys()].map(key => [key.system, key] as const),
-            ...[...graph.keys()].map(key => [key.system.name, key] as const)]);
+        // Include the system itself and its name as mapping to the system
+        const systemMap = new Map<System | string, System>(
+            [...[...graph.keys()].map(key => [key, key] as const),
+            ...[...graph.keys()].map(key => [key.name, key] as const)]);
 
-        for (const [wrappedSystem, incomingEdges] of graph) {
+        for (const [system, incomingEdges] of graph) {
             // Systems that this system runs before have incoming edges from this
             // system in the graph.
-            for (const beforeSystem of wrappedSystem.system.before) {
-                const beforeVal = wrappedSystemMap.get(beforeSystem);
-                if (beforeVal) {
-                    const incomingBeforeEdges = graph.get(beforeVal);
-                    incomingBeforeEdges?.add(wrappedSystem)
+            for (const before of system.before) {
+                const beforeSystem = systemMap.get(before);
+                if (beforeSystem) {
+                    const incomingBeforeEdges = graph.get(beforeSystem);
+                    incomingBeforeEdges?.add(system)
                 }
             }
 
             // This system has incoming edges from the systems that it runs after.
-            for (const afterSystem of wrappedSystem.system.after) {
-                const afterVal = wrappedSystemMap.get(afterSystem);
-                if (afterVal) {
-                    incomingEdges.add(afterVal);
+            for (const after of system.after) {
+                const afterSystem = systemMap.get(after);
+                if (afterSystem) {
+                    incomingEdges.add(afterSystem);
                 }
             }
         }
 
         // Topologically sort the graph
         this.systems = topologicalSort(graph);
-
-        for (const [query, entities] of queries) {
-            this.queries.set(query, entities);
-        }
 
         this.nameSystemMap.set(system.name, system);
         for (const component of system.components) {
@@ -274,6 +209,8 @@ export class World {
 
     addComponent(component: Component<any, any, any, any>) {
         // Adds a component to the map of known components. Does not add to an entity.
+        // Necessary for multiplayer to create entities with components that haven't
+        // been used yet.
         if (this.nameComponentMap.has(component.name)
             && this.nameComponentMap.get(component.name) !== component) {
             throw new Error(`A component with name ${component.name} already exists`);
@@ -284,18 +221,9 @@ export class World {
 
     step() {
         this.state = produce(this.state, draft => {
-            for (const { system, entities } of this.systems) {
-                for (const entityUUID of entities) {
-                    if (!draft.entities.has(entityUUID)) {
-                        throw new Error(`Internal error: Missing entity ${entityUUID}`);
-                    }
-                    const entity = draft.entities.get(entityUUID)!;
-
-                    // TODO: The types here don't quite work out since
-                    // getArg returns ArgData<T> | undefined.
-                    const args = system.args.map(arg =>
-                        this.getArg(arg, draft, entity, entityUUID));
-
+            for (const system of this.systems) {
+                const argList = this.fulfillQuery(system.query, draft);
+                for (const args of argList) {
                     system.step(...args);
                 }
             }
@@ -304,8 +232,7 @@ export class World {
 
     private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
         entity: Draft<Entity>, uuid: string): ArgData<T> | undefined {
-        //console.log(current(draft));
-        const entities = this.makeEntities(draft);
+        //const entities = this.makeEntities(draft);
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
                 return draft.resources.get(arg) as ResourceData<T> | undefined;
@@ -320,7 +247,7 @@ export class World {
             return this.fulfillQuery(arg, draft) as QueryResults<T>;
         } else if (arg === Entities) {
             // TODO: Don't cast to ArgData<T>?
-            return entities as ArgData<T>;
+            return draft.entities as ArgData<T>;
         } else if (arg === Components) {
             // TODO: Don't cast to ArgData<T>?
             return this.nameComponentMap as ArgData<T>;
@@ -331,54 +258,22 @@ export class World {
             return this.getArg(arg.value, draft, entity, uuid);
         } else if (arg === GetEntity) {
             // TODO: Don't cast to ArgData<T>?
-            return entities.get(uuid) as ArgData<T>;
+            return draft.entities.get(uuid) as ArgData<T>;
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
     }
 
-    private makeEntities(draft: Draft<State>): EntityMap {
-        // This handle automatically recomputes what systems run on what
-        // entities. Could use a proxy instead perhaps.
-        //const entities = draft.entities as EntityMap;
-        //console.log(current(entities));
-        return new EntityMapHandle(
-            callback => callback(draft),
-            this.addComponent.bind(this),
-            ([uuid, entity]: [string, Immutable<Entity>]) => {
-                World.recomputeEntities({
-                    systems: this.systems,
-                    queries: this.queries,
-                    entities: [[uuid, entity]]
-                });
-            },
-            (removedEntity: string) => {
-                World.recomputeEntities({
-                    systems: this.systems,
-                    queries: this.queries,
-                    removedEntities: [removedEntity],
-                });
-            }, false);
-    }
-
-    private fulfillQuery<C extends readonly QueryArgTypes[]>(
+    private fulfillQuery<C extends readonly ArgTypes[]>(
         query: Query<C>, draft: Draft<State>): QueryResults<Query<C>> {
 
-        const entityUUIDs = this.queries.get(query);
-        if (!entityUUIDs) {
-            throw new Error(`Internal Error: ${query} was not registered in the world`);
-        }
+        const entities = [...draft.entities].filter(
+            ([, entity]) => query.supportsEntity(entity));
 
-        return [...entityUUIDs].map(entityUUID => {
-            if (!draft.entities.has(entityUUID)) {
-                throw new Error(`Missing entity ${entityUUID}`);
-            }
-            const entity = draft.entities.get(entityUUID)!;
-
-            return query.args.map(arg =>
-                this.getArg(arg, draft, entity, entityUUID));
-
-        }) as unknown as QueryResults<Query<C>>;
+        return entities.map(([uuid, entity]) =>
+            query.args.map(arg => this.getArg(arg, draft, entity, uuid)
+            ) as unknown as QueryArgsToData<C>
+        );
     }
 
     toString() {

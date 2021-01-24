@@ -519,45 +519,6 @@ describe('world', () => {
             ]);
     });
 
-    it('entity handles stop working when the entity is removed', () => {
-        world.entities.set('entity uuid', new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 123 }));
-        const handle1 = world.entities.get('entity uuid');
-
-        let addMessage: string | undefined;
-        let removeMessage: string | undefined;
-        const getHandleSystem = new System({
-            name: 'GetHandle',
-            args: [GetEntity, Entities, UUID, FOO_COMPONENT] as const,
-            step: (entity, entities, uuid) => {
-                entities.delete(uuid);
-                try {
-                    entity.components.set(FOO_COMPONENT, { x: 123 });
-                } catch (e) {
-                    addMessage = e instanceof Error ? e.message : 'not an error object?';
-                }
-
-                try {
-                    entity.components.delete(FOO_COMPONENT);
-                } catch (e) {
-                    removeMessage = e instanceof Error ? e.message : 'not an error object?';
-                }
-            }
-        });
-
-        world.addSystem(getHandleSystem);
-        world.step();
-
-        const expectedMessage = 'Entity \'entity uuid\' not in the world';
-
-        expect(() => handle1!.components.set(FOO_COMPONENT, { x: 123 }))
-            .toThrowError(expectedMessage);
-        expect(() => handle1!.components.delete(FOO_COMPONENT))
-            .toThrowError(expectedMessage);
-        expect(addMessage).toEqual(expectedMessage);
-        expect(removeMessage).toEqual(expectedMessage);
-    });
-
     it('provides a singleton entity', async () => {
         const stepData = new ReplaySubject<string>();
 

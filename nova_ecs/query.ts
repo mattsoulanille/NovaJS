@@ -1,4 +1,4 @@
-import { QueryArgTypes } from "./arg_types";
+import { ArgTypes } from "./arg_types";
 import { Component } from "./component";
 import { Resource } from "./resource";
 import { ComponentsOnly } from "./system";
@@ -9,8 +9,8 @@ import { subset, WithComponents } from "./utils";
  * A query provides a way of iterating over all the Entities that have
  * a specified set of components.
  */
-export class Query<QueryArgs extends readonly QueryArgTypes[]
-    = readonly QueryArgTypes[]> {
+export class Query<QueryArgs extends readonly ArgTypes[]
+    = readonly ArgTypes[]> {
     readonly components: Set<ComponentsOnly<QueryArgs>>;
 
     constructor(readonly args: QueryArgs, readonly name?: string) {
@@ -24,6 +24,6 @@ export class Query<QueryArgs extends readonly QueryArgTypes[]
     }
 
     toString() {
-        return `Query(${this.name ?? this.args.map(c => c.toString())})`;
+        return `Query(${this.name ?? 'unnamed'})`;
     }
 }

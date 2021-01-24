@@ -33,6 +33,7 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     readonly step: SystemArgs<StepArgTypes>['step'];
     readonly before: ReadonlySet<System | string>;
     readonly after: ReadonlySet<System | string>;
+    readonly query: Query<StepArgTypes>;
 
     constructor({ name, args, step, before, after }: SystemArgs<StepArgTypes>) {
         this.name = name;
@@ -52,10 +53,13 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
         this.queries = new Set(this.args.filter(
             a => (a instanceof Query))
         ) as Set<QueriesOnly<StepArgTypes>>;
+
+        this.query = new Query(args);
+
     }
 
     supportsEntity(entity: WithComponents) {
-        return subset(this.components, new Set(entity.components.keys()));
+        return this.query.supportsEntity(entity);
     }
 
     toString() {

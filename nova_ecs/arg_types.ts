@@ -41,11 +41,6 @@ type ValueType = Component<any, any, any, any>
 type Optionable = Component<any, any, any, any> | Resource<any, any>;
 export type ArgTypes = ValueType | OptionalClass<Optionable>;
 
-export type QueryArgTypes = Component<any, any, any, any>
-    | OptionalClass<Component<any, any, any, any>>
-    | typeof UUID
-    | typeof GetEntity;
-
 type DefiniteArgData<T> =
     Draft<ComponentData<T> | ResourceData<T>>
     | EntitiesObject<T>
@@ -68,7 +63,7 @@ export type ArgsToData<Args> = {
     [K in keyof Args]: ArgData<Args[K]>
 }
 
-type QueryArgsToData<Args> = {
+export type QueryArgsToData<Args> = {
     [K in keyof Args]: QueryArgData<Args[K]>
 }
 
