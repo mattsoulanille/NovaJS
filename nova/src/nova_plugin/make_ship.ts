@@ -1,14 +1,13 @@
 import { ShipData } from "novajs/novadatainterface/ShipData";
-import { v4 } from "uuid";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
-import { Entity } from "nova_ecs/entity";
+import { EntityBuilder } from "nova_ecs/entity";
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from "nova_ecs/plugins/movement_plugin";
 
 
-export function makeShip(shipData: ShipData, uuid = v4()): Entity {
-    return new Entity({ uuid })
+export function makeShip(shipData: ShipData): EntityBuilder {
+    return new EntityBuilder()
         .addComponent(MovementPhysicsComponent, {
             acceleration: shipData.physics.acceleration,
             maxVelocity: shipData.physics.speed,

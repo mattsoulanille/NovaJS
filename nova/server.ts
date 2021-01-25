@@ -76,8 +76,7 @@ async function startGame() {
     // until everthing is ready.
     communicator = new CommunicatorServer(channel);
     // TODO: Don't just give the server the 'server' uuid
-    const multiplayerPlugin = multiplayer(communicator.getMessages.bind(communicator),
-        communicator.sendMessage.bind(communicator), 'server');
+    const multiplayerPlugin = multiplayer(communicator);
 
     world.addResource(GameDataResource, gameData);
     world.addPlugin(multiplayerPlugin);

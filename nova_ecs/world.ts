@@ -232,7 +232,6 @@ export class World {
 
     private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
         entity: Draft<Entity>, uuid: string): ArgData<T> | undefined {
-        //const entities = this.makeEntities(draft);
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
                 return draft.resources.get(arg) as ResourceData<T> | undefined;

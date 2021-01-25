@@ -63,8 +63,7 @@ async function startGame() {
     //controller = await setupControls(gameData);
     //(window as any).controller = controller;
     //shipController = new ShipController(controller);
-    const multiplayerPlugin = multiplayer(communicator.getMessages.bind(communicator),
-        communicator.sendMessage.bind(communicator), 'server');
+    const multiplayerPlugin = multiplayer(communicator);
 
     world.addResource(GameDataResource, gameData);
     world.addPlugin(multiplayerPlugin);

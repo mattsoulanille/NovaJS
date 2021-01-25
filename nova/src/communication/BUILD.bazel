@@ -8,8 +8,8 @@ ts_library(
     srcs = [
         #"RpcChannel.ts",
         "Channel.ts",
-        "Communicator.ts",
         "SocketMessage.ts",
+        "CommunicatorMessage.ts",
         #"GetChanges.ts",
         #"OverwriteState.ts",
         #"FilterDelta.ts",

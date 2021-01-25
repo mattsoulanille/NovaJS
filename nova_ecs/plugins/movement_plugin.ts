@@ -97,6 +97,7 @@ function inertialControls({ state, physics, time }:
             turnToDirection({ state, physics, time }, reverseAngle);
         }
     }
+
     state.rotation = state.rotation.add(state.turning * physics.turnRate * time.delta_s);
 
     // Acceleration

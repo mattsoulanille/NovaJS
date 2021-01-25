@@ -1,9 +1,12 @@
 import { current } from 'immer';
+import { boolean } from 'io-ts';
 import 'jasmine';
 import { v4 } from 'uuid';
 import { Entities, UUID } from './arg_types';
 import { AsyncSystem, AsyncSystemData } from './async_system';
-import { Component } from './component';
+import { Component, ComponentData } from './component';
+import { Angle } from './datatypes/angle';
+import { Vector } from './datatypes/vector';
 import { EntityBuilder } from './entity';
 import { System } from './system';
 import { World } from './world';
@@ -22,6 +25,12 @@ const FOO_COMPONENT = new Component<{
 const BAR_COMPONENT = new Component<{
     y: string;
 }>({ name: 'bar' });
+
+const MovementComponent = new Component<{
+    position: Vector,
+    velocity: Vector,
+    rotation: Angle,
+}>({ name: 'movement' });
 
 describe('async system', () => {
     let world: World;
@@ -151,5 +160,42 @@ describe('async system', () => {
         expect(world.entities.get('test uuid')?.components
             .get(FOO_COMPONENT)?.x).toEqual(123);
         expect(world.entities.get('remove me')).toBeUndefined();
+    });
+
+    it('works with complex immerables', async () => {
+        const expectedMovementComponent: ComponentData<typeof MovementComponent> = {
+            position: new Vector(4, 5),
+            velocity: new Vector(1, 2),
+            rotation: new Angle(3),
+        };
+        const movable = new EntityBuilder()
+            .addComponent(MovementComponent, expectedMovementComponent);
+
+        const addedMovement = new Component<{
+            added: boolean
+        }>({ name: 'added' });
+
+        const addMovableSystem = new AsyncSystem({
+            name: 'addMovable',
+            args: [addedMovement, Entities] as const,
+            step: async (addedMovement, entities) => {
+                await sleep(10);
+                if (!addedMovement.added) {
+                    console.log('set entity');
+                    entities.set('movable', movable);
+                    addedMovement.added = true;
+                }
+            }
+        });
+
+        world.addSystem(addMovableSystem);
+        world.singletonEntity.components.set(addedMovement, { added: false });
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+        world.step();
+
+        expect(world.entities.get('movable')?.components.get(MovementComponent))
+            .toEqual(expectedMovementComponent);
     });
 });

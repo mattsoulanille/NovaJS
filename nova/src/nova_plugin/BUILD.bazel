@@ -16,6 +16,7 @@ ts_library(
         "//nova_ecs/plugins",
         "//nova_ecs/datatypes",
         "//novadatainterface",
+        "//nova/src/common",
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",

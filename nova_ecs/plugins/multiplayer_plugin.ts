@@ -219,7 +219,17 @@ export function multiplayer(communicator: Communicator): Plugin {
                             console.warn(`Component ${component.name} has no applyDelta function`);
                             continue;
                         }
-                        component.applyDelta(componentData, componentDelta);
+                        if (!component.deltaType) {
+                            console.warn(`Component ${component.name} has no deltaType for decoding`);
+                            continue;
+                        }
+
+                        const maybeDelta = component.deltaType.decode(componentDelta);
+                        if (isLeft(maybeDelta)) {
+                            console.warn(`Component ${component.name} delta failed to decode`);
+                            continue;
+                        }
+                        component.applyDelta(componentData, maybeDelta.right);
                     }
                 }
             }
@@ -288,15 +298,17 @@ export function multiplayer(communicator: Communicator): Plugin {
                 }
                 const entityDelta: EntityDelta = {};
                 for (const [component, data] of entity.components.entries()) {
-                    if (component.getDelta && isDraft(data)) {
+                    if (component.getDelta && component.deltaType && isDraft(data)) {
                         // If it's not a draft, there's no delta.
                         const delta = component.getDelta(original(data), data);
                         if (delta) {
-                            entityDelta[component.name] = delta;
+                            entityDelta[component.name] = component.deltaType.encode(delta);
                         }
                     }
                 }
-                changes.delta![uuid] = entityDelta;
+                if (Object.keys(entityDelta).length > 0) {
+                    changes.delta![uuid] = entityDelta;
+                }
             }
             if (Object.keys(changes.delta ?? {}).length === 0) {
                 delete changes.delta;
