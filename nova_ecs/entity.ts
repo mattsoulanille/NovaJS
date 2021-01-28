@@ -27,7 +27,7 @@ export class EntityBuilder {
             components: this.components,
             multiplayer: this.multiplayer,
             name: this.name,
-        }
+        };
     }
 
     addComponent<Data>(component: Component<Data, any, any, any>, data: Data): this {

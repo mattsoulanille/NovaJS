@@ -1,6 +1,8 @@
-import { applyPatches, createDraft, enablePatches, finishDraft, Patch } from "immer";
-import { ArgsToData, ArgTypes, UUID } from "./arg_types";
+import { zip } from "fp-ts/lib/ReadonlyArray";
+import { applyPatches, createDraft, enablePatches, finishDraft, Patch, produceWithPatches } from "immer";
+import { ArgData, ArgsToData, ArgTypes, QueryResults, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
+import { Query } from "./query";
 import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
 import { currentIfDraft, DefaultMap } from "./utils";
@@ -25,6 +27,20 @@ export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
 }
 
 enablePatches();
+
+function getCurrentArgs<A extends readonly ArgTypes[]>(args: A,
+    argsData: ArgsToData<A>): [...ArgsToData<A>] {
+    return zip(args, argsData).map(([arg, argData]) => {
+        if (arg instanceof Query) {
+            const queryResults = argData as QueryResults<Query>;
+            const res = queryResults.map(queryArgsData =>
+                getCurrentArgs(arg.args, queryArgsData));
+            return res;
+        } else {
+            return currentIfDraft(argData) as ArgData<A>;
+        }
+    }) as [...ArgsToData<A>]
+}
 
 export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]>
     extends System<[typeof AsyncSystemData, typeof UUID, ...StepArgTypes]> {
@@ -51,13 +67,14 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 }
                 entityStatus.patches = [];
 
-                const currentArgs = stepArgs.map(currentIfDraft);
+                const currentArgs = getCurrentArgs(systemArgs.args, stepArgs);
                 const draftArgs = createDraft(currentArgs);
 
                 // TODO: This error handling is wrong.
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)
                     .then(() => {
                         let patches: Patch[] | undefined;
+                        if (currentArgs) { }
                         finishDraft(draftArgs, (forwardPatches) => {
                             patches = forwardPatches;
                         });

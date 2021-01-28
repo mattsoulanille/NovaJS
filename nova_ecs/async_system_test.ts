@@ -8,6 +8,7 @@ import { Component, ComponentData } from './component';
 import { Angle } from './datatypes/angle';
 import { Vector } from './datatypes/vector';
 import { EntityBuilder } from './entity';
+import { Query } from './query';
 import { System } from './system';
 import { World } from './world';
 
@@ -181,7 +182,6 @@ describe('async system', () => {
             step: async (addedMovement, entities) => {
                 await sleep(10);
                 if (!addedMovement.added) {
-                    console.log('set entity');
                     entities.set('movable', movable);
                     addedMovement.added = true;
                 }
@@ -197,5 +197,72 @@ describe('async system', () => {
 
         expect(world.entities.get('movable')?.components.get(MovementComponent))
             .toEqual(expectedMovementComponent);
+    });
+
+    it('works with other synchronous systems', async () => {
+        const fooValues: number[] = [];
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [FOO_COMPONENT],
+            step: async (foo) => {
+                await sleep(10);
+                foo.x = 0;
+            }
+        });
+
+        const syncSystem = new System({
+            name: 'SyncSystem',
+            args: [FOO_COMPONENT],
+            step: (foo) => {
+                foo.x++;
+                fooValues.push(foo.x);
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.addSystem(syncSystem);
+        world.entities.set(v4(), new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+        world.step();
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+
+        expect(fooValues).toEqual([1, 2, 3, 1, 2, 3, 4]);
+    });
+
+    it('works with queries', async () => {
+        const fooValues: number[] = [];
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [new Query([FOO_COMPONENT]), FOO_COMPONENT] as const,
+            step: async (fooQuery) => {
+                await sleep(10);
+                for (const query of fooQuery) {
+                    fooValues.push(query[0].x);
+                }
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.entities.set(v4(), new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 }))
+        world.entities.set(v4(), new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 456 }))
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+        world.step();
+
+        expect(fooValues).toEqual([123, 456, 123, 456]);
     });
 });
