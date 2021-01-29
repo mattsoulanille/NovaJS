@@ -22,10 +22,11 @@ export class Component<Data, DataSerialized = Data,
     readonly getDelta?: (a: Data, b: Data) => Delta | undefined;
     readonly applyDelta?: (data: Draft<Data>, delta: Delta) => void;
 
-    constructor({ name, type, getDelta, applyDelta }:
+    constructor({ name, type, deltaType, getDelta, applyDelta }:
         ComponentArgs<Data, DataSerialized, Delta, DeltaSerialized>) {
         this.name = name;
         this.type = type;
+        this.deltaType = deltaType;
         this.getDelta = getDelta;
         this.applyDelta = applyDelta;
     }

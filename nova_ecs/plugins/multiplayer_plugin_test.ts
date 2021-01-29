@@ -6,22 +6,17 @@ import { Component } from '../component';
 import { EntityBuilder } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
+import { applyObjectDelta, getObjectDelta } from './delta';
 import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
 
 
 // TODO: Test delta deserialization.
-const BarComponent = new Component<{ y: string }, { y: string }, { y: string }, { y: string }>({
+const BarComponent = new Component({
     name: "Bar",
     type: t.type({ y: t.string }),
-    getDelta: (a, b) => {
-        if (a.y !== b.y) {
-            return { y: b.y };
-        }
-        return;
-    },
-    applyDelta: (data, delta) => {
-        data.y = delta.y
-    },
+    deltaType: t.partial({ y: t.string }),
+    getDelta: getObjectDelta,
+    applyDelta: applyObjectDelta
 });
 
 class MockCommunicator implements Communicator {
