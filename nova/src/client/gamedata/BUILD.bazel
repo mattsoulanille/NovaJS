@@ -9,7 +9,6 @@ ts_library(
     srcs = glob(["*.ts"]),
     deps = [
         "@npm//@types/node",
-        "//nova/src/engine",
         "//nova/src/common",
         "//novadatainterface",
         "@npm//pixi.js",

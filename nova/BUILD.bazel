@@ -30,7 +30,7 @@ ts_library(
         "@npm//@types/uuid",
         "//novaparse",
         "//nova/src/common",
-        "//nova/src/engine",
+        #"//nova/src/engine",
         "//nova/src/communication:communication_server_lib",
         "//nova/src/server",
         "//nova/src/server/parsing",
@@ -76,7 +76,7 @@ nodejs_binary(
         "//nova/test_keys",
         "//nova/src:static_files",
         "//nova/src:browser_bundle",
-        "//nova/src/engine",
+        #"//nova/src/engine",
         # TODO: Understand why you need to include the
         # compiled libraries in 'data'
         "//nova/src/proto:protobufjs_bundle",

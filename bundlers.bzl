@@ -1,6 +1,6 @@
 load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
 
-def web_bundle(name, deps, entry_point):
+def web_bundle(name, deps, entry_point, **kwargs):
     rollup_bundle(
         name = name,
         deps = deps + [
@@ -15,10 +15,11 @@ def web_bundle(name, deps, entry_point):
         config_file = "//:rollup_browser.config.js",
         sourcemap = "inline",
         format = "iife",
+        **kwargs,
         #format = "cjs",
     )
 
-def node_bundle(name, deps, entry_point):
+def node_bundle(name, deps, entry_point, **kwargs):
     rollup_bundle(
         name = name,
         deps = deps + [
@@ -37,5 +38,6 @@ def node_bundle(name, deps, entry_point):
         config_file = "//:rollup.config.js",
         sourcemap = "inline",
         format = "cjs",
+        **kwargs,
         #format = "iife",
     )
