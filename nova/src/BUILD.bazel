@@ -35,7 +35,7 @@ ts_library(
         "@npm//rxjs",
         "//nova/src/common",
         #"//nova/src/client",
-        #"//nova/src/client/display",
+        "//nova/src/display",
         #"//nova/src/engine",
         #"//nova/src/engine:utils",
         "//nova_ecs:ecs",

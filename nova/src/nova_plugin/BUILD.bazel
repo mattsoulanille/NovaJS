@@ -10,6 +10,7 @@ ts_library(
         "game_data_resource.ts",
         "server_plugin.ts",
         "make_ship.ts",
+        "ship_component.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

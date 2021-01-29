@@ -1,28 +1,15 @@
 package(default_visibility = ["//visibility:public"])
 
-
 load("@npm_bazel_typescript//:index.bzl", "ts_library")
-
 
 ts_library(
     name = "display",
     srcs = [
-        "Display.ts",
-        "AnimationGraphic.ts",
-        "SpriteSheetSprite.ts",
-        "Drawable.ts",
-        "SpaceObjectDrawable.ts",
-        "DrawableMap.ts",
+        "display_plugin.ts",
     ],
     deps = [
-        "@npm//@types/node",
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
         "@npm//pixi.js",
-        "//nova/src/engine",
-        "//nova/src/engine/space_object:space_object_mods",
-        "//nova/src/engine:utils",
-        "//nova/src/client/gamedata",
-        "//nova/src/common",
-        "//novadatainterface",
-        "//nova/src/proto:protobufjs_bundle",
     ]
 )

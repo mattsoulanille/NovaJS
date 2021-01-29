@@ -58,7 +58,7 @@ export const manageClientsSystem = new AsyncSystem({
             const randomShip = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
             const shipData = await gameData.data.Ship.get(randomShip);
             const shipEntity = makeShip(shipData);
-            shipEntity.addComponent(MultiplayerData, {
+            shipEntity.components.set(MultiplayerData, {
                 owner: newPeer
             });
             entities.set(v4(), shipEntity);

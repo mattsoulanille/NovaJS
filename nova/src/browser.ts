@@ -6,6 +6,7 @@ import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
 import { World } from "nova_ecs/world";
 import { GameDataResource } from "./nova_plugin/game_data_resource";
 import { Nova } from "./nova_plugin/nova_plugin";
+import { Display, PixiContainer } from "./display/display_plugin";
 
 // const socketChannel = new SocketChannelClient({});
 // socketChannel.message.subscribe((m) => {
@@ -68,6 +69,12 @@ async function startGame() {
     world.addResource(GameDataResource, gameData);
     world.addPlugin(multiplayerPlugin);
     world.addPlugin(Nova);
+    world.addPlugin(Display);
+    const worldContainer = world.resources.get(PixiContainer);
+    if (!worldContainer) {
+        throw new Error('World did not have Pixi Container');
+    }
+    app.stage.addChild(worldContainer);
 
     app.ticker.add(() => {
         world.step();
