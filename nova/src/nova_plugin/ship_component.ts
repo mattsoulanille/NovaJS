@@ -1,4 +1,4 @@
-import { Component } from 'nova_ecs/component';
+import { Component } from 'novajs/nova_ecs/component';
 import * as t from 'io-ts';
 import { applyObjectDelta, getObjectDelta } from 'novajs/nova_ecs/plugins/delta';
 

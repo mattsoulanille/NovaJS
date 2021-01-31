@@ -57,7 +57,7 @@ export const MovementStateComponent = new Component({
         // Send everything if a delta is detected.
         const same = a.velocity.x === b.velocity.x &&
             a.velocity.y === b.velocity.y &&
-            a.rotation === b.rotation &&
+            a.rotation.angle === b.rotation.angle &&
             a.accelerating === b.accelerating &&
             a.turning === b.turning;
 

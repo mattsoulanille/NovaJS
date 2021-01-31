@@ -12,7 +12,6 @@
 	"lib": ["dom", "dom.iterable", "esnext", "scripthost"],
 	"declaration": true,
 	"sourceMap": true,
-	"outDir": "./build",
 	"strict": true,
 	"noImplicitAny": true,
 	"strictNullChecks": true,
@@ -23,13 +22,6 @@
 	"noImplicitReturns": true,
 	"noFallthroughCasesInSwitch": true,
 	"baseUrl": ".",
-	"paths": {
-	  "novajs/*": [
-		"*",
-		"dist/bin/*"
-	  ],
-      "nova_ecs": ["nova_ecs"]
-	},
 	"esModuleInterop": true,
 	"incremental": false
   }

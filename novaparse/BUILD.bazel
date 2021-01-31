@@ -17,10 +17,3 @@ ts_library(
         "//novaparse/src/parsers",
     ]
 )
-
-pkg_npm(
-    name = "novaparse_pkg",
-    deps = [
-        ":novaparse",
-    ]
-)

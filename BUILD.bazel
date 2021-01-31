@@ -6,15 +6,25 @@
 #   so that ts_library rules still use it by default.
 #   See https://www.npmjs.com/package/@bazel/typescript#installation
 exports_files(["tsconfig.json", "rollup.config.js", "rollup_browser.config.js", "tscc.spec.json"], visibility = ["//:__subpackages__"])
+package(default_visibility = ["//:__subpackages__"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
-pkg_npm(
-    name = "novaparse_pkg",
-    visibility = ["//:__subpackages__"],
-    deps = [
-        "//novaparse",
-    ]
-)
+# pkg_npm(
+#     name = "novaparse_pkg",
+#     deps = [
+#         "//novaparse",
+#     ]
+# )
+
+# pkg_npm(
+#     name = "nova_ecs_pkg",
+#     package_name = "nova_ecs",
+#     deps = [
+#         "//nova_ecs:ecs",
+#         "//nova_ecs/plugins",
+#         "//nova_ecs/datatypes",
+#     ]
+# )
 
 #pkg_npm(name = "novajs")

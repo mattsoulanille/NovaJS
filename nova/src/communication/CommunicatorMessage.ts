@@ -1,4 +1,4 @@
-import { Message } from "nova_ecs/plugins/multiplayer_plugin";
+import { Message } from "novajs/nova_ecs/plugins/multiplayer_plugin";
 import * as t from 'io-ts';
 
 

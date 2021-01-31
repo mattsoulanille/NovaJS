@@ -1,9 +1,9 @@
 import { ShipData } from "novajs/novadatainterface/ShipData";
-import { Angle } from "nova_ecs/datatypes/angle";
-import { Position } from "nova_ecs/datatypes/position";
-import { Vector } from "nova_ecs/datatypes/vector";
-import { Entity, EntityBuilder } from "nova_ecs/entity";
-import { MovementPhysicsComponent, MovementStateComponent, MovementType } from "nova_ecs/plugins/movement_plugin";
+import { Angle } from "novajs/nova_ecs/datatypes/angle";
+import { Position } from "novajs/nova_ecs/datatypes/position";
+import { Vector } from "novajs/nova_ecs/datatypes/vector";
+import { Entity, EntityBuilder } from "novajs/nova_ecs/entity";
+import { MovementPhysicsComponent, MovementStateComponent, MovementType } from "novajs/nova_ecs/plugins/movement_plugin";
 import { ShipComponent } from "./ship_component";
 
 
