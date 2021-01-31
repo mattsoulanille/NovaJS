@@ -272,7 +272,7 @@ class ClientHarness {
         this.callbacks = callbacks;
         this.websocket.send.and.callFake((data: any) => {
             const socketMessage =
-                SocketMessage.decode(JSON.parse(data));
+                SocketMessage.decode(JSON.parse(data) as unknown);
             if (isLeft(socketMessage)) {
                 throw new Error(`Failed to parse SocketMessage: ${data}`);
             }

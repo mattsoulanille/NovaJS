@@ -243,7 +243,8 @@ describe("NovaParse", function() {
             await np.data.SpriteSheetFrames.get("nova:1116");
 
         const frames1116Path = require.resolve("novajs/novaparse/test/zephyrFrames.json");
-        const shouldEqual1116 = JSON.parse(fs.readFileSync(frames1116Path, "utf8"));
+        const shouldEqual1116 = JSON.parse(fs.readFileSync(
+            frames1116Path, "utf8")) as SpriteSheetFramesData;
         expect(rf1116).toEqual(shouldEqual1116);
 
         const rf1000: SpriteSheetFramesData =
@@ -251,7 +252,8 @@ describe("NovaParse", function() {
 
         const frames1000Path =
             require.resolve("novajs/novaparse/test/testSpriteSheetFrames.json");
-        const shouldEqual1000 = JSON.parse(fs.readFileSync(frames1000Path, "utf8"));
+        const shouldEqual1000 = JSON.parse(fs.readFileSync(
+            frames1000Path, "utf8")) as SpriteSheetFramesData;
         expect(rf1000).toEqual(shouldEqual1000);
     });
 
@@ -259,7 +261,8 @@ describe("NovaParse", function() {
         const rs1000: SpriteSheetData = await np.data.SpriteSheet.get("nova:1000");
         const sheet1000Path =
             require.resolve("novajs/novaparse/test/testSpriteSheet.json");
-        const shouldEqual = JSON.parse(fs.readFileSync(sheet1000Path, "utf8"));
+        const shouldEqual = JSON.parse(fs.readFileSync(
+            sheet1000Path, "utf8")) as SpriteSheetData;
 
         fail("TODO: Fix convex hulls");
         //expect(rs1000).toEqual(shouldEqual);

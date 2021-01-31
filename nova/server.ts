@@ -16,8 +16,13 @@ import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
+type Settings = {
+    port: number,
+    relativeDataPath: string,
+}
+
 const serverSettingsPath = require.resolve("novajs/nova/settings/server.json");
-const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8"));
+const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as Settings;
 
 // For production, replace these with real https keys
 const httpsKeys: https.ServerOptions = {
@@ -30,7 +35,7 @@ const httpsServer = https.createServer(httpsKeys, app);
 
 
 const port: number = settings.port;
-const novaDataPath = path.join(__dirname, settings["relative data path"]);
+const novaDataPath = path.join(__dirname, settings.relativeDataPath);
 const novaFileData = new NovaParse(novaDataPath, false);
 
 const filesystemDataPath = path.join(__dirname, "objects");

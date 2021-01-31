@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 
 # WARNING: Using directory labels here. That means bazel can't
 # detect changes to files within these directories. It only
@@ -47,6 +47,7 @@ ts_library(
 jasmine_node_test(
     name = "unit_tests",
     srcs = [":unit_test_sources"],
+    link_workspace_root = True,
     data = [
         "//novaparse/test/resource_parsers/files",
         ":novaparse_test_files",

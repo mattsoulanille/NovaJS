@@ -126,7 +126,7 @@ export class SocketChannelServer implements ChannelServer {
             throw new Error(`Missing client object for ${clientUUID}`);
         }
 
-        const maybeSocketMessage = SocketMessage.decode(JSON.parse(serialized));
+        const maybeSocketMessage = SocketMessage.decode(JSON.parse(serialized) as unknown);
 
         if (isLeft(maybeSocketMessage)) {
             console.warn(`Received bad message from client ${clientUUID}: ${maybeSocketMessage.left}`);

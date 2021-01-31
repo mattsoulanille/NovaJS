@@ -1,4 +1,4 @@
-load("@npm_bazel_rollup//:index.bzl", "rollup_bundle")
+load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
 
 def web_bundle(name, deps, entry_point, **kwargs):
     rollup_bundle(
@@ -11,6 +11,7 @@ def web_bundle(name, deps, entry_point, **kwargs):
             "@npm//rollup-plugin-node-globals",
             "@npm//rollup-plugin-node-builtins",
         ],
+        link_workspace_root = True,
         entry_point = entry_point,
         config_file = "//:rollup_browser.config.js",
         sourcemap = "inline",
@@ -34,6 +35,7 @@ def node_bundle(name, deps, entry_point, **kwargs):
         # data = [
         #"//:tsconfig.json",
         # ],
+        link_workspace_root = True,
         entry_point = entry_point,
         config_file = "//:rollup.config.js",
         sourcemap = "inline",

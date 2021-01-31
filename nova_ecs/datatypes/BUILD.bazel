@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 
 ts_library(
     name = "datatypes",
@@ -37,6 +37,7 @@ ts_library(
 
 jasmine_node_test(
     name = "datatypes_test",
+    link_workspace_root = True,
     srcs = [
         ":datatypes_test_lib",
     ]

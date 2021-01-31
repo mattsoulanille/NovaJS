@@ -1,4 +1,4 @@
 {
     "port": 8443,
-	"relative data path": "Nova_Data"
+	"relativeDataPath": "Nova_Data"
 }

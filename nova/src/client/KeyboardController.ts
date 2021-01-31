@@ -28,7 +28,7 @@ class KeyboardController implements Controller {
 
 
     poll(): ControlState {
-        let toReturn: ControlState = JSON.parse(JSON.stringify(this.controlState)); // Nasty hacky deep copy
+        let toReturn = JSON.parse(JSON.stringify(this.controlState)) as ControlState; // Nasty hacky deep copy
         for (let state of Object.values(this.controlState)) {
             // Reset the key repeats
             // so they only happen as often as the keys

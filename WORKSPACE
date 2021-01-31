@@ -16,8 +16,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "build_bazel_rules_nodejs",
-    sha256 = "f9e7b9f42ae202cc2d2ce6d698ccb49a9f7f7ea572a78fd451696d03ef2ee116",
-    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/1.6.0/rules_nodejs-1.6.0.tar.gz"],
+    sha256 = "6142e9586162b179fdd570a55e50d1332e7d9c030efd853453438d607569721d",
+    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/3.0.0/rules_nodejs-3.0.0.tar.gz"],
 )
 
 #load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
@@ -46,7 +46,6 @@ yarn_install(
     name = "npm",
     package_json = "//:package.json",
     yarn_lock = "//:yarn.lock",
-    #yarn_lock = "//:package-lock.json",
 )
 
 # Install closure
@@ -65,19 +64,17 @@ yarn_install(
 # rules_closure_dependencies()
 # rules_closure_toolchains()
 
-load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+# load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+# git_repository(
+#     name = "com_google_protobuf",
+#     remote = "https://github.com/protocolbuffers/protobuf",
+#     #    tag = "v3.11.4",
+#     commit = "d0bfd5221182da1a7cc280f3337b5e41a89539cf",
+#     shallow_since = "1581711200 -0800",
+# )
 
-git_repository(
-    name = "com_google_protobuf",
-    remote = "https://github.com/protocolbuffers/protobuf",
-    #    tag = "v3.11.4",
-    commit = "d0bfd5221182da1a7cc280f3337b5e41a89539cf",
-    shallow_since = "1581711200 -0800",
-)
-
-load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
-
-protobuf_deps()
+# load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+# protobuf_deps()
 
 http_archive(
     name = "rules_proto",
@@ -125,15 +122,12 @@ rules_proto_toolchains()
 #setup_rules_ts_closure_workspace()
 
 # Install any Bazel rules which were extracted earlier by the yarn_install rule.
-load("@npm//:install_bazel_dependencies.bzl", "install_bazel_dependencies")
 
-install_bazel_dependencies()
-
-# Karma
-# Fetch transitive Bazel dependencies of npm_bazel_karma
-load("@npm_bazel_karma//:package.bzl", "npm_bazel_karma_dependencies")
-
-npm_bazel_karma_dependencies()
+http_archive(
+    name = "io_bazel_rules_webtesting",
+    sha256 = "9bb461d5ef08e850025480bab185fd269242d4e533bca75bfb748001ceb343c3",
+    urls = ["https://github.com/bazelbuild/rules_webtesting/releases/download/0.3.3/rules_webtesting.tar.gz"],
+)
 
 # Set up web testing, choose browsers we can test on
 load("@io_bazel_rules_webtesting//web:repositories.bzl", "web_test_repositories")
@@ -148,11 +142,6 @@ browser_repositories(
 )
 
 # Bazel labs. Contains the ts proto generator
-load("@npm_bazel_labs//:package.bzl", "npm_bazel_labs_dependencies")
+load("@npm//@bazel/labs:package.bzl", "npm_bazel_labs_dependencies")
 
 npm_bazel_labs_dependencies()
-
-# Setup TypeScript toolchain
-load("@npm_bazel_typescript//:index.bzl", "ts_setup_workspace")
-
-ts_setup_workspace()

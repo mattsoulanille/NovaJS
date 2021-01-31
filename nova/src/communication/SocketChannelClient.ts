@@ -92,7 +92,7 @@ export class SocketChannelClient implements ChannelClient {
 
         const data = messageEvent.data;
         let socketMessage: SocketMessage;
-        const maybeSocketMessage = SocketMessage.decode(JSON.parse(data));
+        const maybeSocketMessage = SocketMessage.decode(JSON.parse(data) as unknown);
         if (isRight(maybeSocketMessage)) {
             socketMessage = maybeSocketMessage.right;
         } else {

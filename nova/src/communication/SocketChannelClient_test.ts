@@ -106,7 +106,7 @@ describe("SocketChannelClient", function() {
 
         sendMessage(messageEvent);
         const pong = await pongPromise;
-        const pongMessage = SocketMessage.decode(JSON.parse(pong as string));
+        const pongMessage = SocketMessage.decode(JSON.parse(pong as string) as unknown);
         if (isLeft(pongMessage)) {
             throw new Error("pongPromise was not a SocketMessage");
         }
@@ -129,7 +129,7 @@ describe("SocketChannelClient", function() {
         jasmine.clock().tick(11);
 
         const ping = await pingPromise;
-        const pingMessage = SocketMessage.decode(JSON.parse(ping as string));
+        const pingMessage = SocketMessage.decode(JSON.parse(ping as string) as unknown);
         if (isLeft(pingMessage)) {
             throw new Error("pingPromise was not a SocketMessage");
         }

@@ -25,7 +25,7 @@ class MockCommunicator implements Communicator {
         public peers: Map<string, MockCommunicator> = new Map()) { }
 
     sendMessage(message: Message, destination?: string) {
-        const JSONified = Message.decode(JSON.parse(JSON.stringify(message)));
+        const JSONified = Message.decode(JSON.parse(JSON.stringify(message)) as unknown);
         if (isLeft(JSONified)) {
             throw new Error(`JSON failed to parse: ${JSONified.left}`);
         }

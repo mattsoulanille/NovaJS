@@ -1,9 +1,9 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@npm_bazel_typescript//:index.bzl", "ts_library")
-load("@npm_bazel_jasmine//:index.bzl", "jasmine_node_test")
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 load("@novajs//:bundlers.bzl", "web_bundle")
-load("@npm_bazel_karma//:index.bzl", "karma_web_test")
+load("@npm//@bazel/concatjs:index.bzl", "karma_web_test")
 
 ts_library(
     name = "communication_lib",
@@ -78,6 +78,7 @@ ts_library(
 
 jasmine_node_test(
     name = "communication_tests",
+    link_workspace_root = True,
     srcs = [":unit_test_sources"],
 )
 
