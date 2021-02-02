@@ -3,7 +3,7 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers). This version is running release [0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js), an earlier version written in JavaScript. This version uses TypeScript and is not yet at feature parity with the JavaScript version.
+[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers). This version is running release [0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js), an earlier version written in JavaScript. The main branch's version is undergoing a rewrite / redesign, and is not at feature parity with the JS version yet.
 #### Controls (mostly standard EV Nova):
 * Arrow keys to move
 * Spacebar to fire
@@ -39,25 +39,24 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 [A Mac copy of EV Nova](https://www.reddit.com/r/evnova/comments/cwwjnf/ambrosia_software_mediafire_archive_mirror/) ([Direct Link](http://www.tuxedojack.com/hosted/ambrosia-archive/mac/Action-Adventure/EVNova%201.1.1.dmg))
 
 ### Installing
+#### For the main branch
+The main branch does not display anything yet, but it can be runn with `yarn start` and will launch on port 8443.
 
-#### For production builds, see the [releases page](https://github.com/mattsoulanille/NovaJS/releases) instead of using `git clone`.
+#### For the [alpha js relase](https://github.com/mattsoulanille/NovaJS/releases):
 
-Clone the repository
+Download the release with your browser or with the following command
 ```
-git clone https://github.com/mattsoulanille/NovaJS.git
-```
-Move to the `NovaJS/` directory
-```
-cd NovaJS/
+curl -L https://github.com/mattsoulanille/NovaJS/archive/v0.1-alpha-js.tar.gz | tar xzf -
 ```
 
-Move your Nova Files and Plug-ins to the ```Nova Data``` directory
+Move your Nova Files and Plug-ins to the ```Nova Data``` directory in the unzipped release.
 ###### Make sure you're using the Mac version of EV Nova. Windows EV Nova file formats are currently unsupported, so make sure your Nova files end with `.ndat`
 ```
+cd NovaJS-0.1-alpha-js/
 cp -r /path/to/EV\ Nova.app/Contents/Resources/Nova\ Files/ ./Nova\ Data/
 mkdir ./Nova\ Data/Plug-ins/
 ```
-###### You can add any plug-ins you like in the Plug-ins directory. Just make sure they're in the Mac format or the Nova Data `.ndat` format if you're using Windows.
+###### You can add any plug-ins you like in the Plug-ins directory. Just make sure they're in the Mac format or the Nova Data `.ndat` format if you're using Windows / Linux.
 
 Install packages with `npm`
 ```
@@ -73,7 +72,7 @@ npm run build-debug
 ```
 At this point, you can run NovaJS with
 ```
-npm start
+npm run run
 ```
 You can also use
 ```
@@ -81,17 +80,17 @@ npm run watch
 ```
 to compile incremental changed made to the browser's code, but you will still need to do a full `npm run build-server` and restart the server for changes to be applied to the server.
 
-By default, Nova runs on port 8000. See [Deployment](Deployment) for instructions on changing this. Assuming you installed on the machine you would like to play from, navigate to [localhost:8000](http://localhost:8000).
+By default the JS release runs on port 8000 but can be changed by editing the `port` variable in `settings/server.json`. Assuming you installed on the machine you would like to play from, navigate to [localhost:8000](http://localhost:8000).
 
 ## Running the Tests
-The available tests can be run with `npm run test`.
+The available tests can be run with `yarn test`.
 
 ## Deployment
-Deployment is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`
+Deployment for the js release is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`. The main branch does not support deployment yet.
 
 ## Contributing
 
-I haven't written a design document yet, so contributing to NovaJS itself at this time is infeasably difficult. The easiest place to contribute, and the easiest place for me to evaluate and merge contributions right now would be in the [NovaParse project](https://github.com/mattsoulanille/NovaParse), which seeks to parse all of Nova's resource fork files.
+TBD once the rewrite has feature parity with the js version.
 
 
 ## Known Bugs
