@@ -1,0 +1,27 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+
+ts_library(
+    name = "nova_plugin",
+    srcs = [
+        "nova_plugin.ts",
+        "game_data_resource.ts",
+        "server_plugin.ts",
+        "make_ship.ts",
+        "ship_component.ts",
+    ],
+    deps = [
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
+        "//nova_ecs/datatypes",
+        "//novadatainterface",
+        "//nova/src/common",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//immer",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+    ]
+)

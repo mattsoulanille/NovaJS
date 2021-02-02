@@ -1,0 +1,49 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+
+ts_library(
+    name = "plugins",
+    srcs = [
+        "time_plugin.ts",
+        "multiplayer_plugin.ts",
+        "movement_plugin.ts",
+        "delta.ts",
+    ],
+    deps = [
+        "//nova_ecs:ecs",
+        "//nova_ecs/datatypes",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//immer",
+    ]
+)
+
+ts_library(
+    name = "plugins_test_lib",
+    srcs = [
+        "time_plugin_test.ts",
+        "multiplayer_plugin_test.ts",
+        "movement_plugin_test.ts",
+    ],
+    deps = [
+        ":plugins",
+        "//nova_ecs:ecs",
+        "//nova_ecs/datatypes",
+        "@npm//@types/jasmine",
+        "@npm//io-ts",
+        "@npm//io-ts-types",
+        "@npm//fp-ts",
+        "@npm//immer",
+        "@npm//@types/uuid",
+    ]
+)
+
+jasmine_node_test(
+    name = "plugins_test",
+    link_workspace_root = True,
+    srcs = [
+        ":plugins_test_lib",
+    ]
+)

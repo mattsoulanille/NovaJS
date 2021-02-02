@@ -1,0 +1,35 @@
+\documentclass{article}
+\usepackage{xspace, hyperref}
+\newcommand{\gameData}{\emph{gameData}\xspace}
+
+\title{Communication Design}
+
+
+
+\begin{document}
+\maketitle
+
+\section{Why not gRPC?}
+
+gRPC in the browser is not mature enough for NovaJS's communication needs. Neither Google's nor Improbable's implementation supports bidirectional streaming yet.\footnote{\url{https://grpc.io/blog/state-of-grpc-web/\#f19}} Instead of gRPC, NovaJS uses SocketIO as its realtime communication channel but still communicates with protobufs over the wire. It is also not difficult to hook in a new communication channel, and webRTC seems like a good candidate.
+
+\section{Channel}
+A channel is the interface used by clients and the server to communicate. A channel has the following external methods and properties:
+\begin{enumerate}
+\item \textbf{peers}: A set of unique identifiers corresponding to peers that messages can be sent to and received from.
+\item \textbf{send($destination$, $message$)}: Sends a $message$ to the peer with UUID equal to $destination$.
+\item \textbf{broadcast($message$)}: Sends $message$ to all peers.
+\item \textbf{owners}: A map from peer UUIDs to a set of SpaceObject UUIDs. A peer with UUID $id$ is allowed to set the state of exactly those SpaceObjects whose UUIDs are in \textbf{owners}[$id$].
+\item \textbf{admins}: A subset of \textbf{peers} that have authority to change entries in the \textbf{owners} map and the \textbf{admins} set. It is up to the implementation to supply an initial non-empty value for the admins set.
+\item \textbf{onMessage}: An RXJS Subject (event emitter) that emits whenever a non-maintenance message is received. Emits \textbf{MessageWithSource} objects, which have the following properties:
+  \begin{itemize}
+  \item $source$: The UUID of the peer that sent the message.
+  \item $message$: The message body, which is of unknown type.
+  \end{itemize}
+  
+\item \textbf{disconnect()}: Notifies the other peers that this client is disconnecting.
+\end{enumerate}
+
+
+
+\end{document}

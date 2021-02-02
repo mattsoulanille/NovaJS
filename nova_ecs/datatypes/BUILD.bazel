@@ -1,0 +1,44 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+
+ts_library(
+    name = "datatypes",
+    srcs = [
+        "vector.ts",
+        "position.ts",
+        "angle.ts",
+        "mod.ts",
+        "set.ts",
+    ],
+    deps = [
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//immer",
+    ]
+)
+
+ts_library(
+    name = "datatypes_test_lib",
+    srcs = [
+        "vector_test.ts",
+        "position_test.ts",
+        "set_test.ts",
+    ],
+    deps = [
+        ":datatypes",
+        "@npm//@types/jasmine",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//immer",
+    ]
+)
+
+jasmine_node_test(
+    name = "datatypes_test",
+    link_workspace_root = True,
+    srcs = [
+        ":datatypes_test_lib",
+    ]
+)

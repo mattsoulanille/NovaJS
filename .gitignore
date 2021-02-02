@@ -1,21 +1,73 @@
-build/
-npm-debug.log
+# Created by https://www.gitignore.io/api/emacs
+
+### Emacs ###
+# -*- mode: gitignore; -*-
 *~
 \#*\#
+/.emacs.desktop
+/.emacs.desktop.lock
+*.elc
+auto-save-list
+tramp
 .\#*
-.DS_Store
-*.pyc
-*.swp
-bower_components
-node_modules
-favicon.icns
-parsing.js
-Nova Files
-Nova Data
-Plug-ins
-static
 
+# Org-mode
+.org-id-locations
+*_archive
+
+# flymake-mode
+*_flymake.*
+*flymd.*
+
+# eshell files
+/eshell/history
+/eshell/lastdir
+
+# elpa packages
+/elpa/
+
+# reftex files
+*.rel
+
+# AUCTeX auto folder
+/auto/
+
+# cask packages
+.cask/
+dist/
+
+# Flycheck
+flycheck_*.el
+
+# server auth directory
+/server/
+
+# projectiles files
+.projectile
+
+# directory configuration
+.dir-locals.el
+
+# End of https://www.gitignore.io/api/emacs
+
+node_modules
+
+.DS_Store
+
+Nova Data*
+Nova_Data*
+Nova Plug*
+Nova Ship*
+build/
+
+dist
+bazel-out
+node_modules
+
+# Latex
 *.aux
+*.dvi
 *.log
 *.out
-design/auto/
+*.pdf
+*.ps

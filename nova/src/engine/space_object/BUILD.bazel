@@ -1,0 +1,20 @@
+package(default_visibility = ["//visibility:public"])
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
+
+
+# ts_library(
+#     name = "space_object_mods",
+#     srcs = [
+#         "Movement.ts",
+#         "PlanetStep.ts",
+#         "ShipStep.ts",
+#         "SpaceObjectStep.ts",
+#     ],
+#     deps = [
+#         "//nova/src/proto:protobufjs_bundle",
+#         "//nova/src/engine:utils",
+#         "@npm//@types/node",
+#         "@npm//immer",
+#     ]
+# )

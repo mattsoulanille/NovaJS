@@ -1,0 +1,60 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
+
+ts_library(
+    name = "ecs",
+    srcs = [
+        "entity.ts",
+        "component.ts",
+        "system.ts",
+        "query.ts",
+        "resource.ts",
+        "world.ts",
+        "utils.ts",
+        "plugin.ts",
+        "arg_types.ts",
+        "async_system.ts",
+        "component_map.ts",
+        "entity_map.ts",
+        "mutable_immutable_map_handle.ts",
+    ],
+    deps = [
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//immer",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//rxjs",
+    ]
+)
+
+ts_library(
+    name = "ecs_test_lib",
+    testonly = True,
+    srcs = [
+        "system_test.ts",
+        "world_test.ts",
+        "utils_test.ts",
+        "async_system_test.ts",
+    ],
+    deps = [
+        ":ecs",
+        "//nova_ecs/datatypes",
+        "@npm//@types/jasmine",
+        "@npm//io-ts",
+        "@npm//rxjs",
+        "@npm//immer",
+        "@npm//@types/uuid",
+    ]
+)
+
+jasmine_node_test(
+    name = "ecs_test",
+    link_workspace_root = True,
+    srcs = [
+        ":ecs_test_lib",
+    ],
+)

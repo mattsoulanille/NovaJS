@@ -1,0 +1,78 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+
+
+# WARNING: Using directory labels here. That means bazel can't
+# detect changes to files within these directories. It only
+# detects when the directories change via addition or deletion
+# of files. It's necessary because the files in these directories
+# have spaces in their names. See the documentation at
+# https://docs.bazel.build/versions/master/build-ref.html#label_directory
+filegroup(
+    name = "nova_data",
+    srcs = [
+        "Nova_Data",
+        "objects",
+    ]
+)
+
+ts_library(
+    name = "server",
+    srcs = ["server.ts"],
+    deps = [
+        "@npm//@types/node",
+        "@npm//express",
+        "@npm//@types/express",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "//novaparse",
+        "//nova/src/common",
+        #"//nova/src/engine",
+        "//nova/src/communication:communication_server_lib",
+        "//nova/src/server",
+        "//nova/src/server/parsing",
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
+        "//nova/src/nova_plugin",
+        #"//nova/src:gameloop_lib",
+        #"@npm//protobufjs",
+    ],
+    data = [
+        "//:tsconfig.json"
+    ]
+)
+
+nodejs_binary(
+    name = "nova",
+    #entry_point = "server_rollup.js",
+    entry_point = "server.ts",
+    # Any files you want access to MUST be listed here!
+    link_workspace_root = True,
+    # https://github.com/dgp1130/rules_prerender/issues/8
+    templated_args = ["--bazel_patch_module_resolver"],
+    data = [
+        #":server_rollup",
+        ":server",
+        "//nova/settings",
+        "//novadatainterface:defaults",
+        ":nova_data",
+        "//nova/test_keys",
+        "//nova/src:static_files",
+        "//nova/src:browser_bundle",
+        #"//nova/src/engine",
+        # TODO: Understand why you need to include the
+        # compiled libraries in 'data'
+        # "//nova/src/proto:protobufjs_bundle",
+        # "@npm//protobufjs",
+        #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
+        "//novadatainterface",
+        "//novaparse",
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
+        "//nova_ecs/datatypes",
+        "//nova/src/common",
+    ],
+)

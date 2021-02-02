@@ -1,0 +1,144 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+load("@novajs//:bundlers.bzl", "web_bundle")
+load("@npm//@bazel/concatjs:index.bzl", "karma_web_test")
+
+ts_library(
+    name = "communication_lib",
+    srcs = [
+        #"RpcChannel.ts",
+        "Channel.ts",
+        "SocketMessage.ts",
+        "CommunicatorMessage.ts",
+        #"GetChanges.ts",
+        #"OverwriteState.ts",
+        #"FilterDelta.ts",
+        #"getKeyDelta.ts",
+    ],
+    deps = [
+        "@npm//rxjs",
+        #"@npm//protobufjs",
+        "@npm//io-ts",
+        "@npm//immer",
+        "//nova_ecs/plugins",
+        #"//nova/src/proto:protobufjs_bundle",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+        #"//nova/src/common",
+    ]
+)
+
+ts_library(
+    name = "communication_server_lib",
+    srcs = [
+        "SocketChannelServer.ts",
+        "CommunicatorServer.ts",
+    ],
+    deps = [
+        ":communication_lib",
+        "@npm//@types/node",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//rxjs",
+        "@npm//ws",
+        "@npm//@types/ws",
+        #"@npm//google-protobuf",
+        #"@npm//@types/google-protobuf",
+        "@npm//fp-ts",
+        "//nova_ecs/plugins",
+        #"//nova/src/common",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+    ]
+)
+
+ts_library(
+    name = "communication_client_lib",
+    srcs = [
+        "SocketChannelClient.ts",
+        "CommunicatorClient.ts",
+    ],
+    deps = [
+        ":communication_lib",
+        #"@npm//protobufjs",
+        "@npm//@types/node",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//rxjs",
+        "@npm//fp-ts",
+        "//nova_ecs/plugins",
+        #"//nova/src/common",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+        #"//nova/src/proto:protobufjs_bundle",
+    ]
+)
+
+jasmine_node_test(
+    name = "communication_tests",
+    link_workspace_root = True,
+    srcs = [":unit_test_sources"],
+)
+
+ts_library(
+    name = "test_utils_lib",
+    srcs = ["test_utils.ts"],
+)
+
+ts_library(
+    name = "unit_test_sources",
+    testonly = True,
+    # All tests must end in "_test.ts" or jasmine won't recognize them!
+    srcs = [
+        "SocketChannelServer_test.ts",
+     ],
+    deps = [
+        ":test_utils_lib",
+        ":communication_server_lib",
+        ":communication_lib",
+        "@npm//fp-ts",
+        "@npm//@types/node",
+        "@npm//typescript",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+        "@npm//rxjs",
+        "@npm//ws",
+        "@npm//@types/ws",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
+    ]
+)
+
+ts_library(
+    name = "socket_channel_client_test_lib",
+    srcs = [
+        "SocketChannelClient_test.ts",
+    ],
+    deps = [
+        "@npm//@types/node",
+        "@npm//@types/jasmine",
+        #"@npm//jasmine",
+        "@npm//fp-ts",
+        ":test_utils_lib",
+        ":communication_client_lib",
+        ":communication_lib",
+        #"@npm//uuid",
+        #"@npm//@types/uuid",
+        "@npm//rxjs",
+    ]
+)
+
+web_bundle(
+    name = "socket_channel_client_test_bundle",
+    deps = [":socket_channel_client_test_lib"],
+    entry_point = "SocketChannelClient_test.ts",
+)
+
+karma_web_test(
+    name = "browser_tests",
+    srcs = [
+        ":socket_channel_client_test_bundle",
+    ],
+)

@@ -1,0 +1,63 @@
+package(default_visibility = ["//visibility:public"])
+
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
+
+ts_library(
+    name = "utils",
+    srcs = [
+        "Mod.ts",
+        #"State.ts",
+        #"StateSpreader.ts",
+        "Vector.ts",
+        "Position.ts",
+    ],
+    deps = [
+        #"//nova/src/proto:protobufjs_bundle",
+        "@npm//immer",
+    ]
+)
+    
+# ts_library(
+#     name = "engine",
+#     srcs = [
+#         "Engine.ts",
+#         "EngineMod.ts",
+#         "MovementMod.ts",
+#         "StateTreeMod.ts",
+#         "StateTree.ts",
+#         "ShipMod.ts",
+#         "SystemMod.ts",
+#         "ImmerStepper.ts",
+#     ],
+#     deps = [
+#         ":utils",
+#         #"//nova/src/engine/space_object:space_object_mods",
+#         "//nova/src/common",
+#         #"//nova/src/proto:protobufjs_bundle",
+#         "//novadatainterface",
+#         # "@npm//@types/node",
+#         "@npm//uuid",
+#         "@npm//@types/uuid",
+#         "@npm//io-ts",
+#         # "@npm//google-protobuf",
+#         # "@npm//@types/google-protobuf",
+#         # "@npm//rxjs",
+#         "@npm//immer",
+#     ]
+# )
+
+
+# ts_library(
+#     name = "novaparse",
+#     srcs = glob(["src/*.ts", "src/**/*.ts"]),
+#     module_name = "novaparse", # for npm
+#     deps = [
+#         #"@npm//pngjs",
+#         "@npm//@types/node",
+#         "//NovaDataInterface:novadatainterface",
+#     ],
+# )
+
+

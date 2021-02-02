@@ -1,0 +1,11 @@
+syntax = "proto3";
+import "nova/src/proto/outfit_delta.proto";
+import "nova/src/proto/armament_delta.proto";
+import "nova/src/proto/map_keys.proto";
+
+message EquipmentDelta {
+  map<string, OutfitDelta> outfits = 1;
+  MapKeys outfitsKeys = 2;
+
+  ArmamentDelta armament = 3;  
+}

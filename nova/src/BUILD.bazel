@@ -1,0 +1,76 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@novajs//:bundlers.bzl", "web_bundle")
+
+
+filegroup(
+    name = "static_files",
+    srcs = [
+        "index.html",
+    ],
+)
+
+# ts_library(
+#     name = "gameloop_lib",
+#     srcs = ["GameLoop.ts"],
+#     deps = [
+#         "//nova/src/engine",
+#         "//nova/src/engine:utils",
+#         "//novadatainterface",
+#         "//nova/src/communication:communication_lib",
+#         "@npm//immer",
+#     ],
+# )
+
+ts_library(
+    name = "browser_lib",
+    srcs = ["browser.ts"],
+    deps = [
+        #":gameloop_lib",
+        "@npm//@types/node",
+        "@npm//pixi.js",
+        "@npm//rxjs",
+        "//nova/src/common",
+        #"//nova/src/client",
+        "//nova/src/display",
+        #"//nova/src/engine",
+        #"//nova/src/engine:utils",
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
+        "//nova/src/nova_plugin",
+        "//nova/src/communication:communication_client_lib",
+        "//nova/src/client/gamedata",
+        "@npm//uuid",
+        "@npm//@types/uuid",
+    ]
+)
+
+web_bundle(
+    name = "browser_bundle",
+    deps = [
+        ":browser_lib",
+        #"@npm//protobufjs",
+    ],
+    entry_point = "browser.ts",
+)
+
+# rollup_bundle(
+#     name = "browser_bundle",
+#     deps = [
+#         ":browser_lib",
+#         "@npm//@rollup/plugin-node-resolve",
+#         "@npm//@rollup/plugin-commonjs",
+#         "@npm//rollup-plugin-sourcemaps",
+#         "@npm//@rollup/plugin-json",
+#         "@npm//rollup-plugin-node-globals",
+#         "@npm//rollup-plugin-node-builtins",
+#         "@npm//protobufjs",
+#     ],
+#     entry_point = "browser.ts",
+#     config_file = "//:rollup_browser.config.js",
+#     sourcemap = "inline",
+#     format = "iife",
+# )

@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+
+filegroup(
+    name = "defaults",
+    srcs = [
+        "default.png",
+        "defaultRled.png",
+    ],
+)
+
+ts_library(
+    name = "novadatainterface",
+    srcs = glob(["*.ts"]),
+    deps = [
+        "@npm//@types/node",
+    ],
+)
