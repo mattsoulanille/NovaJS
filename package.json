@@ -64,15 +64,15 @@
         "url-shim": "^1.0.1"
     },
     "scripts": {
-        "build": "bazel build //...",
-        "test": "bazel test //...",
+        "build": "bazelisk build //...",
+        "test": "bazelisk test //...",
         "test-watch": "ibazel test //...",
         "test-only": "ibazel test",
         "test-brk": "ibazel test --test_arg=--node_options=--inspect-brk --test_output=streamed --test_timeout=9999 --nocache_test_results",
-        "start": "bazel build nova && ./dist/bin/nova/nova.sh",
+        "start": "bazelisk build nova && ./dist/bin/nova/nova.sh",
         "watch": "ibazel run nova",
         "watch-brk": "ibazel run nova --config=debug --node_options=--inspect-brk",
-        "debug-bazel": "bazel run nova --verbose_failures --sandbox_debug"
+        "debug-bazel": "bazelisk run nova --verbose_failures --sandbox_debug"
     },
     "dependencies": {
         "@types/uuid": "^7.0.2",
