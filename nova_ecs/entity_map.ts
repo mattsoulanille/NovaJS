@@ -6,12 +6,14 @@ import { CallWithDraft } from "./world";
 export interface EntityMap extends Map<string, Entity> { }
 
 export class EntityMapHandle implements EntityMap {
-    constructor(private callWithDraft: CallWithDraft,
+    constructor(private mutableEntities: EntityMap,
+        private callWithDraft: CallWithDraft,
         // addComponnet adds a component as something the world knows about.
         // Doesn't add it to an entity.
         private addComponent: (component: Component<any, any, any, any>) => void) { }
 
     clear(): void {
+        this.mutableEntities.clear();
         this.callWithDraft(draft => {
             draft.entities.clear();
         });

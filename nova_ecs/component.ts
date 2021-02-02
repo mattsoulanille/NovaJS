@@ -11,6 +11,7 @@ export interface ComponentArgs<Data, DataSerialized = Data,
     deltaType?: t.Type<Delta, DeltaSerialized>;
     getDelta?: (a: Data, b: Data) => Delta | undefined;
     applyDelta?: (data: Draft<Data>, delta: Delta) => void;
+    mutable?: boolean;
 }
 
 export class Component<Data, DataSerialized = Data,
@@ -21,14 +22,16 @@ export class Component<Data, DataSerialized = Data,
     readonly deltaType?: t.Type<Delta, DeltaSerialized>;
     readonly getDelta?: (a: Data, b: Data) => Delta | undefined;
     readonly applyDelta?: (data: Draft<Data>, delta: Delta) => void;
+    readonly mutable: boolean;
 
-    constructor({ name, type, deltaType, getDelta, applyDelta }:
+    constructor({ name, type, deltaType, getDelta, applyDelta, mutable }:
         ComponentArgs<Data, DataSerialized, Delta, DeltaSerialized>) {
         this.name = name;
         this.type = type;
         this.deltaType = deltaType;
         this.getDelta = getDelta;
         this.applyDelta = applyDelta;
+        this.mutable = mutable ?? false;
     }
 
     toString() {

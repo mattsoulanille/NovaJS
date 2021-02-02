@@ -7,7 +7,6 @@ export interface ResourceArgs<Data, DataSerialized = Data,
     Delta = Partial<Data>, DeltaSerialized = Delta> extends
     ComponentArgs<Data, DataSerialized, Delta, DeltaSerialized> {
     multiplayer?: boolean;
-    mutable?: boolean;
 }
 
 /**
@@ -25,9 +24,6 @@ export class Resource<Data, DataSerialized = Data,
         super({ name, type, getDelta, applyDelta });
         this.multiplayer = multiplayer ?? true;
         this.mutable = mutable ?? false;
-        if (this.multiplayer && this.mutable) {
-            throw new Error('A resource must be immutable to be multiplayer');
-        }
     }
 
     toString() {

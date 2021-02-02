@@ -19,6 +19,7 @@ ts_library(
         "async_system.ts",
         "component_map.ts",
         "entity_map.ts",
+        "mutable_immutable_map_handle.ts",
     ],
     deps = [
         "@npm//io-ts",

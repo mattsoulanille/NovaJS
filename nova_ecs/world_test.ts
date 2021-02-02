@@ -607,20 +607,19 @@ describe('world', () => {
             .toThrowError(`A component with name ${component1.name} already exists`);
     });
 
-    it('catches component name conflicts when adding them to entities', () => {
-        const component1 = new Component({
-            name: 'TestComponent',
-            type: t.string,
-            getDelta: () => { },
-            applyDelta: () => { },
-        });
+    it('catches component name conflicts', () => {
+        const component1 = new Component<string>({ name: 'TestComponent' });
+        const component2 = new Component<string>({ name: 'TestComponent' });
 
-        const component2 = new Component({
-            name: 'TestComponent',
-            type: t.string,
-            getDelta: () => { },
-            applyDelta: () => { },
-        });
+        world.addComponent(component1);
+
+        expect(() => world.addComponent(component2))
+            .toThrowError(`A component with name ${component1.name} already exists`);
+    });
+
+    it('catches component name conflicts when adding them to entities', () => {
+        const component1 = new Component<string>({ name: 'TestComponent' });
+        const component2 = new Component<string>({ name: 'TestComponent' });
 
         const uuid = v4();
         world.entities.set(uuid, new EntityBuilder()
@@ -629,7 +628,7 @@ describe('world', () => {
 
         expect(() => handle!.components.set(component2, 'foobar'))
             .toThrowError(`A component with name ${component1.name} already exists`);
-    })
+    });
 
     it('provides systems with access to the entity handle', () => {
         const fooValues = new Set<number>();

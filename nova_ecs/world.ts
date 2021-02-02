@@ -69,10 +69,12 @@ export class World {
         resources: new Map(),
     };
 
+    private mutableEntities: EntityMap = new Map();
     private mutableResources = new Map<UnknownResource,
         unknown /* resource data */>();
 
     readonly entities = new EntityMapHandle(
+        this.mutableEntities,
         this.callWithNewDraft.bind(this),
         this.addComponent.bind(this));
 
@@ -89,7 +91,6 @@ export class World {
     private nameResourceMap = new Map<string, UnknownResource>();
 
     private systems: Array<System> = []; // Not a map because order matters.
-    private queries = new Set<Query>();
     singletonEntity: Entity;
 
     constructor(private name?: string) {
