@@ -1,0 +1,4 @@
+steps:
+  - name: gcr.io/cloud-builders/bazel
+    id: unittest
+    args: ['test', '...']
