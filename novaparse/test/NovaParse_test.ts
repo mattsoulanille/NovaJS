@@ -1,6 +1,6 @@
-import fs from "fs";
+import * as fs from "fs";
 import "jasmine";
-import path from "path";
+import * as path from "path";
 import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
 import { PNG } from "pngjs";
 import { getDefaultExitPoints } from "../../novadatainterface/Animation";
@@ -10,7 +10,7 @@ import { OutfitData } from "../../novadatainterface/OutiftData";
 import { PictImageData } from "../../novadatainterface/PictImage";
 import { PlanetData } from "../../novadatainterface/PlanetData";
 import { ShipData } from "../../novadatainterface/ShipData";
-import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "../../novadatainterface/SpriteSheetData";
+import { ConvexHull, ConvexHulls, SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "../../novadatainterface/SpriteSheetData";
 import { getDefaultStatusBarColors, getDefaultStatusBarDataAreas } from "../../novadatainterface/StatusBarData";
 import { WeaponData } from "../../novadatainterface/WeaponData";
 import { NovaParse } from "../NovaParse";
@@ -261,15 +261,12 @@ describe("NovaParse", function() {
         const rs1000: SpriteSheetData = await np.data.SpriteSheet.get("nova:1000");
         const sheet1000Path =
             require.resolve("novajs/novaparse/test/testSpriteSheet.json");
-        const shouldEqual = JSON.parse(fs.readFileSync(
+        const expectedSpriteSheet = JSON.parse(fs.readFileSync(
             sheet1000Path, "utf8")) as SpriteSheetData;
 
-        fail("TODO: Fix convex hulls");
-        //expect(rs1000).toEqual(shouldEqual);
-
-        // // Chai thinks that -0 !== 0
-        // var noNegativeZeroes = JSON.parse(JSON.stringify(rs1000));
-        // noNegativeZeroes.should.deep.equal(shouldEqual);
+        //fail("TODO: Fix convex hulls");
+        var noNegativeZeroes = JSON.parse(JSON.stringify(rs1000)) as SpriteSheetData;
+        expect(noNegativeZeroes).toEqual(expectedSpriteSheet);
     });
 
     it("Should produce the default StatusBar", async function() {

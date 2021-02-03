@@ -6,7 +6,7 @@ import { RledResource } from "../resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
 import { Defaults } from "novajs/novadatainterface/Defaults";
-
+import hull from 'hull.js';
 
 export interface SpriteSheetMulti {
     spriteSheet: SpriteSheetData;
@@ -102,9 +102,9 @@ function makeVisibleArray(png: PNG): Array<[number, number]> {
 function makeConvexHull(png: PNG): ConvexHull {
     // No concavity. Convex hull.
     var visibleArray = makeVisibleArray(png);
-    //TODO: Fix convex hulls!
-    //var hullWithRepeat = hull(visibleArray, Infinity);
-    var hullWithRepeat: ConvexHull = [[-10, -10], [10, -10], [10, 10], [-10, 10], [1, 2]];
+    // TODO: Maybe replace this with rust's fast convex hull
+    var hullWithRepeat = hull(visibleArray, Infinity) as ConvexHull;
+    //var hullWithRepeat: ConvexHull = [[-10, -10], [10, -10], [10, 10], [-10, 10], [1, 2]];
     // Cut off the last point since it's the same as the first.
     return hullWithRepeat.slice(0, hullWithRepeat.length - 1);
 }
