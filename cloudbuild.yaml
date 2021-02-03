@@ -1,4 +1,4 @@
 steps:
-  - name: gcr.io/cloud-builders/bazel
+  - name: gcr.io/cloud-marketplace-containers/google/bazel:3.5.0
     id: unittest
     args: ['test', '...']
