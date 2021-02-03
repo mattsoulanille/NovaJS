@@ -43,7 +43,7 @@ describe("RledResource", function() {
         leviathan = new RledResource(rleds[1006], idSpace);
     });
 
-    it("should produce an ordered array of frames", async function() {
+    it("should produce an ordered array of frames", function() {
         const starbridgeApplied = applyMask(starbridgePNG, starbridgeMask);
         const leviathanApplied = applyMask(leviathanPNG, leviathanMask);
 
