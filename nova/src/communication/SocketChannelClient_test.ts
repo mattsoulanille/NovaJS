@@ -1,21 +1,35 @@
 import { isLeft } from "fp-ts/lib/Either";
-import { SocketChannelClient } from "novajs/nova/src/communication/SocketChannelClient";
-import { SocketMessage } from "novajs/nova/src/communication/SocketMessage";
+import { SocketChannelClient } from "./SocketChannelClient";
+import { SocketMessage } from "./SocketMessage";
 import { take } from "rxjs/operators";
 import { Callbacks, On, trackOn } from "./test_utils";
 
 describe("SocketChannelClient", function() {
-
     let webSocket: jasmine.SpyObj<WebSocket>;
     let warn: jasmine.Spy<(m: string) => void>;
     let callbacks: Callbacks;
+    let clock: jasmine.Clock;
+
     beforeEach(() => {
-        webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy", ["addEventListener", "send", "close", "removeEventListener"]);
+        clock = jasmine.clock();
+        clock.install();
+
+        webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy",
+            ["addEventListener", "send", "close", "removeEventListener"], {
+            OPEN: 1,
+            CLOSED: 2,
+            CLOSING: 3,
+            CONNECTING: 4,
+            readyState: 1, // OPEN
+        });
         warn = jasmine.createSpy<(m: string) => void>("mockWarn");
 
         let on: On;
         [callbacks, on] = trackOn();
         webSocket.addEventListener.and.callFake(on);
+    });
+    afterEach(() => {
+        clock.uninstall();
     });
 
     it("can be instantiated", () => {
@@ -35,8 +49,10 @@ describe("SocketChannelClient", function() {
         expect(sendMessage).toBeTruthy();
 
         const badMessage = "foobar";
-        const messageEvent =
-            new MessageEvent("testMessage", { data: JSON.stringify(badMessage) });
+        const messageEvent = {
+            type: "testMessage",
+            data: JSON.stringify(badMessage)
+        } as MessageEvent<string>;
 
         let warnPromise = new Promise((resolve) => {
             warn.and.callFake(resolve);
@@ -55,8 +71,10 @@ describe("SocketChannelClient", function() {
         expect(sendMessage).toBeTruthy();
 
         const badMessage = { foo: 'bar' };
-        const messageEvent =
-            new MessageEvent("testMessage", { data: JSON.stringify(badMessage) });
+        const messageEvent = {
+            type: "testMessage",
+            data: JSON.stringify(badMessage)
+        } as MessageEvent<string>;
 
         let warnPromise = new Promise((resolve) => {
             warn.and.callFake(resolve);
@@ -81,8 +99,10 @@ describe("SocketChannelClient", function() {
         };
 
         const message = SocketMessage.encode({ message: testMessage });
-        const messageEvent =
-            new MessageEvent("testMessage", { data: JSON.stringify(message) })
+        const messageEvent = {
+            type: "testMessage",
+            data: JSON.stringify(message)
+        } as MessageEvent<string>;
 
         const messagePromise = client.message.pipe(take(1)).toPromise();
         sendMessage(messageEvent);
@@ -97,8 +117,10 @@ describe("SocketChannelClient", function() {
         expect(sendMessage).toBeTruthy();
 
         const message = SocketMessage.encode({ ping: true });
-        const messageEvent =
-            new MessageEvent("testMessage", { data: JSON.stringify(message) });
+        const messageEvent = {
+            type: "testMessage",
+            data: JSON.stringify(message),
+        } as MessageEvent<string>;
 
         const pongPromise = new Promise<unknown>((resolve) => {
             webSocket.send.and.callFake(resolve);
@@ -114,20 +136,19 @@ describe("SocketChannelClient", function() {
     });
 
     it("sends a ping if it hasn't heard from the server", async () => {
-        jasmine.clock().install();
-
         const client = new SocketChannelClient({
             webSocket,
             warn,
             timeout: 10,
         });
 
+        clock.mockDate(new Date(100));
+
         const pingPromise = new Promise<unknown>((resolve) => {
             webSocket.send.and.callFake(resolve);
         });
 
-        jasmine.clock().tick(11);
-
+        clock.tick(11);
         const ping = await pingPromise;
         const pingMessage = SocketMessage.decode(JSON.parse(ping as string) as unknown);
         if (isLeft(pingMessage)) {
@@ -135,22 +156,26 @@ describe("SocketChannelClient", function() {
         }
         expect(pingMessage.right.ping).toBe(true);
 
-        jasmine.clock().uninstall();
+        clock.uninstall();
     });
 
     it("attempts to reconnect if there is no pong", () => {
-        jasmine.clock().install();
-        (webSocket as any).readyState = WebSocket.OPEN;
+        const webSocketFactory = jasmine.createSpy(
+            'mockWebSocketFactory', () => webSocket);
+        webSocketFactory.and.callThrough();
+
         const client = new SocketChannelClient({
             webSocket,
             warn,
             timeout: 10,
+            webSocketFactory
         });
 
-        jasmine.clock().tick(21);
+        clock.tick(21);
 
         expect(webSocket.close).toHaveBeenCalled();
+        expect(webSocketFactory).toHaveBeenCalled();
 
-        jasmine.clock().uninstall();
+        clock.uninstall();
     });
 });

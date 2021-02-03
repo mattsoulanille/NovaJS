@@ -7,30 +7,19 @@ export class SocketChannelClient implements ChannelClient {
     readonly message = new Subject<unknown>();
 
     webSocket: WebSocket;
+    private webSocketFactory: () => WebSocket;
     warn: (m: string) => void;
     readonly timeout: number;
     private keepaliveTimeout?: NodeJS.Timeout;
     private messageListener: (m: MessageEvent) => void;
 
-    constructor({ webSocket, warn, timeout }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number }) {
-        if (webSocket) {
-            // For testing
-            this.webSocket = webSocket;
-        } else {
-            this.webSocket = new WebSocket(`wss://${location.host}`);
-        }
+    constructor({ webSocket, warn, timeout, webSocketFactory }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number, webSocketFactory?: () => WebSocket }) {
+        this.webSocketFactory = webSocketFactory ??
+            (() => new WebSocket(`wss://${location.host}`));
 
-        if (warn !== undefined) {
-            this.warn = warn;
-        } else {
-            this.warn = console.warn;
-        }
-
-        if (timeout !== undefined) {
-            this.timeout = timeout;
-        } else {
-            this.timeout = 1200;
-        }
+        this.webSocket = webSocket ?? this.webSocketFactory();
+        this.warn = warn ?? console.warn;
+        this.timeout = timeout ?? 1200;
 
         this.messageListener = this.handleMessage.bind(this)
         this.webSocket.addEventListener("message", this.messageListener);
@@ -39,18 +28,18 @@ export class SocketChannelClient implements ChannelClient {
 
     reconnect() {
         this.webSocket.removeEventListener("message", this.messageListener);
-        if (this.webSocket.readyState === WebSocket.CONNECTING
-            || this.webSocket.readyState === WebSocket.OPEN) {
+        if (this.webSocket.readyState === this.webSocket.CONNECTING
+            || this.webSocket.readyState === this.webSocket.OPEN) {
             this.webSocket.close();
         }
-        this.webSocket = new WebSocket(`wss://${location.host}`);
+        this.webSocket = this.webSocketFactory();
         this.webSocket.addEventListener("message", this.messageListener);
         this.resetTimeout();
     }
 
     reconnectIfClosed() {
-        if (this.webSocket.readyState === WebSocket.CLOSED
-            || this.webSocket.readyState === WebSocket.CLOSING) {
+        if (this.webSocket.readyState === this.webSocket.CLOSED
+            || this.webSocket.readyState === this.webSocket.CLOSING) {
             this.reconnect();
         }
     }
@@ -65,8 +54,8 @@ export class SocketChannelClient implements ChannelClient {
         }
 
         this.keepaliveTimeout = setTimeout(() => {
-            if (this.webSocket.readyState === WebSocket.CLOSED
-                || this.webSocket.readyState === WebSocket.CLOSING) {
+            if (this.webSocket.readyState === this.webSocket.CLOSED
+                || this.webSocket.readyState === this.webSocket.CLOSING) {
                 this.warn("Lost connection. Reconnecting...");
                 this.reconnect();
                 return;
