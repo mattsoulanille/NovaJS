@@ -41,27 +41,29 @@ describe("RledResource", function() {
         const rleds = rf.rlëD;
         starbridge = new RledResource(rleds[1010], idSpace);
         leviathan = new RledResource(rleds[1006], idSpace);
+        expect(starbridge).toBeDefined();
+        expect(leviathan).toBeDefined();
     });
 
     it("should produce an ordered array of frames", function() {
         const starbridgeApplied = applyMask(starbridgePNG, starbridgeMask);
         const leviathanApplied = applyMask(leviathanPNG, leviathanMask);
 
-        const starbridgeFrames = getFrames(starbridgeApplied, { width: 48, height: 48 });
-        const leviathanFrames = getFrames(leviathanApplied, { width: 144, height: 144 });
+        const expectedStarbridgeFrames = getFrames(starbridgeApplied, { width: 48, height: 48 });
+        const expectedLeviathanFrames = getFrames(leviathanApplied, { width: 144, height: 144 });
 
         const parsedStarbridgeFrames = starbridge.frames;
         const parsedLeviathanFrames = leviathan.frames
 
-        expect(parsedStarbridgeFrames.length).toEqual(starbridgeFrames.length);
-        expect(parsedLeviathanFrames.length).toEqual(leviathanFrames.length);
+        expect(parsedStarbridgeFrames.length).toEqual(expectedStarbridgeFrames.length);
+        expect(parsedLeviathanFrames.length).toEqual(expectedLeviathanFrames.length);
 
         for (let i = 0; i < parsedStarbridgeFrames.length; i++) {
-            expect(starbridgeFrames[i]).toEqualPNG(parsedStarbridgeFrames[i]);
+            expect(expectedStarbridgeFrames[i]).toEqualPNG(parsedStarbridgeFrames[i]);
         }
 
         for (let i = 0; i < parsedLeviathanFrames.length; i++) {
-            expect(leviathanFrames[i]).toEqualPNG(parsedLeviathanFrames[i]);
+            expect(expectedLeviathanFrames[i]).toEqualPNG(parsedLeviathanFrames[i]);
         }
     });
 });
