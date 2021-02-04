@@ -63,6 +63,17 @@ closure_js_library(
     srcs = [
         ":browser_bundle",
     ],
+    no_closure_library = True,
+    suppress = [
+        "JSC_TYPE_PARSE_ERROR",
+        "JSC_BAD_JSDOC_ANNOTATION",
+        "JSC_INVALID_PARAM",
+        "JSC_USELESS_CODE",
+        "JSC_MISPLACED_ANNOTATION",
+        "JSC_JSDOC_MISSING_TYPE_WARNING",
+        "JSC_UNDEFINED_VARIABLE",
+
+    ]
 )
 
 closure_js_binary(

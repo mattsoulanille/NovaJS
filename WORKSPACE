@@ -54,8 +54,8 @@ http_archive(
     sha256 = "7d206c2383811f378a5ef03f4aacbcf5f47fd8650f6abbc3fa89f3a27dd8b176",
     strip_prefix = "rules_closure-0.10.0",
     urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_closure/archive/0.11.0.tar.gz",
-        "https://github.com/bazelbuild/rules_closure/archive/0.11.0.tar.gz",
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
+        "https://github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
     ],
 )
 
