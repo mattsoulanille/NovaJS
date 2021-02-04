@@ -4,6 +4,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@novajs//:bundlers.bzl", "web_bundle")
+load("@io_bazel_rules_closure//closure:defs.bzl", "closure_js_library", "closure_js_binary")
 
 
 filegroup(
@@ -57,20 +58,17 @@ web_bundle(
     entry_point = "browser.ts",
 )
 
-# rollup_bundle(
-#     name = "browser_bundle",
-#     deps = [
-#         ":browser_lib",
-#         "@npm//@rollup/plugin-node-resolve",
-#         "@npm//@rollup/plugin-commonjs",
-#         "@npm//rollup-plugin-sourcemaps",
-#         "@npm//@rollup/plugin-json",
-#         "@npm//rollup-plugin-node-globals",
-#         "@npm//rollup-plugin-node-builtins",
-#         "@npm//protobufjs",
-#     ],
-#     entry_point = "browser.ts",
-#     config_file = "//:rollup_browser.config.js",
-#     sourcemap = "inline",
-#     format = "iife",
-# )
+closure_js_library(
+    name = "browser_closure_lib",
+    srcs = [
+        ":browser_bundle",
+    ],
+)
+
+closure_js_binary(
+    name = "browser_closure_bundle",
+    deps = [
+        ":browser_closure_lib",
+    ],
+    #entry_point = "browser.ts",
+)
