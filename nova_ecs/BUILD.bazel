@@ -58,3 +58,16 @@ jasmine_node_test(
         ":ecs_test_lib",
     ],
 )
+
+pkg_npm(
+    name = "ecs_pkg",
+    srcs = ["package.json"],
+    deps = [
+        ":ecs",
+        "//:.gitignore",
+    ],
+    nested_packages = [
+        "//nova_ecs/datatypes:datatypes_pkg",
+        "//nova_ecs/plugins:plugins_pkg",
+    ]
+)

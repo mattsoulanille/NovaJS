@@ -2,6 +2,7 @@ package(default_visibility = ["//visibility:public"])
 
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
 ts_library(
     name = "plugins",
@@ -46,4 +47,11 @@ jasmine_node_test(
     srcs = [
         ":plugins_test_lib",
     ]
+)
+
+pkg_npm(
+    name = "plugins_pkg",
+    deps = [
+        ":plugins",
+    ],
 )
