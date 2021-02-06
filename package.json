@@ -70,8 +70,6 @@
         "protobufjs": "^6.9.0",
         "resourceforkjs": "^0.1.0",
         "rxjs": "^6.5.5",
-        "socket.io": "^2.3.0",
-        "socket.io-client": "^2.3.0",
         "supports-color": "^7.1.0",
         "ts-enum-util": "^4.0.1",
         "uuid": "^8.3.2",
