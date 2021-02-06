@@ -24,13 +24,15 @@ http_archive(
 
 #node_repositories(package_json = ["//:package.json"])
 
-# Force node 14
+# Use node 15
 load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
 node_repositories(
-    node_version = "14.0.0",
+    package_json = ["//:package.json"],
+    node_version = "15.8.0",
     node_repositories = {
-        "14.0.0-darwin_amd64": ("node-v14.0.0-darwin-x64.tar.gz", "node-v14.0.0-darwin-x64", "4e50cec7aeef91c6d00d08a3bab938358da182984aa549c2aeab9868e3342f55"),
-        "14.0.0-linux_amd64": ("node-v14.0.0-linux-x64.tar.gz", "node-v14.0.0-linux-x64", "0c3224a9e946e46793e81bced623bb7c0c06538aebea6383ca318a62ac1f49fd"),
+        "15.8.0-darwin_amd64": ("node-v15.8.0-darwin-x64.tar.xz", "node-v15.8.0-darwin-x64", "8b1012b7c78c27513bf1d3b1db65f505041771683d964f14f67fe1fc243fe038"),
+        "15.8.0-linux_amd64": ("node-v15.8.0-linux-x64.tar.xz", "node-v15.8.0-linux-x64", "cdb80f0810e5a076eb6079297073147d2564b1c2292bb4436b3f9e9e4fe18759"),
+        "15.8.0-windows_amd64": ("node-v15.8.0-win-x64.zip", "node-v15.8.0-win-x64", "edb16def1fecaecaffcccf9352e9f94a029d47203f26ae44dc1d4aa7eef35940")
     },
     node_urls = [
         "https://nodejs.org/dist/v{version}/{filename}",
