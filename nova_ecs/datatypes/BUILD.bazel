@@ -6,6 +6,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
 ts_library(
     name = "datatypes",
+    module_name = "nova_ecs/datatypes",
     srcs = [
         "vector.ts",
         "position.ts",
