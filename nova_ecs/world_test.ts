@@ -1,8 +1,6 @@
 import { original } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
-import { ReplaySubject } from 'rxjs';
-import { take, toArray } from 'rxjs/operators';
 import { v4 } from 'uuid';
 import { Entities, GetEntity, Optional, UUID } from './arg_types';
 import { Component } from './component';
@@ -73,13 +71,13 @@ describe('world', () => {
             .toThrowError('World is missing Resource(baz) needed for System(foobar)');
     });
 
-    it('passes components to a system', async () => {
-        const stepData = new ReplaySubject<[number, string]>();
+    it('passes components to a system', () => {
+        const stepData: [number, string][] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (fooData, barData) => {
-                stepData.next([fooData.x, barData.y]);
+                stepData.push([fooData.x, barData.y]);
             }
         });
 
@@ -91,17 +89,16 @@ describe('world', () => {
         );
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo([123, 'asdf']);
+        expect(stepData).toEqual([[123, 'asdf']]);
     });
 
-    it('passes entities to a system added after the entities', async () => {
-        const stepData = new ReplaySubject<[number, string]>();
+    it('passes entities to a system added after the entities', () => {
+        const stepData: [number, string][] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT, BAR_COMPONENT] as const,
             step: (fooData, barData) => {
-                stepData.next([fooData.x, barData.y]);
+                stepData.push([fooData.x, barData.y]);
             }
         });
 
@@ -112,18 +109,17 @@ describe('world', () => {
         world.addSystem(testSystem);
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo([123, 'asdf']);
+        expect(stepData).toEqual([[123, 'asdf']]);
     });
 
-    it('allows systems to modify components', async () => {
-        const stepData = new ReplaySubject<number>();
+    it('allows systems to modify components', () => {
+        const stepData: number[] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT] as const,
             step: (fooData) => {
                 fooData.x += 1;
-                stepData.next(fooData.x);
+                stepData.push(fooData.x);
             }
         });
 
@@ -135,19 +131,18 @@ describe('world', () => {
         world.step();
         world.step();
 
-        await expectAsync(stepData.pipe(take(3), toArray()).toPromise())
-            .toBeResolvedTo([1, 2, 3]);
+        expect(stepData).toEqual([1, 2, 3]);
     });
 
-    it('fulfills queries', async () => {
+    it('fulfills queries', () => {
         const query = new Query([FOO_COMPONENT, BAR_COMPONENT, UUID] as const, "TestQuery");
-        const stepData = new ReplaySubject<[number, string, string]>();
+        const stepData: [number, string, string][] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [query] as const,
             step: (queryData) => {
                 for (let [{ x }, { y }, uuid] of queryData) {
-                    stepData.next([x, y, uuid]);
+                    stepData.push([x, y, uuid]);
                 }
             }
         });
@@ -161,18 +156,22 @@ describe('world', () => {
 
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo([123, 'asdf', 'example uuid']);
-
+        // Appears three times because each entity ran the testSystem
+        // including the singleton entity.
+        expect(stepData).toEqual([
+            [123, 'asdf', 'example uuid'],
+            [123, 'asdf', 'example uuid'],
+            [123, 'asdf', 'example uuid']
+        ]);
     });
 
-    it('passes resources to systems', async () => {
-        const stepData = new ReplaySubject<string[]>();
+    it('passes resources to systems', () => {
+        const stepData: string[][] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [BAZ_RESOURCE, FOO_COMPONENT] as const,
             step: ({ z }) => {
-                stepData.next([...z]);
+                stepData.push([...z]);
             }
         });
 
@@ -183,17 +182,16 @@ describe('world', () => {
 
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo(['foo', 'bar']);
+        expect(stepData).toEqual([['foo', 'bar']]);
     })
 
-    it('passes uuid to systems', async () => {
-        const stepData = new ReplaySubject<string>();
+    it('passes uuid to systems', () => {
+        const stepData: string[] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [UUID, FOO_COMPONENT] as const,
             step: (uuid) => {
-                stepData.next(uuid);
+                stepData.push(uuid);
             }
         });
 
@@ -204,11 +202,10 @@ describe('world', () => {
 
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo('entityUuid');
+        expect(stepData).toEqual(['entityUuid']);
     });
 
-    it('runs systems in topological order', async () => {
+    it('runs systems in topological order', () => {
         const stepData: string[] = [];
 
         const secondSystem = new System({
@@ -265,7 +262,7 @@ describe('world', () => {
         expect(stepData).toEqual(['first', 'second', 'third', 'fourth']);
     });
 
-    it('supports referencing systems by name for ordering', async () => {
+    it('supports referencing systems by name for ordering', () => {
         const stepData: string[] = [];
 
         const secondSystem = new System({
@@ -354,14 +351,14 @@ describe('world', () => {
         expect(stepData).toEqual(['first', 'original value']);
     });
 
-    it('supports optional arguments in systems', async () => {
-        const stepData = new ReplaySubject<[number, string | undefined]>();
+    it('supports optional arguments in systems', () => {
+        const stepData: [number, string | undefined][] = [];
 
         const testSystem = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT, Optional(BAR_COMPONENT)] as const,
             step: (foo, maybeBar) => {
-                stepData.next([foo.x, maybeBar?.y]);
+                stepData.push([foo.x, maybeBar?.y]);
             },
         });
 
@@ -375,21 +372,19 @@ describe('world', () => {
 
         world.step();
 
-        const stepDataContents = await stepData.pipe(take(2), toArray()).toPromise();
-
-        expect(stepDataContents).toContain([123, 'FooBar']);
-        expect(stepDataContents).toContain([456, undefined]);
+        expect(stepData).toContain([123, 'FooBar']);
+        expect(stepData).toContain([456, undefined]);
     });
 
-    it('supports optional arguments in queries', async () => {
+    it('supports optional arguments in queries', () => {
         const query = new Query([FOO_COMPONENT, Optional(BAR_COMPONENT), UUID] as const);
-        const stepData = new ReplaySubject<[number, number, string | undefined]>();
+        const stepData: [number, number, string | undefined][] = [];
         const testSystem = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT, query] as const,
             step: (foo, queryData) => {
                 for (let [{ x }, maybeBar] of queryData) {
-                    stepData.next([foo.x, x, maybeBar?.y]);
+                    stepData.push([foo.x, x, maybeBar?.y]);
                 }
             }
         });
@@ -403,19 +398,16 @@ describe('world', () => {
 
         world.step();
 
-        const stepDataContents = await stepData.pipe(take(4), toArray()).toPromise();
-
         // On each run of testSystem (which runs for both entities), the query
         // iterates over each matching entity, which is why there are four results.
-        expect(stepDataContents).toContain([123, 123, undefined]);
-        expect(stepDataContents).toContain([123, 456, 'asdf']);
-        expect(stepDataContents).toContain([456, 123, undefined]);
-        expect(stepDataContents).toContain([456, 456, 'asdf']);
+        expect(stepData).toContain([123, 123, undefined]);
+        expect(stepData).toContain([123, 456, 'asdf']);
+        expect(stepData).toContain([456, 123, undefined]);
+        expect(stepData).toContain([456, 456, 'asdf']);
     });
 
-    it('loads plugins', async () => {
-        const stepData = new ReplaySubject<string>();
-
+    it('loads plugins', () => {
+        const stepData: string[] = [];
         const plugin: Plugin = {
             name: 'Test Plugin',
             build: (world) => {
@@ -425,7 +417,7 @@ describe('world', () => {
                     name: 'TestSystem',
                     args: [BAR_COMPONENT],
                     step: (bar) => {
-                        stepData.next(bar.y);
+                        stepData.push(bar.y);
                     }
                 }));
             }
@@ -434,8 +426,7 @@ describe('world', () => {
         world.addPlugin(plugin);
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo('plugin component');
+        expect(stepData).toEqual(['plugin component']);
     });
 
     it('supports modifying an existing entity\'s components', () => {
@@ -479,15 +470,15 @@ describe('world', () => {
         expect(fooBarData).toEqual([[123, 'changed by foo']])
     });
 
-    it('removes entities', async () => {
-        const stepData = new ReplaySubject<[string, number]>();
+    it('removes entities', () => {
+        const stepData: [string, number][] = [];
 
         const testSystem = new System({
             name: 'TestSystem',
             args: [BAR_COMPONENT, FOO_COMPONENT] as const,
             step: ({ y }, foo) => {
                 foo.x += 1;
-                stepData.next([y, foo.x]);
+                stepData.push([y, foo.x]);
             }
         });
 
@@ -507,26 +498,25 @@ describe('world', () => {
         world.entities.set(v4(), entityBlueprint!);
         world.step();
 
-        await expectAsync(stepData.pipe(take(5), toArray()).toPromise())
-            .toBeResolvedTo([
-                ['e1', 1],
-                ['e2', 1],
-                // e1 removed
-                ['e2', 2],
-                // e1 added back in
-                ['e2', 3],
-                ['e1', 2]
-            ]);
+        expect(stepData).toEqual([
+            ['e1', 1],
+            ['e2', 1],
+            // e1 removed
+            ['e2', 2],
+            // e1 added back in
+            ['e2', 3],
+            ['e1', 2]
+        ]);
     });
 
-    it('provides a singleton entity', async () => {
-        const stepData = new ReplaySubject<string>();
+    it('provides a singleton entity', () => {
+        const stepData: string[] = [];
 
         const testSystem = new System({
             name: 'TestSystem',
             args: [BAR_COMPONENT] as const,
             step: ({ y }) => {
-                stepData.next(y);
+                stepData.push(y);
             }
         });
 
@@ -534,8 +524,7 @@ describe('world', () => {
         world.addSystem(testSystem);
         world.step();
 
-        await expectAsync(stepData.pipe(take(1)).toPromise())
-            .toBeResolvedTo('singleton')
+        expect(stepData).toEqual(['singleton']);
     });
 
     it('does not permit the singleton entity to be removed', () => {
