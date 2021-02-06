@@ -39,7 +39,6 @@ ts_library(
 
 jasmine_node_test(
     name = "datatypes_test",
-    link_workspace_root = True,
     srcs = [
         ":datatypes_test_lib",
     ]

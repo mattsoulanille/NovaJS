@@ -45,7 +45,6 @@ ts_library(
 
 jasmine_node_test(
     name = "plugins_test",
-    link_workspace_root = True,
     srcs = [
         ":plugins_test_lib",
     ]

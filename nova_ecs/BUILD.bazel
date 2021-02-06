@@ -51,7 +51,6 @@ ts_library(
 
 jasmine_node_test(
     name = "ecs_test",
-    link_workspace_root = True,
     srcs = [
         ":ecs_test_lib",
     ],
