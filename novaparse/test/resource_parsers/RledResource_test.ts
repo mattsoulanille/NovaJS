@@ -14,6 +14,8 @@ declare global {
     }
 }
 
+jasmine.DEFAULT_TIMEOUT_INTERVAL = 30000; // 30 seconds
+
 describe("RledResource", function() {
     let originalTimeout: number;
     let rf: ResourceMap;
@@ -28,9 +30,6 @@ describe("RledResource", function() {
     const idSpace = defaultIDSpace;
 
     beforeEach(async function() {
-        originalTimeout = jasmine.DEFAULT_TIMEOUT_INTERVAL;
-        jasmine.DEFAULT_TIMEOUT_INTERVAL = 10000;
-
         jasmine.addMatchers(PNGCustomMatchers);
 
         starbridgePNG = await getPNG("novaparse/test/resource_parsers/files/rleds/starbridge.png");
@@ -46,9 +45,6 @@ describe("RledResource", function() {
         leviathan = new RledResource(rleds[1006], idSpace);
         expect(starbridge).toBeDefined();
         expect(leviathan).toBeDefined();
-    });
-    afterEach(async function() {
-        jasmine.DEFAULT_TIMEOUT_INTERVAL = originalTimeout;
     });
 
     it("should produce an ordered array of frames", function() {
