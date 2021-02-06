@@ -85,3 +85,7 @@ try-import %workspace%/.bazelrc.user
 # compiler running as daemons, and cache SourceFile AST's to reduce parse time.
 build --strategy=TypeScriptCompile=worker
 
+
+# Use https://github.com/Evertz/bru
+common:bru --bes_backend=grpc://localhost:5000
+common:bru --bes_results_url=http://localhost:8080/invocation
