@@ -63,7 +63,6 @@
         "google-protobuf": "^3.11.4",
         "hull.js": "^1.0.0",
         "io-ts": "^2.2.14",
-        "node": "^15.7.0",
         "pixi-layers": "^0.2.3",
         "pixi.js": "^5.2.2",
         "pngjs": "^5.0.0",
