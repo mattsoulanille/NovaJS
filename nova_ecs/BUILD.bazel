@@ -28,7 +28,6 @@ ts_library(
         "@npm//immer",
         "@npm//uuid",
         "@npm//@types/uuid",
-        "@npm//rxjs",
     ]
 )
 
@@ -46,7 +45,6 @@ ts_library(
         "//nova_ecs/datatypes",
         "@npm//@types/jasmine",
         "@npm//io-ts",
-        "@npm//rxjs",
         "@npm//immer",
         "@npm//@types/uuid",
     ]
