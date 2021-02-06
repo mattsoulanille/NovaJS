@@ -6,6 +6,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
 ts_library(
     name = "ecs",
+    module_name = "nova_ecs",
     srcs = [
         "entity.ts",
         "component.ts",

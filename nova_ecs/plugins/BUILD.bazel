@@ -6,6 +6,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
 ts_library(
     name = "plugins",
+    module_name = "nova_ecs/plugins",
     srcs = [
         "time_plugin.ts",
         "multiplayer_plugin.ts",
