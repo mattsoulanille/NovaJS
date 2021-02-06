@@ -38,6 +38,7 @@ ts_library(
         "@npm//io-ts-types",
         "@npm//fp-ts",
         "@npm//immer",
+        "@npm//uuid",
         "@npm//@types/uuid",
     ]
 )

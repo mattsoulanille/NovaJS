@@ -26,8 +26,6 @@ ts_library(
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
-        "@npm//uuid",
-        "@npm//@types/uuid",
     ]
 )
 
@@ -46,6 +44,7 @@ ts_library(
         "@npm//@types/jasmine",
         "@npm//io-ts",
         "@npm//immer",
+        "@npm//uuid",
         "@npm//@types/uuid",
     ]
 )
