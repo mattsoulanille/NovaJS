@@ -1,7 +1,8 @@
-import { Resource } from "novajs/nova_ecs/resource";
-import { System } from "novajs/nova_ecs/system";
-import { Plugin } from "novajs/nova_ecs/plugin";
+import { Resource } from "nova_ecs/resource";
+import { System } from "nova_ecs/system";
+import { Plugin } from "nova_ecs/plugin";
 import * as PIXI from "pixi.js";
+import { TimeResource } from "nova_ecs/plugins/time_plugin";
 
 
 export const PixiContainer = new Resource<PIXI.Container>({
@@ -19,11 +20,11 @@ const SquareGraphics = new Resource<PIXI.Graphics>({
 
 const SquareSystem = new System({
     name: 'SquareSystem',
-    args: [SquareGraphics],
-    step: (graphics) => {
-        graphics.beginFill(0xDE3249);
-        graphics.drawRect(50, 50, 100, 100);
-        graphics.endFill();
+    args: [SquareGraphics, TimeResource] as const,
+    step: (graphics, time) => {
+        graphics.rotation += time.delta_s;
+        graphics.position.x = (graphics.position.x + time.delta_s * 10) % 800;
+        graphics.position.y = (graphics.position.y + time.delta_s * 15) % 800;
     }
 });
 
@@ -32,6 +33,11 @@ export const Display: Plugin = {
     build: (world) => {
         const container = new PIXI.Container();
         const squareGraphics = new PIXI.Graphics();
+
+        squareGraphics.beginFill(0xDE3249);
+        squareGraphics.drawRect(-50, -50, 100, 100);
+        squareGraphics.endFill();
+
         container.addChild(squareGraphics);
         world.addResource(PixiContainer, container);
         world.addResource(SquareGraphics, squareGraphics);
