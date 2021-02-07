@@ -10,8 +10,8 @@ import { NovaDataType } from "../../../novadatainterface/NovaDataInterface";
  * Serves GameData to the client
  * Maybe consider https://github.com/RioloGiuseppe/byte-serializer in the future?
  */
-export function setupRoutes(gameData: GameDataInterface, app: Express, htmlPath: string, bundlePath: string, settingsPath: string) {
-    return new GameDataServer(gameData, app, htmlPath, bundlePath, settingsPath);
+export function setupRoutes(gameData: GameDataInterface, app: Express, htmlPath: string, bundlePath: string, bundleMapPath: string, settingsPath: string) {
+    return new GameDataServer(gameData, app, htmlPath, bundlePath, bundleMapPath, settingsPath);
 }
 
 // This is a helper class used by `setupRoutes`
@@ -21,6 +21,7 @@ class GameDataServer {
         private readonly app: Express,
         private readonly htmlPath: string,
         private readonly bundlePath: string,
+        private readonly bundleMapPath: string,
         private readonly settingsPath: string) {
         this.setupRoutes();
     }
@@ -47,8 +48,12 @@ class GameDataServer {
             res.sendFile(this.settingsPath);
         });
 
-        this.app.use("/bundle.js", (_req: express.Request, res: express.Response) => {
+        this.app.use("/browser_bundle.js", (_req: express.Request, res: express.Response) => {
             res.sendFile(this.bundlePath);
+        });
+
+        this.app.use("/browser_bundle.js.map", (_req: express.Request, res: express.Response) => {
+            res.sendFile(this.bundleMapPath);
         });
 
         this.app.use("/", (_req: express.Request, res: express.Response) => {

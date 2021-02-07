@@ -4,6 +4,7 @@ import sourcemaps from 'rollup-plugin-sourcemaps';
 import json from '@rollup/plugin-json';
 import alias from '@rollup/plugin-alias';
 import nodeGlobals from 'rollup-plugin-node-globals';
+import compiler from '@ampproject/rollup-plugin-closure-compiler';
 
 export default {
     plugins: [
@@ -20,5 +21,6 @@ export default {
         sourcemaps({
             exclude: /.*pixi.*/,
         }),
+        compiler(),
     ],
 }
