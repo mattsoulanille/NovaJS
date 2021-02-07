@@ -1,11 +1,11 @@
 import { isDraft, original } from "immer";
-import { Component } from "novajs/nova_ecs/component";
-import { System } from "novajs/nova_ecs/system";
-import { Entities, UUID } from "novajs/nova_ecs/arg_types";
-import { AsyncSystem } from "novajs/nova_ecs/async_system";
-import { Plugin } from "novajs/nova_ecs/plugin";
-import { Comms, MultiplayerData } from "novajs/nova_ecs/plugins/multiplayer_plugin";
-import { Query } from "novajs/nova_ecs/query";
+import { Component } from "nova_ecs/component";
+import { System } from "nova_ecs/system";
+import { Entities, UUID } from "nova_ecs/arg_types";
+import { AsyncSystem } from "nova_ecs/async_system";
+import { Plugin } from "nova_ecs/plugin";
+import { Comms, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { Query } from "nova_ecs/query";
 import { v4 } from "uuid";
 import { setDifference } from "../common/SetUtils";
 import { GameDataResource } from "./game_data_resource";
