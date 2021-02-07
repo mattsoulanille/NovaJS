@@ -8,7 +8,7 @@
     "engineStrict": true,
     "devDependencies": {
         "@bazel/bazelisk": "^1.7.3",
-        "@bazel/buildifier": "3.5.0",
+        "@bazel/buildifier": "4.0.0",
         "@bazel/concatjs": "^3.0.0",
         "@bazel/ibazel": "^0.14.0",
         "@bazel/jasmine": "^3.0.0",
