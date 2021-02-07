@@ -15,6 +15,7 @@ def web_bundle(name, deps, entry_point, **kwargs):
             "@npm//path-browserify",
             "@npm//@ampproject/rollup-plugin-closure-compiler",
         ],
+        rollup_bin = "//:rollup_bin",
         link_workspace_root = True,
         entry_point = entry_point,
         config_file = "//:rollup_browser.config.ts",
