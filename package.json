@@ -7,6 +7,7 @@
     },
     "engineStrict": true,
     "devDependencies": {
+        "@ampproject/rollup-plugin-closure-compiler": "^0.26.0",
         "@bazel/bazelisk": "^1.7.3",
         "@bazel/buildifier": "4.0.0",
         "@bazel/concatjs": "^3.1.0",

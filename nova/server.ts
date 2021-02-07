@@ -45,8 +45,9 @@ const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 
 const htmlPath = require.resolve("novajs/nova/src/index.html");
 const bundlePath = require.resolve("novajs/nova/src/browser_bundle.js");
+const bundleMapPath = require.resolve("novajs/nova/src/browser_bundle.js.map");
 const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json");
-setupRoutes(gameData, app, htmlPath, bundlePath, clientSettingsPath);
+setupRoutes(gameData, app, htmlPath, bundlePath, bundleMapPath, clientSettingsPath);
 
 const channel = new SocketChannelServer({ httpsServer });
 
