@@ -13,10 +13,12 @@ export default {
                 path: require.resolve('path-browserify'),
             }
         }),
-	    json(),
-        resolve({browser: true}),
-		commonjs(),
+        json(),
+        resolve({ browser: true }),
+        commonjs(),
         nodeGlobals(),
-		sourcemaps(),
+        sourcemaps({
+            exclude: /.*pixi.*/,
+        }),
     ],
 }

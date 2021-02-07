@@ -15,7 +15,7 @@ def web_bundle(name, deps, entry_point, **kwargs):
         ],
         link_workspace_root = True,
         entry_point = entry_point,
-        config_file = "//:rollup_browser.config.js",
+        config_file = "//:rollup_browser.config.ts",
         sourcemap = "inline",
         format = "iife",
         **kwargs,
