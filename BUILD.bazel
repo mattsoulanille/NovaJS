@@ -9,6 +9,14 @@ exports_files(["tsconfig.json", "rollup.config.js", "rollup_browser.config.ts", 
 package(default_visibility = ["//:__subpackages__"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+
+nodejs_binary(
+    name = "rollup_bin",
+    visibility = ["//:__subpackages__"],
+    entry_point = "@npm//:node_modules/rollup/dist/bin/rollup",
+    templated_args = ["--node_options=--max-old-space-size=4096"],
+)
 
 # pkg_npm(
 #     name = "novaparse_pkg",
