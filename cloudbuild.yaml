@@ -3,4 +3,4 @@ steps:
     id: unittest
     args: ['test', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '...']
 
-timeout: 900
+timeout: 900s
