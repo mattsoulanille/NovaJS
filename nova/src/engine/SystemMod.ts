@@ -1,4 +1,4 @@
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import { EngineMod } from "./EngineMod";
 import { StateTreeDeclaration } from "./StateTree";
 

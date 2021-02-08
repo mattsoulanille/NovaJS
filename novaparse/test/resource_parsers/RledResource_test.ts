@@ -5,7 +5,6 @@ import { PNG } from "pngjs";
 import { getPNG, getFrames, applyMask, PNGCustomMatchers } from "./PNGCompare"
 import { defaultIDSpace } from "./DefaultIDSpace";
 
-
 declare global {
     namespace jasmine {
         interface Matchers<T> {
@@ -16,8 +15,10 @@ declare global {
 
 jasmine.DEFAULT_TIMEOUT_INTERVAL = 30000; // 30 seconds
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
+
 describe("RledResource", function() {
-    let originalTimeout: number;
     let rf: ResourceMap;
     let starbridge: RledResource;
     let leviathan: RledResource;
@@ -32,12 +33,16 @@ describe("RledResource", function() {
     beforeEach(async function() {
         jasmine.addMatchers(PNGCustomMatchers);
 
-        starbridgePNG = await getPNG("novaparse/test/resource_parsers/files/rleds/starbridge.png");
-        starbridgeMask = await getPNG("novaparse/test/resource_parsers/files/rleds/starbridge_mask.png");
-        leviathanPNG = await getPNG("novaparse/test/resource_parsers/files/rleds/leviathan.png");
-        leviathanMask = await getPNG("novaparse/test/resource_parsers/files/rleds/leviathan_mask.png");
+        starbridgePNG = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/rleds/starbridge.png"));
+        starbridgeMask = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/rleds/starbridge_mask.png"));
+        leviathanPNG = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/rleds/leviathan.png"));
+        leviathanMask = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/rleds/leviathan_mask.png"));
 
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/rled.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/rled.ndat");
         rf = await readResourceFork(dataPath, false);
 
         const rleds = rf.rlëD;

@@ -1,9 +1,9 @@
 import { SpaceObjectDrawable } from "novajs/nova/src/client/display/SpaceObjectDrawable";
 import { Position } from "novajs/nova/src/engine/Position";
 import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
-import { MockGameData } from "novajs/novadatainterface/MockGameData";
-import { DefaultSpaceObjectData } from "novajs/novadatainterface/SpaceObjectData";
-import { DefaultAnimation } from "novajs/novadatainterface/Animation";
+import { MockGameData } from "novadatainterface/MockGameData";
+import { DefaultSpaceObjectData } from "novadatainterface/SpaceObjectData";
+import { DefaultAnimation } from "novadatainterface/Animation";
 
 describe("SpaceObjectDrawable", function() {
 

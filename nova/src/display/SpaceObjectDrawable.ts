@@ -1,6 +1,6 @@
-import { Animation } from "novajs/novadatainterface/Animation";
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
+import { Animation } from "novadatainterface/Animation";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import * as PIXI from "pixi.js";
 import { Position } from "../../engine/Position";
 import { ObjectType, SpaceObject } from "../../engine/State";

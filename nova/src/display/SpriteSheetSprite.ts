@@ -1,5 +1,5 @@
-import { AnimationImage } from "novajs/novadatainterface/Animation";
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { AnimationImage } from "novadatainterface/Animation";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { AnimationImageIndex } from "../../../../novadatainterface/Animation";
 import { mod } from "../../engine/Mod";

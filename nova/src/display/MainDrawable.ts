@@ -1,5 +1,5 @@
 import * as PIXI from "pixi.js";
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { Animation } from "../../../../novadatainterface/Animation";
 import { Position } from "../../engine/space_object/Position";
 import { Drawable } from "./Drawable";

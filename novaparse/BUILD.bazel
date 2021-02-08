@@ -7,7 +7,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 ts_library(
     name = "novaparse",
     srcs = ["NovaParse.ts"],
-#    module_name = "novaparse",
+    module_name = "novaparse",
     deps = [
         "@npm//@types/node",
         "@npm//resourceforkjs",

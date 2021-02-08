@@ -1,4 +1,4 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { FactoryQueueMap } from "../../common/FactoryQueueMap";
 import { Position } from "../../engine/Position";

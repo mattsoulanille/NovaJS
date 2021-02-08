@@ -1,9 +1,9 @@
-import { Animation, getDefaultAnimation, getDefaultExitPoints } from "novajs/novadatainterface/Animation";
-import { BaseData } from "novajs/novadatainterface/BaseData";
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
-import { getDefaultShipData } from "novajs/novadatainterface/ShipData";
-import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponData } from "novajs/novadatainterface/WeaponData";
-import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
+import { Animation, getDefaultAnimation, getDefaultExitPoints } from "novadatainterface/Animation";
+import { BaseData } from "novadatainterface/BaseData";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
+import { getDefaultShipData } from "novadatainterface/ShipData";
+import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponData } from "novadatainterface/WeaponData";
+import { BLEND_MODES } from "novadatainterface/BlendModes";
 import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
 import { FPS, TurnRateConversionFactor } from "./Constants";

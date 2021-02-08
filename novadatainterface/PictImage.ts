@@ -1,9 +1,7 @@
-import * as fs from "fs";
+import defaultPict from 'novadatainterface/default_pict';
 
 export type PictImageData = Buffer;
 
-const defaultImagePath = require.resolve("novajs/novadatainterface/default.png");
-const DefaultPictImageData: PictImageData = fs.readFileSync(defaultImagePath);
 export function getDefaultPictImageData(): PictImageData {
-    return DefaultPictImageData;
+    return Buffer.from(defaultPict.buffer);
 }

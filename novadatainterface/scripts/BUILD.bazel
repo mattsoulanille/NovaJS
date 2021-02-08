@@ -1,0 +1,25 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//novadatainterface/scripts:pack_png.bzl", "pack_png")
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+
+ts_library(
+    name = "pack_png_lib",
+    srcs = [
+        "pack_png.ts",
+    ],
+    deps = [
+        "@npm//argparse",
+        "@npm//@types/argparse",
+        "@npm//@types/node",
+    ]
+)
+
+nodejs_binary(
+    name = "pack_png_bin",
+    entry_point = "pack_png.ts",
+    data = [
+        ":pack_png_lib",
+    ],
+)

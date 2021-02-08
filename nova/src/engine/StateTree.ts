@@ -1,6 +1,6 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { Gettable } from "novajs/novadatainterface/Gettable";
-import { NovaDataInterface, NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { Gettable } from "novadatainterface/Gettable";
+import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
 import { StateTreeMod, StateTreeModFactory } from "./StateTreeMod";
 import * as t from 'io-ts';
 

@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import "jasmine";
+import { BLEND_MODES } from "novadatainterface/BlendModes";
 import * as path from "path";
-import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
 import { PNG } from "pngjs";
 import { getDefaultExitPoints } from "../../novadatainterface/Animation";
 import { ExplosionData } from "../../novadatainterface/ExplosionData";
@@ -10,12 +10,15 @@ import { OutfitData } from "../../novadatainterface/OutiftData";
 import { PictImageData } from "../../novadatainterface/PictImage";
 import { PlanetData } from "../../novadatainterface/PlanetData";
 import { ShipData } from "../../novadatainterface/ShipData";
-import { ConvexHull, ConvexHulls, SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "../../novadatainterface/SpriteSheetData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "../../novadatainterface/SpriteSheetData";
 import { getDefaultStatusBarColors, getDefaultStatusBarDataAreas } from "../../novadatainterface/StatusBarData";
 import { WeaponData } from "../../novadatainterface/WeaponData";
 import { NovaParse } from "../NovaParse";
 import { FPS, TurnRateConversionFactor } from "../src/parsers/Constants";
 import { getPNG } from "./resource_parsers/PNGCompare";
+
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
 
 // TODO: Factor all the resource-specific tests out of
 // this file and test them separately. Use mocks instead. 
@@ -219,7 +222,7 @@ describe("NovaParse", function() {
 
     it("Should parse PictImage", async function() {
         const p700: PictImageData = await np.data.PictImage.get("nova:700");
-        const statusBarPath = require.resolve("novajs/novaparse/test/resource_parsers/files/picts/statusBar.png");
+        const statusBarPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/picts/statusBar.png");
         const statusBar = await getPNG(statusBarPath);
 
         expect(p700).toEqual(PNG.sync.write(statusBar));
@@ -233,7 +236,7 @@ describe("NovaParse", function() {
 
     it("Should parse SpriteSheetImage", async function() {
         const ri1000: SpriteSheetImageData = await np.data.SpriteSheetImage.get("nova:1000");
-        const shuttlePath = require.resolve("novajs/novaparse/test/testSpriteSheetImage.png");
+        const shuttlePath = runfiles.resolve("novajs/novaparse/test/testSpriteSheetImage.png");
         const shuttle = fs.readFileSync(shuttlePath);
         expect(ri1000).toEqual(shuttle);
     });
@@ -242,7 +245,7 @@ describe("NovaParse", function() {
         const rf1116: SpriteSheetFramesData =
             await np.data.SpriteSheetFrames.get("nova:1116");
 
-        const frames1116Path = require.resolve("novajs/novaparse/test/zephyrFrames.json");
+        const frames1116Path = runfiles.resolve("novajs/novaparse/test/zephyrFrames.json");
         const shouldEqual1116 = JSON.parse(fs.readFileSync(
             frames1116Path, "utf8")) as SpriteSheetFramesData;
         expect(rf1116).toEqual(shouldEqual1116);
@@ -251,7 +254,7 @@ describe("NovaParse", function() {
             await np.data.SpriteSheetFrames.get("nova:1000");
 
         const frames1000Path =
-            require.resolve("novajs/novaparse/test/testSpriteSheetFrames.json");
+            runfiles.resolve("novajs/novaparse/test/testSpriteSheetFrames.json");
         const shouldEqual1000 = JSON.parse(fs.readFileSync(
             frames1000Path, "utf8")) as SpriteSheetFramesData;
         expect(rf1000).toEqual(shouldEqual1000);
@@ -260,7 +263,7 @@ describe("NovaParse", function() {
     it("Should parse SpriteSheet", async function() {
         const rs1000: SpriteSheetData = await np.data.SpriteSheet.get("nova:1000");
         const sheet1000Path =
-            require.resolve("novajs/novaparse/test/testSpriteSheet.json");
+            runfiles.resolve("novajs/novaparse/test/testSpriteSheet.json");
         const expectedSpriteSheet = JSON.parse(fs.readFileSync(
             sheet1000Path, "utf8")) as SpriteSheetData;
 

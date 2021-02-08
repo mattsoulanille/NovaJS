@@ -1,5 +1,5 @@
 import produce, { enableMapSet } from "immer";
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 //import { Display } from "./display/Display";
 import { Engine } from "./engine/Engine";
 

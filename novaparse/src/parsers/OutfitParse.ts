@@ -1,8 +1,8 @@
 import { OutfResource } from "../resource_parsers/OutfResource";
-import { BaseData } from "novajs/novadatainterface/BaseData";
+import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { OutfitData, OutfitPhysics } from "novajs/novadatainterface/OutiftData";
-import { getDefaultPictData } from "novajs/novadatainterface/PictData";
+import { OutfitData, OutfitPhysics } from "novadatainterface/OutiftData";
+import { getDefaultPictData } from "novadatainterface/PictData";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
 

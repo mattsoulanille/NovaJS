@@ -57,7 +57,6 @@ nodejs_binary(
         #":server_rollup",
         ":server",
         "//nova/settings",
-        "//novadatainterface:defaults",
         ":nova_data",
         "//nova/test_keys",
         "//nova/src:static_files",

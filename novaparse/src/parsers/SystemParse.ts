@@ -1,7 +1,7 @@
 import { SystResource } from "../resource_parsers/SystResource";
-import { SystemData } from "novajs/novadatainterface/SystemData";
+import { SystemData } from "novadatainterface/SystemData";
 import { BaseParse } from "./BaseParse";
-import { BaseData } from "novajs/novadatainterface/BaseData";
+import { BaseData } from "novadatainterface/BaseData";
 
 
 // TODO: Refactor redundant code

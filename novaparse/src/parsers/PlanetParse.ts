@@ -1,10 +1,10 @@
-import { Animation, getDefaultAnimationImage, getDefaultExitPoints } from "novajs/novadatainterface/Animation";
-import { BaseData } from "novajs/novadatainterface/BaseData";
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
-import { getDefaultPictData } from "novajs/novadatainterface/PictData";
-import { PlanetData } from "novajs/novadatainterface/PlanetData";
-import { DamageType } from "novajs/novadatainterface/WeaponData";
-import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
+import { Animation, getDefaultAnimationImage, getDefaultExitPoints } from "novadatainterface/Animation";
+import { BaseData } from "novadatainterface/BaseData";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
+import { getDefaultPictData } from "novadatainterface/PictData";
+import { PlanetData } from "novadatainterface/PlanetData";
+import { DamageType } from "novadatainterface/WeaponData";
+import { BLEND_MODES } from "novadatainterface/BlendModes";
 import { SpobResource } from "../resource_parsers/SpobResource";
 import { BaseParse } from "./BaseParse";
 
