@@ -1,4 +1,4 @@
-import { ShipData } from "novajs/novadatainterface/ShipData";
+import { ShipData } from "novadatainterface/ShipData";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";

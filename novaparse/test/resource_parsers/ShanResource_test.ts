@@ -3,6 +3,8 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { ShanResource } from "../../src/resource_parsers/ShanResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
 
 describe("ShanResource", function() {
     // Shans don't depend on other resources.
@@ -14,7 +16,7 @@ describe("ShanResource", function() {
     let shuttle: ShanResource;
 
     beforeEach(async function() {
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/shan.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/shan.ndat");
         rf = await readResourceFork(dataPath, false);
 
         const shans = rf.shän;

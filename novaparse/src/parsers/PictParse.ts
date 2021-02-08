@@ -1,10 +1,8 @@
-import { PictData } from "novajs/novadatainterface/PictData";
-import { BaseData } from "novajs/novadatainterface/BaseData";
+import { PictData } from "novadatainterface/PictData";
+import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
 import { PictResource, PNGError } from "../resource_parsers/PictResource";
 import { PNG } from "pngjs";
-import { Defaults } from "novajs/novadatainterface/Defaults";
-
 
 export interface PictImageMulti {
     pict: PictData;
@@ -21,7 +19,7 @@ export async function PictImageMultiParse(pict: PictResource, notFoundFunction: 
     catch (e) {
         if (e instanceof PNGError) {
             notFoundFunction("PICT " + base.id + " failed to parse");
-            png = Defaults.PictImage;
+            png = new Buffer('');
         }
         else {
             throw e;

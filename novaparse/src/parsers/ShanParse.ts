@@ -1,8 +1,8 @@
-import { Animation, AnimationFrames, AnimationImages, getDefaultAnimationImage } from "novajs/novadatainterface/Animation";
-import { BaseData } from "novajs/novadatainterface/BaseData";
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
-import { NovaIDNotFoundError } from "novajs/novadatainterface/NovaDataInterface";
-import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
+import { Animation, AnimationFrames, AnimationImages, getDefaultAnimationImage } from "novadatainterface/Animation";
+import { BaseData } from "novadatainterface/BaseData";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
+import { NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
+import { BLEND_MODES } from "novadatainterface/BlendModes";
 import { ShanResource } from "../resource_parsers/ShanResource";
 import { BaseParse } from "./BaseParse";
 

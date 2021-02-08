@@ -1,7 +1,7 @@
-import { Animation, getDefaultAnimation } from "novajs/novadatainterface/Animation";
-import { BaseData } from "novajs/novadatainterface/BaseData";
-import { getDefaultPictData } from "novajs/novadatainterface/PictData";
-import { ShipData, ShipPhysics } from "novajs/novadatainterface/ShipData";
+import { Animation, getDefaultAnimation } from "novadatainterface/Animation";
+import { BaseData } from "novadatainterface/BaseData";
+import { getDefaultPictData } from "novadatainterface/PictData";
+import { ShipData, ShipPhysics } from "novadatainterface/ShipData";
 import { NovaResources } from "../resource_parsers/ResourceHolderBase";
 import { ShipResource } from "../resource_parsers/ShipResource";
 import { BaseParse } from "./BaseParse";

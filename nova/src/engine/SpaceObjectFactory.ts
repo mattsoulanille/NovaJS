@@ -1,4 +1,4 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { Position } from "./Position";
 import { MovementType, ObjectType, SpaceObject, vectorFactory } from "./State";
 import { Angle } from "./Vector";

@@ -3,6 +3,8 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { SpobResource } from "../../src/resource_parsers/SpobResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
 
 describe("SpobResource", function() {
     // Spobs don't depend on other resources.
@@ -13,7 +15,7 @@ describe("SpobResource", function() {
     let p2: SpobResource;
 
     beforeEach(async function() {
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/spob.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/spob.ndat");
         rf = await readResourceFork(dataPath, false);
         const spobs = rf.spöb;
         p1 = new SpobResource(spobs[128], idSpace);

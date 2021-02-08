@@ -1,21 +1,21 @@
 import * as fs from "fs";
+import { BaseData } from "novadatainterface/BaseData";
+import { ExplosionData } from "novadatainterface/ExplosionData";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { Gettable } from "novadatainterface/Gettable";
+import { NovaDataInterface } from "novadatainterface/NovaDataInterface";
+import { NovaIDs } from "novadatainterface/NovaIDs";
+import { OutfitData } from "novadatainterface/OutiftData";
+import { PictData } from "novadatainterface/PictData";
+import { PictImageData } from "novadatainterface/PictImage";
+import { PlanetData } from "novadatainterface/PlanetData";
+import { ShipData } from "novadatainterface/ShipData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "novadatainterface/SpriteSheetData";
+import { StatusBarData } from "novadatainterface/StatusBarData";
+import { SystemData } from "novadatainterface/SystemData";
+import { TargetCornersData } from "novadatainterface/TargetCornersData";
+import { WeaponData } from "novadatainterface/WeaponData";
 import * as path from "path";
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
-import { NovaDataInterface, NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
-import { NovaIDs } from "novajs/novadatainterface/NovaIDs";
-import { ShipData } from "novajs/novadatainterface/ShipData";
-import { OutfitData } from "novajs/novadatainterface/OutiftData";
-import { WeaponData } from "novajs/novadatainterface/WeaponData";
-import { ExplosionData } from "novajs/novadatainterface/ExplosionData";
-import { Gettable } from "novajs/novadatainterface/Gettable";
-import { BaseData } from "novajs/novadatainterface/BaseData";
-import { PictImageData } from "novajs/novadatainterface/PictImage";
-import { SpriteSheetFramesData, SpriteSheetData, SpriteSheetImageData } from "novajs/novadatainterface/SpriteSheetData";
-import { PictData } from "novajs/novadatainterface/PictData";
-import { PlanetData } from "novajs/novadatainterface/PlanetData";
-import { SystemData } from "novajs/novadatainterface/SystemData";
-import { TargetCornersData } from "novajs/novadatainterface/TargetCornersData";
-import { StatusBarData } from "novajs/novadatainterface/StatusBarData";
 
 
 type PathInfo = {

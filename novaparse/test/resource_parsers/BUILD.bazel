@@ -9,6 +9,7 @@ ts_library(
         "PNGCompare.ts",
         "DefaultIDSpace.ts",
     ],
+    module_name = "novaparse/test/resource_parsers",
     deps = [
         "@npm//@types/node",
         "@npm//pngjs",
@@ -51,7 +52,6 @@ ts_library(
 jasmine_node_test(
     name = "unit_tests",
     srcs = [":unit_test_sources"],
-    link_workspace_root = True,
     data = [
         "//novaparse/test/resource_parsers/files",
     ]

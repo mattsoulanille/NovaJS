@@ -1,4 +1,4 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { Position } from "../../engine/Position";
 import { SpaceObject, System } from "../../engine/State";

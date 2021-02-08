@@ -1,4 +1,4 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 
 export class SystemFactory {
     //    readonly spaceObjectFactory: SpaceObjectFactory;

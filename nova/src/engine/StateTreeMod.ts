@@ -1,4 +1,4 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { StateTreeFactories } from "./StateTree";
 
 export type StateTreeModFactory<FactoryData = unknown, Delta = unknown>

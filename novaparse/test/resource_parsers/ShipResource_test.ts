@@ -3,6 +3,8 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { ShipResource } from "../../src/resource_parsers/ShipResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
 
 describe("ShipResource", function() {
     // Ships don't depend on other resources.
@@ -11,7 +13,7 @@ describe("ShipResource", function() {
     let rf: ResourceMap;
     let s1: ShipResource;
     beforeEach(async function() {
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/ship.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/ship.ndat");
         rf = await readResourceFork(dataPath, false);
 
         var ships = rf.shïp;

@@ -1,4 +1,4 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { v4 } from "uuid";
 import { CustomStateTreeDeclaration, StateTree, StateTreeDeclaration, StateTreeDelta, StateTreeFactories, StateTreeNode, StateTreeRoot } from "./StateTree";
 

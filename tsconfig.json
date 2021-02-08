@@ -23,6 +23,12 @@
 	"noFallthroughCasesInSwitch": true,
 	"baseUrl": ".",
 	"esModuleInterop": true,
-	"incremental": false
+	"incremental": false,
+    "paths": {
+      "novadatainterface/*": [
+        "novadatainterface/*",
+        "dist/bin/novadatainterface/*"
+      ]
+    }
   }
 }

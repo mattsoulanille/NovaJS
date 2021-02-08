@@ -15,6 +15,9 @@ declare global {
     }
 }
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
+
 describe("PictResource", function() {
     let ship: PictResource;
     let landed: PictResource;
@@ -33,12 +36,16 @@ describe("PictResource", function() {
     beforeEach(async function() {
         jasmine.addMatchers(PNGCustomMatchers);
 
-        shipPNG = await getPNG("novaparse/test/resource_parsers/files/picts/ship.png");
-        landedPNG = await getPNG("novaparse/test/resource_parsers/files/picts/landed.png");
-        statusBarPNG = await getPNG("novaparse/test/resource_parsers/files/picts/statusBar.png");
-        targetImagePNG = await getPNG("novaparse/test/resource_parsers/files/picts/targetImage.png");
+        shipPNG = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/picts/ship.png"));
+        landedPNG = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/picts/landed.png"));
+        statusBarPNG = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/picts/statusBar.png"));
+        targetImagePNG = await getPNG(runfiles.resolve(
+            "novajs/novaparse/test/resource_parsers/files/picts/targetImage.png"));
 
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/pict.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/pict.ndat");
         rf = await readResourceFork(dataPath, false);
 
         const picts = rf.PICT;

@@ -3,6 +3,8 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { DescResource } from "../../src/resource_parsers/DescResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
 
 describe("DescResource", function() {
     let d1: DescResource;
@@ -13,7 +15,7 @@ describe("DescResource", function() {
     const idSpace = defaultIDSpace;
 
     beforeEach(async function() {
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/desc.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/desc.ndat");
         rf = await readResourceFork(dataPath, false);
 
         const descs = rf.dësc;

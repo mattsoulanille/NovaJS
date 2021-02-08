@@ -3,6 +3,8 @@ import { readResourceFork, ResourceMap } from "resourceforkjs";
 import { BoomResource } from "../../src/resource_parsers/BoomResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 
+// Bazel no longer patches require.
+const runfiles = require(process.env['BAZEL_NODE_RUNFILES_HELPER'] as string) as typeof require;
 
 describe("BoomResource", function() {
     // Booms don't depend on other resources.
@@ -14,7 +16,7 @@ describe("BoomResource", function() {
     let slowBoom: BoomResource;
 
     beforeEach(async function() {
-        const dataPath = require.resolve("novajs/novaparse/test/resource_parsers/files/boom.ndat");
+        const dataPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/boom.ndat");
         rf = await readResourceFork(dataPath, false);
         const booms = rf.bööm;
         firstBoom = new BoomResource(booms[128], idSpace);

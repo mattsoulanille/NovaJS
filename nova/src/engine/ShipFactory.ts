@@ -1,6 +1,6 @@
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { ShipState, SpaceObjectState, SpaceObjectStateValue } from "novajs/nova/src/proto/protobufjs_bundle";
-import { ShipData } from "novajs/novadatainterface/ShipData";
+import { ShipData } from "novadatainterface/ShipData";
 
 export class ShipFactory {
     constructor(private gameData: GameDataInterface) { }

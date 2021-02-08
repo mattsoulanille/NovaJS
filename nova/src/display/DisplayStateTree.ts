@@ -1,6 +1,6 @@
 import { StateTree } from "../engine/StateTree";
 import * as PIXI from "pixi.js";
-import { GameDataInterface } from "novajs/novadatainterface/GameDataInterface";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 
 
 /*

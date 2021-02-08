@@ -1,5 +1,5 @@
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
-import { ShipData } from "novajs/novadatainterface/ShipData";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
+import { ShipData } from "novadatainterface/ShipData";
 import { EngineMod } from "./EngineMod";
 import { MovementMod, MovementType } from "./MovementMod";
 import { StateTreeDeclaration } from "./StateTree";

@@ -1,5 +1,5 @@
-import { NovaDataType } from "novajs/novadatainterface/NovaDataInterface";
-import { BLEND_MODES } from "novajs/novadatainterface/BlendModes";
+import { NovaDataType } from "novadatainterface/NovaDataInterface";
+import { BLEND_MODES } from "novadatainterface/BlendModes";
 import { Animation, AnimationImage, getDefaultAnimationImage, getDefaultExitPoints } from "../../../novadatainterface/Animation";
 import { BaseData } from "../../../novadatainterface/BaseData";
 import { ExplosionData } from "../../../novadatainterface/ExplosionData";

@@ -1,7 +1,4 @@
-import fs from "fs";
-
-const defaultRledPath = require.resolve("novajs/novadatainterface/defaultRled.png");
-const DefaultSpriteSheetImage = fs.readFileSync(defaultRledPath);
+import defaultRled from 'novadatainterface/default_rled';
 export function getDefaultSpriteSheetImage() {
-    return DefaultSpriteSheetImage;
+    return Buffer.from(defaultRled.buffer);
 }
