@@ -1,4 +1,4 @@
-import { Plugin } from "novajs/nova_ecs/plugin";
+import { Plugin } from "nova_ecs/plugin";
 import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
 import { TimePlugin } from "nova_ecs/plugins/time_plugin";
 import { ShipComponent } from "./ship_component";

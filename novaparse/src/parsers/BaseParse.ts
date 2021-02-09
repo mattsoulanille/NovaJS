@@ -1,4 +1,4 @@
-import { BaseData } from "../../../novadatainterface/BaseData";
+import { BaseData } from "novadatainterface/BaseData";
 import { BaseResource } from "../resource_parsers/NovaResourceBase";
 
 
