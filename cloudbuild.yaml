@@ -5,4 +5,4 @@ steps:
 
 timeout: 900s
 options:
-  machineType: 'e2-highcpu-8'
+  machineType: 'E2_HIGHCPU_8'
