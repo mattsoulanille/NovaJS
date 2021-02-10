@@ -1,4 +1,4 @@
-import { TargetCornersData } from "../../../novadatainterface/TargetCornersData";
+import { TargetCornersData } from "novadatainterface/TargetCornersData";
 import { BaseResource } from "../resource_parsers/NovaResourceBase";
 
 

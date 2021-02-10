@@ -21,13 +21,25 @@
 	"noUnusedParameters": true,
 	"noImplicitReturns": true,
 	"noFallthroughCasesInSwitch": true,
-	"baseUrl": ".",
 	"esModuleInterop": true,
 	"incremental": false,
+    "baseUrl": "./",
     "paths": {
+      "nova/*": [
+        "nova/*",
+        "dist/bin/nova/*"
+      ],
       "novadatainterface/*": [
         "novadatainterface/*",
         "dist/bin/novadatainterface/*"
+      ],
+      "novaparse/*": [
+        "novaparse/*",
+        "dist/bin/novaparse/*"
+      ],
+      "nova_ecs/*": [
+        "nova_ecs/*",
+        "dist/bin/nova_ecs/*"
       ]
     }
   }

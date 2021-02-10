@@ -1,4 +1,4 @@
-import { NovaIDNotFoundError } from "../../../novadatainterface/NovaDataInterface";
+import { NovaIDNotFoundError } from "novadatainterface/NovaDataInterface";
 
 
 export function resourceIDNotFoundStrict(message: string): never {

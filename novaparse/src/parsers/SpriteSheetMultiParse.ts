@@ -1,4 +1,4 @@
-import { BaseData } from "../../../novadatainterface/BaseData";
+import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, ConvexHulls, FrameInfo, ConvexHull, DefaultImageLocation } from "novadatainterface/SpriteSheetData";
 import { RledResource } from "../resource_parsers/RledResource";
