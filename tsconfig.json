@@ -23,6 +23,7 @@
 	"noFallthroughCasesInSwitch": true,
 	"esModuleInterop": true,
 	"incremental": false,
+    "baseUrl": "./",
     "paths": {
       "nova/*": [
         "nova/*",
