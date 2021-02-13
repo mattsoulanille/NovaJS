@@ -83,15 +83,10 @@ export class World {
         this.callWithNewDraft.bind(this),
         this.addComponent.bind(this));
 
-    // get resources() {
-    //     return new Map([
-    //         ...this.state.resources,
-    //         ...this.mutableState.resources,
-    //     ]) as ReadonlyResourceMap;
-    // }
-
-    resources = new ResourceMapHandle(this.callWithNewDraft.bind(this),
-        this.mutableState.resources);
+    resources = new ResourceMapHandle(
+        this.mutableState.resources,
+        this.callWithNewDraft.bind(this),
+        this.updateResourceMap.bind(this));
 
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
@@ -132,15 +127,12 @@ export class World {
         return result!;
     }
 
-    // TODO: Resource map like entities
+    /**
+     * Add a resource to the world.
+     * @deprecated Use world.resources.set instead
+     */
     addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
-        if (resource.mutable) {
-            this.updateResourceMap(resource);
-            this.mutableState.resources.set(resource as UnknownResource, value);
-        } else {
-            this.addResourceToDraft(resource, value,
-                this.callWithNewDraft.bind(this));
-        }
+        this.resources.set(resource, value);
     }
 
     private updateResourceMap(resource: Resource<any, any, any, any>) {
@@ -149,15 +141,6 @@ export class World {
             throw new Error(`A resource with name ${resource.name} already exists`);
         }
         this.nameResourceMap.set(resource.name, resource as UnknownResource);
-    }
-
-    private addResourceToDraft<Data>(resource: Resource<Data, any, any, any>,
-        value: Data, callWithDraft: CallWithDraft) {
-        this.updateResourceMap(resource);
-        // TODO: Fix these types. Maybe pass resources in the World constructor?
-        callWithDraft(draft => {
-            draft.resources.set(resource as UnknownResource, value);
-        });
     }
 
     addSystem(system: System): this {

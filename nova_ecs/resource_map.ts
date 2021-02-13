@@ -16,7 +16,9 @@ export interface ResourceMap extends Map<UnknownResource, unknown> {
 export class ResourceMapHandle
     extends MutableImmutableMapHandle<UnknownResource, unknown>
     implements ResourceMap {
-    constructor(callWithDraft: CallWithDraft, mutableResources: ResourceMap) {
+    constructor(mutableResources: ResourceMap,
+        callWithDraft: CallWithDraft,
+        private addResource: (resource: Resource<any, any, any, any>) => void) {
         super(mutableResources, (callback) => callWithDraft(
             draft => callback(draft.resources)),
             resource => resource.mutable,
@@ -28,10 +30,13 @@ export class ResourceMapHandle
     };
 
     set<Data>(resource: Resource<Data, any, any, any>, data: Data): this {
+        this.addResource(resource);
         return super.set(resource as UnknownResource, data);
     };
 
-    delete(resource: Resource<any, any, any, any>): boolean {
-        return super.delete(resource as UnknownResource);
+    delete(_resource: Resource<any, any, any, any>): boolean {
+        throw new Error('Resources can not be deleted since a system may depend on them');
+        // TODO: Allow deletion of resources. Check the systems.
+        //return super.delete(resource as UnknownResource);
     };
 }
