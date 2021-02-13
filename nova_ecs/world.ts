@@ -69,19 +69,23 @@ export class World {
         resources: new Map(),
     };
 
-    private mutableEntities: EntityMap = new Map();
-    private mutableResources = new Map<UnknownResource,
-        unknown /* resource data */>();
+    // Note that an entity may appear in both the immutable state
+    // and the mutable state since it may have both immutable and
+    // mutable components.
+    private mutableState: State = {
+        entities: new Map(),
+        resources: new Map(),
+    };
 
     readonly entities = new EntityMapHandle(
-        this.mutableEntities,
+        this.mutableState.entities,
         this.callWithNewDraft.bind(this),
         this.addComponent.bind(this));
 
     get resources() {
         return new Map([
             ...this.state.resources,
-            ...this.mutableResources,
+            ...this.mutableState.resources,
         ]) as ReadonlyResourceMap;
     }
 
@@ -128,7 +132,7 @@ export class World {
     addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
         if (resource.mutable) {
             this.updateResourceMap(resource);
-            this.mutableResources.set(resource as UnknownResource, value);
+            this.mutableState.resources.set(resource as UnknownResource, value);
         } else {
             this.addResourceToDraft(resource, value,
                 this.callWithNewDraft.bind(this));
@@ -155,7 +159,7 @@ export class World {
     addSystem(system: System): this {
         for (const resource of system.resources) {
             if (!this.state.resources.has(resource)
-                && !this.mutableResources.has(resource)) {
+                && !this.mutableState.resources.has(resource)) {
                 throw new Error(
                     `World is missing ${resource} needed for ${system}`);
             }
@@ -236,8 +240,8 @@ export class World {
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
                 return draft.resources.get(arg) as ResourceData<T> | undefined;
-            } else if (this.mutableResources.has(arg)) {
-                return this.mutableResources.get(arg) as ResourceData<T> | undefined;
+            } else if (this.mutableState.resources.has(arg)) {
+                return this.mutableState.resources.get(arg) as ResourceData<T> | undefined;
             } else {
                 throw new Error(`Missing resource ${arg}`);
             }
