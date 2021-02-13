@@ -817,4 +817,53 @@ describe('world', () => {
         expect(handle.components.get(BAR_COMPONENT)?.y)
             .toEqual('changed bar');
     });
+
+    it('supports mutable resources', () => {
+        const MutableResource = new Resource<{ val: string }>({
+            name: 'MutableResource',
+            mutable: true,
+        });
+
+        const changeResourceSystem = new System({
+            name: 'ChangeResourceSystem',
+            args: [MutableResource],
+            step: (mutableResource) => {
+                mutableResource.val = 'changed';
+            }
+        });
+
+        const resourceVal = { val: 'unchanged' };
+        world.addResource(MutableResource, resourceVal);
+        world.addSystem(changeResourceSystem);
+
+        world.step();
+
+        expect(resourceVal).toEqual({ val: 'changed' });
+    });
+
+    xit('supports mutable components', () => {
+        const MutableComponent = new Component<{ val: string }>({
+            name: 'MutableComponent',
+            mutable: true,
+        });
+
+        const changeComponentSystem = new System({
+            name: 'ChangeComponentSystem',
+            args: [MutableComponent],
+            step: (mutableComponent) => {
+                mutableComponent.val = 'changed';
+            }
+        });
+
+        const componentVal = { val: 'unchanged' };
+        world.entities.set('example uuid', new EntityBuilder()
+            .addComponent(MutableComponent, { val: 'unchanged' })
+            .build());
+
+        world.addSystem(changeComponentSystem);
+
+        world.step();
+
+        expect(componentVal).toEqual({ val: 'changed' });
+    });
 });
