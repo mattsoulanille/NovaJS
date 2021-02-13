@@ -99,7 +99,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
 export const AsyncSystemPlugin: Plugin = {
     name: 'AsyncSystem',
     build: (world) => {
-        world.addResource(AsyncSystemData, {
+        world.resources.set(AsyncSystemData, {
             done: Promise.resolve(),
             systems: new DefaultMap<string /* system name */,
                 DefaultMap<string /* entity uuid */, {

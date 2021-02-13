@@ -39,8 +39,8 @@ export const Display: Plugin = {
         squareGraphics.endFill();
 
         container.addChild(squareGraphics);
-        world.addResource(PixiContainer, container);
-        world.addResource(SquareGraphics, squareGraphics);
+        world.resources.set(PixiContainer, container);
+        world.resources.set(SquareGraphics, squareGraphics);
         world.addSystem(SquareSystem);
     }
 }

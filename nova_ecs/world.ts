@@ -58,10 +58,6 @@ export interface State {
 
 export type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
 
-interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
-    get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
-}
-
 enableMapSet();
 
 export class World {
@@ -86,7 +82,7 @@ export class World {
     resources = new ResourceMapHandle(
         this.mutableState.resources,
         this.callWithNewDraft.bind(this),
-        this.updateResourceMap.bind(this));
+        this.addResource.bind(this));
 
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
@@ -127,15 +123,7 @@ export class World {
         return result!;
     }
 
-    /**
-     * Add a resource to the world.
-     * @deprecated Use world.resources.set instead
-     */
-    addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
-        this.resources.set(resource, value);
-    }
-
-    private updateResourceMap(resource: Resource<any, any, any, any>) {
+    private addResource(resource: Resource<any, any, any, any>) {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);

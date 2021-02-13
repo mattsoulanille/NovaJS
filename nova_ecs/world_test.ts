@@ -175,7 +175,7 @@ describe('world', () => {
             }
         });
 
-        world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
+        world.resources.set(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
         world.entities.set(v4(), new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 123 }));
@@ -195,7 +195,7 @@ describe('world', () => {
             }
         });
 
-        world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
+        world.resources.set(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
         world.entities.set('entityUuid', new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 123 }));
@@ -566,8 +566,8 @@ describe('world', () => {
             applyDelta: () => { },
         });
 
-        world.addResource(resource1, 'foobar');
-        expect(() => world.addResource(resource2, 'foobar'))
+        world.resources.set(resource1, 'foobar');
+        expect(() => world.resources.set(resource2, 'foobar'))
             .toThrowError(`A resource with name ${resource2.name} already exists`);
     });
 
@@ -833,7 +833,7 @@ describe('world', () => {
         });
 
         const resourceVal = { val: 'unchanged' };
-        world.addResource(MutableResource, resourceVal);
+        world.resources.set(MutableResource, resourceVal);
         world.addSystem(changeResourceSystem);
 
         world.step();
