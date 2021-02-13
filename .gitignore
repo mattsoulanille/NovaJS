@@ -71,3 +71,6 @@ node_modules
 *.out
 *.pdf
 *.ps
+
+# Bazel
+.bazelrc.user

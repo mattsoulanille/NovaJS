@@ -237,7 +237,7 @@ describe('async system', () => {
         expect(fooValues).toEqual([1, 2, 3, 1, 2, 3, 4]);
     });
 
-    it('works with queries', async () => {
+    it('can read queries', async () => {
         const fooValues: number[] = [];
         const asyncSystem = new AsyncSystem({
             name: 'AsyncSystem',
@@ -262,5 +262,38 @@ describe('async system', () => {
         world.step();
 
         expect(fooValues).toEqual([123, 456, 123, 456]);
+    });
+
+    it('can write queries', async () => {
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [new Query([FOO_COMPONENT]), FOO_COMPONENT] as const,
+            step: async (fooQuery) => {
+                await sleep(10);
+                for (const query of fooQuery) {
+                    query[0].x += 1;
+                }
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.entities.set('firstEntity', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 }))
+        world.entities.set('secondEntity', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 456 }))
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemData)?.done;
+        world.step();
+
+        // With a synchronous system, we'd expect each foo compoent to be incremented
+        // twice, once by 'firstEntity' and another time by 'secondEntity'.
+        // However, since the system runs asynchronously on both, it gets the same
+        // starting value for both, so it writes them as 124, 457 twice.
+        expect(world.entities.get('firstEntity')?.components.get(FOO_COMPONENT)?.x)
+            .toEqual(124);
+        expect(world.entities.get('secondEntity')?.components.get(FOO_COMPONENT)?.x)
+            .toEqual(457);
     });
 });

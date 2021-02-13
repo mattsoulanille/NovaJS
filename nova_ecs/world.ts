@@ -7,6 +7,7 @@ import { EntityMap, EntityMapHandle } from "./entity_map";
 import { Plugin } from './plugin';
 import { Query } from "./query";
 import { Resource, ResourceData, UnknownResource } from "./resource";
+import { ResourceMap, ResourceMapHandle } from "./resource_map";
 import { System } from "./system";
 import { topologicalSort } from './utils';
 
@@ -52,7 +53,7 @@ enablePatches();
 
 export interface State {
     entities: EntityMap;
-    resources: Map<UnknownResource, unknown>;
+    resources: ResourceMap;
 }
 
 export type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
@@ -82,12 +83,15 @@ export class World {
         this.callWithNewDraft.bind(this),
         this.addComponent.bind(this));
 
-    get resources() {
-        return new Map([
-            ...this.state.resources,
-            ...this.mutableState.resources,
-        ]) as ReadonlyResourceMap;
-    }
+    // get resources() {
+    //     return new Map([
+    //         ...this.state.resources,
+    //         ...this.mutableState.resources,
+    //     ]) as ReadonlyResourceMap;
+    // }
+
+    resources = new ResourceMapHandle(this.callWithNewDraft.bind(this),
+        this.mutableState.resources);
 
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
