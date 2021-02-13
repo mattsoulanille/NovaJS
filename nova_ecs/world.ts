@@ -56,7 +56,7 @@ export interface State {
     resources: ResourceMap;
 }
 
-export type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
+export type CallWithDraft<T> = <R>(callback: (draft: Draft<T>) => R) => R;
 
 enableMapSet();
 

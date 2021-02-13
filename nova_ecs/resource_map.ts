@@ -17,7 +17,7 @@ export class ResourceMapHandle
     extends MutableImmutableMapHandle<UnknownResource, unknown>
     implements ResourceMap {
     constructor(mutableResources: ResourceMap,
-        callWithDraft: CallWithDraft,
+        callWithDraft: CallWithDraft<State>,
         private addResource: (resource: Resource<any, any, any, any>) => void) {
         super(mutableResources, (callback) => callWithDraft(
             draft => callback(draft.resources)),
