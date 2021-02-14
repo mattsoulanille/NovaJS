@@ -16,13 +16,11 @@ export interface ResourceMap extends Map<UnknownResource, unknown> {
 export class ResourceMapHandle
     extends MutableImmutableMapHandle<UnknownResource, unknown>
     implements ResourceMap {
-    constructor(mutableResources: ResourceMap,
-        callWithDraft: CallWithDraft<State>,
+    constructor(callWithDraft: CallWithDraft<State>,
         private addResource: (resource: Resource<any, any, any, any>) => void) {
-        super(mutableResources, (callback) => callWithDraft(
+        super((callback) => callWithDraft(
             draft => callback(draft.resources)),
-            resource => resource.mutable,
-            currentIfDraft)
+            currentIfDraft);
     }
 
     get<Data>(resource: Resource<Data, any, any, any>): Data | undefined {

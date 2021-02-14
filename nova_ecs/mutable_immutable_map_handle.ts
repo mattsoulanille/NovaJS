@@ -5,9 +5,7 @@ export type CallWithDraftedMap<K, V> =
     <R>(callback: (draft: Map<K, Draft<V>>) => R) => R;
 
 export class MutableImmutableMapHandle<K, V> implements Map<K, V> {
-    constructor(private mutableMap: Map<K, V>,
-        private callWithDraftedMap: CallWithDraftedMap<K, V>,
-        private isMutable: (key: K, value: V) => boolean,
+    constructor(private callWithDraftedMap: CallWithDraftedMap<K, V>,
         private wrapImmutableVal: (val: Draft<V>) => V) {
     }
 
@@ -20,13 +18,11 @@ export class MutableImmutableMapHandle<K, V> implements Map<K, V> {
     }
 
     clear(): void {
-        this.mutableMap.clear();
         this.callWithDraftedMap(map => map.clear());
     }
 
     delete(key: K): boolean {
-        return this.mutableMap.delete(key)
-            || this.callWithDraftedMap(map => map.delete(key))
+        return this.callWithDraftedMap(map => map.delete(key))
     }
 
     forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void,
@@ -37,29 +33,23 @@ export class MutableImmutableMapHandle<K, V> implements Map<K, V> {
     }
 
     get(key: K): V | undefined {
-        return this.mutableMap.get(key)
-            ?? this.callWithDraftedMap(map =>
-                this.wrapValOrUndefined(map.get(key)));
+        return this.callWithDraftedMap(
+            map => this.wrapValOrUndefined(map.get(key)));
     }
 
     has(key: K): boolean {
-        return this.mutableMap.has(key)
-            || this.callWithDraftedMap(map => map.has(key));
+        return this.callWithDraftedMap(map => map.has(key));
     }
 
     set(key: K, value: V): this {
-        if (this.isMutable(key, value)) {
-            this.mutableMap.set(key, value);
-        } else {
-            this.callWithDraftedMap(map => {
-                map.set(key, value as Draft<V>);
-            })
-        }
+        this.callWithDraftedMap(map => {
+            map.set(key, value as Draft<V>);
+        })
         return this;
     }
 
     get size() {
-        return this.mutableMap.size + this.callWithDraftedMap(map => map.size);
+        return this.callWithDraftedMap(map => map.size);
     }
 
     [Symbol.iterator](): IterableIterator<[K, V]> {
@@ -73,7 +63,6 @@ export class MutableImmutableMapHandle<K, V> implements Map<K, V> {
     }
 
     *keys(): IterableIterator<K> {
-        yield* this.mutableMap.keys();
         yield* this.callWithDraftedMap(map => {
             return [...map.keys()];
         });
