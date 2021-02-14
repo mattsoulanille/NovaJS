@@ -7,17 +7,27 @@ import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
 import { currentIfDraft, DefaultMap } from "./utils";
 
-export const AsyncSystemData = new Resource<{
+
+class AsyncSystemData {
     systems: DefaultMap<string /* system name */,
         DefaultMap<string /* entity uuid */, {
             patches: Patch[][],
             promise: Promise<void>,
-        }>>,
-    done: Promise<void>,
-}>({
-    name: 'AsyncSystemData',
+        }>> = new DefaultMap(
+            () => new DefaultMap(() => {
+                return {
+                    patches: [],
+                    promise: Promise.resolve(),
+                }
+            })
+        );
+    done: Promise<void> = Promise.resolve();
+    constructor() { }
+}
+
+export const AsyncSystemResource = new Resource<AsyncSystemData>({
+    name: 'AsyncSystemResource',
     multiplayer: false,
-    mutable: true,
 });
 
 export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
@@ -43,11 +53,11 @@ function getCurrentArgs<A extends readonly ArgTypes[]>(args: A,
 }
 
 export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]>
-    extends System<[typeof AsyncSystemData, typeof UUID, ...StepArgTypes]> {
+    extends System<[typeof AsyncSystemResource, typeof UUID, ...StepArgTypes]> {
     constructor(systemArgs: AsyncSystemArgs<StepArgTypes>) {
         super({
             ...systemArgs,
-            args: [AsyncSystemData, UUID, ...systemArgs.args],
+            args: [AsyncSystemResource, UUID, ...systemArgs.args],
             step: (asyncSystemData, UUID, ...stepArgs) => {
                 const system = asyncSystemData.systems.get(this.name);
                 const entityStatus = system?.get(UUID);
@@ -99,20 +109,6 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
 export const AsyncSystemPlugin: Plugin = {
     name: 'AsyncSystem',
     build: (world) => {
-        world.resources.set(AsyncSystemData, {
-            done: Promise.resolve(),
-            systems: new DefaultMap<string /* system name */,
-                DefaultMap<string /* entity uuid */, {
-                    patches: Patch[][],
-                    promise: Promise<void>,
-                }>>(
-                    () => new DefaultMap(() => {
-                        return {
-                            patches: [],
-                            promise: Promise.resolve(),
-                        }
-                    })
-                )
-        });
+        world.resources.set(AsyncSystemResource, new AsyncSystemData());
     }
 };
