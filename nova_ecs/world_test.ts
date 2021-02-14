@@ -56,6 +56,14 @@ const FOO_BAR_SYSTEM = new System({
     }
 });
 
+class MutableObject {
+    constructor(public val: string) { }
+}
+
+const MUTABLE_COMPONENT = new Component<MutableObject>({
+    name: 'MutableComponent'
+})
+
 describe('world', () => {
     let world: World;
     beforeEach(() => {
@@ -819,9 +827,8 @@ describe('world', () => {
     });
 
     it('supports mutable resources', () => {
-        const MutableResource = new Resource<{ val: string }>({
+        const MutableResource = new Resource<MutableObject>({
             name: 'MutableResource',
-            mutable: true,
         });
 
         const changeResourceSystem = new System({
@@ -832,38 +839,33 @@ describe('world', () => {
             }
         });
 
-        const resourceVal = { val: 'unchanged' };
+        const resourceVal = new MutableObject('unchanged');
         world.resources.set(MutableResource, resourceVal);
         world.addSystem(changeResourceSystem);
 
         world.step();
 
-        expect(resourceVal).toEqual({ val: 'changed' });
+        expect(resourceVal).toEqual(new MutableObject('changed'));
     });
 
-    xit('supports mutable components', () => {
-        const MutableComponent = new Component<{ val: string }>({
-            name: 'MutableComponent',
-            mutable: true,
-        });
-
+    it('supports mutable components', () => {
         const changeComponentSystem = new System({
             name: 'ChangeComponentSystem',
-            args: [MutableComponent],
+            args: [MUTABLE_COMPONENT],
             step: (mutableComponent) => {
                 mutableComponent.val = 'changed';
             }
         });
 
-        const componentVal = { val: 'unchanged' };
+        const componentVal = new MutableObject('unchanged');
         world.entities.set('example uuid', new EntityBuilder()
-            .addComponent(MutableComponent, { val: 'unchanged' })
+            .addComponent(MUTABLE_COMPONENT, componentVal)
             .build());
 
         world.addSystem(changeComponentSystem);
 
         world.step();
 
-        expect(componentVal).toEqual({ val: 'changed' });
+        expect(componentVal).toEqual(new MutableObject('changed'));
     });
 });
