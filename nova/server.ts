@@ -84,7 +84,7 @@ async function startGame() {
     // TODO: Don't just give the server the 'server' uuid
     const multiplayerPlugin = multiplayer(communicator);
 
-    world.addResource(GameDataResource, gameData);
+    world.resources.set(GameDataResource, gameData);
     world.addPlugin(multiplayerPlugin);
     world.addPlugin(ServerPlugin);
     world.addPlugin(Nova);

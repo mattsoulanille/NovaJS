@@ -1,19 +1,17 @@
 import { Component } from "./component";
 import { ComponentMapHandle } from "./component_map";
 import { Entity } from "./entity";
-import { CallWithDraft } from "./world";
+import { CallWithDraft, State } from "./world";
 
 export interface EntityMap extends Map<string, Entity> { }
 
 export class EntityMapHandle implements EntityMap {
-    constructor(private mutableEntities: EntityMap,
-        private callWithDraft: CallWithDraft,
+    constructor(private callWithDraft: CallWithDraft<State>,
         // addComponnet adds a component as something the world knows about.
         // Doesn't add it to an entity.
         private addComponent: (component: Component<any, any, any, any>) => void) { }
 
     clear(): void {
-        this.mutableEntities.clear();
         this.callWithDraft(draft => {
             draft.entities.clear();
         });

@@ -7,6 +7,7 @@ import { EntityMap, EntityMapHandle } from "./entity_map";
 import { Plugin } from './plugin';
 import { Query } from "./query";
 import { Resource, ResourceData, UnknownResource } from "./resource";
+import { ResourceMap, ResourceMapHandle } from "./resource_map";
 import { System } from "./system";
 import { topologicalSort } from './utils';
 
@@ -52,14 +53,10 @@ enablePatches();
 
 export interface State {
     entities: EntityMap;
-    resources: Map<UnknownResource, unknown>;
+    resources: ResourceMap;
 }
 
-export type CallWithDraft = <R>(callback: (draft: Draft<State>) => R) => R;
-
-interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
-    get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
-}
+export type CallWithDraft<T> = <R>(callback: (draft: Draft<T>) => R) => R;
 
 enableMapSet();
 
@@ -69,21 +66,13 @@ export class World {
         resources: new Map(),
     };
 
-    private mutableEntities: EntityMap = new Map();
-    private mutableResources = new Map<UnknownResource,
-        unknown /* resource data */>();
-
     readonly entities = new EntityMapHandle(
-        this.mutableEntities,
         this.callWithNewDraft.bind(this),
         this.addComponent.bind(this));
 
-    get resources() {
-        return new Map([
-            ...this.state.resources,
-            ...this.mutableResources,
-        ]) as ReadonlyResourceMap;
-    }
+    readonly resources = new ResourceMapHandle(
+        this.callWithNewDraft.bind(this),
+        this.addResource.bind(this));
 
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
@@ -124,18 +113,7 @@ export class World {
         return result!;
     }
 
-    // TODO: Resource map like entities
-    addResource<Data>(resource: Resource<Data, any, any, any>, value: Data) {
-        if (resource.mutable) {
-            this.updateResourceMap(resource);
-            this.mutableResources.set(resource as UnknownResource, value);
-        } else {
-            this.addResourceToDraft(resource, value,
-                this.callWithNewDraft.bind(this));
-        }
-    }
-
-    private updateResourceMap(resource: Resource<any, any, any, any>) {
+    private addResource(resource: Resource<any, any, any, any>) {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
@@ -143,19 +121,9 @@ export class World {
         this.nameResourceMap.set(resource.name, resource as UnknownResource);
     }
 
-    private addResourceToDraft<Data>(resource: Resource<Data, any, any, any>,
-        value: Data, callWithDraft: CallWithDraft) {
-        this.updateResourceMap(resource);
-        // TODO: Fix these types. Maybe pass resources in the World constructor?
-        callWithDraft(draft => {
-            draft.resources.set(resource as UnknownResource, value);
-        });
-    }
-
     addSystem(system: System): this {
         for (const resource of system.resources) {
-            if (!this.state.resources.has(resource)
-                && !this.mutableResources.has(resource)) {
+            if (!this.state.resources.has(resource)) {
                 throw new Error(
                     `World is missing ${resource} needed for ${system}`);
             }
@@ -236,8 +204,6 @@ export class World {
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
                 return draft.resources.get(arg) as ResourceData<T> | undefined;
-            } else if (this.mutableResources.has(arg)) {
-                return this.mutableResources.get(arg) as ResourceData<T> | undefined;
             } else {
                 throw new Error(`Missing resource ${arg}`);
             }

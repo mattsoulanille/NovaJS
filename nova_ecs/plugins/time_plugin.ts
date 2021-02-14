@@ -37,7 +37,7 @@ export const TimeSystem = new System({
 export const TimePlugin: Plugin = {
     name: 'time',
     build: (world) => {
-        world.addResource(TimeResource,
+        world.resources.set(TimeResource,
             { delta_ms: 0, delta_s: 0, time: new Date().getTime() });
         world.addSystem(TimeSystem);
         world.singletonEntity.components.set(TimeSingleton, undefined);

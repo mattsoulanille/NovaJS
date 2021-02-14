@@ -56,6 +56,14 @@ const FOO_BAR_SYSTEM = new System({
     }
 });
 
+class MutableObject {
+    constructor(public val: string) { }
+}
+
+const MUTABLE_COMPONENT = new Component<MutableObject>({
+    name: 'MutableComponent'
+})
+
 describe('world', () => {
     let world: World;
     beforeEach(() => {
@@ -175,7 +183,7 @@ describe('world', () => {
             }
         });
 
-        world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
+        world.resources.set(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
         world.entities.set(v4(), new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 123 }));
@@ -195,7 +203,7 @@ describe('world', () => {
             }
         });
 
-        world.addResource(BAZ_RESOURCE, { z: ['foo', 'bar'] });
+        world.resources.set(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
         world.entities.set('entityUuid', new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 123 }));
@@ -566,8 +574,8 @@ describe('world', () => {
             applyDelta: () => { },
         });
 
-        world.addResource(resource1, 'foobar');
-        expect(() => world.addResource(resource2, 'foobar'))
+        world.resources.set(resource1, 'foobar');
+        expect(() => world.resources.set(resource2, 'foobar'))
             .toThrowError(`A resource with name ${resource2.name} already exists`);
     });
 
@@ -816,5 +824,48 @@ describe('world', () => {
 
         expect(handle.components.get(BAR_COMPONENT)?.y)
             .toEqual('changed bar');
+    });
+
+    it('supports mutable resources', () => {
+        const MutableResource = new Resource<MutableObject>({
+            name: 'MutableResource',
+        });
+
+        const changeResourceSystem = new System({
+            name: 'ChangeResourceSystem',
+            args: [MutableResource],
+            step: (mutableResource) => {
+                mutableResource.val = 'changed';
+            }
+        });
+
+        const resourceVal = new MutableObject('unchanged');
+        world.resources.set(MutableResource, resourceVal);
+        world.addSystem(changeResourceSystem);
+
+        world.step();
+
+        expect(resourceVal).toEqual(new MutableObject('changed'));
+    });
+
+    it('supports mutable components', () => {
+        const changeComponentSystem = new System({
+            name: 'ChangeComponentSystem',
+            args: [MUTABLE_COMPONENT],
+            step: (mutableComponent) => {
+                mutableComponent.val = 'changed';
+            }
+        });
+
+        const componentVal = new MutableObject('unchanged');
+        world.entities.set('example uuid', new EntityBuilder()
+            .addComponent(MUTABLE_COMPONENT, componentVal)
+            .build());
+
+        world.addSystem(changeComponentSystem);
+
+        world.step();
+
+        expect(componentVal).toEqual(new MutableObject('changed'));
     });
 });

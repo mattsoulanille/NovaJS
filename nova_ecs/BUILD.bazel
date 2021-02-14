@@ -20,6 +20,7 @@ ts_library(
         "async_system.ts",
         "component_map.ts",
         "entity_map.ts",
+        "resource_map.ts",
         "mutable_immutable_map_handle.ts",
     ],
     deps = [
@@ -61,7 +62,6 @@ pkg_npm(
     srcs = ["package.json"],
     deps = [
         ":ecs",
-        "//:.gitignore",
     ],
     nested_packages = [
         "//nova_ecs/datatypes:datatypes_pkg",

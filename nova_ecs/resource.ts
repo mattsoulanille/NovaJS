@@ -18,12 +18,10 @@ export class Resource<Data, DataSerialized = Data,
     Component<Data, DataSerialized, Delta, DeltaSerialized> {
 
     readonly multiplayer: boolean;
-    readonly mutable: boolean;
-    constructor({ name, type, getDelta, applyDelta, multiplayer, mutable }:
+    constructor({ name, type, getDelta, applyDelta, multiplayer }:
         ResourceArgs<Data, DataSerialized, Delta, DeltaSerialized>) {
         super({ name, type, getDelta, applyDelta });
         this.multiplayer = multiplayer ?? true;
-        this.mutable = mutable ?? false;
     }
 
     toString() {

@@ -66,7 +66,7 @@ async function startGame() {
     //shipController = new ShipController(controller);
     const multiplayerPlugin = multiplayer(communicator);
 
-    world.addResource(GameDataResource, gameData);
+    world.resources.set(GameDataResource, gameData);
     world.addPlugin(multiplayerPlugin);
     world.addPlugin(Nova);
     world.addPlugin(Display);

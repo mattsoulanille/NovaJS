@@ -18,11 +18,10 @@ export class ComponentMapHandle
     extends MutableImmutableMapHandle<UnknownComponent, unknown>
     implements ComponentMap {
 
-    constructor(private entityUuid: string, callWithDraft: CallWithDraft,
+    constructor(private entityUuid: string, callWithDraft: CallWithDraft<State>,
         private addComponent: (component: Component<any, any, any, any>) => void) {
-        super(new Map(), (callback) => callWithDraft(
+        super((callback) => callWithDraft(
             draft => callback(this.getEntityComponents(draft))),
-            component => component.mutable,
             currentIfDraft);
     }
 

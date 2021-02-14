@@ -3,6 +3,8 @@ import { System } from "nova_ecs/system";
 import { Plugin } from "nova_ecs/plugin";
 import * as PIXI from "pixi.js";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
+import { Component } from "nova_ecs/component";
+import { EntityBuilder } from "nova_ecs/entity";
 
 
 export const PixiContainer = new Resource<PIXI.Container>({
@@ -12,10 +14,8 @@ export const PixiContainer = new Resource<PIXI.Container>({
 });
 
 
-const SquareGraphics = new Resource<PIXI.Graphics>({
+const SquareGraphics = new Component<PIXI.Graphics>({
     name: 'SquareGraphics',
-    multiplayer: false,
-    mutable: true,
 });
 
 const SquareSystem = new System({
@@ -39,8 +39,10 @@ export const Display: Plugin = {
         squareGraphics.endFill();
 
         container.addChild(squareGraphics);
-        world.addResource(PixiContainer, container);
-        world.addResource(SquareGraphics, squareGraphics);
+        world.resources.set(PixiContainer, container);
+        world.entities.set('square1', new EntityBuilder()
+            .addComponent(SquareGraphics, squareGraphics)
+            .build());
         world.addSystem(SquareSystem);
     }
 }
