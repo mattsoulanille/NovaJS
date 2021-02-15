@@ -29,27 +29,21 @@ export type ArgTypes = Component<any, any, any, any>
     | typeof GetEntity
     | Modifier<ArgTypes[], any>;
 
-type OnlyUndefined<T> = T extends undefined ? T : never;
+type AllowUndefined<T> = T extends undefined ? T : never;
 
-type DefiniteArgData<T> =
+export type ArgData<T> =
     Draft<ComponentData<T> | ResourceData<T>>
     | EntitiesObject<T>
     | ComponentsObject<T>
     | UUIDData<T>
     | GetEntityObject<T>
     | ModifierResult<T>
-    | OnlyUndefined<T>;
-
-// The data type corresponding to an argument type.
-export type ArgData<T> = DefiniteArgData<T> | QueryResults<T>
+    | AllowUndefined<T>
+    | QueryResults<T>;
 
 export type ArgsToData<Args> = {
     [K in keyof Args]: ArgData<Args[K]>
 }
 
-export type QueryArgsToData<Args> = {
-    [K in keyof Args]: DefiniteArgData<Args[K]>
-}
-
 export type QueryResults<Q> =
-    Q extends Query<infer QueryArgs> ? QueryArgsToData<QueryArgs>[] : never;
+    Q extends Query<infer QueryArgs> ? ArgsToData<QueryArgs>[] : never;

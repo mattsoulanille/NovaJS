@@ -1,6 +1,6 @@
 import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { ArgTypes, Components, Entities, GetEntity, QueryArgsToData, QueryResults, UUID } from "./arg_types";
+import { ArgsToData, ArgTypes, Components, Entities, GetEntity, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -247,13 +247,13 @@ export class World {
 
         return entities.map(([uuid, entity]) =>
             this.fulfillQueryForEntity(entity, uuid, query, draft))
-            .filter((results): results is Right<QueryArgsToData<C>> => isRight(results))
+            .filter((results): results is Right<ArgsToData<C>> => isRight(results))
             .map(rightResults => rightResults.right);
     }
 
     private fulfillQueryForEntity<C extends readonly ArgTypes[]>(
         entity: Draft<Entity>, uuid: string, query: Query<C>, draft: Draft<State>):
-        Either<undefined, QueryArgsToData<C>> {
+        Either<undefined, ArgsToData<C>> {
 
         const results = query.args.map(arg => this.getArg(arg, draft, entity, uuid));
         const rightResults: unknown[] = [];
@@ -263,7 +263,7 @@ export class World {
             }
             rightResults.push(result.right);
         }
-        return right(rightResults as unknown as QueryArgsToData<C>);
+        return right(rightResults as unknown as ArgsToData<C>);
     }
 
     toString() {
