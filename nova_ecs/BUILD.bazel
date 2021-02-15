@@ -22,6 +22,8 @@ ts_library(
         "entity_map.ts",
         "resource_map.ts",
         "mutable_immutable_map_handle.ts",
+        "modifier.ts",
+        "optional.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -38,6 +40,7 @@ ts_library(
         "world_test.ts",
         "utils_test.ts",
         "async_system_test.ts",
+        "query_test.ts",
     ],
     deps = [
         ":ecs",

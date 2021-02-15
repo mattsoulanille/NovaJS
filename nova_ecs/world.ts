@@ -1,12 +1,14 @@
+import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { ArgData, ArgTypes, Components, Entities, GetEntity, OptionalClass, QueryArgsToData, QueryResults, UUID } from "./arg_types";
+import { ArgsToData, ArgTypes, Components, Entities, GetEntity, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
-import { Component, ComponentData, UnknownComponent } from "./component";
+import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap, EntityMapHandle } from "./entity_map";
+import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
 import { Query } from "./query";
-import { Resource, ResourceData, UnknownResource } from "./resource";
+import { Resource, UnknownResource } from "./resource";
 import { ResourceMap, ResourceMapHandle } from "./resource_map";
 import { System } from "./system";
 import { topologicalSort } from './utils';
@@ -122,7 +124,7 @@ export class World {
     }
 
     addSystem(system: System): this {
-        for (const resource of system.resources) {
+        for (const resource of system.query.resources) {
             if (!this.state.resources.has(resource)) {
                 throw new Error(
                     `World is missing ${resource} needed for ${system}`);
@@ -170,7 +172,7 @@ export class World {
         this.systems = topologicalSort(graph);
 
         this.nameSystemMap.set(system.name, system);
-        for (const component of system.components) {
+        for (const component of system.query.components) {
             this.addComponent(component);
         }
         return this;
@@ -199,32 +201,39 @@ export class World {
         });
     }
 
-    private getArg<T extends ArgTypes>(arg: T, draft: Draft<State>,
-        entity: Draft<Entity>, uuid: string): ArgData<T> | undefined {
+    private getArg(arg: unknown, draft: Draft<State>,
+        entity: Draft<Entity>, uuid: string): Either<undefined, unknown> {
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
-                return draft.resources.get(arg) as ResourceData<T> | undefined;
+                return right(draft.resources.get(arg));
             } else {
                 throw new Error(`Missing resource ${arg}`);
             }
         } else if (arg instanceof Component) {
-            return entity.components.get(arg) as ComponentData<T> | undefined;
+            if (entity.components.has(arg)) {
+                return right(entity.components.get(arg));
+            }
+            return left(undefined);
         } else if (arg instanceof Query) {
-            return this.fulfillQuery(arg, draft) as QueryResults<T>;
+            // Queries always fulfill because if no entities match, they return [].
+            return right(this.fulfillQuery(arg, draft));
         } else if (arg === Entities) {
-            // TODO: Don't cast to ArgData<T>?
-            return draft.entities as ArgData<T>;
+            return right(draft.entities);
         } else if (arg === Components) {
-            // TODO: Don't cast to ArgData<T>?
-            return this.nameComponentMap as ArgData<T>;
+            return right(this.nameComponentMap);
         } else if (arg === UUID) {
-            // TODO: Don't cast to ArgData<T>?
-            return uuid as ArgData<T>;
-        } else if (arg instanceof OptionalClass) {
-            return this.getArg(arg.value, draft, entity, uuid);
+            return right(uuid);
         } else if (arg === GetEntity) {
-            // TODO: Don't cast to ArgData<T>?
-            return draft.entities.get(uuid) as ArgData<T>;
+            return right(entity);
+        } else if (arg instanceof Modifier) {
+            const modifier = arg as UnknownModifier;
+            const modifierQueryResults = this.fulfillQueryForEntity(entity, uuid,
+                modifier.query, draft);
+            if (isLeft(modifierQueryResults)) {
+                return left(undefined);
+            }
+            const getArg = (arg: unknown) => this.getArg(arg, draft, entity, uuid);
+            return modifier.transform(getArg, ...modifierQueryResults.right);
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
@@ -237,9 +246,24 @@ export class World {
             ([, entity]) => query.supportsEntity(entity));
 
         return entities.map(([uuid, entity]) =>
-            query.args.map(arg => this.getArg(arg, draft, entity, uuid)
-            ) as unknown as QueryArgsToData<C>
-        );
+            this.fulfillQueryForEntity(entity, uuid, query, draft))
+            .filter((results): results is Right<ArgsToData<C>> => isRight(results))
+            .map(rightResults => rightResults.right);
+    }
+
+    private fulfillQueryForEntity<C extends readonly ArgTypes[]>(
+        entity: Draft<Entity>, uuid: string, query: Query<C>, draft: Draft<State>):
+        Either<undefined, ArgsToData<C>> {
+
+        const results = query.args.map(arg => this.getArg(arg, draft, entity, uuid));
+        const rightResults: unknown[] = [];
+        for (const result of results) {
+            if (isLeft(result)) {
+                return left(undefined);
+            }
+            rightResults.push(result.right);
+        }
+        return right(rightResults as unknown as ArgsToData<C>);
     }
 
     toString() {
