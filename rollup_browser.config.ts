@@ -21,6 +21,6 @@ export default {
         sourcemaps({
             exclude: /.*pixi.*/,
         }),
-        compiler(),
+        //compiler(),
     ],
 }

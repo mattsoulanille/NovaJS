@@ -122,7 +122,7 @@ export class World {
     }
 
     addSystem(system: System): this {
-        for (const resource of system.resources) {
+        for (const resource of system.query.resources) {
             if (!this.state.resources.has(resource)) {
                 throw new Error(
                     `World is missing ${resource} needed for ${system}`);
@@ -170,7 +170,7 @@ export class World {
         this.systems = topologicalSort(graph);
 
         this.nameSystemMap.set(system.name, system);
-        for (const component of system.components) {
+        for (const component of system.query.components) {
             this.addComponent(component);
         }
         return this;

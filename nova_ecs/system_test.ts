@@ -1,85 +1,33 @@
-import * as t from 'io-ts';
 import 'jasmine';
 import { Component } from './component';
-import { EntityBuilder } from './entity';
 import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
 
-const FOO_COMPONENT = new Component({
-    name: 'foo',
-    type: t.type({ x: t.number }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta() { },
-});
-
-const BAR_COMPONENT = new Component({
-    name: 'bar',
-    type: t.type({ y: t.string }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta() { },
-});
-
-const BAZ_RESOURCE = new Resource({
-    name: 'baz',
-    type: t.type({ z: t.array(t.string) }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta() { },
-    multiplayer: true
-})
-
-const XYZZY_COMPONENT = new Component({
-    name: 'xyzzy',
-    type: t.type({ z: t.string }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta() { }
-});
-
+const FOO_COMPONENT = new Component<{ x: number }>({ name: 'foo' });
+const BAR_COMPONENT = new Component<{ y: string }>({ name: 'bar' });
+const XYZZY_COMPONENT = new Component<{ z: string }>({ name: 'xyzzy' });
+const BAZ_RESOURCE = new Resource<{ z: string[] }>({ name: 'baz' });
 const FOO_XYZZY_QUERY = new Query([FOO_COMPONENT, XYZZY_COMPONENT] as const);
 
 describe('system', () => {
-    const testSystem = new System({
-        name: 'TestSystem',
-        args: [FOO_COMPONENT, BAR_COMPONENT, FOO_XYZZY_QUERY, BAZ_RESOURCE] as const,
-        step: (foo, bar, a, baz) => {
-            bar.y = foo.x.toString();
-            for (let f of a) {
-                baz.z.push(f[1].z)
+
+    it('creates a query for the given arguments', () => {
+        const args = [FOO_COMPONENT, BAR_COMPONENT,
+            FOO_XYZZY_QUERY, BAZ_RESOURCE] as const;
+
+        const testSystem = new System({
+            name: 'TestSystem',
+            args,
+            step: (foo, bar, a, baz) => {
+                bar.y = foo.x.toString();
+                for (let f of a) {
+                    baz.z.push(f[1].z)
+                }
             }
-        }
-    });
+        });
 
-    it('sets components', () => {
-        expect(testSystem.components).toEqual(new Set([
-            FOO_COMPONENT, BAR_COMPONENT
-        ]));
-    });
+        expect(testSystem.query.args).toEqual(args);
+    })
 
-    it('sets resources', () => {
-        expect(testSystem.resources).toEqual(new Set([
-            BAZ_RESOURCE
-        ]));
-    });
-
-    it('sets queries', () => {
-        expect(testSystem.queries).toEqual(new Set([
-            FOO_XYZZY_QUERY
-        ]));
-    });
-
-    it('supports any entity that has all its required components', () => {
-        const entity = new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'foobar' });
-
-        expect(testSystem.supportsEntity(entity)).toBeTrue();
-    });
 });

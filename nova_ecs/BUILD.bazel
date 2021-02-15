@@ -38,6 +38,7 @@ ts_library(
         "world_test.ts",
         "utils_test.ts",
         "async_system_test.ts",
+        "query_test.ts",
     ],
     deps = [
         ":ecs",
