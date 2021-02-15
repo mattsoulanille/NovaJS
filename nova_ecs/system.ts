@@ -2,7 +2,7 @@ import { ArgsToData, ArgTypes } from "./arg_types";
 import { Component } from "./component";
 import { Query } from "./query";
 import { Resource } from "./resource";
-import { subset, WithComponents } from "./utils";
+import { WithComponents } from "./utils";
 
 
 type ResourcesOnly<T extends readonly [...unknown[]]> =
