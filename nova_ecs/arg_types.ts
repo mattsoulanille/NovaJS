@@ -27,7 +27,7 @@ export type ArgTypes = Component<any, any, any, any>
     | typeof Components
     | typeof UUID
     | typeof GetEntity
-    | Modifier<ArgTypes[], any>;
+    | Modifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
 

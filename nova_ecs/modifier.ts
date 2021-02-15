@@ -5,12 +5,12 @@ import { Query } from "./query";
 
 type GetArg = (arg: unknown) => Either<undefined, unknown>;
 
-type Transform<Args extends any[], Result> = (getArg: GetArg, ...args: ArgsToData<Args>)
-    => Either<undefined, Result>
+type Transform<Args extends readonly any[], Result> =
+    (getArg: GetArg, ...args: ArgsToData<Args>) => Either<undefined, Result>;
 
 export type UnknownModifier = Modifier<ArgTypes[], unknown>;
 
-export class Modifier<Args extends ArgTypes[], Result> {
+export class Modifier<Args extends readonly ArgTypes[], Result> {
     query: Query<Args>;
     transform: Transform<Args, Result>;
     constructor({ query, transform }:
