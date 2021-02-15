@@ -2,6 +2,7 @@ import { Draft } from "immer";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap } from "./entity_map";
+import { Modifier, ModifierResult } from "./modifier";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
 
@@ -18,53 +19,36 @@ export type UUIDData<T> = T extends typeof UUID ? string : never;
 export const GetEntity = Symbol();
 export type GetEntityObject<T> = T extends typeof GetEntity ? Entity : never;
 
-export class OptionalClass<V extends Optionable> {
-    constructor(readonly value: V) { };
-    toString() {
-        return `Optional(${this.value})`;
-    }
-}
-
-export function Optional<V extends Optionable>(value: V) {
-    return new OptionalClass(value);
-}
-
 // Types for args that are used to define a system or query. Passed in a tuple.
-type ValueType = Component<any, any, any, any>
+export type ArgTypes = Component<any, any, any, any>
     | Query
     | Resource<any, any, any, any>
     | typeof Entities
     | typeof Components
     | typeof UUID
-    | typeof GetEntity;
+    | typeof GetEntity
+    | Modifier<ArgTypes[], any>;
 
-type Optionable = Component<any, any, any, any> | Resource<any, any>;
-export type ArgTypes = ValueType | OptionalClass<Optionable>;
+type OnlyUndefined<T> = T extends undefined ? T : never;
 
 type DefiniteArgData<T> =
     Draft<ComponentData<T> | ResourceData<T>>
     | EntitiesObject<T>
     | ComponentsObject<T>
     | UUIDData<T>
-    | GetEntityObject<T>;
-
-type OptionalArgData<T> = T extends OptionalClass<infer V>
-    ? DefiniteArgData<V> | undefined
-    : never
-
-// The type for recursive queries is not allowed in TypeScript,
-// so separate them out here.
-type QueryArgData<T> = DefiniteArgData<T> | OptionalArgData<T>;
+    | GetEntityObject<T>
+    | ModifierResult<T>
+    | OnlyUndefined<T>;
 
 // The data type corresponding to an argument type.
-export type ArgData<T> = QueryArgData<T> | QueryResults<T>
+export type ArgData<T> = DefiniteArgData<T> | QueryResults<T>
 
 export type ArgsToData<Args> = {
     [K in keyof Args]: ArgData<Args[K]>
 }
 
 export type QueryArgsToData<Args> = {
-    [K in keyof Args]: QueryArgData<Args[K]>
+    [K in keyof Args]: DefiniteArgData<Args[K]>
 }
 
 export type QueryResults<Q> =

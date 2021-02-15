@@ -22,6 +22,8 @@ ts_library(
         "entity_map.ts",
         "resource_map.ts",
         "mutable_immutable_map_handle.ts",
+        "modifier.ts",
+        "optional.ts",
     ],
     deps = [
         "@npm//io-ts",
