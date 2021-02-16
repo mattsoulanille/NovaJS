@@ -11,5 +11,7 @@ ts_library(
         "//nova_ecs:ecs",
         "//nova_ecs/plugins",
         "@npm//pixi.js",
+        "@npm//uuid",
+        "@npm//@types/uuid",
     ]
 )
