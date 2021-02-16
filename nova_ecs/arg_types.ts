@@ -1,3 +1,4 @@
+import { Either } from "fp-ts/lib/Either";
 import { Draft } from "immer";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -19,6 +20,11 @@ export type UUIDData<T> = T extends typeof UUID ? string : never;
 export const GetEntity = Symbol();
 export type GetEntityObject<T> = T extends typeof GetEntity ? Entity : never;
 
+export const GetArg = Symbol();
+export type GetArgFunction<T extends ArgTypes = ArgTypes> = (arg: T)
+    => Either<undefined, ArgData<T>>;
+export type GetArgSelector<T> = T extends typeof GetArg ? GetArgFunction : never;
+
 // Types for args that are used to define a system or query. Passed in a tuple.
 export type ArgTypes = Component<any, any, any, any>
     | Query
@@ -27,6 +33,7 @@ export type ArgTypes = Component<any, any, any, any>
     | typeof Components
     | typeof UUID
     | typeof GetEntity
+    | typeof GetArg
     | Modifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
@@ -37,6 +44,7 @@ export type ArgData<T> =
     | ComponentsObject<T>
     | UUIDData<T>
     | GetEntityObject<T>
+    | GetArgSelector<T>
     | ModifierResult<T>
     | AllowUndefined<T>
     | QueryResults<T>;

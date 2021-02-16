@@ -16,7 +16,6 @@ export interface ComponentArgs<Data, DataSerialized = Data,
 
 export class Component<Data, DataSerialized = Data,
     Delta = Partial<Data>, DeltaSerialized = Delta> {
-    [immerable] = true;
     readonly name: string;
     readonly type?: t.Type<Data, DataSerialized>;
     readonly deltaType?: t.Type<Delta, DeltaSerialized>;

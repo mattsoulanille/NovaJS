@@ -24,6 +24,7 @@ ts_library(
         "mutable_immutable_map_handle.ts",
         "modifier.ts",
         "optional.ts",
+        "provider.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -41,12 +42,14 @@ ts_library(
         "utils_test.ts",
         "async_system_test.ts",
         "query_test.ts",
+        "provider_test.ts",
     ],
     deps = [
         ":ecs",
         "//nova_ecs/datatypes",
         "@npm//@types/jasmine",
         "@npm//io-ts",
+        "@npm//fp-ts",
         "@npm//immer",
         "@npm//uuid",
         "@npm//@types/uuid",

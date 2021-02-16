@@ -1,6 +1,6 @@
 import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { ArgsToData, ArgTypes, Components, Entities, GetEntity, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, Components, Entities, GetArg, GetEntity, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -201,30 +201,35 @@ export class World {
         });
     }
 
-    private getArg(arg: unknown, draft: Draft<State>,
-        entity: Draft<Entity>, uuid: string): Either<undefined, unknown> {
+    private getArg<T extends ArgTypes = ArgTypes>(arg: T,
+        draft: Draft<State>, entity: Draft<Entity>, uuid: string):
+        Either<undefined, ArgData<T>> {
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
-                return right(draft.resources.get(arg));
+                return right(draft.resources.get(arg) as ArgData<T>);
             } else {
                 throw new Error(`Missing resource ${arg}`);
             }
         } else if (arg instanceof Component) {
             if (entity.components.has(arg)) {
-                return right(entity.components.get(arg));
+                return right(entity.components.get(arg) as ArgData<T>);
             }
             return left(undefined);
         } else if (arg instanceof Query) {
             // Queries always fulfill because if no entities match, they return [].
-            return right(this.fulfillQuery(arg, draft));
+            return right(this.fulfillQuery(arg, draft) as ArgData<T>);
         } else if (arg === Entities) {
-            return right(draft.entities);
+            return right(draft.entities as ArgData<T>);
         } else if (arg === Components) {
-            return right(this.nameComponentMap);
+            return right(this.nameComponentMap as ArgData<T>);
         } else if (arg === UUID) {
-            return right(uuid);
+            return right(uuid as ArgData<T>);
         } else if (arg === GetEntity) {
-            return right(entity);
+            return right(entity as ArgData<T>);
+        } else if (arg === GetArg) {
+            // TODO: Why don't these types work?
+            return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
+                this.getArg<T>(arg, draft, entity, uuid)) as Right<ArgData<T>>;
         } else if (arg instanceof Modifier) {
             const modifier = arg as UnknownModifier;
             const modifierQueryResults = this.fulfillQueryForEntity(entity, uuid,
@@ -232,8 +237,8 @@ export class World {
             if (isLeft(modifierQueryResults)) {
                 return left(undefined);
             }
-            const getArg = (arg: unknown) => this.getArg(arg, draft, entity, uuid);
-            return modifier.transform(getArg, ...modifierQueryResults.right);
+            return modifier.transform(...modifierQueryResults.right) as
+                Either<undefined, ArgData<T>>;
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
