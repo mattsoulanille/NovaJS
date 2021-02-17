@@ -1,12 +1,10 @@
 import { Either } from "fp-ts/lib/Either";
-import { ArgData, ArgsToData, ArgTypes } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, GetArgFunction } from "./arg_types";
 import { Query } from "./query";
 
 
-type GetArg = (arg: unknown) => Either<undefined, unknown>;
-
 type Transform<Args extends readonly any[], Result> =
-    (getArg: GetArg, ...args: ArgsToData<Args>) => Either<undefined, Result>;
+    (...args: ArgsToData<Args>) => Either<undefined, Result>;
 
 export type UnknownModifier = Modifier<ArgTypes[], unknown>;
 
