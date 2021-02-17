@@ -1,32 +1,30 @@
-import { Either, left, Right, right } from "fp-ts/lib/Either";
-import { immerable } from "immer";
-import { ArgData, ArgsToData, ArgTypes, GetArg, GetEntity } from "./arg_types";
-import { Component, ComponentData, UnknownComponent } from "./component";
-import { Entity } from "./entity";
+import { right } from "fp-ts/lib/Either";
+import { ArgsToData, ArgTypes, GetEntity } from "./arg_types";
+import { Component, ComponentData } from "./component";
 import { Modifier } from "./modifier";
 import { Optional } from "./optional";
 import { Query } from "./query";
 
 
-type ProviderMapEntry = {
-    promise: Promise<unknown>,
-    complete: boolean,
-    result?: unknown,
-    error?: Error,
-};
+// type ProviderMapEntry = {
+//     promise: Promise<unknown>,
+//     complete: boolean,
+//     result?: unknown,
+//     error?: Error,
+// };
 
-type ProviderComponentData = {
-    [immerable]: false,
-    map: Map<UnknownComponent, ProviderMapEntry>
-};
-export const ProviderComponent = new Component<
-    ProviderComponentData>({ name: 'ProviderComponent' });
+// type ProviderComponentData = {
+//     [immerable]: false,
+//     map: Map<UnknownComponent, ProviderMapEntry>
+// };
+//export const ProviderComponent = new Component<
+//    ProviderComponentData>({ name: 'ProviderComponent' });
 
-const ProviderComponentProvider = Provide({
-    provided: ProviderComponent,
-    args: [],
-    factory: () => ({ [immerable]: false, map: new Map() } as const)
-} as const);
+// const ProviderComponentProvider = Provide({
+//     provided: ProviderComponent,
+//     args: [],
+//     factory: () => ({ [immerable]: false, map: new Map() } as const)
+// } as const);
 
 export function Provide<Provided extends Component<any, any, any, any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
     provided: Provided,

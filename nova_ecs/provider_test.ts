@@ -62,6 +62,40 @@ describe('provider', () => {
         expect(wordLengths).toEqual([['hello', 5]]);
     });
 
+    it('returns the existing component if the entity has it', () => {
+        const world = new World();
+
+        const fooProvider = Provide({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            factory: (bar) => {
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
+        const wordLengths: [string, number][] = [];
+
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
+
+        world.addSystem(providesFoo);
+
+        world.entities.set('word1', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+
+        world.step();
+
+        expect(wordLengths).toEqual([['hello', 123]]);
+    });
+
     // it('provides a component asynchronously', () => {
     //     const world = new World();
 
