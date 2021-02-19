@@ -42,6 +42,11 @@
     source-map-support "0.5.9"
     tsutils "2.27.2"
 
+"@bazel/esbuild@^3.2.0":
+  version "3.2.0"
+  resolved "https://registry.yarnpkg.com/@bazel/esbuild/-/esbuild-3.2.0.tgz#3535fcd0da9615bb8fa4350eafb8babfae177a45"
+  integrity sha512-WtTWqtdQrLSSof59VfleFH3823WATS/TVaqQTGUEAFdBYhlysSI1qFGGCZ7Mj4HdlbWDc46zBr97umkaxj4N4g==
+
 "@bazel/ibazel@^0.14.0":
   version "0.14.0"
   resolved "https://registry.yarnpkg.com/@bazel/ibazel/-/ibazel-0.14.0.tgz#86fa0002bed2ce1123b7ad98d4dd4623a0d93244"

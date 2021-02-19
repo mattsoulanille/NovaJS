@@ -4,6 +4,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@novajs//:bundlers.bzl", "web_bundle")
+load("@npm//@bazel/esbuild:index.bzl", "esbuild")
 
 
 filegroup(
@@ -48,14 +49,35 @@ ts_library(
     ]
 )
 
-web_bundle(
+# web_bundle(
+#     name = "browser_bundle",
+#     deps = [
+#         ":browser_lib",
+#         #"@npm//protobufjs",
+#     ],
+#     entry_point = "browser.ts",
+# )
+
+esbuild(
     name = "browser_bundle",
-    deps = [
-        ":browser_lib",
-        #"@npm//protobufjs",
-    ],
     entry_point = "browser.ts",
+    # flags = [
+    #     "--define:process.env.NODE_ENV=\"production\""
+    # ],
+    define = [
+        "process.env.NODE_ENV=\"development\""
+    ],
+    # external = [
+    #     "\"path\"",
+    # ],
+    tool = select({
+        "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
+        "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
+        "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
+    }),
+    deps = [":browser_lib"],
 )
+    
 
 # rollup_bundle(
 #     name = "browser_bundle",

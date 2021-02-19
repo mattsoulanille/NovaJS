@@ -165,3 +165,36 @@ load("@bazel_toolchains//rules:rbe_repo.bzl", "rbe_autoconfig")
 # Use this as is if you are using the rbe_ubuntu16_04 container,
 # otherwise refer to RBE docs.
 rbe_autoconfig(name = "rbe_default")
+
+
+# esbuild binaries
+_ESBUILD_VERSION = "0.8.34"
+http_archive(
+    name = "esbuild_darwin",
+    urls = [
+        "https://registry.npmjs.org/esbuild-darwin-64/-/esbuild-darwin-64-%s.tgz" % _ESBUILD_VERSION,
+    ],
+    strip_prefix = "package",
+    build_file_content = """exports_files(["bin/esbuild"])""",
+    sha256 = "3bf980b5175df873dd84fd614d57722f3b1b9c7e74929504e26192d23075d5c3",
+)
+
+http_archive(
+    name = "esbuild_windows",
+    urls = [
+        "https://registry.npmjs.org/esbuild-windows-64/-/esbuild-windows-64-%s.tgz" % _ESBUILD_VERSION,
+    ],
+    strip_prefix = "package",
+    build_file_content = """exports_files(["esbuild.exe"])""",
+    sha256 = "826cd58553e7b6910dd22aba001cd72af34e05c9c3e9af567b5b2a6b1c9f3941",
+)
+
+http_archive(
+    name = "esbuild_linux",
+    urls = [
+        "https://registry.npmjs.org/esbuild-linux-64/-/esbuild-linux-64-%s.tgz" % _ESBUILD_VERSION,
+    ],
+    strip_prefix = "package",
+    build_file_content = """exports_files(["bin/esbuild"])""",
+    sha256 = "9dff3f5b06fd964a1cbb6aa9ea5ebf797767f1bd2bac71e084fb0bbefeba24a3",
+)
