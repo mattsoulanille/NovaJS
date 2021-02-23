@@ -916,10 +916,52 @@ describe('world', () => {
         world.step();
         world.step();
 
-        debugger;
         world.entities.delete('entity1');
         world.entities.delete('entity2');
         world.entities.delete('entity3');
+        world.step();
+
+        expect(barDeleted).toEqual(new Set(['has foo']));
+        expect(fooDeleted).toEqual(new Set([123]));
+    });
+
+    it('runs a delete system when an entity is removed by a system', () => {
+        const fooDeleted = new Set<number>();
+        const barDeleted = new Set<string>();
+        const onDeleteSystem = new System({
+            name: 'barDeleted',
+            event: DeleteEvent,
+            args: [BAR_COMPONENT, FOO_COMPONENT] as const,
+            step: (bar, foo) => {
+                barDeleted.add(bar.y);
+                fooDeleted.add(foo.x);
+            }
+        });
+
+        const deleteBarEntities = new System({
+            name: 'deleteBarEntities',
+            args: [Entities, UUID, BAR_COMPONENT] as const,
+            step: (entities, uuid) => {
+                entities.delete(uuid);
+            }
+        });
+
+        world.addSystem(onDeleteSystem);
+        world.entities.set('entity1', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'no foo' })
+            .build());
+        world.entities.set('entity2', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'has foo' })
+            .build());
+        world.entities.set('entity3', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 321 })
+            .build());
+
+        world.step();
+        world.step();
+
+        world.addSystem(deleteBarEntities);
         world.step();
 
         expect(barDeleted).toEqual(new Set(['has foo']));
