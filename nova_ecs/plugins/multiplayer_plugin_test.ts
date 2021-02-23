@@ -1,7 +1,7 @@
 import { isLeft } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
 import 'jasmine';
-import { UUID } from '../arg_types';
+import { Entities, UUID } from '../arg_types';
 import { Component } from '../component';
 import { EntityBuilder } from '../entity';
 import { System } from '../system';
@@ -72,6 +72,9 @@ describe('Multiplayer Plugin', () => {
 
         world2 = new World('world2');
         world2.addPlugin(multiplayer(world2Communicator));
+
+        world1.addComponent(BarComponent);
+        world2.addComponent(BarComponent);
     });
 
     it('adds the comms component to the singleton entity', () => {
@@ -175,5 +178,42 @@ describe('Multiplayer Plugin', () => {
 
         expect(world1Communicator.incomingMessages).toEqual([]);
         expect(world2Communicator.incomingMessages).toEqual([]);
+    });
+
+    it('removes entities that have been removed', () => {
+        let remove = false;
+        const removeBarSystem = new System({
+            name: 'RemoveBarSystem',
+            args: [Entities, UUID, BarComponent] as const,
+            step: (entities, uuid) => {
+                if (remove) {
+                    entities.delete(uuid);
+                }
+            },
+            after: ['ApplyChanges'],
+            before: ['SendChanges'],
+        });
+
+        world1.addSystem(removeBarSystem);
+        const testUuid = 'test entity uuid';
+        world1.entities.set(testUuid, new EntityBuilder()
+            .addComponent(MultiplayerData, {
+                owner: 'world1 uuid',
+            })
+            .addComponent(BarComponent, {
+                y: 'a test component',
+            }).build());
+
+        world1.step();
+        world2.step();
+
+        expect(world2.entities.get(testUuid)!.components.get(BarComponent))
+            .toEqual(world1.entities.get(testUuid)!.components.get(BarComponent))
+
+        remove = true;
+        world1.step();
+        world2.step();
+
+        expect(world2.entities.get(testUuid)).toBeUndefined();
     });
 });

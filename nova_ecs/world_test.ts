@@ -3,49 +3,22 @@ import * as t from 'io-ts';
 import 'jasmine';
 import { v4 } from 'uuid';
 import { Entities, GetEntity, UUID } from './arg_types';
-import { Component } from './component';
+import { Component, ComponentData } from './component';
 import { EntityBuilder } from './entity';
+import { DeleteEvent } from './events';
 import { Optional } from './optional';
 import { Plugin } from './plugin';
 import { Query } from './query';
-import { Resource } from './resource';
+import { Resource, ResourceData } from './resource';
 import { System } from './system';
 import { World } from './world';
 
 
-const FOO_COMPONENT = new Component({
-    name: 'foo',
-    type: t.type({ x: t.number }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta(data) {
-        return data;
-    }
-});
+const FOO_COMPONENT = new Component<{ x: number }>({ name: 'foo' });
 
-const BAR_COMPONENT = new Component({
-    name: 'bar',
-    type: t.type({ y: t.string }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta(data) {
-        return data;
-    }
-});
+const BAR_COMPONENT = new Component<{ y: string }>({ name: 'bar' });
 
-const BAZ_RESOURCE = new Resource({
-    name: 'baz',
-    type: t.type({ z: t.array(t.string) }),
-    getDelta(a) {
-        return a;
-    },
-    applyDelta(data) {
-        return data
-    },
-    multiplayer: true
-})
+const BAZ_RESOURCE = new Resource<{ z: string[] }>({ name: 'baz' })
 
 const FOO_BAR_SYSTEM = new System({
     name: 'foobar',
@@ -827,6 +800,27 @@ describe('world', () => {
             .toEqual('changed bar');
     });
 
+    it('supports immutable resources', () => {
+        const pushed: string[] = [];
+        const changeResourceSystem = new System({
+            name: 'ChangeResourceSystem',
+            args: [BAZ_RESOURCE],
+            step: (baz) => {
+                baz.z.push('hello');
+                pushed.push('hello');
+            }
+        });
+
+        const bazVal: ResourceData<typeof BAZ_RESOURCE> = { z: [] };
+        world.resources.set(BAZ_RESOURCE, bazVal);
+        world.addSystem(changeResourceSystem);
+
+        world.step();
+
+        expect(bazVal).toEqual({ z: [] });
+        expect(pushed).toEqual(['hello']);
+    });
+
     it('supports mutable resources', () => {
         const MutableResource = new Resource<MutableObject>({
             name: 'MutableResource',
@@ -849,6 +843,30 @@ describe('world', () => {
         expect(resourceVal).toEqual(new MutableObject('changed'));
     });
 
+    it('supports immutable components', () => {
+        let changed = 'unchanged';
+        const changeComponentSystem = new System({
+            name: 'ChangeComponentSystem',
+            args: [BAR_COMPONENT],
+            step: (bar) => {
+                bar.y = 'changed';
+                changed = 'changed';
+            }
+        });
+
+        const barVal: ComponentData<typeof BAR_COMPONENT> = { y: 'unchanged' };
+        world.entities.set('example uuid', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, barVal)
+            .build());
+
+        world.addSystem(changeComponentSystem);
+
+        world.step();
+
+        expect(barVal).toEqual({ y: 'unchanged' });
+        expect(changed).toEqual('changed');
+    });
+
     it('supports mutable components', () => {
         const changeComponentSystem = new System({
             name: 'ChangeComponentSystem',
@@ -868,5 +886,43 @@ describe('world', () => {
         world.step();
 
         expect(componentVal).toEqual(new MutableObject('changed'));
+    });
+
+    it('runs a delete system when an entity is removed', () => {
+        const fooDeleted = new Set<number>();
+        const barDeleted = new Set<string>();
+        const deleteSystem = new System({
+            name: 'barDeleted',
+            event: DeleteEvent,
+            args: [BAR_COMPONENT, FOO_COMPONENT] as const,
+            step: (bar, foo) => {
+                barDeleted.add(bar.y);
+                fooDeleted.add(foo.x);
+            }
+        });
+
+        world.addSystem(deleteSystem);
+        world.entities.set('entity1', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'no foo' })
+            .build());
+        world.entities.set('entity2', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'has foo' })
+            .build());
+        world.entities.set('entity3', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 321 })
+            .build());
+
+        world.step();
+        world.step();
+
+        debugger;
+        world.entities.delete('entity1');
+        world.entities.delete('entity2');
+        world.entities.delete('entity3');
+        world.step();
+
+        expect(barDeleted).toEqual(new Set(['has foo']));
+        expect(fooDeleted).toEqual(new Set([123]));
     });
 });

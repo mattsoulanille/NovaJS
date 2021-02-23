@@ -5,6 +5,8 @@ import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap, EntityMapHandle } from "./entity_map";
+import { DeleteEvent, StepEvent } from "./events";
+import { EventMap } from "./event_map";
 import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
 import { Query } from "./query";
@@ -54,7 +56,7 @@ import { topologicalSort } from './utils';
 enablePatches();
 
 export interface State {
-    entities: EntityMap;
+    entities: EventMap<string, Entity>;//EntityMap;
     resources: ResourceMap;
 }
 
@@ -62,11 +64,20 @@ export type CallWithDraft<T> = <R>(callback: (draft: Draft<T>) => R) => R;
 
 enableMapSet();
 
+interface EcsEvent {
+    event: Symbol;
+    entities?: Set<string>;
+}
+
 export class World {
     private state: Immutable<State> = {
-        entities: new Map(),
+        entities: new EventMap(),
         resources: new Map(),
     };
+
+    // A hack to support events that need to run immediately, like when deleting
+    // an entity.
+    private currentDraft: Draft<State> | undefined;
 
     readonly entities = new EntityMapHandle(
         this.callWithNewDraft.bind(this),
@@ -75,7 +86,6 @@ export class World {
     readonly resources = new ResourceMapHandle(
         this.callWithNewDraft.bind(this),
         this.addResource.bind(this));
-
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
     private nameSystemMap = new Map<string, System>();
@@ -84,6 +94,8 @@ export class World {
     private systems: Array<System> = []; // Not a map because order matters.
     singletonEntity: Entity;
 
+    private eventQueue: EcsEvent[] = [];
+
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
         this.entities.set('singleton', {
@@ -91,7 +103,19 @@ export class World {
             multiplayer: false,
             name: 'singleton'
         });
+        // Get the handle for the singleton entity.
         this.singletonEntity = this.entities.get('singleton')!;
+
+        // Subscribe the delete event
+        (this.state.entities as EventMap<string, Entity>)
+            .events.delete.subscribe(deleted => {
+                this.callWithCurrentDraft(draft => {
+                    this.runEvent(draft, {
+                        event: DeleteEvent,
+                        entities: deleted,
+                    });
+                });
+            });
     }
 
     addPlugin(plugin: Plugin) {
@@ -113,6 +137,18 @@ export class World {
             throw new Error('Expected to be called');
         }
         return result!;
+    }
+
+    /**
+     * Calls the function with the current draft. If a step is in progress,
+     * it uses the step's draft. Otherwise, it creates a new one.
+     */
+    private callWithCurrentDraft<R>(callback: (draft: Draft<State>) => R) {
+        if (this.currentDraft) {
+            callback(this.currentDraft);
+        } else {
+            this.callWithNewDraft(callback);
+        }
     }
 
     private addResource(resource: Resource<any, any, any, any>) {
@@ -190,14 +226,48 @@ export class World {
         this.nameComponentMap.set(component.name, component);
     }
 
+    /**
+     * Flush the event queue.
+     */
+    private flush(draft: Draft<State>) {
+        // Not a for loop because more events may be added as prior
+        // ones are resolved.
+        while (this.eventQueue.length > 0) {
+            // TODO: Maybe use an actual queue for better time order.
+            const ecsEvent = this.eventQueue.shift()!;
+            this.runEvent(draft, ecsEvent);
+        }
+    }
+
+    private runEvent(draft: Draft<State>, ecsEvent: EcsEvent) {
+        // TODO: Cache this probably.
+        const systems = this.systems.filter(s => s.event === ecsEvent.event);
+
+        // Default to all entities if none are specified. When defaulting to all,
+        // this includes entities added in the same step.
+        let entities: [string, Draft<Entity>][] | undefined;
+        if (ecsEvent.entities) {
+            entities = [...draft.entities].filter(
+                ([uuid]) => ecsEvent.entities!.has(uuid));
+        }
+
+        for (const system of systems) {
+            const argList = this.fulfillQuery(system.query, draft, entities);
+            for (const args of argList) {
+                system.step(...args);
+            }
+        }
+    }
+
     step() {
         this.state = produce(this.state, draft => {
-            for (const system of this.systems) {
-                const argList = this.fulfillQuery(system.query, draft);
-                for (const args of argList) {
-                    system.step(...args);
-                }
-            }
+            this.currentDraft = draft;
+            this.eventQueue.push({
+                event: StepEvent,
+            });
+
+            this.flush(draft);
+            this.currentDraft = undefined;
         });
     }
 
@@ -244,13 +314,13 @@ export class World {
         }
     }
 
-    private fulfillQuery<C extends readonly ArgTypes[]>(
-        query: Query<C>, draft: Draft<State>): QueryResults<Query<C>> {
+    private fulfillQuery<C extends readonly ArgTypes[]>(query: Query<C>, draft: Draft<State>,
+        entities: Iterable<[string, Draft<Entity>]> = draft.entities): QueryResults<Query<C>> {
 
-        const entities = [...draft.entities].filter(
+        const supportedEntities = [...entities].filter(
             ([, entity]) => query.supportsEntity(entity));
 
-        return entities.map(([uuid, entity]) =>
+        return supportedEntities.map(([uuid, entity]) =>
             this.fulfillQueryForEntity(entity, uuid, query, draft))
             .filter((results): results is Right<ArgsToData<C>> => isRight(results))
             .map(rightResults => rightResults.right);

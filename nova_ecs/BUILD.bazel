@@ -25,11 +25,14 @@ ts_library(
         "modifier.ts",
         "optional.ts",
         "provider.ts",
+        "events.ts",
+        "event_map.ts",
     ],
     deps = [
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
+        "@npm//rxjs",
     ]
 )
 
