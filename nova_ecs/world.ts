@@ -4,7 +4,7 @@ import { ArgData, ArgsToData, ArgTypes, Components, Entities, GetArg, GetEntity,
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
-import { EntityMap, EntityMapHandle } from "./entity_map";
+import { EntityMapHandle } from "./entity_map";
 import { DeleteEvent, StepEvent } from "./events";
 import { EventMap } from "./event_map";
 import { Modifier, UnknownModifier } from "./modifier";
@@ -13,7 +13,7 @@ import { Query } from "./query";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMap, ResourceMapHandle } from "./resource_map";
 import { System } from "./system";
-import { topologicalSort } from './utils';
+import { currentIfDraft, topologicalSort } from './utils';
 
 
 // How do you serialize components and make sure the receiver
@@ -56,7 +56,7 @@ import { topologicalSort } from './utils';
 enablePatches();
 
 export interface State {
-    entities: EventMap<string, Entity>;//EntityMap;
+    entities: EventMap<string, Entity>;
     resources: ResourceMap;
 }
 
@@ -66,7 +66,7 @@ enableMapSet();
 
 interface EcsEvent {
     event: Symbol;
-    entities?: Set<string>;
+    entities?: Set<string | [string, Entity]>;
 }
 
 export class World {
@@ -74,10 +74,6 @@ export class World {
         entities: new EventMap(),
         resources: new Map(),
     };
-
-    // A hack to support events that need to run immediately, like when deleting
-    // an entity.
-    private currentDraft: Draft<State> | undefined;
 
     readonly entities = new EntityMapHandle(
         this.callWithNewDraft.bind(this),
@@ -109,11 +105,14 @@ export class World {
         // Subscribe the delete event
         (this.state.entities as EventMap<string, Entity>)
             .events.delete.subscribe(deleted => {
-                this.callWithCurrentDraft(draft => {
-                    this.runEvent(draft, {
-                        event: DeleteEvent,
-                        entities: deleted,
-                    });
+                const currentDeleted = new Set([...deleted]
+                    .map(([uuid, entity]) => {
+                        return [uuid, currentIfDraft(entity)];
+                    })) as NonNullable<EcsEvent['entities']>;
+
+                this.eventQueue.push({
+                    event: DeleteEvent,
+                    entities: currentDeleted,
                 });
             });
     }
@@ -137,18 +136,6 @@ export class World {
             throw new Error('Expected to be called');
         }
         return result!;
-    }
-
-    /**
-     * Calls the function with the current draft. If a step is in progress,
-     * it uses the step's draft. Otherwise, it creates a new one.
-     */
-    private callWithCurrentDraft<R>(callback: (draft: Draft<State>) => R) {
-        if (this.currentDraft) {
-            callback(this.currentDraft);
-        } else {
-            this.callWithNewDraft(callback);
-        }
     }
 
     private addResource(resource: Resource<any, any, any, any>) {
@@ -247,8 +234,13 @@ export class World {
         // this includes entities added in the same step.
         let entities: [string, Draft<Entity>][] | undefined;
         if (ecsEvent.entities) {
-            entities = [...draft.entities].filter(
-                ([uuid]) => ecsEvent.entities!.has(uuid));
+            entities = [...ecsEvent.entities].map(entry => {
+                if (typeof entry === 'string') {
+                    return [entry, draft.entities.get(entry)];
+                } else {
+                    return entry;
+                }
+            }).filter((entry): entry is [string, Draft<Entity>] => Boolean(entry[1]));
         }
 
         for (const system of systems) {
@@ -261,13 +253,11 @@ export class World {
 
     step() {
         this.state = produce(this.state, draft => {
-            this.currentDraft = draft;
             this.eventQueue.push({
                 event: StepEvent,
             });
 
             this.flush(draft);
-            this.currentDraft = undefined;
         });
     }
 
