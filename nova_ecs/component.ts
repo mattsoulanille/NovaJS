@@ -1,4 +1,4 @@
-import { Draft, immerable } from 'immer';
+import { Draft } from 'immer';
 import * as t from 'io-ts';
 
 export type ComponentData<C> = C extends Component<infer Data, any, any, any> ? Data : never;
