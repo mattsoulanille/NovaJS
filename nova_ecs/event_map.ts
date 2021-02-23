@@ -13,12 +13,13 @@ export class EventMap<K, V> implements Map<K, V> {
 
     // TODO(mattsoulanille): Add more events.
     readonly events = {
-        delete: new Subject<Set<K>>(),
+        delete: new Subject<Set<[K, V]>>(),
     }
 
     clear(): void {
-        this.events.delete.next(new Set([...this.keys()]));
+        const toDelete = new Set([...this.entries()]);
         this.wrappedMap.clear();
+        this.events.delete.next(toDelete);
     }
     forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
         return this.wrappedMap.forEach(callbackfn, thisArg);
@@ -34,10 +35,16 @@ export class EventMap<K, V> implements Map<K, V> {
         return this;
     }
     delete(key: K) {
+        let toDelete: Set<[K, V]> | undefined;
         if (this.wrappedMap.has(key)) {
-            this.events.delete.next(new Set([key]));
+            const val = this.wrappedMap.get(key)!;
+            toDelete = new Set([[key, val]]);
         }
-        return this.wrappedMap.delete(key);
+        const result = this.wrappedMap.delete(key);
+        if (toDelete) {
+            this.events.delete.next(toDelete);
+        }
+        return result;
     }
     get size() {
         return this.wrappedMap.size;
