@@ -4,8 +4,6 @@ package(default_visibility = ["//visibility:public"])
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 load("@npm//@bazel/concatjs:index.bzl", "karma_web_test")
-load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
-load("@novajs//:bundlers.bzl", "web_bundle")
 
 # ts_library(
 #     name = "ship_drawable_test_lib",

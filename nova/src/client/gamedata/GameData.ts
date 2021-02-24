@@ -1,22 +1,23 @@
-import * as PIXI from "pixi.js";
-import * as path from "path";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { NovaIDs } from "novadatainterface/NovaIDs";
-import { BaseData } from "novadatainterface/BaseData";
-import { PictImageData } from "novadatainterface/PictImage";
-import { SpriteSheetImageData, SpriteSheetFramesData, SpriteSheetData } from "novadatainterface/SpriteSheetData";
-import { ExplosionData } from "novadatainterface/ExplosionData";
-import { StatusBarData } from "novadatainterface/StatusBarData";
-import { TargetCornersData } from "novadatainterface/TargetCornersData";
-import { SystemData } from "novadatainterface/SystemData";
-import { PlanetData } from "novadatainterface/PlanetData";
-import { PictData } from "novadatainterface/PictData";
-import { WeaponData } from "novadatainterface/WeaponData";
-import { OutfitData } from "novadatainterface/OutiftData";
-import { ShipData } from "novadatainterface/ShipData";
-import { Gettable } from "novadatainterface/Gettable";
-import { dataPath, idsPath } from "../../common/GameDataPaths";
+import { BaseData } from 'novadatainterface/BaseData';
+import { ExplosionData } from 'novadatainterface/ExplosionData';
+import { GameDataInterface } from 'novadatainterface/GameDataInterface';
+import { Gettable } from 'novadatainterface/Gettable';
+import { NovaDataInterface, NovaDataType } from 'novadatainterface/NovaDataInterface';
+import { NovaIDs } from 'novadatainterface/NovaIDs';
+import { OutfitData } from 'novadatainterface/OutiftData';
+import { PictData } from 'novadatainterface/PictData';
+import { PictImageData } from 'novadatainterface/PictImage';
+import { PlanetData } from 'novadatainterface/PlanetData';
+import { ShipData } from 'novadatainterface/ShipData';
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from 'novadatainterface/SpriteSheetData';
+import { StatusBarData } from 'novadatainterface/StatusBarData';
+import { SystemData } from 'novadatainterface/SystemData';
+import { TargetCornersData } from 'novadatainterface/TargetCornersData';
+import { WeaponData } from 'novadatainterface/WeaponData';
+import * as PIXI from 'pixi.js';
+import urlJoin from 'url-join';
+import { dataPath, idsPath } from '../../common/GameDataPaths';
+
 
 /**
  * Retrieves game data from the server
@@ -48,7 +49,7 @@ class GameData implements GameDataInterface {
     }
 
     getSettings(file: string): Promise<unknown> {
-        return this.getUrl(path.join("/settings", file));
+        return this.getUrl(urlJoin("/settings", file));
     }
 
     private async getUrl(url: string): Promise<Buffer> {
@@ -74,25 +75,25 @@ class GameData implements GameDataInterface {
     }
 
     private getDataPrefix(dataType: NovaDataType): string {
-        return path.join(dataPath, dataType);
+        return urlJoin(dataPath, dataType);
     }
 
     private addGettable<T extends BaseData | SpriteSheetFramesData>(dataType: NovaDataType): Gettable<T> {
         var dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string): Promise<T> => {
-            return (await this.getUrl(path.join(dataPrefix, id + ".json"))) as any;
+            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"))) as any;
         });
     }
 
     private addPictGettable<T extends PictImageData | SpriteSheetImageData>(dataType: NovaDataType): Gettable<T> {
         var dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string): Promise<T> => {
-            return <T>(await this.getUrl(path.join(dataPrefix, id) + ".png"));
+            return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png"));
         });
     }
 
     async textureFromPict(id: string): Promise<PIXI.Texture> {
-        const pictPath = path.join(dataPath, NovaDataType.PictImage, id + ".png");
+        const pictPath = urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
         // if (!PIXI.utils.TextureCache[pictPath]) {
         //     await this.getUrl(pictPath);
         // }
@@ -114,4 +115,4 @@ class GameData implements GameDataInterface {
     }
 }
 
-export { GameData }
+export { GameData };

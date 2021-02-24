@@ -8,9 +8,10 @@ ts_library(
     name = "gamedata",
     srcs = glob(["*.ts"]),
     deps = [
-        "@npm//@types/node",
         "//nova/src/common",
         "//novadatainterface",
         "@npm//pixi.js",
+        "@npm//url-join",
+        "@npm//@types/url-join",
     ]
 )

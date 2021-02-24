@@ -2,7 +2,6 @@ package(default_visibility = ["//visibility:public"])
 
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
-load("@novajs//:bundlers.bzl", "web_bundle")
 
 ts_library(
     name = "communication_lib",

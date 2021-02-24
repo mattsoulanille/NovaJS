@@ -1,8 +1,4 @@
-//import * as path from "path";
-import path from "path";
-const prefix = "/gameData/";
-const dataPath = path.join(prefix, "data");
-const idsPath = path.join(prefix, "ids");
-
-const settingsPrefix = "/settings/";
-export { prefix, dataPath, idsPath, settingsPrefix }
+export const prefix = "/gameData/";
+export const dataPath = prefix + "data";
+export const idsPath = prefix + "ids";
+export const settingsPrefix = "/settings/";

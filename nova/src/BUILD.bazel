@@ -1,9 +1,8 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
-load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
-load("@novajs//:bundlers.bzl", "web_bundle")
+load("@npm//@bazel/esbuild:index.bzl", "esbuild")
 
 
 filegroup(
@@ -48,29 +47,21 @@ ts_library(
     ]
 )
 
-web_bundle(
+esbuild(
     name = "browser_bundle",
+    entry_point = "browser.ts",
+    target = "es2015",
+    minify = True,
+    define = [
+        "process.env.NODE_ENV=\"node\""
+    ],
+    link_workspace_root = True,
+    tool = select({
+        "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
+        "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
+        "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
+    }),
     deps = [
         ":browser_lib",
-        #"@npm//protobufjs",
     ],
-    entry_point = "browser.ts",
 )
-
-# rollup_bundle(
-#     name = "browser_bundle",
-#     deps = [
-#         ":browser_lib",
-#         "@npm//@rollup/plugin-node-resolve",
-#         "@npm//@rollup/plugin-commonjs",
-#         "@npm//rollup-plugin-sourcemaps",
-#         "@npm//@rollup/plugin-json",
-#         "@npm//rollup-plugin-node-globals",
-#         "@npm//rollup-plugin-node-builtins",
-#         "@npm//protobufjs",
-#     ],
-#     entry_point = "browser.ts",
-#     config_file = "//:rollup_browser.config.js",
-#     sourcemap = "inline",
-#     format = "iife",
-# )
