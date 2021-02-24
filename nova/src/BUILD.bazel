@@ -61,21 +61,20 @@ ts_library(
 esbuild(
     name = "browser_bundle",
     entry_point = "browser.ts",
-    # flags = [
-    #     "--define:process.env.NODE_ENV=\"production\""
-    # ],
+    target = "es2015",
+    minify = True,
     define = [
-        "process.env.NODE_ENV=\"development\""
+        "process.env.NODE_ENV=\"node\""
     ],
-    # external = [
-    #     "\"path\"",
-    # ],
+    link_workspace_root = True,
     tool = select({
         "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
         "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
         "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
     }),
-    deps = [":browser_lib"],
+    deps = [
+        ":browser_lib",
+    ],
 )
     
 

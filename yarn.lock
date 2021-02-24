@@ -42,10 +42,10 @@
     source-map-support "0.5.9"
     tsutils "2.27.2"
 
-"@bazel/esbuild@^3.2.0":
-  version "3.2.0"
-  resolved "https://registry.yarnpkg.com/@bazel/esbuild/-/esbuild-3.2.0.tgz#3535fcd0da9615bb8fa4350eafb8babfae177a45"
-  integrity sha512-WtTWqtdQrLSSof59VfleFH3823WATS/TVaqQTGUEAFdBYhlysSI1qFGGCZ7Mj4HdlbWDc46zBr97umkaxj4N4g==
+"@bazel/esbuild@^3.2.1":
+  version "3.2.1"
+  resolved "https://registry.yarnpkg.com/@bazel/esbuild/-/esbuild-3.2.1.tgz#bbd530bd2283c67276f432c51080e61331436fdc"
+  integrity sha512-8Y2Vd9KMxWfL9KzF9qbrUGHJZiJsee6xpT+dUCd29zYJA9Ddu4WCeNtS24Ejbm1y3NUgGPXh1nLgTQ/yIfCYng==
 
 "@bazel/ibazel@^0.14.0":
   version "0.14.0"
@@ -661,6 +661,11 @@
   version "7.2.0"
   resolved "https://registry.yarnpkg.com/@types/supports-color/-/supports-color-7.2.0.tgz#edd98ae52ee786b733a5dea0a23da4eb18ef7310"
   integrity sha512-gtUcOP6qIpjbSDdWjMBRNSks42ccx1709mwKTgelW63BESIADw8Ju7klpydDDb9Kr0iRXfpwrXH8+zoU8TCqiA==
+
+"@types/url-join@^4.0.0":
+  version "4.0.0"
+  resolved "https://registry.yarnpkg.com/@types/url-join/-/url-join-4.0.0.tgz#72eff71648a429c7d4acf94e03780e06671369bd"
+  integrity sha512-awrJu8yML4E/xTwr2EMatC+HBnHGoDxc2+ImA9QyeUELI1S7dOCIZcyjki1rkwoA8P2D2NVgLAJLjnclkdLtAw==
 
 "@types/uuid@^8.3.0":
   version "8.3.0"
@@ -2449,6 +2454,11 @@ unpipe@1.0.0, unpipe@~1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/unpipe/-/unpipe-1.0.0.tgz#b2bf4ee8514aae6165b4817829d21b2ef49904ec"
   integrity sha1-sr9O6FFKrmFltIF4KdIbLvSZBOw=
+
+url-join@^4.0.1:
+  version "4.0.1"
+  resolved "https://registry.yarnpkg.com/url-join/-/url-join-4.0.1.tgz#b642e21a2646808ffa178c4c5fda39844e12cde7"
+  integrity sha512-jk1+QP6ZJqyOiuEI9AEWQfju/nB2Pw466kbA0LEZljHwKeMgd9WrAEgEGxjPDD2+TNbbb37rTyhEfrCXfuKXnA==
 
 url-shim@^1.0.1:
   version "1.0.1"
