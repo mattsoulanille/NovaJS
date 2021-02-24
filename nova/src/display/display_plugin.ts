@@ -7,6 +7,9 @@ import { Component, ComponentData } from "nova_ecs/component";
 import { EntityBuilder } from "nova_ecs/entity";
 import { Provide } from "nova_ecs/provider";
 import { v4 } from "uuid";
+import { UUID } from "nova_ecs/arg_types";
+import { Entities } from "nova_ecs/arg_types";
+import { DeleteEvent } from "nova_ecs/events";
 
 
 export const PixiContainer = new Resource<PIXI.Container>({
@@ -17,6 +20,15 @@ export const PixiContainer = new Resource<PIXI.Container>({
 
 const SquareGraphics = new Component<PIXI.Graphics>({
     name: 'SquareGraphics',
+});
+
+const SquareGraphicsCleanup = new System({
+    name: 'SquareGraphicsCleanup',
+    event: DeleteEvent,
+    args: [SquareGraphics, PixiContainer] as const,
+    step: (graphics, container) => {
+        container.removeChild(graphics as PIXI.Graphics);
+    }
 });
 
 const SquarePhysics = new Component<{
@@ -40,13 +52,17 @@ const SquareProvider = Provide({
 
 const SquareSystem = new System({
     name: 'SquareSystem',
-    args: [SquareProvider, TimeResource, SquarePhysics] as const,
-    step: (graphics, time, physics) => {
+    args: [SquareProvider, TimeResource, SquarePhysics, UUID, Entities] as const,
+    step: (graphics, time, physics, uuid, entities) => {
         graphics.rotation += time.delta_s * physics.rotationRate;
-        graphics.position.x = (graphics.position.x + time.delta_s
-            * physics.velocity.x) % 800;
-        graphics.position.y = (graphics.position.y + time.delta_s
-            * physics.velocity.y) % 800;
+        graphics.position.x += time.delta_s * physics.velocity.x;
+        graphics.position.y += time.delta_s * physics.velocity.y;
+
+
+        if (graphics.position.x > window.innerWidth
+            || graphics.position.y > window.innerHeight) {
+            entities.delete(uuid);
+        }
     }
 });
 
@@ -70,6 +86,7 @@ export const Display: Plugin = {
         world.resources.set(PixiContainer, container);
 
         world.addSystem(SquareSystem);
+        world.addSystem(SquareGraphicsCleanup);
 
         setInterval(() => {
             for (let i = 0; i < 10; i++) {

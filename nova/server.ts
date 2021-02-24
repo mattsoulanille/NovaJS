@@ -1,6 +1,6 @@
 import express from "express";
 import fs from "fs";
-import https from "https";
+import http from "http";
 import path from "path";
 import { NovaParse } from "../novaparse/NovaParse";
 import { CommunicatorServer } from "./src/communication/CommunicatorServer";
@@ -25,13 +25,13 @@ const serverSettingsPath = require.resolve("novajs/nova/settings/server.json");
 const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as Settings;
 
 // For production, replace these with real https keys
-const httpsKeys: https.ServerOptions = {
-    key: fs.readFileSync(require.resolve("novajs/nova/test_keys/testkey.pem")),
-    cert: fs.readFileSync(require.resolve("novajs/nova/test_keys/testcert.pem")),
-};
+// const httpsKeys: https.ServerOptions = {
+//     key: fs.readFileSync(require.resolve("novajs/nova/test_keys/testkey.pem")),
+//     cert: fs.readFileSync(require.resolve("novajs/nova/test_keys/testcert.pem")),
+// };
 
 const app = express();
-const httpsServer = https.createServer(httpsKeys, app);
+const httpServer = http.createServer(app);
 
 
 const port: number = settings.port;
@@ -49,7 +49,7 @@ const bundleMapPath = require.resolve("novajs/nova/src/browser_bundle.js.map");
 const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json");
 setupRoutes(gameData, app, htmlPath, bundlePath, bundleMapPath, clientSettingsPath);
 
-const channel = new SocketChannelServer({ httpsServer });
+const channel = new SocketChannelServer({ server: httpServer });
 
 // async function makeSystems() {
 //     const systemIds = (await gameData.ids).System;
@@ -74,7 +74,7 @@ repl.repl.context.world = world;
 
 let communicator: CommunicatorServer;
 async function startGame() {
-    httpsServer.listen(port, function() {
+    httpServer.listen(port, function() {
         console.log("listening at port " + port);
     });
 

@@ -39,10 +39,11 @@ document.body.appendChild(app.view);
 //app.stage.addChild(display.displayObject);
 //(window as any).display = display;
 
-window.onresize = function() {
+function resize() {
     app.renderer.resize(window.innerWidth, window.innerHeight);
-    //display.resize(window.innerWidth, window.innerHeight);
 }
+window.onresize = resize;
+window.onload = resize;
 
 // display.buildPromise.then(function() {
 //     // Set the window size once everything is built

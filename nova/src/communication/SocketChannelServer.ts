@@ -1,5 +1,6 @@
 import { isLeft } from "fp-ts/lib/Either";
 import https from "https";
+import http from "http";
 import { Subject } from "rxjs";
 import { v4 } from "uuid";
 import WebSocket from "ws";
@@ -24,7 +25,11 @@ export class SocketChannelServer implements ChannelServer {
     // If the ping doesn't get back in this much time, disconnect them.
     readonly timeout: number;
 
-    constructor({ httpsServer, warn, wss, timeout }: { httpsServer?: https.Server, warn?: ((m: string) => void), wss?: WebSocket.Server, timeout?: number }) {
+    constructor({ server, warn, wss, timeout }: {
+        server?: http.Server | https.Server,
+        warn?: ((m: string) => void),
+        wss?: WebSocket.Server, timeout?: number
+    }) {
 
         if (warn) {
             this.warn = warn;
@@ -33,8 +38,8 @@ export class SocketChannelServer implements ChannelServer {
         if (wss) {
             this.wss = wss;
         }
-        else if (httpsServer) {
-            this.wss = new WebSocket.Server({ server: httpsServer });
+        else if (server) {
+            this.wss = new WebSocket.Server({ server: server });
         }
         else {
             throw new Error("httpsServer or wss must be defined");
