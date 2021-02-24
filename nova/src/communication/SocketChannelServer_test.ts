@@ -1,5 +1,6 @@
 import { isLeft } from "fp-ts/lib/Either";
 import * as https from "https";
+import * as http from "http";
 import "jasmine";
 import { SocketChannelServer } from "novajs/nova/src/communication/SocketChannelServer";
 import { SocketMessage } from "novajs/nova/src/communication/SocketMessage";
@@ -34,7 +35,7 @@ describe("SocketChannelServer", function() {
         const [callbacks, on] = trackOn();
         httpsServer.on.and.callFake(on);
         new SocketChannelServer({
-            httpsServer
+            server: httpsServer
         });
 
         expect(callbacks["upgrade"].length).toBe(1);

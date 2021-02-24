@@ -15,7 +15,7 @@ export class SocketChannelClient implements ChannelClient {
 
     constructor({ webSocket, warn, timeout, webSocketFactory }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number, webSocketFactory?: () => WebSocket }) {
         this.webSocketFactory = webSocketFactory ??
-            (() => new WebSocket(`wss://${location.host}`));
+            (() => new WebSocket(`ws://${location.host}`));
 
         this.webSocket = webSocket ?? this.webSocketFactory();
         this.warn = warn ?? console.warn;
