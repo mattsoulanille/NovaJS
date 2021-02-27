@@ -44,6 +44,8 @@ ts_library(
         "//nova/src/client/gamedata",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//stats.js",
+        "@npm//@types/stats.js",
     ]
 )
 

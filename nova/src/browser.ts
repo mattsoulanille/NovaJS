@@ -7,6 +7,7 @@ import { World } from "nova_ecs/world";
 import { GameDataResource } from "./nova_plugin/game_data_resource";
 import { Nova } from "./nova_plugin/nova_plugin";
 import { Display, PixiContainer } from "./display/display_plugin";
+import Stats from 'stats.js';
 
 // const socketChannel = new SocketChannelClient({});
 // socketChannel.message.subscribe((m) => {
@@ -77,8 +78,13 @@ async function startGame() {
     }
     app.stage.addChild(worldContainer);
 
+    const stats = new Stats();
+    document.body.appendChild(stats.dom);
+
     app.ticker.add(() => {
+        stats.begin();
         world.step();
+        stats.end();
     });
 }
 
