@@ -42,7 +42,7 @@
         "peer-lite": "^1.1.0",
         "requirejs": "^2.3.6",
         "stats.js": "^0.17.0",
-        "typescript": "~4.1.5",
+        "typescript": "~4.2.2",
         "url-join": "^4.0.1",
         "url-shim": "^1.0.1"
     },
