@@ -967,4 +967,31 @@ describe('world', () => {
         expect(barDeleted).toEqual(new Set(['has foo']));
         expect(fooDeleted).toEqual(new Set([123]));
     });
+
+    it('runs the correct system if an entity\'s components are changed', () => {
+        const foobars: [number, string][] = [];
+        const fooBarSystem = new System({
+            name: "FooBarSystem",
+            args: [FOO_COMPONENT, BAR_COMPONENT] as const,
+            step: (foo, bar) => {
+                foobars.push([foo.x, bar.y]);
+            }
+        });
+
+        world.addSystem(fooBarSystem);
+        world.entities.set('e', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'hello' })
+            .build());
+
+        const entity = world.entities.get('e')!;
+
+        world.step();
+        entity.components.delete(FOO_COMPONENT);
+        world.step();
+        entity.components.set(FOO_COMPONENT, { x: 456 });
+        world.step();
+
+        expect(foobars).toEqual([[123, 'hello'], [456, 'hello']]);
+    });
 });
