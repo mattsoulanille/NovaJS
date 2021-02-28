@@ -50,9 +50,16 @@ jasmine_node_test(
     ]
 )
 
+filegroup(
+    name = "plugins_es6",
+    srcs = [":plugins"],
+    output_group = "es6_sources",
+)
+
 pkg_npm(
     name = "plugins_pkg",
     deps = [
         ":plugins",
+        ":plugins_es6",
     ],
 )

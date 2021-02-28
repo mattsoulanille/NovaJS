@@ -1,14 +1,15 @@
 {
   "name": "nova_ecs",
-  "version": "0.1.5",
+  "version": "0.1.9",
   "description": "The Entity Component System for NovaJS",
   "repository": "https://github.com/mattsoulanille/NovaJS",
   "author": "Matthew Soulanille",
   "license": "MIT",
+  "type": "commonjs",
   "dependencies": {
     "fp-ts": "^2.9.5",
-    "io-ts": "^2.2.14",
     "immer": "^8.0.1",
+    "io-ts": "^2.2.14",
     "rxjs": "^6.6.3"
   },
   "devDependencies": {

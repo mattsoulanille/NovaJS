@@ -66,11 +66,18 @@ jasmine_node_test(
     ],
 )
 
+filegroup(
+    name = "ecs_es6",
+    srcs = [":ecs"],
+    output_group = "es6_sources",
+)
+
 pkg_npm(
     name = "ecs_pkg",
     srcs = ["package.json"],
     deps = [
         ":ecs",
+        ":ecs_es6",
     ],
     nested_packages = [
         "//nova_ecs/datatypes:datatypes_pkg",
