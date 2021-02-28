@@ -44,9 +44,16 @@ jasmine_node_test(
     ]
 )
 
+filegroup(
+    name = "datatypes_es6",
+    srcs = [":datatypes"],
+    output_group = "es6_sources",
+)
+
 pkg_npm(
     name = "datatypes_pkg",
     deps = [
         ":datatypes",
+        ":datatypes_es6",
     ],
 )
