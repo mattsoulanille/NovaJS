@@ -1,6 +1,6 @@
 import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
 import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
-import { ArgData, ArgsToData, ArgTypes, Components, Entities, GetArg, GetEntity, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -92,6 +92,7 @@ export class World {
     singletonEntity: Entity;
 
     private eventQueue: EcsEventWithEntities<unknown>[] = [];
+    private boundEmit: EmitFunction = this.emit.bind(this);
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
@@ -304,6 +305,8 @@ export class World {
             return right(uuid as ArgData<T>);
         } else if (arg === GetEntity) {
             return right(entity as ArgData<T>);
+        } else if (arg === Emit) {
+            return right(this.boundEmit as ArgData<T>);
         } else if (arg === GetArg) {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>

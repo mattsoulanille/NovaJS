@@ -26,6 +26,11 @@ export type GetArgFunction<T extends ArgTypes = ArgTypes> = (arg: T)
     => Either<undefined, ArgData<T>>;
 export type GetArgSelector<T> = T extends typeof GetArg ? GetArgFunction : never;
 
+export const Emit = Symbol('Emit');
+export type EmitFunction = <Data>(event: EcsEvent<Data, any>, data: Data,
+    entities?: Set<string>) => void;
+export type EmitSelector<T> = T extends typeof Emit ? EmitFunction : never;
+
 // Types for args that are used to define a system or query. Passed in a tuple.
 export type ArgTypes = Component<any, any, any, any>
     | Query
@@ -36,6 +41,7 @@ export type ArgTypes = Component<any, any, any, any>
     | typeof UUID
     | typeof GetEntity
     | typeof GetArg
+    | typeof Emit
     | Modifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
@@ -49,6 +55,7 @@ export type ArgData<T> =
     | UUIDData<T>
     | GetEntityObject<T>
     | GetArgSelector<T>
+    | EmitSelector<T>
     | ModifierResult<T>
     | AllowUndefined<T>;
 

@@ -2,7 +2,7 @@ import { original } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Entities, GetEntity, UUID } from './arg_types';
+import { Emit, Entities, GetEntity, UUID } from './arg_types';
 import { Component, ComponentData } from './component';
 import { EntityBuilder } from './entity';
 import { DeleteEvent, EcsEvent } from './events';
@@ -1030,5 +1030,57 @@ describe('world', () => {
         world.emit(AddEvent, 9);
 
         expect(fooVals).toEqual([100, 105, 105, 112]);
+    });
+
+    it('allows systems to emit new events', () => {
+        const AddEvent = new EcsEvent<number>();
+
+        const fooVals: number[] = [];
+        const fooSystem = new System({
+            name: 'fooSystem',
+            events: [AddEvent],
+            args: [AddEvent, FOO_COMPONENT] as const,
+            step: (add, foo) => {
+                foo.x += add;
+            }
+        });
+
+        const reportSystem = new System({
+            name: 'report',
+            args: [FOO_COMPONENT],
+            step: (foo) => {
+                fooVals.push(foo.x);
+            }
+        });
+
+        const emitSystem = new System({
+            name: 'emitEvent',
+            args: [Emit, BAR_COMPONENT] as const,
+            step: (emit) => {
+                emit(AddEvent, 10);
+            }
+        });
+
+        world.singletonEntity.components.set(BAR_COMPONENT, { y: '' });
+        world.addSystem(fooSystem);
+        world.addSystem(reportSystem);
+        world.addSystem(emitSystem);
+        world.entities.set('e', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 100 })
+            .build());
+
+
+        world.step();
+        world.step();
+        world.step();
+        world.step();
+
+        // How this works...
+        // Step event starts:
+        //   emitSystem emits the event to update foo ---------- These may be swapped
+        //   reportSystem reports the current value of foo --|
+        // Add event starts:
+        //   fooSystem adds to foo.
+        expect(fooVals).toEqual([100, 110, 120, 130]);
     });
 });
