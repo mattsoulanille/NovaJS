@@ -1,6 +1,6 @@
 {
   "name": "nova_ecs",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "The Entity Component System for NovaJS",
   "repository": "https://github.com/mattsoulanille/NovaJS",
   "author": "Matthew Soulanille",
