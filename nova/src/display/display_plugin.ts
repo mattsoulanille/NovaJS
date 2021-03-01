@@ -1,15 +1,14 @@
+import { Entities, UUID } from "nova_ecs/arg_types";
+import { Component } from "nova_ecs/component";
+import { EntityBuilder } from "nova_ecs/entity";
+import { DeleteEvent } from "nova_ecs/events";
+import { Plugin } from "nova_ecs/plugin";
+import { TimeResource } from "nova_ecs/plugins/time_plugin";
+import { Provide } from "nova_ecs/provider";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
-import { Plugin } from "nova_ecs/plugin";
 import * as PIXI from "pixi.js";
-import { TimeResource } from "nova_ecs/plugins/time_plugin";
-import { Component, ComponentData } from "nova_ecs/component";
-import { EntityBuilder } from "nova_ecs/entity";
-import { Provide } from "nova_ecs/provider";
 import { v4 } from "uuid";
-import { UUID } from "nova_ecs/arg_types";
-import { Entities } from "nova_ecs/arg_types";
-import { DeleteEvent } from "nova_ecs/events";
 
 
 export const PixiContainer = new Resource<PIXI.Container>({
@@ -24,7 +23,7 @@ const SquareGraphics = new Component<PIXI.Graphics>({
 
 const SquareGraphicsCleanup = new System({
     name: 'SquareGraphicsCleanup',
-    event: DeleteEvent,
+    events: [DeleteEvent],
     args: [SquareGraphics, PixiContainer] as const,
     step: (graphics, container) => {
         container.removeChild(graphics as PIXI.Graphics);
