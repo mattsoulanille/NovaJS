@@ -4,12 +4,8 @@ import { Modifier, UnknownModifier } from "./modifier";
 import { Resource, UnknownResource } from "./resource";
 import { subset, WithComponents } from "./utils";
 
-// type ComponentsOnly<T extends readonly [...unknown[]]> =
-//     Exclude<Extract<T[number], Component<any, any, any, any>>, Resource<any, any, any, any>>;
 
-// type ResourcesOnly<T extends readonly [...unknown[]]> =
-//     Extract<T[number], Resource<any, any, any, any>>;
-
+const querySymbol = Symbol('Query');
 
 /**
  * A query provides a way of iterating over all the Entities that have
@@ -17,6 +13,9 @@ import { subset, WithComponents } from "./utils";
  */
 export class Query<QueryArgs extends readonly ArgTypes[]
     = readonly ArgTypes[]> {
+
+    // Prevent query from being a subtype of EcsEvent
+    private readonly querySymbol = querySymbol;
     readonly components: ReadonlySet<UnknownComponent>;
     readonly resources: ReadonlySet<UnknownResource>;
 

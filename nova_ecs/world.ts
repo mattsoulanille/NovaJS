@@ -5,7 +5,7 @@ import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMapHandle } from "./entity_map";
-import { DeleteEvent, StepEvent } from "./events";
+import { DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { EventMap } from "./event_map";
 import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
@@ -64,8 +64,9 @@ export type CallWithDraft<T> = <R>(callback: (draft: Draft<T>) => R) => R;
 
 enableMapSet();
 
-interface EcsEvent {
-    event: Symbol;
+interface EcsEventWithEntities<Data> {
+    event: EcsEvent<Data, any>;
+    data: Data;
     entities?: Set<string | [string, Entity]>;
 }
 
@@ -90,7 +91,7 @@ export class World {
     private systems: Array<System> = []; // Not a map because order matters.
     singletonEntity: Entity;
 
-    private eventQueue: EcsEvent[] = [];
+    private eventQueue: EcsEventWithEntities<unknown>[] = [];
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
@@ -108,13 +109,27 @@ export class World {
                 const currentDeleted = new Set([...deleted]
                     .map(([uuid, entity]) => {
                         return [uuid, currentIfDraft(entity)];
-                    })) as NonNullable<EcsEvent['entities']>;
+                    })) as NonNullable<EcsEventWithEntities<unknown>['entities']>;
 
                 this.eventQueue.push({
-                    event: DeleteEvent,
+                    event: DeleteEvent as UnknownEvent,
+                    data: undefined,
                     entities: currentDeleted,
                 });
             });
+    }
+
+    emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: Set<string>) {
+        this.emitWrapped(event, data, entities);
+    }
+
+    private emitWrapped<Data>(event: EcsEvent<Data, any>, data: Data,
+        entities?: Set<string> | Set<[string, Entity]>) {
+        this.eventQueue.push({
+            event: event as UnknownEvent,
+            data,
+            entities
+        });
     }
 
     addPlugin(plugin: Plugin) {
@@ -226,15 +241,15 @@ export class World {
         }
     }
 
-    private runEvent(draft: Draft<State>, ecsEvent: EcsEvent) {
+    private runEvent(draft: Draft<State>, eventWithEntities: EcsEventWithEntities<unknown>) {
         // TODO: Cache this probably.
-        const systems = this.systems.filter(s => s.event === ecsEvent.event);
+        const systems = this.systems.filter(s => s.events.has(eventWithEntities.event));
 
         // Default to all entities if none are specified. When defaulting to all,
         // this includes entities added in the same step.
         let entities: [string, Draft<Entity>][] | undefined;
-        if (ecsEvent.entities) {
-            entities = [...ecsEvent.entities].map(entry => {
+        if (eventWithEntities.entities) {
+            entities = [...eventWithEntities.entities].map(entry => {
                 if (typeof entry === 'string') {
                     return [entry, draft.entities.get(entry)];
                 } else {
@@ -243,8 +258,9 @@ export class World {
             }).filter((entry): entry is [string, Draft<Entity>] => Boolean(entry[1]));
         }
 
+        const eventTuple = [eventWithEntities.event, eventWithEntities.data] as const;
         for (const system of systems) {
-            const argList = this.fulfillQuery(system.query, draft, entities);
+            const argList = this.fulfillQuery(system.query, draft, entities, eventTuple);
             for (const args of argList) {
                 system.step(...args);
             }
@@ -254,7 +270,8 @@ export class World {
     step() {
         this.state = produce(this.state, draft => {
             this.eventQueue.push({
-                event: StepEvent,
+                event: StepEvent as UnknownEvent,
+                data: undefined,
             });
 
             this.flush(draft);
@@ -262,7 +279,8 @@ export class World {
     }
 
     private getArg<T extends ArgTypes = ArgTypes>(arg: T,
-        draft: Draft<State>, entity: Draft<Entity>, uuid: string):
+        draft: Draft<State>, entity: Draft<Entity>, uuid: string,
+        event?: readonly [EcsEvent<unknown>, unknown]):
         Either<undefined, ArgData<T>> {
         if (arg instanceof Resource) {
             if (draft.resources.has(arg)) {
@@ -290,6 +308,15 @@ export class World {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
                 this.getArg<T>(arg, draft, entity, uuid)) as Right<ArgData<T>>;
+        } else if (arg instanceof EcsEvent) {
+            if (!event) {
+                return left(undefined);
+            }
+            const [ecsEvent, data] = event;
+            if (ecsEvent === arg) {
+                return right(data as ArgData<T>);
+            }
+            return left(undefined);
         } else if (arg instanceof Modifier) {
             const modifier = arg as UnknownModifier;
             const modifierQueryResults = this.fulfillQueryForEntity(entity, uuid,
@@ -305,22 +332,24 @@ export class World {
     }
 
     private fulfillQuery<C extends readonly ArgTypes[]>(query: Query<C>, draft: Draft<State>,
-        entities: Iterable<[string, Draft<Entity>]> = draft.entities): QueryResults<Query<C>> {
+        entities: Iterable<[string, Draft<Entity>]> = draft.entities,
+        event?: readonly [EcsEvent<unknown>, unknown]): QueryResults<Query<C>> {
 
         const supportedEntities = [...entities].filter(
             ([, entity]) => query.supportsEntity(entity));
 
         return supportedEntities.map(([uuid, entity]) =>
-            this.fulfillQueryForEntity(entity, uuid, query, draft))
+            this.fulfillQueryForEntity(entity, uuid, query, draft, event))
             .filter((results): results is Right<ArgsToData<C>> => isRight(results))
             .map(rightResults => rightResults.right);
     }
 
     private fulfillQueryForEntity<C extends readonly ArgTypes[]>(
-        entity: Draft<Entity>, uuid: string, query: Query<C>, draft: Draft<State>):
+        entity: Draft<Entity>, uuid: string, query: Query<C>, draft: Draft<State>,
+        event?: readonly [EcsEvent<unknown>, unknown]):
         Either<undefined, ArgsToData<C>> {
 
-        const results = query.args.map(arg => this.getArg(arg, draft, entity, uuid));
+        const results = query.args.map(arg => this.getArg(arg, draft, entity, uuid, event));
         const rightResults: unknown[] = [];
         for (const result of results) {
             if (isLeft(result)) {

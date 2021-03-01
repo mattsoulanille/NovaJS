@@ -5,7 +5,7 @@ import { v4 } from 'uuid';
 import { Entities, GetEntity, UUID } from './arg_types';
 import { Component, ComponentData } from './component';
 import { EntityBuilder } from './entity';
-import { DeleteEvent } from './events';
+import { DeleteEvent, EcsEvent } from './events';
 import { Optional } from './optional';
 import { Plugin } from './plugin';
 import { Query } from './query';
@@ -15,9 +15,7 @@ import { World } from './world';
 
 
 const FOO_COMPONENT = new Component<{ x: number }>({ name: 'foo' });
-
 const BAR_COMPONENT = new Component<{ y: string }>({ name: 'bar' });
-
 const BAZ_RESOURCE = new Resource<{ z: string[] }>({ name: 'baz' })
 
 const FOO_BAR_SYSTEM = new System({
@@ -893,7 +891,7 @@ describe('world', () => {
         const barDeleted = new Set<string>();
         const deleteSystem = new System({
             name: 'barDeleted',
-            event: DeleteEvent,
+            events: [DeleteEvent],
             args: [BAR_COMPONENT, FOO_COMPONENT] as const,
             step: (bar, foo) => {
                 barDeleted.add(bar.y);
@@ -930,7 +928,7 @@ describe('world', () => {
         const barDeleted = new Set<string>();
         const onDeleteSystem = new System({
             name: 'barDeleted',
-            event: DeleteEvent,
+            events: [DeleteEvent],
             args: [BAR_COMPONENT, FOO_COMPONENT] as const,
             step: (bar, foo) => {
                 barDeleted.add(bar.y);
@@ -993,5 +991,44 @@ describe('world', () => {
         world.step();
 
         expect(foobars).toEqual([[123, 'hello'], [456, 'hello']]);
+    });
+
+    it('runs systems triggered by events on the next step', () => {
+        const AddEvent = new EcsEvent<number>();
+
+        const fooVals: number[] = [];
+        const fooSystem = new System({
+            name: 'fooSystem',
+            events: [AddEvent],
+            args: [AddEvent, FOO_COMPONENT] as const,
+            step: (add, foo) => {
+                foo.x += add;
+            }
+        });
+
+        const reportSystem = new System({
+            name: 'report',
+            args: [FOO_COMPONENT],
+            step: (foo) => {
+                fooVals.push(foo.x);
+            }
+        });
+
+        world.addSystem(fooSystem);
+        world.addSystem(reportSystem);
+        world.entities.set('e', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 100 })
+            .build());
+
+
+        world.step();
+        world.emit(AddEvent, 5);
+        world.step();
+        world.step();
+        world.emit(AddEvent, 7);
+        world.step();
+        world.emit(AddEvent, 9);
+
+        expect(fooVals).toEqual([100, 105, 105, 112]);
     });
 });
