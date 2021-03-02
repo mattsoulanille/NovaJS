@@ -11,7 +11,7 @@
     },
     "devDependencies": {
         "@bazel/bazelisk": "^1.7.5",
-        "@bazel/buildifier": "4.0.0",
+        "@bazel/buildifier": "4.0.1",
         "@bazel/concatjs": "^3.2.1",
         "@bazel/esbuild": "^3.2.1",
         "@bazel/ibazel": "^0.14.0",
