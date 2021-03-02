@@ -1,7 +1,8 @@
+import { Query } from "nova_ecs/query";
 import { Entities, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { EntityBuilder } from "nova_ecs/entity";
-import { DeleteEvent } from "nova_ecs/events";
+import { DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Provide } from "nova_ecs/provider";
@@ -11,8 +12,8 @@ import * as PIXI from "pixi.js";
 import { v4 } from "uuid";
 
 
-export const PixiContainer = new Resource<PIXI.Container>({
-    name: 'PixiContainer',
+export const Stage = new Resource<PIXI.Container>({
+    name: 'Stage',
     multiplayer: false,
     mutable: true,
 });
@@ -24,7 +25,7 @@ const SquareGraphics = new Component<PIXI.Graphics>({
 const SquareGraphicsCleanup = new System({
     name: 'SquareGraphicsCleanup',
     events: [DeleteEvent],
-    args: [SquareGraphics, PixiContainer] as const,
+    args: [SquareGraphics, Stage] as const,
     step: (graphics, container) => {
         container.removeChild(graphics as PIXI.Graphics);
     }
@@ -41,7 +42,7 @@ const SquarePhysics = new Component<{
 
 const SquareProvider = Provide({
     provided: SquareGraphics,
-    args: [PixiContainer, SquarePhysics] as const,
+    args: [Stage, SquarePhysics] as const,
     factory: (container, physics) => {
         const graphics = new PIXI.Graphics();
         graphics.beginFill(0xFFFFFF);
@@ -121,12 +122,17 @@ const AddSquaresComponent = new Component<{
     count: number,
     speed: number,
     radius: number,
+    max: number,
 }>({ name: 'AddSquaresComponent' });
 
 const AddSquares = new System({
     name: 'AddSquares',
-    args: [AddSquaresComponent, Entities, TimeResource] as const,
-    step: (addSquares, entities, time) => {
+    args: [AddSquaresComponent, Entities, TimeResource,
+        new Query([SquarePhysics])] as const,
+    step: (addSquares, entities, time, squares) => {
+        if (squares.length >= addSquares.max) {
+            return;
+        }
         if (addSquares.lastTime + addSquares.period < time.time) {
             addSquares.lastTime = time.time;
             // Get position of emitter
@@ -155,10 +161,38 @@ const AddSquares = new System({
                             y: (Math.random() - 0.5) * 60,
                         },
                         createTime: time.time,
-                        life: 30_000
+                        life: 20_000
                     }).build());
             }
         }
+    }
+});
+
+const TextComponent = new Component<PIXI.Text>({ name: 'Text' });
+
+const CountSquares = new System({
+    name: 'CountSquares',
+    args: [TextComponent, new Query([SquareGraphics]),
+        new Query([AddSquaresComponent])] as const,
+    step: (text, query, addSquaresQuery) => {
+        const addSquaresData = addSquaresQuery[0];
+        if (!addSquaresData) {
+            return;
+        }
+        const addSquares = addSquaresData[0];
+        text.text = `Entities: ${query.length}, Max: ${addSquares.max}`;
+        text.position.y = window.innerHeight;
+    }
+});
+
+const ChangeMaxEvent = new EcsEvent<number>();
+
+const ChangeMax = new System({
+    name: 'ChangeMax',
+    events: [ChangeMaxEvent],
+    args: [ChangeMaxEvent, AddSquaresComponent] as const,
+    step: (changeBy, addSquares) => {
+        addSquares.max += changeBy;
     }
 });
 
@@ -166,19 +200,43 @@ export const Display: Plugin = {
     name: 'Display',
     build: (world) => {
         const container = new PIXI.Container();
-        world.resources.set(PixiContainer, container);
+        world.resources.set(Stage, container);
 
         world.addSystem(SquareSystem);
         world.addSystem(SquareGraphicsCleanup);
         world.addSystem(AddSquares);
+        world.addSystem(CountSquares);
+        world.addSystem(ChangeMax);
         world.entities.set('squareEmitter', new EntityBuilder()
             .addComponent(AddSquaresComponent, {
                 count: 3,
-                period: 10,
+                period: 0,
                 lastTime: new Date().getTime(),
                 radius: 160,
                 speed: 4,
+                max: 200
             }).build());
+
+
+        const entityCountText = new PIXI.Text('asdfasdfasdf', new PIXI.TextStyle({
+            fill: 0xffffff
+        }));
+
+        entityCountText.anchor.y = 1;
+
+        container.addChild(entityCountText);
+        world.entities.set('entityCount', new EntityBuilder()
+            .addComponent(TextComponent, entityCountText)
+            .build())
+
+        document.addEventListener('keydown', (evt) => {
+            if (evt.code === 'Equal') {
+                world.emit(ChangeMaxEvent, 50);
+            } else if (evt.code === 'Minus') {
+                world.emit(ChangeMaxEvent, -50);
+            }
+        });
+
     }
 }
 
