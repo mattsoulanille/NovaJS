@@ -4,7 +4,7 @@ import { Query } from "./query";
 
 
 type Transform<Args extends readonly any[], Result> =
-    (...args: ArgsToData<Args>) => Either<undefined, Result>;
+    (...args: ArgsToData<Args>) => Either<undefined, ArgData<Result>>;
 
 export type UnknownModifier = Modifier<ArgTypes[], unknown>;
 

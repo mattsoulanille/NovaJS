@@ -1,6 +1,6 @@
-import { left, right } from "fp-ts/lib/Either";
+import { Either, left, right } from "fp-ts/lib/Either";
 import { applyPatches, createDraft, finishDraft, Patch } from "immer";
-import { ArgsToData, ArgTypes, GetArg, GetEntity, UUID } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, GetArg, GetEntity, UUID } from "./arg_types";
 import { getCurrentArgs } from "./async_system";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Modifier } from "./modifier";
@@ -18,7 +18,7 @@ type ProviderMapEntry = {
     patches: Patch[],
 };
 
-class AsyncProviderData {
+export class AsyncProviderData {
     providers: DefaultMap<string /* Entity uuid */,
         Map<UnknownComponent /* Provided symbol */, ProviderMapEntry>>
         = new DefaultMap(() => new Map());
@@ -40,7 +40,7 @@ export function Provide<Provided extends Component<any, any, any, any>, Args ext
         transform: (providedVal, entity, ...factoryArgs) => {
 
             if (providedVal) {
-                return right(providedVal as Provided);
+                return right(providedVal as ArgData<Provided>);
             }
             const newVal = factory(...factoryArgs);
             entity.components.set(provided, newVal);
@@ -57,12 +57,12 @@ export function ProvideAsync<Provided extends Component<any, any, any, any>, Arg
 }) {
     type Data = ComponentData<Provided>;
     return new Modifier({
-        query: new Query([GetArg, AsyncProviderResource,
-            Optional(provided), GetEntity, UUID, ...args] as const),
-        transform: (getArg, providerResource, providedVal, entity, uuid, ...argData) => {
+        query: new Query([AsyncProviderResource, Optional(provided), GetEntity,
+            UUID, ...args] as const),
+        transform: (providerResource, providedVal, entity, uuid, ...argData) => {
             const providerMap = providerResource.providers.get(uuid)!;
             if (providedVal) {
-                return right(providedVal);
+                return right(providedVal as ArgData<Provided>);
             } else if (providerMap.has(provided as UnknownComponent)) {
                 const providerMapEntry = providerMap
                     .get(provided as UnknownComponent)!;
@@ -81,7 +81,7 @@ export function ProvideAsync<Provided extends Component<any, any, any, any>, Arg
 
                     entity.components.set(provided, providerMapEntry.result as Data);
 
-                    return getArg(provided);
+                    return right(providerMapEntry.result as ArgData<Provided>);
                 }
                 return left(undefined);
             } else {
