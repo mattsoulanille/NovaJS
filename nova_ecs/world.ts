@@ -9,6 +9,7 @@ import { DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { EventMap } from "./event_map";
 import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
+import { ProvideAsyncPlugin } from "./provider";
 import { Query } from "./query";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMap, ResourceMapHandle } from "./resource_map";
@@ -96,6 +97,7 @@ export class World {
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
+        this.addPlugin(ProvideAsyncPlugin);
         this.entities.set('singleton', {
             components: new Map(),
             multiplayer: false,

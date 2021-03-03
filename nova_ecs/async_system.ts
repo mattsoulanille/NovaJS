@@ -1,5 +1,5 @@
 import { zip } from "fp-ts/lib/ReadonlyArray";
-import { applyPatches, createDraft, enablePatches, finishDraft, Patch, produceWithPatches } from "immer";
+import { applyPatches, createDraft, enablePatches, finishDraft, Patch } from "immer";
 import { ArgData, ArgsToData, ArgTypes, QueryResults, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
 import { Query } from "./query";
@@ -22,7 +22,6 @@ class AsyncSystemData {
             })
         );
     done: Promise<void> = Promise.resolve();
-    constructor() { }
 }
 
 export const AsyncSystemResource = new Resource<AsyncSystemData>({
@@ -38,7 +37,7 @@ export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
 
 enablePatches();
 
-function getCurrentArgs<A extends readonly ArgTypes[]>(args: A,
+export function getCurrentArgs<A extends readonly ArgTypes[]>(args: A,
     argsData: ArgsToData<A>): [...ArgsToData<A>] {
     return zip(args, argsData).map(([arg, argData]) => {
         if (arg instanceof Query) {
@@ -84,7 +83,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)
                     .then(() => {
                         let patches: Patch[] | undefined;
-                        if (currentArgs) { }
+
                         finishDraft(draftArgs, (forwardPatches) => {
                             patches = forwardPatches;
                         });
