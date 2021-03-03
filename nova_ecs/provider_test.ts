@@ -1,13 +1,13 @@
 import 'jasmine';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
-import { Provide } from './provider';
+import { AsyncProviderResource, Provide, ProvideAsync } from './provider';
 import { Resource } from './resource';
 import { System } from './system';
 import { World } from './world';
 
 
-async function sleep(ms: number) {
+function sleep(ms: number) {
     return new Promise(resolve => {
         setTimeout(resolve, ms);
     });
@@ -96,39 +96,78 @@ describe('provider', () => {
         expect(wordLengths).toEqual([['hello', 123]]);
     });
 
-    // it('provides a component asynchronously', () => {
-    //     const world = new World();
+    it('provides a component asynchronously', async () => {
+        const world = new World();
 
-    //     const fooProvider = Provide({
-    //         provided: FOO_COMPONENT,
-    //         args: [BAR_COMPONENT] as const,
-    //         factory: async (bar) => {
-    //             await sleep(10);
-    //             return {
-    //                 x: bar.y.length
-    //             }
-    //         }
-    //     });
+        const fooProvider = ProvideAsync({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            factory: async (bar) => {
+                await sleep(10);
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
 
-    //     const wordLengths: [string, number][] = [];
+        const wordLengths: [string, number][] = [];
 
-    //     const providesFoo = new System({
-    //         name: 'providesFoo',
-    //         args: [BAR_COMPONENT, fooProvider] as const,
-    //         step: (bar, foo) => {
-    //             wordLengths.push([bar.y, foo.x]);
-    //         }
-    //     });
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
 
-    //     world.addSystem(providesFoo);
+        world.addSystem(providesFoo);
 
-    //     world.entities.set('word1', new EntityBuilder()
-    //         .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+        world.entities.set('word1', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
 
-    //     world.step();
-    //     expect(wordLengths).toEqual([]);
-    //     clock.tick(11);
-    //     world.step();
-    //     expect(wordLengths).toEqual([['hello', 5]]);
-    // });
+        world.step();
+        expect(wordLengths).toEqual([]);
+        clock.tick(11);
+        await world.resources.get(AsyncProviderResource)?.done;
+        world.step();
+        expect(wordLengths).toEqual([['hello', 5]]);
+    });
+
+    it('async provider can modify args', async () => {
+        const world = new World();
+
+        const fooProvider = ProvideAsync({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            factory: async (bar) => {
+                await sleep(10);
+                bar.y = bar.y + ' there';
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
+        const wordLengths: [string, number][] = [];
+
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
+
+        world.addSystem(providesFoo);
+
+        world.entities.set('word1', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+
+        world.step();
+        expect(wordLengths).toEqual([]);
+        clock.tick(11);
+        await world.resources.get(AsyncProviderResource)?.done;
+        world.step();
+        expect(wordLengths).toEqual([['hello there', 11]]);
+    });
 });
