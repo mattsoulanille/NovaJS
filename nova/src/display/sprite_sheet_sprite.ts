@@ -1,8 +1,11 @@
 import { AnimationImage } from "novadatainterface/Animation";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
-import { AnimationImageIndex } from "../../../../novadatainterface/Animation";
-import { mod } from "../../engine/Mod";
+import { AnimationImageIndex } from "novadatainterface/Animation";
+
+export function mod(a: number, b: number): number {
+    return ((a % b) + b) % b;
+}
 
 const TWO_PI = 2 * Math.PI;
 

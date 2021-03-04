@@ -6,10 +6,14 @@ ts_library(
     name = "display",
     srcs = [
         "display_plugin.ts",
+        "sprite_sheet_sprite.ts",
+        "animation_graphic.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
         "//nova_ecs/plugins",
+        "//novadatainterface",
+        "//nova/src/nova_plugin",
         "@npm//pixi.js",
         "@npm//uuid",
         "@npm//@types/uuid",

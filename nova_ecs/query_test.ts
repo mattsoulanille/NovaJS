@@ -40,7 +40,7 @@ describe('query', () => {
         const exampleModifier = new Modifier({
             query: new Query([FOO_COMPONENT, BAZ_RESOURCE] as const),
             transform: (foo, _baz) => {
-                return right(foo);
+                return right(foo as any);
             }
         });
 

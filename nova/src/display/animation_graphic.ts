@@ -1,7 +1,7 @@
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { Animation } from "novadatainterface/Animation";
-import { SpriteSheetSprite } from "./SpriteSheetSprite";
+import { SpriteSheetSprite } from "./sprite_sheet_sprite";
 
 /**
  * An AnimationGraphic is responsible for managing all the PIXI Sprites
@@ -10,10 +10,10 @@ import { SpriteSheetSprite } from "./SpriteSheetSprite";
  */
 export class AnimationGraphic {
     // AnimationGraphic is not a Drawable since it doesn't draw a state.
-    readonly displayObject = new PIXI.Container();
+    readonly container = new PIXI.Container();
     protected readonly gameData: GameDataInterface;
 
-    readonly sprites: Map<string, SpriteSheetSprite> = new Map();
+    readonly sprites = new Map<string, SpriteSheetSprite>();
     private wrappedRotation = 0;
     private animation: Animation | Promise<Animation>;
     readonly buildPromise: Promise<AnimationGraphic>;
@@ -28,15 +28,15 @@ export class AnimationGraphic {
 
     private async build(): Promise<AnimationGraphic> {
         var promises: Promise<unknown>[] = [];
-        for (let imageName in (await this.animation).images) {
-            let image = (await this.animation).images[imageName];
-            let sprite = new SpriteSheetSprite({
+        for (const imageName in (await this.animation).images) {
+            const image = (await this.animation).images[imageName];
+            const sprite = new SpriteSheetSprite({
                 image,
                 gameData: this.gameData
             });
 
             this.sprites.set(imageName, sprite);
-            this.displayObject.addChild(sprite.pixiSprite);
+            this.container.addChild(sprite.pixiSprite);
             promises.push(sprite.buildPromise);
         }
         await Promise.all(promises);
@@ -53,14 +53,14 @@ export class AnimationGraphic {
     }
 
     setFramesToUse(frames: string) {
-        for (let sprite of this.sprites.values()) {
+        for (const sprite of this.sprites.values()) {
             sprite.setFramesToUse(frames);
         }
     }
 
     set rotation(angle: number) {
         this.wrappedRotation = angle;
-        for (let sprite of this.sprites.values()) {
+        for (const sprite of this.sprites.values()) {
             sprite.rotation = angle;
         }
     }
