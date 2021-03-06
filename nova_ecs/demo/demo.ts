@@ -10,8 +10,10 @@ import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { v4 } from "uuid";
+import { World } from "nova_ecs/world";
+import Stats from 'stats.js';
 
-
+console.log("hello");
 export const Stage = new Resource<PIXI.Container>({
     name: 'Stage',
     multiplayer: false,
@@ -195,7 +197,7 @@ const ChangeMax = new System({
     }
 });
 
-export const Demo: Plugin = {
+const Demo: Plugin = {
     name: 'Demo',
     build: (world) => {
         const container = new PIXI.Container();
@@ -240,3 +242,31 @@ export const Demo: Plugin = {
     }
 }
 
+function main() {
+    const app = new PIXI.Application();
+    document.body.appendChild(app.view);
+    const stats = new Stats();
+    document.body.appendChild(stats.dom);
+
+    function resize() {
+        app.renderer.resize(window.innerWidth, window.innerHeight);
+    }
+    window.onresize = resize;
+    window.onload = resize;
+
+    const world = new World();
+    world.addPlugin(Demo);
+    const demoStage = world.resources.get(Stage);
+    if (!demoStage) {
+        throw new Error('demo stage not created');
+    }
+    app.stage.addChild(demoStage);
+    app.ticker.add(() => {
+        stats.begin();
+        world.step();
+        stats.end();
+    });
+
+}
+
+main();
