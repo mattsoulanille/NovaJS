@@ -1,65 +1,73 @@
-import { immerable } from 'immer';
-import { Subject } from 'rxjs';
+export class MapEvent<V> {
+    private wrappedCancelled = false;
+    constructor(public value: V) { }
+
+    get cancelled() {
+        return this.wrappedCancelled;
+    }
+
+    cancel() {
+        this.wrappedCancelled = true;
+    }
+}
+
+interface SyncSubscription {
+    unsubscribe: () => void;
+}
+
+type Callback<V> = (val: V) => void;
+class SyncSubject<V> {
+    private subscriptions = new Map<SyncSubscription, Callback<V>>();
+    subscribe(callback: Callback<V>) {
+        const subscription: SyncSubscription = {
+            unsubscribe: () => {
+                this.subscriptions.delete(subscription);
+            }
+        };
+
+        this.subscriptions.set(subscription, callback);
+        return subscription;
+    }
+
+    next(val: V) {
+        for (const callback of this.subscriptions.values()) {
+            callback(val);
+        }
+    }
+}
 
 /**
  * A map that emits events when its contents are changed.
  */
-export class EventMap<K, V> implements Map<K, V> {
-    [immerable] = true;
-    // The wrapped map that stores the data. Don't extend
-    // the map class because immer will replace it with a
-    // generic 'map' object when running produce.
-    private readonly wrappedMap = new Map<K, V>();
-
+export class EventMap<K, V> extends Map<K, V> {
     // TODO(mattsoulanille): Add more events.
     readonly events = {
-        delete: new Subject<Set<[K, V]>>(),
+        delete: new SyncSubject<Set<[K, V]>>(),
+        set: new SyncSubject<[K, V]>(),
     }
 
     clear(): void {
         const toDelete = new Set([...this.entries()]);
-        this.wrappedMap.clear();
+        super.clear();
         this.events.delete.next(toDelete);
     }
-    forEach(callbackfn: (value: V, key: K, map: Map<K, V>) => void, thisArg?: any): void {
-        return this.wrappedMap.forEach(callbackfn, thisArg);
-    }
-    get(key: K): V | undefined {
-        return this.wrappedMap.get(key);
-    }
-    has(key: K): boolean {
-        return this.wrappedMap.has(key);
-    }
     set(key: K, value: V): this {
-        this.wrappedMap.set(key, value);
+        // When constructing with entries, events may
+        // not yet be defined.
+        this.events?.set.next([key, value]);
+        super.set(key, value);
         return this;
     }
     delete(key: K) {
         let toDelete: Set<[K, V]> | undefined;
-        if (this.wrappedMap.has(key)) {
-            const val = this.wrappedMap.get(key)!;
+        if (this.has(key)) {
+            const val = this.get(key)!;
             toDelete = new Set([[key, val]]);
         }
-        const result = this.wrappedMap.delete(key);
+        const result = super.delete(key);
         if (toDelete) {
             this.events.delete.next(toDelete);
         }
         return result;
     }
-    get size() {
-        return this.wrappedMap.size;
-    }
-    [Symbol.iterator](): IterableIterator<[K, V]> {
-        return this.wrappedMap[Symbol.iterator]();
-    }
-    entries(): IterableIterator<[K, V]> {
-        return this.wrappedMap.entries();
-    }
-    keys(): IterableIterator<K> {
-        return this.wrappedMap.keys();
-    }
-    values(): IterableIterator<V> {
-        return this.wrappedMap.values();
-    }
-    [Symbol.toStringTag]: string;
 }

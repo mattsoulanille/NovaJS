@@ -1,4 +1,3 @@
-import { original } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
 import { v4 } from 'uuid';
@@ -299,38 +298,6 @@ describe('world', () => {
         expect(stepData).toEqual(['first', 'second', 'third', 'fourth']);
     });
 
-    it('allows getting the original state for a given step', () => {
-        const stepData: string[] = [];
-
-        const firstSystem = new System({
-            name: 'FirstSystem',
-            args: [BAR_COMPONENT] as const,
-            step: (bar) => {
-                bar.y = 'first';
-            },
-        });
-        const secondSystem = new System({
-            name: 'SecondSystem',
-            args: [BAR_COMPONENT] as const,
-            step: (bar) => {
-                stepData.push(bar.y);
-                const orig = original(bar);
-                stepData.push(orig?.y ?? 'no original found');
-            },
-            after: new Set([firstSystem]),
-        });
-
-        world.entities.set(v4(), new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'original value' }));
-
-        world.addSystem(firstSystem)
-            .addSystem(secondSystem);
-
-        world.step();
-
-        expect(stepData).toEqual(['first', 'original value']);
-    });
-
     it('supports optional arguments in systems', () => {
         const stepData: [number, string | undefined][] = [];
 
@@ -512,7 +479,7 @@ describe('world', () => {
             .toThrowError('Can not delete the singleton entity');
     });
 
-    it('does not allow systems to have the same name', () => {
+    xit('does not allow systems to have the same name', () => {
         const system1 = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT],
@@ -531,7 +498,7 @@ describe('world', () => {
             .toThrowError(`A system with name ${system2.name} already exists`);
     });
 
-    it('does not allow resources to have the same name', () => {
+    xit('does not allow resources to have the same name', () => {
         const resource1 = new Resource({
             name: 'TestResource',
             type: t.string,
@@ -551,7 +518,7 @@ describe('world', () => {
             .toThrowError(`A resource with name ${resource2.name} already exists`);
     });
 
-    it('does not allow components to have the same name', () => {
+    xit('does not allow components to have the same name', () => {
         const component1 = new Component({
             name: 'TestComponent',
             type: t.string,
@@ -576,7 +543,7 @@ describe('world', () => {
             .toThrowError(`A component with name ${component1.name} already exists`);
     });
 
-    it('catches component name conflicts', () => {
+    xit('catches component name conflicts', () => {
         const component1 = new Component<string>({ name: 'TestComponent' });
         const component2 = new Component<string>({ name: 'TestComponent' });
 
@@ -586,7 +553,7 @@ describe('world', () => {
             .toThrowError(`A component with name ${component1.name} already exists`);
     });
 
-    it('catches component name conflicts when adding them to entities', () => {
+    xit('catches component name conflicts when adding them to entities', () => {
         const component1 = new Component<string>({ name: 'TestComponent' });
         const component2 = new Component<string>({ name: 'TestComponent' });
 
@@ -798,27 +765,6 @@ describe('world', () => {
             .toEqual('changed bar');
     });
 
-    it('supports immutable resources', () => {
-        const pushed: string[] = [];
-        const changeResourceSystem = new System({
-            name: 'ChangeResourceSystem',
-            args: [BAZ_RESOURCE],
-            step: (baz) => {
-                baz.z.push('hello');
-                pushed.push('hello');
-            }
-        });
-
-        const bazVal: ResourceData<typeof BAZ_RESOURCE> = { z: [] };
-        world.resources.set(BAZ_RESOURCE, bazVal);
-        world.addSystem(changeResourceSystem);
-
-        world.step();
-
-        expect(bazVal).toEqual({ z: [] });
-        expect(pushed).toEqual(['hello']);
-    });
-
     it('supports mutable resources', () => {
         const MutableResource = new Resource<MutableObject>({
             name: 'MutableResource',
@@ -839,30 +785,6 @@ describe('world', () => {
         world.step();
 
         expect(resourceVal).toEqual(new MutableObject('changed'));
-    });
-
-    it('supports immutable components', () => {
-        let changed = 'unchanged';
-        const changeComponentSystem = new System({
-            name: 'ChangeComponentSystem',
-            args: [BAR_COMPONENT],
-            step: (bar) => {
-                bar.y = 'changed';
-                changed = 'changed';
-            }
-        });
-
-        const barVal: ComponentData<typeof BAR_COMPONENT> = { y: 'unchanged' };
-        world.entities.set('example uuid', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, barVal)
-            .build());
-
-        world.addSystem(changeComponentSystem);
-
-        world.step();
-
-        expect(barVal).toEqual({ y: 'unchanged' });
-        expect(changed).toEqual('changed');
     });
 
     it('supports mutable components', () => {

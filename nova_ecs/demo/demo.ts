@@ -143,7 +143,10 @@ const AddSquares = new System({
                 y: Math.sin(angle) * addSquares.radius + window.innerHeight / 2,
             }
 
-            for (let i = 0; i < addSquares.count; i++) {
+            const life = 20_000;
+            const count = (addSquares.max / life) * Math.max(addSquares.period, 16);
+
+            for (let i = 0; i < count; i++) {
                 let color = 0;
                 const gamma = 0.6 / (1.1 + Math.sin(time.time / 2000));
                 for (let j = 0; j < 3; j++) {
@@ -162,7 +165,7 @@ const AddSquares = new System({
                             y: (Math.random() - 0.5) * 60,
                         },
                         createTime: time.time,
-                        life: 20_000
+                        life,
                     }).build());
             }
         }
@@ -243,7 +246,10 @@ const Demo: Plugin = {
 }
 
 function main() {
-    const app = new PIXI.Application();
+    const app = new PIXI.Application({
+        autoDensity: true
+    });
+
     document.body.appendChild(app.view);
     const stats = new Stats();
     document.body.appendChild(stats.dom);

@@ -1,20 +1,18 @@
 import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
-import produce, { Draft, enableMapSet, enablePatches, Immutable } from "immer";
 import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
-import { EntityMapHandle } from "./entity_map";
+import { EntityMapWrapped } from "./entity_map";
 import { DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
-import { EventMap } from "./event_map";
 import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
 import { ProvideAsyncPlugin } from "./provider";
 import { Query } from "./query";
 import { Resource, UnknownResource } from "./resource";
-import { ResourceMap, ResourceMapHandle } from "./resource_map";
+import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
-import { currentIfDraft, topologicalSort } from './utils';
+import { topologicalSort } from './utils';
 
 
 // How do you serialize components and make sure the receiver
@@ -54,17 +52,6 @@ import { currentIfDraft, topologicalSort } from './utils';
 // Idea: Load async stuff by adding components to the entity as the data becomes
 // available?
 
-enablePatches();
-
-export interface State {
-    entities: EventMap<string, Entity>;
-    resources: ResourceMap;
-}
-
-export type CallWithDraft<T> = <R>(callback: (draft: Draft<T>) => R) => R;
-
-enableMapSet();
-
 interface EcsEventWithEntities<Data> {
     event: EcsEvent<Data, any>;
     data: Data;
@@ -72,18 +59,14 @@ interface EcsEventWithEntities<Data> {
 }
 
 export class World {
-    private state: Immutable<State> = {
-        entities: new EventMap(),
-        resources: new Map(),
+    private readonly state = {
+        entities: new EntityMapWrapped(),
+        resources: new ResourceMapWrapped(),
     };
 
-    readonly entities = new EntityMapHandle(
-        this.callWithNewDraft.bind(this),
-        this.addComponent.bind(this));
+    readonly entities = this.state.entities;
+    readonly resources = this.state.resources;
 
-    readonly resources = new ResourceMapHandle(
-        this.callWithNewDraft.bind(this),
-        this.addResource.bind(this));
     // These maps exist in part to make sure there are no name collisions
     private nameComponentMap = new Map<string, UnknownComponent>();
     private nameSystemMap = new Map<string, System>();
@@ -106,20 +89,16 @@ export class World {
         // Get the handle for the singleton entity.
         this.singletonEntity = this.entities.get('singleton')!;
 
-        // Subscribe the delete event
-        (this.state.entities as EventMap<string, Entity>)
-            .events.delete.subscribe(deleted => {
-                const currentDeleted = new Set([...deleted]
-                    .map(([uuid, entity]) => {
-                        return [uuid, currentIfDraft(entity)];
-                    })) as NonNullable<EcsEventWithEntities<unknown>['entities']>;
+        // Emit delete when an entity is deleted.
+        this.state.entities.events.delete.subscribe(deleted => {
+            this.emitWrapped(DeleteEvent, undefined, deleted);
+        });
 
-                this.eventQueue.push({
-                    event: DeleteEvent as UnknownEvent,
-                    data: undefined,
-                    entities: currentDeleted,
-                });
-            });
+        this.state.resources.events.set.subscribe(added => {
+            this.addResource(added[0]);
+        })
+
+
     }
 
     emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: Set<string>) {
@@ -141,22 +120,7 @@ export class World {
         plugin.build(this);
     }
 
-    private callWithNewDraft<R>(callback: (draft: Draft<State>) => R) {
-        // Can't directly pass the draft because addEntity binds
-        // functions to edit the draft that can be called later.
-        let result: R;
-        let called = false;
-        this.state = produce(this.state, draft => {
-            result = callback(draft);
-            called = true;
-        });
-        if (!called) {
-            throw new Error('Expected to be called');
-        }
-        return result!;
-    }
-
-    private addResource(resource: Resource<any, any, any, any>) {
+    addResource(resource: Resource<any, any, any, any>) {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
@@ -234,36 +198,36 @@ export class World {
     /**
      * Flush the event queue.
      */
-    private flush(draft: Draft<State>) {
+    private flush() {
         // Not a for loop because more events may be added as prior
         // ones are resolved.
         while (this.eventQueue.length > 0) {
             // TODO: Maybe use an actual queue for better time order.
             const ecsEvent = this.eventQueue.shift()!;
-            this.runEvent(draft, ecsEvent);
+            this.runEvent(ecsEvent);
         }
     }
 
-    private runEvent(draft: Draft<State>, eventWithEntities: EcsEventWithEntities<unknown>) {
+    private runEvent(eventWithEntities: EcsEventWithEntities<unknown>) {
         // TODO: Cache this probably.
         const systems = this.systems.filter(s => s.events.has(eventWithEntities.event));
 
         // Default to all entities if none are specified. When defaulting to all,
         // this includes entities added in the same step.
-        let entities: [string, Draft<Entity>][] | undefined;
+        let entities: [string, Entity][] | undefined;
         if (eventWithEntities.entities) {
             entities = [...eventWithEntities.entities].map(entry => {
                 if (typeof entry === 'string') {
-                    return [entry, draft.entities.get(entry)];
+                    return [entry, this.state.entities.get(entry)];
                 } else {
                     return entry;
                 }
-            }).filter((entry): entry is [string, Draft<Entity>] => Boolean(entry[1]));
+            }).filter((entry): entry is [string, Entity] => Boolean(entry[1]));
         }
 
         const eventTuple = [eventWithEntities.event, eventWithEntities.data] as const;
         for (const system of systems) {
-            const argList = this.fulfillQuery(system.query, draft, entities, eventTuple);
+            const argList = this.fulfillQuery(system.query, entities, eventTuple);
             for (const args of argList) {
                 system.step(...args);
             }
@@ -271,23 +235,21 @@ export class World {
     }
 
     step() {
-        this.state = produce(this.state, draft => {
-            this.eventQueue.push({
-                event: StepEvent as UnknownEvent,
-                data: undefined,
-            });
-
-            this.flush(draft);
+        this.eventQueue.push({
+            event: StepEvent as UnknownEvent,
+            data: undefined,
         });
+
+        this.flush();
     }
 
     private getArg<T extends ArgTypes = ArgTypes>(arg: T,
-        draft: Draft<State>, entity: Draft<Entity>, uuid: string,
+        entity: Entity, uuid: string,
         event?: readonly [EcsEvent<unknown>, unknown]):
         Either<undefined, ArgData<T>> {
         if (arg instanceof Resource) {
-            if (draft.resources.has(arg)) {
-                return right(draft.resources.get(arg) as ArgData<T>);
+            if (this.state.resources.has(arg)) {
+                return right(this.state.resources.get(arg) as ArgData<T>);
             } else {
                 throw new Error(`Missing resource ${arg}`);
             }
@@ -298,9 +260,9 @@ export class World {
             return left(undefined);
         } else if (arg instanceof Query) {
             // Queries always fulfill because if no entities match, they return [].
-            return right(this.fulfillQuery(arg, draft) as ArgData<T>);
+            return right(this.fulfillQuery(arg) as ArgData<T>);
         } else if (arg === Entities) {
-            return right(draft.entities as ArgData<T>);
+            return right(this.state.entities as ArgData<T>);
         } else if (arg === Components) {
             return right(this.nameComponentMap as ArgData<T>);
         } else if (arg === UUID) {
@@ -312,7 +274,7 @@ export class World {
         } else if (arg === GetArg) {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
-                this.getArg<T>(arg, draft, entity, uuid)) as Right<ArgData<T>>;
+                this.getArg<T>(arg, entity, uuid)) as Right<ArgData<T>>;
         } else if (arg instanceof EcsEvent) {
             if (!event) {
                 return left(undefined);
@@ -324,8 +286,8 @@ export class World {
             return left(undefined);
         } else if (arg instanceof Modifier) {
             const modifier = arg as UnknownModifier;
-            const modifierQueryResults = this.fulfillQueryForEntity(entity, uuid,
-                modifier.query, draft);
+            const modifierQueryResults = this.fulfillQueryForEntity(
+                entity, uuid, modifier.query);
             if (isLeft(modifierQueryResults)) {
                 return left(undefined);
             }
@@ -336,25 +298,25 @@ export class World {
         }
     }
 
-    private fulfillQuery<C extends readonly ArgTypes[]>(query: Query<C>, draft: Draft<State>,
-        entities: Iterable<[string, Draft<Entity>]> = draft.entities,
+    private fulfillQuery<C extends readonly ArgTypes[]>(query: Query<C>,
+        entities: Iterable<[string, Entity]> = this.state.entities,
         event?: readonly [EcsEvent<unknown>, unknown]): QueryResults<Query<C>> {
 
         const supportedEntities = [...entities].filter(
             ([, entity]) => query.supportsEntity(entity));
 
         return supportedEntities.map(([uuid, entity]) =>
-            this.fulfillQueryForEntity(entity, uuid, query, draft, event))
+            this.fulfillQueryForEntity(entity, uuid, query, event))
             .filter((results): results is Right<ArgsToData<C>> => isRight(results))
             .map(rightResults => rightResults.right);
     }
 
     private fulfillQueryForEntity<C extends readonly ArgTypes[]>(
-        entity: Draft<Entity>, uuid: string, query: Query<C>, draft: Draft<State>,
+        entity: Entity, uuid: string, query: Query<C>,
         event?: readonly [EcsEvent<unknown>, unknown]):
         Either<undefined, ArgsToData<C>> {
 
-        const results = query.args.map(arg => this.getArg(arg, draft, entity, uuid, event));
+        const results = query.args.map(arg => this.getArg(arg, entity, uuid, event));
         const rightResults: unknown[] = [];
         for (const result of results) {
             if (isLeft(result)) {
