@@ -2,7 +2,7 @@ import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
 import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
-import { Entity } from "./entity";
+import { Entity, EntityBuilder } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
 import { DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { Modifier, UnknownModifier } from "./modifier";
@@ -52,6 +52,8 @@ import { topologicalSort } from './utils';
 // Idea: Load async stuff by adding components to the entity as the data becomes
 // available?
 
+export const SingletonComponent = new Component<undefined>({ name: 'SingletonComponent' });
+
 interface EcsEventWithEntities<Data> {
     event: EcsEvent<Data, any>;
     data: Data;
@@ -81,11 +83,10 @@ export class World {
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
         this.addPlugin(ProvideAsyncPlugin);
-        this.entities.set('singleton', {
-            components: new Map(),
-            multiplayer: false,
-            name: 'singleton'
-        });
+        this.entities.set('singleton', new EntityBuilder()
+            .addComponent(SingletonComponent, undefined)
+            .build());
+
         // Get the handle for the singleton entity.
         this.singletonEntity = this.entities.get('singleton')!;
 

@@ -20,6 +20,8 @@ const BarComponent = new Component({
     applyDelta: applyObjectDelta
 });
 
+const NonMultiplayer = new Component<{ z: string }>({ name: 'NonMultiplayer' });
+
 class MockCommunicator implements Communicator {
     incomingMessages: Message[] = [];
     constructor(public uuid: string | undefined,
@@ -245,5 +247,25 @@ describe('Multiplayer Plugin', () => {
 
         const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
         expect(isDraft(bar)).toBeFalse();
+    });
+
+    it('does not draft non-multiplayer components', () => {
+        const testUuid = 'test entity uuid';
+        world1.entities.set(testUuid, new EntityBuilder()
+            .addComponent(MultiplayerData, {
+                owner: 'world1 uuid',
+            }).addComponent(BarComponent, {
+                y: 'a test component',
+            }).addComponent(NonMultiplayer, {
+                z: 'not multiplayer'
+            }).build());
+
+        world1.step();
+
+        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
+        expect(isDraft(bar)).toBeTrue();
+
+        const nonMultiplaer = world1.entities.get(testUuid)?.components.get(NonMultiplayer);
+        expect(isDraft(nonMultiplaer)).toBeFalse();
     });
 });

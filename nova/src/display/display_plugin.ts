@@ -1,5 +1,4 @@
 import { Animation } from "novadatainterface/Animation";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { Component } from "nova_ecs/component";
 import { DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
@@ -7,6 +6,7 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
+import { currentIfDraft } from "nova_ecs/utils";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ShipDataProvider } from "../nova_plugin/ship_component";
 import { AnimationGraphic } from "./animation_graphic";
@@ -33,10 +33,9 @@ const AnimationGraphicProvider = ProvideAsync({
     args: [ShipAnimationComponentProvider, Stage, GameDataResource] as const,
     factory: async (animation, stage, gameData) => {
         const graphic = new AnimationGraphic({
-            gameData: gameData as GameDataInterface,
-            animation: animation as Animation,
+            gameData: currentIfDraft(gameData)!,
+            animation: currentIfDraft(animation)!,
         });
-
         await graphic.buildPromise;
         stage.addChild(graphic.container);
         return graphic;
@@ -48,7 +47,7 @@ const AnimationGraphicCleanup = new System({
     events: [DeleteEvent],
     args: [AnimationGraphicComponent, Stage] as const,
     step: (graphic, stage) => {
-        stage.removeChild(graphic.container as PIXI.Container);
+        stage.removeChild(graphic.container);
     }
 });
 
@@ -59,7 +58,7 @@ const ShipDrawSystem = new System({
     step: (movementState, graphic) => {
         graphic.container.position.x = movementState.position.x;
         graphic.container.position.y = movementState.position.y;
-        graphic.container.rotation = movementState.rotation.angle;
+        graphic.rotation = movementState.rotation.angle;
     }
 });
 

@@ -47,7 +47,8 @@ export type ArgTypes = Component<any, any, any, any>
 type AllowUndefined<T> = T extends undefined ? T : never;
 
 export type ArgData<T> =
-    Draft<ComponentData<T> | ResourceData<T>>
+    ComponentData<T>
+    | ResourceData<T>
     | QueryResults<T>
     | EventData<T>
     | EntitiesObject<T>

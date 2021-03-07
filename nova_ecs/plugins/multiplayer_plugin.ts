@@ -2,7 +2,8 @@ import { isLeft } from 'fp-ts/lib/Either';
 import { createDraft, current, Draft, finishDraft, isDraft, original } from 'immer';
 import { Objectish } from 'immer/dist/internal';
 import * as t from 'io-ts';
-import { Components, Entities, GetEntity, UUID } from '../arg_types';
+import { EcsEvent } from 'nova_ecs/events';
+import { Components, Emit, Entities, GetEntity, UUID } from '../arg_types';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
 import { Entity, EntityBuilder } from '../entity';
@@ -38,8 +39,13 @@ export const Message = t.intersection([t.type({
     admins: set(t.string),
     peers: set(t.string),
 })]);
-
 export type Message = t.TypeOf<typeof Message>;
+
+export const PeersChanged = new EcsEvent<{
+    removedPeers: Set<string>,
+    addedPeers: Set<string>,
+    peers: Set<string>,
+}>({ name: 'PeersChanged' });
 
 export const MultiplayerData = new Component({
     name: 'MultiplayerData',
@@ -78,8 +84,8 @@ export function multiplayer(communicator: Communicator): Plugin {
     const multiplayerSystem = new System({
         name: 'Multiplayer',
         args: [new Query([UUID, GetEntity, MultiplayerData] as const),
-            Entities, Components, Comms] as const,
-        step: (query, entities, components, comms) => {
+            Entities, Components, Comms, Emit] as const,
+        step: (query, entities, components, comms, emit) => {
             comms.uuid = communicator.uuid;
             if (!comms.uuid) {
                 // Can't do anything if we don't have a uuid.
@@ -108,7 +114,14 @@ export function multiplayer(communicator: Communicator): Plugin {
 
                 // Set peers
                 if (isAdmin && message.peers) {
+                    const addedPeers = setDifference(message.peers, comms.peers);
+                    const removedPeers = setDifference(comms.peers, message.peers);
                     comms.peers = message.peers;
+                    emit(PeersChanged, {
+                        removedPeers,
+                        addedPeers,
+                        peers: comms.peers,
+                    });
                 }
 
                 // Set requested states
@@ -261,7 +274,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                     throw new Error(`Expected to have entity ${uuid}`);
                 }
                 const { entity, data } = val;
-
+                console.log(`Sending new entity ${uuid}`);
 
                 changes.state![uuid] = {
                     owner: data.owner,
