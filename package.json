@@ -15,7 +15,7 @@
         "@bazel/concatjs": "^3.2.1",
         "@bazel/esbuild": "^3.2.1",
         "@bazel/ibazel": "^0.14.0",
-        "@bazel/jasmine": "^3.2.1",
+        "@bazel/jasmine": "^3.2.2",
         "@bazel/labs": "^3.2.1",
         "@bazel/typescript": "3.2.1",
         "@types/argparse": "^2.0.5",
