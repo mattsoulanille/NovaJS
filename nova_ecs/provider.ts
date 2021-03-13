@@ -1,7 +1,6 @@
-import { Either, left, right } from "fp-ts/lib/Either";
-import { applyPatches, createDraft, finishDraft, Patch } from "immer";
-import { ArgData, ArgsToData, ArgTypes, GetArg, GetEntity, UUID } from "./arg_types";
-import { getCurrentArgs } from "./async_system";
+import { left, right } from "fp-ts/lib/Either";
+import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, Patch, setAutoFreeze } from "immer";
+import { ArgData, ArgsToData, ArgTypes, GetEntity, UUID } from "./arg_types";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Modifier } from "./modifier";
 import { Optional } from "./optional";
@@ -49,6 +48,10 @@ export function Provide<Provided extends Component<any, any, any, any>, Args ext
     });
 }
 
+enablePatches();
+enableMapSet();
+setAutoFreeze(false);
+
 // TODO: Refactor this with AsyncSystem?
 export function ProvideAsync<Provided extends Component<any, any, any, any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
     provided: Provided,
@@ -86,8 +89,7 @@ export function ProvideAsync<Provided extends Component<any, any, any, any>, Arg
                 return left(undefined);
             } else {
                 // TODO: Refactor with Async system
-                const currentArgs = getCurrentArgs(args, argData);
-                const draftArgs = createDraft(currentArgs);
+                const draftArgs = createDraft(argData);
                 const newData = factory(...draftArgs as typeof argData);
                 const providerMapEntry: ProviderMapEntry = {
                     complete: false,

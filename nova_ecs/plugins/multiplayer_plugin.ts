@@ -1,7 +1,9 @@
 import { isLeft } from 'fp-ts/lib/Either';
-import { current, isDraft, original } from 'immer';
+import { createDraft, current, Draft, finishDraft, isDraft, original } from 'immer';
+import { Objectish } from 'immer/dist/internal';
 import * as t from 'io-ts';
-import { Components, Entities, GetEntity, UUID } from '../arg_types';
+import { EcsEvent } from 'nova_ecs/events';
+import { Components, Emit, Entities, GetEntity, UUID } from '../arg_types';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
 import { Entity, EntityBuilder } from '../entity';
@@ -36,10 +38,14 @@ export const Message = t.intersection([t.type({
     ownedUuids: t.array(t.string),
     admins: set(t.string),
     peers: set(t.string),
-    playerShip: t.string,
 })]);
-
 export type Message = t.TypeOf<typeof Message>;
+
+export const PeersChanged = new EcsEvent<{
+    removedPeers: Set<string>,
+    addedPeers: Set<string>,
+    peers: Set<string>,
+}>({ name: 'PeersChanged' });
 
 export const MultiplayerData = new Component({
     name: 'MultiplayerData',
@@ -54,8 +60,6 @@ export const Comms = new Component<{
     admins: Set<string>,
     uuid: string | undefined,
     stateRequests: Map<string /* peer uuid */, Set<string /* Entity uuid */>>,
-    added: Set<string>, // Entities added this step by ApplyChanges
-    removed: Set<string>, // Entities removed this step by ApplyChanges
     lastEntities: Set<string>, // Entities
 }>({ name: 'Comms' });
 
@@ -77,11 +81,11 @@ function getEntityState(entity: Entity) {
 }
 
 export function multiplayer(communicator: Communicator): Plugin {
-    const applyChangesSystem = new System({
-        name: 'ApplyChanges',
+    const multiplayerSystem = new System({
+        name: 'Multiplayer',
         args: [new Query([UUID, GetEntity, MultiplayerData] as const),
-            Entities, Components, Comms] as const,
-        step: (query, entities, components, comms) => {
+            Entities, Components, Comms, Emit] as const,
+        step: (query, entities, components, comms, emit) => {
             comms.uuid = communicator.uuid;
             if (!comms.uuid) {
                 // Can't do anything if we don't have a uuid.
@@ -95,6 +99,11 @@ export function multiplayer(communicator: Communicator): Plugin {
             // Entities to request the full state of
             const fullStateRequests = new Set<string>();
 
+            // Track entities added and removed
+            const added = new Set<string>();
+            const removed = new Set<string>();
+
+            // Apply changes from messages
             for (const message of messages) {
                 const isAdmin = comms.admins.has(message.source);
 
@@ -105,7 +114,30 @@ export function multiplayer(communicator: Communicator): Plugin {
 
                 // Set peers
                 if (isAdmin && message.peers) {
+                    const addedPeers = setDifference(message.peers, comms.peers);
+                    const removedPeers = setDifference(comms.peers, message.peers);
                     comms.peers = message.peers;
+                    emit(PeersChanged, {
+                        removedPeers,
+                        addedPeers,
+                        peers: comms.peers,
+                    });
+                    if (comms.admins.has(comms.uuid)) {
+                        // TODO: This breaks for multiple admins.
+                        // Send the state to the peer.
+                        const message: Message = {
+                            source: comms.uuid,
+                            state: {}
+                        };
+
+                        for (const [uuid, entity, multiplayerData] of query) {
+                            message.state![uuid] = {
+                                owner: multiplayerData.owner,
+                                state: {}
+                            };
+                            //  for (const 
+                        }
+                    }
                 }
 
                 // Set requested states
@@ -119,18 +151,13 @@ export function multiplayer(communicator: Communicator): Plugin {
                     }
                 }
 
-                // Remove entities
-                // TODO: Let them know they're being removed?
-                // Solution: Implement events and emit a 'remove' event on the
-                // entity (which runs each system that listens for 'remove and
-                // that the entity satisfies).
                 for (const uuid of message.remove ?? []) {
                     if (entityMap.has(uuid) &&
                         (entityMap.get(uuid)?.data.owner === message.source || isAdmin)) {
                         entities.delete(uuid);
                         fullStateRequests.delete(uuid);
-                        comms.added.delete(uuid);
-                        comms.removed.add(uuid);
+                        added.delete(uuid);
+                        removed.add(uuid);
                         entityMap.delete(uuid);
                     } else {
                         console.warn(`'${message.source}' tried to remove ${uuid}`);
@@ -142,7 +169,8 @@ export function multiplayer(communicator: Communicator): Plugin {
                     if (entityMap.has(uuid)
                         && entityMap.get(uuid)?.data.owner !== message.source
                         && !isAdmin) {
-                        console.warn(`'${message.source}' tried to replace existing entity ${uuid}`);
+                        debugger;
+                        console.warn(`'${message.source}' tried to replace existing entity '${uuid}'`);
                         continue;
                     }
 
@@ -173,8 +201,8 @@ export function multiplayer(communicator: Communicator): Plugin {
                     entity.addComponent(MultiplayerData, multiplayerData);
                     entities.set(uuid, entity.build());
                     const handle = entities.get(uuid)!;
-                    comms.added.add(uuid);
-                    comms.removed.delete(uuid);
+                    added.add(uuid);
+                    removed.delete(uuid);
                     // Add the newly added entity to the entityMap so we don't
                     // accidentally request its state in `apply deltas`.
                     entityMap.set(uuid, { entity: handle, data: multiplayerData });
@@ -183,11 +211,6 @@ export function multiplayer(communicator: Communicator): Plugin {
                 // Set UUIDs
                 if (message.ownedUuids) {
                     comms.ownedUuids = new Set(message.ownedUuids);
-                }
-
-                // Set player ship
-                if (message.playerShip) {
-                    // TODO
                 }
 
                 // Apply deltas
@@ -199,7 +222,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                     const { entity, data } = entityMap.get(uuid)!;
 
                     if (message.source !== data.owner && !comms.admins.has(message.source)) {
-                        console.warn(`'${message.source}' tried to modify entity ${uuid}`);
+                        console.warn(`'${message.source}' tried to modify entity '${uuid}'`);
                         continue;
                     }
 
@@ -242,18 +265,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                     requestState: [...fullStateRequests]
                 }, randomAdmin);
             }
-        }
-    });
 
-    const sendChangesSystem = new System({
-        name: 'SendChanges',
-        args: [new Query([UUID, GetEntity, MultiplayerData] as const),
-            Comms] as const,
-        step: (query, comms) => {
-            if (!comms.uuid) {
-                // Can't send changes if we don't have a uuid
-                return;
-            }
 
             const changes: Message = {
                 source: comms.uuid,
@@ -263,20 +275,15 @@ export function multiplayer(communicator: Communicator): Plugin {
                 ownedUuids: [],
             };
 
-            const entities = new Set(query.map(([uuid]) => uuid));
-            const addedEntities = setDifference(entities,
-                new Set([...comms.lastEntities, ...comms.added]));
+            const entityUuids = new Set(query.map(([uuid]) => uuid));
+            const addedEntities = setDifference(entityUuids,
+                new Set([...comms.lastEntities, ...added]));
             const removedEntities = setDifference(comms.lastEntities,
-                new Set([...entities, ...comms.removed]));
-            comms.added = new Set();
-            comms.removed = new Set();
-            comms.lastEntities = entities;
+                new Set([...entityUuids, ...removed]));
+            comms.lastEntities = new Set([...entityUuids, ...added]);
             changes.remove = [...removedEntities];
 
             // Get states for new entities
-            const entityMap = new Map(query.map(([uuid, entity, data]) =>
-                [uuid, { entity, data }]));
-
             for (const uuid of addedEntities) {
                 const val = entityMap.get(uuid);
                 if (!val) {
@@ -290,26 +297,44 @@ export function multiplayer(communicator: Communicator): Plugin {
                 }
             }
 
-            // Get deltas
+            // Get deltas and create drafts 
             const newStates = new Set(Object.keys(changes.state ?? {}));
-            for (const [uuid, entity, multiplayer] of query) {
-                if (multiplayer.owner !== comms.uuid || newStates.has(uuid)) {
+            for (const [uuid, entity, multiplayerData] of query) {
+                if (multiplayerData.owner !== comms.uuid) {
                     continue;
                 }
-                const entityDelta: EntityDelta = {};
-                for (const [component, data] of entity.components.entries()) {
-                    if (component.getDelta && component.deltaType && isDraft(data)) {
-                        // If it's not a draft, there's no delta.
-                        const delta = component.getDelta(original(data), data);
-                        if (delta) {
-                            entityDelta[component.name] = component.deltaType.encode(delta);
+                const entityDelta: EntityDelta = {}; // Serialized changes to an entity
+                for (const [component, data] of entity.components) {
+                    if (component.getDelta && component.deltaType) {
+                        // The new draft to be used in place of the component's data.
+                        // For tracking changes between runs of this system.
+                        // TODO: Remove draftedness when losing ownership.
+                        let newDraft: Draft<unknown>;
+                        if (isDraft(data)) {
+                            // If it's not a draft, there's no delta.
+                            const originalData = original(data);
+                            const currentData = finishDraft(data);
+                            newDraft = createDraft(currentData as Objectish);
+                            // Don't send a delta if we're sending a state.
+                            if (!newStates.has(uuid)) {
+                                const delta = component.getDelta(originalData, currentData);
+                                if (delta) {
+                                    entityDelta[component.name] =
+                                        component.deltaType.encode(delta);
+                                }
+                            }
+
+                        } else {
+                            newDraft = createDraft(data as Objectish);
                         }
+                        entity.components.set(component, newDraft);
                     }
                 }
                 if (Object.keys(entityDelta).length > 0) {
                     changes.delta![uuid] = entityDelta;
                 }
             }
+
             if (Object.keys(changes.delta ?? {}).length === 0) {
                 delete changes.delta;
             }
@@ -349,14 +374,12 @@ export function multiplayer(communicator: Communicator): Plugin {
                 }, peer);
             }
             comms.stateRequests = new Map();
-        },
-        after: new Set([applyChangesSystem]),
+        }
     });
 
-
     function build(world: World) {
-        world.addSystem(applyChangesSystem);
-        world.addSystem(sendChangesSystem);
+        world.addSystem(multiplayerSystem);
+        //world.addSystem(sendChangesSystem);
         world.addComponent(MultiplayerData);
         world.singletonEntity.components.set(Comms, {
             ownedUuids: new Set<string>(),
@@ -365,8 +388,6 @@ export function multiplayer(communicator: Communicator): Plugin {
             admins: new Set<string>(['server']),
             lastEntities: new Set<string>(),
             stateRequests: new Map(),
-            added: new Set<string>(),
-            removed: new Set<string>(),
         });
     }
 

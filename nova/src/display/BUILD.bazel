@@ -17,5 +17,6 @@ ts_library(
         "@npm//pixi.js",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//immer",
     ]
 )

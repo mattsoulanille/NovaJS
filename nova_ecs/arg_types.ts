@@ -1,5 +1,4 @@
 import { Either } from "fp-ts/lib/Either";
-import { Draft } from "immer";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap } from "./entity_map";
@@ -47,7 +46,8 @@ export type ArgTypes = Component<any, any, any, any>
 type AllowUndefined<T> = T extends undefined ? T : never;
 
 export type ArgData<T> =
-    Draft<ComponentData<T> | ResourceData<T>>
+    ComponentData<T>
+    | ResourceData<T>
     | QueryResults<T>
     | EventData<T>
     | EntitiesObject<T>

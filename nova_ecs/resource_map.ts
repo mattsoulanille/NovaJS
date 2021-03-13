@@ -1,7 +1,5 @@
+import { EventMap } from "./event_map";
 import { Resource, UnknownResource } from "./resource";
-import { MutableImmutableMapHandle } from "./mutable_immutable_map_handle";
-import { currentIfDraft } from "./utils";
-import { CallWithDraft, State } from "./world";
 
 export interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknown> {
     get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
@@ -13,28 +11,12 @@ export interface ResourceMap extends Map<UnknownResource, unknown> {
     delete(resource: Resource<any, any, any, any>): boolean;
 }
 
-export class ResourceMapHandle
-    extends MutableImmutableMapHandle<UnknownResource, unknown>
-    implements ResourceMap {
-    constructor(callWithDraft: CallWithDraft<State>,
-        private addResource: (resource: Resource<any, any, any, any>) => void) {
-        super((callback) => callWithDraft(
-            draft => callback(draft.resources)),
-            currentIfDraft);
-    }
-
+export class ResourceMapWrapped extends EventMap<UnknownResource, unknown> implements ResourceMap {
     get<Data>(resource: Resource<Data, any, any, any>): Data | undefined {
-        return super.get(resource as UnknownResource) as Data;
+        return super.get(resource as UnknownResource) as Data | undefined;
     };
-
     set<Data>(resource: Resource<Data, any, any, any>, data: Data): this {
-        this.addResource(resource);
-        return super.set(resource as UnknownResource, data);
-    };
-
-    delete(_resource: Resource<any, any, any, any>): boolean {
-        throw new Error('Resources can not be deleted since a system may depend on them');
-        // TODO: Allow deletion of resources. Check the systems.
-        //return super.delete(resource as UnknownResource);
+        super.set(resource as UnknownResource, data);
+        return this;
     };
 }

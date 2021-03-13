@@ -1,11 +1,9 @@
-import { zip } from "fp-ts/lib/ReadonlyArray";
-import { applyPatches, createDraft, enablePatches, finishDraft, Patch } from "immer";
-import { ArgData, ArgsToData, ArgTypes, QueryResults, UUID } from "./arg_types";
+import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, Patch, setAutoFreeze } from "immer";
+import { ArgsToData, ArgTypes, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
-import { Query } from "./query";
 import { Resource } from "./resource";
 import { BaseSystemArgs, System } from "./system";
-import { currentIfDraft, DefaultMap } from "./utils";
+import { DefaultMap } from "./utils";
 
 
 class AsyncSystemData {
@@ -36,20 +34,8 @@ export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
 }
 
 enablePatches();
-
-export function getCurrentArgs<A extends readonly ArgTypes[]>(args: A,
-    argsData: ArgsToData<A>): [...ArgsToData<A>] {
-    return zip(args, argsData).map(([arg, argData]) => {
-        if (arg instanceof Query) {
-            const queryResults = argData as QueryResults<Query>;
-            const res = queryResults.map(queryArgsData =>
-                getCurrentArgs(arg.args, queryArgsData));
-            return res;
-        } else {
-            return currentIfDraft(argData) as ArgData<A>;
-        }
-    }) as [...ArgsToData<A>]
-}
+enableMapSet();
+setAutoFreeze(false);
 
 export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]>
     extends System<[typeof AsyncSystemResource, typeof UUID, ...StepArgTypes]> {
@@ -74,10 +60,11 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 for (const patches of entityStatus.patches) {
                     applyPatches(stepArgs, patches);
                 }
+                delete (stepArgs as any)[Symbol.for('immer-state')];
                 entityStatus.patches = [];
 
-                const currentArgs = getCurrentArgs(systemArgs.args, stepArgs);
-                const draftArgs = createDraft(currentArgs);
+                //const currentArgs = getCurrentArgs(systemArgs.args, stepArgs);
+                const draftArgs = createDraft(stepArgs);
 
                 // TODO: This error handling is wrong.
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)

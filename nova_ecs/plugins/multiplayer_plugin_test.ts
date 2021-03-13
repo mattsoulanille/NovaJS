@@ -1,4 +1,5 @@
 import { isLeft } from 'fp-ts/lib/Either';
+import { isDraft } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
 import { Entities, UUID } from '../arg_types';
@@ -18,6 +19,8 @@ const BarComponent = new Component({
     getDelta: getObjectDelta,
     applyDelta: applyObjectDelta
 });
+
+const NonMultiplayer = new Component<{ z: string }>({ name: 'NonMultiplayer' });
 
 class MockCommunicator implements Communicator {
     incomingMessages: Message[] = [];
@@ -89,8 +92,7 @@ describe('Multiplayer Plugin', () => {
             name: 'BarSystem',
             args: [BarComponent] as const,
             step: () => { },
-            before: ['SendChanges'],
-            after: ['ApplyChanges'],
+            after: ['Multiplayer'],
         });
         world1.addSystem(barSystem);
 
@@ -100,8 +102,7 @@ describe('Multiplayer Plugin', () => {
             step: (bar, uuid) => {
                 reports.push([bar.y, uuid]);
             },
-            before: ['SendChanges'],
-            after: ['ApplyChanges'],
+            after: ['Multiplayer'],
         });
         world2.addSystem(reportSystem);
 
@@ -128,16 +129,14 @@ describe('Multiplayer Plugin', () => {
             step: (bar) => {
                 bar.y = bar.y + ' stepped';
             },
-            after: ['ApplyChanges'],
-            before: ['SendChanges'],
+            after: ['Multiplayer'],
         });
         world1.addSystem(barSystem);
 
         const reportSystem = new System({
             name: 'ReportSystem',
             args: [BarComponent] as const,
-            after: ['ApplyChanges'],
-            before: ['SendChanges'],
+            after: ['Multiplayer'],
             step: (bar) => {
                 reports.push(bar.y);
             }
@@ -162,9 +161,9 @@ describe('Multiplayer Plugin', () => {
         world2.step();
 
         expect(reports).toEqual([
+            'a test component',
             'a test component stepped',
             'a test component stepped stepped',
-            'a test component stepped stepped stepped',
         ]);
     });
 
@@ -190,8 +189,7 @@ describe('Multiplayer Plugin', () => {
                     entities.delete(uuid);
                 }
             },
-            after: ['ApplyChanges'],
-            before: ['SendChanges'],
+            before: ['Multiplayer'],
         });
 
         world1.addSystem(removeBarSystem);
@@ -207,6 +205,9 @@ describe('Multiplayer Plugin', () => {
         world1.step();
         world2.step();
 
+        world1.step();
+        world2.step();
+
         expect(world2.entities.get(testUuid)!.components.get(BarComponent))
             .toEqual(world1.entities.get(testUuid)!.components.get(BarComponent))
 
@@ -215,5 +216,56 @@ describe('Multiplayer Plugin', () => {
         world2.step();
 
         expect(world2.entities.get(testUuid)).toBeUndefined();
+    });
+
+
+    it('drafts components of entities it owns', () => {
+        const testUuid = 'test entity uuid';
+        world1.entities.set(testUuid, new EntityBuilder()
+            .addComponent(MultiplayerData, {
+                owner: 'world1 uuid',
+            }).addComponent(BarComponent, {
+                y: 'a test component',
+            }).build());
+
+        world1.step();
+
+        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
+        expect(isDraft(bar)).toBeTrue();
+    });
+
+    it('does not draft components of entities it does not own', () => {
+        const testUuid = 'test entity uuid';
+        world1.entities.set(testUuid, new EntityBuilder()
+            .addComponent(MultiplayerData, {
+                owner: 'not me',
+            }).addComponent(BarComponent, {
+                y: 'a test component',
+            }).build());
+
+        world1.step();
+
+        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
+        expect(isDraft(bar)).toBeFalse();
+    });
+
+    it('does not draft non-multiplayer components', () => {
+        const testUuid = 'test entity uuid';
+        world1.entities.set(testUuid, new EntityBuilder()
+            .addComponent(MultiplayerData, {
+                owner: 'world1 uuid',
+            }).addComponent(BarComponent, {
+                y: 'a test component',
+            }).addComponent(NonMultiplayer, {
+                z: 'not multiplayer'
+            }).build());
+
+        world1.step();
+
+        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
+        expect(isDraft(bar)).toBeTrue();
+
+        const nonMultiplaer = world1.entities.get(testUuid)?.components.get(NonMultiplayer);
+        expect(isDraft(nonMultiplaer)).toBeFalse();
     });
 });
