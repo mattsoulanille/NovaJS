@@ -85,6 +85,7 @@ export class World {
         this.addPlugin(ProvideAsyncPlugin);
         this.entities.set('singleton', new EntityBuilder()
             .addComponent(SingletonComponent, undefined)
+            .setName('singleton')
             .build());
 
         // Get the handle for the singleton entity.
@@ -97,9 +98,7 @@ export class World {
 
         this.state.resources.events.set.subscribe(added => {
             this.addResource(added[0]);
-        })
-
-
+        });
     }
 
     emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: Set<string>) {

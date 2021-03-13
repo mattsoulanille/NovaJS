@@ -10,7 +10,7 @@ import { Entity, EntityBuilder } from '../entity';
 import { Plugin } from '../plugin';
 import { Query } from '../query';
 import { System } from '../system';
-import { currentIfDraft, setDifference } from '../utils';
+import { setDifference } from '../utils';
 import { World } from '../world';
 
 
@@ -122,6 +122,22 @@ export function multiplayer(communicator: Communicator): Plugin {
                         addedPeers,
                         peers: comms.peers,
                     });
+                    if (comms.admins.has(comms.uuid)) {
+                        // TODO: This breaks for multiple admins.
+                        // Send the state to the peer.
+                        const message: Message = {
+                            source: comms.uuid,
+                            state: {}
+                        };
+
+                        for (const [uuid, entity, multiplayerData] of query) {
+                            message.state![uuid] = {
+                                owner: multiplayerData.owner,
+                                state: {}
+                            };
+                            //  for (const 
+                        }
+                    }
                 }
 
                 // Set requested states
@@ -274,7 +290,6 @@ export function multiplayer(communicator: Communicator): Plugin {
                     throw new Error(`Expected to have entity ${uuid}`);
                 }
                 const { entity, data } = val;
-                console.log(`Sending new entity ${uuid}`);
 
                 changes.state![uuid] = {
                     owner: data.owner,
@@ -282,7 +297,7 @@ export function multiplayer(communicator: Communicator): Plugin {
                 }
             }
 
-            // Get deltas
+            // Get deltas and create drafts 
             const newStates = new Set(Object.keys(changes.state ?? {}));
             for (const [uuid, entity, multiplayerData] of query) {
                 if (multiplayerData.owner !== comms.uuid) {
@@ -298,18 +313,17 @@ export function multiplayer(communicator: Communicator): Plugin {
                         if (isDraft(data)) {
                             // If it's not a draft, there's no delta.
                             const originalData = original(data);
-
+                            const currentData = finishDraft(data);
+                            newDraft = createDraft(currentData as Objectish);
                             // Don't send a delta if we're sending a state.
                             if (!newStates.has(uuid)) {
-                                const delta = component.getDelta(originalData, data);
+                                const delta = component.getDelta(originalData, currentData);
                                 if (delta) {
                                     entityDelta[component.name] =
                                         component.deltaType.encode(delta);
                                 }
                             }
 
-                            const finished = finishDraft(data);
-                            newDraft = createDraft(finished as Objectish);
                         } else {
                             newDraft = createDraft(data as Objectish);
                         }

@@ -55,11 +55,8 @@ export const MovementStateComponent = new Component({
     getDelta(a, b): MovementState | undefined {
         // Omit position.
         // Send everything if a delta is detected.
-        const same = a.velocity.x === b.velocity.x &&
-            a.velocity.y === b.velocity.y &&
-            a.rotation.angle === b.rotation.angle &&
-            a.accelerating === b.accelerating &&
-            a.turning === b.turning;
+        const same = a.turning === b.turning &&
+            a.accelerating === b.accelerating;
 
         if (same) {
             return;

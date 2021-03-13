@@ -1,5 +1,4 @@
 import { Either } from "fp-ts/lib/Either";
-import { Draft } from "immer";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap } from "./entity_map";

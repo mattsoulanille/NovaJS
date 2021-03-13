@@ -1,15 +1,15 @@
-import { SingletonComponent } from "nova_ecs/world";
 import { Entities, UUID } from "nova_ecs/arg_types";
-import { AsyncSystem } from "nova_ecs/async_system";
 import { Plugin } from "nova_ecs/plugin";
 import { MultiplayerData, PeersChanged } from "nova_ecs/plugins/multiplayer_plugin";
 import { Query } from "nova_ecs/query";
+import { System } from "nova_ecs/system";
+import { SingletonComponent } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { GameDataResource } from "./game_data_resource";
 import { makeShip } from "./make_ship";
 
 
-export const manageClientsSystem = new AsyncSystem({
+export const manageClientsSystem = new System({
     name: 'ManageClients',
     events: [PeersChanged], // TODO: Fix async systems that use events.
     args: [GameDataResource, PeersChanged, new Query([MultiplayerData, UUID] as const),
