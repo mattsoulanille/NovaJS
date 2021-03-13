@@ -479,7 +479,7 @@ describe('world', () => {
             .toThrowError('Can not delete the singleton entity');
     });
 
-    xit('does not allow systems to have the same name', () => {
+    it('does not allow systems to have the same name', () => {
         const system1 = new System({
             name: 'TestSystem',
             args: [FOO_COMPONENT],
@@ -498,7 +498,7 @@ describe('world', () => {
             .toThrowError(`A system with name ${system2.name} already exists`);
     });
 
-    xit('does not allow resources to have the same name', () => {
+    it('does not allow resources to have the same name', () => {
         const resource1 = new Resource({
             name: 'TestResource',
             type: t.string,
@@ -518,20 +518,9 @@ describe('world', () => {
             .toThrowError(`A resource with name ${resource2.name} already exists`);
     });
 
-    xit('does not allow components to have the same name', () => {
-        const component1 = new Component({
-            name: 'TestComponent',
-            type: t.string,
-            getDelta: () => { },
-            applyDelta: () => { },
-        });
-
-        const component2 = new Component({
-            name: 'TestComponent',
-            type: t.string,
-            getDelta: () => { },
-            applyDelta: () => { },
-        });
+    it('catches component name conflicts when required by systems', () => {
+        const component1 = new Component<string>({ name: 'TestComponent' });
+        const component2 = new Component<string>({ name: 'TestComponent' });
 
         const testSystem = new System({
             name: 'TestSystem',
@@ -543,7 +532,7 @@ describe('world', () => {
             .toThrowError(`A component with name ${component1.name} already exists`);
     });
 
-    xit('catches component name conflicts', () => {
+    it('catches component name conflicts', () => {
         const component1 = new Component<string>({ name: 'TestComponent' });
         const component2 = new Component<string>({ name: 'TestComponent' });
 
