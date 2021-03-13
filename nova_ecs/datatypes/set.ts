@@ -23,8 +23,6 @@ export function set<Value>(value: t.Type<Value>) {
             }
             return right(new Set(decoded.right));
         },
-        (a) => {
-            return [...a];
-        }
+        (a) => [...a],
     )
 }

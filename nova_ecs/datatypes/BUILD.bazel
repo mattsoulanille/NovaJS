@@ -13,6 +13,7 @@ ts_library(
         "angle.ts",
         "mod.ts",
         "set.ts",
+        "map.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -27,6 +28,7 @@ ts_library(
         "vector_test.ts",
         "position_test.ts",
         "set_test.ts",
+        "map_test.ts",
     ],
     deps = [
         ":datatypes",
