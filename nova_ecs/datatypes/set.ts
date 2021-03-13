@@ -2,8 +2,7 @@ import { isLeft, left, right } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
 
 
-export function set<A, O>(value: t.Type<A, O>) {
-    type Value = t.TypeOf<typeof value>;
+export function set<Value>(value: t.Type<Value>) {
     return new t.Type<Set<Value>, Value[]>(
         `Set(${value.name})`,
         (u): u is Set<Value> => u instanceof Set
