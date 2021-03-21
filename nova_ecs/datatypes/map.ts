@@ -3,7 +3,8 @@ import * as t from 'io-ts';
 
 // TODO(mattsoulanille): Maybe optimize string and number keys by serializing
 // them as objects instead of tuples?
-export function map<Key, Value>(key: t.Type<Key>, value: t.Type<Value>) {
+export function map<Key, KeyEncode, Value, ValueEncode>(key: t.Type<Key, KeyEncode>,
+    value: t.Type<Value, ValueEncode>) {
     return new t.Type(`Map<${key.name}, ${value.name}>`,
         (u): u is Map<Key, Value> => u instanceof Map
             && [...u.entries()]
@@ -25,6 +26,6 @@ export function map<Key, Value>(key: t.Type<Key>, value: t.Type<Value>) {
             }
             return right(new Map(decoded.right));
         },
-        (a) => [...a]
+        (a) => [...a].map(([k, v]) => [key.encode(k), value.encode(v)])
     )
 }

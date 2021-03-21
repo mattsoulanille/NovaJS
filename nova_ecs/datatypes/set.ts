@@ -2,9 +2,9 @@ import { isLeft, left, right } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
 
 
-export function set<Value>(value: t.Type<Value>) {
-    return new t.Type<Set<Value>, Value[]>(
-        `Set(${value.name})`,
+export function set<Value, ValueEncode>(value: t.Type<Value, ValueEncode>) {
+    return new t.Type(
+        `Set<${value.name}>`,
         (u): u is Set<Value> => u instanceof Set
             && [...u].map(u => value.is(u)).reduce((a, b) => a && b),
         (i, context) => {
@@ -23,6 +23,6 @@ export function set<Value>(value: t.Type<Value>) {
             }
             return right(new Set(decoded.right));
         },
-        (a) => [...a],
+        (a) => [...a].map(v => value.encode(v)),
     )
 }

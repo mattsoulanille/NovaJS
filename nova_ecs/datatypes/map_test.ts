@@ -34,7 +34,6 @@ describe('Map', () => {
     });
 
     it('works on complex types', () => {
-
         const xStringType = t.type({ x: t.string });
         const yNumberType = t.type({ y: t.number });
         const testArray: Array<[t.TypeOf<typeof xStringType>,
@@ -53,4 +52,22 @@ describe('Map', () => {
         expect(decoded.right).toEqual(new Map(testArray));
     });
 
+    it('calls the subtypes\' encode methods', () => {
+        const mapOfMaps = map(map(t.string, t.number), map(t.number, t.string));
+
+        const input: t.TypeOf<typeof mapOfMaps> = new Map([
+            [new Map([['one', 1], ['two', 2]]), new Map([[1, 'one'], [2, 'two']])]
+        ]);
+
+        const encoded = mapOfMaps.encode(input);
+        expect(encoded).toEqual([
+            [[['one', 1], ['two', 2]], [[1, 'one'], [2, 'two']]]
+        ]);
+
+        const decoded = mapOfMaps.decode(encoded);
+        if (isLeft(decoded)) {
+            fail(`Expected to decode [${encoded}] successfully`);
+            return;
+        }
+    });
 });
