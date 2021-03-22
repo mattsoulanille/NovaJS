@@ -11,10 +11,15 @@ export const CommunicatorMessage = t.union([
         type: t.literal(MessageType.uuid),
         uuid: t.string,
     }),
-    t.type({
-        type: t.literal(MessageType.message),
-        message: t.unknown,
-    }),
+    t.intersection([
+        t.type({
+            type: t.literal(MessageType.message),
+            message: t.unknown,
+        }),
+        t.partial({
+            destination: t.string,
+        })
+    ])
 ]);
 
 export type CommunicatorMessage = t.TypeOf<typeof CommunicatorMessage>;

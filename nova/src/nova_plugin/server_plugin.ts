@@ -17,7 +17,6 @@ export const manageClientsSystem = new System({
     step: async (gameData, peersEvent, multiplayerEntities, entities) => {
         // Remove entities of peers who have disconnected
         // TODO: Save them for when they reconnect.
-        console.log(peersEvent);
         if (peersEvent.removedPeers.size > 0) {
             for (const [multiplayerData, uuid] of multiplayerEntities) {
                 if (peersEvent.removedPeers.has(multiplayerData.owner)) {

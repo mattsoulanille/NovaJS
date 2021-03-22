@@ -29,10 +29,11 @@ export class CommunicatorClient implements Communicator {
         }
     }
 
-    sendMessage(message: unknown) {
+    sendMessage(message: unknown, destination?: string) {
         this.channel.send(CommunicatorMessage.encode({
             type: MessageType.message,
-            message
+            message,
+            destination,
         }))
     }
 }

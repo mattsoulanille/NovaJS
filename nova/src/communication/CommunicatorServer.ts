@@ -8,7 +8,7 @@ import { CommunicatorMessage, MessageType } from "./CommunicatorMessage";
 
 export class CommunicatorServer implements Communicator {
     readonly messages = new Subject<unknown>();
-    readonly peers = new BehaviorSubject<Set<string>>(new Set());
+    readonly peers = new BehaviorSubject(new Set<string>());
 
     constructor(private channel: ChannelServer, public uuid = 'server') {
         // Handle messages from the channel
@@ -24,12 +24,25 @@ export class CommunicatorServer implements Communicator {
             }
 
             const message = maybeMessage.right.message;
-            this.messages.next(message);
 
-            // Rebroadcast messages
-            for (const otherId of this.channel.clients) {
-                if (otherId !== source) {
-                    this.sendMessage(message, otherId);
+            // TODO: Fix this
+            (message as { source: string }).source = source;
+
+            const destination = maybeMessage.right.destination;
+            if (destination) {
+                if (destination === this.uuid) {
+                    this.messages.next(message);
+                } else {
+                    if (this.channel.clients.has(destination)) {
+                        this.sendMessage(message, destination);
+                    }
+                }
+            } else {
+                // Rebroadcast messages
+                for (const otherId of this.channel.clients) {
+                    if (otherId !== source) {
+                        this.sendMessage(message, otherId);
+                    }
                 }
             }
         });
