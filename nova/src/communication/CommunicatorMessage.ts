@@ -1,4 +1,3 @@
-import { Message } from "nova_ecs/plugins/multiplayer_plugin";
 import * as t from 'io-ts';
 
 
@@ -14,7 +13,7 @@ export const CommunicatorMessage = t.union([
     }),
     t.type({
         type: t.literal(MessageType.message),
-        message: Message,
+        message: t.unknown,
     }),
 ]);
 

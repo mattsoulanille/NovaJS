@@ -39,6 +39,7 @@ ts_library(
         "@npm//@types/node",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//immer",
         "@npm//rxjs",
         "@npm//ws",
         "@npm//@types/ws",

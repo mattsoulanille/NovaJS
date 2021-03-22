@@ -1,6 +1,6 @@
 import { Entities, UUID } from "nova_ecs/arg_types";
 import { Plugin } from "nova_ecs/plugin";
-import { MultiplayerData, PeersChanged } from "nova_ecs/plugins/multiplayer_plugin";
+import { MultiplayerData, PeersEvent } from "nova_ecs/plugins/multiplayer_plugin";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
@@ -11,22 +11,23 @@ import { makeShip } from "./make_ship";
 
 export const manageClientsSystem = new System({
     name: 'ManageClients',
-    events: [PeersChanged], // TODO: Fix async systems that use events.
-    args: [GameDataResource, PeersChanged, new Query([MultiplayerData, UUID] as const),
+    events: [PeersEvent], // TODO?: Fix async systems that use events.
+    args: [GameDataResource, PeersEvent, new Query([MultiplayerData, UUID] as const),
         Entities, SingletonComponent] as const,
-    step: async (gameData, peersChanged, multiplayerEntities, entities) => {
+    step: async (gameData, peersEvent, multiplayerEntities, entities) => {
         // Remove entities of peers who have disconnected
         // TODO: Save them for when they reconnect.
-        if (peersChanged.removedPeers.size > 0) {
+        console.log(peersEvent);
+        if (peersEvent.removedPeers.size > 0) {
             for (const [multiplayerData, uuid] of multiplayerEntities) {
-                if (peersChanged.removedPeers.has(multiplayerData.owner)) {
+                if (peersEvent.removedPeers.has(multiplayerData.owner)) {
                     entities.delete(uuid);
                 }
             }
         }
 
         // TODO: Give them back the entitiy they disconnected with.
-        for (const newPeer of peersChanged.addedPeers) {
+        for (const newPeer of peersEvent.addedPeers) {
             console.log(`Adding ship for peer ${newPeer}`);
             const ids = await gameData.ids;
             const randomShip = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];

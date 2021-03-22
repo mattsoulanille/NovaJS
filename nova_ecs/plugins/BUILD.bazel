@@ -19,6 +19,7 @@ ts_library(
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
+        "@npm//rxjs",
     ]
 )
 
@@ -40,6 +41,7 @@ ts_library(
         "@npm//immer",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//rxjs",
     ]
 )
 

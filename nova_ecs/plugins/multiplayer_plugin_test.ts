@@ -1,7 +1,7 @@
-import { isLeft } from 'fp-ts/lib/Either';
 import { isDraft } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { Entities, UUID } from '../arg_types';
 import { Component } from '../component';
 import { EntityBuilder } from '../entity';
@@ -22,34 +22,34 @@ const BarComponent = new Component({
 
 const NonMultiplayer = new Component<{ z: string }>({ name: 'NonMultiplayer' });
 
+function sleep(ms: number) {
+    return new Promise(fulfill => {
+        setTimeout(fulfill, ms);
+    });
+}
+
 class MockCommunicator implements Communicator {
-    incomingMessages: Message[] = [];
+    peers = new BehaviorSubject(new Set<string>());
+    messages = new Subject<unknown>();
+    allMessages: unknown[] = [];
+
     constructor(public uuid: string | undefined,
-        public peers: Map<string, MockCommunicator> = new Map()) { }
+        public mockPeers: Map<string, MockCommunicator> = new Map()) {
+        this.messages.subscribe(message => this.allMessages.push(message));
+    }
 
     sendMessage(message: Message, destination?: string) {
-        const JSONified = Message.decode(JSON.parse(JSON.stringify(message)) as unknown);
-        if (isLeft(JSONified)) {
-            throw new Error(`JSON failed to parse: ${JSONified.left}`);
-        }
-
-        const copied = JSONified.right;
+        const JSONified = JSON.parse(JSON.stringify(message)) as unknown;
 
         if (destination) {
-            this.peers.get(destination)?.incomingMessages.push(copied);
+            this.mockPeers.get(destination)?.messages.next(JSONified);
         } else {
-            for (const peer of this.peers.values()) {
+            for (const peer of this.mockPeers.values()) {
                 if (peer.uuid !== this.uuid) {
-                    peer.incomingMessages.push(copied);
+                    peer.messages.next(JSONified);
                 }
             }
         }
-    }
-
-    getMessages() {
-        const messages = this.incomingMessages;
-        this.incomingMessages = [];
-        return messages;
     }
 }
 
@@ -63,18 +63,23 @@ describe('Multiplayer Plugin', () => {
         world1Communicator = new MockCommunicator('world1 uuid');
         world2Communicator = new MockCommunicator('world2 uuid');
 
-        const communicators = new Map([
+        const mockPeers = new Map([
             [world1Communicator.uuid as string, world1Communicator],
             [world2Communicator.uuid as string, world2Communicator],
         ]);
-        world1Communicator.peers = communicators;
-        world2Communicator.peers = communicators;
+        world1Communicator.mockPeers = mockPeers;
+        world2Communicator.mockPeers = mockPeers;
+
+        const peers = new Set([...mockPeers.keys()]);
 
         world1 = new World('world1');
         world1.addPlugin(multiplayer(world1Communicator));
 
         world2 = new World('world2');
         world2.addPlugin(multiplayer(world2Communicator));
+
+        world1Communicator.peers.next(peers);
+        world2Communicator.peers.next(peers);
 
         world1.addComponent(BarComponent);
         world2.addComponent(BarComponent);
@@ -85,7 +90,7 @@ describe('Multiplayer Plugin', () => {
             .map(component => component.name)).toContain('Comms');
     });
 
-    it('sends new entities that it owns', () => {
+    it('sends new entities that it owns', async () => {
         const reports: [string, string][] = [];
 
         const barSystem = new System({
@@ -175,8 +180,8 @@ describe('Multiplayer Plugin', () => {
         world1.step();
         world2.step();
 
-        expect(world1Communicator.incomingMessages).toEqual([]);
-        expect(world2Communicator.incomingMessages).toEqual([]);
+        expect(world1Communicator.allMessages).toEqual([]);
+        expect(world2Communicator.allMessages).toEqual([]);
     });
 
     it('removes entities that have been removed', () => {
