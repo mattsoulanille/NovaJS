@@ -57,7 +57,7 @@ class GameData implements GameDataInterface {
             //var loader = new PIXI.loaders.Loader();
             var loader = new PIXI.Loader();
             loader.add(url, url)
-                .load(function(_loader: any, resources: Partial<Record<string, PIXI.LoaderResource>>) {
+                .load(function(_loader: any, resources: Partial<Record<string, PIXI.ILoaderResource>>) {
                     const resource = resources[url];
                     if (resource == undefined) {
                         reject(`Resource ${url} not present on loaded url`)

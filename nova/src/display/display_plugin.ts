@@ -10,6 +10,7 @@ import { currentIfDraft } from "nova_ecs/utils";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ShipDataProvider } from "../nova_plugin/ship_component";
 import { AnimationGraphic } from "./animation_graphic";
+import * as PIXI from "pixi.js";
 
 export const Stage = new Resource<PIXI.Container>({
     name: 'Stage',
