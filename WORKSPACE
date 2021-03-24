@@ -168,7 +168,7 @@ rbe_autoconfig(name = "rbe_default")
 
 
 # esbuild binaries
-_ESBUILD_VERSION = "0.8.48"
+_ESBUILD_VERSION = "0.9.6"
 
 http_archive(
     name = "esbuild_darwin",
