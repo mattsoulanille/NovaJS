@@ -44,6 +44,8 @@ export class CommunicatorServer implements Communicator {
                         this.sendMessage(message, otherId);
                     }
                 }
+                // And receive the message ourselves.
+                this.messages.next(message);
             }
         });
 
