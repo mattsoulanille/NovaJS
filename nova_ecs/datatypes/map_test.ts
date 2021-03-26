@@ -70,4 +70,10 @@ describe('Map', () => {
             return;
         }
     });
+
+    it('returns left if a decode fails', () => {
+        const notAMap = [1, 2, 3, 4, 5];
+        const result = map(t.number, t.string).decode(notAMap);
+        expect(isLeft(result)).toBeTrue();
+    });
 });
