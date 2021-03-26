@@ -38,4 +38,24 @@ describe('Set', () => {
 
         expect(decoded.right).toEqual(new Set(testArray));
     });
+
+    it('calls the subtypes\' encode methods', () => {
+        const setOfSets = set(set(t.number));
+
+        const input: t.TypeOf<typeof setOfSets> = new Set([
+            new Set([1, 2, 3]),
+            new Set([4, 5, 6]),
+        ]);
+
+        const encoded = setOfSets.encode(input);
+        expect(encoded).toEqual([[1, 2, 3], [4, 5, 6]]);
+
+        const decoded = setOfSets.decode(encoded);
+        if (isLeft(decoded)) {
+            fail(`Expected to decode [${encoded}] successfully`);
+            return;
+        }
+
+        expect(decoded.right).toEqual(input);
+    });
 });

@@ -1,12 +1,15 @@
 import { isRight } from "fp-ts/lib/Either";
-import { Communicator, Message } from "nova_ecs/plugins/multiplayer_plugin";
+import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
+import { BehaviorSubject, Subject } from "rxjs";
 import { ChannelClient } from "./Channel";
 import { CommunicatorMessage, MessageType } from "./CommunicatorMessage";
 
 
 export class CommunicatorClient implements Communicator {
-    private messages: Message[] = [];
+    readonly messages = new Subject<unknown>();
+    readonly peers = new BehaviorSubject<Set<string>>(new Set());
     uuid: string | undefined = undefined;
+
 
     constructor(private channel: ChannelClient) {
         channel.message.subscribe(this.onMessage.bind(this));
@@ -17,7 +20,7 @@ export class CommunicatorClient implements Communicator {
         if (isRight(maybeMessage)) {
             const communicatorMessage = maybeMessage.right;
             if (communicatorMessage.type === MessageType.message) {
-                this.messages.push(communicatorMessage.message);
+                this.messages.next(communicatorMessage.message);
             } else {
                 this.uuid = communicatorMessage.uuid;
             }
@@ -26,16 +29,11 @@ export class CommunicatorClient implements Communicator {
         }
     }
 
-    sendMessage(message: Message) {
+    sendMessage(message: unknown, destination?: string) {
         this.channel.send(CommunicatorMessage.encode({
             type: MessageType.message,
-            message
+            message,
+            destination,
         }))
-    }
-
-    getMessages() {
-        const messages = this.messages;
-        this.messages = [];
-        return messages;
     }
 }

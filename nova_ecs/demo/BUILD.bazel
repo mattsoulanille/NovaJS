@@ -28,6 +28,7 @@ esbuild(
     entry_point = "demo.ts",
     target = "es2015",
     minify = False,
+    sources_content = True,
     define = [
         "process.env.NODE_ENV=\"node\""
     ],
