@@ -72,11 +72,14 @@ describe('Multiplayer Plugin', () => {
 
         const peers = new Set([...mockPeers.keys()]);
 
+        function error(message: string) {
+            throw new Error(message);
+        }
         world1 = new World('world1');
-        world1.addPlugin(multiplayer(world1Communicator));
+        world1.addPlugin(multiplayer(world1Communicator, error));
 
         world2 = new World('world2');
-        world2.addPlugin(multiplayer(world2Communicator));
+        world2.addPlugin(multiplayer(world2Communicator, error));
 
         world1Communicator.peers.next(peers);
         world2Communicator.peers.next(peers);
