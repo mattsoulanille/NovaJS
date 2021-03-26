@@ -11,6 +11,7 @@ ts_library(
         "time_plugin.ts",
         "multiplayer_plugin.ts",
         "movement_plugin.ts",
+        "serializer_plugin.ts",
         "delta.ts",
     ],
     deps = [
@@ -29,6 +30,7 @@ ts_library(
         "time_plugin_test.ts",
         "multiplayer_plugin_test.ts",
         "movement_plugin_test.ts",
+        "serializer_plugin_test.ts",
     ],
     deps = [
         ":plugins",

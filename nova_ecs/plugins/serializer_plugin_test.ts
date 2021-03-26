@@ -1,0 +1,93 @@
+import 'jasmine';
+import * as t from 'io-ts';
+import { System } from '../system';
+import { World } from '../world';
+import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
+import { Component } from '../component';
+import { EntityBuilder } from 'nova_ecs/entity';
+import { isLeft } from 'fp-ts/lib/Either';
+import { set } from '../datatypes/set';
+
+
+const FooComponent = new Component<{ x: number }>({ name: 'Foo' });
+const FooType = t.type({ x: t.number });
+const BarComponent = new Component<{ y: string }>({ name: 'Bar' });
+const BarType = t.type({ y: t.string });
+
+const SetComponent = new Component<{ s: Set<string> }>({ name: 'Set' });
+const SetType = t.type({ s: set(t.string) });
+
+
+describe('Serializer Plugin', () => {
+    let world: World;
+    let serializer: Serializer;
+
+    beforeEach(() => {
+        world = new World();
+        world.addPlugin(SerializerPlugin);
+
+        const maybeSerializer = world.resources.get(SerializerResource);
+        if (!maybeSerializer) {
+            throw new Error('Expected world to have serializer resource');
+        }
+        serializer = maybeSerializer;
+        serializer.addComponent(FooComponent, FooType);
+        serializer.addComponent(BarComponent, BarType);
+        serializer.addComponent(SetComponent, SetType);
+    });
+
+    it('serializes and deserializes entities', () => {
+        const entity = new EntityBuilder()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+            .addComponent(BarComponent, { y: 'Hello' })
+            .build();
+
+        const encoded = serializer.encode(entity);
+        const decoded = serializer.deocde(encoded);
+        if (isLeft(decoded)) {
+            fail('Expected to decode successfully');
+            return;
+        }
+
+        expect(decoded.right).toEqual(entity);
+    });
+
+    it('serializes components with custom types', () => {
+        const entity = new EntityBuilder()
+            .setName('Test Entity')
+            .addComponent(SetComponent, { s: new Set(['foo', 'bar', 'baz']) })
+            .build();
+
+        const encoded = serializer.encode(entity);
+        const decoded = serializer.deocde(encoded);
+        if (isLeft(decoded)) {
+            fail('Expected to decode successfully');
+            return;
+        }
+
+        expect(decoded.right).toEqual(entity);
+    });
+
+    it('does not include components with no serializer', () => {
+        const BazComponent = new Component<{ z: number[] }>({ name: 'Baz' });
+        const expectedEntity = new EntityBuilder()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+            .addComponent(BarComponent, { y: 'Hello' })
+            .build();
+
+        const inputEntity = new EntityBuilder(expectedEntity)
+            .addComponent(BazComponent, { z: [1, 2, 3] })
+            .build();
+
+        const encoded = serializer.encode(inputEntity);
+        const decoded = serializer.deocde(encoded);
+        if (isLeft(decoded)) {
+            fail('Expected to decode successfully');
+            return;
+        }
+
+        expect(decoded.right).toEqual(expectedEntity);
+    });
+});
