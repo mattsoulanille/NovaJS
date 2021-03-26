@@ -31,7 +31,7 @@
         "immer": "^9.0.1",
         "io-ts-types": "^0.5.16",
         "jasmine": "^3.6.4",
-        "jasmine-core": "^3.5.0",
+        "jasmine-core": "^3.7.1",
         "karma": "^6.3.1",
         "karma-chrome-launcher": "^3.1.0",
         "karma-firefox-launcher": "^2.1.0",
