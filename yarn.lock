@@ -587,10 +587,10 @@
   resolved "https://registry.yarnpkg.com/@types/stats.js/-/stats.js-0.17.0.tgz#0ed81d48e03b590c24da85540c1d952077a9fe20"
   integrity sha512-9w+a7bR8PeB0dCT/HBULU2fMqf6BAzvKbxFboYhmDtDkKPiyXYbjoe2auwsXlEFI7CFNMF1dCv3dFH5Poy9R1w==
 
-"@types/supports-color@^7.2.0":
-  version "7.2.0"
-  resolved "https://registry.yarnpkg.com/@types/supports-color/-/supports-color-7.2.0.tgz#edd98ae52ee786b733a5dea0a23da4eb18ef7310"
-  integrity sha512-gtUcOP6qIpjbSDdWjMBRNSks42ccx1709mwKTgelW63BESIADw8Ju7klpydDDb9Kr0iRXfpwrXH8+zoU8TCqiA==
+"@types/supports-color@^7.2.1":
+  version "7.2.1"
+  resolved "https://registry.yarnpkg.com/@types/supports-color/-/supports-color-7.2.1.tgz#58a6efe82d9eca92cf316b16112fcd2675ffa6c0"
+  integrity sha512-glb1BXM/pchMWTt9kg67CceKqyAW3NGBviNPKXN84JJhk3shqVpyi5d5MM4MWYoZHHk/Ioct7Yt1TNqQORiIAw==
 
 "@types/url-join@^4.0.0":
   version "4.0.0"
