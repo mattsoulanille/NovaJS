@@ -101,15 +101,24 @@ TBD once the rewrite has feature parity with the js version.
 ## Unsolved Multiplayer Questions
 * How will mission strings that significantly change the universe work?
   * Put people in their respective system for every changed system? But then it's not multiplayer.
+      * What if you had a limited number of people per 'universe.' Then you could lock each mission or mission set by a particular player, essentially locking out anyone else from being able to affect that particular story-change. That way your changes have consequences and you can still have multiple people make changes that affect the galaxy outcome.
   * Put everyone in the same system, but make the planets different based on the state of the universe? But there are fleets...
+      * What if you simply loaded a small set of systems based on a max cap of 5-10 players? Then you don't have to control the whole universe at once, but you can still have multiple fleets in a single system.  
   * Choose a system randomly and put everyone in it?
-    * How do you detect which systems are actually just different instances of the same system?
+    * How do you detect which systems are actually just different amount instances of the same system?
+          * Personally I think playing with friends is much more do-able than allowing 15+ people into your game session
   * This is probably the biggest proplem with multiplayer support, and I welcome any suggestions.
+          * I think limiting the # of people makes the complexity much more do-able. :) 
 * How will dates work? Realtime is definitely a bad idea for timing missions since it takes time to read the dialogue. Maybe everyone just has a different date that changes normally (when you jump / land)?
+      * I actually think this is a really good idea. Maybe you could allow timing to be indiviual until everyone has no active quests, then update everyone to the player with the latest stardate (thematically other players just 'took a vacation.'
 * Will there be some form of chat, and if so, where will it be? Perhaps you need to hail other ships to talk to them? Perhaps it's just in the bottom left info area?
+      * Good idea! I would say everyone in the system with the ability to add friends or group-chats based on players whose vehicles you've hailed or maybe even a group feature before you go into the game.
 * How will hailing other ships be managed when the game can't just pause at any time?
+      * What would break by making a hail a textbox in real-time? It will add tension in spacefights but maybe that's okay?
 * How will 2x speed work on a client basis? (It probably just won't and will be a server-configured option).
+      * I think that would have to be a server-side option, perhaps it's something you can turn on if you find yourself in a system by yourself, otherwise it is locked to 1x to allow space-battles.
 * How should pilot files be saved? How should deaths be handled?
+      * Any reason not to have this client-side? Couldn't deaths be the same as they are in the original game?
 
 
 
