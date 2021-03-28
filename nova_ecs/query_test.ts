@@ -6,9 +6,9 @@ import { Query } from './query';
 import { Resource } from './resource';
 
 
-const FOO_COMPONENT = new Component<{ x: number }>({ name: 'foo' });
-const BAR_COMPONENT = new Component<{ y: string }>({ name: 'bar' });
-const BAZ_RESOURCE = new Resource<{ z: string[] }>({ name: 'baz' })
+const FOO_COMPONENT = new Component<{ x: number }>('foo');
+const BAR_COMPONENT = new Component<{ y: string }>('bar');
+const BAZ_RESOURCE = new Resource<{ z: string[] }>('baz');
 
 
 describe('query', () => {

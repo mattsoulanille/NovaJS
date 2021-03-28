@@ -12,12 +12,9 @@ import { ShipDataProvider } from "../nova_plugin/ship_component";
 import { AnimationGraphic } from "./animation_graphic";
 import * as PIXI from "pixi.js";
 
-export const Stage = new Resource<PIXI.Container>({
-    name: 'Stage',
-    multiplayer: false,
-});
+export const Stage = new Resource<PIXI.Container>('Stage');
 
-const AnimationComponent = new Component<Animation>({ name: 'AnimationComponent' });
+const AnimationComponent = new Component<Animation>('AnimationComponent');
 
 const ShipAnimationComponentProvider = Provide({
     provided: AnimationComponent,
@@ -28,7 +25,7 @@ const ShipAnimationComponentProvider = Provide({
 });
 
 
-const AnimationGraphicComponent = new Component<AnimationGraphic>({ name: 'AnimationGraphic' });
+const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicProvider = ProvideAsync({
     provided: AnimationGraphicComponent,
     args: [ShipAnimationComponentProvider, Stage, GameDataResource] as const,

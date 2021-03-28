@@ -22,10 +22,7 @@ class AsyncSystemData {
     done: Promise<void> = Promise.resolve();
 }
 
-export const AsyncSystemResource = new Resource<AsyncSystemData>({
-    name: 'AsyncSystemResource',
-    multiplayer: false,
-});
+export const AsyncSystemResource = new Resource<AsyncSystemData>('AsyncSystemResource');
 
 export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
     extends BaseSystemArgs<StepArgTypes> {

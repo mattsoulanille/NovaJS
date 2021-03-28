@@ -30,12 +30,12 @@ export class EntityBuilder {
         };
     }
 
-    addComponent<Data>(component: Component<Data, any, any, any>, data: Data): this {
+    addComponent<Data>(component: Component<Data>, data: Data): this {
         this.components.set(component as UnknownComponent, data);
         return this;
     }
 
-    removeComponent(component: Component<any, any, any, any>): this {
+    removeComponent(component: Component<any>): this {
         this.components.delete(component);
         return this;
     }

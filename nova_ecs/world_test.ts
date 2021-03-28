@@ -2,20 +2,20 @@ import * as t from 'io-ts';
 import 'jasmine';
 import { v4 } from 'uuid';
 import { Emit, Entities, GetEntity, UUID } from './arg_types';
-import { Component, ComponentData } from './component';
+import { Component } from './component';
 import { EntityBuilder } from './entity';
 import { DeleteEvent, EcsEvent } from './events';
 import { Optional } from './optional';
 import { Plugin } from './plugin';
 import { Query } from './query';
-import { Resource, ResourceData } from './resource';
+import { Resource } from './resource';
 import { System } from './system';
 import { World } from './world';
 
 
-const FOO_COMPONENT = new Component<{ x: number }>({ name: 'foo' });
-const BAR_COMPONENT = new Component<{ y: string }>({ name: 'bar' });
-const BAZ_RESOURCE = new Resource<{ z: string[] }>({ name: 'baz' })
+const FOO_COMPONENT = new Component<{ x: number }>('foo');
+const BAR_COMPONENT = new Component<{ y: string }>('bar');
+const BAZ_RESOURCE = new Resource<{ z: string[] }>('baz');
 
 const FOO_BAR_SYSTEM = new System({
     name: 'foobar',
@@ -31,9 +31,7 @@ class MutableObject {
     constructor(public val: string) { }
 }
 
-const MUTABLE_COMPONENT = new Component<MutableObject>({
-    name: 'MutableComponent'
-})
+const MUTABLE_COMPONENT = new Component<MutableObject>('MutableComponent');
 
 describe('world', () => {
     let world: World;
@@ -499,19 +497,8 @@ describe('world', () => {
     });
 
     it('does not allow resources to have the same name', () => {
-        const resource1 = new Resource({
-            name: 'TestResource',
-            type: t.string,
-            getDelta: () => { },
-            applyDelta: () => { },
-        });
-
-        const resource2 = new Resource({
-            name: 'TestResource',
-            type: t.string,
-            getDelta: () => { },
-            applyDelta: () => { },
-        });
+        const resource1 = new Resource('TestResource');
+        const resource2 = new Resource('TestResource');
 
         world.resources.set(resource1, 'foobar');
         expect(() => world.resources.set(resource2, 'foobar'))
@@ -519,8 +506,8 @@ describe('world', () => {
     });
 
     it('catches component name conflicts when required by systems', () => {
-        const component1 = new Component<string>({ name: 'TestComponent' });
-        const component2 = new Component<string>({ name: 'TestComponent' });
+        const component1 = new Component<string>('TestComponent');
+        const component2 = new Component<string>('TestComponent');
 
         const testSystem = new System({
             name: 'TestSystem',
@@ -533,8 +520,8 @@ describe('world', () => {
     });
 
     it('catches component name conflicts', () => {
-        const component1 = new Component<string>({ name: 'TestComponent' });
-        const component2 = new Component<string>({ name: 'TestComponent' });
+        const component1 = new Component<string>('TestComponent');
+        const component2 = new Component<string>('TestComponent');
 
         world.addComponent(component1);
 
@@ -543,8 +530,8 @@ describe('world', () => {
     });
 
     xit('catches component name conflicts when adding them to entities', () => {
-        const component1 = new Component<string>({ name: 'TestComponent' });
-        const component2 = new Component<string>({ name: 'TestComponent' });
+        const component1 = new Component<string>('TestComponent');
+        const component2 = new Component<string>('TestComponent');
 
         const uuid = v4();
         world.entities.set(uuid, new EntityBuilder()
@@ -755,9 +742,7 @@ describe('world', () => {
     });
 
     it('supports mutable resources', () => {
-        const MutableResource = new Resource<MutableObject>({
-            name: 'MutableResource',
-        });
+        const MutableResource = new Resource<MutableObject>('MutableResource');
 
         const changeResourceSystem = new System({
             name: 'ChangeResourceSystem',

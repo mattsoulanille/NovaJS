@@ -13,15 +13,9 @@ import { v4 } from "uuid";
 import { World } from "nova_ecs/world";
 import Stats from 'stats.js';
 
-console.log("hello");
-export const Stage = new Resource<PIXI.Container>({
-    name: 'Stage',
-    multiplayer: false,
-});
 
-const SquareGraphics = new Component<PIXI.Graphics>({
-    name: 'SquareGraphics',
-});
+const Stage = new Resource<PIXI.Container>('Stage');
+const SquareGraphics = new Component<PIXI.Graphics>('SquareGraphics');
 
 const SquareGraphicsCleanup = new System({
     name: 'SquareGraphicsCleanup',
@@ -39,7 +33,7 @@ const SquarePhysics = new Component<{
     rotationRate: number,
     life: number,
     createTime: number,
-}>({ name: 'SquarePhysics' })
+}>('SquarePhysics')
 
 const SquareProvider = Provide({
     provided: SquareGraphics,
@@ -124,7 +118,7 @@ const AddSquaresComponent = new Component<{
     speed: number,
     radius: number,
     max: number,
-}>({ name: 'AddSquaresComponent' });
+}>('AddSquaresComponent');
 
 const AddSquares = new System({
     name: 'AddSquares',
@@ -172,7 +166,7 @@ const AddSquares = new System({
     }
 });
 
-const TextComponent = new Component<PIXI.Text>({ name: 'Text' });
+const TextComponent = new Component<PIXI.Text>('Text');
 
 const CountSquares = new System({
     name: 'CountSquares',

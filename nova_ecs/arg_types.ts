@@ -31,9 +31,9 @@ export type EmitFunction = <Data>(event: EcsEvent<Data, any>, data: Data,
 export type EmitSelector<T> = T extends typeof Emit ? EmitFunction : never;
 
 // Types for args that are used to define a system or query. Passed in a tuple.
-export type ArgTypes = Component<any, any, any, any>
+export type ArgTypes = Component<any>
     | Query
-    | Resource<any, any, any, any>
+    | Resource<any>
     | EcsEvent<any, any>
     | typeof Entities
     | typeof Components

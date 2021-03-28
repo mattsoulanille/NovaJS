@@ -58,4 +58,10 @@ describe('Set', () => {
 
         expect(decoded.right).toEqual(input);
     });
+
+    it('returns left if a decode fails', () => {
+        const notASet = { x: 123 };
+        const result = set(t.number).decode(notASet);
+        expect(isLeft(result)).toBeTrue();
+    });
 });
