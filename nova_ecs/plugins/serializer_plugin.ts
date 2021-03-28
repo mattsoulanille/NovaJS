@@ -13,7 +13,6 @@ interface ComponentTypeMap<K extends Component<any, any, any, any>>
     set<Data>(key: Component<Data, any, any, any>, val: t.Type<Data, unknown, unknown>): this;
 }
 
-
 const EntityState = t.intersection([
     t.type({
         components: map(t.string /* Component Name */, t.unknown /* State */),
@@ -30,7 +29,7 @@ export class Serializer {
     readonly componentsByName = new Map<string, UnknownComponent>();
 
     // Capitalized because it's a runtime type.
-    private readonly Entity = new t.Type(
+    readonly Entity = new t.Type(
         'Entity',
         (u): u is Entity => u instanceof Object &&
             (u as Entity).components instanceof Map &&
@@ -107,6 +106,14 @@ export class Serializer {
     }
 }
 
+export type EncodedEntity = ReturnType<Serializer['Entity']['encode']>;
+export const EncodedEntity: t.Type<EncodedEntity> = t.intersection([
+    t.type({
+        components: t.array(t.tuple([t.string, t.unknown])),
+    }), t.partial({
+        name: t.string,
+    })
+]);
 
 export const SerializerResource =
     new Resource<Serializer>({ name: 'SerializerResource' });

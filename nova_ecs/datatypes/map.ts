@@ -17,6 +17,7 @@ export function map<Key, KeyEncode, Value, ValueEncode>(key: t.Type<Key, KeyEnco
             }
             return right(new Map(decoded.right));
         },
-        (a) => [...a].map(([k, v]) => [key.encode(k), value.encode(v)])
+        (a) => [...a].map(([k, v]) =>
+            [key.encode(k), value.encode(v)] as [KeyEncode, ValueEncode])
     )
 }

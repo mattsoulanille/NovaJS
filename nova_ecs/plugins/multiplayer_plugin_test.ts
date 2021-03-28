@@ -8,10 +8,9 @@ import { EntityBuilder } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
 import { applyObjectDelta, getObjectDelta } from './delta';
+import { DeltaResource } from './delta_plugin';
 import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
 
-
-// TODO: Test delta deserialization.
 const BarComponent = new Component({
     name: "Bar",
     type: t.type({ y: t.string }),
@@ -21,12 +20,6 @@ const BarComponent = new Component({
 });
 
 const NonMultiplayer = new Component<{ z: string }>({ name: 'NonMultiplayer' });
-
-function sleep(ms: number) {
-    return new Promise(fulfill => {
-        setTimeout(fulfill, ms);
-    });
-}
 
 class MockCommunicator implements Communicator {
     peers = new BehaviorSubject(new Set<string>());
@@ -86,6 +79,12 @@ describe('Multiplayer Plugin', () => {
 
         world1.addComponent(BarComponent);
         world2.addComponent(BarComponent);
+
+        const world1delta = world1.resources.get(DeltaResource)!;
+        const world2delta = world2.resources.get(DeltaResource)!;
+
+        world1delta.addComponent(BarComponent, { componentType: t.type({ y: t.string }) });
+        world2delta.addComponent(BarComponent, { componentType: t.type({ y: t.string }) });
     });
 
     it('adds the comms component to the singleton entity', () => {

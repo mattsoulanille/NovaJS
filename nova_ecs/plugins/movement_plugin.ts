@@ -1,13 +1,14 @@
-import { Component } from '../component';
-import { System } from '../system';
-import * as t from 'io-ts';
-import { applyObjectDelta, getObjectDelta } from './delta';
-import { Time, TimeResource, TimeSystem } from './time_plugin';
 import { Draft } from 'immer';
-import { VectorType } from '../datatypes/vector';
-import { Position, PositionType } from '../datatypes/position';
+import * as t from 'io-ts';
+import { Component } from '../component';
 import { Angle, AngleType } from '../datatypes/angle';
+import { Position, PositionType } from '../datatypes/position';
+import { VectorType } from '../datatypes/vector';
 import { Plugin } from '../plugin';
+import { System } from '../system';
+import { applyObjectDelta, getObjectDelta } from './delta';
+import { DeltaPlugin, DeltaResource } from './delta_plugin';
+import { Time, TimeResource, TimeSystem } from './time_plugin';
 
 export enum MovementType {
     INERTIAL = 0,
@@ -48,23 +49,7 @@ export type MovementState = t.TypeOf<typeof MovementState>;
 // because we don't want to send predictable deltas, such as when
 // an entity is moving in a straight line. When an unpredictable event happens,
 // such as when a player accelerates, we send the full state.
-export const MovementStateComponent = new Component({
-    name: 'MovementState',
-    type: MovementState,
-    deltaType: MovementState,
-    getDelta(a, b): MovementState | undefined {
-        // Omit position.
-        // Send everything if a delta is detected.
-        const same = a.turning === b.turning &&
-            a.accelerating === b.accelerating;
-
-        if (same) {
-            return;
-        }
-        return b;
-    },
-    applyDelta: applyObjectDelta,
-});
+export const MovementStateComponent = new Component<MovementState>({ name: 'MovementState' })
 
 
 export const MovementSystem = new System({
@@ -148,6 +133,33 @@ function turnToDirection({ state, physics, time }:
 export const MovementPlugin: Plugin = {
     name: 'MovementPlugin',
     build(world) {
+        world.addPlugin(DeltaPlugin);
+        const deltaMaker = world.resources.get(DeltaResource);
+        if (!deltaMaker) {
+            throw new Error('Expected delta maker resource to exist');
+        }
+
+        deltaMaker.addComponent(MovementStateComponent, {
+            componentType: MovementState,
+            deltaType: MovementState,
+            getDelta(a, b): MovementState | undefined {
+                // Omit position.
+                // Send everything if a delta is detected.
+                const same = a.turning === b.turning &&
+                    a.accelerating === b.accelerating;
+
+                if (same) {
+                    return;
+                }
+                return b;
+            },
+            applyDelta: applyObjectDelta,
+        });
+
+        deltaMaker.addComponent(MovementPhysicsComponent, {
+            componentType: MovementPhysics
+        });
+
         world.addComponent(MovementPhysicsComponent);
         world.addComponent(MovementStateComponent);
         world.addSystem(MovementSystem);

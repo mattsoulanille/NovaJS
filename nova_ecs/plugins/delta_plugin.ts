@@ -9,7 +9,7 @@ import { Plugin } from '../plugin';
 import { Resource } from '../resource';
 import { isLeft } from 'fp-ts/lib/Either';
 import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
-import { setDifference } from 'nova_ecs/utils';
+import { setDifference } from '../utils';
 
 
 export interface OptionalComponentDelta<Data, Delta> {
@@ -19,7 +19,7 @@ export interface OptionalComponentDelta<Data, Delta> {
     applyDelta?: (componentData: Data, delta: Delta) => Data | void;
 }
 
-type ComponentDelta<Data, Delta> = {
+export type ComponentDelta<Data, Delta> = {
     [K in keyof OptionalComponentDelta<Data, Delta>]-?:
     OptionalComponentDelta<Data, Delta>[K];
 }
@@ -30,13 +30,13 @@ interface ComponentDeltaMap<K extends Component<any, any, any, any>>
     set<Data>(key: Component<Data, any, any, any>, val: ComponentDelta<Data, any>): this;
 }
 
-const EntityDelta = t.partial({
+export const EntityDelta = t.partial({
     componentStates: map(t.string /* Component Name */, t.unknown /* State */),
     componentDeltas: map(t.string /* Component Name */, t.unknown /* Delta */),
     removeComponents: set(t.string /* Component Name */),
 });
 
-type EntityDelta = t.TypeOf<typeof EntityDelta>;
+export type EntityDelta = t.TypeOf<typeof EntityDelta>;
 
 enablePatches();
 setAutoFreeze(false);

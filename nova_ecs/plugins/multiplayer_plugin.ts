@@ -1,13 +1,10 @@
 import { isLeft } from 'fp-ts/lib/Either';
-import { createDraft, current, Draft, finishDraft, isDraft, original } from 'immer';
-import { Objectish } from 'immer/dist/internal';
 import * as t from 'io-ts';
 import { BehaviorSubject, Observable } from 'rxjs';
-import { Components, Emit, Entities, GetEntity, UUID } from '../arg_types';
+import { Emit, Entities, GetEntity, UUID } from '../arg_types';
 import { Component } from '../component';
 import { map } from '../datatypes/map';
 import { set } from '../datatypes/set';
-import { Entity, EntityBuilder } from '../entity';
 import { EcsEvent } from '../events';
 import { Plugin } from '../plugin';
 import { Query } from '../query';
@@ -15,6 +12,8 @@ import { Resource } from '../resource';
 import { System } from '../system';
 import { setDifference } from '../utils';
 import { SingletonComponent, World } from '../world';
+import { DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
+import { EncodedEntity, SerializerResource } from './serializer_plugin';
 
 export interface Communicator {
     uuid: string | undefined;
@@ -23,19 +22,11 @@ export interface Communicator {
     sendMessage(message: unknown, destination?: string): void;
 }
 
-const EntityState = t.type({
-    state: map(t.string /* Component Name */, t.unknown /* State */),
-    owner: t.string,
-})
-type EntityState = t.TypeOf<typeof EntityState>;
-const EntityDelta = map(t.string /* Component Name */, t.unknown /* Delta */);
-type EntityDelta = t.TypeOf<typeof EntityDelta>;
-
 export const Message = t.intersection([t.type({
     source: t.string, // UUID of the client or server the message came from.
 }), t.partial({
     delta: map(t.string /* Entity UUID */, EntityDelta),
-    state: map(t.string /* Entity UUID */, EntityState),
+    state: map(t.string /* Entity UUID */, EncodedEntity),
     requestState: t.type({
         uuids: set(t.string),
         invert: t.boolean,
@@ -56,12 +47,7 @@ export interface PeersState {
 export const PeersFromCommunicator = new EcsEvent<Set<string>>();
 export const PeersEvent = new EcsEvent<PeersState>({ name: 'PeersEvent' });
 
-export const MultiplayerData = new Component({
-    name: 'MultiplayerData',
-    type: t.type({
-        owner: t.string,
-    }),
-});
+export const MultiplayerData = new Component<{ owner: string }>({ name: 'MultiplayerData' });
 
 export const Comms = new Component<{
     ownedUuids: Set<string>,
@@ -72,28 +58,6 @@ export const Comms = new Component<{
     messages: Message[],
     initialStateRequested: boolean,
 }>({ name: 'Comms' });
-
-
-function getEntityState(entity: Entity) {
-    const multiplayerData = entity.components.get(MultiplayerData);
-    if (!multiplayerData) {
-        throw new Error('Expected entity to have multiplayer data');
-    }
-    const componentStates: EntityState['state'] = new Map();
-    for (const [component, componentData] of entity.components) {
-        if (component.type) {
-            // The component data is likely a draft, but might not be
-            // if it was added this step.
-            const currentData = isDraft(componentData)
-                ? current(componentData)
-                : componentData;
-
-            componentStates.set(component.name,
-                component.type.encode(currentData));
-        }
-    }
-    return componentStates;
-}
 
 const PeersResource = new Resource<{ peers: Set<string> }>({ name: 'PeersResource' });
 
@@ -134,8 +98,9 @@ export function multiplayer(communicator: Communicator,
 
     const multiplayerSystem = new System({
         name: 'Multiplayer',
-        args: [MultiplayerQuery, Entities, Components, Comms] as const,
-        step: (query, entities, components, comms) => {
+        args: [MultiplayerQuery, Entities, Comms,
+            DeltaResource, SerializerResource] as const,
+        step: (query, entities, comms, deltaMaker, serializer) => {
             comms.uuid = communicator.uuid;
             if (!comms.uuid) {
                 // Can't do anything if we don't have a uuid.
@@ -193,21 +158,18 @@ export function multiplayer(communicator: Communicator,
                             uuid => entityUuids.has(uuid));
                     }
 
-                    sendMessage({
-                        source: comms.uuid,
-                        state: new Map([...uuidsToSend].map(entityUuid => {
-                            const entry = entityMap.get(entityUuid);
-                            if (!entry) {
-                                throw new Error(`Expected entity ${entityUuid} to exist`);
-                            }
-                            const { entity, data } = entry;
+                    const state = new Map(uuidsToSend.map(entityUuid => {
+                        const entry = entityMap.get(entityUuid);
+                        if (!entry) {
+                            // They have already been filtered above, so this would
+                            // be an error.
+                            throw new Error(`Expected entity ${entityUuid} to exist`);
+                        }
+                        const { entity } = entry;
+                        return [entityUuid, serializer.encode(entity)]
+                    }));
 
-                            return [entityUuid, {
-                                owner: data.owner,
-                                state: getEntityState(entity)
-                            }]
-                        }))
-                    }, message.source);
+                    sendMessage({ source: comms.uuid, state }, message.source);
                 }
 
                 // Remove entities
@@ -225,46 +187,33 @@ export function multiplayer(communicator: Communicator,
                 }
 
                 // Add new entities
-                for (const [uuid, entityState] of message.state ?? []) {
+                for (const [uuid, encodedEntity] of message.state ?? []) {
+                    const maybeEntity = serializer.deocde(encodedEntity);
+                    if (isLeft(maybeEntity)) {
+                        warn(`Failed to decode entity: ${maybeEntity.left}`);
+                        continue;
+                    }
+                    const entity = maybeEntity.right;
+
+                    const multiplayerData = entity.components.get(MultiplayerData);
+                    if (!multiplayerData) {
+                        warn(`New entity '${uuid}' missing MultiplayerData`);
+                        continue;
+                    }
                     if (entityMap.has(uuid)
                         && entityMap.get(uuid)?.data.owner !== message.source
                         && !peerIsAdmin) {
-                        debugger;
                         warn(`'${message.source}' tried to replace existing entity '${uuid}'`);
                         continue;
                     }
 
-                    const entity = new EntityBuilder();
-                    for (const [componentName, maybeState] of entityState.state) {
-                        const component = components.get(componentName);
-                        if (!component) {
-                            warn(`New entity ${uuid} uses unknown component ${componentName}`);
-                            continue;
-                        }
-                        if (!component.type) {
-                            warn(`Component ${component.name} has no type and can not be created`);
-                            continue;
-                        }
-
-                        // To generalize this to non fp-ts data, have components provide
-                        // 'serialize' and 'deserialize' methods.
-                        const state = component.type.decode(maybeState);
-                        if (isLeft(state)) {
-                            warn(state.left.map(s => s.message).join('\n'));
-                            continue;
-                        }
-                        entity.addComponent(component, state.right);
-                    }
-                    const multiplayerData = {
-                        owner: entityState.owner,
-                    };
-                    entity.addComponent(MultiplayerData, multiplayerData);
-                    entities.set(uuid, entity.build());
-                    const handle = entities.get(uuid)!;
-                    added.set(uuid, entityState.owner);
+                    entities.set(uuid, entity);
+                    added.set(uuid, multiplayerData.owner);
                     removed.delete(uuid);
+
                     // Add the newly added entity to the entityMap so we don't
                     // accidentally request its state in `apply deltas`.
+                    const handle = entities.get(uuid)!;
                     entityMap.set(uuid, { entity: handle, data: multiplayerData });
                 }
 
@@ -286,36 +235,10 @@ export function multiplayer(communicator: Communicator,
                         continue;
                     }
 
-                    for (const [componentName, componentDelta] of entityDelta) {
-                        const component = components.get(componentName);
-                        if (!component) {
-                            warn(`No such component ${componentName}`);
-                            continue;
-                        }
-                        const componentData = entity.components.get<unknown>(component);
-                        if (!componentData) {
-                            warn(`Entity ${uuid} does not have component ${component.name}`);
-                            fullStateRequests.add(uuid);
-                            continue;
-                        }
-                        if (!component.applyDelta) {
-                            warn(`Component ${component.name} has no applyDelta function`);
-                            continue;
-                        }
-                        if (!component.deltaType) {
-                            warn(`Component ${component.name} has no deltaType for decoding`);
-                            continue;
-                        }
-
-                        const maybeDelta = component.deltaType.decode(componentDelta);
-                        if (isLeft(maybeDelta)) {
-                            warn(`Component ${component.name} delta failed to decode`);
-                            continue;
-                        }
-                        component.applyDelta(componentData, maybeDelta.right);
-                    }
+                    deltaMaker.applyDelta(entity, entityDelta);
                 }
             }
+            // Reset messages since they've been processed.
             comms.messages = [];
 
             if (fullStateRequests.size > 0) {
@@ -328,16 +251,6 @@ export function multiplayer(communicator: Communicator,
                     }
                 }, randomAdmin());
             }
-
-            const changes: Message = {
-                source: comms.uuid,
-                delta: new Map(),
-                state: new Map(),
-                remove: [],
-                ownedUuids: [],
-            };
-
-
             const currentOwners = new Map([...entityMap].map(([uuid, val]) =>
                 [uuid, val.data.owner]));
             const entityOwners = new Map([
@@ -358,8 +271,10 @@ export function multiplayer(communicator: Communicator,
                 ...added,
             ]);
 
-            new Set([...entityUuids, ...added]);
-            changes.remove = [...removedEntities].filter(entityUuid =>
+            const delta = new Map<string, EntityDelta>();
+            const state = new Map<string, EncodedEntity>();
+            let ownedUuids: string[] = [];
+            const remove = [...removedEntities].filter(entityUuid =>
                 entityOwners.get(entityUuid) === comms.uuid || isAdmin);
 
             // Send states for new entities
@@ -368,66 +283,45 @@ export function multiplayer(communicator: Communicator,
                 if (!val) {
                     throw new Error(`Expected to have entity ${uuid}`);
                 }
-                const { entity, data } = val;
+                const { entity } = val;
 
-                changes.state?.set(uuid, {
-                    owner: data.owner,
-                    state: getEntityState(entity)
-                });
+                state.set(uuid, serializer.encode(entity));
             }
 
             // Get deltas and create drafts 
-            const newStates = new Set(changes.state?.keys());
             for (const [uuid, entity, multiplayerData] of query) {
                 if (multiplayerData.owner !== comms.uuid) {
                     continue;
                 }
-                const entityDelta: EntityDelta = new Map(); // Serialized changes to an entity
-                for (const [component, data] of entity.components) {
-                    if (component.getDelta && component.deltaType) {
-                        // The new draft to be used in place of the component's data.
-                        // For tracking changes between runs of this system.
-                        // TODO: Remove draftedness when losing ownership.
-                        let newDraft: Draft<unknown>;
-                        if (isDraft(data)) {
-                            // If it's not a draft, there's no delta.
-                            const originalData = original(data);
-                            const currentData = finishDraft(data);
-                            newDraft = createDraft(currentData as Objectish);
-                            // Don't send a delta if we're sending a state.
-                            if (!newStates.has(uuid)) {
-                                const delta = component.getDelta(originalData, currentData);
-                                if (delta) {
-                                    entityDelta.set(component.name,
-                                        component.deltaType.encode(delta));
-                                }
-                            }
-
-                        } else {
-                            newDraft = createDraft(data as Objectish);
-                        }
-                        entity.components.set(component, newDraft);
-                    }
-                }
-                if (entityDelta.size > 0) {
-                    changes.delta?.set(uuid, entityDelta);
+                const entityDelta = deltaMaker.getDelta(entity);
+                if (entityDelta) {
+                    delta.set(uuid, entityDelta);
                 }
             }
 
-            if (changes.delta?.size === 0) {
-                delete changes.delta;
+            const changes: Message = {
+                source: comms.uuid,
+            };
+
+            let send = false;
+            if (delta.size > 0) {
+                changes.delta = delta;
+                send = true;
             }
-            if (changes.state?.size === 0) {
-                delete changes.state;
+            if (state.size > 0) {
+                changes.state = state;
+                send = true;
             }
-            if (changes.remove?.length === 0) {
-                delete changes.remove;
+            if (remove.length > 0) {
+                changes.remove = remove;
+                send = true;
             }
-            if (changes.ownedUuids?.length === 0) {
-                delete changes.ownedUuids;
+            if (ownedUuids.length > 0) {
+                changes.ownedUuids = ownedUuids;
+                send = true;
             }
 
-            if (Object.keys(changes).length > 1) {
+            if (send) {
                 // Only send if there's something to send.
                 sendMessage(changes);
             }
@@ -435,6 +329,18 @@ export function multiplayer(communicator: Communicator,
     });
 
     function build(world: World) {
+        world.addPlugin(DeltaPlugin);
+        const deltaMaker = world.resources.get(DeltaResource);
+        if (!deltaMaker) {
+            throw new Error('Expected delta maker resource to exist');
+        }
+
+        deltaMaker.addComponent(MultiplayerData, {
+            componentType: t.type({
+                owner: t.string,
+            })
+        });
+
         world.addSystem(multiplayerSystem);
         world.addSystem(MessageSystem);
         world.resources.set(PeersResource, { peers: new Set<string>() });
@@ -464,3 +370,4 @@ export function multiplayer(communicator: Communicator,
         build
     }
 }
+
