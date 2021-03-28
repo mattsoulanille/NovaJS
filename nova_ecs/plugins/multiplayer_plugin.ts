@@ -45,7 +45,7 @@ export interface PeersState {
 };
 
 export const PeersFromCommunicator = new EcsEvent<Set<string>>();
-export const PeersEvent = new EcsEvent<PeersState>({ name: 'PeersEvent' });
+export const PeersEvent = new EcsEvent<PeersState>('PeersEvent');
 
 export const MultiplayerData = new Component<{ owner: string }>('MultiplayerData');
 
@@ -77,7 +77,7 @@ const PeersSystem = new System({
     }
 });
 
-export const MultiplayerMessageEvent = new EcsEvent<unknown>({ name: 'MultiplayerMessageEvent' });
+export const MultiplayerMessageEvent = new EcsEvent<unknown>('MultiplayerMessageEvent');
 const MessageSystem = new System({
     name: 'MessageSystem',
     events: [MultiplayerMessageEvent],

@@ -9,14 +9,13 @@ export class EcsEvent<Data, DataSerialized = Data> {
     readonly name?: string;
     readonly type?: t.Type<Data, DataSerialized>;
 
-    constructor(args?: { name?: string, type?: t.Type<Data, DataSerialized> }) {
-        this.name = args?.name;
-        this.type = args?.type;
+    constructor(name?: string) {
+        this.name = name;
     }
 }
 
-export const StepEvent = new EcsEvent<undefined>({ name: 'step' });
-export const DeleteEvent = new EcsEvent<undefined>({ name: 'delete' });
+export const StepEvent = new EcsEvent<undefined>('step');
+export const DeleteEvent = new EcsEvent<undefined>('delete');
 
 export type EventData<E> = E extends EcsEvent<infer Data, any> ? Data : never;
 
