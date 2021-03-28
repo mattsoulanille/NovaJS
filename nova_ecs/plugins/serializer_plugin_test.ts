@@ -1,12 +1,11 @@
-import 'jasmine';
+import { isLeft } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
-import { System } from '../system';
+import 'jasmine';
+import { EntityBuilder } from 'nova_ecs/entity';
+import { Component } from '../component';
+import { set } from '../datatypes/set';
 import { World } from '../world';
 import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
-import { Component } from '../component';
-import { EntityBuilder } from 'nova_ecs/entity';
-import { isLeft } from 'fp-ts/lib/Either';
-import { set } from '../datatypes/set';
 
 
 const FooComponent = new Component<{ x: number }>({ name: 'Foo' });
@@ -89,5 +88,19 @@ describe('Serializer Plugin', () => {
         }
 
         expect(decoded.right).toEqual(expectedEntity);
+    });
+
+    it('allows serializing individual components', () => {
+        const encoded = serializer.componentTypes.get(FooComponent)?.encode({ x: 123 });
+        const decoded = serializer.componentTypes.get(FooComponent)?.decode(encoded);
+        if (!decoded) {
+            fail('expected decoded to be defined');
+            return;
+        }
+        if (isLeft(decoded)) {
+            fail('expect decoded to decode correctly');
+            return;
+        }
+        expect(decoded.right).toEqual({ x: 123 });
     });
 });

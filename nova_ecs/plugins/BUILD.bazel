@@ -13,6 +13,7 @@ ts_library(
         "movement_plugin.ts",
         "serializer_plugin.ts",
         "delta.ts",
+        "delta_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -31,6 +32,7 @@ ts_library(
         "multiplayer_plugin_test.ts",
         "movement_plugin_test.ts",
         "serializer_plugin_test.ts",
+        "delta_plugin_test.ts",
     ],
     deps = [
         ":plugins",

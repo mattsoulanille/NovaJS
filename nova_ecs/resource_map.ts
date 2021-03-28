@@ -8,6 +8,7 @@ export interface ReadonlyResourceMap extends ReadonlyMap<UnknownResource, unknow
 export interface ResourceMap extends Map<UnknownResource, unknown> {
     get<Data>(resource: Resource<Data, any, any, any>): Data | undefined;
     set<Data>(resource: Resource<Data, any, any, any>, data: Data): this;
+    has<Data>(resource: Resource<Data, any, any, any>): boolean;
     delete(resource: Resource<any, any, any, any>): boolean;
 }
 
@@ -19,4 +20,7 @@ export class ResourceMapWrapped extends EventMap<UnknownResource, unknown> imple
         super.set(resource as UnknownResource, data);
         return this;
     };
+    has<Data>(resource: Resource<Data, any, any, any>): boolean {
+        return super.has(resource as UnknownResource);
+    }
 }

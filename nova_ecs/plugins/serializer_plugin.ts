@@ -26,8 +26,8 @@ const EntityState = t.intersection([
 type EntityState = t.TypeOf<typeof EntityState>;
 
 export class Serializer {
-    private readonly componentTypes: ComponentTypeMap<UnknownComponent> = new Map();
-    private readonly componentsByName = new Map<string, UnknownComponent>();
+    readonly componentTypes: ComponentTypeMap<UnknownComponent> = new Map();
+    readonly componentsByName = new Map<string, UnknownComponent>();
 
     // Capitalized because it's a runtime type.
     private readonly Entity = new t.Type(
@@ -115,6 +115,8 @@ export const SerializerResource =
 export const SerializerPlugin: Plugin = {
     name: 'Serializer',
     build(world) {
-        world.resources.set(SerializerResource, new Serializer());
+        if (!world.resources.has(SerializerResource)) {
+            world.resources.set(SerializerResource, new Serializer());
+        }
     }
 }
