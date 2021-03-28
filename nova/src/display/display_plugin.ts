@@ -49,11 +49,21 @@ const AnimationGraphicCleanup = new System({
     }
 });
 
-
 const ShipDrawSystem = new System({
     name: "ShipDrawSystem",
     args: [MovementStateComponent, AnimationGraphicProvider] as const,
     step: (movementState, graphic) => {
+        if (movementState.turning < 0) {
+            graphic.setFramesToUse('left');
+        } else if (movementState.turning > 0) {
+            graphic.setFramesToUse('right');
+        } else {
+            graphic.setFramesToUse('normal');
+        }
+
+        graphic.glowAlpha = movementState.accelerating *
+            (1 - (Math.random() * 0.2));
+
         graphic.container.position.x = movementState.position.x;
         graphic.container.position.y = movementState.position.y;
         graphic.rotation = movementState.rotation.angle;
