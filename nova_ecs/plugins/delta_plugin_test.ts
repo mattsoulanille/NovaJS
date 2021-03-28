@@ -9,12 +9,12 @@ import { System } from '../system';
 import { World } from '../world';
 import { DeltaMaker, DeltaPlugin, DeltaResource, OptionalComponentDelta } from './delta_plugin';
 
-const FooComponent = new Component<{ x: number }>({ name: 'Foo' });
+const FooComponent = new Component<{ x: number }>('Foo');
 const FooType = t.type({ x: t.number });
-const BarComponent = new Component<{ y: string }>({ name: 'Bar' });
+const BarComponent = new Component<{ y: string }>('Bar');
 const BarType = t.type({ y: t.string });
 
-const SetComponent = new Component<{ s: Set<string> }>({ name: 'Set' });
+const SetComponent = new Component<{ s: Set<string> }>('Set');
 const SetType = t.type({ s: set(t.string) });
 
 const FooDelta: OptionalComponentDelta<{ x: number }, number> = {

@@ -11,15 +11,8 @@ import { applyObjectDelta, getObjectDelta } from './delta';
 import { DeltaResource } from './delta_plugin';
 import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
 
-const BarComponent = new Component({
-    name: "Bar",
-    type: t.type({ y: t.string }),
-    deltaType: t.partial({ y: t.string }),
-    getDelta: getObjectDelta,
-    applyDelta: applyObjectDelta
-});
-
-const NonMultiplayer = new Component<{ z: string }>({ name: 'NonMultiplayer' });
+const BarComponent = new Component<{ y: string }>("Bar");
+const NonMultiplayer = new Component<{ z: string }>('NonMultiplayer');
 
 class MockCommunicator implements Communicator {
     peers = new BehaviorSubject(new Set<string>());

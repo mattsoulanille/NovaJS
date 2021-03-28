@@ -9,9 +9,9 @@ export const ShipType = t.type({
 });
 export type ShipType = t.TypeOf<typeof ShipType>;
 
-export const ShipComponent = new Component<ShipType>({ name: 'Ship' });
+export const ShipComponent = new Component<ShipType>('Ship');
 
-export const ShipDataComponent = new Component<ShipData>({ name: 'ShipData' });
+export const ShipDataComponent = new Component<ShipData>('ShipData');
 
 export const ShipDataProvider = ProvideAsync({
     provided: ShipDataComponent,

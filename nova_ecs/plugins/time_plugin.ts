@@ -1,7 +1,7 @@
-import { Component } from '../component';
 import { Resource } from '../resource';
 import { System } from '../system';
 import { Plugin } from '../plugin';
+import { SingletonComponent } from 'nova_ecs/world';
 
 
 export interface Time {
@@ -11,19 +11,11 @@ export interface Time {
     delta_ms: number,
 }
 
-export const TimeResource = new Resource<Time>({
-    name: 'time',
-    multiplayer: false,
-});
+export const TimeResource = new Resource<Time>('time');
 
-const TimeSingleton = new Component<undefined>({
-    name: 'singleton',
-});
-
-// Should be a singleton system.
 export const TimeSystem = new System({
     name: 'time',
-    args: [TimeResource, TimeSingleton] as const,
+    args: [TimeResource, SingletonComponent] as const,
     step: (time) => {
         // TODO: performance.now for node?
         const now = new Date().getTime();
@@ -33,13 +25,11 @@ export const TimeSystem = new System({
     }
 });
 
-
 export const TimePlugin: Plugin = {
     name: 'time',
     build: (world) => {
         world.resources.set(TimeResource,
             { delta_ms: 0, delta_s: 0, time: new Date().getTime() });
         world.addSystem(TimeSystem);
-        world.singletonEntity.components.set(TimeSingleton, undefined);
     }
 }

@@ -6,7 +6,7 @@ import { Position, PositionType } from '../datatypes/position';
 import { VectorType } from '../datatypes/vector';
 import { Plugin } from '../plugin';
 import { System } from '../system';
-import { applyObjectDelta, getObjectDelta } from './delta';
+import { applyObjectDelta } from './delta';
 import { DeltaPlugin, DeltaResource } from './delta_plugin';
 import { Time, TimeResource, TimeSystem } from './time_plugin';
 
@@ -27,12 +27,7 @@ export const MovementPhysics = t.type({
 });
 export type MovementPhysics = t.TypeOf<typeof MovementPhysics>;
 
-export const MovementPhysicsComponent = new Component({
-    name: 'MovementPhysics',
-    type: MovementPhysics,
-    getDelta: getObjectDelta,
-    applyDelta: applyObjectDelta
-});
+export const MovementPhysicsComponent = new Component<MovementPhysics>('MovementPhysics');
 
 export const MovementState = t.type({
     position: PositionType,
@@ -49,7 +44,7 @@ export type MovementState = t.TypeOf<typeof MovementState>;
 // because we don't want to send predictable deltas, such as when
 // an entity is moving in a straight line. When an unpredictable event happens,
 // such as when a player accelerates, we send the full state.
-export const MovementStateComponent = new Component<MovementState>({ name: 'MovementState' })
+export const MovementStateComponent = new Component<MovementState>('MovementState');
 
 
 export const MovementSystem = new System({

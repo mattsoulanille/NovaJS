@@ -47,7 +47,7 @@ export interface PeersState {
 export const PeersFromCommunicator = new EcsEvent<Set<string>>();
 export const PeersEvent = new EcsEvent<PeersState>({ name: 'PeersEvent' });
 
-export const MultiplayerData = new Component<{ owner: string }>({ name: 'MultiplayerData' });
+export const MultiplayerData = new Component<{ owner: string }>('MultiplayerData');
 
 export const Comms = new Component<{
     ownedUuids: Set<string>,
@@ -57,9 +57,9 @@ export const Comms = new Component<{
     lastEntities: Map<string, string>, // entity, owner
     messages: Message[],
     initialStateRequested: boolean,
-}>({ name: 'Comms' });
+}>('Comms');
 
-const PeersResource = new Resource<{ peers: Set<string> }>({ name: 'PeersResource' });
+const PeersResource = new Resource<{ peers: Set<string> }>('PeersResource');
 
 const PeersSystem = new System({
     name: 'PeersSystem',

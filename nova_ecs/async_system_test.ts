@@ -17,19 +17,15 @@ async function sleep(ms: number) {
     });
 }
 
-const FOO_COMPONENT = new Component<{
-    x: number;
-}>({ name: 'foo' })
+const FOO_COMPONENT = new Component<{ x: number }>('foo');
 
-const BAR_COMPONENT = new Component<{
-    y: string;
-}>({ name: 'bar' });
+const BAR_COMPONENT = new Component<{ y: string }>('bar');
 
 const MovementComponent = new Component<{
     position: Vector,
     velocity: Vector,
     rotation: Angle,
-}>({ name: 'movement' });
+}>('movement');
 
 describe('async system', () => {
     let world: World;
@@ -170,9 +166,7 @@ describe('async system', () => {
         const movable = new EntityBuilder()
             .addComponent(MovementComponent, expectedMovementComponent);
 
-        const addedMovement = new Component<{
-            added: boolean
-        }>({ name: 'added' });
+        const addedMovement = new Component<{ added: boolean }>('added');
 
         const addMovableSystem = new AsyncSystem({
             name: 'addMovable',

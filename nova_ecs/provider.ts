@@ -24,12 +24,9 @@ export class AsyncProviderData {
     done: Promise<void> = Promise.resolve();
 }
 
-export const AsyncProviderResource = new Resource<AsyncProviderData>({
-    name: 'AsyncProviderResource',
-    multiplayer: false,
-});
+export const AsyncProviderResource = new Resource<AsyncProviderData>('AsyncProviderResource')
 
-export function Provide<Provided extends Component<any, any, any, any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
+export function Provide<Provided extends Component<any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
     provided: Provided,
     factory: (...args: ArgsToData<Args>) => ComponentData<Provided>,
     args: Args
@@ -53,7 +50,7 @@ enableMapSet();
 setAutoFreeze(false);
 
 // TODO: Refactor this with AsyncSystem?
-export function ProvideAsync<Provided extends Component<any, any, any, any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
+export function ProvideAsync<Provided extends Component<any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
     provided: Provided,
     factory: (...args: ArgsToData<Args>) => Promise<ComponentData<Provided>>,
     args: Args

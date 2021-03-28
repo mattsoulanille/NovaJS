@@ -2,7 +2,6 @@ import 'jasmine';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
 import { AsyncProviderResource, Provide, ProvideAsync } from './provider';
-import { Resource } from './resource';
 import { System } from './system';
 import { World } from './world';
 
@@ -13,9 +12,8 @@ function sleep(ms: number) {
     });
 }
 
-const FOO_COMPONENT = new Component<{ x: number }>({ name: 'foo' });
-const BAR_COMPONENT = new Component<{ y: string }>({ name: 'bar' });
-const BAZ_RESOURCE = new Resource<{ z: string[] }>({ name: 'baz' });
+const FOO_COMPONENT = new Component<{ x: number }>('foo');
+const BAR_COMPONENT = new Component<{ y: string }>('bar');
 
 describe('provider', () => {
     let clock: jasmine.Clock;

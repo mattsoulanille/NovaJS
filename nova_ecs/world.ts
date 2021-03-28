@@ -52,7 +52,7 @@ import { topologicalSort } from './utils';
 // Idea: Load async stuff by adding components to the entity as the data becomes
 // available?
 
-export const SingletonComponent = new Component<undefined>({ name: 'SingletonComponent' });
+export const SingletonComponent = new Component<undefined>('SingletonComponent');
 
 interface EcsEventWithEntities<Data> {
     event: EcsEvent<Data, any>;
@@ -120,7 +120,7 @@ export class World {
         plugin.build(this);
     }
 
-    addResource(resource: Resource<any, any, any, any>) {
+    addResource(resource: Resource<any>) {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
@@ -183,7 +183,7 @@ export class World {
         return this;
     }
 
-    addComponent(component: Component<any, any, any, any>) {
+    addComponent(component: Component<any>) {
         // Adds a component to the map of known components. Does not add to an entity.
         // Necessary for multiplayer to create entities with components that haven't
         // been used yet.

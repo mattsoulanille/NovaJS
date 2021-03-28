@@ -8,12 +8,12 @@ import { World } from '../world';
 import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
 
 
-const FooComponent = new Component<{ x: number }>({ name: 'Foo' });
+const FooComponent = new Component<{ x: number }>('Foo');
 const FooType = t.type({ x: t.number });
-const BarComponent = new Component<{ y: string }>({ name: 'Bar' });
+const BarComponent = new Component<{ y: string }>('Bar');
 const BarType = t.type({ y: t.string });
 
-const SetComponent = new Component<{ s: Set<string> }>({ name: 'Set' });
+const SetComponent = new Component<{ s: Set<string> }>('Set');
 const SetType = t.type({ s: set(t.string) });
 
 
@@ -69,7 +69,7 @@ describe('Serializer Plugin', () => {
     });
 
     it('does not include components with no serializer', () => {
-        const BazComponent = new Component<{ z: number[] }>({ name: 'Baz' });
+        const BazComponent = new Component<{ z: number[] }>('Baz');
         const expectedEntity = new EntityBuilder()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })

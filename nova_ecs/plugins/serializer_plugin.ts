@@ -7,10 +7,10 @@ import { Entity } from '../entity';
 import { Plugin } from '../plugin';
 import { Resource } from '../resource';
 
-interface ComponentTypeMap<K extends Component<any, any, any, any>>
+interface ComponentTypeMap<K extends Component<any>>
     extends Map<K, t.Type<ComponentData<K>, unknown, unknown>> {
-    get<Data>(key: Component<Data, any, any, any>): t.Type<Data, unknown, unknown> | undefined;
-    set<Data>(key: Component<Data, any, any, any>, val: t.Type<Data, unknown, unknown>): this;
+    get<Data>(key: Component<Data>): t.Type<Data, unknown, unknown> | undefined;
+    set<Data>(key: Component<Data>, val: t.Type<Data, unknown, unknown>): this;
 }
 
 const EntityState = t.intersection([
@@ -91,7 +91,7 @@ export class Serializer {
         }
     )
 
-    addComponent<Data>(component: Component<Data, any, any, any>,
+    addComponent<Data>(component: Component<Data>,
         componentType: t.Type<Data, unknown, unknown>) {
         this.componentsByName.set(component.name, component as UnknownComponent);
         this.componentTypes.set(component, componentType);
@@ -116,7 +116,7 @@ export const EncodedEntity: t.Type<EncodedEntity> = t.intersection([
 ]);
 
 export const SerializerResource =
-    new Resource<Serializer>({ name: 'SerializerResource' });
+    new Resource<Serializer>('SerializerResource');
 
 
 export const SerializerPlugin: Plugin = {

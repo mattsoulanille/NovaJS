@@ -24,10 +24,10 @@ export type ComponentDelta<Data, Delta> = {
     OptionalComponentDelta<Data, Delta>[K];
 }
 
-interface ComponentDeltaMap<K extends Component<any, any, any, any>>
+interface ComponentDeltaMap<K extends Component<any>>
     extends Map<K, ComponentDelta<unknown, unknown>> {
-    get<Data>(key: Component<Data, any, any, any>): ComponentDelta<Data, unknown> | undefined;
-    set<Data>(key: Component<Data, any, any, any>, val: ComponentDelta<Data, any>): this;
+    get<Data>(key: Component<Data>): ComponentDelta<Data, unknown> | undefined;
+    set<Data>(key: Component<Data>, val: ComponentDelta<Data, any>): this;
 }
 
 export const EntityDelta = t.partial({
@@ -43,14 +43,14 @@ setAutoFreeze(false);
 
 const DeltaComponent = new Component<{
     components: Set<UnknownComponent>,
-}>({ name: 'DeltaComponent' });
+}>('DeltaComponent');
 
 export class DeltaMaker {
     readonly componentDeltas: ComponentDeltaMap<UnknownComponent> = new Map();
 
     constructor(private serializer: Serializer) { }
 
-    addComponent<Data, Delta>(component: Component<Data, any, any, any>,
+    addComponent<Data, Delta>(component: Component<Data>,
         componentDelta: OptionalComponentDelta<Data, Delta>) {
         this.serializer.addComponent(component, componentDelta.componentType);
         this.componentDeltas.set(component, {
@@ -237,7 +237,7 @@ export class DeltaMaker {
 }
 
 export const DeltaResource =
-    new Resource<DeltaMaker>({ name: 'DeltaResource' });
+    new Resource<DeltaMaker>('DeltaResource');
 
 export const DeltaPlugin: Plugin = {
     name: 'Delta',
