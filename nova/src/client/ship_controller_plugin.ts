@@ -26,7 +26,7 @@ const keyMap = new Map([
 ]);
 
 // Used to mark the single ship that's under control.
-const ShipControlSelector = new Component<undefined>('ShipControl');
+export const ShipControlSelector = new Component<undefined>('ShipControl');
 
 type ControlState = Map<ControlAction, boolean>;
 
@@ -91,7 +91,6 @@ const ControlPlayerShip = new System({
         movementState.turnBack = Boolean(controlState.get(ControlAction.reverse));
     }
 });
-
 
 export const ShipController: Plugin = {
     name: 'ShipController',
