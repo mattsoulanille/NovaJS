@@ -48,6 +48,7 @@
     },
     "scripts": {
         "build": "bazelisk build //...",
+        "build-docker": "bazelisk build nova:nova_image.tar",
         "test": "bazelisk test //...",
         "test-watch": "ibazel test //...",
         "test-only": "ibazel test",

@@ -3,6 +3,7 @@ package(default_visibility = ["//visibility:public"])
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@io_bazel_rules_docker//nodejs:image.bzl", "nodejs_image")
+load("@io_bazel_rules_docker//container:container.bzl", "container_image")
 load("@npm//@bazel/esbuild:index.bzl", "esbuild")
 
 # WARNING: Using directory labels here. That means bazel can't
@@ -83,9 +84,17 @@ nodejs_binary(
     data = data,
 )
 
+container_image(
+    name = "port_image",
+    base = "@nodejs_image_base//image",
+    ports = ["8000"],
+    stamp = True,
+)
+
 nodejs_image(
     name = "nova_image",
     entry_point = "server_bundle.ts",
     # npm deps will be put into their own layer
     data = data,
+    base = ":port_image",
 )
