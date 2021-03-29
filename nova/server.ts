@@ -21,7 +21,9 @@ type Settings = {
     relativeDataPath: string,
 }
 
-const serverSettingsPath = require.resolve("novajs/nova/settings/server.json");
+const runfiles = require(process.env.BAZEL_NODE_RUNFILES_HELPER!) as { resolve: (path: string) => string };
+
+const serverSettingsPath = runfiles.resolve("novajs/nova/settings/server.json");
 const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as Settings;
 
 // For production, replace these with real https keys
@@ -43,10 +45,10 @@ const filesystemData = new FilesystemData(filesystemDataPath);
 
 const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 
-const htmlPath = require.resolve("novajs/nova/src/index.html");
-const bundlePath = require.resolve("novajs/nova/src/browser_bundle.js");
-const bundleMapPath = require.resolve("novajs/nova/src/browser_bundle.js.map");
-const clientSettingsPath = require.resolve("novajs/nova/settings/controls.json");
+const htmlPath = runfiles.resolve("novajs/nova/src/index.html");
+const bundlePath = runfiles.resolve("novajs/nova/src/browser_bundle.js");
+const bundleMapPath = runfiles.resolve("novajs/nova/src/browser_bundle.js.map");
+const clientSettingsPath = runfiles.resolve("novajs/nova/settings/controls.json");
 setupRoutes(gameData, app, htmlPath, bundlePath, bundleMapPath, clientSettingsPath);
 
 const channel = new SocketChannelServer({ server: httpServer });
