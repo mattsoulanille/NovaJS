@@ -2,6 +2,7 @@ package(default_visibility = ["//visibility:public"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@io_bazel_rules_docker//nodejs:image.bzl", "nodejs_image")
 
 
 # WARNING: Using directory labels here. That means bazel can't
@@ -60,8 +61,30 @@ nodejs_binary(
         "//nova/src:static_files",
         "//nova/src:browser_bundle",
         #"//nova/src/engine",
-        # TODO: Understand why you need to include the
-        # compiled libraries in 'data'
+        # "//nova/src/proto:protobufjs_bundle",
+        # "@npm//protobufjs",
+        #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
+        "//novadatainterface",
+        "//novaparse",
+        "//nova_ecs:ecs",
+        "//nova_ecs/plugins",
+        "//nova_ecs/datatypes",
+        "//nova/src/common",
+    ],
+)
+
+nodejs_image(
+    name = "nova_image",
+    entry_point = "server.ts",
+    # npm deps will be put into their own layer
+    data = [
+        #":server_rollup",
+        ":server",
+        "//nova/settings",
+        ":nova_data",
+        "//nova/src:static_files",
+        "//nova/src:browser_bundle",
+        #"//nova/src/engine",
         # "//nova/src/proto:protobufjs_bundle",
         # "@npm//protobufjs",
         #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
