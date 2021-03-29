@@ -3,7 +3,7 @@ package(default_visibility = ["//visibility:public"])
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@io_bazel_rules_docker//nodejs:image.bzl", "nodejs_image")
-
+load("@npm//@bazel/esbuild:index.bzl", "esbuild")
 
 # WARNING: Using directory labels here. That means bazel can't
 # detect changes to files within these directories. It only
@@ -45,12 +45,33 @@ ts_library(
     ]
 )
 
+esbuild(
+    name = "server_bundle",
+    entry_point = "server.ts",
+    platform = "node",
+    #target = "node14.",
+    minify = False,
+    sources_content = True,
+    define = [
+        "process.env.NODE_ENV=\"node\""
+    ],
+    tool = select({
+        "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
+        "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
+        "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
+    }),
+    deps = [
+        ":server",
+    ],
+)
+
 nodejs_binary(
     name = "nova",
-    entry_point = "server.ts",
+    entry_point = "server_bundle.ts",
     data = [
         #":server_rollup",
-        ":server",
+        #":server",
+        ":server_bundle",
         "//nova/settings",
         ":nova_data",
         "//nova/src:static_files",
@@ -59,22 +80,17 @@ nodejs_binary(
         # "//nova/src/proto:protobufjs_bundle",
         # "@npm//protobufjs",
         #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
-        "//novadatainterface",
-        "//novaparse",
-        "//nova_ecs:ecs",
-        "//nova_ecs/plugins",
-        "//nova_ecs/datatypes",
-        "//nova/src/common",
     ],
 )
 
 nodejs_image(
     name = "nova_image",
-    entry_point = "server.ts",
+    entry_point = "server_bundle.ts",
     # npm deps will be put into their own layer
     data = [
         #":server_rollup",
-        ":server",
+        #":server",
+        ":server_bundle",
         "//nova/settings",
         ":nova_data",
         "//nova/src:static_files",
@@ -83,11 +99,5 @@ nodejs_image(
         # "//nova/src/proto:protobufjs_bundle",
         # "@npm//protobufjs",
         #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
-        "//novadatainterface",
-        "//novaparse",
-        "//nova_ecs:ecs",
-        "//nova_ecs/plugins",
-        "//nova_ecs/datatypes",
-        "//nova/src/common",
     ],
 )
