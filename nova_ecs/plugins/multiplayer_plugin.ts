@@ -45,7 +45,7 @@ export interface PeersState {
 };
 
 export const PeersFromCommunicator = new EcsEvent<Set<string>>();
-export const PeersEvent = new EcsEvent<PeersState>({ name: 'PeersEvent' });
+export const PeersEvent = new EcsEvent<PeersState>('PeersEvent');
 
 export const MultiplayerData = new Component<{ owner: string }>('MultiplayerData');
 
@@ -77,7 +77,9 @@ const PeersSystem = new System({
     }
 });
 
-export const MultiplayerMessageEvent = new EcsEvent<unknown>({ name: 'MultiplayerMessageEvent' });
+export const NewOwnedEntityEvent = new EcsEvent<string>('NewOwnedEntityEvent');
+
+export const MultiplayerMessageEvent = new EcsEvent<unknown>('MultiplayerMessageEvent');
 const MessageSystem = new System({
     name: 'MessageSystem',
     events: [MultiplayerMessageEvent],
@@ -99,8 +101,8 @@ export function multiplayer(communicator: Communicator,
     const multiplayerSystem = new System({
         name: 'Multiplayer',
         args: [MultiplayerQuery, Entities, Comms,
-            DeltaResource, SerializerResource] as const,
-        step: (query, entities, comms, deltaMaker, serializer) => {
+            DeltaResource, SerializerResource, Emit] as const,
+        step: (query, entities, comms, deltaMaker, serializer, emit) => {
             comms.uuid = communicator.uuid;
             if (!comms.uuid) {
                 // Can't do anything if we don't have a uuid.
@@ -215,6 +217,11 @@ export function multiplayer(communicator: Communicator,
                     // accidentally request its state in `apply deltas`.
                     const handle = entities.get(uuid)!;
                     entityMap.set(uuid, { entity: handle, data: multiplayerData });
+
+                    // If the new entity is owned by us, emit that fact.
+                    if (multiplayerData.owner === comms.uuid) {
+                        emit(NewOwnedEntityEvent, uuid);
+                    }
                 }
 
                 // Set UUIDs
