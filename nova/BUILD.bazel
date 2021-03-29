@@ -65,39 +65,27 @@ esbuild(
     ],
 )
 
+data = [
+    ":server_bundle",
+    "//nova/settings",
+    ":nova_data",
+    "//nova/src:static_files",
+    "//nova/src:browser_bundle",
+    #"//nova/src/engine",
+    # "//nova/src/proto:protobufjs_bundle",
+    # "@npm//protobufjs",
+    #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
+]
+
 nodejs_binary(
     name = "nova",
     entry_point = "server_bundle.ts",
-    data = [
-        #":server_rollup",
-        #":server",
-        ":server_bundle",
-        "//nova/settings",
-        ":nova_data",
-        "//nova/src:static_files",
-        "//nova/src:browser_bundle",
-        #"//nova/src/engine",
-        # "//nova/src/proto:protobufjs_bundle",
-        # "@npm//protobufjs",
-        #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
-    ],
+    data = data,
 )
 
 nodejs_image(
     name = "nova_image",
     entry_point = "server_bundle.ts",
     # npm deps will be put into their own layer
-    data = [
-        #":server_rollup",
-        #":server",
-        ":server_bundle",
-        "//nova/settings",
-        ":nova_data",
-        "//nova/src:static_files",
-        "//nova/src:browser_bundle",
-        #"//nova/src/engine",
-        # "//nova/src/proto:protobufjs_bundle",
-        # "@npm//protobufjs",
-        #"@npm_bazel_labs//protobufjs:bootstrap_scripts",
-    ],
+    data = data,
 )
