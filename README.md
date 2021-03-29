@@ -40,7 +40,7 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 
 ### Installing
 #### For the main branch
-The main branch does not display anything yet, but it can be runn with `yarn start` and will launch on port 8443.
+After installing dependencies with `yarn`, the main branch can be run with `yarn start` and will launch on port 8000.
 
 #### For the [alpha js relase](https://github.com/mattsoulanille/NovaJS/releases):
 
