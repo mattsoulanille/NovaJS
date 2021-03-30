@@ -2,6 +2,21 @@ steps:
   - name: gcr.io/cloud-builders/bazel
     id: push_container
     args: ['run', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '//nova:push_nova_image']
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'nova'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/nova:$COMMIT_SHA'
+      - '--region'
+      - 'us-central1 '
+      - '--platform'
+      - 'managed'
+
+images:
+  - 'gcr.io/$PROJECT_ID/nova:$COMMIT_SHA'
 
 timeout: 900s
 options:

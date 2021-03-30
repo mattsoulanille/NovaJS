@@ -1,7 +1,6 @@
 import express from "express";
 import fs from "fs";
 import http from "http";
-import https from "http";
 import path from "path";
 import { NovaParse } from "../novaparse/NovaParse";
 import { CommunicatorServer } from "./src/communication/CommunicatorServer";
@@ -31,8 +30,7 @@ const runfiles = require(process.env.BAZEL_NODE_RUNFILES_HELPER!) as { resolve: 
 
 const serverSettingsPath = runfiles.resolve("novajs/nova/settings/server.json");
 const maybeSettings = Settings.decode(
-    JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as unknown
-);
+    JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as unknown);
 
 if (isLeft(maybeSettings)) {
     throw new Error('Failed to parse settings');
