@@ -2,7 +2,7 @@ steps:
   # Copy nova files into the repository
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
     entrypoint: gsutil
-    args: ['cp', '-r', 'Nova\ Files', 'nova/Nova_Data/']
+    args: ['cp', '-r', 'gs://novajs-static-data/Nova\ Files', 'nova/Nova_Data/']
 
   # Publish the image
   - name: gcr.io/cloud-builders/bazel
