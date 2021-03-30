@@ -14,8 +14,12 @@ export class SocketChannelClient implements ChannelClient {
     private messageListener: (m: MessageEvent) => void;
 
     constructor({ webSocket, warn, timeout, webSocketFactory }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number, webSocketFactory?: () => WebSocket }) {
-        this.webSocketFactory = webSocketFactory ??
-            (() => new WebSocket(`ws://${location.host}`));
+        this.webSocketFactory = webSocketFactory ?? (() => {
+            if (location.protocol === "https:") {
+                return new WebSocket(`wss://${location.host}`);
+            }
+            return new WebSocket(`ws://${location.host}`);
+        });
 
         this.webSocket = webSocket ?? this.webSocketFactory();
         this.warn = warn ?? console.warn;

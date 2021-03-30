@@ -1,0 +1,39 @@
+steps:
+  # Copy nova files into the repository
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'copy-novafiles'
+    entrypoint: gsutil
+    args: ['cp', '-r', 'gs://novajs-static-data/Nova Files', 'nova/Nova_Data/']
+    waitFor: ['-']
+
+  # Copy plug-ins into the repository
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'copy-plugins'
+    entrypoint: gsutil
+    args: ['cp', '-r', 'gs://novajs-static-data/Plug-ins', 'nova/Nova_Data/']
+    waitFor: ['-']
+
+  # Publish the image
+  - name: gcr.io/cloud-builders/bazel
+    id: push_container
+    #args: ['run', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '//nova:push_nova_image']
+    args: ['run', '--google_default_credentials', '//nova:push_nova_image']
+    waitFor: ['copy-novafiles', 'copy-plugins']
+
+  # Deploy to cloud run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - 'nova'
+      - '--image'
+      - 'gcr.io/$PROJECT_ID/nova:dev'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+
+timeout: 900s
+options:
+  machineType: 'E2_HIGHCPU_8'
