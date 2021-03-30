@@ -108,4 +108,7 @@ container_push(
     registry = "gcr.io",
     repository = "novajs-303605/nova",
     tag = "dev",
+    # no-cache because the nova_data filegroup
+    # references a directory.
+    tags = ["no-cache"],
 )
