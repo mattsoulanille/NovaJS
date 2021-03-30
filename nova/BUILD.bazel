@@ -29,6 +29,8 @@ ts_library(
         "@npm//@types/express",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//io-ts",
+        "@npm//fp-ts",
         "//novaparse",
         "//nova/src/common",
         #"//nova/src/engine",

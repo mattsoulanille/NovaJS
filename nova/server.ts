@@ -1,6 +1,7 @@
 import express from "express";
 import fs from "fs";
 import http from "http";
+import https from "http";
 import path from "path";
 import { NovaParse } from "../novaparse/NovaParse";
 import { CommunicatorServer } from "./src/communication/CommunicatorServer";
@@ -14,17 +15,32 @@ import { NovaRepl } from "./src/server/nova_repl";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
+import * as t from 'io-ts';
+import { isLeft } from "fp-ts/lib/Either";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
-type Settings = {
-    port: number,
-    relativeDataPath: string,
-}
+
+const Settings = t.partial({
+    port: t.number,
+    relativeDataPath: t.string,
+    https: t.boolean,
+});
+type Settings = t.TypeOf<typeof Settings>;
 
 const runfiles = require(process.env.BAZEL_NODE_RUNFILES_HELPER!) as { resolve: (path: string) => string };
 
 const serverSettingsPath = runfiles.resolve("novajs/nova/settings/server.json");
-const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as Settings;
+const maybeSettings = Settings.decode(
+    JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as unknown
+);
+
+if (isLeft(maybeSettings)) {
+    throw new Error('Failed to parse settings');
+}
+
+const settings = maybeSettings.right;
+const port = settings.port ?? 8000;
+const novaDataPath = path.join(__dirname, settings.relativeDataPath ?? "Nova_Data");
 
 // For production, replace these with real https keys
 // const httpsKeys: https.ServerOptions = {
@@ -35,9 +51,6 @@ const settings = JSON.parse(fs.readFileSync(serverSettingsPath, "utf8")) as Sett
 const app = express();
 const httpServer = http.createServer(app);
 
-
-const port: number = settings.port;
-const novaDataPath = path.join(__dirname, settings.relativeDataPath);
 const novaFileData = new NovaParse(novaDataPath, false);
 
 const filesystemDataPath = path.join(__dirname, "objects");
