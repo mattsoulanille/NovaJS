@@ -3,6 +3,10 @@ steps:
     id: unittest
     args: ['test', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '...']
 
+  - name: gcr.io/cloud-builders/bazel
+    id: push_container
+    args: ['run', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '//nova:push_nova_image']
+
 timeout: 900s
 options:
   machineType: 'E2_HIGHCPU_8'
