@@ -9,14 +9,14 @@ steps:
       - 'deploy'
       - 'nova'
       - '--image'
-      - 'gcr.io/$PROJECT_ID/nova:$COMMIT_SHA'
+      - 'gcr.io/$PROJECT_ID/nova:dev'
       - '--region'
-      - 'us-central1 '
+      - 'us-central1'
       - '--platform'
       - 'managed'
 
 images:
-  - 'gcr.io/$PROJECT_ID/nova:$COMMIT_SHA'
+  - 'gcr.io/$PROJECT_ID/nova:dev'
 
 timeout: 900s
 options:
