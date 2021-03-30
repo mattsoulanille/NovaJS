@@ -1,4 +1,5 @@
 {
-    "port": 8000,
-	"relativeDataPath": "Nova_Data"
+  "port": 8000,
+  "relativeDataPath": "Nova_Data",
+  "https": false
 }
