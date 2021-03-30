@@ -15,9 +15,6 @@ steps:
       - '--platform'
       - 'managed'
 
-images:
-  - 'gcr.io/$PROJECT_ID/nova:dev'
-
 timeout: 900s
 options:
   machineType: 'E2_HIGHCPU_8'
