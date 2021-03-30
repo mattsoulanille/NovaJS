@@ -99,7 +99,6 @@ nodejs_image(
     # npm deps will be put into their own layer
     data = data,
     base = ":port_image",
-    tags = ["no-cache"],
 )
 
 container_push(
@@ -109,6 +108,4 @@ container_push(
     registry = "gcr.io",
     repository = "novajs-303605/nova",
     tag = "dev",
-    # no-cache because the nova_data filegroup
-    # references a directory.
 )
