@@ -2,7 +2,7 @@ steps:
   # Test novajs
   - name: gcr.io/cloud-builders/bazel
     id: unittest
-    args: ['test', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '...']
+    args: ['test', '--config=ci', '--google_default_credentials', '...']
 
   # Copy nova files into the repository
   - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
@@ -21,7 +21,7 @@ steps:
   # Publish the image
   - name: gcr.io/cloud-builders/bazel
     id: push_container
-    args: ['run', '--google_default_credentials', '--remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-novajs', '//nova:push_nova_image']
+    args: ['run', '--config=ci', '--google_default_credentials', '//nova:push_nova_image']
     waitFor: ['copy-novafiles', 'copy-plugins']
 
   # Deploy to cloud run
