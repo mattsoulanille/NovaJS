@@ -24,11 +24,6 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 * Improve on some of the issues with EV Nova's engine (such as limited turning angles) as long as doing so does not negatively affect gameplay.
 * **Support multiplayer to an extent.**
 
-### Related Projects
-* [NovaParse](https://github.com/mattsoulanille/NovaParse): The parser for NovaJS
-
-
-
 ## Wait, but isn't EV Nova Copyrighted?
 
 Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights to anything in the [objects](https://github.com/mattsoulanille/NovaJS/tree/master/Nova/objects) directory. The end goal of this project is to write a Nova engine that can interpret Nova files without including any Nova data itself.
@@ -118,16 +113,21 @@ to compile incremental changed made to the browser's code, but you will still ne
 
 By default the JS release runs on port 8000 but can be changed by editing the `port` variable in `settings/server.json`. Assuming you installed on the machine you would like to play from, navigate to [localhost:8000](http://localhost:8000).
 
-## Running the Tests
-The available tests can be run with `yarn test`.
-
 ## Deployment
-Deployment for the js release is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`. The main branch does not support deployment yet.
-
+Deployment for the js release is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`. For the main branch, build the docker container with `yarn bazelisk build //nova:nova_image.tar` and then deploy the docker container located at `dist/bin/nova/nova_image.tar` to whatever hosing service you want.
 ## Contributing
 
-TBD once the rewrite has feature parity with the js version.
+Accepting PRs, but this project is still in early stages. Documentation is poor at best. See the issues tab for good first issues (although there might not be any at the moment).
 
+
+## Project Structure
+The project is organized as a monorepo and has several subpackages:
+* `nova`: The server, client, and engine for NovaJS.
+* `novaparse`: Parses Nova Files and Plug-ins.
+* `novadatainterface`: The interface implemented by `novaparse` and used by `nova`. It's a separate package because it made development easier while the project was using lerna to manage its monorepo, but it could perhaps be merged into `nova` (but this is low priority).
+* `nova_ecs`: The Entity Component System used by NovaJS.
+
+(Why does `nova_ecs` use snake case while the others don't? I don't actually know. I should change `novaparse` and `novadatainterface` into `nova_parse` and `nova_data_interface`)
 
 ## Known Bugs
 * Ship velocity scaling is wrong in that ships are far too fast. I think the scale should be 3/10 of what it currently is, but Nova gives a speed boost to the player when they're not playing in strict mode, so I don't know what the actual scale is. Perhaps the coordinate system needs to be redone so that no scaling is needed for non-player ships?
@@ -139,7 +139,7 @@ TBD once the rewrite has feature parity with the js version.
   * Put people in their respective system for every changed system? But then it's not multiplayer.
   * Put everyone in the same system, but make the planets different based on the state of the universe? But there are fleets...
   * Choose a system randomly and put everyone in it?
-    * How do you detect which systems are actually just different instances of the same system?
+    * How do you detect which systems are actually just different instances of the same system (e.g. when you complete a certain storyline, certain systems of a specific government get annexed, but they'd need to remain not-taken-over for other players)?
   * This is probably the biggest proplem with multiplayer support, and I welcome any suggestions.
 * How will dates work? Realtime is definitely a bad idea for timing missions since it takes time to read the dialogue. Maybe everyone just has a different date that changes normally (when you jump / land)?
 * Will there be some form of chat, and if so, where will it be? Perhaps you need to hail other ships to talk to them? Perhaps it's just in the bottom left info area?
