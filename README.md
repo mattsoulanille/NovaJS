@@ -64,7 +64,7 @@ Copy your `Nova Files` and `Plug-ins` directories to the `nova/Nova_Data/` direc
 ##### Run NovaJS
 To start NovaJS, run 
 ```
-yarnpkg start
+yarn start
 ```
 
 To watch for changes and automatically restart, run
