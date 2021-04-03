@@ -47,7 +47,6 @@ export class Serializer {
 
             const entity: Entity = {
                 components: new Map(),
-                multiplayer: false,
                 name: state.name,
             };
 

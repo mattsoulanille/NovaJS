@@ -6,26 +6,25 @@ export type ComponentTypes = Set<UnknownComponent>;
 
 export interface Entity {
     components: ComponentMap,
-    multiplayer: boolean;
     name?: string;
 }
 
+/**
+ * A convenience class for creating Entities
+ */
 export class EntityBuilder {
     [immerable] = true;
     components: ComponentMap;
-    multiplayer: boolean;
     name?: string;
 
     constructor(entity?: Entity) {
         this.components = new Map([...entity?.components ?? []]) as ComponentMap;
-        this.multiplayer = entity?.multiplayer ?? false;
         this.name = entity?.name;
     }
 
     build(): Entity {
         return {
             components: this.components,
-            multiplayer: this.multiplayer,
             name: this.name,
         };
     }
