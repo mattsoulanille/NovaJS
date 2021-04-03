@@ -34,6 +34,9 @@ class Component<Data> {
 ```
 As an example, this is how a `Position` component could be defined and added to an entity.
 ```ts
+import {Entity} from 'nova_ecs/entity'
+import {Component} from 'nova_ecs/component'
+
 const testEntity: Entity = {
     components: new Map(),
 };
@@ -65,6 +68,9 @@ class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> {
 In the most common case, a system is run when the world (`world.ts`) is stepped. The world runs the system on the components of each entity the system supports. For most cases, a system supports an entity if and only if the entity has all the components in the system's `args` parameter. As an example, here's a system that moves entities that have the `PositionComponent` component (from above) according to a `VelocityComponent`.
 
 ```ts
+import {System} from 'nova_ecs/system';
+import {World} from 'nova_ecs/world';
+
 interface Velocity = Position // {x: number, y: number}
 const VelocityComponent = new Component<Velocity>('velocity');
 
@@ -80,6 +86,12 @@ const MoveSystem = new System({
         position.y += velocity.y;
     }
 });
+
+const world = new World();
+world.addSystem(MoveSystem);
+testEntity.components.set(Velocity, {x: 1, y: 2});
+world.entities.set('test entity uuid', testEntity);
+world.step();
 ```
 
 ### Resource
@@ -90,3 +102,6 @@ This documentation is TODO. Similar to Bevy's Query. Everything uses it. `args` 
 
 ### Modifier
 This documentation is TODO. Allows doing more with queries than just requiring components. See `optional.ts` and `provider.ts` for example uses.
+
+### Plugins
+Docs TODO, but they essentially are just functions that the world calls with itself.
