@@ -2,7 +2,7 @@ import { ShipData } from "novadatainterface/ShipData";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
-import { Entity, EntityBuilder } from "nova_ecs/entity";
+import { Entity } from "nova_ecs/entity";
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from "nova_ecs/plugins/movement_plugin";
 import { ShipComponent } from "./ship_component";
 
@@ -10,7 +10,6 @@ import { ShipComponent } from "./ship_component";
 export function makeShip(shipData: ShipData): Entity {
     const ship: Entity = {
         components: new Map(),
-        multiplayer: true,
         name: shipData.name,
     }
     ship.components.set(ShipComponent, {
