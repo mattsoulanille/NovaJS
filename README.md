@@ -41,7 +41,42 @@ Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights
 
 ### Installing
 #### For the main branch
-After installing dependencies with `yarn`, the main branch can be run with `yarn start` and will launch on port 8000.
+##### Clone the main branch
+```
+git clone https://github.com/mattsoulanille/NovaJS.git
+```
+##### Install dependencies with Yarn
+```
+cd NovaJS/
+yarn
+```
+If you are using Ubuntu and see `00h00m00s 0/0: : ERROR: There are no scenarios; must have at least one.` after running `yarn`, you may need to `apt install yarnpkg` instead (and substitue `yarnpkg` wherever you see `yarn` in this readme).
+
+##### (Optional) Read from the Bazel Remote Cache
+To speed up compilation and test time, you can configure Bazel to use cached build and test results created by the project's continouous integration runs. To enable this, add `build --config=remote_cache` to `.bazelrc.user` at the root of the project. You may need to create `.bazelrc.user`.
+
+##### (Optional) Run the tests
+Tests can be run with `yarn test`. This will take a while the first time it's run since it tests all targets in the project. This includes building docker images for NovaJS. Subsequent runs should be much faster.
+
+##### Add Nova Files and Plug-ins
+Copy your `Nova Files` and `Plug-ins` directories to the `nova/Nova_Data/` directory. Make sure files are in `.ndat` or Mac resource fork format. Windows `.res` is not yet supported (PRs welcome though). Since resource fork is Mac-specific, Plug-ins can be saved as `.ndat` for use on Windows and Linux. Ideally, this won't matter once `.res` is supported, but that's a lower priority at the moment. If this proves annoying for users or developers, I can try to fix it.
+
+##### Run NovaJS
+To start NovaJS, run 
+```
+yarnpkg start
+```
+
+To watch for changes and automatically restart, run
+```
+yarn watch
+```
+
+To run with docker, run
+```
+yarn bazel run //nova:nova_image
+```
+This of course requires docker to be installed (and I've only gotten it to work on Linux. I've tried on Mac, but not Windows yet).
 
 #### For the [alpha js relase](https://github.com/mattsoulanille/NovaJS/releases):
 
@@ -59,7 +94,7 @@ mkdir ./Nova\ Data/Plug-ins/
 ```
 ###### You can add any plug-ins you like in the Plug-ins directory. Just make sure they're in the Mac format or the Nova Data `.ndat` format if you're using Windows / Linux.
 
-Install packages with `npm`
+Install packages with `npm` (note that this is different from the main branch, which uses `yarn`)
 ```
 npm install
 ```
