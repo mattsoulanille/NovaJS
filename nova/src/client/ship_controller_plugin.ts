@@ -26,7 +26,7 @@ const keyMap = new Map([
 ]);
 
 // Used to mark the single ship that's under control.
-export const ShipControlSelector = new Component<undefined>('ShipControl');
+export const PlayerShipSelector = new Component<undefined>('ShipControl');
 
 type ControlState = Map<ControlAction, boolean>;
 
@@ -45,10 +45,10 @@ const SetControlledShip = new System({
             // When queries are cached, use a query for just the multiplayer
             // entities as an optimization.
             for (const entity of entities.values()) {
-                entity.components.delete(ShipControlSelector);
+                entity.components.delete(PlayerShipSelector);
             }
             const entity = entities.get(newEntity);
-            entity?.components.set(ShipControlSelector, undefined);
+            entity?.components.set(PlayerShipSelector, undefined);
         }
     }
 });
@@ -78,7 +78,7 @@ const UpdateControlState = new System({
 const ControlPlayerShip = new System({
     name: 'ControlPlayerShip',
     events: [ControlStateEvent],
-    args: [ControlStateEvent, MovementStateComponent, ShipControlSelector] as const,
+    args: [ControlStateEvent, MovementStateComponent, PlayerShipSelector] as const,
     step(controlState, movementState) {
         movementState.accelerating = (
             controlState.get(ControlAction.accelerate) &&

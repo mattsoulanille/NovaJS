@@ -6,6 +6,7 @@ import { EcsEvent, EventData } from "./events";
 import { Modifier, ModifierResult } from "./modifier";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
+import { World } from "./world";
 
 export const Entities = Symbol('Entities');
 export type EntitiesObject<T> = T extends typeof Entities ? EntityMap : never;
@@ -30,6 +31,10 @@ export type EmitFunction = <Data>(event: EcsEvent<Data, any>, data: Data,
     entities?: Set<string>) => void;
 export type EmitSelector<T> = T extends typeof Emit ? EmitFunction : never;
 
+export const GetWorld = Symbol('World');
+export type GetWorldSelector<T> = T extends typeof GetWorld ? World : never;
+
+
 // Types for args that are used to define a system or query. Passed in a tuple.
 export type ArgTypes = Component<any>
     | Query
@@ -41,6 +46,7 @@ export type ArgTypes = Component<any>
     | typeof GetEntity
     | typeof GetArg
     | typeof Emit
+    | typeof GetWorld
     | Modifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
@@ -56,6 +62,7 @@ export type ArgData<T> =
     | GetEntityObject<T>
     | GetArgSelector<T>
     | EmitSelector<T>
+    | GetWorldSelector<T>
     | ModifierResult<T>
     | AllowUndefined<T>;
 
