@@ -1,6 +1,7 @@
 import { Animation } from "novadatainterface/Animation";
 import { Component } from "nova_ecs/component";
 import { DeleteEvent } from "nova_ecs/events";
+import { FirstAvailable } from "nova_ecs/first_available";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
@@ -10,7 +11,8 @@ import { currentIfDraft } from "nova_ecs/utils";
 import * as PIXI from "pixi.js";
 import { PlayerShipSelector } from "../client/ship_controller_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
-import { ShipDataProvider } from "../nova_plugin/ship_component";
+import { PlanetDataProvider } from "../nova_plugin/planet_plugin";
+import { ShipDataProvider } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { starfield } from "./starfield_plugin";
 
@@ -26,11 +28,24 @@ const ShipAnimationComponentProvider = Provide({
     }
 });
 
+const PlanetAnimationComponentProvider = Provide({
+    provided: AnimationComponent,
+    args: [PlanetDataProvider],
+    factory: (shipData) => {
+        return shipData.animation;
+    }
+});
+
+const FirstAnimation = FirstAvailable([
+    AnimationComponent,
+    ShipAnimationComponentProvider,
+    PlanetAnimationComponentProvider
+]);
 
 const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicProvider = ProvideAsync({
     provided: AnimationGraphicComponent,
-    args: [ShipAnimationComponentProvider, Stage, GameDataResource] as const,
+    args: [FirstAnimation, Stage, GameDataResource] as const,
     factory: async (animation, stage, gameData) => {
         const graphic = new AnimationGraphic({
             gameData: currentIfDraft(gameData)!,

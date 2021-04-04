@@ -27,6 +27,7 @@ ts_library(
         "provider.ts",
         "events.ts",
         "event_map.ts",
+        "first_available.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -46,6 +47,7 @@ ts_library(
         "async_system_test.ts",
         "query_test.ts",
         "provider_test.ts",
+        "first_available_test.ts",
     ],
     deps = [
         ":ecs",

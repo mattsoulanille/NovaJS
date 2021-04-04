@@ -16,6 +16,7 @@ import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
 import { setupRoutes } from "./src/server/setupRoutes";
 import * as t from 'io-ts';
 import { isLeft } from "fp-ts/lib/Either";
+import { makeSystem } from "./src/nova_plugin/make_system";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
 
@@ -81,9 +82,8 @@ const channel = new SocketChannelServer({ server: httpServer });
 
 
 
-const world = new World('test world')
+let world: World;
 const repl = new NovaRepl();
-repl.repl.context.world = world;
 
 let communicator: CommunicatorServer;
 async function startGame() {
@@ -96,6 +96,9 @@ async function startGame() {
     communicator = new CommunicatorServer(channel);
     // TODO: Don't just give the server the 'server' uuid
     const multiplayerPlugin = multiplayer(communicator);
+
+    world = await makeSystem('nova:130', gameData);
+    repl.repl.context.world = world;
 
     world.resources.set(GameDataResource, gameData);
     await world.addPlugin(multiplayerPlugin);
