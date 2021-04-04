@@ -1,6 +1,8 @@
 import * as t from 'io-ts';
 import { ShipData } from "novadatainterface/ShipData";
 import { Component } from 'nova_ecs/component';
+import { Plugin } from 'nova_ecs/plugin';
+import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { ProvideAsync } from 'nova_ecs/provider';
 import { GameDataResource } from './game_data_resource';
 
@@ -20,3 +22,19 @@ export const ShipDataProvider = ProvideAsync({
         return await gameData.data.Ship.get(ship.id);
     }
 });
+
+export const ShipPlugin: Plugin = {
+    name: "ShipPlugin",
+    build(world) {
+        const deltaMaker = world.resources.get(DeltaResource);
+        if (!deltaMaker) {
+            throw new Error('Expected delta maker resource to exist');
+        }
+
+        world.addComponent(ShipComponent);
+        world.addComponent(ShipDataComponent);
+        deltaMaker.addComponent(ShipComponent, {
+            componentType: ShipType
+        });
+    }
+}
