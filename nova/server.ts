@@ -98,9 +98,9 @@ async function startGame() {
     const multiplayerPlugin = multiplayer(communicator);
 
     world.resources.set(GameDataResource, gameData);
-    world.addPlugin(multiplayerPlugin);
-    world.addPlugin(ServerPlugin);
-    world.addPlugin(Nova);
+    await world.addPlugin(multiplayerPlugin);
+    await world.addPlugin(ServerPlugin);
+    await world.addPlugin(Nova);
 
     //const novaRepl = new NovaRepl(gameLoop, gameData, communicator);
     stepper();

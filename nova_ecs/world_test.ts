@@ -1,7 +1,6 @@
-import * as t from 'io-ts';
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Emit, Entities, GetEntity, UUID } from './arg_types';
+import { Emit, Entities, GetEntity, GetWorld, UUID } from './arg_types';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
 import { DeleteEvent, EcsEvent } from './events';
@@ -973,10 +972,25 @@ describe('world', () => {
 
         // How this works...
         // Step event starts:
-        //   emitSystem emits the event to update foo ---------- These may be swapped
-        //   reportSystem reports the current value of foo --|
+        //   emitSystem emits the event to update foo <-------v-- These may be swapped
+        //   reportSystem reports the current value of foo <--|
         // Add event starts:
         //   fooSystem adds to foo.
         expect(fooVals).toEqual([100, 110, 120, 130]);
+    });
+
+    it('allows getting the world as an argument', () => {
+        let gotWorld: World | undefined;
+        const getsWorld = new System({
+            name: 'GetsWorld',
+            args: [GetWorld] as const,
+            step(world) {
+                gotWorld = world;
+            }
+        });
+
+        world.addSystem(getsWorld);
+        world.step();
+        expect(gotWorld).toEqual(world);
     });
 });

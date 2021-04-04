@@ -1,5 +1,5 @@
 import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
-import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, QueryResults, UUID } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, QueryResults, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
@@ -114,10 +114,10 @@ export class World {
         });
     }
 
-    addPlugin(plugin: Plugin) {
-        // TODO: Namespace component and system names. Perhaps use ':' or '/' to
+    async addPlugin(plugin: Plugin) {
+        // TODO: Namespace component and system names? Perhaps use ':' or '/' to
         // denote namespace vs name. Use a proxy like NovaData uses.
-        plugin.build(this);
+        await plugin.build(this);
     }
 
     addResource(resource: Resource<any>) {
@@ -275,6 +275,8 @@ export class World {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
                 this.getArg<T>(arg, entity, uuid)) as Right<ArgData<T>>;
+        } else if (arg === GetWorld) {
+            return right(this as ArgData<T>);
         } else if (arg instanceof EcsEvent) {
             if (!event) {
                 return left(undefined);

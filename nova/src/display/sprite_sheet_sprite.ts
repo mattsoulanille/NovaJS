@@ -2,6 +2,7 @@ import { AnimationImage } from "novadatainterface/Animation";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import * as PIXI from "pixi.js";
 import { AnimationImageIndex } from "novadatainterface/Animation";
+import { texturesFromFrames } from "./textures_from_frames";
 
 export function mod(a: number, b: number): number {
     return ((a % b) + b) % b;
@@ -26,25 +27,15 @@ export class SpriteSheetSprite {
         this.pixiSprite.blendMode = image.blendMode;
 
         const loadTextures = async () => {
-            this.textures = await this.texturesFromSpriteSheet(this.image.id)
+            const framesData = await this.gameData.data
+                .SpriteSheetFrames.get(this.image.id);
+            this.textures = await texturesFromFrames(framesData.frames);
             return this;
         }
 
         this.pixiSprite.anchor.x = 0.5;
         this.pixiSprite.anchor.y = 0.5;
         this.buildPromise = loadTextures();
-    }
-
-    private async texturesFromSpriteSheet(id: string): Promise<PIXI.Texture[]> {
-        const spriteSheetFrames = await this.gameData.data.SpriteSheetFrames.get(id);
-        const allTextures: PIXI.Texture[] = [];
-        const frameNames = Object.keys(spriteSheetFrames.frames);
-        for (let frameIndex = 0; frameIndex < frameNames.length; frameIndex++) {
-            let frameName = frameNames[frameIndex];
-            allTextures[frameIndex] = PIXI.Texture.from(frameName);
-        }
-        return allTextures;
-
     }
 
     private setTexture(index: number) {

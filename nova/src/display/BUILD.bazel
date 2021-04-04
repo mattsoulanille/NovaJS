@@ -8,9 +8,13 @@ ts_library(
         "display_plugin.ts",
         "sprite_sheet_sprite.ts",
         "animation_graphic.ts",
+        "textures_from_frames.ts",
+        "starfield_plugin.ts",
+        "pixi_app_resource.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
+        "//nova_ecs/datatypes",
         "//nova/src/client",
         "//nova_ecs/plugins",
         "//novadatainterface",

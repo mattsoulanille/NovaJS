@@ -8,10 +8,11 @@ import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
 import * as PIXI from "pixi.js";
-import { ShipControlSelector } from "../client/ship_controller_plugin";
+import { PlayerShipSelector } from "../client/ship_controller_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ShipDataProvider } from "../nova_plugin/ship_component";
 import { AnimationGraphic } from "./animation_graphic";
+import { starfield } from "./starfield_plugin";
 
 export const Stage = new Resource<PIXI.Container>('Stage');
 
@@ -73,7 +74,7 @@ const ShipDrawSystem = new System({
 
 const CenterShipSystem = new System({
     name: 'CenterShipPlugin',
-    args: [Stage, MovementStateComponent, ShipControlSelector] as const,
+    args: [Stage, MovementStateComponent, PlayerShipSelector] as const,
     step(stage, movementState) {
         stage.position.x = -movementState.position.x + window.innerWidth / 2;
         stage.position.y = -movementState.position.y + window.innerHeight / 2;
@@ -82,8 +83,9 @@ const CenterShipSystem = new System({
 
 export const Display: Plugin = {
     name: 'Display',
-    build: (world) => {
+    build: async (world) => {
         world.resources.set(Stage, new PIXI.Container());
+        await world.addPlugin(starfield());
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(ShipDrawSystem);
         world.addSystem(CenterShipSystem);
