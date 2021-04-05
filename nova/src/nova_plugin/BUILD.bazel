@@ -7,13 +7,18 @@ ts_library(
     name = "nova_plugin",
     srcs = [
         "nova_plugin.ts",
+        "platform_plugin.ts",
         "game_data_resource.ts",
         "server_plugin.ts",
         "make_ship.ts",
         "ship_plugin.ts",
+        "ship_controller_plugin.ts",
         "planet_plugin.ts",
         "make_planet.ts",
         "make_system.ts",
+        "projectile_plugin.ts",
+        "weapon_plugin.ts",
+        "guidance.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

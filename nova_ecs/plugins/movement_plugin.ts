@@ -1,4 +1,3 @@
-import { Draft } from 'immer';
 import * as t from 'io-ts';
 import { Component } from '../component';
 import { Angle, AngleType } from '../datatypes/angle';
@@ -29,14 +28,16 @@ export type MovementPhysics = t.TypeOf<typeof MovementPhysics>;
 
 export const MovementPhysicsComponent = new Component<MovementPhysics>('MovementPhysics');
 
-export const MovementState = t.type({
+export const MovementState = t.intersection([t.type({
     position: PositionType,
     velocity: VectorType,
     rotation: AngleType,
     turning: t.number,
     turnBack: t.boolean,
     accelerating: t.number,
-});
+}), t.partial({
+    turnToAngle: AngleType
+})]);
 export type MovementState = t.TypeOf<typeof MovementState>;
 
 
@@ -45,7 +46,6 @@ export type MovementState = t.TypeOf<typeof MovementState>;
 // an entity is moving in a straight line. When an unpredictable event happens,
 // such as when a player accelerates, we send the full state.
 export const MovementStateComponent = new Component<MovementState>('MovementState');
-
 
 export const MovementSystem = new System({
     name: 'movement',
@@ -63,15 +63,15 @@ export const MovementSystem = new System({
 
 
 function inertialControls({ state, physics, time }:
-    { state: Draft<MovementState>, physics: Draft<MovementPhysics>, time: Draft<Time> }) {
+    { state: MovementState, physics: MovementPhysics, time: Time }) {
 
     // Turning
-    // Handle the case where the ship is turning to point opposite
-    // its velocity vector.
-    if (state.turnBack) {
+    if (state.turnToAngle) {
+        turnToAngle({ state, physics, time }, state.turnToAngle);
+    } else if (state.turnBack) {
         if (state.velocity.length > 0) {
             let reverseAngle = state.velocity.angle.add(Math.PI);
-            turnToDirection({ state, physics, time }, reverseAngle);
+            turnToAngle({ state, physics, time }, reverseAngle);
         }
     }
 
@@ -91,8 +91,14 @@ function inertialControls({ state, physics, time }:
 }
 
 function inertialessControls({ state, physics, time }:
-    { state: Draft<MovementState>, physics: Draft<MovementPhysics>, time: Time }) {
-    state.rotation = state.rotation.add(state.turning * physics.turnRate * time.delta_s);
+    { state: MovementState, physics: MovementPhysics, time: Time }) {
+
+    if (state.turnToAngle) {
+        turnToAngle({ state, physics, time }, state.turnToAngle);
+    } else {
+        state.rotation = state.rotation.
+            add(state.turning * physics.turnRate * time.delta_s);
+    }
 
     // Yes, it's inefficient, but it keeps a single source of
     // truth for velocity / speed.
@@ -106,9 +112,9 @@ function inertialessControls({ state, physics, time }:
 }
 
 
-function turnToDirection({ state, physics, time }:
-    { state: Draft<MovementState>, physics: Draft<MovementPhysics>, time: Time },
-    target: Draft<Angle>) {
+function turnToAngle({ state, physics, time }:
+    { state: MovementState, physics: MovementPhysics, time: Time },
+    target: Angle) {
     // Used for turning retrograde and pointing at a target
     let difference = state.rotation.distanceTo(target);
 

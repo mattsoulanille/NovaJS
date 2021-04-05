@@ -33,7 +33,7 @@ ts_library(
         "@npm//pixi.js",
         "@npm//rxjs",
         "//nova/src/common",
-        "//nova/src/client",
+        #"//nova/src/client",
         "//nova/src/display",
         #"//nova/src/engine",
         #"//nova/src/engine:utils",

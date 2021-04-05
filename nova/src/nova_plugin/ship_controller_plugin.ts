@@ -8,12 +8,14 @@ import { NewOwnedEntityEvent } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
+import { PlatformResource } from './platform_plugin';
 
 export enum ControlAction {
     'accelerate',
     'turnLeft',
     'turnRight',
     'reverse',
+    'firePrimary',
 }
 
 // TODO: Support loading this from the server.
@@ -23,6 +25,7 @@ const keyMap = new Map([
     ['ArrowLeft', ControlAction.turnLeft],
     ['ArrowRight', ControlAction.turnRight],
     ['ArrowDown', ControlAction.reverse],
+    ['Space', ControlAction.firePrimary],
 ]);
 
 // Used to mark the single ship that's under control.
@@ -49,11 +52,14 @@ const SetControlledShip = new System({
             }
             const entity = entities.get(newEntity);
             entity?.components.set(PlayerShipSelector, undefined);
+
+            // For convenience
+            (window as any).myShip = entity;
         }
     }
 });
 
-const ControlStateEvent = new EcsEvent<ControlState>('ControlState');
+export const ControlStateEvent = new EcsEvent<ControlState>('ControlState');
 
 const UpdateControlState = new System({
     name: 'UpdateControlState',
@@ -75,6 +81,7 @@ const UpdateControlState = new System({
 });
 
 
+// TODO: Move this to ship plugin?
 const ControlPlayerShip = new System({
     name: 'ControlPlayerShip',
     events: [ControlStateEvent],
@@ -95,10 +102,13 @@ const ControlPlayerShip = new System({
 export const ShipController: Plugin = {
     name: 'ShipController',
     build(world) {
-        world.addPlugin(KeyboardPlugin);
-        world.resources.set(ControlStateResource, new Map());
-        world.addSystem(SetControlledShip);
-        world.addSystem(UpdateControlState);
-        world.addSystem(ControlPlayerShip);
+        const platform = world.resources.get(PlatformResource);
+        if (platform === 'browser') {
+            world.addPlugin(KeyboardPlugin);
+            world.resources.set(ControlStateResource, new Map());
+            world.addSystem(SetControlledShip);
+            world.addSystem(UpdateControlState);
+            world.addSystem(ControlPlayerShip);
+        }
     }
 };

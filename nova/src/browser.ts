@@ -8,7 +8,6 @@ import { GameDataResource } from "./nova_plugin/game_data_resource";
 import { Nova } from "./nova_plugin/nova_plugin";
 import { Display, Stage } from "./display/display_plugin";
 import Stats from 'stats.js';
-import { ShipController } from "./client/ship_controller_plugin";
 import { PixiAppResource } from "./display/pixi_app_resource";
 
 // const socketChannel = new SocketChannelClient({});
@@ -73,7 +72,6 @@ async function startGame() {
     await world.addPlugin(multiplayerPlugin);
     await world.addPlugin(Nova);
     await world.addPlugin(Display);
-    await world.addPlugin(ShipController);
     const worldContainer = world.resources.get(Stage);
     if (!worldContainer) {
         throw new Error('World did not have Pixi Container');

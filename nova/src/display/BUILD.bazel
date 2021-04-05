@@ -15,7 +15,6 @@ ts_library(
     deps = [
         "//nova_ecs:ecs",
         "//nova_ecs/datatypes",
-        "//nova/src/client",
         "//nova_ecs/plugins",
         "//novadatainterface",
         "//nova/src/nova_plugin",

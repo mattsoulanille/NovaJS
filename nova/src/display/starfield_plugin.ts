@@ -2,7 +2,7 @@ import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { PlayerShipSelector } from "../client/ship_controller_plugin";
+import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { Stage } from "./display_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { texturesFromFrames } from "./textures_from_frames";

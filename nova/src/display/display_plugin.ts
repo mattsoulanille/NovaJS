@@ -9,9 +9,10 @@ import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
 import * as PIXI from "pixi.js";
-import { PlayerShipSelector } from "../client/ship_controller_plugin";
+import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlanetDataProvider } from "../nova_plugin/planet_plugin";
+import { ProjectileDataComponent } from "../nova_plugin/projectile_plugin";
 import { ShipDataProvider } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { starfield } from "./starfield_plugin";
@@ -36,10 +37,19 @@ const PlanetAnimationComponentProvider = Provide({
     }
 });
 
+const ProjectileAnimationComponentProvider = Provide({
+    provided: AnimationComponent,
+    args: [ProjectileDataComponent],
+    factory: (projectile) => {
+        return projectile.animation;
+    }
+});
+
 const FirstAnimation = FirstAvailable([
     AnimationComponent,
     ShipAnimationComponentProvider,
-    PlanetAnimationComponentProvider
+    PlanetAnimationComponentProvider,
+    ProjectileAnimationComponentProvider,
 ]);
 
 const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
