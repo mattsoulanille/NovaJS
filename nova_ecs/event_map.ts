@@ -16,7 +16,7 @@ interface SyncSubscription {
 }
 
 type Callback<V> = (val: V) => void;
-class SyncSubject<V> {
+export class SyncSubject<V> {
     private subscriptions = new Map<SyncSubscription, Callback<V>>();
     subscribe(callback: Callback<V>) {
         const subscription: SyncSubscription = {
@@ -44,6 +44,8 @@ export class EventMap<K, V> extends Map<K, V> {
     readonly events = {
         delete: new SyncSubject<Set<[K, V]>>(),
         set: new SyncSubject<[K, V]>(),
+        // Add only triggers when it's a key not in the map
+        add: new SyncSubject<[K, V]>(),
     }
 
     clear(): void {
@@ -53,8 +55,11 @@ export class EventMap<K, V> extends Map<K, V> {
     }
     set(key: K, value: V): this {
         // When constructing with entries, events may
-        // not yet be defined.
+        // not yet be defined, hence the `?`.
         this.events?.set.next([key, value]);
+        if (!this.has(key)) {
+            this.events?.add.next([key, value]);
+        }
         super.set(key, value);
         return this;
     }

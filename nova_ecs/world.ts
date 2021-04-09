@@ -14,7 +14,6 @@ import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
 import { topologicalSort } from './utils';
 
-
 // How do you serialize components and make sure the receiver
 // knows which is which?
 
@@ -60,6 +59,11 @@ interface EcsEventWithEntities<Data> {
     entities?: Set<string | [string, Entity]>;
 }
 
+type QueryCache = Map<Query, {
+    entities: Map<string, Entity>,
+    toCheck: Map<string, Entity>,
+}>;
+
 export class World {
     private readonly state = {
         entities: new EntityMapWrapped(),
@@ -80,6 +84,9 @@ export class World {
     private eventQueue: EcsEventWithEntities<unknown>[] = [];
     private boundEmit: EmitFunction = this.emit.bind(this);
 
+    // Query cache
+    private queries: QueryCache = new Map();
+
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
         this.addPlugin(ProvideAsyncPlugin);
@@ -91,9 +98,31 @@ export class World {
         // Get the handle for the singleton entity.
         this.singletonEntity = this.entities.get('singleton')!;
 
-        // Emit delete when an entity is deleted.
+        this.state.entities.events.add.subscribe(([uuid, entity]) => {
+            // Update queries with newly added entities
+            for (const query of this.queries.values()) {
+                query.toCheck.set(uuid, entity);
+                query.entities.delete(uuid);
+            }
+        });
+
+        this.state.entities.events.change.subscribe(([uuid, entity]) => {
+            for (const query of this.queries.values()) {
+                query.toCheck.set(uuid, entity);
+                query.entities.delete(uuid);
+            }
+        });
+
         this.state.entities.events.delete.subscribe(deleted => {
+            // Emit delete when an entity is deleted.
             this.emitWrapped(DeleteEvent, undefined, deleted);
+            // Update queries
+            for (const query of this.queries.values()) {
+                for (const [uuid] of deleted) {
+                    query.toCheck.delete(uuid);
+                    query.entities.delete(uuid);
+                }
+            }
         });
 
         this.state.resources.events.set.subscribe(added => {
@@ -304,13 +333,40 @@ export class World {
         entities: Iterable<[string, Entity]> = this.state.entities,
         event?: readonly [EcsEvent<unknown>, unknown]): QueryResults<Query<C>> {
 
-        const supportedEntities = [...entities].filter(
-            ([, entity]) => query.supportsEntity(entity));
+        if (!this.queries.has(query)) {
+            this.queries.set(query, {
+                entities: new Map(),
+                toCheck: new Map(this.entities),
+            });
+        }
+        const cachedQuery = this.queries.get(query)!;
 
-        return supportedEntities.map(([uuid, entity]) =>
-            this.fulfillQueryForEntity(entity, uuid, query, event))
-            .filter((results): results is Right<ArgsToData<C>> => isRight(results))
-            .map(rightResults => rightResults.right);
+        // Update cached query
+        for (const [key, entity] of cachedQuery.toCheck) {
+            if (query.supportsEntity(entity)) {
+                cachedQuery.entities.set(key, entity);
+            }
+            cachedQuery.toCheck.delete(key);
+        }
+
+        const supportedEntities = [...entities].filter(([uuid, entity]) => {
+            // Don't rely on the cached query for DeleteEvent because
+            // the entity (and its entry in the cached query) have already
+            // been removed.
+            if (event?.[0] === DeleteEvent) {
+                return query.supportsEntity(entity);
+            }
+            return cachedQuery.entities.has(uuid)
+        });
+
+        const entityResults = supportedEntities.map(([uuid, entity]) =>
+            [entity, this.fulfillQueryForEntity(entity, uuid, query, event)] as const)
+            .filter((results): results is [Entity, Right<ArgsToData<C>>] => isRight(results[1]))
+            .map(rightResults => [rightResults[0], rightResults[1].right] as const);
+
+        const result = entityResults.map(([, results]) => results);
+
+        return result;
     }
 
     private fulfillQueryForEntity<C extends readonly ArgTypes[]>(
