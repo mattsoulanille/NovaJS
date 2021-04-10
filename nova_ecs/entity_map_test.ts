@@ -1,9 +1,8 @@
 import produce from "immer";
 import "jasmine";
 import { Component } from "./component";
-import { ComponentMap } from "./component_map";
 import { EntityBuilder } from "./entity";
-import { EntityMap, EntityMapWrapped } from './entity_map';
+import { EntityMapWrapped } from './entity_map';
 
 const BarComponent = new Component<{ y: string }>('bar');
 
