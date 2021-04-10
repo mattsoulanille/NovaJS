@@ -4,7 +4,7 @@ load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
 load("@io_bazel_rules_docker//nodejs:image.bzl", "nodejs_image")
 load("@io_bazel_rules_docker//container:container.bzl", "container_image", "container_push")
-load("@npm//@bazel/esbuild:index.bzl", "esbuild")
+load("//:esbuild.bzl", "esbuild")
 
 # WARNING: Using directory labels here. That means bazel can't
 # detect changes to files within these directories. It only
@@ -50,19 +50,17 @@ ts_library(
 
 esbuild(
     name = "server_bundle",
+    args = [
+        "--keep-names", # For convenience. Can be removed.
+        "--resolve-extensions=.mjs,.js",
+    ],
     entry_point = "server.ts",
     platform = "node",
-    #target = "node14.",
     minify = False,
     sources_content = True,
     define = [
         "process.env.NODE_ENV=\"node\""
     ],
-    tool = select({
-        "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
-        "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
-        "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
-    }),
     deps = [
         ":server",
     ],

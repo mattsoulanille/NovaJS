@@ -2,7 +2,7 @@ package(default_visibility = ["//visibility:public"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
-load("@npm//@bazel/esbuild:index.bzl", "esbuild")
+load("//:esbuild.bzl", "esbuild")
 
 
 filegroup(
@@ -11,18 +11,6 @@ filegroup(
         "index.html",
     ],
 )
-
-# ts_library(
-#     name = "gameloop_lib",
-#     srcs = ["GameLoop.ts"],
-#     deps = [
-#         "//nova/src/engine",
-#         "//nova/src/engine:utils",
-#         "//novadatainterface",
-#         "//nova/src/communication:communication_lib",
-#         "@npm//immer",
-#     ],
-# )
 
 ts_library(
     name = "browser_lib",
@@ -51,19 +39,18 @@ ts_library(
 
 esbuild(
     name = "browser_bundle",
+    args = [
+        "--keep-names",
+        "--resolve-extensions=.mjs,.js",
+    ],
     entry_point = "browser.ts",
     target = "es2015",
     minify = True,
     sources_content = True,
     define = [
-        "process.env.NODE_ENV=\"node\""
+        "process.env.NODE_ENV=\"browser\""
     ],
     link_workspace_root = True,
-    tool = select({
-        "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
-        "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
-        "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
-    }),
     deps = [
         ":browser_lib",
     ],
