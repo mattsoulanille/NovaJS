@@ -48,6 +48,7 @@ ts_library(
         "query_test.ts",
         "provider_test.ts",
         "first_available_test.ts",
+        "entity_map_test.ts",
     ],
     deps = [
         ":ecs",
