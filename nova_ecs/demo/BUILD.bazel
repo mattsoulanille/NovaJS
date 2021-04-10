@@ -5,7 +5,8 @@ load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 load("@npm//@bazel/concatjs:index.bzl", "concatjs_devserver")
 load("@build_bazel_rules_nodejs//internal/npm_install:npm_umd_bundle.bzl", "npm_umd_bundle")
 load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
-load("@npm//@bazel/esbuild:index.bzl", "esbuild")
+load("//:esbuild.bzl", "esbuild")
+
 
 ts_library(
     name = "demo_lib",
@@ -25,19 +26,18 @@ ts_library(
 
 esbuild(
     name = "demo_bundle",
+    args = [
+        "--keep-names",
+        "--resolve-extensions=.mjs,.js",
+    ],
     entry_point = "demo.ts",
     target = "es2015",
     minify = False,
     sources_content = True,
     define = [
-        "process.env.NODE_ENV=\"node\""
+        "process.env.NODE_ENV=\"browser\""
     ],
     link_workspace_root = True,
-    tool = select({
-        "@bazel_tools//src/conditions:darwin": "@esbuild_darwin//:bin/esbuild",
-        "@bazel_tools//src/conditions:windows": "@esbuild_windows//:esbuild.exe",
-        "@bazel_tools//src/conditions:linux_x86_64": "@esbuild_linux//:bin/esbuild",
-    }),
     deps = [
         ":demo_lib",
     ],

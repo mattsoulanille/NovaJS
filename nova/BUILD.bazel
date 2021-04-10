@@ -51,7 +51,7 @@ ts_library(
 esbuild(
     name = "server_bundle",
     args = [
-        "--keep-names",
+        "--keep-names", # For convenience. Can be removed.
         "--resolve-extensions=.mjs,.js",
     ],
     entry_point = "server.ts",
