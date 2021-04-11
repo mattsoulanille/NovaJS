@@ -1,0 +1,10 @@
+{
+  "capabilities": {
+    "goog:chromeOptions": {
+      "args": [
+        "--use-mock-keychain",
+        "--no-sandbox"
+      ]
+    }
+  }
+}
