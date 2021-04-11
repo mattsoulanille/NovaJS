@@ -1,6 +1,7 @@
 package(default_visibility = ["//:__subpackages__"])
 
 load("@io_bazel_rules_docker//container:container.bzl", "container_image", "container_push")
+load("@io_bazel_rules_docker//docker/util:run.bzl", "container_run_and_commit")
 
 exports_files([
     "tsconfig.json",
@@ -8,13 +9,22 @@ exports_files([
     "rollup_browser.config.ts",
     ".gitignore"], visibility = ["//:__subpackages__"])
 
-container_image(
+# container_image(
+#     name = "bazel_webtesting_image",
+#     base = "@bazel_image//image",
+#     cmd = [
+#         "apt update",
+#         "apt install libcups2 libdbus-glib2.0-cil libxrandr2 libxcursor1 libxinerama1 libcairo2 libcairo-gobject2 libpango-1.0-0 libxss1",
+#     ]
+# )
+
+container_run_and_commit(
     name = "bazel_webtesting_image",
-    base = "@bazel_docker//image",
-    cmd = [
+    commands = [
         "apt update",
-        "apt install libcups2 libdbus-glib2.0-cil libxrandr2 libxcursor1 libxinerama1 libcairo2 libcairo-gobject2 libpango-1.0-0",
-    ]
+        "apt install libxss1",
+    ],
+    image = "@bazel_image//image",
 )
 
 container_push(

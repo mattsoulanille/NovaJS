@@ -225,7 +225,7 @@ load("@io_bazel_rules_docker//container:pull.bzl", "container_pull")
 
 # Load base bazel container for building the CI container
 container_pull(
-    name = "bazel_docker",
+    name = "bazel_image",
     registry = "gcr.io",
     repository = "cloud-builders/bazel",
     # 'tag' is also supported, but digest is encouraged for reproducibility.
