@@ -1,6 +1,27 @@
+package(default_visibility = ["//:__subpackages__"])
+
+load("@io_bazel_rules_docker//container:container.bzl", "container_image", "container_push")
+
 exports_files([
     "tsconfig.json",
     "rollup.config.js",
     "rollup_browser.config.ts",
     ".gitignore"], visibility = ["//:__subpackages__"])
-package(default_visibility = ["//:__subpackages__"])
+
+container_image(
+    name = "bazel_webtesting_image",
+    base = "@bazel_docker//image",
+    cmd = [
+        "apt update",
+        "apt install libcups2 libdbus-glib2.0-cil libxrandr2 libxcursor1 libxinerama1 libcairo2 libcairo-gobject2 libpango-1.0-0",
+    ]
+)
+
+container_push(
+    name = "push_bazel_webtesting_image",
+    image = ":bazel_webtesting_image",
+    format = "Docker",
+    registry = "gcr.io",
+    repository = "novajs-303605/bazel_webtesting",
+    tag = "latest",
+)
