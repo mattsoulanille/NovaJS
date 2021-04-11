@@ -1,7 +1,10 @@
 package(default_visibility = ["//:__subpackages__"])
 
 load("@io_bazel_rules_docker//container:container.bzl", "container_image", "container_push")
-load("@io_bazel_rules_docker//docker/util:run.bzl", "container_run_and_commit")
+load("@io_bazel_rules_docker//docker/util:run.bzl", "container_run_and_commit", "container_run_and_commit_layer")
+load("@io_bazel_rules_docker//docker/package_managers:download_pkgs.bzl", "download_pkgs")
+load("@io_bazel_rules_docker//docker/package_managers:install_pkgs.bzl", "install_pkgs")
+
 
 exports_files([
     "tsconfig.json",
@@ -18,13 +21,51 @@ exports_files([
 #     ]
 # )
 
+# container_image(
+#     name = "bazel_base",
+#     base = "@bazel_image//image",
+#     cmd = "",
+#     entrypoint = "",
+# )
+
+# download_pkgs(
+#     name = "chrome_pkgs",
+#     image_tar = "@bazel_image//image",
+#     packages = [
+#         "libxss1",
+#     ],
+# )
+
+# install_pkgs(
+#     name = "chrome_pkgs_image",
+#     image_tar = "@bazel_image//image",
+#     installables_tar = ":chrome_pkgs.tar",
+#     installation_cleanup_commands = "rm -rf /var/lib/apt/lists/*",
+#     output_image_name = "chrome_pkgs_image",
+# )
+
+
 container_run_and_commit(
-    name = "bazel_webtesting_image",
+    name = "bazel_webtesting_layer",
     commands = [
         "apt update",
         "apt install libxss1",
     ],
+    # docker_run_flags = [
+    #     "--entrypoint",
+    #     "/bin/bash",
+    # ],
+    #image = ":bazel_base",
     image = "@bazel_image//image",
+)
+
+container_image(
+    name = "bazel_webtesting_image",
+    base = "@bazel_image//image",
+    layers = [
+        ":bazel_webtesting_layer",
+    ],
+    #base = "chrome_pkgs_image",
 )
 
 container_push(

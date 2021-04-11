@@ -12,10 +12,10 @@ describe('display plugin', () => {
         world = new World();
         gameData = new MockGameData();
         world.resources.set(GameDataResource, gameData);
-        //world.addPlugin(Display);
+        world.addPlugin(Display);
     });
 
     it('does not add a sprite to the stage if the entity is gone', () => {
-
+        expect(123).toEqual(123);
     });
 });
