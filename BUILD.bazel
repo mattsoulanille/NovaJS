@@ -55,7 +55,7 @@ container_run_and_commit_layer(
     name = "bazel_webtesting_layer",
     commands = [
         "apt update",
-        "apt install -y unzip libnss3 libxss1",
+        "apt install -y unzip libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0",
     ],
     # docker_run_flags = [
     #     "--entrypoint",
