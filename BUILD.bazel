@@ -71,7 +71,7 @@ container_image(
     layers = [
         ":bazel_webtesting_layer",
     ],
-    entrypoint = "bazel",
+    #entrypoint = "bazel",
     #base = "chrome_pkgs_image",
 )
 
