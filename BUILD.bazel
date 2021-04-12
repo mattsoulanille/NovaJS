@@ -12,6 +12,7 @@ exports_files([
     "rollup_browser.config.ts",
     ".gitignore"], visibility = ["//:__subpackages__"])
 
+# TODO: Remove
 # container_image(
 #     name = "bazel_webtesting_image",
 #     base = "@bazel_image//image",
@@ -21,42 +22,47 @@ exports_files([
 #     ]
 # )
 
-# container_image(
-#     name = "bazel_base",
-#     base = "@bazel_image//image",
-#     cmd = "",
-#     entrypoint = "",
-# )
+# Remove `bazel` as the entry point so shell commands can be run.
+container_image(
+    name = "bazel_base",
+    base = "@bazel_image//image",
+    cmd = "",
+    entrypoint = "",
+)
 
+# As far as I can tell, this mode of installing packages
+# forces you to push a '.tar' instead of layers.
 # download_pkgs(
 #     name = "chrome_pkgs",
-#     image_tar = "@bazel_image//image",
+#     image_tar = ":bazel_base.tar",
 #     packages = [
+#         "unzip",
+#         "libnss3",
 #         "libxss1",
 #     ],
 # )
 
-# install_pkgs(
-#     name = "chrome_pkgs_image",
-#     image_tar = "@bazel_image//image",
-#     installables_tar = ":chrome_pkgs.tar",
-#     installation_cleanup_commands = "rm -rf /var/lib/apt/lists/*",
-#     output_image_name = "chrome_pkgs_image",
-# )
+install_pkgs(
+    name = "chrome_pkgs_image",
+    image_tar = ":bazel_base.tar",
+    installables_tar = ":chrome_pkgs.tar",
+    installation_cleanup_commands = "rm -rf /var/lib/apt/lists/*",
+    output_image_name = "chrome_pkgs_image",
+)
 
 
-container_run_and_commit(
+container_run_and_commit_layer(
     name = "bazel_webtesting_layer",
     commands = [
         "apt update",
-        "apt install libxss1",
+        "apt install -y unzip libnss3 libxss1",
     ],
     # docker_run_flags = [
     #     "--entrypoint",
     #     "/bin/bash",
     # ],
-    #image = ":bazel_base",
-    image = "@bazel_image//image",
+    image = ":bazel_base.tar",
+    #image = "@bazel_image//image",
 )
 
 container_image(
@@ -65,6 +71,7 @@ container_image(
     layers = [
         ":bazel_webtesting_layer",
     ],
+    entrypoint = "bazel",
     #base = "chrome_pkgs_image",
 )
 
