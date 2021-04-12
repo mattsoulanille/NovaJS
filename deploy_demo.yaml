@@ -1,6 +1,6 @@
 steps:
   # Test novajs
-  - name: gcr.io/cloud-builders/bazel
+  - name: 'gcr.io/novajs-303605/bazel_webtesting'
     id: unittest
     args: ['test', '--config=ci', '--google_default_credentials', '...']
 
@@ -19,7 +19,7 @@ steps:
     waitFor: ['unittest']
 
   # Publish the image
-  - name: gcr.io/cloud-builders/bazel
+  - name: 'gcr.io/cloud-builders/bazel'
     id: push_container
     args: ['run', '--config=ci', '--google_default_credentials', '//nova:push_nova_image']
     waitFor: ['copy-novafiles', 'copy-plugins']

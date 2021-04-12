@@ -1,30 +1,45 @@
-# Add rules here to build your software
-# See https://docs.bazel.build/versions/master/build-ref.html#BUILD_files
-
-# Allow any ts_library rules in this workspace to reference the config
-# Note: if you move the tsconfig.json file to a subdirectory, you can add an alias() here instead
-#   so that ts_library rules still use it by default.
-#   See https://www.npmjs.com/package/@bazel/typescript#installation
-exports_files(["tsconfig.json", "rollup.config.js", "rollup_browser.config.ts", ".gitignore"], visibility = ["//:__subpackages__"])
 package(default_visibility = ["//:__subpackages__"])
 
-load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
+load("@io_bazel_rules_docker//container:container.bzl", "container_image", "container_push")
+load("@io_bazel_rules_docker//docker/util:run.bzl", "container_run_and_commit_layer")
 
-# pkg_npm(
-#     name = "novaparse_pkg",
-#     deps = [
-#         "//novaparse",
-#     ]
-# )
 
-# pkg_npm(
-#     name = "nova_ecs_pkg",
-#     package_name = "nova_ecs",
-#     deps = [
-#         "//nova_ecs:ecs",
-#         "//nova_ecs/plugins",
-#         "//nova_ecs/datatypes",
-#     ]
-# )
+exports_files([
+    "tsconfig.json",
+    "rollup.config.js",
+    "rollup_browser.config.ts",
+    ".gitignore"], visibility = ["//:__subpackages__"])
 
-#pkg_npm(name = "novajs")
+# Remove `bazel` as the entry point so shell commands can be run.
+container_image(
+    name = "bazel_base",
+    base = "@bazel_image//image",
+    cmd = "",
+    entrypoint = "",
+)
+
+container_run_and_commit_layer(
+    name = "bazel_webtesting_layer",
+    commands = [
+        "apt update",
+        "apt install -y unzip libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0",
+    ],
+    image = ":bazel_base.tar",
+)
+
+container_image(
+    name = "bazel_webtesting_image",
+    base = "@bazel_image//image",
+    layers = [
+        ":bazel_webtesting_layer",
+    ],
+)
+
+container_push(
+    name = "push_bazel_webtesting_image",
+    image = ":bazel_webtesting_image",
+    format = "Docker",
+    registry = "gcr.io",
+    repository = "novajs-303605/bazel_webtesting",
+    tag = "latest",
+)

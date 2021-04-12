@@ -16,6 +16,7 @@ import { ProjectileDataComponent } from "../nova_plugin/projectile_plugin";
 import { ShipDataProvider } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { starfield } from "./starfield_plugin";
+import { Entities, UUID } from "nova_ecs/arg_types";
 
 export const Stage = new Resource<PIXI.Container>('Stage');
 
@@ -55,14 +56,19 @@ const FirstAnimation = FirstAvailable([
 const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicProvider = ProvideAsync({
     provided: AnimationGraphicComponent,
-    args: [FirstAnimation, Stage, GameDataResource] as const,
-    factory: async (animation, stage, gameData) => {
+    args: [FirstAnimation, Stage, GameDataResource, Entities, UUID] as const,
+    factory: async (animation, stage, gameData, entities, uuid) => {
         const graphic = new AnimationGraphic({
             gameData: currentIfDraft(gameData)!,
             animation: currentIfDraft(animation)!,
         });
         await graphic.buildPromise;
-        stage.addChild(graphic.container);
+
+        // Only add the graphic to the stage if the entity still exists
+        if (entities.has(uuid)) {
+            stage.addChild(graphic.container);
+        }
+
         return graphic;
     }
 });
