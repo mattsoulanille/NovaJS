@@ -37,6 +37,7 @@ ts_library(
     deps = [
         ":display",
         "@npm//@types/jasmine",
+        "@npm//pixi.js",
         "//nova_ecs:ecs",
         "//novadatainterface",
         "//nova/src/nova_plugin",
