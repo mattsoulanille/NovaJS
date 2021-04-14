@@ -20,7 +20,7 @@ import { Entities, UUID } from "nova_ecs/arg_types";
 
 export const Stage = new Resource<PIXI.Container>('Stage');
 
-const AnimationComponent = new Component<Animation>('AnimationComponent');
+export const AnimationComponent = new Component<Animation>('AnimationComponent');
 
 const ShipAnimationComponentProvider = Provide({
     provided: AnimationComponent,
@@ -54,21 +54,32 @@ const FirstAnimation = FirstAvailable([
 ]);
 
 const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
-const AnimationGraphicProvider = ProvideAsync({
+const AnimationGraphicLoader = ProvideAsync({
     provided: AnimationGraphicComponent,
-    args: [FirstAnimation, Stage, GameDataResource, Entities, UUID] as const,
-    factory: async (animation, stage, gameData, entities, uuid) => {
+    args: [FirstAnimation, GameDataResource] as const,
+    async factory(animation, gameData) {
         const graphic = new AnimationGraphic({
             gameData: currentIfDraft(gameData)!,
             animation: currentIfDraft(animation)!,
         });
         await graphic.buildPromise;
+        return graphic;
+    }
+});
 
+// Add the graphic to the PIXI stage in a synchronous provider. Othewise,
+// the check that makes sure the entity is still in the world may be
+// invalid.
+const AnimationGraphicProvider = Provide({
+    provided: AnimationGraphicComponent,
+    args: [AnimationGraphicLoader, Stage, Entities, UUID] as const,
+    factory(graphic, stage, entities, uuid) {
         // Only add the graphic to the stage if the entity still exists
         if (entities.has(uuid)) {
             stage.addChild(graphic.container);
+        } else {
+            console.log(uuid);
         }
-
         return graphic;
     }
 });
@@ -82,8 +93,8 @@ const AnimationGraphicCleanup = new System({
     }
 });
 
-const ShipDrawSystem = new System({
-    name: "ShipDrawSystem",
+const ObjectDrawSystem = new System({
+    name: "ObjectDrawSystem",
     args: [MovementStateComponent, AnimationGraphicProvider] as const,
     step: (movementState, graphic) => {
         if (movementState.turning < 0) {
@@ -118,7 +129,7 @@ export const Display: Plugin = {
         world.resources.set(Stage, new PIXI.Container());
         await world.addPlugin(starfield());
         world.addSystem(AnimationGraphicCleanup);
-        world.addSystem(ShipDrawSystem);
+        world.addSystem(ObjectDrawSystem);
         world.addSystem(CenterShipSystem);
     }
 };
