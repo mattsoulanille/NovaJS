@@ -39,10 +39,10 @@
     c8 "~7.5.0"
     jasmine-reporters "~2.4.0"
 
-"@bazel/labs@^3.3.0":
-  version "3.3.0"
-  resolved "https://registry.yarnpkg.com/@bazel/labs/-/labs-3.3.0.tgz#a95cbcf4cbc9d37b31155e82abef865a526899b0"
-  integrity sha512-jIfN4TdRcH2dfLiY0181Pr/CadmBAn5rU8SHevC7l5MScliG4FiqiuZdr3Ae+d4ZSiz5mFfizuXzOjk4MCU7Ng==
+"@bazel/labs@^3.4.1":
+  version "3.4.1"
+  resolved "https://registry.yarnpkg.com/@bazel/labs/-/labs-3.4.1.tgz#b67f6748126a28a2e5d38e89a702f6340b1b2902"
+  integrity sha512-xYyrkuRL6TYkYFjGKN0UhlUNr8+8qs2XmZc+hY1BuXytPU3WB/aezxsyd6r9QmHqcqlkRio5R+5hm7tlPYGlcg==
 
 "@bazel/typescript@3.3.0":
   version "3.3.0"
