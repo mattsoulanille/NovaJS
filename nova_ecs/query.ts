@@ -15,9 +15,10 @@ export class Query<QueryArgs extends readonly ArgTypes[]
     = readonly ArgTypes[]> {
 
     // Prevent query from being a subtype of EcsEvent
-    private readonly querySymbol = querySymbol;
+    private readonly _querySymbol = querySymbol;
     readonly components: ReadonlySet<UnknownComponent>;
     readonly resources: ReadonlySet<UnknownResource>;
+    readonly queries: Query[];
 
     constructor(readonly args: QueryArgs, readonly name?: string) {
         const modifiers = args.filter(arg => arg instanceof Modifier) as UnknownModifier[];
@@ -38,6 +39,9 @@ export class Query<QueryArgs extends readonly ArgTypes[]
         this.resources = new Set([...(this.args.filter(
             a => (a instanceof Resource)) as UnknownResource[]),
         ...modifierResources]);
+
+        this.queries = [...(this.args.filter(
+            (a): a is Query => (a instanceof Query)))];
     }
 
     supportsEntity(entity: WithComponents) {

@@ -81,13 +81,13 @@ export function setIntersection<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): Set<T>
 }
 
 export class DefaultMap<K, V> extends Map<K, V> {
-    constructor(private factory: () => V) {
+    constructor(private factory: (key: K) => V) {
         super();
     }
 
     get(key: K): V {
         if (!super.has(key)) {
-            super.set(key, this.factory());
+            super.set(key, this.factory(key));
         }
         return super.get(key)!;
     }

@@ -1,3 +1,4 @@
+import { UnknownComponent } from "./component";
 import { ComponentMap } from "./component_map";
 import { Entity } from "./entity";
 import { EventMap, SyncSubject } from "./event_map";
@@ -7,7 +8,9 @@ export interface EntityMap extends Map<string, Entity> { }
 
 export class EntityMapWrapped extends EventMap<string, Entity> implements EntityMap {
     events!: EventMap<string, Entity>['events'] & {
-        change: SyncSubject<[string, Entity]>
+        addComponent: SyncSubject<[string, Entity, UnknownComponent]>,
+        deleteComponent: SyncSubject<[string, Entity, UnknownComponent]>,
+        changeComponent: SyncSubject<[string, Entity, UnknownComponent]>,
     };
 
     private entityChangeUnsubscribe = new Map<string,
@@ -15,9 +18,10 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
 
     constructor() {
         super();
-        this.events.change = new SyncSubject();
+        this.events.addComponent = new SyncSubject();
+        this.events.deleteComponent = new SyncSubject();
+        this.events.changeComponent = new SyncSubject();
     }
-
 
     set(uuid: string, entity: Entity) {
         const current = this.get(uuid);
@@ -30,18 +34,23 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
         const componentEvents = componentsEventMap.events;
         entity.components = componentsEventMap as ComponentMap;
 
-        // Subscribe to changes from the entity
-        const reportChange = () => {
-            this.events.change.next([uuid, entity]);
-        }
-
-        const s1 = componentEvents.add.subscribe(reportChange);
-        const s2 = componentEvents.delete.subscribe(reportChange);
+        const s1 = componentEvents.add.subscribe(([component]) => {
+            this.events.addComponent.next([uuid, entity, component]);
+        });
+        const s2 = componentEvents.delete.subscribe((components) => {
+            for (const [component] of components) {
+                this.events.deleteComponent.next([uuid, entity, component]);
+            }
+        });
+        const s3 = componentEvents.set.subscribe(([component]) => {
+            this.events.changeComponent.next([uuid, entity, component]);
+        });
 
         this.entityChangeUnsubscribe.set(uuid, {
             unsubscribe() {
                 s1.unsubscribe();
                 s2.unsubscribe();
+                s3.unsubscribe();
             }
         });
 

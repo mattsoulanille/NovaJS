@@ -915,7 +915,6 @@ describe('world', () => {
             .addComponent(FOO_COMPONENT, { x: 100 })
             .build());
 
-
         world.step();
         world.emit(AddEvent, 5);
         world.step();
@@ -1055,5 +1054,61 @@ describe('world', () => {
             new Set(['BarSystem']),
             new Set(['FooSystem', 'BarSystem', 'FooBarSystem']),
         ]);
+    });
+
+    it('handles nested queries correctly', () => {
+        const FooQuery = new Query([FOO_COMPONENT] as const);
+        const foos: number[][] = [];
+
+        const barSystem = new System({
+            name: 'BarSystem',
+            args: [FooQuery, BAR_COMPONENT] as const,
+            step: (fooQuery) => {
+                foos.push(fooQuery.map(([foo]) => foo.x));
+            }
+        });
+
+        world.addSystem(barSystem);
+        const e1 = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hi' })
+            .build();
+
+        world.entities.set('e1', e1);
+
+        world.step();
+
+        const e2 = new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .build();
+        world.entities.set('e2', e2);
+
+        world.step();
+
+        expect(foos).toEqual([[], [123]]);
+    });
+
+    it('handles replacing components correctly', () => {
+        const bars: string[] = [];
+        const barSystem = new System({
+            name: 'BarSystem',
+            args: [BAR_COMPONENT] as const,
+            step: ({ y }) => {
+                bars.push(y);
+            }
+        });
+
+        world.addSystem(barSystem);
+        const e1 = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' })
+            .build();
+
+        world.entities.set('e1', e1);
+        world.step();
+
+        e1.components.set(BAR_COMPONENT, { y: 'bye' });
+
+        world.step();
+
+        expect(bars).toEqual(['hello', 'bye']);
     });
 });

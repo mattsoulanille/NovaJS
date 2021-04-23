@@ -9,10 +9,11 @@ import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
 import { ProvideAsyncPlugin } from "./provider";
 import { Query } from "./query";
+import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
-import { topologicalSort } from './utils';
+import { DefaultMap, topologicalSort } from './utils';
 
 // How do you serialize components and make sure the receiver
 // knows which is which?
@@ -59,11 +60,6 @@ interface EcsEventWithEntities<Data> {
     entities?: Set<string | [string, Entity]>;
 }
 
-type QueryCache = Map<Query, {
-    entities: Map<string, Entity>,
-    toCheck: Map<string, Entity>,
-}>;
-
 export class World {
     private readonly state = {
         entities: new EntityMapWrapped(),
@@ -84,8 +80,7 @@ export class World {
     private eventQueue: EcsEventWithEntities<unknown>[] = [];
     private boundEmit: EmitFunction = this.emit.bind(this);
 
-    // Query cache
-    private queries: QueryCache = new Map();
+    private queries = new QueryCache(this.entities, this.getArg.bind(this));
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
@@ -98,31 +93,9 @@ export class World {
         // Get the handle for the singleton entity.
         this.singletonEntity = this.entities.get('singleton')!;
 
-        this.state.entities.events.add.subscribe(([uuid, entity]) => {
-            // Update queries with newly added entities
-            for (const query of this.queries.values()) {
-                query.toCheck.set(uuid, entity);
-                query.entities.delete(uuid);
-            }
-        });
-
-        this.state.entities.events.change.subscribe(([uuid, entity]) => {
-            for (const query of this.queries.values()) {
-                query.toCheck.set(uuid, entity);
-                query.entities.delete(uuid);
-            }
-        });
-
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
             this.emitWrapped(DeleteEvent, undefined, deleted);
-            // Update queries
-            for (const query of this.queries.values()) {
-                for (const [uuid] of deleted) {
-                    query.toCheck.delete(uuid);
-                    query.entities.delete(uuid);
-                }
-            }
         });
 
         this.state.resources.events.set.subscribe(added => {
@@ -254,9 +227,10 @@ export class World {
             }).filter((entry): entry is [string, Entity] => Boolean(entry[1]));
         }
 
-        const eventTuple = [eventWithEntities.event, eventWithEntities.data] as const;
+        const event = [eventWithEntities.event, eventWithEntities.data] as const;
         for (const system of systems) {
-            const argList = this.fulfillQuery(system.query, entities, eventTuple);
+            const argList = this.queries.get(system.query)
+                .getResult({ entities, event });
             for (const args of argList) {
                 system.step(...args);
             }
@@ -289,7 +263,8 @@ export class World {
             return left(undefined);
         } else if (arg instanceof Query) {
             // Queries always fulfill because if no entities match, they return [].
-            return right(this.fulfillQuery(arg) as ArgData<T>);
+            const query = this.queries.get(arg);
+            return right(query.getResult() as ArgData<T>);
         } else if (arg === Entities) {
             return right(this.state.entities as ArgData<T>);
         } else if (arg === Components) {
@@ -317,8 +292,10 @@ export class World {
             return left(undefined);
         } else if (arg instanceof Modifier) {
             const modifier = arg as UnknownModifier;
-            const modifierQueryResults = this.fulfillQueryForEntity(
-                entity, uuid, modifier.query);
+            const query = this.queries.get(modifier.query);
+            const modifierQueryResults = query.getResultForEntity(entity, uuid)
+            // const modifierQueryResults = this.fulfillQueryForEntity(
+            //     entity, uuid, modifier.query);
             if (isLeft(modifierQueryResults)) {
                 return left(undefined);
             }
@@ -327,62 +304,6 @@ export class World {
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
-    }
-
-    private fulfillQuery<C extends readonly ArgTypes[]>(query: Query<C>,
-        entities: Iterable<[string, Entity]> = this.state.entities,
-        event?: readonly [EcsEvent<unknown>, unknown]): QueryResults<Query<C>> {
-
-        if (!this.queries.has(query)) {
-            this.queries.set(query, {
-                entities: new Map(),
-                toCheck: new Map(this.entities),
-            });
-        }
-        const cachedQuery = this.queries.get(query)!;
-
-        // Update cached query
-        for (const [key, entity] of cachedQuery.toCheck) {
-            if (query.supportsEntity(entity)) {
-                cachedQuery.entities.set(key, entity);
-            }
-            cachedQuery.toCheck.delete(key);
-        }
-
-        const supportedEntities = [...entities].filter(([uuid, entity]) => {
-            // Don't rely on the cached query for DeleteEvent because
-            // the entity (and its entry in the cached query) have already
-            // been removed.
-            if (event?.[0] === DeleteEvent) {
-                return query.supportsEntity(entity);
-            }
-            return cachedQuery.entities.has(uuid)
-        });
-
-        const entityResults = supportedEntities.map(([uuid, entity]) =>
-            [entity, this.fulfillQueryForEntity(entity, uuid, query, event)] as const)
-            .filter((results): results is [Entity, Right<ArgsToData<C>>] => isRight(results[1]))
-            .map(rightResults => [rightResults[0], rightResults[1].right] as const);
-
-        const result = entityResults.map(([, results]) => results);
-
-        return result;
-    }
-
-    private fulfillQueryForEntity<C extends readonly ArgTypes[]>(
-        entity: Entity, uuid: string, query: Query<C>,
-        event?: readonly [EcsEvent<unknown>, unknown]):
-        Either<undefined, ArgsToData<C>> {
-
-        const results = query.args.map(arg => this.getArg(arg, entity, uuid, event));
-        const rightResults: unknown[] = [];
-        for (const result of results) {
-            if (isLeft(result)) {
-                return left(undefined);
-            }
-            rightResults.push(result.right);
-        }
-        return right(rightResults as unknown as ArgsToData<C>);
     }
 
     toString() {

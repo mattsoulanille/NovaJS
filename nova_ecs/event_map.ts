@@ -11,7 +11,7 @@ export class MapEvent<V> {
     }
 }
 
-interface SyncSubscription {
+export interface SyncSubscription {
     unsubscribe: () => void;
 }
 
@@ -54,13 +54,15 @@ export class EventMap<K, V> extends Map<K, V> {
         this.events.delete.next(toDelete);
     }
     set(key: K, value: V): this {
+        let hadKeyAlready = this.has(key);
+        super.set(key, value);
+
         // When constructing with entries, events may
         // not yet be defined, hence the `?`.
         this.events?.set.next([key, value]);
-        if (!this.has(key)) {
+        if (!hadKeyAlready) {
             this.events?.add.next([key, value]);
         }
-        super.set(key, value);
         return this;
     }
     delete(key: K) {
