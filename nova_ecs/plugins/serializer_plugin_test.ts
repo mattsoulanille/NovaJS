@@ -43,7 +43,7 @@ describe('Serializer Plugin', () => {
             .build();
 
         const encoded = serializer.encode(entity);
-        const decoded = serializer.deocde(encoded);
+        const decoded = serializer.decode(encoded);
         if (isLeft(decoded)) {
             fail('Expected to decode successfully');
             return;
@@ -59,7 +59,7 @@ describe('Serializer Plugin', () => {
             .build();
 
         const encoded = serializer.encode(entity);
-        const decoded = serializer.deocde(encoded);
+        const decoded = serializer.decode(encoded);
         if (isLeft(decoded)) {
             fail('Expected to decode successfully');
             return;
@@ -81,7 +81,7 @@ describe('Serializer Plugin', () => {
             .build();
 
         const encoded = serializer.encode(inputEntity);
-        const decoded = serializer.deocde(encoded);
+        const decoded = serializer.decode(encoded);
         if (isLeft(decoded)) {
             fail('Expected to decode successfully');
             return;
