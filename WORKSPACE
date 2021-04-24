@@ -228,7 +228,5 @@ container_pull(
     name = "bazel_image",
     registry = "gcr.io",
     repository = "cloud-builders/bazel",
-    # 'tag' is also supported, but digest is encouraged for reproducibility.
-    #digest = "sha256:deadbeef",
-    tag = "latest",
+    digest = "sha256:9faaccc351f9b172ab74b8607b3afe0f057e95b2975cfb5146be51fbc78603fd"
 )
