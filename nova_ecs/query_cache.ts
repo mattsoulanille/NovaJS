@@ -23,21 +23,15 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
             ([, entity]) => query.supportsEntity(entity)));
 
         const subscriptions = [
-            entities.events.add.subscribe(([uuid, entity]) => {
+            entities.events.set.subscribe(([uuid, entity]) => {
+                if (this.entities.get(uuid) === entity) {
+                    return;
+                }
                 if (query.supportsEntity(entity)) {
                     this.entities.set(uuid, entity);
+                } else {
+                    this.entities.delete(uuid);
                 }
-                this.entityResults.delete(entity);
-                this.resultValid = false;
-            }),
-            entities.events.addComponent.subscribe(([uuid, entity]) => {
-                if (query.supportsEntity(entity)) {
-                    this.entities.set(uuid, entity);
-                }
-                this.entityResults.delete(entity); // for `Optional` etc.
-                this.resultValid = false;
-            }),
-            entities.events.changeComponent.subscribe(([, entity]) => {
                 this.entityResults.delete(entity);
                 this.resultValid = false;
             }),
@@ -49,6 +43,17 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
                     this.entities.delete(uuid);
                     this.entityResults.delete(entity);
                 }
+            }),
+            entities.events.addComponent.subscribe(([uuid, entity]) => {
+                if (query.supportsEntity(entity)) {
+                    this.entities.set(uuid, entity);
+                }
+                this.entityResults.delete(entity); // for `Optional` etc.
+                this.resultValid = false;
+            }),
+            entities.events.changeComponent.subscribe(([, entity]) => {
+                this.entityResults.delete(entity);
+                this.resultValid = false;
             }),
             entities.events.deleteComponent.subscribe(([uuid, entity, component]) => {
                 if (query.components.has(component) && !query.supportsEntity(entity)) {
