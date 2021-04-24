@@ -3,6 +3,7 @@ import { ArgsToData, ArgTypes, QueryResults } from "./arg_types";
 import { Entity } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
 import { DeleteEvent, EcsEvent, StepEvent } from "./events";
+import { FilterMapIterable } from "./filter_map_iterable";
 import { Query } from "./query";
 import { DefaultMap } from "./utils";
 import { World } from "./world";
@@ -69,47 +70,52 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
     getResultForEntity(entity: Entity, uuid: string,
         event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>> {
 
-        const isStep = event ? event[0] === StepEvent : true;
-        if (isStep && this.entityResults.has(entity)) {
-            // Update referenced queries
-            for (const arg of this.query.queries) {
-                const cached = this.queryCache.get(arg);
-                cached.getResult();
-            }
-            // Return from cache
-            return right(this.entityResults.get(entity)!);
-        } else {
-            // Create cache entry / result for entity.
-            const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
-            const rightResults: unknown[] = [];
-            for (const result of results) {
-                if (isLeft(result)) {
-                    return left(undefined);
-                }
-                rightResults.push(result.right);
-            }
+        const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
 
-            const result = rightResults as unknown as ArgsToData<Args>;
-
-            if (isStep) {
-                this.entityResults.set(entity, result);
+        const rightResults: unknown[] = [];
+        for (const result of results) {
+            if (isLeft(result)) {
+                return left(undefined);
             }
-            return right(result);
+            rightResults.push(result.right);
         }
+
+        return right(rightResults as unknown as ArgsToData<Args>);
+
+
+        // const isStep = event ? event[0] === StepEvent : true;
+        // if (isStep && this.entityResults.has(entity)) {
+        //     // Update referenced queries
+        //     for (const arg of this.query.queries) {
+        //         const cached = this.queryCache.get(arg);
+        //         cached.getResult();
+        //     }
+        //     // Return from cache
+        //     return right(this.entityResults.get(entity)!);
+        // } else {
+        //     // Create cache entry / result for entity.
+        //     const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
+        //     const rightResults: unknown[] = [];
+        //     for (const result of results) {
+        //         if (isLeft(result)) {
+        //             return left(undefined);
+        //         }
+        //         rightResults.push(result.right);
+        //     }
+
+        //     const result = rightResults as unknown as ArgsToData<Args>;
+
+        //     if (isStep) {
+        //         this.entityResults.set(entity, result);
+        //     }
+        //     return right(result);
+        // }
     }
 
     getResult({ entities, event }: {
         entities?: Iterable<[string, Entity]>,
         event?: readonly [EcsEvent<unknown>, unknown],
     } = {}): QueryResults<Query<Args>> {
-
-        // Only use the cache if the event is a step event and there are
-        // no entities specified (i.e. use all entities).
-        const isStep = event ? event[0] === StepEvent : true;
-
-        if (isStep && !entities && this.valid) {
-            return this.wrappedResult;
-        }
 
         let supportedEntities: [string, Entity][];
         if (entities || event?.[0] === DeleteEvent) {
@@ -126,27 +132,60 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
             supportedEntities = [...this.entities];
         }
 
-        const queryResults = supportedEntities.map(([uuid, entity]) =>
-            [entity, this.getResultForEntity(entity, uuid, event)] as const)
+
+
+        const queryResults = new FilterMapIterable(supportedEntities)
+            .map(([uuid, entity]) =>
+                [entity, this.getResultForEntity(entity, uuid, event)] as const)
             .filter((results): results is [Entity, Right<ArgsToData<Args>>] => isRight(results[1]))
             .map(rightResults => rightResults[1].right);
 
+        return queryResults;
 
-        // Don't cache events other than Step
-        if (!isStep || entities) {
-            return queryResults;
-        }
+        // // Only use the cache if the event is a step event and there are
+        // // no entities specified (i.e. use all entities).
+        // const isStep = event ? event[0] === StepEvent : true;
 
-        // We use the same wrappedResult instead of reassigning it because
-        // otherwise, we'd have to update the references of all queries
-        // that depend on this query.
-        this.wrappedResult.length = 0;
-        for (let i = 0; i < queryResults.length; i++) {
-            this.wrappedResult[i] = queryResults[i];
-        }
+        // if (isStep && !entities && this.valid) {
+        //     return this.wrappedResult;
+        // }
 
-        this.resultValid = true;
-        return this.wrappedResult;
+        // let supportedEntities: [string, Entity][];
+        // if (entities || event?.[0] === DeleteEvent) {
+        //     supportedEntities = [...entities ?? this.entities].filter(([uuid, entity]) => {
+        //         // Don't rely on the cached query for DeleteEvent because
+        //         // the entity (and its entry in the cached query) have already
+        //         // been removed.
+        //         if (event?.[0] === DeleteEvent) {
+        //             return this.query.supportsEntity(entity);
+        //         }
+        //         return this.entities.has(uuid);
+        //     });
+        // } else {
+        //     supportedEntities = [...this.entities];
+        // }
+
+        // const queryResults = supportedEntities.map(([uuid, entity]) =>
+        //     [entity, this.getResultForEntity(entity, uuid, event)] as const)
+        //     .filter((results): results is [Entity, Right<ArgsToData<Args>>] => isRight(results[1]))
+        //     .map(rightResults => rightResults[1].right);
+
+
+        // // Don't cache events other than Step
+        // if (!isStep || entities) {
+        //     return queryResults;
+        // }
+
+        // // We use the same wrappedResult instead of reassigning it because
+        // // otherwise, we'd have to update the references of all queries
+        // // that depend on this query.
+        // this.wrappedResult.length = 0;
+        // for (let i = 0; i < queryResults.length; i++) {
+        //     this.wrappedResult[i] = queryResults[i];
+        // }
+
+        // this.resultValid = true;
+        // return this.wrappedResult;
     }
 
     get valid() {

@@ -286,8 +286,8 @@ describe('async system', () => {
         // However, since the system runs asynchronously on both, it gets the same
         // starting value for both, so it writes them as 124, 457 twice.
         expect(world.entities.get('firstEntity')?.components.get(FOO_COMPONENT)?.x)
-            .toEqual(124);
+            .toEqual(125);
         expect(world.entities.get('secondEntity')?.components.get(FOO_COMPONENT)?.x)
-            .toEqual(457);
+            .toEqual(458);
     });
 });

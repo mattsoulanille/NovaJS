@@ -124,7 +124,8 @@ const AddSquares = new System({
     name: 'AddSquares',
     args: [AddSquaresComponent, Entities, TimeResource,
         new Query([SquarePhysics])] as const,
-    step: (addSquares, entities, time, squares) => {
+    step: (addSquares, entities, time, squaresIterable) => {
+        const squares = [...squaresIterable];
         if (squares.length >= addSquares.max) {
             return;
         }
@@ -173,12 +174,13 @@ const CountSquares = new System({
     args: [TextComponent, new Query([SquareGraphics]),
         new Query([AddSquaresComponent])] as const,
     step: (text, query, addSquaresQuery) => {
-        const addSquaresData = addSquaresQuery[0];
+        const queryValues = [...query];
+        const addSquaresData = [...addSquaresQuery][0];
         if (!addSquaresData) {
             return;
         }
         const addSquares = addSquaresData[0];
-        text.text = `Entities: ${query.length}, Max: ${addSquares.max}`;
+        text.text = `Entities: ${queryValues.length}, Max: ${addSquares.max}`;
         text.position.y = window.innerHeight;
     }
 });

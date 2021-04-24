@@ -1,4 +1,5 @@
 import * as t from 'io-ts';
+import { GetEntity } from 'nova_ecs/arg_types';
 import { Component } from '../component';
 import { Angle, AngleType } from '../datatypes/angle';
 import { Position, PositionType } from '../datatypes/position';
@@ -49,8 +50,8 @@ export const MovementStateComponent = new Component<MovementState>('MovementStat
 
 export const MovementSystem = new System({
     name: 'movement',
-    args: [MovementStateComponent, MovementPhysicsComponent, TimeResource] as const,
-    step(state, physics, time) {
+    args: [MovementStateComponent, MovementPhysicsComponent, TimeResource, GetEntity] as const,
+    step(state, physics, time, _entity) {
         if (physics.movementType === MovementType.INERTIAL) {
             inertialControls({ state, physics, time });
         } else if (physics.movementType === MovementType.INERTIALESS) {

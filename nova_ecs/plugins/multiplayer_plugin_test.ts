@@ -7,7 +7,6 @@ import { Component } from '../component';
 import { EntityBuilder } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
-import { applyObjectDelta, getObjectDelta } from './delta';
 import { DeltaResource } from './delta_plugin';
 import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
 

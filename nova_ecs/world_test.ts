@@ -1064,7 +1064,7 @@ describe('world', () => {
             name: 'BarSystem',
             args: [FooQuery, BAR_COMPONENT] as const,
             step: (fooQuery) => {
-                foos.push(fooQuery.map(([foo]) => foo.x));
+                foos.push([...fooQuery.map(([foo]) => foo.x)]);
             }
         });
 

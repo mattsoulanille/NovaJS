@@ -3,6 +3,7 @@ import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap } from "./entity_map";
 import { EcsEvent, EventData } from "./events";
+import { FilterMapIterable } from "./filter_map_iterable";
 import { Modifier, ModifierResult } from "./modifier";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
@@ -72,4 +73,4 @@ export type ArgsToData<Args> = {
 }
 
 export type QueryResults<Q> =
-    Q extends Query<infer QueryArgs> ? readonly ArgsToData<QueryArgs>[] : never;
+    Q extends Query<infer QueryArgs> ? FilterMapIterable<ArgsToData<QueryArgs>> : never;

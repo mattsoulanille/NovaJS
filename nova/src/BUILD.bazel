@@ -45,7 +45,7 @@ esbuild(
     ],
     entry_point = "browser.ts",
     target = "es2015",
-    minify = True,
+    minify = False,
     sources_content = True,
     define = [
         "process.env.NODE_ENV=\"browser\""
