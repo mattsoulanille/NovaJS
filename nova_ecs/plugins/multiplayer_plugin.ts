@@ -190,7 +190,7 @@ export function multiplayer(communicator: Communicator,
 
                 // Add new entities
                 for (const [uuid, encodedEntity] of message.state ?? []) {
-                    const maybeEntity = serializer.deocde(encodedEntity);
+                    const maybeEntity = serializer.decode(encodedEntity);
                     if (isLeft(maybeEntity)) {
                         warn(`Failed to decode entity: ${maybeEntity.left}`);
                         continue;

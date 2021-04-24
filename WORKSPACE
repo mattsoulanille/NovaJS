@@ -196,12 +196,21 @@ http_archive(
     ],
 )
 
-http_archive(
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+git_repository(
     name = "io_bazel_rules_docker",
-    sha256 = "95d39fd84ff4474babaf190450ee034d958202043e366b9fc38f438c9e6c3334",
-    strip_prefix = "rules_docker-0.16.0",
-    urls = ["https://github.com/bazelbuild/rules_docker/releases/download/v0.16.0/rules_docker-v0.16.0.tar.gz"],
+    remote = "https://github.com/bazelbuild/rules_docker.git",
+    commit = "0adf8b2ff23e8d7a14562be0f5707cd4dbb32998",
+    shallow_since = "1619278302 -0700",
 )
+
+# TODO: Use the next release once the go issue is fixed.
+# http_archive(
+#     name = "io_bazel_rules_docker",
+#     sha256 = "95d39fd84ff4474babaf190450ee034d958202043e366b9fc38f438c9e6c3334",
+#     strip_prefix = "rules_docker-0.16.0",
+#     urls = ["https://github.com/bazelbuild/rules_docker/releases/download/v0.16.0/rules_docker-v0.16.0.tar.gz"],
+# )
 
 load(
     "@io_bazel_rules_docker//repositories:repositories.bzl",
@@ -228,7 +237,5 @@ container_pull(
     name = "bazel_image",
     registry = "gcr.io",
     repository = "cloud-builders/bazel",
-    # 'tag' is also supported, but digest is encouraged for reproducibility.
-    #digest = "sha256:deadbeef",
-    tag = "latest",
+    digest = "sha256:9faaccc351f9b172ab74b8607b3afe0f057e95b2975cfb5146be51fbc78603fd"
 )

@@ -100,7 +100,7 @@ export class Serializer {
         return this.Entity.encode(entity);
     }
 
-    deocde(state: unknown) {
+    decode(state: unknown) {
         return this.Entity.decode(state);
     }
 }

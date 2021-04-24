@@ -28,6 +28,7 @@ ts_library(
         "events.ts",
         "event_map.ts",
         "first_available.ts",
+        "query_cache.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -48,6 +49,8 @@ ts_library(
         "query_test.ts",
         "provider_test.ts",
         "first_available_test.ts",
+        "entity_map_test.ts",
+        "query_cache_test.ts",
     ],
     deps = [
         ":ecs",

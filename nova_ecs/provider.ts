@@ -49,6 +49,9 @@ enablePatches();
 enableMapSet();
 setAutoFreeze(false);
 
+// Used to force the cache to be re-checked by setting a component value.
+const CheckCacheComponent = new Component<undefined>('CheckCacheComponent');
+
 // TODO: Refactor this with AsyncSystem?
 export function ProvideAsync<Provided extends Component<any>, Args extends readonly ArgTypes[]>({ provided, factory, args }: {
     provided: Provided,
@@ -107,7 +110,11 @@ export function ProvideAsync<Provided extends Component<any>, Args extends reado
                         }
                     }).catch(error => {
                         providerMapEntry.error = error;
-                    })
+                    }).finally(() => {
+                        // Invalidate the cache for this entity.
+                        // TODO: Should there be a more 'official' way of doing this?
+                        entity.components.set(CheckCacheComponent, undefined);
+                    }),
                 }
                 providerResource.done = (async () => {
                     await providerResource.done
