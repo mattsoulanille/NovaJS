@@ -217,7 +217,6 @@ describe('Multiplayer Plugin', () => {
         expect(world2.entities.get(testUuid)).toBeUndefined();
     });
 
-
     it('drafts components of entities it owns', () => {
         const testUuid = 'test entity uuid';
         world1.entities.set(testUuid, new EntityBuilder()
@@ -226,6 +225,7 @@ describe('Multiplayer Plugin', () => {
             }).addComponent(BarComponent, {
                 y: 'a test component',
             }).build());
+        debugger;
 
         world1.step();
 

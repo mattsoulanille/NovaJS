@@ -296,8 +296,8 @@ export function multiplayer(communicator: Communicator,
             }
 
             // Get deltas and create drafts 
-            for (const [uuid, entity, multiplayerData] of query) {
-                if (multiplayerData.owner !== comms.uuid) {
+            for (const [uuid, { entity, data }] of entityMap) {
+                if (data.owner !== comms.uuid) {
                     continue;
                 }
                 const entityDelta = deltaMaker.getDelta(entity);
