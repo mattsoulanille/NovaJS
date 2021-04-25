@@ -1,4 +1,5 @@
 import * as t from 'io-ts';
+import { ShipData } from 'novadatainterface/ShipData';
 import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
@@ -29,7 +30,6 @@ export type WeaponState = t.TypeOf<typeof WeaponState>;
 const WeaponsState = map(t.string /* weapon id */, WeaponState);
 export type WeaponsState = t.TypeOf<typeof WeaponsState>;
 export const WeaponsStateComponent = new Component<WeaponsState>('WeaponsStateComponent');
-
 
 interface WeaponLocalState {
     lastFired: number,
@@ -72,26 +72,40 @@ const WeaponsSystem = new System({
             const localState = weaponsLocalState.get(id)!;
             const lastFired = localState.lastFired;
 
-            const reloadTime = ((1 / weapon.fireRate) / state.count) * 1000;
+            let reloadTime = weapon.fireSimultaneously
+                ? weapon.reload : weapon.reload / state.count;
+            let reloadingBurst = false;
+            if (localState.burstCount > weapon.burstCount * state.count) {
+                reloadTime = weapon.burstReload;
+                reloadingBurst = true;
+            }
+
             if (time.time - lastFired < reloadTime) {
                 // Still reloading
                 continue;
             }
 
-            let exitPoint = movementState.position;
-            if (shipData) {
-                if (weapon.exitType !== "center") {
-                    const offset = shipData.animation.exitPoints[weapon.exitType];
-                    localState.exitIndex =
-                        ((localState.exitIndex ?? 0) + 1) % offset.length;
+            if (reloadingBurst) {
+                localState.burstCount = 0;
+            }
 
-                    exitPoint = exitPoint.add(
-                        applyExitPoint(offset[localState.exitIndex],
-                            movementState.rotation,
-                            shipData.animation.exitPoints.upCompress,
-                            shipData.animation.exitPoints.downCompress)
-                    ) as Position;
+            const getNextExitpoint = () => {
+                let exitPoint = movementState.position;
+                if (shipData) {
+                    if (weapon.exitType !== "center") {
+                        const offset = shipData.animation.exitPoints[weapon.exitType];
+                        localState.exitIndex =
+                            ((localState.exitIndex ?? 0) + 1) % offset.length;
+
+                        exitPoint = exitPoint.add(
+                            applyExitPoint(offset[localState.exitIndex],
+                                movementState.rotation,
+                                shipData.animation.exitPoints.upCompress,
+                                shipData.animation.exitPoints.downCompress)
+                        ) as Position;
+                    }
                 }
+                return exitPoint;
             }
 
             if (weapon.type === 'ProjectileWeaponData') {
@@ -99,20 +113,28 @@ const WeaponsSystem = new System({
                     * weapon.accuracy
                     * (2 * Math.PI / 360);
 
-                const projectile = makeProjectile({
-                    projectileData: weapon,
-                    position: exitPoint,
-                    rotation: movementState.rotation.add(inaccuracy),
-                    sourceVelocity: movementState.velocity,
-                    source: uuid,
-                    target: target?.target
-                });
-                entities.set(v4(), projectile);
+                const fireCount = weapon.fireSimultaneously ? state.count : 1;
+                for (let i = 0; i < fireCount; i++) {
+                    const exitPoint = getNextExitpoint();
+                    const projectile = makeProjectile({
+                        projectileData: weapon,
+                        position: exitPoint,
+                        rotation: movementState.rotation.add(inaccuracy),
+                        sourceVelocity: movementState.velocity,
+                        source: uuid,
+                        target: target?.target
+                    });
+                    entities.set(v4(), projectile);
+                    if (weapon.burstCount) {
+                        localState.burstCount++;
+                    }
+                }
                 localState.lastFired = time.time;
             }
         }
     }
 });
+
 
 const ControlPlayerWeapons = new System({
     name: 'ControlPlayerWeapons',
