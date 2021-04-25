@@ -96,10 +96,14 @@ const WeaponsSystem = new System({
             }
 
             if (weapon.type === 'ProjectileWeaponData') {
+                const inaccuracy = 2 * (Math.random() - 0.5)
+                    * weapon.accuracy
+                    * (2 * Math.PI / 360);
+
                 const projectile = makeProjectile({
                     projectileData: weapon,
                     position: exitPoint,
-                    rotation: movementState.rotation,
+                    rotation: movementState.rotation.add(inaccuracy),
                     sourceVelocity: movementState.velocity,
                     source: uuid,
                     target: target?.target
