@@ -14,7 +14,10 @@ import { ControlAction, ControlStateEvent, PlayerShipSelector } from './ship_con
 import { GameDataResource } from './game_data_resource';
 import { makeProjectile, TargetComponent } from './projectile_plugin';
 import { PlatformResource } from './platform_plugin';
-
+import { ShipComponent, ShipDataComponent } from './ship_plugin';
+import { Vector } from 'nova_ecs/datatypes/vector';
+import { Position } from 'nova_ecs/datatypes/position';
+import { applyExitPoint } from './exit_point';
 
 const WeaponState = t.intersection([t.type({
     count: t.number,
@@ -33,6 +36,7 @@ interface WeaponLocalState {
     lastFired: number,
     burstCount: number,
     reloadingBurst: boolean,
+    exitIndex?: number,
 }
 type WeaponsLocalState = Map<string, WeaponLocalState>;
 const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
@@ -50,9 +54,9 @@ const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponentProvider, Entities,
         MovementStateComponent, TimeResource, GameDataResource, UUID,
-        Optional(TargetComponent)] as const,
+        Optional(TargetComponent), Optional(ShipDataComponent)] as const,
     step(weaponsState, weaponsLocalState, entities, movementState, time,
-        gameData, uuid, target) {
+        gameData, uuid, target, shipData) {
         for (const [id, state] of weaponsState) {
             const weapon = gameData.data.Weapon.getCached(id);
             if (!(weapon && state.firing)) {
@@ -75,12 +79,26 @@ const WeaponsSystem = new System({
                 continue;
             }
 
-            if (weapon.type === 'ProjectileWeaponData') {
-                // TODO: ExitPoints
+            let exitPoint = movementState.position;
+            if (shipData) {
+                if (weapon.exitType !== "center") {
+                    const offset = shipData.animation.exitPoints[weapon.exitType];
+                    localState.exitIndex =
+                        ((localState.exitIndex ?? 0) + 1) % offset.length;
 
+                    exitPoint = exitPoint.add(
+                        applyExitPoint(offset[localState.exitIndex],
+                            movementState.rotation,
+                            shipData.animation.exitPoints.upCompress,
+                            shipData.animation.exitPoints.downCompress)
+                    ) as Position;
+                }
+            }
+
+            if (weapon.type === 'ProjectileWeaponData') {
                 const projectile = makeProjectile({
                     projectileData: weapon,
-                    position: movementState.position,
+                    position: exitPoint,
                     rotation: movementState.rotation,
                     sourceVelocity: movementState.velocity,
                     source: uuid,

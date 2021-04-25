@@ -45,14 +45,14 @@ export type AnimationImages = {
     baseImage: AnimationImage
 }
 
-export type ExitPoint = Array<Array<number>>;
+export type ExitPoint = Array<[number, number, number]>;
 export interface ExitPoints {
     gun: ExitPoint;
     turret: ExitPoint;
     guided: ExitPoint;
     beam: ExitPoint;
-    upCompress: Array<number>;
-    downCompress: Array<number>;
+    upCompress: [number, number];
+    downCompress: [number, number];
 };
 
 export function getDefaultExitPoints(): ExitPoints {
@@ -61,8 +61,8 @@ export function getDefaultExitPoints(): ExitPoints {
         turret: [],
         guided: [],
         beam: [],
-        upCompress: [],
-        downCompress: []
+        upCompress: [0, 0],
+        downCompress: [0, 0]
     }
 }
 

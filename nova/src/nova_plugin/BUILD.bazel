@@ -19,6 +19,7 @@ ts_library(
         "projectile_plugin.ts",
         "weapon_plugin.ts",
         "guidance.ts",
+        "exit_point.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

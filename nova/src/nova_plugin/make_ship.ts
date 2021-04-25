@@ -28,7 +28,7 @@ export function makeShip(shipData: ShipData): Entity {
         turning: 0,
         velocity: new Vector(0, 0),
     }).set(WeaponsStateComponent, new Map([
-        ['nova:128', { count: 1, firing: false }]
+        ['nova:128', { count: 100, firing: false }]
     ]));
 
     return ship;
