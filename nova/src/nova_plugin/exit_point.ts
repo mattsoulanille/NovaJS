@@ -6,7 +6,7 @@ export function applyExitPoint(offset: [number, number, number], rotation: Angle
     upCompress: [number, number], downCompress: [number, number]): Vector {
     //    var rotation = (this.source.pointing + 1.5 * Math.PI) % (2 * Math.PI);
 
-    const exit = new Vector(offset[0], offset[1]);
+    const exit = new Vector(offset[0], -offset[1]);
     const rotated = exit.rotate(rotation.angle);
 
     let compressed: Vector;

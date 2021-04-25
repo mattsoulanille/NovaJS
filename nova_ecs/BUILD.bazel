@@ -29,6 +29,7 @@ ts_library(
         "event_map.ts",
         "first_available.ts",
         "query_cache.ts",
+        "without.ts",
     ],
     deps = [
         "@npm//io-ts",

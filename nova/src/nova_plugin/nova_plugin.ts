@@ -2,6 +2,7 @@ import { Plugin } from "nova_ecs/plugin";
 import { DeltaPlugin } from "nova_ecs/plugins/delta_plugin";
 import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
 import { TimePlugin } from "nova_ecs/plugins/time_plugin";
+import { OutfitPlugin } from "./outfit_plugin";
 import { PlanetPlugin } from "./planet_plugin";
 import { PlatformPlugin } from "./platform_plugin";
 import { ProjectilePlugin } from "./projectile_plugin";
@@ -23,6 +24,7 @@ export const Nova: Plugin = {
         world.addPlugin(MovementPlugin);
         world.addPlugin(ProjectilePlugin);
         world.addPlugin(WeaponPlugin);
+        world.addPlugin(OutfitPlugin);
     }
 };
 

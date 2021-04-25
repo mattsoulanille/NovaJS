@@ -2,6 +2,7 @@ import * as t from 'io-ts';
 import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
+import { Position } from 'nova_ecs/datatypes/position';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
@@ -10,14 +11,12 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
-import { ControlAction, ControlStateEvent, PlayerShipSelector } from './ship_controller_plugin';
-import { GameDataResource } from './game_data_resource';
-import { makeProjectile, TargetComponent } from './projectile_plugin';
-import { PlatformResource } from './platform_plugin';
-import { ShipComponent, ShipDataComponent } from './ship_plugin';
-import { Vector } from 'nova_ecs/datatypes/vector';
-import { Position } from 'nova_ecs/datatypes/position';
 import { applyExitPoint } from './exit_point';
+import { GameDataResource } from './game_data_resource';
+import { PlatformResource } from './platform_plugin';
+import { makeProjectile, TargetComponent } from './projectile_plugin';
+import { ControlAction, ControlStateEvent, PlayerShipSelector } from './ship_controller_plugin';
+import { ShipDataComponent } from './ship_plugin';
 
 const WeaponState = t.intersection([t.type({
     count: t.number,
