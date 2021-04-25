@@ -91,6 +91,39 @@ describe('Delta Plugin', () => {
         expect(secondDelta).toBeUndefined();
     });
 
+    it('sends the state of replaced components', () => {
+        const entity = new EntityBuilder()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+            .addComponent(BarComponent, { y: 'Hello' })
+            .build();
+
+        const firstDelta = deltaMaker1.getDelta(entity);
+        if (!firstDelta?.componentStates) {
+            fail('Expected firstDelta to have component states');
+            return;
+        }
+
+        expect([...firstDelta.componentStates?.keys()])
+            .toEqual(['Foo', 'Bar']);
+
+        expect(firstDelta.componentDeltas).toBeUndefined();
+        expect(firstDelta.removeComponents).toBeUndefined();
+
+        entity.components.set(FooComponent, { x: 456 });
+
+        const secondDelta = deltaMaker1.getDelta(entity);
+        if (!secondDelta?.componentStates) {
+            fail('Expected secondDelta to have component states');
+            return;
+        }
+        expect([...secondDelta.componentStates.keys()])
+            .toEqual(['Foo']);
+
+        expect(secondDelta.componentDeltas).toBeUndefined();
+        expect(secondDelta.removeComponents).toBeUndefined();
+    });
+
     it('creates new components that were sent', () => {
         const entity = new EntityBuilder()
             .setName('Test Entity')

@@ -1,7 +1,9 @@
 import * as t from 'io-ts';
+import { ShipData } from 'novadatainterface/ShipData';
 import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
+import { Position } from 'nova_ecs/datatypes/position';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
@@ -10,11 +12,12 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
-import { ControlAction, ControlStateEvent, PlayerShipSelector } from './ship_controller_plugin';
+import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
-import { makeProjectile, TargetComponent } from './projectile_plugin';
 import { PlatformResource } from './platform_plugin';
-
+import { makeProjectile, TargetComponent } from './projectile_plugin';
+import { ControlAction, ControlStateEvent, PlayerShipSelector } from './ship_controller_plugin';
+import { ShipDataComponent } from './ship_plugin';
 
 const WeaponState = t.intersection([t.type({
     count: t.number,
@@ -28,11 +31,11 @@ const WeaponsState = map(t.string /* weapon id */, WeaponState);
 export type WeaponsState = t.TypeOf<typeof WeaponsState>;
 export const WeaponsStateComponent = new Component<WeaponsState>('WeaponsStateComponent');
 
-
 interface WeaponLocalState {
     lastFired: number,
     burstCount: number,
     reloadingBurst: boolean,
+    exitIndex?: number,
 }
 type WeaponsLocalState = Map<string, WeaponLocalState>;
 const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
@@ -50,9 +53,9 @@ const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponentProvider, Entities,
         MovementStateComponent, TimeResource, GameDataResource, UUID,
-        Optional(TargetComponent)] as const,
+        Optional(TargetComponent), Optional(ShipDataComponent)] as const,
     step(weaponsState, weaponsLocalState, entities, movementState, time,
-        gameData, uuid, target) {
+        gameData, uuid, target, shipData) {
         for (const [id, state] of weaponsState) {
             const weapon = gameData.data.Weapon.getCached(id);
             if (!(weapon && state.firing)) {
@@ -69,29 +72,69 @@ const WeaponsSystem = new System({
             const localState = weaponsLocalState.get(id)!;
             const lastFired = localState.lastFired;
 
-            const reloadTime = ((1 / weapon.fireRate) / state.count) * 1000;
+            let reloadTime = weapon.fireSimultaneously
+                ? weapon.reload : weapon.reload / state.count;
+            let reloadingBurst = false;
+            if (localState.burstCount > weapon.burstCount * state.count) {
+                reloadTime = weapon.burstReload;
+                reloadingBurst = true;
+            }
+
             if (time.time - lastFired < reloadTime) {
                 // Still reloading
                 continue;
             }
 
-            if (weapon.type === 'ProjectileWeaponData') {
-                // TODO: ExitPoints
+            if (reloadingBurst) {
+                localState.burstCount = 0;
+            }
 
-                const projectile = makeProjectile({
-                    projectileData: weapon,
-                    position: movementState.position,
-                    rotation: movementState.rotation,
-                    sourceVelocity: movementState.velocity,
-                    source: uuid,
-                    target: target?.target
-                });
-                entities.set(v4(), projectile);
+            const getNextExitpoint = () => {
+                let exitPoint = movementState.position;
+                if (shipData) {
+                    if (weapon.exitType !== "center") {
+                        const offset = shipData.animation.exitPoints[weapon.exitType];
+                        localState.exitIndex =
+                            ((localState.exitIndex ?? 0) + 1) % offset.length;
+
+                        exitPoint = exitPoint.add(
+                            applyExitPoint(offset[localState.exitIndex],
+                                movementState.rotation,
+                                shipData.animation.exitPoints.upCompress,
+                                shipData.animation.exitPoints.downCompress)
+                        ) as Position;
+                    }
+                }
+                return exitPoint;
+            }
+
+            if (weapon.type === 'ProjectileWeaponData') {
+                const inaccuracy = 2 * (Math.random() - 0.5)
+                    * weapon.accuracy
+                    * (2 * Math.PI / 360);
+
+                const fireCount = weapon.fireSimultaneously ? state.count : 1;
+                for (let i = 0; i < fireCount; i++) {
+                    const exitPoint = getNextExitpoint();
+                    const projectile = makeProjectile({
+                        projectileData: weapon,
+                        position: exitPoint,
+                        rotation: movementState.rotation.add(inaccuracy),
+                        sourceVelocity: movementState.velocity,
+                        source: uuid,
+                        target: target?.target
+                    });
+                    entities.set(v4(), projectile);
+                    if (weapon.burstCount) {
+                        localState.burstCount++;
+                    }
+                }
                 localState.lastFired = time.time;
             }
         }
     }
 });
+
 
 const ControlPlayerWeapons = new System({
     name: 'ControlPlayerWeapons',

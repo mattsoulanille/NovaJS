@@ -42,7 +42,7 @@ enablePatches();
 setAutoFreeze(false);
 
 const DeltaComponent = new Component<{
-    components: Set<UnknownComponent>,
+    components: Map<UnknownComponent, unknown>,
 }>('DeltaComponent');
 
 export class DeltaMaker {
@@ -82,7 +82,7 @@ export class DeltaMaker {
         const componentDeltas = new Map<string, unknown>();
 
         if (!entity.components.has(DeltaComponent)) {
-            entity.components.set(DeltaComponent, { components: new Set<UnknownComponent>() });
+            entity.components.set(DeltaComponent, { components: new Map() });
         }
         const deltaComponent = entity.components.get(DeltaComponent)!;
 
@@ -97,16 +97,8 @@ export class DeltaMaker {
             // for tracking changes between calls to getDelta.
             let newDraft: Draft<unknown>;
 
-            if (!deltaComponent.components.has(component)) {
-                // Use the full state for components we haven't seen before
-                const componentType = this.serializer.componentTypes.get(component);
-                if (!componentType) {
-                    throw new Error(`Expected to have component type for ${component.name}`);
-                }
-                componentStates.set(component.name, componentType.encode(data));
-                newDraft = createDraft(data as Objectish);
-            } else {
-                // Use deltas for the remaining components.
+            if (deltaComponent.components.get(component) === data) {
+                // Use deltas for components we've already seen.
                 const { getDelta, deltaType } = componentDeltaFuncs;
 
                 if (isDraft(data)) {
@@ -130,18 +122,29 @@ export class DeltaMaker {
                 } else {
                     newDraft = createDraft(data as Objectish);
                 }
+            } else {
+                // Use the full state for components we haven't seen before or which
+                // have been replaced.
+                const componentType = this.serializer.componentTypes.get(component);
+                if (!componentType) {
+                    throw new Error(`Expected to have component type for ${component.name}`);
+                }
+                componentStates.set(component.name, componentType.encode(data));
+                newDraft = createDraft(data as Objectish);
             }
+
             entity.components.set(component, newDraft);
         }
 
         const entityComponents = new Set(entity.components.keys());
 
         // Mark removed components as removed
+        const deltaComponentSet = new Set([...deltaComponent.components.keys()])
         const removedComponents = new Set(
-            [...setDifference(deltaComponent.components, entityComponents)]
+            [...setDifference(deltaComponentSet, entityComponents)]
                 .map(component => component.name));
         // Update the components list
-        deltaComponent.components = entityComponents;
+        deltaComponent.components = new Map(entity.components);
 
         const entityDelta: EntityDelta = {};
         if (componentStates.size > 0) {

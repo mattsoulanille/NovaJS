@@ -99,7 +99,7 @@ export interface WeaponDamageList {
 export type FireGroup = "primary" | "secondary" | "pointDefense";
 
 export interface BaseWeaponData extends BaseData {
-    fireRate: number;
+    reload: number;
     shotSpeed: number;
     fireGroup: FireGroup;
     exitType: ExitType;
@@ -115,13 +115,13 @@ export interface BaseWeaponData extends BaseData {
 export function getDefaultBaseWeaponData(): BaseWeaponData {
     return {
         ...getDefaultBaseData(),
-        fireRate: 5,
+        reload: 1000,
         shotSpeed: 50,
         fireGroup: "primary",
         exitType: "gun",
         accuracy: 0,
-        burstCount: 1,
-        burstReload: 1,
+        burstCount: 0,
+        burstReload: 1000,
         ammoType: "unlimited",
         useFiringAnimation: true,
         fireSimultaneously: false,

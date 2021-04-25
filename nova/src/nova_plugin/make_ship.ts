@@ -4,8 +4,8 @@ import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { Entity } from "nova_ecs/entity";
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from "nova_ecs/plugins/movement_plugin";
+import { OutfitsStateComponent } from "./outfit_plugin";
 import { ShipComponent } from "./ship_plugin";
-import { WeaponsStateComponent } from "./weapon_plugin";
 
 
 export function makeShip(shipData: ShipData): Entity {
@@ -27,9 +27,10 @@ export function makeShip(shipData: ShipData): Entity {
         turnBack: false,
         turning: 0,
         velocity: new Vector(0, 0),
-    }).set(WeaponsStateComponent, new Map([
-        ['nova:128', { count: 1, firing: false }]
-    ]));
+    }).set(OutfitsStateComponent, new Map(
+        Object.entries(shipData.outfits)
+            .map(([id, count]) => [id, { count }])
+    ));
 
     return ship;
 }
