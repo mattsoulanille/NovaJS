@@ -5,7 +5,6 @@ import { FirstAvailable } from "nova_ecs/first_available";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
-import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
 import * as PIXI from "pixi.js";
@@ -17,8 +16,10 @@ import { ShipDataProvider } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { starfield } from "./starfield_plugin";
 import { Entities, UUID } from "nova_ecs/arg_types";
-
-export const Stage = new Resource<PIXI.Container>('Stage');
+import { StatusBarComponent, StatusBarPlugin } from "./status_bar";
+import { Space } from "./space_resource";
+import { Stage } from "./stage_resource";
+import { Optional } from "nova_ecs/optional";
 
 export const AnimationComponent = new Component<Animation>('AnimationComponent');
 
@@ -67,16 +68,16 @@ const AnimationGraphicLoader = ProvideAsync({
     }
 });
 
-// Add the graphic to the PIXI stage in a synchronous provider. Othewise,
+// Add the graphic to the PIXI container in a synchronous provider. Othewise,
 // the check that makes sure the entity is still in the world may be
 // invalid.
 const AnimationGraphicProvider = Provide({
     provided: AnimationGraphicComponent,
-    args: [AnimationGraphicLoader, Stage, Entities, UUID] as const,
-    factory(graphic, stage, entities, uuid) {
-        // Only add the graphic to the stage if the entity still exists
+    args: [AnimationGraphicLoader, Space, Entities, UUID] as const,
+    factory(graphic, space, entities, uuid) {
+        // Only add the graphic to the container if the entity still exists
         if (entities.has(uuid)) {
-            stage.addChild(graphic.container);
+            space.addChild(graphic.container);
         } else {
             console.log(uuid);
         }
@@ -87,9 +88,9 @@ const AnimationGraphicProvider = Provide({
 const AnimationGraphicCleanup = new System({
     name: 'AnimationGraphicCleanup',
     events: [DeleteEvent],
-    args: [AnimationGraphicComponent, Stage] as const,
-    step: (graphic, stage) => {
-        stage.removeChild(graphic.container);
+    args: [AnimationGraphicComponent, Space] as const,
+    step: (graphic, space) => {
+        space.removeChild(graphic.container);
     }
 });
 
@@ -116,18 +117,25 @@ const ObjectDrawSystem = new System({
 
 const CenterShipSystem = new System({
     name: 'CenterShipPlugin',
-    args: [Stage, MovementStateComponent, PlayerShipSelector] as const,
-    step(stage, movementState) {
-        stage.position.x = -movementState.position.x + window.innerWidth / 2;
-        stage.position.y = -movementState.position.y + window.innerHeight / 2;
+    args: [Space, MovementStateComponent, Optional(StatusBarComponent),
+        PlayerShipSelector] as const,
+    step(space, movementState, statusBar) {
+        space.position.x = -movementState.position.x +
+            (window.innerWidth - (statusBar?.width ?? 0)) / 2;
+        space.position.y = -movementState.position.y + window.innerHeight / 2;
     }
 });
 
 export const Display: Plugin = {
     name: 'Display',
     build: async (world) => {
-        world.resources.set(Stage, new PIXI.Container());
+        const stage = new PIXI.Container();
+        const space = new PIXI.Container();
+        stage.addChild(space);
+        world.resources.set(Stage, stage);
+        world.resources.set(Space, space);
         await world.addPlugin(starfield());
+        await world.addPlugin(StatusBarPlugin);
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(ObjectDrawSystem);
         world.addSystem(CenterShipSystem);

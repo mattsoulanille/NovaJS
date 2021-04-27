@@ -14,6 +14,10 @@ ts_library(
         "textures_from_frames.ts",
         "starfield_plugin.ts",
         "pixi_app_resource.ts",
+        "status_bar.ts",
+        "stage_resource.ts",
+        "space_resource.ts",
+        "resize_event.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -21,6 +25,7 @@ ts_library(
         "//nova_ecs/plugins",
         "//novadatainterface",
         "//nova/src/nova_plugin",
+        "//nova/src/client/gamedata",
         "@npm//pixi.js",
         "@npm//uuid",
         "@npm//@types/uuid",
