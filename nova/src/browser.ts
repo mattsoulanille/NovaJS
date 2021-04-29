@@ -19,6 +19,7 @@ const gameData = new GameData();
 
 const pixelRatio = window.devicePixelRatio || 1;
 PIXI.settings.RESOLUTION = pixelRatio;
+//PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.
 const app = new PIXI.Application({
     width: window.innerWidth * pixelRatio,
     height: window.innerHeight * pixelRatio,
