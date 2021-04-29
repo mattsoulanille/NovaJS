@@ -52,6 +52,18 @@ export class Vector implements VectorLike {
         return this.apply(other, (a, b) => a - b);
     }
 
+    times(other: VectorLike) {
+        return this.apply(other, (a, b) => a * b);
+    }
+
+    div(other: VectorLike) {
+        return this.apply(other, (a, b) => a / b);
+    }
+
+    dot(other: VectorLike) {
+        return this.x * other.x + this.y * other.y;
+    }
+
     rotate(radians: number) {
         const cos = Math.cos(radians);
         const sin = Math.sin(radians);

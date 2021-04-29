@@ -94,10 +94,6 @@ class GameData implements GameDataInterface {
 
     async textureFromPict(id: string): Promise<PIXI.Texture> {
         const pictPath = urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
-        // if (!PIXI.utils.TextureCache[pictPath]) {
-        //     await this.getUrl(pictPath);
-        // }
-
         await this.data.PictImage.get(id);
         return PIXI.Texture.from(pictPath);
     }

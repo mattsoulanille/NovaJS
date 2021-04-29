@@ -72,4 +72,4 @@ export type ArgsToData<Args> = {
 }
 
 export type QueryResults<Q> =
-    Q extends Query<infer QueryArgs> ? readonly ArgsToData<QueryArgs>[] : never;
+    Q extends Query<infer QueryArgs> ? ArgsToData<QueryArgs>[] : never;

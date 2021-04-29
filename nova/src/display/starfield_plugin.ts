@@ -3,7 +3,6 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
-import { Stage } from "./display_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { texturesFromFrames } from "./textures_from_frames";
 import { Resource } from "nova_ecs/resource";
@@ -12,6 +11,7 @@ import { PixiAppResource } from "./pixi_app_resource";
 // This is the distance from the center of the system to the boundary.
 // The system width and height are both 2*BOUNDARY
 import { BOUNDARY } from "nova_ecs/datatypes/position";
+import { Space } from "./space_resource";
 
 const STAR_ID = "nova:700";
 
@@ -79,7 +79,7 @@ export function starfield({ layers = 8, density = 0.00002,
     return {
         name: 'Starfield',
         async build(world) {
-            const stage = world.resources.get(Stage);
+            const stage = world.resources.get(Space);
             if (!stage) {
                 throw new Error('Expected Stage resource to exist');
             }
