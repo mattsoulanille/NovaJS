@@ -84,6 +84,9 @@ build:ci --remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-n
 common:bru --bes_backend=grpc://localhost:5000
 common:bru --bes_results_url=http://localhost:8080/invocation
 
+# https://github.com/bazelbuild/bazel/issues/12905
+build --features=-debug_prefix_map_pwd_is_dot
+
 # Load any settings specific to the current user.
 # .bazelrc.user should appear in .gitignore so that settings are not shared with team members
 # This needs to be last statement in this

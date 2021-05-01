@@ -1,0 +1,57 @@
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+load("@rules_rust//rust:rust.bzl", "rust_binary")
+load("@rules_rust//wasm_bindgen:wasm_bindgen.bzl", "rust_wasm_bindgen")
+load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
+load("//:esbuild.bzl", "esbuild")
+
+package(default_visibility = ["//visibility:public"])
+
+rust_binary(
+    name = "hello_world_wasm",
+    srcs = ["main.rs"],
+    edition = "2018",
+    deps = [
+        "@rules_rust//wasm_bindgen/raze:wasm_bindgen",
+    ],
+)
+
+rust_wasm_bindgen(
+    name = "hello_world_wasm_bindgen",
+    wasm_file = ":hello_world_wasm",
+)
+
+js_library(
+    name = "collisions_library",
+    package_name = "collisions",
+    deps = [":hello_world_wasm_bindgen"],
+)
+
+ts_library(
+    name = "hello_world_wasm_test_lib",
+    srcs = [
+        "hello_world_wasm_test.ts"
+    ],
+    deps = [
+        "@npm//@types/jasmine",
+        "@npm//jasmine",
+        #":hello_world_wasm_bindgen",
+        ":collisions_library",
+    ]
+)
+
+esbuild(
+    name = "hello_world_wasm_test_bundle",
+    entry_point = "hello_world_wasm_test.ts",
+    platform = "node",
+    deps = [
+        ":hello_world_wasm_test_lib",
+    ]
+)
+
+jasmine_node_test(
+    name = "hello_world_wasm_test",
+    srcs = [
+        ":hello_world_wasm_test_bundle"
+    ]
+)

@@ -40,6 +40,10 @@
       "nova_ecs/*": [
         "nova_ecs/*",
         "dist/bin/nova_ecs/*"
+      ],
+      "collisions/*": [
+        "collisions/*",
+        "dist/bin/collisions/*"
       ]
     }
   }
