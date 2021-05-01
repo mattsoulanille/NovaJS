@@ -4,6 +4,9 @@ load("@rules_rust//rust:rust.bzl", "rust_binary")
 load("@rules_rust//wasm_bindgen:wasm_bindgen.bzl", "rust_wasm_bindgen")
 load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
 load("//:esbuild.bzl", "esbuild")
+load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+
 
 package(default_visibility = ["//visibility:public"])
 
@@ -40,13 +43,45 @@ ts_library(
     ]
 )
 
-esbuild(
+filegroup(
+    name = "hello_world_wasm_file",
+    srcs = [
+        ":hello_world_wasm_bindgen_bg.wasm",
+    ]
+)
+
+rollup_bundle(
     name = "hello_world_wasm_test_bundle",
-    entry_point = "hello_world_wasm_test.ts",
-    platform = "node",
     deps = [
         ":hello_world_wasm_test_lib",
-    ]
+        ":collisions_library",
+        ":hello_world_wasm_bindgen",
+        ":hello_world_wasm_file",
+        "@npm//@rollup/plugin-wasm",
+        "@npm//@rollup/plugin-node-resolve",
+        "@npm//@rollup/plugin-commonjs",
+    ],
+    entry_point = "hello_world_wasm_test.ts",
+    config_file = "rollup.config.js",
+    sourcemap = "inline",
+    format = "iife",
+)
+
+# esbuild(
+#     name = "hello_world_wasm_test_bundle",
+#     entry_point = "hello_world_wasm_test.ts",
+#     platform = "node",
+#     deps = [
+#         ":hello_world_wasm_test_lib",
+#     ]
+# )
+
+nodejs_binary(
+    name = "hello_world_wasm_bin",
+    entry_point = "hello_world_wasm_test_bundle.js",
+    data = [
+        ":hello_world_wasm_test_bundle",
+    ],
 )
 
 jasmine_node_test(
