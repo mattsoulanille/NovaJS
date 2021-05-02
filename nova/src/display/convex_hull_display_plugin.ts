@@ -1,0 +1,68 @@
+import { Component } from "nova_ecs/component";
+import { DeleteEvent } from "nova_ecs/events";
+import { Plugin } from "nova_ecs/plugin";
+import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { Provide } from "nova_ecs/provider";
+import { System } from "nova_ecs/system";
+import * as PIXI from "pixi.js";
+import { FirstAnimation } from "../nova_plugin/animation_plugin";
+import { HullProvider } from "../nova_plugin/collisions_plugin";
+import { getFrameFromMovement } from "../util/get_frame_and_angle";
+import { Space } from "./space_resource";
+
+
+const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
+
+const GraphicsProvider = Provide({
+    provided: ConvexHullGraphicsComponent,
+    args: [Space] as const,
+    factory: (space) => {
+        const graphics = new PIXI.Graphics();
+        graphics.zIndex = 1000;
+        space.addChild(graphics);
+        return graphics;
+    }
+});
+
+const HullGraphicsCleanup = new System({
+    name: 'HullGraphicCleanup',
+    events: [DeleteEvent],
+    args: [ConvexHullGraphicsComponent, Space] as const,
+    step: (graphic, space) => {
+        space.removeChild(graphic);
+    }
+});
+
+function drawPoly(poly: [number, number][], graphics: PIXI.Graphics) {
+    graphics.clear();
+    graphics.lineStyle(2, 0xFF0000, 0.5);
+    const [x0, y0] = poly[0];
+    graphics.moveTo(x0, -y0);
+    for (const [x, y] of poly) {
+        graphics.lineTo(x, -y);
+    }
+    graphics.lineTo(x0, -y0);
+}
+
+const ConvexHullGraphicsSystem = new System({
+    name: 'ConvexHullGraphics',
+    args: [HullProvider, FirstAnimation, MovementStateComponent, GraphicsProvider] as const,
+    step(hull, animation, movement, graphics) {
+        const { frame, angle } = getFrameFromMovement(animation, movement);
+
+        const activeHull = hull.hulls[frame];
+        graphics.rotation = angle;
+        graphics.position.x = movement.position.x;
+        graphics.position.y = movement.position.y;
+        drawPoly(activeHull, graphics);
+    }
+});
+
+export const ConvexHullDisplayPlugin: Plugin = {
+    name: 'ConvexHullDisplayPlugin',
+    build(world) {
+        world.addComponent(ConvexHullGraphicsComponent);
+        world.addSystem(ConvexHullGraphicsSystem);
+        world.addSystem(HullGraphicsCleanup);
+    }
+}

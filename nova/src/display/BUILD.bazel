@@ -18,6 +18,7 @@ ts_library(
         "stage_resource.ts",
         "space_resource.ts",
         "resize_event.ts",
+        "convex_hull_display_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -26,6 +27,7 @@ ts_library(
         "//novadatainterface",
         "//nova/src/nova_plugin",
         "//nova/src/client/gamedata",
+        "//nova/src/util",
         "@npm//pixi.js",
         "@npm//uuid",
         "@npm//@types/uuid",

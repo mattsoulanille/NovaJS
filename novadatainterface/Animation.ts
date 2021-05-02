@@ -14,7 +14,10 @@ export function getDefaultAnimationImageIndex() {
 
 export type AnimationFrames = {
     [index: string]: AnimationImageIndex,
-    normal: AnimationImageIndex
+    normal: AnimationImageIndex,
+} & {
+    left?: AnimationImageIndex,
+    right?: AnimationImageIndex,
 }
 
 export function getDefaultAnimationFrames(): AnimationFrames {

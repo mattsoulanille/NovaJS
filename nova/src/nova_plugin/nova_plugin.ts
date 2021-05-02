@@ -9,6 +9,7 @@ import { ProjectilePlugin } from "./projectile_plugin";
 import { ShipController } from "./ship_controller_plugin";
 import { ShipPlugin } from "./ship_plugin";
 import { WeaponPlugin } from "./weapon_plugin";
+import { CollisionsPlugin } from './collisions_plugin';
 
 // Users must add the multiplayer plugin and a display plugin.
 // Users must also add the NovaData resource.
@@ -25,6 +26,7 @@ export const Nova: Plugin = {
         world.addPlugin(ProjectilePlugin);
         world.addPlugin(WeaponPlugin);
         world.addPlugin(OutfitPlugin);
+        world.addPlugin(CollisionsPlugin);
     }
 };
 

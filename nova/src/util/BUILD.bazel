@@ -1,0 +1,12 @@
+package(default_visibility = ["//visibility:public"])
+
+load("@npm//@bazel/typescript:index.bzl", "ts_library")
+
+ts_library(
+    name = "util",
+    srcs = glob(["*.ts"]),
+    deps = [
+        "//novadatainterface",
+        "//nova_ecs/plugins",
+    ]
+)

@@ -21,6 +21,8 @@ ts_library(
         "guidance.ts",
         "exit_point.ts",
         "outfit_plugin.ts",
+        "collisions_plugin.ts",
+        "animation_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
