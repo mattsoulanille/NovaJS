@@ -88,7 +88,7 @@ class GameData implements GameDataInterface {
     private addPictGettable<T extends PictImageData | SpriteSheetImageData>(dataType: NovaDataType): Gettable<T> {
         var dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string): Promise<T> => {
-            return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png"));
+            return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png")).buffer;
         });
     }
 

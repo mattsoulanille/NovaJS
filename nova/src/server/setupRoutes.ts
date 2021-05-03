@@ -69,7 +69,10 @@ class GameDataServer {
         var dataGettable = this.gameData.data[name as NovaDataType];
 
         if (dataGettable) {
-            var data = await dataGettable.get(item);
+            let data = await dataGettable.get(item);
+            if (data instanceof ArrayBuffer) {
+                data = Buffer.from(data);
+            }
             res.send(data);
         }
         else {

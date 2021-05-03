@@ -5,6 +5,7 @@ import { RledResource } from "../resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
 import hull from 'hull.js';
+import { bufferToArrayBuffer } from "./buffer_to_array_buffer";
 
 export interface SpriteSheetMulti {
     spriteSheet: SpriteSheetData;
@@ -162,22 +163,20 @@ function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
 // Parses SpriteSheet, SpriteSheetImage, and SpriteSheetFrames at the same time
 // They are separated from each other due to PIXI.js peculiarities.
 export async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction: (m: string) => void): Promise<SpriteSheetMulti> {
-    var base: BaseData = await BaseParse(rled, notFoundFunction);
+    const base: BaseData = await BaseParse(rled, notFoundFunction);
 
-
-    var assembledPNG: PNG = buildPNG(rled.frames);
-    var spriteSheetImage: SpriteSheetImageData = PNG.sync.write(assembledPNG);
-
-
+    const assembledPNG: PNG = buildPNG(rled.frames);
+    const buf = PNG.sync.write(assembledPNG);
+    const spriteSheetImage = bufferToArrayBuffer(buf);
 
     // TODO: Convex Hulls
-    var convexHulls = buildConvexHulls(rled.frames);
-    var spriteSheet: SpriteSheetData = {
+    const convexHulls = buildConvexHulls(rled.frames);
+    const spriteSheet: SpriteSheetData = {
         ...base,
         convexHulls
     }
 
-    var spriteSheetFrames: SpriteSheetFramesData = buildSpriteSheetFrames(rled);
+    const spriteSheetFrames: SpriteSheetFramesData = buildSpriteSheetFrames(rled);
 
 
     return {

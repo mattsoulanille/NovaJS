@@ -79,7 +79,7 @@ class FilesystemData implements GameDataInterface {
                                 fulfill(JSON.parse(contents.toString('utf8')) as T)
                             }
                             else if (p.extension == "png") {
-                                fulfill(contents as T);
+                                fulfill(contents.buffer as T);
                             }
                             else {
                                 reject("Unsupported");

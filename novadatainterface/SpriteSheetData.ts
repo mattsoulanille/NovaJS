@@ -30,7 +30,7 @@ export function getDefaultSpriteSheetData(): SpriteSheetData {
     };
 }
 
-export type SpriteSheetImageData = Buffer;
+export type SpriteSheetImageData = ArrayBuffer;
 
 export interface FrameInfo {
     frame: {

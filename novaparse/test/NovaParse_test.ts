@@ -225,7 +225,7 @@ describe("NovaParse", function() {
         const statusBarPath = runfiles.resolve("novajs/novaparse/test/resource_parsers/files/picts/statusBar.png");
         const statusBar = await getPNG(statusBarPath);
 
-        expect(p700).toEqual(PNG.sync.write(statusBar));
+        expect(p700).toEqual(PNG.sync.write(statusBar).buffer);
     });
 
     it("Should parse Planet", async function() {
@@ -238,7 +238,7 @@ describe("NovaParse", function() {
         const ri1000: SpriteSheetImageData = await np.data.SpriteSheetImage.get("nova:1000");
         const shuttlePath = runfiles.resolve("novajs/novaparse/test/testSpriteSheetImage.png");
         const shuttle = fs.readFileSync(shuttlePath);
-        expect(ri1000).toEqual(shuttle);
+        expect(ri1000).toEqual(shuttle.buffer);
     });
 
     it("Should parse SpriteSheetFrames", async function() {
