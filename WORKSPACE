@@ -20,15 +20,15 @@ http_archive(
     urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/3.4.1/rules_nodejs-3.4.1.tar.gz"],
 )
 
-# Use node 15
+# Use node 16
 load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
 node_repositories(
     package_json = ["//:package.json"],
-    node_version = "15.8.0",
+    node_version = "16.0.0",
     node_repositories = {
-        "15.8.0-darwin_amd64": ("node-v15.8.0-darwin-x64.tar.xz", "node-v15.8.0-darwin-x64", "8b1012b7c78c27513bf1d3b1db65f505041771683d964f14f67fe1fc243fe038"),
-        "15.8.0-linux_amd64": ("node-v15.8.0-linux-x64.tar.xz", "node-v15.8.0-linux-x64", "cdb80f0810e5a076eb6079297073147d2564b1c2292bb4436b3f9e9e4fe18759"),
-        "15.8.0-windows_amd64": ("node-v15.8.0-win-x64.zip", "node-v15.8.0-win-x64", "edb16def1fecaecaffcccf9352e9f94a029d47203f26ae44dc1d4aa7eef35940")
+        "16.0.0-darwin_amd64": ("node-v16.0.0-darwin-x64.tar.xz", "node-v16.0.0-darwin-x64", "66ecffa48b98cf1ca4d038b42b74f05bfc4d31681e2aa43a1ba50919ea23823b"),
+        "16.0.0-linux_amd64": ("node-v16.0.0-linux-x64.tar.xz", "node-v16.0.0-linux-x64", "1736446bb102e19942addce29f6a12b157ca71f38b9159d0446f51ba69618b8d"),
+        "16.0.0-windows_amd64": ("node-v16.0.0-win-x64.zip", "node-v16.0.0-win-x64", "99c2b01afb8d966fc876ec30ac7dfdbd9da9b17a3daeda92c19ce657ab9bea61")
     },
     node_urls = [
         "https://nodejs.org/dist/v{version}/{filename}",
