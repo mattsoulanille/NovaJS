@@ -261,8 +261,6 @@ export class NovaParse implements GameDataInterface {
         return weaponOutfitMap;
     }
 
-
-
     private async getSpriteSheetData(id: string): Promise<SpriteSheetData> {
         var multi: SpriteSheetMulti = await this.spriteSheetMultiGettable.get(id);
         return multi.spriteSheet

@@ -1,18 +1,53 @@
 package(default_visibility = ["//visibility:public"])
 
-
 load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("//:esbuild.bzl", "esbuild")
 
 
 ts_library(
     name = "parsing",
-    srcs = glob(["*.ts"]),
+    srcs = [
+        "FilesystemData.ts",
+        "GameDataAggregator.ts",
+    ],
     deps = [
         "@npm//@types/node",
         "@npm//io-ts",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//fp-ts",
+        "@npm//comlink",
         "//novadatainterface",
+        "//novaparse",
     ]
+)
+
+ts_library(
+    name = "nova_parse_worker_lib",
+    srcs = [
+        "nova_parse_worker.ts",
+    ],
+    deps = [
+        "@npm//comlink",
+        "@npm//@types/node",
+        "//novaparse",
+    ],
+)
+
+esbuild(
+    name = "nova_parse_worker_bundle",
+    args = [
+        "--keep-names", # For convenience. Can be removed.
+        "--resolve-extensions=.mjs,.js",
+    ],
+    entry_point = "nova_parse_worker.ts",
+    platform = "node",
+    minify = False,
+    sources_content = True,
+    define = [
+        "process.env.NODE_ENV=\"node\""
+    ],
+    deps = [
+        ":nova_parse_worker_lib",
+    ],
 )

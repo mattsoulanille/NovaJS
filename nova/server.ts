@@ -17,6 +17,10 @@ import { setupRoutes } from "./src/server/setupRoutes";
 import * as t from 'io-ts';
 import { isLeft } from "fp-ts/lib/Either";
 import { makeSystem } from "./src/nova_plugin/make_system";
+import { Worker } from "worker_threads";
+import * as Comlink from 'comlink';
+import nodeEndpoint from "comlink/dist/esm/node-adapter";
+import { NovaParseWorkerApi } from "./src/server/parsing/nova_parse_worker";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
 
@@ -41,52 +45,43 @@ const settings = maybeSettings.right;
 const port = settings.port ?? 8000;
 const novaDataPath = path.join(__dirname, settings.relativeDataPath ?? "Nova_Data");
 
-// For production, replace these with real https keys
-// const httpsKeys: https.ServerOptions = {
-//     key: fs.readFileSync(require.resolve("novajs/nova/test_keys/testkey.pem")),
-//     cert: fs.readFileSync(require.resolve("novajs/nova/test_keys/testcert.pem")),
-// };
-
 const app = express();
 const httpServer = http.createServer(app);
 
-const novaFileData = new NovaParse(novaDataPath, false);
-
 const filesystemDataPath = path.join(__dirname, "objects");
 const filesystemData = new FilesystemData(filesystemDataPath);
-
-const gameData = new GameDataAggregator([filesystemData, novaFileData]);
 
 const htmlPath = runfiles.resolve("novajs/nova/src/index.html");
 const bundlePath = runfiles.resolve("novajs/nova/src/browser_bundle.js");
 const bundleMapPath = runfiles.resolve("novajs/nova/src/browser_bundle.js.map");
 const clientSettingsPath = runfiles.resolve("novajs/nova/settings/controls.json");
-setupRoutes(gameData, app, htmlPath, bundlePath, bundleMapPath, clientSettingsPath);
+
 
 const channel = new SocketChannelServer({ server: httpServer });
-
-// async function makeSystems() {
-//     const systemIds = (await gameData.ids).System;
-//     const systemFactory = engine.stateTreeFactories.get('System');
-//     if (!systemFactory) {
-//         debugger;
-//         throw new Error('Missing system factory');
-//     }
-
-//     for (const id of systemIds) {
-//         // Using id as uuid since systems are unique.
-//         const system = systemFactory(id, id);
-//         engine.rootNode.addChild(system);
-//     }
-// }
-
-
+const novaParseWorkerPath = runfiles.resolve(
+    "novajs/nova/src/server/parsing/nova_parse_worker_bundle.js");
 
 let world: World;
 const repl = new NovaRepl();
 
 let communicator: CommunicatorServer;
 async function startGame() {
+    // Set up the novaparse webworker
+    const novaParseWorker = new Worker(novaParseWorkerPath);
+    const novaParseWorkerApi = Comlink.wrap<NovaParseWorkerApi>(
+        nodeEndpoint(novaParseWorker));
+
+    await novaParseWorkerApi.init(novaDataPath);
+    const novaFileData = await novaParseWorkerApi.novaParse;
+    //const novaFileData = new NovaParse(novaDataPath, false);
+    if (!novaFileData) {
+        throw new Error("Expected novaparse worker to be defined");
+    }
+    const gameData = new GameDataAggregator([filesystemData, novaFileData]);
+    repl.repl.context.gameData = gameData;
+
+    setupRoutes(gameData, app, htmlPath, bundlePath, bundleMapPath, clientSettingsPath);
+
     httpServer.listen(port, function() {
         console.log("listening at port " + port);
     });
@@ -104,38 +99,14 @@ async function startGame() {
     await world.addPlugin(multiplayerPlugin);
     await world.addPlugin(ServerPlugin);
     await world.addPlugin(Nova);
-
-    //const novaRepl = new NovaRepl(gameLoop, gameData, communicator);
     stepper();
 }
 
 const STEP_TIME = 1000 / 60;
 function stepper() {
-    // const timeNano = process.hrtime.bigint();
-    // const delta = Number((timeNano - lastTimeNano) / BigInt(1e6));
-    // lastTimeNano = timeNano;
     world.step();
     setTimeout(stepper, STEP_TIME);
 }
-
-//    const stateChanges = communicator.getStateChanges();
-//    engine.setState(stateChanges);
-//    setTimeout(gameLoop, 0);
-
-/*
-async function addClientToGame() {
-    const shipID = (await new PilotData().getShip()).id;
-    const shipState = await Ship.fromID(shipID, gameData);
-    const shipUUID = engine.newShipInSystem(shipState, "nova:130");
-    engine.activeShips.add(shipUUID);
-
-
-    return {
-        clientUUIDs: new Set([shipUUID]),
-        shipUUID: shipUUID
-    }
-}
-*/
 
 startGame();
 

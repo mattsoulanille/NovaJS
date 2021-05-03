@@ -55,7 +55,7 @@ class GameDataAggregator implements GameDataInterface {
         return this.dataSources;
     }
 
-    private makeAggregator<T extends (BaseData | Buffer | SpriteSheetFramesData)>(dataType: NovaDataType): Gettable<T> {
+    private makeAggregator<T extends (BaseData | ArrayBuffer | SpriteSheetFramesData)>(dataType: NovaDataType): Gettable<T> {
         // Arrow functions automatically bind this
         return new Gettable<T>(async (id: string): Promise<T> => {
             var errors: Array<string> = [];
