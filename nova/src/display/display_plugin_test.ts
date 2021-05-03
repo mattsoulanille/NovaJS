@@ -4,10 +4,11 @@ import { MockGameData } from 'novadatainterface/MockGameData';
 import { EntityBuilder } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
-import { AnimationComponent, Display } from './display_plugin';
+import { Display } from './display_plugin';
 import * as PIXI from 'pixi.js';
 import { PixiAppResource } from "./pixi_app_resource";
 import { Stage } from "./stage_resource";
+import { AnimationComponent } from "../nova_plugin/animation_plugin";
 
 describe('display plugin', () => {
     let world: World

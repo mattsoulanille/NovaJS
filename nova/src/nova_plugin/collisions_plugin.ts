@@ -1,4 +1,4 @@
-import { ConvexHulls } from "novadatainterface/SpriteSheetData";
+import { Hull } from "novadatainterface/SpriteSheetData";
 import { Component } from "nova_ecs/component";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
@@ -8,7 +8,7 @@ import { FirstAnimation } from "./animation_plugin";
 import { GameDataResource } from "./game_data_resource";
 
 export const HullComponent = new Component<{
-    hulls: ConvexHulls,
+    hulls: Hull[],
 }>('HullComponent');
 
 export const HullProvider = ProvideAsync({
@@ -19,7 +19,7 @@ export const HullProvider = ProvideAsync({
             .get(animation.images.baseImage.id);
         animation.images.baseImage.frames
         return {
-            hulls: spriteSheet.convexHulls
+            hulls: spriteSheet.hulls
         }
     }
 });
@@ -31,8 +31,6 @@ const CollisionSystem = new System({
 
     }
 });
-
-
 
 export const CollisionsPlugin: Plugin = {
     name: 'CollisionsPlugin',

@@ -33,9 +33,8 @@ const HullGraphicsCleanup = new System({
     }
 });
 
-function drawPoly(poly: [number, number][], graphics: PIXI.Graphics) {
-    graphics.clear();
-    graphics.lineStyle(2, 0xFF0000, 0.5);
+function drawPoly(poly: [number, number][], graphics: PIXI.Graphics, color = 0xff0000) {
+    graphics.lineStyle(0.5, color);
     const [x0, y0] = poly[0];
     graphics.moveTo(x0, -y0);
     for (const [x, y] of poly) {
@@ -43,6 +42,19 @@ function drawPoly(poly: [number, number][], graphics: PIXI.Graphics) {
     }
     graphics.lineTo(x0, -y0);
 }
+
+const COLORS = [
+    0xff0000,
+    0x00ff00,
+    0x0000ff,
+    0xffff00,
+    0xff00ff,
+    0x00ff00,
+    0x88ff00,
+    0xff8800,
+    0x0088ff,
+    0x00ff88,
+];
 
 const ConvexHullGraphicsSystem = new System({
     name: 'ConvexHullGraphics',
@@ -54,7 +66,13 @@ const ConvexHullGraphicsSystem = new System({
         graphics.rotation = angle;
         graphics.position.x = movement.position.x;
         graphics.position.y = movement.position.y;
-        drawPoly(activeHull, graphics);
+
+        graphics.clear();
+        for (let i = 0; i < activeHull.length; i++) {
+            const convexHull = activeHull[i];
+            const color = COLORS[i % COLORS.length]
+            drawPoly(convexHull, graphics, color);
+        }
     }
 });
 
