@@ -29,7 +29,7 @@
         "@types/ws": "^7.4.1",
         "argparse": "^2.0.1",
         "comlink": "^4.3.0",
-        "immer": "^9.0.1",
+        "immer": "^9.0.2",
         "io-ts-types": "^0.5.16",
         "jasmine": "^3.7.0",
         "jasmine-core": "^3.7.1",
