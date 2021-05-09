@@ -8,7 +8,9 @@ exports_files([
     "tsconfig.json",
     "rollup.config.js",
     "rollup_browser.config.ts",
-    ".gitignore"], visibility = ["//:__subpackages__"])
+    ".gitignore",
+    "package.json",
+], visibility = ["//:__subpackages__"])
 
 # Remove `bazel` as the entry point so shell commands can be run.
 container_image(

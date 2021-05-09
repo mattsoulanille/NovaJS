@@ -6,6 +6,8 @@ load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
 load("//:esbuild.bzl", "esbuild")
 load("@npm//@bazel/rollup:index.bzl", "rollup_bundle")
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
+load("//collisions:webpack_wasm.bzl", "webpack_wasm")
+load("//webtesting:web_test.bzl", "web_test")
 
 
 package(default_visibility = ["//visibility:public"])
@@ -50,22 +52,33 @@ filegroup(
     ]
 )
 
-rollup_bundle(
+webpack_wasm(
     name = "hello_world_wasm_test_bundle",
+    entry_point = "hello_world_wasm_test.js",
     deps = [
         ":hello_world_wasm_test_lib",
         ":collisions_library",
         ":hello_world_wasm_bindgen",
         ":hello_world_wasm_file",
-        "@npm//@rollup/plugin-wasm",
-        "@npm//@rollup/plugin-node-resolve",
-        "@npm//@rollup/plugin-commonjs",
-    ],
-    entry_point = "hello_world_wasm_test.ts",
-    config_file = "rollup.config.js",
-    sourcemap = "inline",
-    format = "iife",
+    ]
 )
+
+# rollup_bundle(
+#     name = "hello_world_wasm_test_bundle",
+#     deps = [
+#         ":hello_world_wasm_test_lib",
+#         ":collisions_library",
+#         ":hello_world_wasm_bindgen",
+#         ":hello_world_wasm_file",
+#         "@npm//@rollup/plugin-wasm",
+#         "@npm//@rollup/plugin-node-resolve",
+#         "@npm//@rollup/plugin-commonjs",
+#     ],
+#     entry_point = "hello_world_wasm_test.ts",
+#     config_file = "rollup.config.js",
+#     sourcemap = "inline",
+#     format = "iife",
+# )
 
 # esbuild(
 #     name = "hello_world_wasm_test_bundle",
@@ -87,6 +100,19 @@ nodejs_binary(
 jasmine_node_test(
     name = "hello_world_wasm_test",
     srcs = [
-        ":hello_world_wasm_test_bundle"
+        ":hello_world_wasm_test_bundle",
     ]
+)
+
+web_test(
+    name = "hello_world_wasm_test_browser",
+    srcs = [
+        ":hello_world_wasm_test_bundle",
+        #":collisions_library",
+    ],
+    static_files = [
+        # Serve sourcemaps
+        ":hello_world_wasm_file",
+        ":hello_world_wasm_test_bundle",
+    ],
 )
