@@ -119,6 +119,10 @@ export class World {
         await plugin.build(this);
     }
 
+    removePlugin(plugin: Plugin) {
+        plugin.remove?.(this);
+    }
+
     addResource(resource: Resource<any>): this {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {

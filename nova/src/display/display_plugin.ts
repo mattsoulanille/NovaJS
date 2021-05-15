@@ -104,6 +104,5 @@ export const Display: Plugin = {
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(ObjectDrawSystem);
         world.addSystem(CenterShipSystem);
-        await world.addPlugin(ConvexHullDisplayPlugin);
     }
 };

@@ -83,5 +83,17 @@ export const ConvexHullDisplayPlugin: Plugin = {
         world.addComponent(ConvexHullGraphicsComponent);
         world.addSystem(ConvexHullGraphicsSystem);
         world.addSystem(HullGraphicsCleanup);
+    },
+    remove(world) {
+        world.removeSystem(ConvexHullGraphicsSystem);
+        world.removeSystem(HullGraphicsCleanup);
+        const space = world.resources.get(Space);
+        for (const entity of world.entities.values()) {
+            const graphics = entity.components.get(ConvexHullGraphicsComponent);
+            if (graphics && space) {
+                space.removeChild(graphics);
+            }
+            entity.components.delete(ConvexHullGraphicsComponent);
+        }
     }
 }

@@ -13,13 +13,20 @@ filegroup(
 )
 
 ts_library(
+    name = "debug_settings_lib",
+    srcs = ["debug_settings.ts"],
+    deps = [
+        "//nova_ecs:ecs",
+        "//nova/src/display",
+    ]
+)
+
+ts_library(
     name = "browser_lib",
     srcs = ["browser.ts"],
     deps = [
         #":gameloop_lib",
-        "@npm//@types/node",
-        "@npm//pixi.js",
-        "@npm//rxjs",
+        ":debug_settings_lib",
         "//nova/src/common",
         #"//nova/src/client",
         "//nova/src/display",
@@ -34,6 +41,9 @@ ts_library(
         "@npm//@types/uuid",
         "@npm//stats.js",
         "@npm//@types/stats.js",
+        "@npm//@types/node",
+        "@npm//pixi.js",
+        "@npm//rxjs",
     ]
 )
 

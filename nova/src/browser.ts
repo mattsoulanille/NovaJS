@@ -5,6 +5,7 @@ import Stats from 'stats.js';
 import { GameData } from "./client/gamedata/GameData";
 import { CommunicatorClient } from "./communication/CommunicatorClient";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
+import { DebugSettings } from "./debug_settings";
 import { Display } from "./display/display_plugin";
 import { PixiAppResource } from "./display/pixi_app_resource";
 import { ResizeEvent } from "./display/resize_event";
@@ -59,6 +60,8 @@ async function startGame() {
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);
+
+    (window as any).novaDebug = new DebugSettings(world);
 
     app.ticker.add(() => {
         stats.begin();
