@@ -3,9 +3,6 @@
 	"bazel-out",
 	"dist"
   ],
-  "bazelOptions": {
-	"devmodeTargetOverride": "esnext"
-  },
   "compilerOptions": {
 	"target": "es2017",
 	"module": "commonjs",

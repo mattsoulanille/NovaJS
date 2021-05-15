@@ -9,6 +9,7 @@ import { FirstAnimation } from "../nova_plugin/animation_plugin";
 import { HullProvider } from "../nova_plugin/collisions_plugin";
 import { getFrameFromMovement } from "../util/get_frame_and_angle";
 import { Space } from "./space_resource";
+import * as SAT from "sat";
 
 
 const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
@@ -33,11 +34,11 @@ const HullGraphicsCleanup = new System({
     }
 });
 
-function drawPoly(poly: [number, number][], graphics: PIXI.Graphics, color = 0xff0000) {
+function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000) {
     graphics.lineStyle(0.5, color);
-    const [x0, y0] = poly[0];
+    const { x: x0, y: y0 } = poly.points[0];
     graphics.moveTo(x0, -y0);
-    for (const [x, y] of poly) {
+    for (const { x, y } of poly.points) {
         graphics.lineTo(x, -y);
     }
     graphics.lineTo(x0, -y0);

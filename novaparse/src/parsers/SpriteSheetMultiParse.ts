@@ -110,14 +110,8 @@ function makeConvexHull(png: PNG): ConvexHull {
 
 function makeHull(png: PNG): Hull {
     const convexHull = makeConvexHull(png);
-    const offset = 50;
-    return [
-        convexHull,
-        convexHull.map(([x, y]) => [x + offset, y + offset]),
-        convexHull.map(([x, y]) => [x + offset, y - offset]),
-        convexHull.map(([x, y]) => [x - offset, y + offset]),
-        convexHull.map(([x, y]) => [x - offset, y - offset]),
-    ];
+    // TODO: Approximately convex decomposition -> multiple hulls per sprite.
+    return [convexHull];
 }
 
 function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {

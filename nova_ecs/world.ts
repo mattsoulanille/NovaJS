@@ -1,5 +1,5 @@
-import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
-import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, QueryResults, UUID } from "./arg_types";
+import { Either, isLeft, left, Right, right } from "fp-ts/lib/Either";
+import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
@@ -13,7 +13,7 @@ import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
-import { DefaultMap, topologicalSort } from './utils';
+import { topologicalSort } from './utils';
 
 // How do you serialize components and make sure the receiver
 // knows which is which?
@@ -57,7 +57,7 @@ export const SingletonComponent = new Component<undefined>('SingletonComponent')
 interface EcsEventWithEntities<Data> {
     event: EcsEvent<Data, any>;
     data: Data;
-    entities?: Set<string | [string, Entity]>;
+    entities?: Array<string | [string, Entity]>;
 }
 
 export class World {
@@ -95,7 +95,7 @@ export class World {
 
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
-            this.emitWrapped(DeleteEvent, undefined, deleted);
+            this.emitWrapped(DeleteEvent, undefined, [...deleted]);
         });
 
         this.state.resources.events.set.subscribe(added => {
@@ -103,12 +103,12 @@ export class World {
         });
     }
 
-    emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: Set<string>) {
+    emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: string[]) {
         this.emitWrapped(event, data, entities);
     }
 
     private emitWrapped<Data>(event: EcsEvent<Data, any>, data: Data,
-        entities?: Set<string> | Set<[string, Entity]>) {
+        entities?: string[] | Array<[string, Entity]>) {
         this.eventQueue.push({
             event: event as UnknownEvent,
             data,
@@ -218,7 +218,7 @@ export class World {
         // this includes entities added in the same step.
         let entities: [string, Entity][] | undefined;
         if (eventWithEntities.entities) {
-            entities = [...eventWithEntities.entities].map(entry => {
+            entities = eventWithEntities.entities.map(entry => {
                 if (typeof entry === 'string') {
                     return [entry, this.state.entities.get(entry)];
                 } else {

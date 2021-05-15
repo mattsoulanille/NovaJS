@@ -1,5 +1,5 @@
 load("@build_bazel_rules_nodejs//:providers.bzl", "run_node")
-load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("//:defaults.bzl", "ts_library")
 
 EXT = ".png"
 

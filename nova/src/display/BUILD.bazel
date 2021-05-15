@@ -1,6 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("//:defaults.bzl", "ts_library")
 load("//:esbuild.bzl", "esbuild")
 load("//webtesting:web_test.bzl", "web_test")
 
@@ -32,6 +32,8 @@ ts_library(
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//immer",
+        "@npm//sat",
+        "@npm//@types/sat",
     ]
 )
 

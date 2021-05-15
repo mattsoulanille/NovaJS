@@ -32,7 +32,8 @@ export function Provide<Provided extends Component<any>, Args extends readonly A
     args: Args
 }) {
     return new Modifier({
-        query: new Query([Optional(provided), GetEntity, ...args] as const),
+        query: new Query([Optional(provided), GetEntity, ...args] as const,
+            `Provide ${provided.name}`),
         transform: (providedVal, entity, ...factoryArgs) => {
 
             if (providedVal) {
@@ -61,7 +62,7 @@ export function ProvideAsync<Provided extends Component<any>, Args extends reado
     type Data = ComponentData<Provided>;
     return new Modifier({
         query: new Query([AsyncProviderResource, Optional(provided), GetEntity,
-            UUID, ...args] as const),
+            UUID, ...args] as const, `ProvideAsync ${provided.name}`),
         transform: (providerResource, providedVal, entity, uuid, ...argData) => {
             const providerMap = providerResource.providers.get(uuid)!;
             if (providedVal) {

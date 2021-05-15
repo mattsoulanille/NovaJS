@@ -10,6 +10,7 @@ import { MovementPhysicsComponent, MovementStateComponent, MovementType } from '
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
+import { CollisionInteractionComponent } from './collision_interaction';
 import { Guidance, zeroOrderGuidance } from './guidance';
 
 
@@ -61,6 +62,8 @@ export function makeProjectile({
             turnRate: projectileData.physics.turnRate,
             movementType: projectileData.guidance === 'guided'
                 ? MovementType.INERTIALESS : MovementType.INERTIAL,
+        }).addComponent(CollisionInteractionComponent, {
+            hitTypes: new Set(['normal']),
         });
 
     if (target) {
