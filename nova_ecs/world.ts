@@ -63,7 +63,8 @@ interface EcsEventWithEntities<Data> {
 export class World {
     private readonly state = {
         entities: new EntityMapWrapped(),
-        resources: new ResourceMapWrapped(),
+        resources: new ResourceMapWrapped(this.addResource.bind(this),
+            this.removeResource.bind(this)),
     };
 
     readonly entities = this.state.entities;
@@ -97,10 +98,6 @@ export class World {
             // Emit delete when an entity is deleted.
             this.emitWrapped(DeleteEvent, undefined, [...deleted]);
         });
-
-        this.state.resources.events.set.subscribe(added => {
-            this.addResource(added[0]);
-        });
     }
 
     emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: string[]) {
@@ -122,12 +119,28 @@ export class World {
         await plugin.build(this);
     }
 
-    addResource(resource: Resource<any>) {
+    addResource(resource: Resource<any>): this {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
         }
         this.nameResourceMap.set(resource.name, resource as UnknownResource);
+        return this;
+    }
+
+    private removeResource(resource: Resource<any>): boolean {
+        if (this.nameResourceMap.get(resource.name) !== resource) {
+            return false;
+        }
+
+        for (const system of this.systems) {
+            if (system.query.resources.has(resource)) {
+                throw new Error(`Cannot remove resource ${resource.name} `
+                    + `because ${system.name} uses it`);
+            }
+        }
+
+        return this.nameResourceMap.delete(resource.name);
     }
 
     addSystem(system: System): this {
@@ -182,6 +195,20 @@ export class World {
         for (const component of system.query.components) {
             this.addComponent(component);
         }
+        return this;
+    }
+
+    removeSystem(system: System): this {
+        if (this.nameSystemMap.get(system.name) !== system) {
+            return this;
+        }
+
+        this.nameSystemMap.delete(system.name);
+        const index = this.systems.indexOf(system);
+        if (index >= 0) {
+            this.systems.splice(index, 1);
+        }
+
         return this;
     }
 
