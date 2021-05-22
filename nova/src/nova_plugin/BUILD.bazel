@@ -24,6 +24,7 @@ ts_library(
         "collisions_plugin.ts",
         "collision_interaction.ts",
         "animation_plugin.ts",
+        "health_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

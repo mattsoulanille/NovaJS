@@ -1,6 +1,6 @@
 import { PlanetData } from "novadatainterface/PlanetData";
 import { ShipData } from "novadatainterface/ShipData";
-import { StatusBarData } from "novadatainterface/StatusBarData";
+import { StatusBarData, StatusBarDataArea } from "novadatainterface/StatusBarData";
 import { UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Position } from "nova_ecs/datatypes/position";
@@ -14,6 +14,7 @@ import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
+import { Health, HealthComponent } from "../nova_plugin/health_plugin";
 import { PlanetDataComponent } from "../nova_plugin/planet_plugin";
 import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { ShipDataComponent } from "../nova_plugin/ship_plugin";
@@ -28,6 +29,7 @@ class StatusBar {
     private radarScale = new Vector(6000, 6000);
     private radar = new PIXI.Graphics();
     radarPeriod = 200;
+    private statsGraphics = new PIXI.Graphics();
 
     constructor(private statusBarData: StatusBarData, private gameData: GameData) {
         this.built = this.build();
@@ -40,6 +42,7 @@ class StatusBar {
         const dataAreas = this.statusBarData.dataAreas;
         [this.radar.position.x, this.radar.position.y] = dataAreas.radar.position;
         this.container.addChild(this.radar);
+        this.container.addChild(this.statsGraphics);
     }
 
     drawRadar(source: Position, ships: Iterable<readonly [string, MovementState, ShipData]>,
@@ -73,6 +76,28 @@ class StatusBar {
             this.radar.lineTo(pixiPos.x, pixiPos.y + size);
             this.radar.endFill()
         }
+    }
+
+    private drawLine(dataArea: StatusBarDataArea, color: number, fullness: number) {
+        var pos = [dataArea.position[0], dataArea.position[1]];
+        var size = [dataArea.size[0], dataArea.size[1]];
+        pos[1] += size[1] / 2;
+
+        this.statsGraphics.lineStyle(size[1], color);
+        this.statsGraphics.moveTo(pos[0], pos[1]);
+        this.statsGraphics.lineTo(pos[0] + size[0] * fullness, pos[1]);
+    }
+
+    drawStats(health: Health) {
+        this.statsGraphics.clear();
+
+        const shieldFullness = Math.max(0, health.shield.current / health.shield.max);
+        this.drawLine(this.statusBarData.dataAreas.shield,
+            this.statusBarData.colors.shield, shieldFullness);
+
+        const armorFullness = Math.max(0, health.armor.current / health.armor.max);
+        this.drawLine(this.statusBarData.dataAreas.armor,
+            this.statusBarData.colors.armor, armorFullness);
     }
 }
 
@@ -125,11 +150,20 @@ const DrawRadar = new System({
 });
 
 
+const DrawStatusBarStats = new System({
+    name: 'DrawStatusBarStats',
+    args: [StatusBarProvider, HealthComponent, PlayerShipSelector] as const,
+    step(statusBar, health) {
+        statusBar.drawStats(health);
+    }
+})
+
 export const StatusBarPlugin: Plugin = {
     name: 'StatusBar',
     build(world) {
         world.addComponent(StatusBarComponent);
         world.addSystem(DrawRadar);
         world.addSystem(StatusBarResize);
+        world.addSystem(DrawStatusBarStats);
     }
 }

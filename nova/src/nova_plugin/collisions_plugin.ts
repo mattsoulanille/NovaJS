@@ -30,7 +30,7 @@ export const HullProvider = ProvideAsync({
 
         const hulls = spriteSheet.hulls.map(hull =>
             hull.map(convexPoly => new SAT.Polygon(new SAT.Vector(),
-                convexPoly.map(([x, y]) => new SAT.Vector(x, y)))));
+                convexPoly.map(([x, y]) => new SAT.Vector(x, -y)))));
 
         hulls[0][0].getAABB();
         return { hulls };
@@ -116,8 +116,8 @@ const CollisionSystem = new System({
                 const activeHull = hull.hulls[frame];
                 for (const convexHull of activeHull) {
                     convexHull.setAngle(angle);
-                    convexHull.setOffset(new SAT.Vector(
-                        movement.position.x, movement.position.y));
+                    convexHull.pos = new SAT.Vector(
+                        movement.position.x, movement.position.y);
                 }
 
                 const entry = getBoundingBox(activeHull) as RBushEntry;

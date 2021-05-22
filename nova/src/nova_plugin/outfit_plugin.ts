@@ -1,13 +1,14 @@
 import * as t from 'io-ts';
 import { GetEntity } from 'nova_ecs/arg_types';
-import { AsyncSystem } from 'nova_ecs/async_system';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
+import { Plugin } from 'nova_ecs/plugin';
+import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
+import { System } from 'nova_ecs/system';
 import { DefaultMap } from 'nova_ecs/utils';
 import { Without } from 'nova_ecs/without';
 import { GameDataResource } from './game_data_resource';
 import { WeaponsStateComponent, WeaponState } from './weapon_plugin';
-import { Plugin } from 'nova_ecs/plugin';
 
 
 const OutfitState = t.type({
@@ -19,9 +20,9 @@ const OutfitsState = map(t.string /* Outfit id */, OutfitState);
 export type OutfitsState = t.TypeOf<typeof OutfitsState>;
 
 export const OutfitsStateComponent = new Component<OutfitsState>('OutfitsStateComponent');
-const AppliedOutfitsComponent = new Component<undefined>('AppliedOutfitsComponent');
+const AppliedOutfitsComponent = new Component<{}>('AppliedOutfitsComponent');
 
-export const ApplyOutfitsSystem = new AsyncSystem({
+export const ApplyOutfitsSystem = new System({
     name: "ApplyOutfitsSystem",
     args: [OutfitsStateComponent, GameDataResource, GetEntity,
         Without(AppliedOutfitsComponent)] as const,
@@ -45,16 +46,28 @@ export const ApplyOutfitsSystem = new AsyncSystem({
         }
 
         entity.components.set(WeaponsStateComponent, new Map(weaponsState));
-        entity.components.set(AppliedOutfitsComponent, undefined);
+        entity.components.set(AppliedOutfitsComponent, {});
     }
 });
 
 export const OutfitPlugin: Plugin = {
     name: "OutfitPlugin",
     build(world) {
+        const deltaMaker = world.resources.get(DeltaResource);
+        if (!deltaMaker) {
+            throw new Error('Expected delta maker resource to exist');
+        }
+
         world.addComponent(OutfitsStateComponent);
         world.addComponent(AppliedOutfitsComponent);
         world.addSystem(ApplyOutfitsSystem);
+
+        deltaMaker.addComponent(OutfitsStateComponent, {
+            componentType: OutfitsState,
+        });
+        deltaMaker.addComponent(AppliedOutfitsComponent, {
+            componentType: t.type({}),
+        });
     }
 };
 

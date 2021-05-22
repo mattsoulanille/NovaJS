@@ -37,11 +37,11 @@ const HullGraphicsCleanup = new System({
 function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000) {
     graphics.lineStyle(0.5, color);
     const { x: x0, y: y0 } = poly.points[0];
-    graphics.moveTo(x0, -y0);
+    graphics.moveTo(x0, y0);
     for (const { x, y } of poly.points) {
-        graphics.lineTo(x, -y);
+        graphics.lineTo(x, y);
     }
-    graphics.lineTo(x0, -y0);
+    graphics.lineTo(x0, y0);
 }
 
 const COLORS = [
