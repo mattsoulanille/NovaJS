@@ -37,18 +37,21 @@ export function makeShip(shipData: ShipData): Entity {
             max: shipData.physics.shield,
             recharge: shipData.physics.shieldRecharge,
             changed: false,
+            lastSent: 0,
         },
         armor: {
             current: shipData.physics.armor,
             max: shipData.physics.armor,
             recharge: shipData.physics.armorRecharge,
             changed: false,
+            lastSent: 0,
         },
         ionization: {
             current: 0,
             max: shipData.physics.ionization,
             recharge: -shipData.physics.deionize,
             changed: false,
+            lastSent: 0,
         }
     });
 

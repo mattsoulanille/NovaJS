@@ -12,6 +12,7 @@ const StatContents = {
     recharge: t.number,
     max: t.number,
     changed: t.boolean,
+    lastSent: t.number,
 };
 const Stat = t.type(StatContents);
 type Stat = t.TypeOf<typeof Stat>;
@@ -33,9 +34,13 @@ const PartialHealth = t.partial({
 export type Health = t.TypeOf<typeof Health>;
 type PartialHealth = t.TypeOf<typeof PartialHealth>;
 
+const SEND_INTERVAL = 1000;
+
 function getStatDelta(a: Stat, b: Stat): PartialStat | undefined {
-    if (b.changed) {
+    const now = new Date().getTime();
+    if (b.changed && b.lastSent + SEND_INTERVAL < now) {
         b.changed = false;
+        b.lastSent = now;
         return getObjectDelta(a, b);
     }
     return undefined;
