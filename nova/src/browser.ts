@@ -21,6 +21,10 @@ const gameData = new GameData();
 const pixelRatio = window.devicePixelRatio || 1;
 PIXI.settings.RESOLUTION = pixelRatio;
 PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
+
+// TODO: Using WebGL 1 (instead of 2) seems to make the game smoother, but
+// this will likely change in the future.
+PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL;
 const app = new PIXI.Application({
     width: window.innerWidth * pixelRatio,
     height: window.innerHeight * pixelRatio,
