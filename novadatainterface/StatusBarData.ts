@@ -25,39 +25,20 @@ export function getDefaultStatusBarColors(): StatusBarColors {
     };
 }
 
+export interface StatusBarDataArea {
+    position: [number, number];
+    size: [number, number];
+}
+
 export interface StatusBarDataAreas {
-    radar: {
-        position: [number, number],
-        size: [number, number]
-    };
-    shield: {
-        position: [number, number],
-        size: [number, number]
-    };
-    armor: {
-        position: [number, number],
-        size: [number, number]
-    };
-    fuel: {
-        position: [number, number],
-        size: [number, number]
-    };
-    navigation: {
-        position: [number, number],
-        size: [number, number]
-    };
-    weapons: {
-        position: [number, number],
-        size: [number, number]
-    };
-    targeting: {
-        position: [number, number],
-        size: [number, number]
-    };
-    cargo: {
-        position: [number, number],
-        size: [number, number]
-    };
+    radar: StatusBarDataArea;
+    shield: StatusBarDataArea;
+    armor: StatusBarDataArea;
+    fuel: StatusBarDataArea;
+    navigation: StatusBarDataArea;
+    weapons: StatusBarDataArea;
+    targeting: StatusBarDataArea;
+    cargo: StatusBarDataArea;
 }
 
 export function getDefaultStatusBarDataAreas(): StatusBarDataAreas {
