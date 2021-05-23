@@ -72,7 +72,7 @@ esbuild(
     entry_point = "browser.ts",
     #target = "es2015",
     target = "esnext",
-    minify = False,
+    minify = True,
     sources_content = True,
     define = [
         "process.env.NODE_ENV=\"browser\""

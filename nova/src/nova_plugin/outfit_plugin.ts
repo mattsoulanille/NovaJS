@@ -1,5 +1,5 @@
 import * as t from 'io-ts';
-import { GetEntity } from 'nova_ecs/arg_types';
+import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
 import { Plugin } from 'nova_ecs/plugin';
@@ -24,9 +24,9 @@ const AppliedOutfitsComponent = new Component<{}>('AppliedOutfitsComponent');
 
 export const ApplyOutfitsSystem = new System({
     name: "ApplyOutfitsSystem",
-    args: [OutfitsStateComponent, GameDataResource, GetEntity,
+    args: [OutfitsStateComponent, GameDataResource, GetEntity, UUID, Entities,
         Without(AppliedOutfitsComponent)] as const,
-    step: async (outfits, gameData, entity) => {
+    step: async (outfits, gameData, entity, uuid, entities) => {
         const weaponsState = new DefaultMap<string, WeaponState>(() => ({
             count: 0,
             firing: false,
@@ -34,6 +34,12 @@ export const ApplyOutfitsSystem = new System({
 
         for (const [id, state] of outfits) {
             const outfit = await gameData.data.Outfit.get(id);
+            if (entities.get(uuid)?.components.get(OutfitsStateComponent) !== outfits) {
+                // This handles the case where the OutfitStateComponent is reassinged before
+                // this function finishes.
+                // TODO: Fix AsyncSystem creating a call stack overflow when used here.
+                return;
+            }
             if (!outfit) {
                 continue;
             }
