@@ -10,7 +10,9 @@ import { MovementPhysicsComponent, MovementStateComponent, MovementType } from '
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
+import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { Guidance, zeroOrderGuidance } from './guidance';
+import { Health, HealthComponent } from './health_plugin';
 
 
 export interface ProjectileType {
@@ -61,6 +63,8 @@ export function makeProjectile({
             turnRate: projectileData.physics.turnRate,
             movementType: projectileData.guidance === 'guided'
                 ? MovementType.INERTIALESS : MovementType.INERTIAL,
+        }).addComponent(CollisionInteractionComponent, {
+            hitTypes: new Set(['normal']),
         });
 
     if (target) {
@@ -116,10 +120,50 @@ const ProjectileGuidanceSystem = new System({
     }
 });
 
+function applyDamage(health: Health, projectileData: ProjectileWeaponData) {
+    const minShield = -health.shield.max * 0.05;
+    health.shield.current = Math.max(minShield,
+        health.shield.current - projectileData.damage.shield);
+    health.shield.changed = true;
+    if (health.shield.current <= 0) {
+        health.armor.current = Math.max(0,
+            health.armor.current - projectileData.damage.armor)
+        health.armor.changed = true;
+    }
+
+    if (projectileData.damage.ionization !== 0) {
+        health.ionization.current += projectileData.damage.ionization;
+        health.ionization.changed = true;
+    }
+}
+
+const ProjectileCollisionSystem = new System({
+    name: 'ProjectileCollisionSystem',
+    events: [CollisionEvent],
+    args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
+        ProjectileComponent] as const,
+    step(collision, entities, uuid, projectileData, projectileComponent) {
+        const other = entities.get(collision.other);
+        if (!other) {
+            return;
+        }
+        if (collision.other === projectileComponent.source) {
+            return;
+        }
+
+        const otherHealth = other.components.get(HealthComponent);
+        if (otherHealth) {
+            applyDamage(otherHealth, projectileData);
+        }
+        entities.delete(uuid);
+    }
+});
+
 export const ProjectilePlugin: Plugin = {
     name: 'ProjectilePlugin',
     build(world) {
         world.addSystem(ProjectileGuidanceSystem);
         world.addSystem(ProjectileLifespanSystem);
+        world.addSystem(ProjectileCollisionSystem);
     }
 }

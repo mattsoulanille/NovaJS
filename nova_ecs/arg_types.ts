@@ -28,7 +28,7 @@ export type GetArgSelector<T> = T extends typeof GetArg ? GetArgFunction : never
 
 export const Emit = Symbol('Emit');
 export type EmitFunction = <Data>(event: EcsEvent<Data, any>, data: Data,
-    entities?: Set<string>) => void;
+    entities?: string[]) => void;
 export type EmitSelector<T> = T extends typeof Emit ? EmitFunction : never;
 
 export const GetWorld = Symbol('World');

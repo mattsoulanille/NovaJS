@@ -5,6 +5,7 @@ import Stats from 'stats.js';
 import { GameData } from "./client/gamedata/GameData";
 import { CommunicatorClient } from "./communication/CommunicatorClient";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
+import { DebugSettings } from "./debug_settings";
 import { Display } from "./display/display_plugin";
 import { PixiAppResource } from "./display/pixi_app_resource";
 import { ResizeEvent } from "./display/resize_event";
@@ -19,7 +20,11 @@ const gameData = new GameData();
 
 const pixelRatio = window.devicePixelRatio || 1;
 PIXI.settings.RESOLUTION = pixelRatio;
-//PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.
+PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
+
+// TODO: Using WebGL 1 (instead of 2) seems to make the game smoother, but
+// this will likely change in the future.
+PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL;
 const app = new PIXI.Application({
     width: window.innerWidth * pixelRatio,
     height: window.innerHeight * pixelRatio,
@@ -59,6 +64,8 @@ async function startGame() {
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);
+
+    (window as any).novaDebug = new DebugSettings(world);
 
     app.ticker.add(() => {
         stats.begin();

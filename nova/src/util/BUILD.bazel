@@ -3,9 +3,10 @@ package(default_visibility = ["//visibility:public"])
 load("//:defaults.bzl", "ts_library")
 
 ts_library(
-    name = "hull",
-    srcs = ["index.d.ts"],
+    name = "util",
+    srcs = glob(["*.ts"]),
     deps = [
-        "@npm//hull.js",
-    ],
+        "//novadatainterface",
+        "//nova_ecs/plugins",
+    ]
 )

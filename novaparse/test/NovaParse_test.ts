@@ -267,7 +267,6 @@ describe("NovaParse", function() {
         const expectedSpriteSheet = JSON.parse(fs.readFileSync(
             sheet1000Path, "utf8")) as SpriteSheetData;
 
-        //fail("TODO: Fix convex hulls");
         var noNegativeZeroes = JSON.parse(JSON.stringify(rs1000)) as SpriteSheetData;
         expect(noNegativeZeroes).toEqual(expectedSpriteSheet);
     });

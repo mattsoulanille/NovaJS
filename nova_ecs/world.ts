@@ -1,5 +1,5 @@
-import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
-import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, QueryResults, UUID } from "./arg_types";
+import { Either, isLeft, left, Right, right } from "fp-ts/lib/Either";
+import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
@@ -13,7 +13,7 @@ import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
-import { DefaultMap, topologicalSort } from './utils';
+import { topologicalSort } from './utils';
 
 // How do you serialize components and make sure the receiver
 // knows which is which?
@@ -57,13 +57,14 @@ export const SingletonComponent = new Component<undefined>('SingletonComponent')
 interface EcsEventWithEntities<Data> {
     event: EcsEvent<Data, any>;
     data: Data;
-    entities?: Set<string | [string, Entity]>;
+    entities?: Array<string | [string, Entity]>;
 }
 
 export class World {
     private readonly state = {
         entities: new EntityMapWrapped(),
-        resources: new ResourceMapWrapped(),
+        resources: new ResourceMapWrapped(this.addResource.bind(this),
+            this.removeResource.bind(this)),
     };
 
     readonly entities = this.state.entities;
@@ -95,20 +96,16 @@ export class World {
 
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
-            this.emitWrapped(DeleteEvent, undefined, deleted);
-        });
-
-        this.state.resources.events.set.subscribe(added => {
-            this.addResource(added[0]);
+            this.emitWrapped(DeleteEvent, undefined, [...deleted]);
         });
     }
 
-    emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: Set<string>) {
+    emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: string[]) {
         this.emitWrapped(event, data, entities);
     }
 
     private emitWrapped<Data>(event: EcsEvent<Data, any>, data: Data,
-        entities?: Set<string> | Set<[string, Entity]>) {
+        entities?: string[] | Array<[string, Entity]>) {
         this.eventQueue.push({
             event: event as UnknownEvent,
             data,
@@ -122,12 +119,32 @@ export class World {
         await plugin.build(this);
     }
 
-    addResource(resource: Resource<any>) {
+    removePlugin(plugin: Plugin) {
+        plugin.remove?.(this);
+    }
+
+    addResource(resource: Resource<any>): this {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
             throw new Error(`A resource with name ${resource.name} already exists`);
         }
         this.nameResourceMap.set(resource.name, resource as UnknownResource);
+        return this;
+    }
+
+    private removeResource(resource: Resource<any>): boolean {
+        if (this.nameResourceMap.get(resource.name) !== resource) {
+            return false;
+        }
+
+        for (const system of this.systems) {
+            if (system.query.resources.has(resource)) {
+                throw new Error(`Cannot remove resource ${resource.name} `
+                    + `because ${system.name} uses it`);
+            }
+        }
+
+        return this.nameResourceMap.delete(resource.name);
     }
 
     addSystem(system: System): this {
@@ -185,6 +202,20 @@ export class World {
         return this;
     }
 
+    removeSystem(system: System): this {
+        if (this.nameSystemMap.get(system.name) !== system) {
+            return this;
+        }
+
+        this.nameSystemMap.delete(system.name);
+        const index = this.systems.indexOf(system);
+        if (index >= 0) {
+            this.systems.splice(index, 1);
+        }
+
+        return this;
+    }
+
     addComponent(component: Component<any>) {
         // Adds a component to the map of known components. Does not add to an entity.
         // Necessary for multiplayer to create entities with components that haven't
@@ -218,7 +249,7 @@ export class World {
         // this includes entities added in the same step.
         let entities: [string, Entity][] | undefined;
         if (eventWithEntities.entities) {
-            entities = [...eventWithEntities.entities].map(entry => {
+            entities = eventWithEntities.entities.map(entry => {
                 if (typeof entry === 'string') {
                     return [entry, this.state.entities.get(entry)];
                 } else {

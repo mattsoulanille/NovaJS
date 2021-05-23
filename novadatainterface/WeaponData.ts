@@ -88,7 +88,7 @@ export interface SubmunitionType {
 }
 
 
-export interface WeaponDamageList {
+export interface WeaponDamage {
     [index: string]: number;
     shield: number;
     armor: number;
@@ -130,6 +130,7 @@ export function getDefaultBaseWeaponData(): BaseWeaponData {
 }
 
 export interface NotBayWeaponData extends BaseWeaponData {
+    damage: WeaponDamage;
     oneAmmoPerBurst: boolean;
     ionizationColor: number;
     shotDuration: number;
@@ -142,6 +143,12 @@ export interface NotBayWeaponData extends BaseWeaponData {
 export function getDefaultNotBayWeaponData(): NotBayWeaponData {
     return {
         ...getDefaultBaseWeaponData(),
+        damage: {
+            shield: 1,
+            armor: 1,
+            ionization: 0,
+            passThroughShield: 0,
+        },
         oneAmmoPerBurst: false,
         ionizationColor: 0xffffff,
         shotDuration: 7,

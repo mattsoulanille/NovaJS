@@ -1,58 +1,22 @@
-import { Animation } from "novadatainterface/Animation";
+import { Entities, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { DeleteEvent } from "nova_ecs/events";
-import { FirstAvailable } from "nova_ecs/first_available";
+import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
 import * as PIXI from "pixi.js";
-import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
+import { FirstAnimation } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
-import { PlanetDataProvider } from "../nova_plugin/planet_plugin";
-import { ProjectileDataComponent } from "../nova_plugin/projectile_plugin";
-import { ShipDataProvider } from "../nova_plugin/ship_plugin";
+import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { AnimationGraphic } from "./animation_graphic";
-import { starfield } from "./starfield_plugin";
-import { Entities, UUID } from "nova_ecs/arg_types";
-import { StatusBarComponent, StatusBarPlugin } from "./status_bar";
+import { ConvexHullDisplayPlugin } from "./convex_hull_display_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
-import { Optional } from "nova_ecs/optional";
-
-export const AnimationComponent = new Component<Animation>('AnimationComponent');
-
-const ShipAnimationComponentProvider = Provide({
-    provided: AnimationComponent,
-    args: [ShipDataProvider],
-    factory: (shipData) => {
-        return shipData.animation;
-    }
-});
-
-const PlanetAnimationComponentProvider = Provide({
-    provided: AnimationComponent,
-    args: [PlanetDataProvider],
-    factory: (shipData) => {
-        return shipData.animation;
-    }
-});
-
-const ProjectileAnimationComponentProvider = Provide({
-    provided: AnimationComponent,
-    args: [ProjectileDataComponent],
-    factory: (projectile) => {
-        return projectile.animation;
-    }
-});
-
-const FirstAnimation = FirstAvailable([
-    AnimationComponent,
-    ShipAnimationComponentProvider,
-    PlanetAnimationComponentProvider,
-    ProjectileAnimationComponentProvider,
-]);
+import { starfield } from "./starfield_plugin";
+import { StatusBarComponent, StatusBarPlugin } from "./status_bar";
 
 const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicLoader = ProvideAsync({
@@ -131,6 +95,7 @@ export const Display: Plugin = {
     build: async (world) => {
         const stage = new PIXI.Container();
         const space = new PIXI.Container();
+        space.sortableChildren = true;
         stage.addChild(space);
         world.resources.set(Stage, stage);
         world.resources.set(Space, space);

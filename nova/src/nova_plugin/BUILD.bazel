@@ -1,6 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("//:defaults.bzl", "ts_library")
 load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 
 ts_library(
@@ -21,6 +21,10 @@ ts_library(
         "guidance.ts",
         "exit_point.ts",
         "outfit_plugin.ts",
+        "collisions_plugin.ts",
+        "collision_interaction.ts",
+        "animation_plugin.ts",
+        "health_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -28,10 +32,15 @@ ts_library(
         "//nova_ecs/datatypes",
         "//novadatainterface",
         "//nova/src/common",
+        "//nova/src/util",
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
         "@npm//uuid",
         "@npm//@types/uuid",
+        "@npm//sat",
+        "@npm//@types/sat",
+        "@npm//rbush",
+        "@npm//@types/rbush",
     ]
 )

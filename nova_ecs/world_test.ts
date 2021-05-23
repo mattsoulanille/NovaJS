@@ -1111,4 +1111,81 @@ describe('world', () => {
 
         expect(bars).toEqual(['hello', 'bye']);
     });
+
+    it('removes a system from the world', () => {
+        const foos: number[] = [];
+        const bars: string[] = [];
+
+        const fooSystem = new System({
+            name: 'FooSystem',
+            args: [FOO_COMPONENT] as const,
+            step: (foo) => {
+                foo.x += 1;
+                foos.push(foo.x);
+            }
+        });
+
+        const barSystem = new System({
+            name: 'BarSystem',
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = bar.y + ' asdf';
+                bars.push(bar.y);
+            }
+        });
+
+        const otherBarSystem = new System({
+            name: 'BarSystem',
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = bar.y + ' fdsa';
+                bars.push(bar.y);
+            }
+        });
+
+        world.addSystem(fooSystem);
+        world.addSystem(barSystem);
+        world.entities.set('e1', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'asdf' })
+            .build());
+
+        world.step();
+
+        world.removeSystem(barSystem);
+        world.step();
+        world.addSystem(otherBarSystem);
+        world.step();
+        world.removeSystem(barSystem);
+        world.step();
+
+        expect(foos).toEqual([124, 125, 126, 127]);
+        expect(bars).toEqual(['asdf asdf', 'asdf asdf fdsa',
+            'asdf asdf fdsa fdsa']);
+
+        expect(() => {
+            world.addSystem(barSystem)
+        }).toThrowError(/A system with name/);
+    });
+
+    it('removes resources', () => {
+        const dependsOnBaz = new System({
+            name: 'DependsOnBaz',
+            args: [BAZ_RESOURCE] as const,
+            step() { }
+        });
+
+        world.resources.set(BAZ_RESOURCE, { z: [] });
+
+        expect(world.resources.has(BAZ_RESOURCE)).toBeTrue();
+
+        world.addSystem(dependsOnBaz);
+        expect(() => {
+            world.resources.delete(BAZ_RESOURCE);
+        }).toThrowError(/Cannot remove resource/);
+
+        world.removeSystem(dependsOnBaz);
+        expect(world.resources.delete(BAZ_RESOURCE)).toBeTrue();
+        expect(world.resources.has(BAZ_RESOURCE)).toBeFalse();
+    });
 });

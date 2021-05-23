@@ -30,7 +30,7 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
         this.before = new Set([...before ?? []]);
         this.after = new Set([...after ?? []]);
         this.events = new Set([...events ?? [StepEvent]]) as Set<UnknownEvent>;
-        this.query = new Query(args);
+        this.query = new Query(args, name);
     }
 
     toString() {

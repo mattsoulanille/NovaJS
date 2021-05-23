@@ -2,7 +2,7 @@ import { Animation, getDefaultAnimation, getDefaultExitPoints } from "novadatain
 import { BaseData } from "novadatainterface/BaseData";
 import { NovaDataType } from "novadatainterface/NovaDataInterface";
 import { getDefaultShipData } from "novadatainterface/ShipData";
-import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponData } from "novadatainterface/WeaponData";
+import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponDamage, WeaponData } from "novadatainterface/WeaponData";
 import { BLEND_MODES } from "novadatainterface/BlendModes";
 import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
@@ -61,8 +61,16 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         damageType = "normal";
     }
 
+    const damage: WeaponDamage = {
+        shield: weap.shieldDamage,
+        armor: weap.armorDamage,
+        ionization: weap.ionization,
+        passThroughShield: weap.passThroughShields ? 1 : 0,
+    }
+
     return {
         ...baseWeapon,
+        damage,
         oneAmmoPerBurst: weap.oneAmmoPerBurst,
         ionizationColor: weap.ionizeColor,
         shotDuration: weap.duration,

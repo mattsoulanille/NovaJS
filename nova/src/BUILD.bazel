@@ -1,7 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
-load("@npm//@bazel/typescript:index.bzl", "ts_library")
+load("//:defaults.bzl", "ts_library")
 load("//:esbuild.bzl", "esbuild")
 
 
@@ -13,13 +13,20 @@ filegroup(
 )
 
 ts_library(
+    name = "debug_settings_lib",
+    srcs = ["debug_settings.ts"],
+    deps = [
+        "//nova_ecs:ecs",
+        "//nova/src/display",
+    ]
+)
+
+ts_library(
     name = "browser_lib",
     srcs = ["browser.ts"],
     deps = [
         #":gameloop_lib",
-        "@npm//@types/node",
-        "@npm//pixi.js",
-        "@npm//rxjs",
+        ":debug_settings_lib",
         "//nova/src/common",
         #"//nova/src/client",
         "//nova/src/display",
@@ -34,8 +41,27 @@ ts_library(
         "@npm//@types/uuid",
         "@npm//stats.js",
         "@npm//@types/stats.js",
+        "@npm//@types/node",
+        "@npm//pixi.js",
+        "@npm//rxjs",
     ]
 )
+
+# rollup_bundle(
+#     name = "browser_bundle",
+#     sourcemap = "true",
+#     entry_point = "browser.ts",
+#     config_file = "@//:rollup.config.js",
+#     format = "iife",
+#     deps = [
+#         ":browser_lib",
+#         "@npm//url-shim",
+#         "@npm//@rollup/plugin-alias",
+#         "@npm//@rollup/plugin-node-resolve",
+#         "@npm//@rollup/plugin-commonjs",
+#         "@npm//rollup-plugin-sourcemaps",
+#     ]
+# )
 
 esbuild(
     name = "browser_bundle",
@@ -46,12 +72,12 @@ esbuild(
     entry_point = "browser.ts",
     #target = "es2015",
     target = "esnext",
-    minify = False,
+    minify = True,
     sources_content = True,
     define = [
         "process.env.NODE_ENV=\"browser\""
     ],
-    link_workspace_root = True,
+    #link_workspace_root = True,
     deps = [
         ":browser_lib",
     ],

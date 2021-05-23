@@ -1,18 +1,18 @@
 import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, ConvexHulls, FrameInfo, ConvexHull, DefaultImageLocation } from "novadatainterface/SpriteSheetData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, Hull, FrameInfo, ConvexHull, DefaultImageLocation } from "novadatainterface/SpriteSheetData";
 import { RledResource } from "../resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
 import hull from 'hull.js';
 import { bufferToArrayBuffer } from "./buffer_to_array_buffer";
 
+
 export interface SpriteSheetMulti {
     spriteSheet: SpriteSheetData;
     spriteSheetImage: SpriteSheetImageData;
     spriteSheetFrames: SpriteSheetFramesData;
 }
-
 
 const SHEET_LOOP = 10;
 
@@ -108,17 +108,15 @@ function makeConvexHull(png: PNG): ConvexHull {
     return hullWithRepeat.slice(0, hullWithRepeat.length - 1);
 }
 
-
-function buildConvexHulls(frames: Array<PNG>): ConvexHulls {
-    return frames.map(makeConvexHull);
+function makeHull(png: PNG): Hull {
+    const convexHull = makeConvexHull(png);
+    // TODO: Approximately convex decomposition -> multiple hulls per sprite.
+    return [convexHull];
 }
-
-
 
 function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
     var frames = rled.frames;
     var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
-
 
     var imagePath = path.join(DefaultImageLocation, rled.globalID + ".png");
 
@@ -151,7 +149,6 @@ function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
         };
     }
 
-
     return {
         frames: frameInfoObj,
         meta
@@ -169,15 +166,12 @@ export async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction
     const buf = PNG.sync.write(assembledPNG);
     const spriteSheetImage = bufferToArrayBuffer(buf);
 
-    // TODO: Convex Hulls
-    const convexHulls = buildConvexHulls(rled.frames);
     const spriteSheet: SpriteSheetData = {
         ...base,
-        convexHulls
+        hulls: rled.frames.map(makeHull),
     }
 
-    const spriteSheetFrames: SpriteSheetFramesData = buildSpriteSheetFrames(rled);
-
+    const spriteSheetFrames = buildSpriteSheetFrames(rled);
 
     return {
         spriteSheet,

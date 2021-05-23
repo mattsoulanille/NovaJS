@@ -12,21 +12,26 @@ export function getDefaultConvexHull(): ConvexHull {
     ];
 }
 
-export type ConvexHulls = Array<ConvexHull>;
+// A Hull can be made of multiple convex hulls.
+export type Hull = Array<ConvexHull>;
 
-export function getDefaultConvexHulls(): ConvexHulls {
+export function getDefaultHull(): Hull {
     return [getDefaultConvexHull()];
 }
 
+export function getDefaultHulls(): Hull[] {
+    return [getDefaultHull()];
+}
+
 export interface SpriteSheetData extends BaseData {
-    convexHulls: Array<ConvexHull>
+    hulls: Hull[];
 }
 
 
 export function getDefaultSpriteSheetData(): SpriteSheetData {
     return {
         ...getDefaultBaseData(),
-        convexHulls: getDefaultConvexHulls()
+        hulls: getDefaultHulls(),
     };
 }
 
