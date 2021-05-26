@@ -14,10 +14,11 @@ import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
-import { Health, HealthComponent } from "../nova_plugin/health_plugin";
+import { ShieldComponent, ArmorComponent } from "../nova_plugin/health_plugin";
 import { PlanetDataComponent } from "../nova_plugin/planet_plugin";
 import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { ShipDataComponent } from "../nova_plugin/ship_plugin";
+import { Stat } from "../nova_plugin/stat";
 import { ResizeEvent } from "./resize_event";
 import { Stage } from "./stage_resource";
 
@@ -88,14 +89,14 @@ class StatusBar {
         this.statsGraphics.lineTo(pos[0] + size[0] * fullness, pos[1]);
     }
 
-    drawStats(health: Health) {
+    drawStats(shield: Stat, armor: Stat) {
         this.statsGraphics.clear();
 
-        const shieldFullness = Math.max(0, health.shield.current / health.shield.max);
+        const shieldFullness = Math.max(0, shield.current / shield.max);
         this.drawLine(this.statusBarData.dataAreas.shield,
             this.statusBarData.colors.shield, shieldFullness);
 
-        const armorFullness = Math.max(0, health.armor.current / health.armor.max);
+        const armorFullness = Math.max(0, armor.current / armor.max);
         this.drawLine(this.statusBarData.dataAreas.armor,
             this.statusBarData.colors.armor, armorFullness);
     }
@@ -152,9 +153,9 @@ const DrawRadar = new System({
 
 const DrawStatusBarStats = new System({
     name: 'DrawStatusBarStats',
-    args: [StatusBarProvider, HealthComponent, PlayerShipSelector] as const,
-    step(statusBar, health) {
-        statusBar.drawStats(health);
+    args: [StatusBarProvider, ShieldComponent, ArmorComponent, PlayerShipSelector] as const,
+    step(statusBar, shield, armor) {
+        statusBar.drawStats(shield, armor);
     }
 })
 

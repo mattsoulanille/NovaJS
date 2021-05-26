@@ -12,7 +12,8 @@ import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { Guidance, zeroOrderGuidance } from './guidance';
-import { Health, HealthComponent } from './health_plugin';
+import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
+import { Stat } from './stat';
 
 
 export interface ProjectileType {
@@ -120,21 +121,23 @@ const ProjectileGuidanceSystem = new System({
     }
 });
 
-function applyDamage(health: Health, projectileData: ProjectileWeaponData) {
-    const minShield = -health.shield.max * 0.05;
-    health.shield.current = Math.max(minShield,
-        health.shield.current - projectileData.damage.shield);
-    health.shield.changed = true;
-    if (health.shield.current <= 0) {
-        health.armor.current = Math.max(0,
-            health.armor.current - projectileData.damage.armor)
-        health.armor.changed = true;
+function applyDamage(projectileData: ProjectileWeaponData, armor: Stat,
+    shield?: Stat, ionization?: Stat) {
+
+    if (projectileData.damage.ionization !== 0 && ionization) {
+        ionization.current += projectileData.damage.ionization;
     }
 
-    if (projectileData.damage.ionization !== 0) {
-        health.ionization.current += projectileData.damage.ionization;
-        health.ionization.changed = true;
+    if (shield) {
+        const minShield = -shield.max * 0.05;
+        shield.current = Math.max(minShield,
+            shield.current - projectileData.damage.shield);
+        if (shield.current > 0) {
+            return;
+        }
     }
+
+    armor.current = Math.max(0, armor.current - projectileData.damage.armor)
 }
 
 const ProjectileCollisionSystem = new System({
@@ -151,9 +154,12 @@ const ProjectileCollisionSystem = new System({
             return;
         }
 
-        const otherHealth = other.components.get(HealthComponent);
-        if (otherHealth) {
-            applyDamage(otherHealth, projectileData);
+        const otherShield = other.components.get(ShieldComponent);
+        const otherArmor = other.components.get(ArmorComponent);
+        const otherIonization = other.components.get(IonizationComponent);
+
+        if (otherArmor) {
+            applyDamage(projectileData, otherArmor, otherShield, otherIonization);
         }
         entities.delete(uuid);
     }
