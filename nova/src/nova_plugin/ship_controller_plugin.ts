@@ -16,6 +16,7 @@ export enum ControlAction {
     'turnRight',
     'reverse',
     'firePrimary',
+    'cycleTarget',
 }
 
 // TODO: Support loading this from the server.
@@ -26,12 +27,13 @@ const keyMap = new Map([
     ['ArrowRight', ControlAction.turnRight],
     ['ArrowDown', ControlAction.reverse],
     ['Space', ControlAction.firePrimary],
+    ['Tab', ControlAction.cycleTarget],
 ]);
 
 // Used to mark the single ship that's under control.
 export const PlayerShipSelector = new Component<undefined>('ShipControl');
 
-type ControlState = Map<ControlAction, boolean>;
+type ControlState = Map<ControlAction, false | 'start' | 'repeat' | true>;
 
 // A resource because the ship may change.
 const ControlStateResource = new Resource<ControlState>('ControlStateResource');
@@ -66,16 +68,23 @@ const UpdateControlState = new System({
     events: [EcsKeyboardEvent],
     args: [EcsKeyboardEvent, ControlStateResource, Emit, SingletonComponent] as const,
     step(event, controlState, emit) {
-        if (event.repeat) {
-            return;
-        }
-
         const action = keyMap.get(event.code);
         if (action === undefined) {
             return;
         }
 
-        controlState.set(action, event.type !== 'keyup');
+        // Avoid accidentally sending a 'start' or 'repeat' event that's
+        // not actually happening.
+        for (const [key, val] of controlState) {
+            if (val) {
+                controlState.set(key, true);
+            }
+        }
+
+        const eventType = event.type === 'keyup' ? false
+            : event.repeat ? 'repeat' : 'start';
+
+        controlState.set(action, eventType);
         emit(ControlStateEvent, controlState);
     }
 });

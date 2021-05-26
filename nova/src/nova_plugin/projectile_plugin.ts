@@ -14,6 +14,7 @@ import { CollisionEvent, CollisionInteractionComponent } from './collision_inter
 import { Guidance, zeroOrderGuidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { Stat } from './stat';
+import { TargetComponent } from './target_plugin';
 
 
 export interface ProjectileType {
@@ -22,7 +23,6 @@ export interface ProjectileType {
 }
 
 export const ProjectileComponent = new Component<ProjectileType>('Projectile');
-export const TargetComponent = new Component<{ target: string }>('TargetComponent');
 
 export const ProjectileDataComponent = new Component<ProjectileWeaponData>('ProjectileData');
 
@@ -108,6 +108,9 @@ const ProjectileGuidanceSystem = new System({
     args: [MovementStateComponent, TargetComponent,
         Entities, ProjectileComponent] as const,
     step(movementState, { target }, entities) {
+        if (!target) {
+            return;
+        }
         const targetEntity = entities.get(target);
         const targetMovement = targetEntity?.components.get(MovementStateComponent);
         const targetPosition = targetMovement?.position;

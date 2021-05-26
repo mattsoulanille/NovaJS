@@ -26,6 +26,7 @@ ts_library(
         "animation_plugin.ts",
         "health_plugin.ts",
         "stat.ts",
+        "target_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

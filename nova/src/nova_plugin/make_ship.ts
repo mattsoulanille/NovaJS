@@ -8,6 +8,7 @@ import { ArmorComponent, IonizationComponent, ShieldComponent } from "./health_p
 import { OutfitsStateComponent } from "./outfit_plugin";
 import { ShipComponent } from "./ship_plugin";
 import { Stat } from "./stat";
+import { TargetComponent } from "./target_plugin";
 
 
 // TODO: Use providers instead?
@@ -45,7 +46,7 @@ export function makeShip(shipData: ShipData): Entity {
         current: 0,
         max: shipData.physics.ionization,
         recharge: -shipData.physics.deionize,
-    }));
+    })).set(TargetComponent, { target: undefined });
 
     return ship;
 }

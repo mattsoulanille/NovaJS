@@ -5,6 +5,8 @@ import { Plugin } from '../plugin';
 
 const KeyboardResource = new Resource<undefined>('KeyboardResource');
 
+const prevented = new Set(['Tab']);
+
 export const EcsKeyboardEvent = new EcsEvent<KeyboardEvent>('KeyboardEvent');
 export const KeyboardPlugin: Plugin = {
     name: 'KeyboardPlugin',
@@ -15,8 +17,10 @@ export const KeyboardPlugin: Plugin = {
         }
         world.resources.set(KeyboardResource, undefined);
 
-
         function report(event: KeyboardEvent) {
+            if (prevented.has(event.key)) {
+                event.preventDefault();
+            }
             world.emit(EcsKeyboardEvent, event);
         }
         document.addEventListener('keydown', report);
