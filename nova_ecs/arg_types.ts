@@ -22,7 +22,7 @@ export const GetEntity = Symbol('Get Entity');
 export type GetEntityObject<T> = T extends typeof GetEntity ? Entity : never;
 
 export const GetArg = Symbol('Get Arg');
-export type GetArgFunction<T extends ArgTypes = ArgTypes> = (arg: T)
+export type GetArgFunction = <T extends ArgTypes = ArgTypes>(arg: T)
     => Either<undefined, ArgData<T>>;
 export type GetArgSelector<T> = T extends typeof GetArg ? GetArgFunction : never;
 
@@ -34,6 +34,9 @@ export type EmitSelector<T> = T extends typeof Emit ? EmitFunction : never;
 export const GetWorld = Symbol('World');
 export type GetWorldSelector<T> = T extends typeof GetWorld ? World : never;
 
+export const RunQuery = Symbol('RunQuery');
+export type RunQueryFunction = <T extends readonly ArgTypes[] = ArgTypes[]>(query: Query<T>, uuid?: string) => ArgsToData<T>[];
+export type RunQuerySelector<T> = T extends typeof RunQuery ? RunQueryFunction : never;
 
 // Types for args that are used to define a system or query. Passed in a tuple.
 export type ArgTypes = Component<any>
@@ -47,6 +50,7 @@ export type ArgTypes = Component<any>
     | typeof GetArg
     | typeof Emit
     | typeof GetWorld
+    | typeof RunQuery
     | Modifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
@@ -63,9 +67,9 @@ export type ArgData<T> =
     | GetArgSelector<T>
     | EmitSelector<T>
     | GetWorldSelector<T>
+    | RunQuerySelector<T>
     | ModifierResult<T>
     | AllowUndefined<T>;
-
 
 export type ArgsToData<Args> = {
     [K in keyof Args]: ArgData<Args[K]>

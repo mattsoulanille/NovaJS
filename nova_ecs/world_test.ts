@@ -1,6 +1,6 @@
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Emit, Entities, GetEntity, GetWorld, UUID } from './arg_types';
+import { Emit, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
 import { DeleteEvent, EcsEvent } from './events';
@@ -9,7 +9,7 @@ import { Plugin } from './plugin';
 import { Query } from './query';
 import { Resource } from './resource';
 import { System } from './system';
-import { World } from './world';
+import { SingletonComponent, World } from './world';
 
 
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
@@ -1187,5 +1187,92 @@ describe('world', () => {
         world.removeSystem(dependsOnBaz);
         expect(world.resources.delete(BAZ_RESOURCE)).toBeTrue();
         expect(world.resources.has(BAZ_RESOURCE)).toBeFalse();
+    });
+
+    it('runs queries', () => {
+        const fooQuery = new Query([FOO_COMPONENT] as const);
+        const barQuery = new Query([BAR_COMPONENT] as const);
+        const fooBarQuery = new Query([FOO_COMPONENT, BAR_COMPONENT] as const);
+
+        let fooResults: QueryResults<typeof fooQuery>;
+        let barResults: QueryResults<typeof barQuery>;
+        let fooBarResults: QueryResults<typeof fooBarQuery>;
+
+        const runQuerySystem = new System({
+            name: 'RunQuerySystem',
+            args: [RunQuery, SingletonComponent] as const,
+            step(runQuery) {
+                fooResults = runQuery(fooQuery);
+                barResults = runQuery(barQuery);
+                fooBarResults = runQuery(fooBarQuery);
+            }
+        });
+
+        world.addSystem(runQuerySystem);
+
+        world.entities.set('foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+
+        world.entities.set('bar', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
+
+        world.entities.set('foobar', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 456 })
+            .addComponent(BAR_COMPONENT, { y: 'bye' }));
+
+        world.step();
+
+        expect(fooResults!).toEqual([
+            [{ x: 123 }],
+            [{ x: 456 }],
+        ]);
+
+        expect(barResults!).toEqual([
+            [{ y: 'hello' }],
+            [{ y: 'bye' }],
+        ]);
+
+        expect(fooBarResults!).toEqual([
+            [{ x: 456 }, { y: 'bye' }]
+        ]);
+    });
+
+    it('runs queries on a single entity', () => {
+        const fooQuery = new Query([FOO_COMPONENT] as const);
+
+        let fooResultsOnFoo: QueryResults<typeof fooQuery>;
+        let fooResultsOnBar: QueryResults<typeof fooQuery>;
+        let fooResultsOnFooBar: QueryResults<typeof fooQuery>;
+        let fooResultsOnMissing: QueryResults<typeof fooQuery>;
+
+        const runQuerySystem = new System({
+            name: 'RunQuerySystem',
+            args: [RunQuery, SingletonComponent] as const,
+            step(runQuery) {
+                fooResultsOnFoo = runQuery(fooQuery, 'foo');
+                fooResultsOnBar = runQuery(fooQuery, 'bar');
+                fooResultsOnFooBar = runQuery(fooQuery, 'foobar');
+                fooResultsOnMissing = runQuery(fooQuery, 'missing');
+            }
+        });
+
+        world.addSystem(runQuerySystem);
+
+        world.entities.set('foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+
+        world.entities.set('bar', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
+
+        world.entities.set('foobar', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 456 })
+            .addComponent(BAR_COMPONENT, { y: 'bye' }));
+
+        world.step();
+
+        expect(fooResultsOnFoo!).toEqual([[{ x: 123 }]]);
+        expect(fooResultsOnBar!).toEqual([]);
+        expect(fooResultsOnFooBar!).toEqual([[{ x: 456 }]]);
+        expect(fooResultsOnMissing!).toEqual([]);
     });
 });
