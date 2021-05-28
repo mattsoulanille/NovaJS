@@ -3,7 +3,7 @@ import { Component } from "nova_ecs/component";
 import { DeleteEvent } from "nova_ecs/events";
 import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
@@ -12,13 +12,13 @@ import { FirstAnimation } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { AnimationGraphic } from "./animation_graphic";
-import { ConvexHullDisplayPlugin } from "./convex_hull_display_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
 import { starfield } from "./starfield_plugin";
 import { StatusBarComponent, StatusBarPlugin } from "./status_bar";
+import { TargetCornersPlugin } from "./target_corners_plugin";
 
-const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
+export const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicLoader = ProvideAsync({
     provided: AnimationGraphicComponent,
     args: [FirstAnimation, GameDataResource] as const,
@@ -58,7 +58,7 @@ const AnimationGraphicCleanup = new System({
     }
 });
 
-const ObjectDrawSystem = new System({
+export const ObjectDrawSystem = new System({
     name: "ObjectDrawSystem",
     args: [MovementStateComponent, AnimationGraphicProvider] as const,
     step: (movementState, graphic) => {
@@ -76,7 +76,8 @@ const ObjectDrawSystem = new System({
         graphic.container.position.x = movementState.position.x;
         graphic.container.position.y = movementState.position.y;
         graphic.rotation = movementState.rotation.angle;
-    }
+    },
+    after: [MovementSystem],
 });
 
 const CenterShipSystem = new System({
@@ -104,5 +105,6 @@ export const Display: Plugin = {
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(ObjectDrawSystem);
         world.addSystem(CenterShipSystem);
+        await world.addPlugin(TargetCornersPlugin);
     }
 };

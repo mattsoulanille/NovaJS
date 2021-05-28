@@ -6,7 +6,7 @@ export interface TargetCornersData extends BaseData {
         neutral: string,
         hostile: string,
         friendly: string,
-        disabled: string
+        disabled: string,
     }
 }
 
@@ -17,7 +17,7 @@ export function getDefaultTargetCornersData(): TargetCornersData {
             neutral: "default",
             hostile: "default",
             friendly: "default",
-            disabled: "default"
+            disabled: "default",
         }
     }
 }

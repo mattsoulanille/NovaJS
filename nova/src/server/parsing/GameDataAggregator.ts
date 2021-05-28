@@ -15,6 +15,8 @@ import { ExplosionData } from "novadatainterface/ExplosionData";
 import { PictImageData } from "novadatainterface/PictImage";
 import { NovaIDs } from "novadatainterface/NovaIDs";
 import { Defaults } from "novadatainterface/Defaults";
+import { CicnImageData } from "novadatainterface/CicnImage";
+import { CicnData } from "novadatainterface/CicnData";
 
 /**
  * Combines multiple GameDataInterface instances into a single GameDataInterface
@@ -37,6 +39,8 @@ class GameDataAggregator implements GameDataInterface {
             Weapon: this.makeAggregator<WeaponData>(NovaDataType.Weapon),
             Pict: this.makeAggregator<PictData>(NovaDataType.Pict),
             PictImage: this.makeAggregator<PictImageData>(NovaDataType.PictImage),
+            Cicn: this.makeAggregator<CicnData>(NovaDataType.Cicn),
+            CicnImage: this.makeAggregator<CicnImageData>(NovaDataType.CicnImage),
             Planet: this.makeAggregator<PlanetData>(NovaDataType.Planet),
             System: this.makeAggregator<SystemData>(NovaDataType.System),
             TargetCorners: this.makeAggregator<TargetCornersData>(NovaDataType.TargetCorners),
@@ -91,6 +95,8 @@ class GameDataAggregator implements GameDataInterface {
             Outfit: [],
             Pict: [],
             PictImage: [],
+            Cicn: [],
+            CicnImage: [],
             Planet: [],
             Ship: [],
             SpriteSheet: [],

@@ -1,3 +1,5 @@
+import { CicnData } from "./CicnData";
+import { CicnImageData } from "./CicnImage";
 import { ExplosionData } from "./ExplosionData";
 import { Gettable } from "./Gettable";
 import { OutfitData } from "./OutiftData";
@@ -11,12 +13,15 @@ import { SystemData } from "./SystemData";
 import { TargetCornersData } from "./TargetCornersData";
 import { WeaponData } from "./WeaponData";
 
+
 enum NovaDataType {
     Ship = "Ship",
     Outfit = "Outfit",
     Weapon = "Weapon",
     Pict = "Pict",
     PictImage = "PictImage",
+    Cicn = "Cicn",
+    CicnImage = "CicnImage",
     Planet = "Planet",
     System = "System",
     TargetCorners = "TargetCorners",
@@ -35,6 +40,8 @@ type NovaDataInterface = {
     Weapon: Gettable<WeaponData>,
     Pict: Gettable<PictData>,
     PictImage: Gettable<PictImageData>,
+    Cicn: Gettable<CicnData>,
+    CicnImage: Gettable<CicnImageData>,
     Planet: Gettable<PlanetData>,
     System: Gettable<SystemData>,
     TargetCorners: Gettable<TargetCornersData>,

@@ -1,5 +1,7 @@
 import * as fs from "fs";
 import { BaseData } from "novadatainterface/BaseData";
+import { CicnData } from "novadatainterface/CicnData";
+import { CicnImageData } from "novadatainterface/CicnImage";
 import { ExplosionData } from "novadatainterface/ExplosionData";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { Gettable } from "novadatainterface/Gettable";
@@ -28,7 +30,9 @@ const Paths = {
     Outfit: { path: "Outfit", extension: "json" } as PathInfo,
     Weapon: { path: "Weapon", extension: "json" } as PathInfo,
     Pict: { path: "Pict", extension: "json" } as PathInfo,
-    PictImage: { path: "Pict", extension: "png" } as PathInfo,
+    PictImage: { path: "PictImage", extension: "png" } as PathInfo,
+    Cicn: { path: "Cicn", extension: "json" } as PathInfo,
+    CicnImage: { path: "CicnImage", extension: "png" } as PathInfo,
     Planet: { path: "Planet", extension: "json" } as PathInfo,
     System: { path: "System", extension: "json" } as PathInfo,
     TargetCorners: { path: "TargetCorners", extension: "json" } as PathInfo,
@@ -53,6 +57,8 @@ class FilesystemData implements GameDataInterface {
             Weapon: this.getFunction<WeaponData>(Paths.Weapon),
             Pict: this.getFunction<PictData>(Paths.Pict),
             PictImage: this.getFunction<PictImageData>(Paths.PictImage),
+            Cicn: this.getFunction<CicnData>(Paths.Cicn),
+            CicnImage: this.getFunction<CicnImageData>(Paths.CicnImage),
             Planet: this.getFunction<PlanetData>(Paths.Planet),
             System: this.getFunction<SystemData>(Paths.System),
             TargetCorners: this.getFunction<TargetCornersData>(Paths.TargetCorners),
@@ -91,13 +97,14 @@ class FilesystemData implements GameDataInterface {
     }
 
     async buildIDs(): Promise<NovaIDs> {
-
         return {
             Ship: await this.buildIDsForPath(Paths.Ship),
             Outfit: await this.buildIDsForPath(Paths.Outfit),
             Weapon: await this.buildIDsForPath(Paths.Weapon),
             Pict: await this.buildIDsForPath(Paths.Pict),
             PictImage: await this.buildIDsForPath(Paths.PictImage),
+            Cicn: await this.buildIDsForPath(Paths.Cicn),
+            CicnImage: await this.buildIDsForPath(Paths.CicnImage),
             Planet: await this.buildIDsForPath(Paths.Planet),
             System: await this.buildIDsForPath(Paths.System),
             TargetCorners: await this.buildIDsForPath(Paths.TargetCorners),

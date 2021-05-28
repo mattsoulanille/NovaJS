@@ -1,4 +1,6 @@
 import { BaseData } from 'novadatainterface/BaseData';
+import { CicnData } from 'novadatainterface/CicnData';
+import { CicnImageData } from 'novadatainterface/CicnImage';
 import { ExplosionData } from 'novadatainterface/ExplosionData';
 import { GameDataInterface } from 'novadatainterface/GameDataInterface';
 import { Gettable } from 'novadatainterface/Gettable';
@@ -34,6 +36,8 @@ class GameData implements GameDataInterface {
             Weapon: this.addGettable<WeaponData>(NovaDataType.Weapon),
             Pict: this.addGettable<PictData>(NovaDataType.Pict),
             PictImage: this.addPictGettable<PictImageData>(NovaDataType.PictImage),
+            Cicn: this.addGettable<CicnData>(NovaDataType.Cicn),
+            CicnImage: this.addPictGettable<CicnImageData>(NovaDataType.CicnImage),
             Planet: this.addGettable<PlanetData>(NovaDataType.Planet),
             System: this.addGettable<SystemData>(NovaDataType.System),
             TargetCorners: this.addGettable<TargetCornersData>(NovaDataType.TargetCorners),
@@ -98,11 +102,16 @@ class GameData implements GameDataInterface {
         return PIXI.Texture.from(pictPath);
     }
 
-
     async spriteFromPict(id: string) {
         // TODO: Use this.data
         var texture = await this.textureFromPict(id);
         return new PIXI.Sprite(texture);
+    }
+
+    async textureFromCicn(id: string): Promise<PIXI.Texture> {
+        const cicnPath = urlJoin(dataPath, NovaDataType.CicnImage, id + ".png");
+        await this.data.CicnImage.get(id);
+        return PIXI.Texture.from(cicnPath);
     }
 
     private async getIds(): Promise<NovaIDs> {

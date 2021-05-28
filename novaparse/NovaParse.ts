@@ -36,6 +36,7 @@ import { ShipResource } from "./src/resource_parsers/ShipResource";
 import { SpobResource } from "./src/resource_parsers/SpobResource";
 import { SystResource } from "./src/resource_parsers/SystResource";
 import { WeapResource } from "./src/resource_parsers/WeapResource";
+import { Defaults } from "novadatainterface/Defaults";
 
 
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
@@ -128,6 +129,8 @@ export class NovaParse implements GameDataInterface {
             Weapon: this.buildIDsForResource(idSpace.wëap),
             Pict: this.buildIDsForResource(idSpace.PICT),
             PictImage: this.buildIDsForResource(idSpace.PICT),
+            Cicn: this.buildIDsForResource(idSpace.cicn),
+            CicnImage: this.buildIDsForResource(idSpace.cicn),
             Planet: this.buildIDsForResource(idSpace.spöb),
             System: this.buildIDsForResource(idSpace.sÿst),
             TargetCorners: [], // TODO: parse these
@@ -148,6 +151,8 @@ export class NovaParse implements GameDataInterface {
             Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
             Pict: this.pictGettable,
             PictImage: this.pictImageGettable,
+            Cicn: new Gettable(async () => Defaults.Cicn), // TODO
+            CicnImage: new Gettable(async () => Defaults.CicnImage), // TODO
             Planet: this.makeGettable<SpobResource, PlanetData>(NovaResourceType.spöb, PlanetParse),
             System: this.makeGettable<SystResource, SystemData>(NovaResourceType.sÿst, SystemParse),
             TargetCorners: this.makeGettable<BaseResource, TargetCornersData>(NovaResourceType.cicn, TargetCornersParse),

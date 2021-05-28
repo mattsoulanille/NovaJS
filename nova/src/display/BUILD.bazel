@@ -19,6 +19,7 @@ ts_library(
         "space_resource.ts",
         "resize_event.ts",
         "convex_hull_display_plugin.ts",
+        "target_corners_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

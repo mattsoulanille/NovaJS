@@ -1,10 +1,12 @@
 import { AnimationImage } from "novadatainterface/Animation";
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
+GameData
 import * as PIXI from "pixi.js";
 import { AnimationImageIndex } from "novadatainterface/Animation";
 import { texturesFromFrames } from "./textures_from_frames";
 import { mod } from "../util/mod";
 import { getFrameAndAngle } from "../util/get_frame_and_angle";
+import { GameData } from "../client/gamedata/GameData";
 
 const TWO_PI = 2 * Math.PI;
 
