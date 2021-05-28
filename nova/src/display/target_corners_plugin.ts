@@ -1,7 +1,5 @@
 import { Entities } from "nova_ecs/arg_types";
-import { Component } from "nova_ecs/component";
 import { Plugin } from 'nova_ecs/plugin';
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
@@ -11,7 +9,7 @@ import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { TargetComponent } from "../nova_plugin/target_plugin";
 import { mod } from "../util/mod";
-import { AnimationGraphicComponent, ObjectDrawSystem } from "./display_plugin";
+import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin";
 import { Space } from "./space_resource";
 
 
@@ -100,32 +98,28 @@ class TargetCorners {
 
 const TargetCornersResource = new Resource<TargetCorners>('TargetCornersResource');
 
-const TargetCornersSizeComponent = new Component<{
-    size: { x: number, y: number }
-}>('TargetCornersSizeComponent');
-
 const DrawTargetCornersSystem = new System({
     name: "DrawTargetCornersSystem",
     args: [TargetComponent, TimeResource, TargetCornersResource, Entities,
         PlayerShipSelector] as const,
     step({ target }, time, targetCorners, entities) {
-        if (target) {
-            const targetEntity = entities.get(target);
-            const targetPosition = targetEntity?.components.get(MovementStateComponent)?.position;
-            const targetContainer = targetEntity?.components.get(AnimationGraphicComponent)?.container;
-            if (targetEntity && targetContainer && targetPosition) {
-                targetCorners.step(time.time, target, {
-                    x: 60,
-                    y: 60,
-                });
-
-                targetCorners.setPosition(targetContainer.position);
-                targetCorners.visible = true;
-                return;
-            }
+        if (!target) {
+            targetCorners.visible = false;
+            targetCorners.targetUuid = undefined;
+            return;
         }
-        targetCorners.visible = false;
-        targetCorners.targetUuid = undefined;
+
+        const targetGraphic = entities.get(target)?.components
+            .get(AnimationGraphicComponent);
+        if (!targetGraphic) {
+            targetCorners.visible = false;
+            targetCorners.targetUuid = undefined;
+            return;
+        }
+
+        targetCorners.step(time.time, target, targetGraphic.size);
+        targetCorners.setPosition(targetGraphic.container.position);
+        targetCorners.visible = true;
     },
     after: [ObjectDrawSystem],
 });
