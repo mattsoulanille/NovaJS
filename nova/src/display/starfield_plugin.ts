@@ -2,7 +2,6 @@ import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { texturesFromFrames } from "./textures_from_frames";
 import { Resource } from "nova_ecs/resource";
@@ -12,6 +11,7 @@ import { PixiAppResource } from "./pixi_app_resource";
 // The system width and height are both 2*BOUNDARY
 import { BOUNDARY } from "nova_ecs/datatypes/position";
 import { Space } from "./space_resource";
+import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 
 const STAR_ID = "nova:700";
 

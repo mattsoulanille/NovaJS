@@ -1,3 +1,4 @@
+import { getDefaultCicnData } from "./CicnData";
 import { getDefaultExplosionData } from "./ExplosionData";
 import { GameDataInterface } from "./GameDataInterface";
 import { Gettable } from "./Gettable";
@@ -50,6 +51,8 @@ export class MockGameData implements GameDataInterface {
         Outfit: new MockGettable(getDefaultOutfitData()),
         Pict: new MockGettable(getDefaultPictData()),
         PictImage: new MockGettable(new Uint8Array(0) as Buffer),
+        Cicn: new MockGettable(getDefaultCicnData()),
+        CicnImage: new MockGettable(new Uint8Array(0) as Buffer),
         Planet: new MockGettable(getDefaultPlanetData()),
         Ship: new MockGettable(getDefaultShipData()),
         SpriteSheet: new MockGettable(getDefaultSpriteSheetData()),

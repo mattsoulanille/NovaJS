@@ -10,6 +10,8 @@ export function getDefaultNovaIDs(): NovaIDs {
         Outfit: [],
         Pict: [],
         PictImage: [],
+        Cicn: [],
+        CicnImage: [],
         Planet: [],
         Ship: [],
         SpriteSheet: [],

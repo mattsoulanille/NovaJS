@@ -1,91 +1,23 @@
 import { Component } from "nova_ecs/component";
 import { Plugin } from 'nova_ecs/plugin';
-import * as t from 'io-ts';
 import { DeltaResource } from "nova_ecs/plugins/delta_plugin";
-import { applyObjectDelta, getObjectDelta } from "nova_ecs/plugins/delta";
-import { System } from "nova_ecs/system";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
+import { System } from "nova_ecs/system";
+import { applyStatDelta, getStatDelta, PartialStat, stat, Stat } from "./stat";
 
 
-const StatContents = {
-    current: t.number,
-    recharge: t.number,
-    max: t.number,
-    changed: t.boolean,
-    lastSent: t.number,
-};
-const Stat = t.type(StatContents);
-type Stat = t.TypeOf<typeof Stat>;
-const PartialStat = t.partial(StatContents);
-type PartialStat = t.TypeOf<typeof PartialStat>;
+export const ShieldComponent = new Component<Stat>('Shield');
+export const ArmorComponent = new Component<Stat>('Armor');
+export const IonizationComponent = new Component<Stat>('Ionization');
 
-export const Health = t.type({
-    shield: Stat,
-    armor: Stat,
-    ionization: Stat,
-});
-
-const PartialHealth = t.partial({
-    shield: PartialStat,
-    armor: PartialStat,
-    ionization: PartialStat,
-});
-
-export type Health = t.TypeOf<typeof Health>;
-type PartialHealth = t.TypeOf<typeof PartialHealth>;
-
-const SEND_INTERVAL = 1000;
-
-function getStatDelta(a: Stat, b: Stat): PartialStat | undefined {
-    const now = new Date().getTime();
-    if (b.changed && b.lastSent + SEND_INTERVAL < now) {
-        b.changed = false;
-        b.lastSent = now;
-        return getObjectDelta(a, b);
-    }
-    return undefined;
-}
-
-function getHealthDelta(a: Health, b: Health): PartialHealth | undefined {
-    const result: PartialHealth = {};
-    let changed = false;
-    for (const [untypedKey, bStat] of Object.entries(b)) {
-        const key = untypedKey as keyof Health;
-        const aStat = a[key];
-        const delta = getStatDelta(aStat, bStat);
-        if (delta) {
-            result[key as keyof Health] = delta;
-            changed = true;
+const healthStats = [ShieldComponent, ArmorComponent, IonizationComponent]
+    .map(statComponent => [statComponent, new System({
+        name: `${statComponent.name}Recharge`,
+        args: [statComponent, TimeResource] as const,
+        step(stat, time) {
+            stat.step(time.delta_s);
         }
-    }
-    if (changed) {
-        return result;
-    }
-    return undefined;
-}
-
-function applyHealthDelta(state: Health, delta: PartialHealth) {
-    for (const [untypedKey, statDelta] of Object.entries(delta)) {
-        const key = untypedKey as keyof Health;
-        const statState = state[key];
-        if (statDelta) {
-            applyObjectDelta(statState, statDelta);
-        }
-    }
-}
-
-export const HealthComponent = new Component<Health>('Health');
-
-const HealthRecharge = new System({
-    name: "HealthRecharge",
-    args: [HealthComponent, TimeResource] as const,
-    step(health, time) {
-        for (const val of Object.values(health)) {
-            val.current = Math.min(val.max,
-                val.current + val.recharge * time.delta_s);
-        }
-    }
-});
+    })] as const);
 
 export const HealthPlugin: Plugin = {
     name: "HealthPlugin",
@@ -95,14 +27,16 @@ export const HealthPlugin: Plugin = {
             throw new Error('Expected delta maker resource to exist');
         }
 
-        deltaMaker.addComponent(HealthComponent, {
-            componentType: Health,
-            deltaType: PartialHealth,
-            getDelta: getHealthDelta,
-            applyDelta: applyHealthDelta,
-        });
+        for (const [healthComponent, healthRecharge] of healthStats) {
+            deltaMaker.addComponent(healthComponent, {
+                componentType: stat,
+                deltaType: PartialStat,
+                getDelta: getStatDelta,
+                applyDelta: applyStatDelta,
+            });
 
-        world.addSystem(HealthRecharge);
+            world.addSystem(healthRecharge);
+        }
     }
 }
 

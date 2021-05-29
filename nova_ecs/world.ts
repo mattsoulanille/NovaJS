@@ -1,5 +1,5 @@
 import { Either, isLeft, left, Right, right } from "fp-ts/lib/Either";
-import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, UUID } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
@@ -325,13 +325,30 @@ export class World {
             const modifier = arg as UnknownModifier;
             const query = this.queries.get(modifier.query);
             const modifierQueryResults = query.getResultForEntity(entity, uuid)
-            // const modifierQueryResults = this.fulfillQueryForEntity(
-            //     entity, uuid, modifier.query);
             if (isLeft(modifierQueryResults)) {
                 return left(undefined);
             }
             return modifier.transform(...modifierQueryResults.right) as
                 Either<undefined, ArgData<T>>;
+        } else if (arg === RunQuery) {
+            const runQuery: RunQueryFunction =
+                <T extends readonly ArgTypes[] = ArgTypes[]>(query: Query<T>, uuid?: string | undefined) => {
+                    const queryCached = this.queries.get(query);
+                    if (uuid !== undefined) {
+                        const entity = this.entities.get(uuid);
+                        if (!entity) {
+                            return [];
+                        }
+                        const result = queryCached.getResultForEntity(entity, uuid);
+                        if (isLeft(result)) {
+                            return [];
+                        }
+                        return [result.right];
+                    }
+                    return queryCached.getResult();
+                }
+
+            return right(runQuery as ArgData<T>);
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }

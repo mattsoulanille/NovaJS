@@ -13,6 +13,7 @@ ts_library(
         "make_ship.ts",
         "ship_plugin.ts",
         "ship_controller_plugin.ts",
+        "player_ship_plugin.ts",
         "planet_plugin.ts",
         "make_planet.ts",
         "make_system.ts",
@@ -25,6 +26,9 @@ ts_library(
         "collision_interaction.ts",
         "animation_plugin.ts",
         "health_plugin.ts",
+        "stat.ts",
+        "target_plugin.ts",
+        "target_component.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

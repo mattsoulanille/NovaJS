@@ -9,6 +9,7 @@ ts_library(
     name = "display",
     srcs = [
         "display_plugin.ts",
+        "animation_graphic_plugin.ts",
         "sprite_sheet_sprite.ts",
         "animation_graphic.ts",
         "textures_from_frames.ts",
@@ -19,6 +20,7 @@ ts_library(
         "space_resource.ts",
         "resize_event.ts",
         "convex_hull_display_plugin.ts",
+        "target_corners_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -28,6 +30,7 @@ ts_library(
         "//nova/src/nova_plugin",
         "//nova/src/client/gamedata",
         "//nova/src/util",
+        "@npm//fp-ts",
         "@npm//pixi.js",
         "@npm//uuid",
         "@npm//@types/uuid",

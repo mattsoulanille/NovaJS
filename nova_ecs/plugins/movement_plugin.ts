@@ -1,4 +1,6 @@
 import * as t from 'io-ts';
+import { Entities } from 'nova_ecs/arg_types';
+import { EntityMap } from 'nova_ecs/entity_map';
 import { Component } from '../component';
 import { Angle, AngleType } from '../datatypes/angle';
 import { Position, PositionType } from '../datatypes/position';
@@ -8,6 +10,7 @@ import { System } from '../system';
 import { applyObjectDelta } from './delta';
 import { DeltaPlugin, DeltaResource } from './delta_plugin';
 import { Time, TimeResource, TimeSystem } from './time_plugin';
+
 
 export enum MovementType {
     INERTIAL = 0,
@@ -36,10 +39,9 @@ export const MovementState = t.intersection([t.type({
     turnBack: t.boolean,
     accelerating: t.number,
 }), t.partial({
-    turnToAngle: AngleType
+    turnTo: t.union([AngleType, t.string /* target UUID */, t.null]),
 })]);
 export type MovementState = t.TypeOf<typeof MovementState>;
-
 
 // Don't split this into separate position and velocity components
 // because we don't want to send predictable deltas, such as when
@@ -49,33 +51,22 @@ export const MovementStateComponent = new Component<MovementState>('MovementStat
 
 export const MovementSystem = new System({
     name: 'movement',
-    args: [MovementStateComponent, MovementPhysicsComponent, TimeResource] as const,
-    step(state, physics, time) {
+    args: [MovementStateComponent, MovementPhysicsComponent,
+        TimeResource, Entities] as const,
+    step(state, physics, time, entities) {
         if (physics.movementType === MovementType.INERTIAL) {
-            inertialControls({ state, physics, time });
+            inertialControls(state, physics, time, entities);
         } else if (physics.movementType === MovementType.INERTIALESS) {
-            inertialessControls({ state, physics, time });
+            inertialessControls(state, physics, time, entities);
         }
     },
     after: ['ApplyChanges', TimeSystem],
     before: ['SendChanges'],
 });
 
-
-function inertialControls({ state, physics, time }:
-    { state: MovementState, physics: MovementPhysics, time: Time }) {
-
-    // Turning
-    if (state.turnToAngle) {
-        turnToAngle({ state, physics, time }, state.turnToAngle);
-    } else if (state.turnBack) {
-        if (state.velocity.length > 0) {
-            let reverseAngle = state.velocity.angle.add(Math.PI);
-            turnToAngle({ state, physics, time }, reverseAngle);
-        }
-    }
-
-    state.rotation = state.rotation.add(state.turning * physics.turnRate * time.delta_s);
+function inertialControls(state: MovementState, physics: MovementPhysics,
+    time: Time, entities: EntityMap) {
+    handleTurning(state, physics, time, entities);
 
     // Acceleration
     if (state.accelerating > 0) {
@@ -87,18 +78,13 @@ function inertialControls({ state, physics, time }:
 
     // Velocity
     // TODO: Make it so you don't have to cast
-    state.position = state.position.add(state.velocity.scale(time.delta_s)) as Position;
+    state.position = state.position
+        .add(state.velocity.scale(time.delta_s)) as Position;
 }
 
-function inertialessControls({ state, physics, time }:
-    { state: MovementState, physics: MovementPhysics, time: Time }) {
-
-    if (state.turnToAngle) {
-        turnToAngle({ state, physics, time }, state.turnToAngle);
-    } else {
-        state.rotation = state.rotation.
-            add(state.turning * physics.turnRate * time.delta_s);
-    }
+function inertialessControls(state: MovementState, physics: MovementPhysics,
+    time: Time, entities: EntityMap) {
+    handleTurning(state, physics, time, entities);
 
     // Yes, it's inefficient, but it keeps a single source of
     // truth for velocity / speed.
@@ -108,13 +94,43 @@ function inertialessControls({ state, physics, time }:
         .scale(speed)
         .shortenToLength(physics.maxVelocity);
 
-    state.position = state.position.add(state.velocity.scale(time.delta_s)) as Position;
+    updatePosition(state, time);
 }
 
+function updatePosition(state: MovementState, time: Time) {
+    state.position = state.position
+        .add(state.velocity.scale(time.delta_s)) as Position;
+}
+function handleTurning(state: MovementState, physics: MovementPhysics,
+    time: Time, entities: EntityMap) {
+    // Turning
+    if (state.turnTo) {
+        let angle: Angle | undefined;
+        if (state.turnTo instanceof Angle) {
+            angle = state.turnTo;
+        } else {
+            const otherPosition = entities.get(state.turnTo)
+                ?.components.get(MovementStateComponent)?.position;
+            if (otherPosition) {
+                angle = otherPosition.subtract(state.position).angle;
+            }
+        }
+        if (angle) {
+            turnToAngle(state, physics, time, angle);
+        }
+    } else if (state.turnBack) {
+        if (state.velocity.length > 0) {
+            let reverseAngle = state.velocity.angle.add(Math.PI);
+            turnToAngle(state, physics, time, reverseAngle);
+        }
+    }
 
-function turnToAngle({ state, physics, time }:
-    { state: MovementState, physics: MovementPhysics, time: Time },
-    target: Angle) {
+    state.rotation = state.rotation
+        .add(state.turning * physics.turnRate * time.delta_s);
+}
+
+function turnToAngle(state: MovementState, physics: MovementPhysics,
+    time: Time, target: Angle) {
     // Used for turning retrograde and pointing at a target
     let difference = state.rotation.distanceTo(target);
 
@@ -143,7 +159,7 @@ export const MovementPlugin: Plugin = {
         deltaMaker.addComponent(MovementStateComponent, {
             componentType: MovementState,
             deltaType: MovementState,
-            getDelta(a, b): MovementState | undefined {
+            getDelta(a, b) {
                 // Omit position.
                 // Send everything if a delta is detected.
                 const same = a.turning === b.turning &&
@@ -154,7 +170,7 @@ export const MovementPlugin: Plugin = {
                 }
                 return b;
             },
-            applyDelta: applyObjectDelta,
+            applyDelta: applyObjectDelta
         });
 
         deltaMaker.addComponent(MovementPhysicsComponent, {

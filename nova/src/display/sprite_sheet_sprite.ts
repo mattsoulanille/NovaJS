@@ -5,6 +5,7 @@ import { AnimationImageIndex } from "novadatainterface/Animation";
 import { texturesFromFrames } from "./textures_from_frames";
 import { mod } from "../util/mod";
 import { getFrameAndAngle } from "../util/get_frame_and_angle";
+import { GameData } from "../client/gamedata/GameData";
 
 const TWO_PI = 2 * Math.PI;
 
@@ -16,6 +17,7 @@ export class SpriteSheetSprite {
     readonly buildPromise: Promise<SpriteSheetSprite>;
     private textureSet: AnimationImageIndex;
     private wrappedRotation: number;
+    size = { x: 0, y: 0 };
 
     constructor({ gameData, image }: { gameData: GameDataInterface, image: AnimationImage }) {
         this.gameData = gameData;
@@ -28,6 +30,8 @@ export class SpriteSheetSprite {
             const framesData = await this.gameData.data
                 .SpriteSheetFrames.get(this.image.id);
             this.textures = texturesFromFrames(framesData.frames);
+            this.size.x = Math.max(0, ...this.textures.map(t => t.width));
+            this.size.y = Math.max(0, ...this.textures.map(t => t.height));
             return this;
         }
 

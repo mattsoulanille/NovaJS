@@ -18,6 +18,7 @@ export class AnimationGraphic {
     private animation: Animation | Promise<Animation>;
     readonly buildPromise: Promise<AnimationGraphic>;
     built = false;
+    size = { x: 0, y: 0 }
 
     constructor({ gameData, animation }: { gameData: GameDataInterface, animation: Animation | Promise<Animation> }) {
         this.animation = animation;
@@ -40,6 +41,8 @@ export class AnimationGraphic {
             promises.push(sprite.buildPromise);
         }
         await Promise.all(promises);
+        this.size.x = Math.max(0, ...[...this.sprites.values()].map(s => s.size.x));
+        this.size.y = Math.max(0, ...[...this.sprites.values()].map(s => s.size.y));
         this.rotation = this.rotation;
         this.built = true;
         return this;
