@@ -70,8 +70,7 @@ esbuild(
         "--resolve-extensions=.mjs,.js",
     ],
     entry_point = "browser.ts",
-    #target = "es2015",
-    target = "esnext",
+    target = "es2015",
     minify = True,
     sources_content = True,
     define = [

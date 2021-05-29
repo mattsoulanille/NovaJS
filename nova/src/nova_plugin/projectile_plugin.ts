@@ -11,7 +11,7 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
-import { Guidance, zeroOrderGuidance } from './guidance';
+import { firstOrderWithFallback, Guidance, zeroOrderGuidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { Stat } from './stat';
 import { TargetComponent } from './target_component';
@@ -27,7 +27,7 @@ export const ProjectileComponent = new Component<ProjectileType>('Projectile');
 export const ProjectileDataComponent = new Component<ProjectileWeaponData>('ProjectileData');
 
 export const GuidanceComponent = new Component<{
-    guidance: Guidance
+    guidance: Guidance,
 }>('GuidanceComponent');
 
 export function makeProjectile({
@@ -44,8 +44,11 @@ export function makeProjectile({
 }) {
     // TODO: Fix this in novaparse
     const realSpeed = projectileData.physics.speed * 3 / 10;
-    const velocity = sourceVelocity.add(
-        rotation.getUnitVector().scale(realSpeed));
+    let velocity = rotation.getUnitVector().scale(realSpeed);
+    if (projectileData.guidance !== 'guided') {
+        velocity = velocity.add(sourceVelocity);
+    }
+
     const projectile = new EntityBuilder()
         .setName(projectileData.name)
         .addComponent(ProjectileDataComponent, projectileData)
@@ -74,7 +77,7 @@ export function makeProjectile({
     if (projectileData.guidance === 'guided') {
         // TODO: Support 1st order approximation
         projectile.addComponent(GuidanceComponent, {
-            guidance: Guidance.zeroOrder
+            guidance: Guidance.firstOrder
         });
     }
 
@@ -106,21 +109,20 @@ const ProjectileLifespanSystem = new System({
 const ProjectileGuidanceSystem = new System({
     name: 'ProjectileGuidanceSystem',
     args: [MovementStateComponent, TargetComponent,
-        Entities, ProjectileComponent] as const,
-    step(movementState, { target }, entities) {
+        Entities, ProjectileDataComponent] as const,
+    step(movementState, { target }, entities, projectileData) {
         if (!target) {
             return;
         }
         const targetEntity = entities.get(target);
         const targetMovement = targetEntity?.components.get(MovementStateComponent);
-        const targetPosition = targetMovement?.position;
 
-        if (!targetPosition) {
+        if (!targetMovement) {
             return;
         }
 
-        const position = movementState.position;
-        movementState.turnTo = zeroOrderGuidance(position, targetPosition);
+        movementState.turnTo = firstOrderWithFallback(movementState.position, movementState.velocity,
+            targetMovement.position, targetMovement.velocity, projectileData.shotSpeed * 3 / 10)
     }
 });
 
