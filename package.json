@@ -30,7 +30,7 @@
         "@types/url-join": "^4.0.0",
         "@types/ws": "^7.4.4",
         "argparse": "^2.0.1",
-        "comlink": "^4.3.0",
+        "comlink": "^4.3.1",
         "immer": "^9.0.2",
         "io-ts-types": "^0.5.16",
         "jasmine": "^3.7.0",
