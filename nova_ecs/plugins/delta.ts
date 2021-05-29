@@ -21,10 +21,6 @@ export function getObjectDelta<T extends Object>(a: T, b: T): Partial<T> | undef
 
 export function applyObjectDelta<T extends Object>(data: T, delta: Partial<T>) {
     for (const [key, val] of Object.entries(delta)) {
-        if (!data.hasOwnProperty(key)) {
-            console.warn(`Tried to set property ${key} not found on object`);
-            continue;
-        }
         data[key as keyof T] = val;
     }
 }

@@ -1,4 +1,5 @@
 import { isLeft, right } from 'fp-ts/lib/Either';
+import { immerable } from 'immer';
 import * as t from 'io-ts';
 import { Vector } from './vector';
 
@@ -24,6 +25,7 @@ export const AngleType = new t.Type<Angle, AngleLike>(
 export type AngleLike = t.TypeOf<typeof AngleLike>;
 
 export class Angle implements AngleLike {
+    [immerable] = true;
     readonly angle: number;
 
     constructor(angle: number) {

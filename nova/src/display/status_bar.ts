@@ -16,7 +16,7 @@ import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ShieldComponent, ArmorComponent } from "../nova_plugin/health_plugin";
 import { PlanetDataComponent } from "../nova_plugin/planet_plugin";
-import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
+import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { ShipDataComponent } from "../nova_plugin/ship_plugin";
 import { Stat } from "../nova_plugin/stat";
 import { ResizeEvent } from "./resize_event";
@@ -149,7 +149,6 @@ const DrawRadar = new System({
         }
     }
 });
-
 
 const DrawStatusBarStats = new System({
     name: 'DrawStatusBarStats',

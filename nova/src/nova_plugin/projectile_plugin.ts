@@ -14,7 +14,7 @@ import { CollisionEvent, CollisionInteractionComponent } from './collision_inter
 import { Guidance, zeroOrderGuidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { Stat } from './stat';
-import { TargetComponent } from './target_plugin';
+import { TargetComponent } from './target_component';
 
 
 export interface ProjectileType {
@@ -120,7 +120,7 @@ const ProjectileGuidanceSystem = new System({
         }
 
         const position = movementState.position;
-        movementState.turnToAngle = zeroOrderGuidance(position, targetPosition);
+        movementState.turnTo = zeroOrderGuidance(position, targetPosition);
     }
 });
 

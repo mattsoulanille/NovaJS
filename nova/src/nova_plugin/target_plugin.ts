@@ -1,22 +1,16 @@
 import { Component } from "nova_ecs/component";
 import { Plugin } from "nova_ecs/plugin";
-import * as t from 'io-ts';
 import { DeltaResource } from "nova_ecs/plugins/delta_plugin";
 import { System } from "nova_ecs/system";
-import { ControlAction, ControlStateEvent, PlayerShipSelector } from "./ship_controller_plugin";
+import { ControlAction, ControlStateEvent } from "./ship_controller_plugin";
 import { ShipComponent } from "./ship_plugin";
 import { Query } from "nova_ecs/query";
 import { UUID } from "nova_ecs/arg_types";
 import { Provide } from "nova_ecs/provider";
+import { PlayerShipSelector } from "./player_ship_plugin";
+import { Target, TargetComponent } from "./target_component";
 
 
-export const Target = t.type({
-    target: t.union([t.string, t.undefined]),
-});
-
-export type Target = t.TypeOf<typeof Target>;
-
-export const TargetComponent = new Component<Target>('TargetComponent');
 const TargetIndexComponent = new Component<{ index: number }>('TargetIndexComponent');
 
 const TargetIndexProvider = Provide({

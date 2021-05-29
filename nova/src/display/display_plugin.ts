@@ -3,7 +3,7 @@ import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { PlayerShipSelector } from "../nova_plugin/ship_controller_plugin";
+import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";

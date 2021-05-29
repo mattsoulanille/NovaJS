@@ -14,10 +14,12 @@ import { v4 } from 'uuid';
 import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
 import { PlatformResource } from './platform_plugin';
+import { PlayerShipSelector } from './player_ship_plugin';
 import { makeProjectile } from './projectile_plugin';
-import { ControlAction, ControlStateEvent, PlayerShipSelector } from './ship_controller_plugin';
+import { ControlAction, ControlStateEvent } from './ship_controller_plugin';
 import { ShipDataComponent } from './ship_plugin';
-import { TargetComponent } from './target_plugin';
+import { TargetComponent } from './target_component';
+
 
 const WeaponState = t.intersection([t.type({
     count: t.number,
