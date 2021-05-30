@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import "jasmine";
 import { BLEND_MODES } from "novadatainterface/BlendModes";
+import { WEAP_SPEED_FACTOR } from "novaparse/src/parsers/WeaponParse";
 import * as path from "path";
 import { PNG } from "pngjs";
 import { getDefaultExitPoints } from "../../novadatainterface/Animation";
@@ -180,7 +181,7 @@ describe("NovaParse", function() {
                 ionization: 0,
                 mass: 0,
                 shieldRecharge: 0,
-                speed: 17,
+                speed: 17 * WEAP_SPEED_FACTOR,
                 turnRate: 0,
                 shield: 0,
                 armor: 0

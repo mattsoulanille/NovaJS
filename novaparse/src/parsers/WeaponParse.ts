@@ -8,7 +8,7 @@ import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
-const WEAP_SPEED_FACTOR = 3 / 10;
+export const WEAP_SPEED_FACTOR = 3 / 10;
 
 async function BaseWeaponParse(weap: WeapResource, _notFoundFunction: (m: string) => void, base: BaseData): Promise<BaseWeaponData> {
     // TODO: Implement ammo
