@@ -1,12 +1,13 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
 import { FireGroup, ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { map } from 'nova_ecs/datatypes/map';
 import { Position } from 'nova_ecs/datatypes/position';
 import { EntityMap } from 'nova_ecs/entity_map';
+import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
@@ -45,7 +46,7 @@ interface WeaponLocalState {
     wasFiring: boolean,
     loaded?: boolean,
     exitIndex?: number,
-    fireGroup: FireGroup,
+    weaponData: WeaponData,
 }
 type WeaponsLocalState = Map<string, WeaponLocalState>;
 export const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
@@ -120,7 +121,7 @@ const WeaponsSystem = new System({
                     lastFired: 0,
                     burstCount: 0,
                     wasFiring: false,
-                    fireGroup: weapon.fireGroup,
+                    weaponData: weapon,
                     reloadingBurst: false,
                 });
             }
@@ -254,8 +255,12 @@ function stepProjectileWeapon({ weapon, state, sourceAnimation, movementState,
     localState.lastFired = time.time;
 }
 
-const ActiveSecondaryWeapon =
-    new Component<{ secondary: string | null /* id */ }>('ActiveSecondaryWeapon');
+type ActiveSecondary = {
+    secondary: string | null /* id */,
+};
+
+export const ActiveSecondaryWeapon =
+    new Component<ActiveSecondary>('ActiveSecondaryWeapon');
 
 const ActiveSecondaryProvider = Provide({
     provided: ActiveSecondaryWeapon,
@@ -263,12 +268,14 @@ const ActiveSecondaryProvider = Provide({
     factory: () => ({ secondary: null }),
 });
 
+export const ChangeSecondaryEvent = new EcsEvent<ActiveSecondary>('ChangeSecondaryEvent');
+
 const ControlPlayerWeapons = new System({
     name: 'ControlPlayerWeapons',
     events: [ControlStateEvent],
     args: [ControlStateEvent, WeaponsStateComponent, WeaponsComponent,
-        ActiveSecondaryProvider, PlayerShipSelector] as const,
-    step(controlState, weaponsState, weaponsData, activeSecondary) {
+        ActiveSecondaryProvider, Emit, PlayerShipSelector] as const,
+    step(controlState, weaponsState, weaponsData, activeSecondary, emit) {
         for (const [, weaponState] of weaponsState) {
             weaponState.firing = false;
         }
@@ -280,7 +287,7 @@ const ControlPlayerWeapons = new System({
 
         if (controlState.get(ControlAction.cycleSecondary) === 'start') {
             const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
-                return weapon.fireGroup === 'secondary';
+                return weapon.weaponData.fireGroup === 'secondary';
             }).map(([id]) => id);
 
             let index = -1;
@@ -294,7 +301,7 @@ const ControlPlayerWeapons = new System({
                 activeSecondary.secondary = secondaryWeapons[index];
                 secondary = weaponsState.get(activeSecondary.secondary);
             }
-            console.log(activeSecondary.secondary);
+            emit(ChangeSecondaryEvent, activeSecondary);
         }
 
         if (secondary) {
@@ -303,7 +310,7 @@ const ControlPlayerWeapons = new System({
 
         const firing = Boolean(controlState.get(ControlAction.firePrimary));
         for (const [id, weaponState] of weaponsState) {
-            if (weaponsData.get(id)?.fireGroup === 'primary') {
+            if (weaponsData.get(id)?.weaponData.fireGroup === 'primary') {
                 weaponState.firing = firing;
             }
         }

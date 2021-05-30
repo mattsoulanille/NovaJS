@@ -19,21 +19,25 @@ import { PlanetDataComponent } from "../nova_plugin/planet_plugin";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { ShipDataComponent } from "../nova_plugin/ship_plugin";
 import { Stat } from "../nova_plugin/stat";
+import { ActiveSecondaryWeapon, ChangeSecondaryEvent } from "../nova_plugin/weapon_plugin";
 import { ResizeEvent } from "./resize_event";
 import { Stage } from "./stage_resource";
 
 
 class StatusBar {
     readonly container = new PIXI.Container();
-    readonly built: Promise<void>;
+    readonly buildPromise: Promise<void>;
+    built = false;
     width = 0;
     private radarScale = new Vector(6000, 6000);
     private radar = new PIXI.Graphics();
     radarPeriod = 200;
     private statsGraphics = new PIXI.Graphics();
 
+    private text: { [index: string]: PIXI.Text } = {};
+
     constructor(private statusBarData: StatusBarData, private gameData: GameData) {
-        this.built = this.build();
+        this.buildPromise = this.build();
     }
 
     private async build() {
@@ -44,6 +48,41 @@ class StatusBar {
         [this.radar.position.x, this.radar.position.y] = dataAreas.radar.position;
         this.container.addChild(this.radar);
         this.container.addChild(this.statsGraphics);
+
+        const font = new PIXI.TextStyle({
+            fontFamily: 'Geneva',
+            fontSize: 12,
+            align: 'center',
+            fill: this.statusBarData.colors.brightText,
+        });
+        const dimFont = new PIXI.TextStyle({
+            fontFamily: 'Geneva',
+            fontSize: 12,
+            align: 'center',
+            fill: this.statusBarData.colors.dimText,
+        });
+
+        const secondaryWeaponContainer = new PIXI.Container();
+        this.container.addChild(secondaryWeaponContainer);
+        secondaryWeaponContainer.position.x =
+            this.statusBarData.dataAreas.weapons.position[0];
+        secondaryWeaponContainer.position.y =
+            this.statusBarData.dataAreas.weapons.position[1];
+
+        this.text.noWeapon = new PIXI.Text("No Secondary Weapon", dimFont);
+        this.text.noWeapon.anchor.x = 0.5;
+        this.text.noWeapon.anchor.y = 0.5;
+        this.text.noWeapon.position.x = this.statusBarData.dataAreas.weapons.size[0] / 2;
+        this.text.noWeapon.position.y = this.statusBarData.dataAreas.weapons.size[1] / 2;;
+        secondaryWeaponContainer.addChild(this.text.noWeapon);
+
+        this.text.weapon = new PIXI.Text("", new PIXI.TextStyle(font));
+        this.text.weapon.anchor.x = 0.5;
+        this.text.weapon.anchor.y = 0.5;
+        this.text.weapon.position.x = this.statusBarData.dataAreas.weapons.size[0] / 2;
+        this.text.weapon.position.y = this.statusBarData.dataAreas.weapons.size[1] / 2;
+        secondaryWeaponContainer.addChild(this.text.weapon);
+        this.built = true;
     }
 
     drawRadar(source: Position, ships: Iterable<readonly [string, MovementState, ShipData]>,
@@ -100,6 +139,20 @@ class StatusBar {
         this.drawLine(this.statusBarData.dataAreas.armor,
             this.statusBarData.colors.armor, armorFullness);
     }
+
+    drawSecondary(name: string | null | undefined) {
+        if (!this.built) {
+            return;
+        }
+        if (name) {
+            this.text.weapon.text = name;
+            this.text.weapon.visible = true;
+            this.text.noWeapon.visible = false;
+        } else {
+            this.text.weapon.visible = false;
+            this.text.noWeapon.visible = true;
+        }
+    }
 }
 
 export const StatusBarComponent = new Component<StatusBar>('StatusBar');
@@ -111,7 +164,7 @@ const StatusBarProvider = ProvideAsync({
         // helper functions for creating sprites from picts.
         const statusBar = new StatusBar(
             await gameData.data.StatusBar.get("nova:128"), gameData as GameData);
-        await statusBar.built;
+        await statusBar.buildPromise;
         stage.addChild(statusBar.container);
         statusBar.container.position.x = window.innerWidth - statusBar.container.width;
         statusBar.container.position.y = 0;
@@ -158,6 +211,22 @@ const DrawStatusBarStats = new System({
     }
 })
 
+const DrawSecondaryWeapon = new System({
+    name: 'DrawSecondaryWeapon',
+    events: [ChangeSecondaryEvent],
+    args: [StatusBarProvider, ChangeSecondaryEvent, GameDataResource,
+        PlayerShipSelector] as const,
+    step(statusBar, activeSecondary, gameData) {
+        if (activeSecondary.secondary) {
+            const secondaryName = gameData.data.Weapon
+                .getCached(activeSecondary.secondary);
+            statusBar.drawSecondary(secondaryName?.name);
+        } else {
+            statusBar.drawSecondary(null);
+        }
+    }
+});
+
 export const StatusBarPlugin: Plugin = {
     name: 'StatusBar',
     build(world) {
@@ -165,5 +234,6 @@ export const StatusBarPlugin: Plugin = {
         world.addSystem(DrawRadar);
         world.addSystem(StatusBarResize);
         world.addSystem(DrawStatusBarStats);
+        world.addSystem(DrawSecondaryWeapon);
     }
 }
