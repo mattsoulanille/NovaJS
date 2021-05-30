@@ -29,8 +29,7 @@ export const manageClientsSystem = new System({
         for (const newPeer of peersEvent.addedPeers) {
             console.log(`Adding ship for peer ${newPeer}`);
             const ids = await gameData.ids;
-            //let randomShip = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
-            let randomShip = "nova:310";
+            let randomShip = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
             const shipData = await gameData.data.Ship.get(randomShip);
             const shipEntity = makeShip(shipData);
             shipEntity.components.set(MultiplayerData, {

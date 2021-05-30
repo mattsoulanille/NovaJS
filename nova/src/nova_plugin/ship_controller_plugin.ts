@@ -1,4 +1,5 @@
-import { Emit, Entities } from 'nova_ecs/arg_types';
+import { Emit } from 'nova_ecs/arg_types';
+import { Component } from 'nova_ecs/component';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { EcsKeyboardEvent, KeyboardPlugin } from 'nova_ecs/plugins/keyboard_plugin';
@@ -6,7 +7,6 @@ import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movemen
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
-import { zeroOrderGuidance } from './guidance';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipPlugin, PlayerShipSelector } from './player_ship_plugin';
 import { TargetComponent } from './target_component';
@@ -20,6 +20,8 @@ export enum ControlAction {
     'firePrimary',
     'cycleTarget',
     'pointToTarget',
+    'cycleSecondary',
+    'fireSecondary',
 }
 
 // TODO: Support loading this from the server.
@@ -32,6 +34,9 @@ const keyMap = new Map([
     ['Space', ControlAction.firePrimary],
     ['Tab', ControlAction.cycleTarget],
     ['KeyA', ControlAction.pointToTarget],
+    ['KeyW', ControlAction.cycleSecondary],
+    ['ControlLeft', ControlAction.fireSecondary],
+    ['ShiftLeft', ControlAction.fireSecondary],
 ]);
 
 type ControlState = Map<ControlAction, false | 'start' | 'repeat' | true>;

@@ -1,9 +1,7 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
-import { GameDataInterface } from 'novadatainterface/GameDataInterface';
-import { ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
+import { FireGroup, ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
 import { Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
-import { AsyncSystem } from 'nova_ecs/async_system';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { map } from 'nova_ecs/datatypes/map';
@@ -14,9 +12,8 @@ import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { ProvideAsync } from 'nova_ecs/provider';
+import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
-import { SingletonComponent } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
@@ -48,9 +45,10 @@ interface WeaponLocalState {
     wasFiring: boolean,
     loaded?: boolean,
     exitIndex?: number,
+    fireGroup: FireGroup,
 }
 type WeaponsLocalState = Map<string, WeaponLocalState>;
-const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
+export const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
 // TODO: This doesn't update if the set or count of weapons changes.
 const WeaponsComponentProvider = ProvideAsync({
     provided: WeaponsComponent,
@@ -122,6 +120,7 @@ const WeaponsSystem = new System({
                     lastFired: 0,
                     burstCount: 0,
                     wasFiring: false,
+                    fireGroup: weapon.fireGroup,
                     reloadingBurst: false,
                 });
             }
@@ -255,15 +254,58 @@ function stepProjectileWeapon({ weapon, state, sourceAnimation, movementState,
     localState.lastFired = time.time;
 }
 
+const ActiveSecondaryWeapon =
+    new Component<{ secondary: string | null /* id */ }>('ActiveSecondaryWeapon');
+
+const ActiveSecondaryProvider = Provide({
+    provided: ActiveSecondaryWeapon,
+    args: [] as const,
+    factory: () => ({ secondary: null }),
+});
+
 const ControlPlayerWeapons = new System({
     name: 'ControlPlayerWeapons',
     events: [ControlStateEvent],
-    args: [ControlStateEvent, WeaponsStateComponent, PlayerShipSelector] as const,
-    step(controlState, weaponsState) {
-        // TODO: Primary and secondary
+    args: [ControlStateEvent, WeaponsStateComponent, WeaponsComponent,
+        ActiveSecondaryProvider, PlayerShipSelector] as const,
+    step(controlState, weaponsState, weaponsData, activeSecondary) {
+        for (const [, weaponState] of weaponsState) {
+            weaponState.firing = false;
+        }
+
+        let secondary: WeaponState | undefined;
+        if (activeSecondary.secondary) {
+            secondary = weaponsState.get(activeSecondary.secondary);
+        }
+
+        if (controlState.get(ControlAction.cycleSecondary) === 'start') {
+            const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
+                return weapon.fireGroup === 'secondary';
+            }).map(([id]) => id);
+
+            let index = -1;
+            if (activeSecondary.secondary) {
+                index = secondaryWeapons.indexOf(activeSecondary.secondary);
+            }
+            index++;
+            if (index >= secondaryWeapons.length) {
+                activeSecondary.secondary = null;
+            } else {
+                activeSecondary.secondary = secondaryWeapons[index];
+                secondary = weaponsState.get(activeSecondary.secondary);
+            }
+            console.log(activeSecondary.secondary);
+        }
+
+        if (secondary) {
+            secondary.firing = Boolean(controlState.get(ControlAction.fireSecondary));
+        }
+
         const firing = Boolean(controlState.get(ControlAction.firePrimary));
         for (const [id, weaponState] of weaponsState) {
-            weaponState.firing = firing;
+            if (weaponsData.get(id)?.fireGroup === 'primary') {
+                weaponState.firing = firing;
+            }
         }
     }
 });
