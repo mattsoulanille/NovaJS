@@ -1,8 +1,9 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
-import { ShipData } from 'novadatainterface/ShipData';
+import { GameDataInterface } from 'novadatainterface/GameDataInterface';
 import { ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
 import { Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { AsyncSystem } from 'nova_ecs/async_system';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { map } from 'nova_ecs/datatypes/map';
@@ -14,12 +15,12 @@ import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { ProvideAsync } from 'nova_ecs/provider';
-import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
+import { SingletonComponent } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
-import { firstOrderGuidance, firstOrderWithFallback, zeroOrderGuidance } from './guidance';
+import { firstOrderWithFallback } from './guidance';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
 import { makeProjectile } from './projectile_plugin';
@@ -45,6 +46,7 @@ interface WeaponLocalState {
     burstCount: number,
     reloadingBurst: boolean,
     wasFiring: boolean,
+    loaded?: boolean,
     exitIndex?: number,
 }
 type WeaponsLocalState = Map<string, WeaponLocalState>;
@@ -202,7 +204,7 @@ function stepProjectileWeapon({ weapon, state, sourceAnimation, movementState,
         let hitSolution: Angle | undefined;
         if (targetMovement) {
             hitSolution = firstOrderWithFallback(exitPoint, movementState.velocity,
-                targetMovement.position, targetMovement.velocity, weapon.shotSpeed * 3 / 10);
+                targetMovement.position, targetMovement.velocity, weapon.shotSpeed);
         }
 
         switch (weapon.guidance) {
@@ -265,7 +267,6 @@ const ControlPlayerWeapons = new System({
         }
     }
 });
-
 
 export const WeaponPlugin: Plugin = {
     name: 'WeaponPlugin',

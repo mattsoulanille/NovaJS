@@ -90,10 +90,9 @@ function inertialessControls(state: MovementState, physics: MovementPhysics,
     // truth for velocity / speed.
     let speed = state.velocity.length;
     speed += state.accelerating * physics.acceleration * time.delta_s;
-    state.velocity = state.rotation.getUnitVector()
-        .scale(speed)
-        .shortenToLength(physics.maxVelocity);
-
+    speed = Math.min(speed, physics.maxVelocity);
+    speed = Math.max(speed, 0);
+    state.velocity = state.rotation.getUnitVector().scale(speed)
     updatePosition(state, time);
 }
 

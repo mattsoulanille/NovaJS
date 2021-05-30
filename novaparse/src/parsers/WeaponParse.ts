@@ -8,6 +8,7 @@ import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
 import { FPS, TurnRateConversionFactor } from "./Constants";
 
+const WEAP_SPEED_FACTOR = 3 / 10;
 
 async function BaseWeaponParse(weap: WeapResource, _notFoundFunction: (m: string) => void, base: BaseData): Promise<BaseWeaponData> {
     // TODO: Implement ammo
@@ -22,7 +23,7 @@ async function BaseWeaponParse(weap: WeapResource, _notFoundFunction: (m: string
         fireGroup: weap.fireGroup,
         reload: weap.reload / FPS * 1000,
         fireSimultaneously: weap.fireSimultaneously,
-        shotSpeed: weap.speed,
+        shotSpeed: weap.speed * WEAP_SPEED_FACTOR,
         useFiringAnimation: weap.useFiringAnimation
     }
 }
@@ -73,7 +74,7 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         damage,
         oneAmmoPerBurst: weap.oneAmmoPerBurst,
         ionizationColor: weap.ionizeColor,
-        shotDuration: weap.duration,
+        shotDuration: weap.duration * 1000 / FPS,
         primaryExplosion,
         secondaryExplosion,
         knockback: weap.impact,
@@ -96,7 +97,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
                 id: subResource.globalID,
                 limit: weap.submunition.limit,
                 subIfExpire: weap.submunition.subIfExpire,
-                theta: weap.submunition.theta
+                theta: weap.submunition.theta * 2 * Math.PI / 360,
             });
         }
         else {
@@ -185,7 +186,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
             ionization: 0,
             mass: 0,
             shieldRecharge: 0,
-            speed: weap.speed,
+            speed: baseWeapon.shotSpeed,
             turnRate: weap.turnRate * TurnRateConversionFactor,
             shield: 0,
             armor: weap.durability
@@ -195,10 +196,8 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
 
 
 async function BeamWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, baseWeapon: BaseWeaponData): Promise<BeamWeaponData> {
-
-    var notBayBase = await NotBayWeaponParse(weap, notFoundFunction, baseWeapon);
-
-    var guidance: BeamGuidanceType;
+    const notBayBase = await NotBayWeaponParse(weap, notFoundFunction, baseWeapon);
+    let guidance: BeamGuidanceType;
     if (!BeamGuidanceSet.has(weap.guidance)) {
         throw new Error("Wrong guidance type " + weap.guidance + " for BeamWeapon");
     }
@@ -221,9 +220,8 @@ async function BeamWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
 }
 
 async function BayWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, baseWeapon: BaseWeaponData): Promise<BayWeaponData> {
-
-    var ship = weap.idSpace.shïp[weap.ammoType];
-    var shipID: string;
+    const ship = weap.idSpace.shïp[weap.ammoType];
+    let shipID: string;
     if (ship) {
         shipID = ship.globalID;
     }
@@ -240,12 +238,9 @@ async function BayWeaponParse(weap: WeapResource, notFoundFunction: (m: string) 
 }
 
 export async function WeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void): Promise<WeaponData> {
-    var base: BaseData = await BaseParse(weap, notFoundFunction);
-
-    var baseWeapon: BaseWeaponData = await BaseWeaponParse(weap, notFoundFunction, base);
-
-    var guidanceType = weap.guidance;
-    var parseFunc: (w: WeapResource, nff: (m: string) => void, baseWeapon: BaseWeaponData) => Promise<WeaponData>
+    const base: BaseData = await BaseParse(weap, notFoundFunction);
+    const baseWeapon: BaseWeaponData = await BaseWeaponParse(weap, notFoundFunction, base);
+    let parseFunc: (w: WeapResource, nff: (m: string) => void, baseWeapon: BaseWeaponData) => Promise<WeaponData>
 
     if (ProjectileGuidanceSet.has(weap.guidance)) {
         parseFunc = ProjectileWeaponParse;

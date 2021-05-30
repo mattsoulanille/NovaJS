@@ -1,4 +1,5 @@
 import * as t from 'io-ts';
+import { GameDataInterface } from 'novadatainterface/GameDataInterface';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
