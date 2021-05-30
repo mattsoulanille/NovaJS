@@ -21,10 +21,24 @@ import urlJoin from 'url-join';
 import { dataPath, idsPath } from '../../common/GameDataPaths';
 
 
+class WeaponGettable extends Gettable<WeaponData> {
+    async get(id: string) {
+        if (id in this.data) {
+            return await super.get(id);
+        }
+
+        const weapon = await super.get(id);
+        if (weapon.type === 'ProjectileWeaponData') {
+            await Promise.all(weapon.submunitions.map(s => this.get(s.id)));
+        }
+        return weapon;
+    }
+}
+
 /**
  * Retrieves game data from the server
  */
-class GameData implements GameDataInterface {
+export class GameData implements GameDataInterface {
     public readonly data: NovaDataInterface;
     public readonly ids: Promise<NovaIDs>;
 
@@ -33,7 +47,7 @@ class GameData implements GameDataInterface {
         this.data = {
             Ship: this.addGettable<ShipData>(NovaDataType.Ship),
             Outfit: this.addGettable<OutfitData>(NovaDataType.Outfit),
-            Weapon: this.addGettable<WeaponData>(NovaDataType.Weapon),
+            Weapon: this.addWeaponGettable(),
             Pict: this.addGettable<PictData>(NovaDataType.Pict),
             PictImage: this.addPictGettable<PictImageData>(NovaDataType.PictImage),
             Cicn: this.addGettable<CicnData>(NovaDataType.Cicn),
@@ -83,10 +97,18 @@ class GameData implements GameDataInterface {
     }
 
     private addGettable<T extends BaseData | SpriteSheetFramesData>(dataType: NovaDataType): Gettable<T> {
-        var dataPrefix = this.getDataPrefix(dataType);
+        const dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string): Promise<T> => {
             return (await this.getUrl(urlJoin(dataPrefix, id + ".json"))) as any;
         });
+    }
+
+    private addWeaponGettable(): WeaponGettable {
+        const dataPrefix = this.getDataPrefix(NovaDataType.Weapon);
+        return new WeaponGettable(async (id: string): Promise<WeaponData> => {
+            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"))) as any;
+        });
+
     }
 
     private addPictGettable<T extends PictImageData | SpriteSheetImageData>(dataType: NovaDataType): Gettable<T> {
@@ -119,5 +141,3 @@ class GameData implements GameDataInterface {
         //return JSON.parse(idsBuffer.toString('utf8'));
     }
 }
-
-export { GameData };
