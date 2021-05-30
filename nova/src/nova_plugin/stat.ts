@@ -41,6 +41,10 @@ export class Stat {
             this.current + this.recharge * delta);
     }
 
+    get percent() {
+        return Math.ceil(this.current / this.max * 100);
+    }
+
     getDelta(): PartialStat | undefined {
         const delta: PartialStat = {};
 

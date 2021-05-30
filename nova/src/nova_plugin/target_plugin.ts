@@ -5,10 +5,12 @@ import { System } from "nova_ecs/system";
 import { ControlAction, ControlStateEvent } from "./ship_controller_plugin";
 import { ShipComponent } from "./ship_plugin";
 import { Query } from "nova_ecs/query";
-import { UUID } from "nova_ecs/arg_types";
+import { Emit, UUID } from "nova_ecs/arg_types";
 import { Provide } from "nova_ecs/provider";
 import { PlayerShipSelector } from "./player_ship_plugin";
 import { Target, TargetComponent } from "./target_component";
+import { EcsEvent } from "nova_ecs/events";
+import { Entity } from "nova_ecs/entity";
 
 
 const TargetIndexComponent = new Component<{ index: number }>('TargetIndexComponent');
@@ -19,12 +21,14 @@ const TargetIndexProvider = Provide({
     factory: () => ({ index: -1 }),
 });
 
+export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
+
 const CycleTargetSystem = new System({
     name: 'CycleTarget',
     events: [ControlStateEvent],
     args: [ControlStateEvent, TargetComponent, TargetIndexProvider, UUID,
-        new Query([UUID, ShipComponent] as const), PlayerShipSelector] as const,
-    step(controlState, target, index, uuid, ships) {
+        new Query([UUID, ShipComponent] as const), Emit, PlayerShipSelector] as const,
+    step(controlState, target, index, uuid, ships, emit) {
         if (controlState.get(ControlAction.cycleTarget) !== 'start') {
             return;
         }
@@ -42,7 +46,7 @@ const CycleTargetSystem = new System({
         } else {
             target.target = ships[index.index][0];
         }
-        console.log(target.target);
+        emit(CycleTargetEvent, target);
     }
 });
 

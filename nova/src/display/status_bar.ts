@@ -1,10 +1,11 @@
 import { PlanetData } from "novadatainterface/PlanetData";
 import { ShipData } from "novadatainterface/ShipData";
 import { StatusBarData, StatusBarDataArea } from "novadatainterface/StatusBarData";
-import { UUID } from "nova_ecs/arg_types";
+import { RunQuery, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
+import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementState, MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
@@ -14,12 +15,13 @@ import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
-import { ShieldComponent, ArmorComponent } from "../nova_plugin/health_plugin";
+import { ArmorComponent, ShieldComponent } from "../nova_plugin/health_plugin";
 import { PlanetDataComponent } from "../nova_plugin/planet_plugin";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { ShipDataComponent } from "../nova_plugin/ship_plugin";
 import { Stat } from "../nova_plugin/stat";
-import { ActiveSecondaryWeapon, ChangeSecondaryEvent } from "../nova_plugin/weapon_plugin";
+import { TargetComponent } from "../nova_plugin/target_component";
+import { ChangeSecondaryEvent } from "../nova_plugin/weapon_plugin";
 import { ResizeEvent } from "./resize_event";
 import { Stage } from "./stage_resource";
 
@@ -33,6 +35,9 @@ class StatusBar {
     private radar = new PIXI.Graphics();
     radarPeriod = 200;
     private statsGraphics = new PIXI.Graphics();
+
+    private targetContainer = new PIXI.Container();
+    private noTargetContainer = new PIXI.Container();
 
     private text: { [index: string]: PIXI.Text } = {};
 
@@ -49,6 +54,11 @@ class StatusBar {
         this.container.addChild(this.radar);
         this.container.addChild(this.statsGraphics);
 
+        this.makeText();
+        this.built = true;
+    }
+
+    private makeText() {
         const font = new PIXI.TextStyle({
             fontFamily: 'Geneva',
             fontSize: 12,
@@ -76,13 +86,69 @@ class StatusBar {
         this.text.noWeapon.position.y = this.statusBarData.dataAreas.weapons.size[1] / 2;;
         secondaryWeaponContainer.addChild(this.text.noWeapon);
 
-        this.text.weapon = new PIXI.Text("", new PIXI.TextStyle(font));
+        this.text.weapon = new PIXI.Text("", font);
         this.text.weapon.anchor.x = 0.5;
         this.text.weapon.anchor.y = 0.5;
         this.text.weapon.position.x = this.statusBarData.dataAreas.weapons.size[0] / 2;
-        this.text.weapon.position.y = this.statusBarData.dataAreas.weapons.size[1] / 2;
+        this.text.weapon.position.y = this.statusBarData.dataAreas.weapons.size[1] / 2;;
         secondaryWeaponContainer.addChild(this.text.weapon);
-        this.built = true;
+
+        this.targetContainer.visible = false;
+        this.container.addChild(this.targetContainer);
+        this.container.addChild(this.noTargetContainer);
+
+        this.targetContainer.position.x = this.statusBarData.dataAreas.targeting.position[0];
+        this.targetContainer.position.y = this.statusBarData.dataAreas.targeting.position[1];
+        this.noTargetContainer.position.x = this.statusBarData.dataAreas.targeting.position[0];
+        this.noTargetContainer.position.y = this.statusBarData.dataAreas.targeting.position[1];
+
+        var size = [this.statusBarData.dataAreas.targeting.size[0],
+        this.statusBarData.dataAreas.targeting.size[1]];
+
+        this.text.shield = new PIXI.Text('Shield:', dimFont);
+        this.text.shield.anchor.y = 1;
+        this.text.shield.position.x = 6;
+        this.text.shield.position.y = size[1] - 3;
+
+        this.targetContainer.addChild(this.text.shield);
+
+        this.text.armor = new PIXI.Text('Armor:', dimFont);
+        this.text.armor.anchor.y = 1;
+        this.text.armor.position.x = 6;
+        this.text.armor.position.y = size[1] - 3;
+        this.text.armor.visible = false;
+        this.targetContainer.addChild(this.text.armor);
+
+
+        this.text.percent = new PIXI.Text("100%", font);
+        this.text.percent.anchor.y = 1;
+        this.text.percent.position.x = 49;
+        this.text.percent.position.y = size[1] - 3;
+
+        this.targetContainer.addChild(this.text.percent);
+
+        const middle = [this.statusBarData.dataAreas.targeting.size[0] / 2,
+        this.statusBarData.dataAreas.targeting.size[1] / 2 - 15];
+
+        this.text.noTarget = new PIXI.Text("No Target", dimFont);
+        this.text.noTarget.anchor.x = 0.5;
+        this.text.noTarget.anchor.y = 0.5;
+        this.text.noTarget.position.x = middle[0];
+        this.text.noTarget.position.y = middle[1] - 15;
+
+        this.noTargetContainer.addChild(this.text.noTarget);
+
+        this.text.targetName = new PIXI.Text("Name Placeholder", font);
+        this.text.targetName.anchor.x = 0.5;
+        this.text.targetName.anchor.y = 0.5;
+        this.text.targetName.position.x = middle[0];
+        this.text.targetName.position.y = 12;
+
+        this.targetContainer.addChild(this.text.targetName);
+
+        this.text.targetImagePlaceholder = new PIXI.Text("No target image", dimFont);
+        this.text.targetImagePlaceholder.anchor.x = 0.5;
+        this.text.targetImagePlaceholder.anchor.y = 0.5;
     }
 
     drawRadar(source: Position, ships: Iterable<readonly [string, MovementState, ShipData]>,
@@ -153,6 +219,29 @@ class StatusBar {
             this.text.noWeapon.visible = true;
         }
     }
+
+    drawTarget(name: string, shield?: number, armor?: number) {
+        this.targetContainer.visible = true;
+        this.noTargetContainer.visible = false;
+        this.text.targetName.text = name;
+
+        if (shield && shield > 0) {
+            this.text.shield.visible = true;
+            this.text.armor.visible = false;
+            this.text.percent.text = `${String(shield)}%`;
+        } else if (typeof armor === 'number') {
+            this.text.shield.visible = false;
+            this.text.armor.visible = true;
+            this.text.percent.text = `${String(armor)}%`;
+        } else {
+            this.text.shield.visible = false;
+            this.text.armor.visible = false;
+        }
+    }
+    clearTarget() {
+        this.targetContainer.visible = false;
+        this.noTargetContainer.visible = true;
+    }
 }
 
 export const StatusBarComponent = new Component<StatusBar>('StatusBar');
@@ -211,8 +300,8 @@ const DrawStatusBarStats = new System({
     }
 })
 
-const DrawSecondaryWeapon = new System({
-    name: 'DrawSecondaryWeapon',
+const DrawStatusBarSecondaryWeapon = new System({
+    name: 'DrawStatusBarSecondaryWeapon',
     events: [ChangeSecondaryEvent],
     args: [StatusBarProvider, ChangeSecondaryEvent, GameDataResource,
         PlayerShipSelector] as const,
@@ -227,6 +316,24 @@ const DrawSecondaryWeapon = new System({
     }
 });
 
+const TargetQuery = new Query([ShipDataComponent, Optional(ShieldComponent),
+    Optional(ArmorComponent)] as const);
+const DrawStatusBarTarget = new System({
+    name: 'DrawStatusBarTarget',
+    args: [StatusBarProvider, TargetComponent, RunQuery, PlayerShipSelector] as const,
+    step(statusBar, { target }, runQuery) {
+        if (!target) {
+            statusBar.clearTarget();
+            return;
+        }
+        const result = runQuery(TargetQuery, target)[0];
+        if (result) {
+            const [shipData, shield, armor] = result;
+            statusBar.drawTarget(shipData.name, shield?.percent, armor?.percent);
+        }
+    }
+})
+
 export const StatusBarPlugin: Plugin = {
     name: 'StatusBar',
     build(world) {
@@ -234,6 +341,7 @@ export const StatusBarPlugin: Plugin = {
         world.addSystem(DrawRadar);
         world.addSystem(StatusBarResize);
         world.addSystem(DrawStatusBarStats);
-        world.addSystem(DrawSecondaryWeapon);
+        world.addSystem(DrawStatusBarSecondaryWeapon);
+        world.addSystem(DrawStatusBarTarget);
     }
 }
