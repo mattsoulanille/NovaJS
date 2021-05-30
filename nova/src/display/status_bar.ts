@@ -13,6 +13,7 @@ import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
+import { Renderer } from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ArmorComponent, ShieldComponent } from "../nova_plugin/health_plugin";
@@ -22,6 +23,9 @@ import { ShipDataComponent } from "../nova_plugin/ship_plugin";
 import { Stat } from "../nova_plugin/stat";
 import { TargetComponent } from "../nova_plugin/target_component";
 import { ChangeSecondaryEvent } from "../nova_plugin/weapon_plugin";
+import { AnimationGraphic } from "./animation_graphic";
+import { AnimationGraphicComponent } from "./animation_graphic_plugin";
+import { PixiAppResource } from "./pixi_app_resource";
 import { ResizeEvent } from "./resize_event";
 import { Stage } from "./stage_resource";
 
@@ -38,10 +42,13 @@ class StatusBar {
 
     private targetContainer = new PIXI.Container();
     private noTargetContainer = new PIXI.Container();
+    private targetSprite = new PIXI.Sprite();
 
     private text: { [index: string]: PIXI.Text } = {};
 
-    constructor(private statusBarData: StatusBarData, private gameData: GameData) {
+
+    constructor(private statusBarData: StatusBarData, private gameData: GameData,
+        private renderer: PIXI.Renderer | PIXI.AbstractRenderer) {
         this.buildPromise = this.build();
     }
 
@@ -53,6 +60,12 @@ class StatusBar {
         [this.radar.position.x, this.radar.position.y] = dataAreas.radar.position;
         this.container.addChild(this.radar);
         this.container.addChild(this.statsGraphics);
+        this.targetContainer.addChild(this.targetSprite);
+        this.targetSprite.anchor.set(0.5, 0.5);
+        this.targetSprite.position.x =
+            this.statusBarData.dataAreas.targeting.size[0] / 2;
+        this.targetSprite.position.y =
+            this.statusBarData.dataAreas.targeting.size[1] / 2;
 
         this.makeText();
         this.built = true;
@@ -220,7 +233,8 @@ class StatusBar {
         }
     }
 
-    drawTarget(name: string, shield?: number, armor?: number) {
+    drawTarget(name: string, shield?: number, armor?: number,
+        shipGraphic?: AnimationGraphic) {
         this.targetContainer.visible = true;
         this.noTargetContainer.visible = false;
         this.text.targetName.text = name;
@@ -237,22 +251,48 @@ class StatusBar {
             this.text.shield.visible = false;
             this.text.armor.visible = false;
         }
+
+        if (shipGraphic) {
+            const shipContainer = shipGraphic?.container;
+            const baseRenderTexture = new PIXI.BaseRenderTexture({
+                width: shipGraphic.size.x, height: shipGraphic.size.y,
+            });
+            const renderTexture = new PIXI.RenderTexture(baseRenderTexture);
+
+            shipContainer.setTransform();
+            shipContainer.position.x = shipGraphic.size.x / 2;
+            shipContainer.position.y = shipGraphic.size.y / 2;
+            this.renderer.render(shipContainer, { renderTexture });
+            this.targetSprite.texture = renderTexture;
+            let scale = 1;
+            const maxSize = 110;
+            const targetMaxDim = Math.max(shipGraphic.size.x, shipGraphic.size.y);
+            if (targetMaxDim > maxSize) {
+                scale = maxSize / targetMaxDim;
+            }
+            this.targetSprite.scale.set(scale, scale);
+            this.targetSprite.visible = true;
+        } else {
+            this.targetSprite.visible = false;
+        }
+
     }
     clearTarget() {
         this.targetContainer.visible = false;
         this.noTargetContainer.visible = true;
+        this.targetSprite.visible = false;
     }
 }
 
 export const StatusBarComponent = new Component<StatusBar>('StatusBar');
 const StatusBarProvider = ProvideAsync({
     provided: StatusBarComponent,
-    args: [GameDataResource, Stage] as const,
-    async factory(gameData, stage) {
+    args: [GameDataResource, Stage, PixiAppResource] as const,
+    async factory(gameData, stage, app) {
         // Casting to the client version of GameData, which includes
         // helper functions for creating sprites from picts.
-        const statusBar = new StatusBar(
-            await gameData.data.StatusBar.get("nova:128"), gameData as GameData);
+        const statusBar = new StatusBar(await gameData.data.StatusBar.get("nova:128"),
+            gameData as GameData, app.renderer);
         await statusBar.buildPromise;
         stage.addChild(statusBar.container);
         statusBar.container.position.x = window.innerWidth - statusBar.container.width;
@@ -317,7 +357,7 @@ const DrawStatusBarSecondaryWeapon = new System({
 });
 
 const TargetQuery = new Query([ShipDataComponent, Optional(ShieldComponent),
-    Optional(ArmorComponent)] as const);
+    Optional(ArmorComponent), Optional(AnimationGraphicComponent)] as const);
 const DrawStatusBarTarget = new System({
     name: 'DrawStatusBarTarget',
     args: [StatusBarProvider, TargetComponent, RunQuery, PlayerShipSelector] as const,
@@ -328,8 +368,8 @@ const DrawStatusBarTarget = new System({
         }
         const result = runQuery(TargetQuery, target)[0];
         if (result) {
-            const [shipData, shield, armor] = result;
-            statusBar.drawTarget(shipData.name, shield?.percent, armor?.percent);
+            const [shipData, shield, armor, shipGraphic] = result;
+            statusBar.drawTarget(shipData.name, shield?.percent, armor?.percent, shipGraphic);
         }
     }
 })
