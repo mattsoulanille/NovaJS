@@ -22,7 +22,7 @@ import { firstOrderWithFallback } from './guidance';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
 import { makeProjectile } from './projectile_plugin';
-import { ControlAction, ControlStateEvent } from './ship_controller_plugin';
+import { ControlStateEvent } from './ship_controller_plugin';
 import { ShipDataComponent } from './ship_plugin';
 import { Target, TargetComponent } from './target_component';
 
@@ -285,7 +285,7 @@ const ControlPlayerWeapons = new System({
             secondary = weaponsState.get(activeSecondary.secondary);
         }
 
-        if (controlState.get(ControlAction.cycleSecondary) === 'start') {
+        if (controlState.get('nextSecondary') === 'start') {
             const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
                 return weapon.weaponData.fireGroup === 'secondary';
             }).map(([id]) => id);
@@ -305,10 +305,10 @@ const ControlPlayerWeapons = new System({
         }
 
         if (secondary) {
-            secondary.firing = Boolean(controlState.get(ControlAction.fireSecondary));
+            secondary.firing = Boolean(controlState.get('fireSecondary'));
         }
 
-        const firing = Boolean(controlState.get(ControlAction.firePrimary));
+        const firing = Boolean(controlState.get('firePrimary'));
         for (const [id, weaponState] of weaponsState) {
             if (weaponsData.get(id)?.weaponData.fireGroup === 'primary') {
                 weaponState.firing = firing;

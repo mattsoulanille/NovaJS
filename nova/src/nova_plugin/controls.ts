@@ -1,6 +1,5 @@
-import { Either, isLeft, Right, right } from 'fp-ts/lib/Either';
+import { isLeft, right } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
-import { Errors } from 'io-ts';
 import { DefaultMap } from 'nova_ecs/utils';
 
 
@@ -32,7 +31,8 @@ const SavedControlsPartialObject = t.partial({
     'nextTarget': ControlInputs,
     'friendlyTarget': ControlInputs,
     'nearestTarget': ControlInputs,
-    'cycleSecondary': ControlInputs,
+    'nextSecondary': ControlInputs,
+    'previousSecondary': ControlInputs,
     'afterburner': ControlInputs,
     'hail': ControlInputs,
     'board': ControlInputs,
@@ -136,7 +136,7 @@ const ControlEntry = t.type({
 });
 type ControlEntry = t.TypeOf<typeof ControlEntry>;
 
-type Controls = Map<string, ControlEntry[]>;
+export type Controls = Map<string, ControlEntry[]>;
 
 export const Controls = new t.Type(
     'Controls',
@@ -174,63 +174,26 @@ export const Controls = new t.Type(
     }
 )
 
-// function invertMap<K, V>(map: Map<K, V[]>): Map<V, K[]> {
-//     const invert = new DefaultMap<V, K[]>(() => []);
-//     for (const [k, vArray] of map) {
-//         for (const v of vArray) {
-//             invert.get(v).push(k);
-//         }
-//     }
-//     return new Map(invert);
-// }
+function modifiersPressed(event: KeyboardEvent, modifiers: string[]) {
+    for (const modifier of modifiers) {
+        if (!event.getModifierState(modifier)) {
+            return false;
+        }
+    }
+    return true;
+}
 
-// export function parseControls(controls: SavedControls) {
+export function getAction(controls: Controls,
+    event: KeyboardEvent): ControlAction | undefined {
+    const possibleActions = controls.get(event.code);
+    if (!possibleActions) {
+        return undefined;
+    }
 
-//     const controlsMap = new DefaultMap<string, ControlEntry[]>(() => []);
-
-//     for (const [key, controlInputs] of Object.entries(controls)) {
-//         const action = key as ControlAction;
-
-//         function addInput(input: ControlInput) {
-//             if (typeof input === 'string') {
-//                 controlsMap.get(input).push({
-//                     action,
-//                     modifiers: [],
-//                     notModifiers: [],
-//                 });
-//             } else {
-//                 controlsMap.get(input.key).push({
-//                     action,
-//                     modifiers: input.modifiers ?? [],
-//                     notModifiers: input.notModifiers ?? [],
-//                 })
-//             }
-//         }
-
-//         if (controlInputs instanceof Array) {
-//             for (const input of controlInputs) {
-//                 addInput(input)
-//             }
-//         } else if (controlInputs) {
-//             addInput(controlInputs);
-//         }
-//     }
-
-
-//     return function parseKeyboardEvent(event: KeyboardEvent): ControlAction[] {
-//         const controlEntries = controlsMap.get(event.code);
-//         return controlEntries.map(controlEntry => {
-//             for (const modifier of controlEntry.modifiers) {
-//                 if (!event.getModifierState(modifier)) {
-//                     return null;
-//                 }
-//             }
-//             for (const modifier of controlEntry.notModifiers) {
-//                 if (event.getModifierState(modifier)) {
-//                     return null;
-//                 }
-//             }
-//             return controlEntry.action;
-//         }).filter((a): a is NonNull<typeof a> => a !== null);
-//     }
-// }
+    for (const { action, modifiers } of possibleActions) {
+        if (modifiersPressed(event, modifiers)) {
+            return action;
+        }
+    }
+    return undefined;
+}

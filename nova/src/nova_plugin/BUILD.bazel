@@ -37,6 +37,7 @@ ts_library(
         "//nova_ecs/datatypes",
         "//novadatainterface",
         "//nova/src/common",
+        "//nova/src/client/gamedata",
         "//nova/src/util",
         "@npm//io-ts",
         "@npm//fp-ts",
