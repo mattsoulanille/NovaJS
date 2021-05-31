@@ -1,5 +1,5 @@
+import { isLeft } from 'fp-ts/lib/Either';
 import { Emit } from 'nova_ecs/arg_types';
-import { Component } from 'nova_ecs/component';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { EcsKeyboardEvent, KeyboardPlugin } from 'nova_ecs/plugins/keyboard_plugin';
@@ -7,37 +7,15 @@ import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movemen
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
+import { GameData } from '../client/gamedata/GameData';
+import { Controls, SavedControls, getAction, ControlAction } from './controls';
+import { GameDataResource } from './game_data_resource';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipPlugin, PlayerShipSelector } from './player_ship_plugin';
 import { TargetComponent } from './target_component';
 
 
-export enum ControlAction {
-    'accelerate',
-    'turnLeft',
-    'turnRight',
-    'reverse',
-    'firePrimary',
-    'cycleTarget',
-    'pointToTarget',
-    'cycleSecondary',
-    'fireSecondary',
-}
-
-// TODO: Support loading this from the server.
-// TODO: Support modifier keys changing behavior.
-const keyMap = new Map([
-    ['ArrowUp', ControlAction.accelerate],
-    ['ArrowLeft', ControlAction.turnLeft],
-    ['ArrowRight', ControlAction.turnRight],
-    ['ArrowDown', ControlAction.reverse],
-    ['Space', ControlAction.firePrimary],
-    ['Tab', ControlAction.cycleTarget],
-    ['KeyA', ControlAction.pointToTarget],
-    ['KeyW', ControlAction.cycleSecondary],
-    ['ControlLeft', ControlAction.fireSecondary],
-    ['ShiftLeft', ControlAction.fireSecondary],
-]);
+const ControlsResource = new Resource<Controls>('ControlsResource');
 
 type ControlState = Map<ControlAction, false | 'start' | 'repeat' | true>;
 
@@ -49,9 +27,10 @@ export const ControlStateEvent = new EcsEvent<ControlState>('ControlState');
 const UpdateControlState = new System({
     name: 'UpdateControlState',
     events: [EcsKeyboardEvent],
-    args: [EcsKeyboardEvent, ControlStateResource, Emit, SingletonComponent] as const,
-    step(event, controlState, emit) {
-        const action = keyMap.get(event.code);
+    args: [EcsKeyboardEvent, ControlStateResource, ControlsResource,
+        Emit, SingletonComponent] as const,
+    step(event, controlState, controls, emit) {
+        const action = getAction(controls, event);
         if (action === undefined) {
             return;
         }
@@ -80,33 +59,45 @@ const ControlPlayerShip = new System({
         TargetComponent, PlayerShipSelector] as const,
     step(controlState, movementState, { target }) {
         movementState.accelerating = (
-            controlState.get(ControlAction.accelerate) &&
-            !controlState.get(ControlAction.reverse)) ? 1 : 0;
+            controlState.get('accelerate') &&
+            !controlState.get('reverse')) ? 1 : 0;
 
         movementState.turning =
-            (controlState.get(ControlAction.turnLeft) ? -1 : 0) +
-            (controlState.get(ControlAction.turnRight) ? 1 : 0);
+            (controlState.get('turnLeft') ? -1 : 0) +
+            (controlState.get('turnRight') ? 1 : 0);
 
         movementState.turnTo = null;
-        if (controlState.get(ControlAction.pointToTarget) && target) {
+        if (controlState.get('pointTo') && target) {
             movementState.turnTo = target;
         }
 
-        movementState.turnBack = Boolean(controlState.get(ControlAction.reverse));
+        movementState.turnBack = Boolean(controlState.get('reverse'));
     },
     before: [MovementSystem]
 });
 
 export const ShipController: Plugin = {
     name: 'ShipController',
-    build(world) {
+    async build(world) {
         const platform = world.resources.get(PlatformResource);
         if (platform === 'browser') {
-            world.addPlugin(KeyboardPlugin);
-            world.addPlugin(PlayerShipPlugin);
+            await world.addPlugin(KeyboardPlugin);
+            await world.addPlugin(PlayerShipPlugin);
             world.resources.set(ControlStateResource, new Map());
-            world.addSystem(UpdateControlState);
             world.addSystem(ControlPlayerShip);
+
+            const gameData = world.resources.get(GameDataResource) as GameData;
+            if (!gameData) {
+                throw new Error('Expected world to have gameData');
+            }
+            const controlsJson = await gameData.getSettings('controls.json');
+            const decoded = SavedControls.pipe(Controls).decode(controlsJson);
+            if (isLeft(decoded)) {
+                console.error(decoded.left);
+                throw new Error('Failed to parse controls');
+            }
+            world.resources.set(ControlsResource, decoded.right);
+            world.addSystem(UpdateControlState);
         }
     }
 };

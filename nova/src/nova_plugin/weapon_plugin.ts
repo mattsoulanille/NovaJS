@@ -16,13 +16,14 @@ import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
+import { mod } from '../util/mod';
 import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback } from './guidance';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
 import { makeProjectile } from './projectile_plugin';
-import { ControlAction, ControlStateEvent } from './ship_controller_plugin';
+import { ControlStateEvent } from './ship_controller_plugin';
 import { ShipDataComponent } from './ship_plugin';
 import { Target, TargetComponent } from './target_component';
 
@@ -280,35 +281,51 @@ const ControlPlayerWeapons = new System({
             weaponState.firing = false;
         }
 
+        // TODO: Store this somewhere?
+        const secondaryWeapons = [
+            undefined, // for when no weapon is selected
+            ...[...weaponsData].filter(([, weapon]) => {
+                return weapon.weaponData.fireGroup === 'secondary';
+            }).map(([id]) => id)
+        ];
+
         let secondary: WeaponState | undefined;
+        let secondaryIndex = 0;
+        if (activeSecondary.secondary) {
+            secondary = weaponsState.get(activeSecondary.secondary);
+            secondaryIndex = secondaryWeapons.indexOf(activeSecondary.secondary);
+        }
+
+        let changedSecondary = false;
+        if (controlState.get('nextSecondary') === 'start') {
+            secondaryIndex++;
+            changedSecondary = true;
+        }
+        if (controlState.get('previousSecondary') === 'start') {
+            secondaryIndex--;
+            changedSecondary = true;
+        }
+        if (controlState.get('resetSecondary') === 'start') {
+            secondaryIndex = 0;
+            changedSecondary = true;
+        }
+
+        secondaryIndex = mod(secondaryIndex, secondaryWeapons.length);
+        activeSecondary.secondary = secondaryWeapons[secondaryIndex] ?? null;
+
+        if (changedSecondary) {
+            emit(ChangeSecondaryEvent, activeSecondary);
+        }
+
         if (activeSecondary.secondary) {
             secondary = weaponsState.get(activeSecondary.secondary);
         }
 
-        if (controlState.get(ControlAction.cycleSecondary) === 'start') {
-            const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
-                return weapon.weaponData.fireGroup === 'secondary';
-            }).map(([id]) => id);
-
-            let index = -1;
-            if (activeSecondary.secondary) {
-                index = secondaryWeapons.indexOf(activeSecondary.secondary);
-            }
-            index++;
-            if (index >= secondaryWeapons.length) {
-                activeSecondary.secondary = null;
-            } else {
-                activeSecondary.secondary = secondaryWeapons[index];
-                secondary = weaponsState.get(activeSecondary.secondary);
-            }
-            emit(ChangeSecondaryEvent, activeSecondary);
-        }
-
         if (secondary) {
-            secondary.firing = Boolean(controlState.get(ControlAction.fireSecondary));
+            secondary.firing = Boolean(controlState.get('fireSecondary'));
         }
 
-        const firing = Boolean(controlState.get(ControlAction.firePrimary));
+        const firing = Boolean(controlState.get('firePrimary'));
         for (const [id, weaponState] of weaponsState) {
             if (weaponsData.get(id)?.weaponData.fireGroup === 'primary') {
                 weaponState.firing = firing;

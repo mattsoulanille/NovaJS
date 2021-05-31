@@ -1,0 +1,31 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:defaults.bzl", "ts_library")
+load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_test")
+
+ts_library(
+    name = "controls_lint_lib",
+    srcs = [
+        ":controls_lint.ts",
+    ],
+    deps = [
+        "//nova/src/nova_plugin",
+        "@npm//@types/node",
+        "@npm//argparse",
+        "@npm//@types/argparse",
+        "@npm//fp-ts",
+    ]
+)
+
+nodejs_test(
+    name = "controls_lint_test",
+    entry_point = "controls_lint.ts",
+    link_workspace_root = True,
+    data = [
+        ":controls_lint_lib",
+        "//nova/settings",
+    ],
+    templated_args = [
+        "nova/settings/controls.json",
+    ],
+)

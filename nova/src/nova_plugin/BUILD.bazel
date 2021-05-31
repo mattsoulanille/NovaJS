@@ -29,6 +29,7 @@ ts_library(
         "stat.ts",
         "target_plugin.ts",
         "target_component.ts",
+        "controls.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -36,6 +37,7 @@ ts_library(
         "//nova_ecs/datatypes",
         "//novadatainterface",
         "//nova/src/common",
+        "//nova/src/client/gamedata",
         "//nova/src/util",
         "@npm//io-ts",
         "@npm//fp-ts",
@@ -46,5 +48,26 @@ ts_library(
         "@npm//@types/sat",
         "@npm//rbush",
         "@npm//@types/rbush",
+    ]
+)
+
+ts_library(
+    name = "nova_plugin_test_lib",
+    srcs = [
+        "controls_test.ts",
+    ],
+    deps = [
+        ":nova_plugin",
+        "@npm//io-ts",
+        "@npm//fp-ts",
+        "@npm//@types/jasmine",
+    ],
+)
+
+jasmine_node_test(
+    name = "nova_plugin_test",
+    link_workspace_root = True, # Why is this necessary for `bazel test`
+    srcs = [
+        ":nova_plugin_test_lib",
     ]
 )
