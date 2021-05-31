@@ -4,7 +4,7 @@ import * as http from "http";
 import "jasmine";
 import { SocketChannelServer } from "./SocketChannelServer";
 import { SocketMessage } from "./SocketMessage";
-import { Subject } from "rxjs";
+import { firstValueFrom, Subject } from "rxjs";
 import { take } from "rxjs/operators";
 import * as WebSocket from "ws";
 import { Callbacks, On, trackOn } from "./test_utils";
@@ -159,9 +159,8 @@ describe("SocketChannelServer", function() {
             cat: 'dog',
         };
 
-        const serverEmitsPromise = server.message
-            .pipe(take(1))
-            .toPromise();
+        const serverEmitsPromise = firstValueFrom(server.message.pipe(take(1)));
+
 
         client1.sendMessage({ message: testMessage });
 
