@@ -66,6 +66,7 @@ ts_library(
 
 jasmine_node_test(
     name = "nova_plugin_test",
+    link_workspace_root = True, # Why is this necessary for `bazel test`
     srcs = [
         ":nova_plugin_test_lib",
     ]
