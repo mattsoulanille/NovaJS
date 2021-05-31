@@ -5,7 +5,7 @@
   "reverse": "ArrowDown",
   "pointTo": "KeyA",
   "firePrimary": "Space",
-  "fireSecondary": "ControlLeft",
+  "fireSecondary": ["ControlLeft", "ShiftLeft"],
   "resetSecondary": "KeyS",
   "nextTarget": {
     "key": "Tab"
