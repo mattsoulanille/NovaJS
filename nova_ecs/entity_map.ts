@@ -7,7 +7,7 @@ import { EventMap, SyncSubject } from "./event_map";
 export interface EntityMap extends Map<string, Entity> { }
 
 export class EntityMapWrapped extends EventMap<string, Entity> implements EntityMap {
-    events!: EventMap<string, Entity>['events'] & {
+    declare events: EventMap<string, Entity>['events'] & {
         addComponent: SyncSubject<[string, Entity, UnknownComponent]>,
         deleteComponent: SyncSubject<[string, Entity, UnknownComponent]>,
         changeComponent: SyncSubject<[string, Entity, UnknownComponent]>,
