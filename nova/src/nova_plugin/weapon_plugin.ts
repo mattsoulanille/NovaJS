@@ -282,12 +282,15 @@ const ControlPlayerWeapons = new System({
         }
 
         // TODO: Store this somewhere?
-        const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
-            return weapon.weaponData.fireGroup === 'secondary';
-        }).map(([id]) => id);
+        const secondaryWeapons = [
+            undefined, // for when no weapon is selected
+            ...[...weaponsData].filter(([, weapon]) => {
+                return weapon.weaponData.fireGroup === 'secondary';
+            }).map(([id]) => id)
+        ];
 
         let secondary: WeaponState | undefined;
-        let secondaryIndex = -1;
+        let secondaryIndex = 0;
         if (activeSecondary.secondary) {
             secondary = weaponsState.get(activeSecondary.secondary);
             secondaryIndex = secondaryWeapons.indexOf(activeSecondary.secondary);
@@ -302,7 +305,12 @@ const ControlPlayerWeapons = new System({
             secondaryIndex--;
             changedSecondary = true;
         }
-        secondaryIndex = mod((secondaryIndex + 1), secondaryWeapons.length) - 1;
+        if (controlState.get('resetSecondary') === 'start') {
+            secondaryIndex = 0;
+            changedSecondary = true;
+        }
+
+        secondaryIndex = mod(secondaryIndex, secondaryWeapons.length);
         activeSecondary.secondary = secondaryWeapons[secondaryIndex] ?? null;
 
         if (changedSecondary) {
