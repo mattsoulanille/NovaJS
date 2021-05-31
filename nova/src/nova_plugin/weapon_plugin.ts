@@ -16,6 +16,7 @@ import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
+import { mod } from '../util/mod';
 import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback } from './guidance';
@@ -280,28 +281,36 @@ const ControlPlayerWeapons = new System({
             weaponState.firing = false;
         }
 
+        // TODO: Store this somewhere?
+        const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
+            return weapon.weaponData.fireGroup === 'secondary';
+        }).map(([id]) => id);
+
         let secondary: WeaponState | undefined;
+        let secondaryIndex = -1;
         if (activeSecondary.secondary) {
             secondary = weaponsState.get(activeSecondary.secondary);
+            secondaryIndex = secondaryWeapons.indexOf(activeSecondary.secondary);
         }
 
+        let changedSecondary = false;
         if (controlState.get('nextSecondary') === 'start') {
-            const secondaryWeapons = [...weaponsData].filter(([, weapon]) => {
-                return weapon.weaponData.fireGroup === 'secondary';
-            }).map(([id]) => id);
+            secondaryIndex++;
+            changedSecondary = true;
+        }
+        if (controlState.get('previousSecondary') === 'start') {
+            secondaryIndex--;
+            changedSecondary = true;
+        }
+        secondaryIndex = mod((secondaryIndex + 1), secondaryWeapons.length) - 1;
+        activeSecondary.secondary = secondaryWeapons[secondaryIndex] ?? null;
 
-            let index = -1;
-            if (activeSecondary.secondary) {
-                index = secondaryWeapons.indexOf(activeSecondary.secondary);
-            }
-            index++;
-            if (index >= secondaryWeapons.length) {
-                activeSecondary.secondary = null;
-            } else {
-                activeSecondary.secondary = secondaryWeapons[index];
-                secondary = weaponsState.get(activeSecondary.secondary);
-            }
+        if (changedSecondary) {
             emit(ChangeSecondaryEvent, activeSecondary);
+        }
+
+        if (activeSecondary.secondary) {
+            secondary = weaponsState.get(activeSecondary.secondary);
         }
 
         if (secondary) {
