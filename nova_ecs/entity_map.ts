@@ -63,6 +63,7 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
             throw new Error('Can not delete the singleton entity');
         }
         this.entityChangeUnsubscribe.get(key)?.unsubscribe();
+        this.entityChangeUnsubscribe.delete(key);
         return super.delete(key);
     }
 
