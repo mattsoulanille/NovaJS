@@ -1,5 +1,7 @@
 import { Emit, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
+import { Angle } from "nova_ecs/datatypes/angle";
+import { Vector } from "nova_ecs/datatypes/vector";
 import { FirstAvailable } from "nova_ecs/first_available";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
@@ -17,8 +19,13 @@ import { GameDataResource } from "./game_data_resource";
 import { ShipComponent } from "./ship_plugin";
 
 
+
+type Hull = {
+    convexPolys: SAT.Polygon[],
+    bbox: BBox, // Axis-aligned bounding box
+};
 export const HullComponent = new Component<{
-    hulls: SAT.Polygon[][],
+    hulls: Hull[],
 }>('HullComponent');
 
 export const HullProvider = ProvideAsync({
@@ -29,10 +36,13 @@ export const HullProvider = ProvideAsync({
             .get(animation.images.baseImage.id);
 
         const hulls = spriteSheet.hulls.map(hull =>
-            hull.map(convexPoly => new SAT.Polygon(new SAT.Vector(),
-                convexPoly.map(([x, y]) => new SAT.Vector(x, -y)))));
+            hull.map(convexHull => new SAT.Polygon(new SAT.Vector(),
+                convexHull.map(([x, y]) => new SAT.Vector(x, -y)))))
+            .map(convexPolys => ({
+                convexPolys,
+                bbox: getBoundingBox(convexPolys),
+            }));
 
-        hulls[0][0].getAABB();
         return { hulls };
     }
 });
@@ -40,13 +50,13 @@ export const HullProvider = ProvideAsync({
 interface RBushEntry extends BBox {
     uuid: string,
     interaction: CollisionInteraction,
-    hull: SAT.Polygon[],
+    hull: Hull,
 };
 
 export const RBushResource = new Resource<RBush<RBushEntry>>("RBushResource");
 
-function getBoundingBox(hull: SAT.Polygon[]): BBox {
-    return hull.map(
+function getBoundingBox(polys: SAT.Polygon[]): BBox {
+    return polys.map(
         p => (p as unknown as { getAABBAsBox(): SAT.Box }).getAABBAsBox())
         .map(box => ({
             minX: box.pos.x,
@@ -77,7 +87,7 @@ function canCollide(a: CollisionInteraction, b: CollisionInteraction) {
     return aHitsB(a, b) || aHitsB(b, a);
 }
 
-function hullsCollide(a: SAT.Polygon[], b: SAT.Polygon[]) {
+function convexPolysCollide(a: SAT.Polygon[], b: SAT.Polygon[]) {
     for (const polyA of a) {
         for (const polyB of b) {
             if (SAT.testPolygonPolygon(polyA, polyB)) {
@@ -102,6 +112,33 @@ const CollisionInteractionFirst = FirstAvailable([
     ShipCollisionInteraction,
 ]);
 
+function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
+    return {
+        minX: bbox.minX + x,
+        minY: bbox.minY + y,
+        maxX: bbox.maxX + x,
+        maxY: bbox.maxY + y,
+    };
+}
+
+function rotateAabb(bbox: BBox, angle: Angle): BBox {
+    const center = new Vector(bbox.maxX + bbox.minX,
+        bbox.maxY + bbox.minY).scale(0.5);
+
+    const a = new Vector(bbox.minX, bbox.minY).subtract(center).rotate(angle);
+    const b = new Vector(bbox.minX, bbox.maxY).subtract(center).rotate(angle);
+
+    const maxX = Math.max(Math.abs(a.x), Math.abs(b.x));
+    const maxY = Math.max(Math.abs(a.y), Math.abs(b.y));
+
+    return {
+        maxX: center.x + maxX,
+        maxY: center.y + maxY,
+        minX: center.x - maxX,
+        minY: center.y - maxY,
+    };
+}
+
 const CollisionSystem = new System({
     name: "CollisionSystem",
     args: [RBushResource, new Query([HullProvider, MovementStateComponent,
@@ -114,13 +151,14 @@ const CollisionSystem = new System({
             colliders.map(([hull, movement, animation, uuid, interaction]) => {
                 const { frame, angle } = getFrameFromMovement(animation, movement);
                 const activeHull = hull.hulls[frame];
-                for (const convexHull of activeHull) {
-                    convexHull.setAngle(angle);
-                    convexHull.pos = new SAT.Vector(
+                for (const convexPoly of activeHull.convexPolys) {
+                    convexPoly.setAngle(angle);
+                    convexPoly.pos = new SAT.Vector(
                         movement.position.x, movement.position.y);
                 }
 
-                const entry = getBoundingBox(activeHull) as RBushEntry;
+                const entry = rotateAabb(translateAabb(activeHull.bbox,
+                    movement.position), movement.rotation) as RBushEntry;
                 entry.uuid = uuid;
                 entry.interaction = interaction;
                 entry.hull = activeHull;
@@ -139,7 +177,8 @@ const CollisionSystem = new System({
                 const collisionPair = [entry.uuid, other.uuid].sort().join();
                 if (canCollide(entry.interaction, other.interaction) &&
                     !alreadyCollided.has(collisionPair) &&
-                    hullsCollide(entry.hull, other.hull)) {
+                    convexPolysCollide(entry.hull.convexPolys,
+                        other.hull.convexPolys)) {
                     alreadyCollided.add(collisionPair);
                     emit(CollisionEvent, { other: other.uuid }, [entry.uuid]);
                     emit(CollisionEvent, { other: entry.uuid }, [other.uuid]);

@@ -37,6 +37,8 @@ ts_library(
         "@npm//immer",
         "@npm//sat",
         "@npm//@types/sat",
+        "@npm//rbush",
+        "@npm//@types/rbush",
     ]
 )
 
