@@ -1,16 +1,13 @@
 import { Component } from "nova_ecs/component";
+import { Vector } from "nova_ecs/datatypes/vector";
 import { DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Provide } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { FirstAnimation } from "../nova_plugin/animation_plugin";
-import { HullProvider } from "../nova_plugin/collisions_plugin";
-import { getFrameFromMovement } from "../util/get_frame_and_angle";
-import { Space } from "./space_resource";
 import * as SAT from "sat";
-import { BBox } from "rbush";
+import { HullProvider } from "../nova_plugin/collisions_plugin";
+import { Space } from "./space_resource";
 
 
 const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
@@ -30,16 +27,18 @@ const HullGraphicsCleanup = new System({
     name: 'HullGraphicCleanup',
     events: [DeleteEvent],
     args: [ConvexHullGraphicsComponent, Space] as const,
-    step: (graphic, space) => {
-        space.removeChild(graphic);
+    step: (graphics, space) => {
+        space.removeChild(graphics);
     }
 });
 
 function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000) {
     graphics.lineStyle(0.5, color);
-    const { x: x0, y: y0 } = poly.points[0];
+    const points = poly.points.map(v => Vector.fromVectorLike(v)
+        .rotate(poly.angle).add(poly.pos));
+    const { x: x0, y: y0 } = points[0];
     graphics.moveTo(x0, y0);
-    for (const { x, y } of poly.points) {
+    for (const { x, y } of points) {
         graphics.lineTo(x, y);
     }
     graphics.lineTo(x0, y0);
@@ -60,23 +59,23 @@ const COLORS = [
 
 const ConvexHullGraphicsSystem = new System({
     name: 'ConvexHullGraphics',
-    args: [HullProvider, FirstAnimation, MovementStateComponent, GraphicsProvider] as const,
-    step(hull, animation, movement, graphics) {
-        const { frame, angle } = getFrameFromMovement(animation, movement);
-
-        const activeHull = hull.hulls[frame];
-        graphics.rotation = angle;
-        graphics.position.x = movement.position.x;
-        graphics.position.y = movement.position.y;
-
+    args: [HullProvider, GraphicsProvider] as const,
+    step(hull, graphics) {
         graphics.clear();
+
+        const activeHull = hull.activeHull;
+        const bbox = hull.computedBbox;
+        if (!activeHull || !bbox) {
+            return;
+        }
+
         for (let i = 0; i < activeHull.convexPolys.length; i++) {
             const convexPoly = activeHull.convexPolys[i];
             const color = COLORS[i % COLORS.length]
             drawPoly(convexPoly, graphics, color);
         }
+
         // Draw bounding box
-        const bbox = activeHull.bbox;
         graphics.lineStyle(0.5, 0x4488ff);
         graphics.drawRect(bbox.minX, bbox.minY,
             bbox.maxX - bbox.minX, bbox.maxY - bbox.minY);

@@ -19,13 +19,14 @@ import { GameDataResource } from "./game_data_resource";
 import { ShipComponent } from "./ship_plugin";
 
 
-
 type Hull = {
     convexPolys: SAT.Polygon[],
     bbox: BBox, // Axis-aligned bounding box
 };
 export const HullComponent = new Component<{
     hulls: Hull[],
+    activeHull?: Hull,
+    computedBbox?: BBox,
 }>('HullComponent');
 
 export const HullProvider = ProvideAsync({
@@ -112,7 +113,7 @@ const CollisionInteractionFirst = FirstAvailable([
     ShipCollisionInteraction,
 ]);
 
-function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
+export function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
     return {
         minX: bbox.minX + x,
         minY: bbox.minY + y,
@@ -121,7 +122,7 @@ function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
     };
 }
 
-function rotateAabb(bbox: BBox, angle: Angle): BBox {
+export function rotateAabb(bbox: BBox, angle: Angle): BBox {
     const center = new Vector(bbox.maxX + bbox.minX,
         bbox.maxY + bbox.minY).scale(0.5);
 
@@ -162,6 +163,9 @@ const CollisionSystem = new System({
                 entry.uuid = uuid;
                 entry.interaction = interaction;
                 entry.hull = activeHull;
+
+                hull.activeHull = activeHull;
+                hull.computedBbox = entry;
                 return entry;
             });
 
@@ -173,6 +177,7 @@ const CollisionSystem = new System({
         for (const entry of entries) {
             const maybeCollisions = rbush.search(entry)
                 .filter(found => found !== entry);
+
             for (const other of maybeCollisions) {
                 const collisionPair = [entry.uuid, other.uuid].sort().join();
                 if (canCollide(entry.interaction, other.interaction) &&
