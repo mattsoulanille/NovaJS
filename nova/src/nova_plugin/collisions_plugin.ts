@@ -113,7 +113,7 @@ const CollisionInteractionFirst = FirstAvailable([
     ShipCollisionInteraction,
 ]);
 
-export function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
+function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
     return {
         minX: bbox.minX + x,
         minY: bbox.minY + y,
@@ -122,7 +122,7 @@ export function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): B
     };
 }
 
-export function rotateAabb(bbox: BBox, angle: Angle): BBox {
+function rotateAabb(bbox: BBox, angle: number | Angle): BBox {
     const center = new Vector(bbox.maxX + bbox.minX,
         bbox.maxY + bbox.minY).scale(0.5);
 
@@ -159,7 +159,7 @@ const CollisionSystem = new System({
                 }
 
                 const entry = rotateAabb(translateAabb(activeHull.bbox,
-                    movement.position), movement.rotation) as RBushEntry;
+                    movement.position), angle) as RBushEntry;
                 entry.uuid = uuid;
                 entry.interaction = interaction;
                 entry.hull = activeHull;
