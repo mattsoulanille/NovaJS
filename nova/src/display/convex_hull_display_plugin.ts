@@ -10,6 +10,7 @@ import { HullProvider } from "../nova_plugin/collisions_plugin";
 import { getFrameFromMovement } from "../util/get_frame_and_angle";
 import { Space } from "./space_resource";
 import * as SAT from "sat";
+import { BBox } from "rbush";
 
 
 const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
@@ -50,7 +51,7 @@ const COLORS = [
     0x0000ff,
     0xffff00,
     0xff00ff,
-    0x00ff00,
+    0x00ffff,
     0x88ff00,
     0xff8800,
     0x0088ff,
@@ -69,11 +70,16 @@ const ConvexHullGraphicsSystem = new System({
         graphics.position.y = movement.position.y;
 
         graphics.clear();
-        for (let i = 0; i < activeHull.length; i++) {
-            const convexHull = activeHull[i];
+        for (let i = 0; i < activeHull.convexPolys.length; i++) {
+            const convexPoly = activeHull.convexPolys[i];
             const color = COLORS[i % COLORS.length]
-            drawPoly(convexHull, graphics, color);
+            drawPoly(convexPoly, graphics, color);
         }
+        // Draw bounding box
+        const bbox = activeHull.bbox;
+        graphics.lineStyle(0.5, 0x4488ff);
+        graphics.drawRect(bbox.minX, bbox.minY,
+            bbox.maxX - bbox.minX, bbox.maxY - bbox.minY);
     }
 });
 

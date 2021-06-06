@@ -5,7 +5,7 @@ import path from "path";
 import { NovaParse } from "../novaparse/NovaParse";
 import { CommunicatorServer } from "./src/communication/CommunicatorServer";
 import { SocketChannelServer } from "./src/communication/SocketChannelServer";
-import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
+import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { World } from "nova_ecs/world";
 import { GameDataResource } from "./src/nova_plugin/game_data_resource";
 import { Nova } from "./src/nova_plugin/nova_plugin";
@@ -21,6 +21,9 @@ import { Worker } from "worker_threads";
 import * as Comlink from 'comlink';
 import nodeEndpoint from "comlink/dist/esm/node-adapter";
 import { NovaParseWorkerApi } from "./src/server/parsing/nova_parse_worker";
+import { makeShip } from "./src/nova_plugin/make_ship";
+import { v4 } from "uuid";
+import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
 
@@ -79,6 +82,7 @@ async function startGame() {
     }
     const gameData = new GameDataAggregator([filesystemData, novaFileData]);
     repl.repl.context.gameData = gameData;
+    repl.repl.context.makeShip = makeShip;
 
     setupRoutes(gameData, app, htmlPath, bundlePath, bundleMapPath, clientSettingsPath);
 
@@ -99,6 +103,17 @@ async function startGame() {
     await world.addPlugin(multiplayerPlugin);
     await world.addPlugin(ServerPlugin);
     await world.addPlugin(Nova);
+    repl.repl.context.addEnemy = async () => {
+        const ids = await gameData.ids;
+        const randomShipId = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
+        const randomShip = await gameData.data.Ship.get(randomShipId);
+        const ship = makeShip(randomShip);
+        ship.components.set(MultiplayerData, {
+            owner: 'server',
+        });
+        world.entities.set(v4(), ship);
+    }
+
     stepper();
 }
 
