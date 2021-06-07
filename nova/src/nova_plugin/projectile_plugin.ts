@@ -1,12 +1,13 @@
 import { GameDataInterface } from 'novadatainterface/GameDataInterface';
 import { ProjectileWeaponData } from 'novadatainterface/WeaponData';
-import { Entities, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { EntityBuilder } from 'nova_ecs/entity';
+import { Entity, EntityBuilder } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
+import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementPhysicsComponent, MovementState, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
@@ -201,12 +202,15 @@ function applyDamage(projectileData: ProjectileWeaponData, armor: Stat,
     armor.current = Math.max(0, armor.current - projectileData.damage.armor)
 }
 
+export const ProjectileCollisionEvent
+    = new EcsEvent<Entity>('ProjectileCollision');
+
 const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        ProjectileComponent] as const,
-    step(collision, entities, uuid, projectileData, projectileComponent) {
+        ProjectileComponent, Emit] as const,
+    step(collision, entities, uuid, projectileData, projectileComponent, emit) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
@@ -222,7 +226,13 @@ const ProjectileCollisionSystem = new System({
         if (otherArmor) {
             applyDamage(projectileData, otherArmor, otherShield, otherIonization);
         }
+        const self = entities.get(uuid);
+        if (!self) {
+            console.warn(`Missing projectile ${uuid} that is colliding`);
+            return;
+        }
         entities.delete(uuid);
+        emit(ProjectileCollisionEvent, self);
     }
 });
 
