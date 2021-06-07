@@ -1,7 +1,7 @@
 import { Resource } from "resourceforkjs";
 import { NovaResources } from "./ResourceHolderBase";
 import { BaseResource } from "./NovaResourceBase";
-import { Particles, ExitType, FireGroup, GuidanceType } from "../../../novadatainterface/WeaponData";
+import { ParticleConfig, ExitType, FireGroup, GuidanceType } from "../../../novadatainterface/WeaponData";
 
 type BlindSpots = {
     front: boolean,
@@ -68,7 +68,7 @@ class WeapResource extends BaseResource {
     attackParentIfJammed: boolean;
     cicnSmoke: number[] | null;
     decay: number;
-    trailParticles: Particles;
+    trailParticles: ParticleConfig;
     beamLength: number;
     beamWidth: number;
     spinRate: number;
@@ -95,7 +95,7 @@ class WeapResource extends BaseResource {
     fireWhileCloaked: boolean;
     asteroidMiner: boolean;
     ionization: number;
-    hitParticles: Particles;
+    hitParticles: ParticleConfig;
     recoil: number;
     exitTypeN: number;
     exitType: ExitType;

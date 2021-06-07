@@ -16,7 +16,7 @@ import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { GameDataResource } from './game_data_resource';
-import { firstOrderWithFallback, Guidance, zeroOrderGuidance } from './guidance';
+import { firstOrderWithFallback, Guidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { Stat } from './stat';
 import { Target, TargetComponent } from './target_component';

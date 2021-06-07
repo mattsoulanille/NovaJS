@@ -21,6 +21,7 @@ ts_library(
         "resize_event.ts",
         "convex_hull_display_plugin.ts",
         "target_corners_plugin.ts",
+        "particles_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -39,6 +40,7 @@ ts_library(
         "@npm//@types/sat",
         "@npm//rbush",
         "@npm//@types/rbush",
+        "@npm//pixi-particles",
     ]
 )
 

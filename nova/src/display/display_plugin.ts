@@ -5,6 +5,7 @@ import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin";
+import { ParticlesPlugin } from "./particles_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
 import { starfield } from "./starfield_plugin";
@@ -37,5 +38,6 @@ export const Display: Plugin = {
         await world.addPlugin(AnimationGraphicPlugin);
         world.addSystem(CenterShipSystem);
         await world.addPlugin(TargetCornersPlugin);
+        await world.addPlugin(ParticlesPlugin);
     }
 };
