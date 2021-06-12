@@ -11,7 +11,6 @@ import { Resource } from './resource';
 import { System } from './system';
 import { SingletonComponent, World } from './world';
 
-
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
 const BAR_COMPONENT = new Component<{ y: string }>('bar');
 const BAZ_RESOURCE = new Resource<{ z: string[] }>('baz');
@@ -976,6 +975,44 @@ describe('world', () => {
         // Add event starts:
         //   fooSystem adds to foo.
         expect(fooVals).toEqual([100, 110, 120, 130]);
+    });
+
+    it('allows a system to be triggered by multiple events', () => {
+        const FooEvent = new EcsEvent<number>('FooEvent');
+        const BarEvent = new EcsEvent<string>('BarEvent');
+
+        const foos: number[] = [];
+        const bars: string[] = [];
+
+        const FooBarSystem = new System({
+            name: 'FooBarSystem',
+            events: [FooEvent, BarEvent],
+            args: [Optional(FooEvent), Optional(BarEvent), SingletonComponent] as const,
+            step(foo, bar) {
+                if (foo) {
+                    foos.push(foo);
+                }
+                if (bar) {
+                    bars.push(bar);
+                }
+                if (!foo && !bar) {
+                    throw new Error('Neither foo nor bar event was defined but system was still run');
+                }
+            }
+        });
+
+        world.addSystem(FooBarSystem);
+        world.step();
+        world.emit(FooEvent, 123);
+        world.step();
+        world.emit(BarEvent, 'Hello');
+        world.step();
+        world.emit(FooEvent, 456);
+        world.emit(BarEvent, 'Bye');
+        world.step();
+
+        expect(foos).toEqual([123, 456]);
+        expect(bars).toEqual(['Hello', 'Bye']);
     });
 
     it('allows getting the world as an argument', () => {
