@@ -25,11 +25,7 @@ describe('time plugin', () => {
             name: 'ReadClock',
             args: [TimeResource],
             step: (time) => {
-                times.push({
-                    delta_ms: time.delta_ms,
-                    delta_s: time.delta_s,
-                    time: time.time,
-                });
+                times.push({ ...time });
             },
             after: new Set([TimeSystem]),
         });
@@ -43,10 +39,10 @@ describe('time plugin', () => {
         world.step();
 
         expect(times).toEqual([
-            { time: 100, delta_ms: 0, delta_s: 0 },
-            { time: 100, delta_ms: 0, delta_s: 0 },
-            { time: 150, delta_ms: 50, delta_s: 0.05 },
-            { time: 150, delta_ms: 0, delta_s: 0 },
+            { time: 100, delta_ms: 0, delta_s: 0, frame: 1 },
+            { time: 100, delta_ms: 0, delta_s: 0, frame: 2 },
+            { time: 150, delta_ms: 50, delta_s: 0.05, frame: 3 },
+            { time: 150, delta_ms: 0, delta_s: 0, frame: 4 },
         ])
     });
 });

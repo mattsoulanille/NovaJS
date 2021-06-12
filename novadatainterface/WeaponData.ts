@@ -160,7 +160,7 @@ export function getDefaultNotBayWeaponData(): NotBayWeaponData {
 }
 
 
-export interface Particles {
+export interface ParticleConfig {
     count: number;
     velocity: number;
     lifeMin: number;
@@ -168,7 +168,7 @@ export interface Particles {
     color: number;
 }
 
-export function getDefaultParticles(): Particles {
+export function getDefaultParticles(): ParticleConfig {
     return {
         count: 0,
         velocity: 0,
@@ -184,8 +184,8 @@ export interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData 
     submunitions: Array<SubmunitionType>,
     proxRadius: number, // Proximity to something before it explodes
     proxSafety: number // Number of seconds after firing that the weapon won't explode
-    trailParticles: Particles,
-    hitParticles: Particles
+    trailParticles: ParticleConfig,
+    hitParticles: ParticleConfig
 }
 
 // This extends SpaceObjectData since projectiles use sprites
