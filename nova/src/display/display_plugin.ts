@@ -5,6 +5,7 @@ import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin";
+import { ExplosionPlugin } from "./explosion_plugin";
 import { FullscreenPlugin } from "./fullscreen_plugin";
 import { ParticlesPlugin } from "./particles_plugin";
 import { Space } from "./space_resource";
@@ -41,5 +42,6 @@ export const Display: Plugin = {
         await world.addPlugin(TargetCornersPlugin);
         await world.addPlugin(ParticlesPlugin);
         await world.addPlugin(FullscreenPlugin);
+        await world.addPlugin(ExplosionPlugin);
     }
 };

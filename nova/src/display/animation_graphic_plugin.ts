@@ -10,7 +10,6 @@ import { FirstAnimation } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { AnimationGraphic } from "./animation_graphic";
 import { Space } from "./space_resource";
-import * as PIXI from "pixi.js";
 
 
 export const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');

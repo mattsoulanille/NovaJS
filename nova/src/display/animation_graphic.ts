@@ -12,8 +12,8 @@ export class AnimationGraphic {
     // AnimationGraphic is not a Drawable since it doesn't draw a state.
     readonly container = new PIXI.Container();
     protected readonly gameData: GameDataInterface;
-
     readonly sprites = new Map<string, SpriteSheetSprite>();
+    private wrappedProgress = 0;
     private wrappedRotation = 0;
     private animation: Animation | Promise<Animation>;
     readonly buildPromise: Promise<AnimationGraphic>;
@@ -61,6 +61,10 @@ export class AnimationGraphic {
         }
     }
 
+    get rotation() {
+        return this.wrappedRotation;
+    }
+
     set rotation(angle: number) {
         this.wrappedRotation = angle;
         for (const sprite of this.sprites.values()) {
@@ -68,7 +72,16 @@ export class AnimationGraphic {
         }
     }
 
-    get rotation() {
-        return this.wrappedRotation;
+    get progress() {
+        return this.wrappedProgress;
+    }
+
+    set progress(progress: number) {
+        progress = Math.min(1, Math.max(0, progress));
+        for (const sprite of this.sprites.values()) {
+            sprite.rotation = 0;
+            sprite.frame = Math.min(sprite.frames - 1,
+                Math.floor(progress * sprite.frames));
+        }
     }
 }

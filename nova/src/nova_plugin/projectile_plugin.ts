@@ -148,16 +148,25 @@ function fireSubs(sourceMovement: MovementState, entities: EntityMap,
     }
 }
 
+export const ProjectileExpireEvent = new EcsEvent<Entity>('ProjectileExpire');
+
 const ProjectileLifespanSystem = new System({
     name: 'ProjectileLifespanSystem',
     args: [ProjectileFireTimeProvider, TimeResource, MovementStateComponent,
         GameDataResource, Optional(TargetComponent), ProjectileDataComponent,
-        ProjectileComponent, Entities, UUID] as const,
+        ProjectileComponent, Entities, UUID, Emit] as const,
     step(fireTime, { time }, movement, gameData, target, projectileData,
-        projectileType, entities, uuid) {
+        projectileType, entities, uuid, emit) {
         if (time - fireTime > projectileData.shotDuration) {
             fireSubs(movement, entities, projectileData, projectileType,
                 gameData, true /* source shot expired */, target);
+
+            const self = entities.get(uuid);
+            if (!self) {
+                console.warn(`Missing projectile ${uuid} that is expiring`);
+                return;
+            }
+            emit(ProjectileExpireEvent, self);
             entities.delete(uuid);
         }
     },
