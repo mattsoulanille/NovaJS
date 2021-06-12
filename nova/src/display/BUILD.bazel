@@ -23,6 +23,7 @@ ts_library(
         "target_corners_plugin.ts",
         "particles_plugin.ts",
         "fullscreen_plugin.ts",
+        "explosion_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

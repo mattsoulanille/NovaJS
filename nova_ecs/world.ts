@@ -309,7 +309,7 @@ export class World {
         } else if (arg === GetArg) {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
-                this.getArg<T>(arg, entity, uuid)) as Right<ArgData<T>>;
+                this.getArg<T>(arg, entity, uuid, event)) as Right<ArgData<T>>;
         } else if (arg === GetWorld) {
             return right(this as ArgData<T>);
         } else if (arg instanceof EcsEvent) {
@@ -324,7 +324,8 @@ export class World {
         } else if (arg instanceof Modifier) {
             const modifier = arg as UnknownModifier;
             const query = this.queries.get(modifier.query);
-            const modifierQueryResults = query.getResultForEntity(entity, uuid)
+            const modifierQueryResults =
+                query.getResultForEntity(entity, uuid, event);
             if (isLeft(modifierQueryResults)) {
                 return left(undefined);
             }

@@ -43,16 +43,8 @@ const HitParticlesProvider = Provide({
     }
 });
 
-const FirstHitParticles = FirstAvailable([
-    HitParticlesComponent,
-    HitParticlesProvider,
-]);
-
 const TrailEmitterComponent =
     new Component<particles.Emitter>('TrailEmitterComponent');
-
-const HitEmitterComponent =
-    new Component<particles.Emitter>('HitEmitterComponent');
 
 function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
     fps: number, particleConfig: ParticleConfig): particles.Emitter {

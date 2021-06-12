@@ -1,4 +1,5 @@
 import { Animation } from "novadatainterface/Animation";
+import { ExplosionData } from "novadatainterface/ExplosionData";
 import { Component } from "nova_ecs/component";
 import { FirstAvailable } from "nova_ecs/first_available";
 import { Plugin } from "nova_ecs/plugin";
@@ -33,16 +34,27 @@ const ProjectileAnimationComponentProvider = Provide({
     }
 });
 
+export const ExplosionDataComponent
+    = new Component<ExplosionData>('ExplosionData');
+
+const ExplosionAnimationComponentProvider = Provide({
+    provided: AnimationComponent,
+    args: [ExplosionDataComponent],
+    factory: explosion => explosion.animation,
+});
+
 export const FirstAnimation = FirstAvailable([
     AnimationComponent,
     ShipAnimationComponentProvider,
     PlanetAnimationComponentProvider,
     ProjectileAnimationComponentProvider,
+    ExplosionAnimationComponentProvider,
 ]);
 
 export const AnimationPlugin: Plugin = {
     name: 'AnimationPlugin',
     build(world) {
         world.addComponent(AnimationComponent);
+        world.addComponent(ExplosionDataComponent);
     }
 }
