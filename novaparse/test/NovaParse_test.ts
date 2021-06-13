@@ -185,7 +185,8 @@ describe("NovaParse", function() {
                 speed: 17 * WEAP_SPEED_FACTOR,
                 turnRate: 0,
                 shield: 0,
-                armor: 0
+                armor: 0,
+                inertialess: false,
             });
             expect(w132.animation).toEqual({
                 exitPoints: getDefaultExitPoints(),

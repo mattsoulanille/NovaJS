@@ -165,7 +165,6 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         vulnerableTo = [];
     }
 
-
     return {
         ...notBayBase,
         type: "ProjectileWeaponData",
