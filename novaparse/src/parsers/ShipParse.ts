@@ -171,9 +171,10 @@ export async function ShipParse(ship: ShipResource,
         speed: ship.speed, // TODO: Figure out the correct scaling factor for these
         acceleration: ship.acceleration,
         turnRate: ship.turnRate * TurnRateConversionFactor,
+        inertialess: Boolean(ship.flags2N & 0x40),
         mass: ship.mass,
         freeMass,
-        freeCargo: ship.cargoSpace
+        freeCargo: ship.cargoSpace,
     }
 
     return {

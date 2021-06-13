@@ -79,6 +79,7 @@ describe("NovaParse", function() {
         expect(s128.physics.turnRate).toEqual(13 * TurnRateConversionFactor);
         expect(s128.physics.mass).toEqual(5678);
         expect(s128.physics.freeMass).toEqual(4234);
+        expect(s128.physics.inertialess).toEqual(false);
         expect(s128.displayWeight).toEqual(128);
         expect(s128.deathDelay).toEqual(67 / 30);
         expect(s128.largeExplosion).toEqual(true);

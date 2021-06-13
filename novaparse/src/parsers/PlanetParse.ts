@@ -82,6 +82,7 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
             ionization: 0,
             mass: 0,
             turnRate: 0,
+            inertialess: true,
         },
         position: [spob.position[0], spob.position[1]]
     }

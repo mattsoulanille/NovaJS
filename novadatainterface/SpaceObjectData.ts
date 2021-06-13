@@ -16,6 +16,7 @@ export interface SpaceObjectPhysics {
     acceleration: number;
     turnRate: number;
     mass: number;
+    inertialess: boolean;
 };
 
 export function getDefaultSpaceObjectPhysics(): SpaceObjectPhysics {
@@ -31,7 +32,8 @@ export function getDefaultSpaceObjectPhysics(): SpaceObjectPhysics {
         speed: 300,
         acceleration: 300,
         turnRate: 3,
-        mass: 100
+        mass: 100,
+        inertialess: false,
     }
 }
 

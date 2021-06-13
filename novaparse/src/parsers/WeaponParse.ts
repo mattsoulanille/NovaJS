@@ -189,7 +189,8 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
             speed: baseWeapon.shotSpeed,
             turnRate: weap.turnRate * TurnRateConversionFactor,
             shield: 0,
-            armor: weap.durability
+            armor: weap.durability,
+            inertialess: guidance === 'guided',
         }
     }
 }
