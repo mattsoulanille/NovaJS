@@ -158,7 +158,6 @@ export async function ShipParse(ship: ShipResource,
         freeMass += outfit.mass * outfits[outfitID];
     }
 
-
     var physics: ShipPhysics = {
         shield: ship.shield,
         shieldRecharge: ship.shieldRecharge * FPS / 1000, // Recharge per second
@@ -171,9 +170,10 @@ export async function ShipParse(ship: ShipResource,
         speed: ship.speed, // TODO: Figure out the correct scaling factor for these
         acceleration: ship.acceleration,
         turnRate: ship.turnRate * TurnRateConversionFactor,
+        inertialess: Boolean(ship.flags2N & 0x20), // Nova bible is wrong here
         mass: ship.mass,
         freeMass,
-        freeCargo: ship.cargoSpace
+        freeCargo: ship.cargoSpace,
     }
 
     return {

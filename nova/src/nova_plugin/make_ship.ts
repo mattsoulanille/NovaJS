@@ -22,7 +22,8 @@ export function makeShip(shipData: ShipData): Entity {
     }).set(MovementPhysicsComponent, {
         acceleration: shipData.physics.acceleration,
         maxVelocity: shipData.physics.speed,
-        movementType: MovementType.INERTIAL, // TODO: Support more
+        movementType: shipData.physics.inertialess
+            ? MovementType.INERTIALESS : MovementType.INERTIAL,
         turnRate: shipData.physics.turnRate
     }).set(MovementStateComponent, {
         accelerating: 0,

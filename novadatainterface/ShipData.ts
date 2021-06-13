@@ -1,6 +1,4 @@
-import { Animation, getDefaultAnimation } from "./Animation";
-import { BaseData, getDefaultBaseData } from "./BaseData";
-import { SpaceObjectPhysics, SpaceObjectData, getDefaultSpaceObjectPhysics, getDefaultSpaceObjectData } from "./SpaceObjectData";
+import { getDefaultSpaceObjectData, getDefaultSpaceObjectPhysics, SpaceObjectData, SpaceObjectPhysics } from "./SpaceObjectData";
 
 
 export interface ShipPhysics extends SpaceObjectPhysics {

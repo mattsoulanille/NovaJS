@@ -165,7 +165,7 @@ class ShipResource extends BaseResource {
 
         this.energyRecharge = d.getInt16(94);
         this.skillVariation = d.getInt16(96);
-        this.flags2N = d.getInt16(98);
+        this.flags2N = d.getUint16(98);
 
         var getString = function(start: number, length: number): string {
             var s = "";
