@@ -37,6 +37,7 @@ class Starfield {
     precision mediump float;
     uniform vec2 pos;
     uniform sampler2D star;
+    uniform float scale;
 
     float modu(float a, float b) {
         return (b * fract(a / b));
@@ -45,11 +46,11 @@ class Starfield {
         return fract(sin(x*142.1)*1248.1+sin(y*92.3)*3293.2+1.0/tan(l)*12983.32);
     }
     void main() {
-        for ( float l = 0.75; l > 0.25; l -= 0.0625){
+        for ( float l = 0.875; l > 0.25; l -= 0.125){
             //gl_FragColor = vec4(gl_FragCoord.x / 1000.0, 0.0, 0.0, 1.0);
             //gl_FragColor = vec4(pos.x / 1000.0, pos.y / 1000.0, 0.05, 1.0);
-            float posx = gl_FragCoord.x + pos.x*l;
-            float posy = gl_FragCoord.y - pos.y*l;
+            float posx = gl_FragCoord.x / scale + pos.x*l;
+            float posy = gl_FragCoord.y / scale - pos.y*l;
             
             float u = floor(modu(posx, 5.0))+0.5;
             float v = floor(modu(posy, 5.0))+0.5;
@@ -64,7 +65,7 @@ class Starfield {
             float nu = starx*5.0+clamp(u,0.0,5.0);
             float nv = stary*5.0+clamp(v,0.0,5.0);
             float inStar = step(0.0,u)*step(0.0,5.0-u)*step(0.0,v)*step(0.0,5.0-v);
-            inStar = step(0.9985,prng(starcox+0.75,starcoy+0.75,l));
+            inStar = step(0.997,prng(starcox+0.75,starcoy+0.75,l));
             vec2 relPos = vec2(nu/50.0, nv/10.0);
         
             gl_FragColor += texture2D(star,  relPos)*inStar;
@@ -79,6 +80,7 @@ class Starfield {
         this.uniforms = {
             star: this.textures[0],
             pos: new PIXI.Point(0, 0),
+            scale: window.devicePixelRatio,
         };
         this.filter = new PIXI.Filter('', this.shaderCode, this.uniforms);
         this.layers = layers;
