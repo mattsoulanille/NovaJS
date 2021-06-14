@@ -41,31 +41,34 @@ class Starfield {
     float modu(float a, float b) {
         return (b * fract(a / b));
     }
-    float heck(float x, float y) {
-        return fract(sin(x*1742.3231)*1313.0842+cos(y*179.48222)*18321.2);
+    float prng(float x, float y,float l) {
+        return fract(sin(x*142.1)*1248.1+sin(y*92.3)*3293.2+1.0/tan(l)*12983.32);
     }
     void main() {
-
-        //gl_FragColor = vec4(gl_FragCoord.x / 1000.0, 0.0, 0.0, 1.0);
-        //gl_FragColor = vec4(pos.x / 1000.0, pos.y / 1000.0, 0.05, 1.0);
-        float posx = gl_FragCoord.x + pos.x*0.5;
-        float posy = gl_FragCoord.y - pos.y*0.5;
-    
-        float u = floor(modu(posx, 50.0))+0.5;
-        float v = floor(modu(posy, 50.0))+0.5;
+        for ( float l = 0.75; l > 0.25; l -= 0.0625){
+            //gl_FragColor = vec4(gl_FragCoord.x / 1000.0, 0.0, 0.0, 1.0);
+            //gl_FragColor = vec4(pos.x / 1000.0, pos.y / 1000.0, 0.05, 1.0);
+            float posx = gl_FragCoord.x + pos.x*l;
+            float posy = gl_FragCoord.y - pos.y*l;
+            
+            float u = floor(modu(posx, 5.0))+0.5;
+            float v = floor(modu(posy, 5.0))+0.5;
+            
+            float starcox = floor(posx/5.0);
+            float starcoy = floor(posy/5.0);
+            
+            //float u = gl_FragCoord.x + pos.x;
+            //float v = gl_FragCoord.y + pos.y;
+            float starx = floor(prng(starcox,starcoy,l)*10.0);
+            float stary = floor(prng(starcox+0.5,starcoy+0.5,l)*2.0);
+            float nu = starx*5.0+clamp(u,0.0,5.0);
+            float nv = stary*5.0+clamp(v,0.0,5.0);
+            float inStar = step(0.0,u)*step(0.0,5.0-u)*step(0.0,v)*step(0.0,5.0-v);
+            inStar = step(0.9985,prng(starcox+0.75,starcoy+0.75,l));
+            vec2 relPos = vec2(nu/50.0, nv/10.0);
         
-        float starcox = floor(posx/50.0);
-        float starcoy = floor(posy/50.0);
-        
-        //float u = gl_FragCoord.x + pos.x;
-        //float v = gl_FragCoord.y + pos.y;
-        float starx = floor(heck(starcox,starcoy)*10.0);
-        float stary = floor(heck(starcox+0.5,starcoy+0.5)*2.0);
-        float nu = starx*5.0+clamp(u,0.0,5.0);
-        float nv = stary*5.0+clamp(v,0.0,5.0);
-        float inStar = step(0.0,u)*step(0.0,5.0-u)*step(0.0,v)*step(0.0,5.0-v);
-        vec2 relPos = vec2(nu/50.0, nv/10.0);
-        gl_FragColor = texture2D(star,  relPos)*inStar;
+            gl_FragColor += texture2D(star,  relPos)*inStar;
+        }
     }
     `;
     private uniforms: Record<string, any>;
