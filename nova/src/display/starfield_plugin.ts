@@ -1,71 +1,173 @@
-import { Plugin } from "nova_ecs/plugin";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
-import { System } from "nova_ecs/system";
-import * as PIXI from "pixi.js";
-import { GameDataResource } from "../nova_plugin/game_data_resource";
-import { texturesFromFrames } from "./textures_from_frames";
-import { Resource } from "nova_ecs/resource";
-import { PixiAppResource } from "./pixi_app_resource";
 // The system boundary should probably not be defined in position.ts.
 // This is the distance from the center of the system to the boundary.
 // The system width and height are both 2*BOUNDARY
 import { BOUNDARY } from "nova_ecs/datatypes/position";
-import { Space } from "./space_resource";
+import { Vector } from "nova_ecs/datatypes/vector";
+import { Plugin } from "nova_ecs/plugin";
+import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { Resource } from "nova_ecs/resource";
+import { System } from "nova_ecs/system";
+import * as PIXI from "pixi.js";
+import RBush, { BBox } from "rbush";
+import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
+import { PixiAppResource } from "./pixi_app_resource";
+import { ResizeEvent } from "./resize_event";
+import { texturesFromFrames } from "./textures_from_frames";
+import { alea } from 'seedrandom';
 
 const STAR_ID = "nova:700";
 
 interface StarfieldArgs {
     textures: PIXI.Texture[],
-    renderer: PIXI.Renderer | PIXI.AbstractRenderer,
-    layers: number,
     density: number,
     positionFactorRange: [number, number],
+    seed?: string,
+}
+
+interface Star extends BBox {
+    sprite: PIXI.Sprite,
+    position: Vector,
+    factor: number,
 }
 
 class Starfield {
     private textures: PIXI.Texture[];
-    private layers: number;
-    private density: number;
     private positionFactorRange: [number, number];
     container = new PIXI.Container();
-    private layerSprites: PIXI.Sprite[] = [];
-    private placeholderText = new PIXI.Text('This is a starfield');
+    private rbush = new RBush<Star>();
+    private screen = { width: 100, height: 100 };
+    private graphics = new PIXI.Graphics();
+    private fudge: number;
+    private random: () => number;
+    private visibleStars: Star[] = [];
 
-    constructor({ textures, renderer, layers, density, positionFactorRange }: StarfieldArgs) {
+    constructor({ textures, density, positionFactorRange, seed }: StarfieldArgs) {
         this.textures = textures;
-        this.layers = layers;
-        this.density = density;
         this.positionFactorRange = positionFactorRange;
+        this.container.addChild(this.graphics);
+        const count = density * (2 * BOUNDARY) ** 2;
 
-        const starSprites = textures.map(starTexture => new PIXI.Sprite(starTexture));
-
-
-        // Example starfield with none of the cool features
-        // TODO: Issue #102
-        const baseRenderTexture = new PIXI.BaseRenderTexture({ width: 1000, height: 1000 });
-        const renderTexture = new PIXI.RenderTexture(baseRenderTexture);
-        for (let i = 0; i < 10000; i++) {
-            const starSprite = starSprites[Math.floor(Math.random() * starSprites.length)];
-            starSprite.position.x = Math.random() * 1000;
-            starSprite.position.y = Math.random() * 1000;
-            renderer.render(starSprite, { renderTexture, clear: false });
+        this.random = alea(seed ?? 'stars');
+        for (let i = 0; i < count; i++) {
+            this.rbush.insert(this.makeStar());
         }
 
-        const firstLayer = new PIXI.Sprite(renderTexture);
-        this.container.addChild(firstLayer);
-        this.layerSprites = [firstLayer];
+        this.fudge = Math.max(
+            ...this.textures.map(t => Math.max(t.width, t.height))) + 1;
     }
 
-    draw(_playerPosition: { x: number, y: number }) {
-        // TODO
+    private sampleRange(min: number, max: number) {
+        return this.random() * (max - min) + min
+    }
+
+    private makeStar(): Star {
+        const texture = this.textures[
+            Math.floor(this.random() * this.textures.length)];
+        const sprite = new PIXI.Sprite(texture);
+        sprite.visible = false;
+        this.container.addChild(sprite);
+        // TODO: not uniform
+        const factor = this.sampleRange(...this.positionFactorRange);
+
+        const maxDistance = BOUNDARY * (1 - factor);
+
+        const position = new Vector(
+            this.sampleRange(-maxDistance, maxDistance),
+            this.sampleRange(-maxDistance, maxDistance),
+        );
+
+        return {
+            ...this.getBBox(position, factor),
+            position,
+            sprite,
+            factor,
+        }
+    }
+
+    private getBBox(position: Vector, factor: number): BBox {
+        // Sprite position when shipPos === spritePos.
+        // Given: spritePos = pos + shipPos * factor
+        // And:   ship === sprite
+        // Then:  spritePos = pos / (1 - factor)
+        const spritePos = position.scale(1 / (1 - factor));
+
+        // Hitbox size scales depending on factor and screen size.
+        // Start the ship at the star and move to where the star is at the edge.
+        // Then the bbox radius is how far from that star a star with factor 0 would be,
+        // since that's where we're testing the collision from.
+        // Let everything start at the origin.
+        // Then, we can solve for starPos to get distance from a star with factor 0:
+        //     starPos = shipPos * factor
+        //     shipPos - starPos = screenWidth / 2
+        //     shipPos * (1 - factor) = screenWidth / 2
+        //     shipPos = screenWidth / (2 * (1 - factor))
+        //     starPos = factor * screenWidth / (2 * (1 - factor))
+
+        const hitboxX = factor * this.screen.width / (2 * (1 - factor));
+        const hitboxY = factor * this.screen.height / (2 * (1 - factor));
+        return {
+            minX: spritePos.x - hitboxX,
+            minY: spritePos.y - hitboxY,
+            maxX: spritePos.x + hitboxX,
+            maxY: spritePos.y + hitboxY,
+        }
+    }
+
+    draw(shipPos: Vector) {
+        const { x, y } = shipPos;
+        const screenBBox: BBox = {
+            minX: x - this.screen.width / 2,
+            minY: y - this.screen.height / 2,
+            maxX: x + this.screen.width / 2,
+            maxY: y + this.screen.height / 2,
+        }
+
+        // Hide stars from the last frame
+        for (const star of this.visibleStars) {
+            star.sprite.visible = false;
+        }
+        this.visibleStars = this.rbush.search(screenBBox);
+
+        for (const star of this.visibleStars) {
+            const spritePos = star.position
+                .add(shipPos.scale(star.factor))
+                .subtract(shipPos);
+
+            star.sprite.position.x = spritePos.x;
+            star.sprite.position.y = spritePos.y;
+            star.sprite.visible = true;
+        }
+    }
+
+    resize(width: number, height: number) {
+        this.screen.width = width + this.fudge * 2;
+        this.screen.height = height + this.fudge * 2;
+        this.container.position.x = this.screen.width / 2 - this.fudge;
+        this.container.position.y = this.screen.height / 2 - this.fudge;
+
+        const stars = this.rbush.all();
+        this.rbush.clear();
+        for (const star of stars) {
+            const bbox = this.getBBox(star.position, star.factor);
+            star.minX = bbox.minX;
+            star.minY = bbox.minY;
+            star.maxX = bbox.maxX;
+            star.maxY = bbox.maxY;
+            star.sprite.visible = false;
+        }
+        this.rbush.load(stars);
+
+        // this.graphics.clear();
+        // this.graphics.lineStyle(1, 0xff0000, 0.5);
+        // this.graphics.drawRect(-this.screen.width / 2, -this.screen.height / 2, this.screen.width, this.screen.height);
     }
 }
 
 const StarfieldResource = new Resource<Starfield>('Starfield');
 
-export function starfield({ layers = 8, density = 0.00002,
-    positionFactorRange = [0.2, 0.8] as [number, number] } = {}): Plugin {
+export function starfield({ density = 0.00002,
+    positionFactorRange = [0, 0.5] as [number, number] } = {}): Plugin {
 
     const StarfieldSystem = new System({
         name: 'StarfieldSystem',
@@ -76,13 +178,18 @@ export function starfield({ layers = 8, density = 0.00002,
         }
     });
 
+    const StarfieldResize = new System({
+        name: 'StarfieldResize',
+        events: [ResizeEvent],
+        args: [StarfieldResource, ResizeEvent] as const,
+        step(starfield, resize) {
+            starfield.resize(...resize);
+        }
+    });
+
     return {
         name: 'Starfield',
         async build(world) {
-            const stage = world.resources.get(Space);
-            if (!stage) {
-                throw new Error('Expected Stage resource to exist');
-            }
             const gameData = world.resources.get(GameDataResource);
             if (!gameData) {
                 throw new Error('Expected GameData resource to exist');
@@ -92,20 +199,19 @@ export function starfield({ layers = 8, density = 0.00002,
                 throw new Error('Expected PixiApp resource to exist');
             }
 
-
             const { frames } = await gameData.data.SpriteSheetFrames.get(STAR_ID);
             const textures = await texturesFromFrames(frames);
-            const renderer = app.renderer;
             const starfield = new Starfield({
                 textures,
-                renderer,
-                layers,
                 density,
                 positionFactorRange,
             });
 
-            stage.addChild(starfield.container);
+            //starfield.resize(app.screen.width, app.screen.height);
+            starfield.resize(window.innerWidth, window.innerHeight);
+            app.stage.addChild(starfield.container);
             world.resources.set(StarfieldResource, starfield);
+            world.addSystem(StarfieldResize);
             world.addSystem(StarfieldSystem);
         }
     }
