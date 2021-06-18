@@ -43,6 +43,8 @@ ts_library(
         "@npm//rbush",
         "@npm//@types/rbush",
         "@npm//pixi-particles",
+        "@npm//seedrandom",
+        "@npm//@types/seedrandom",
     ]
 )
 
