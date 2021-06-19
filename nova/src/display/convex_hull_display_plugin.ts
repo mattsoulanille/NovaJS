@@ -6,7 +6,7 @@ import { Provide } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import * as SAT from "sat";
-import { HullProvider } from "../nova_plugin/collisions_plugin";
+import { FirstHull, UpdateHullSystem } from "../nova_plugin/collisions_plugin";
 import { Space } from "./space_resource";
 
 
@@ -59,7 +59,8 @@ const COLORS = [
 
 const ConvexHullGraphicsSystem = new System({
     name: 'ConvexHullGraphics',
-    args: [HullProvider, GraphicsProvider] as const,
+    args: [FirstHull, GraphicsProvider] as const,
+    after: [UpdateHullSystem],
     step(hull, graphics) {
         graphics.clear();
 

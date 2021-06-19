@@ -24,6 +24,7 @@ ts_library(
         "particles_plugin.ts",
         "fullscreen_plugin.ts",
         "explosion_plugin.ts",
+        "beam_display_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
