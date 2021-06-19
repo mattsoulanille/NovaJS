@@ -165,7 +165,7 @@ const WeaponsSystem = new System({
     }
 });
 
-function sampleInaccuracy(accuracy: number) {
+export function sampleInaccuracy(accuracy: number) {
     return 2 * (Math.random() - 0.5) * accuracy * (2 * Math.PI / 360);
 }
 

@@ -18,6 +18,7 @@ import { FireTimeProvider } from './fire_time';
 import { zeroOrderGuidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { TargetComponent } from './target_component';
+import { sampleInaccuracy } from './weapon_plugin';
 
 
 export interface ExitPointData {
@@ -128,6 +129,7 @@ export const BeamSystem = new System({
                 movement.rotation = zeroOrderGuidance(movement.position, otherPos);
             }
         }
+        movement.rotation = movement.rotation.add(sampleInaccuracy(beamData.accuracy));
     }
 });
 
