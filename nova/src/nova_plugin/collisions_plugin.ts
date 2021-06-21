@@ -3,8 +3,9 @@ import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { FirstAvailable } from "nova_ecs/first_available";
+import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
@@ -19,17 +20,20 @@ import { GameDataResource } from "./game_data_resource";
 import { ShipComponent } from "./ship_plugin";
 
 
-type Hull = {
-    convexPolys: SAT.Polygon[],
-    bbox: BBox, // Axis-aligned bounding box
-};
+export class Hull {
+    readonly bbox: BBox;
+    constructor(readonly convexPolys: SAT.Polygon[]) {
+        this.bbox = getBoundingBox(convexPolys);
+    }
+}
+
 export const HullComponent = new Component<{
     hulls: Hull[],
     activeHull?: Hull,
     computedBbox?: BBox,
 }>('HullComponent');
 
-export const HullProvider = ProvideAsync({
+const HullProvider = ProvideAsync({
     provided: HullComponent,
     args: [FirstAnimation, GameDataResource] as const,
     async factory(animation, gameData) {
@@ -39,14 +43,13 @@ export const HullProvider = ProvideAsync({
         const hulls = spriteSheet.hulls.map(hull =>
             hull.map(convexHull => new SAT.Polygon(new SAT.Vector(),
                 convexHull.map(([x, y]) => new SAT.Vector(x, -y)))))
-            .map(convexPolys => ({
-                convexPolys,
-                bbox: getBoundingBox(convexPolys),
-            }));
+            .map(convexPolys => new Hull(convexPolys));
 
         return { hulls };
     }
 });
+
+export const FirstHull = FirstAvailable([HullComponent, HullProvider]);
 
 interface RBushEntry extends BBox {
     uuid: string,
@@ -56,7 +59,7 @@ interface RBushEntry extends BBox {
 
 export const RBushResource = new Resource<RBush<RBushEntry>>("RBushResource");
 
-function getBoundingBox(polys: SAT.Polygon[]): BBox {
+export function getBoundingBox(polys: SAT.Polygon[]): BBox {
     return polys.map(
         p => (p as unknown as { getAABBAsBox(): SAT.Box }).getAABBAsBox())
         .map(box => ({
@@ -123,48 +126,69 @@ function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
 }
 
 function rotateAabb(bbox: BBox, angle: number | Angle): BBox {
-    const center = new Vector(bbox.maxX + bbox.minX,
-        bbox.maxY + bbox.minY).scale(0.5);
+    //const center = new Vector(bbox.maxX + bbox.minX,
+    //bbox.maxY + bbox.minY).scale(0.5);
 
-    const a = new Vector(bbox.minX, bbox.minY).subtract(center).rotate(angle);
-    const b = new Vector(bbox.minX, bbox.maxY).subtract(center).rotate(angle);
+    const points = [
+        new Vector(bbox.minX, bbox.minY).rotate(angle),
+        new Vector(bbox.minX, bbox.maxY).rotate(angle),
+        new Vector(bbox.maxX, bbox.minY).rotate(angle),
+        new Vector(bbox.maxX, bbox.maxY).rotate(angle),
+    ];
 
-    const maxX = Math.max(Math.abs(a.x), Math.abs(b.x));
-    const maxY = Math.max(Math.abs(a.y), Math.abs(b.y));
+    const x = points.map(v => v.x);
+    const y = points.map(v => v.y);
 
     return {
-        maxX: center.x + maxX,
-        maxY: center.y + maxY,
-        minX: center.x - maxX,
-        minY: center.y - maxY,
+        maxX: Math.max(...x),
+        maxY: Math.max(...y),
+        minX: Math.min(...x),
+        minY: Math.min(...y),
     };
 }
 
-const CollisionSystem = new System({
+export const UpdateHullSystem = new System({
+    name: "ActiveHullSystem",
+    args: [MovementStateComponent, FirstHull, Optional(FirstAnimation)] as const,
+    step(movement, hull, animation) {
+        let frame = 0;
+        let angle: number;
+        if (animation) {
+            ({ frame, angle } = getFrameFromMovement(animation, movement));
+        } else {
+            angle = movement.rotation.angle;
+        }
+        hull.activeHull = hull.hulls[frame];
+        for (const convexPoly of hull.activeHull.convexPolys) {
+            convexPoly.setAngle(angle);
+            convexPoly.pos = new SAT.Vector(
+                movement.position.x, movement.position.y);
+        }
+    },
+    after: [MovementSystem]
+});
+
+export const CollisionSystem = new System({
     name: "CollisionSystem",
-    args: [RBushResource, new Query([HullProvider, MovementStateComponent,
-        FirstAnimation, UUID, CollisionInteractionFirst] as const),
+    after: [UpdateHullSystem],
+    args: [RBushResource, new Query([FirstHull, MovementStateComponent,
+        UUID, CollisionInteractionFirst] as const),
         Emit, SingletonComponent] as const,
     step(rbush, colliders, emit) {
         rbush.clear();
 
         const entries: RBushEntry[] =
-            colliders.map(([hull, movement, animation, uuid, interaction]) => {
-                const { frame, angle } = getFrameFromMovement(animation, movement);
-                const activeHull = hull.hulls[frame];
-                for (const convexPoly of activeHull.convexPolys) {
-                    convexPoly.setAngle(angle);
-                    convexPoly.pos = new SAT.Vector(
-                        movement.position.x, movement.position.y);
+            colliders.map(([hull, movement, uuid, interaction]) => {
+                if (!hull.activeHull) {
+                    hull.activeHull = hull.hulls[0];
                 }
-
-                const entry = rotateAabb(translateAabb(activeHull.bbox,
-                    movement.position), angle) as RBushEntry;
+                const entry = translateAabb(rotateAabb(hull.activeHull.bbox,
+                    hull.activeHull.convexPolys[0].angle), movement.position) as RBushEntry;
                 entry.uuid = uuid;
                 entry.interaction = interaction;
-                entry.hull = activeHull;
+                entry.hull = hull.activeHull;
 
-                hull.activeHull = activeHull;
+                hull.activeHull = hull.activeHull;
                 hull.computedBbox = entry;
                 return entry;
             });
@@ -207,6 +231,7 @@ export const CollisionsPlugin: Plugin = {
     build(world) {
         world.addComponent(HullComponent);
         world.resources.set(RBushResource, new RBush());
+        world.addSystem(UpdateHullSystem);
         world.addSystem(CollisionSystem);
         //world.addSystem(LogCollisionSystem);
     }

@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
-import { FireGroup, ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
+import { BeamWeaponData, ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
 import { Emit, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
@@ -17,6 +17,7 @@ import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
 import { mod } from '../util/mod';
+import { ExitPointData, makeBeam } from './beam_plugin';
 import { applyExitPoint } from './exit_point';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback } from './guidance';
@@ -84,6 +85,22 @@ function checkReloaded(weapon: WeaponData, localState: WeaponLocalState,
     return true;
 }
 
+function getExitPointData(sourceAnimation: Animation,
+    weapon: WeaponData, localState: WeaponLocalState): ExitPointData {
+    let position: [number, number, number] = [0, 0, 0];
+
+    if (weapon.exitType !== "center") {
+        const positions = sourceAnimation.exitPoints[weapon.exitType];
+        position = positions[localState?.exitIndex ?? 0];
+    }
+
+    return {
+        position,
+        downCompress: sourceAnimation.exitPoints.downCompress,
+        upCompress: sourceAnimation.exitPoints.upCompress,
+    };
+}
+
 function getNextExitpoint(sourceMovement: MovementState, sourceAnimation?: Animation,
     weapon?: WeaponData, localState?: WeaponLocalState) {
     let exitPoint = sourceMovement.position;
@@ -140,14 +157,15 @@ const WeaponsSystem = new System({
 
             switch (weapon.type) {
                 case 'ProjectileWeaponData':
-                    stepProjectileWeapon(stepWeaponArgs as StepWeaponArgs<ProjectileWeaponData>);
+                case 'BeamWeaponData':
+                    stepWeapon(stepWeaponArgs as StepWeaponArgs<ProjectileWeaponData>);
                     break;
             }
         }
     }
 });
 
-function sampleInaccuracy(accuracy: number) {
+export function sampleInaccuracy(accuracy: number) {
     return 2 * (Math.random() - 0.5) * accuracy * (2 * Math.PI / 360);
 }
 
@@ -177,8 +195,8 @@ type StepWeaponArgs<W extends WeaponData> = {
     runQuery: RunQueryFunction,
 }
 
-function stepProjectileWeapon({ weapon, state, sourceAnimation, movementState,
-    uuid, target, entities, localState, time }: StepWeaponArgs<ProjectileWeaponData>) {
+function stepWeapon({ weapon, state, sourceAnimation, movementState,
+    uuid, target, entities, localState, time }: StepWeaponArgs<ProjectileWeaponData | BeamWeaponData>) {
     const fireCount = weapon.fireSimultaneously ? state.count : 1;
 
     if (!state.firing) {
@@ -234,21 +252,43 @@ function stepProjectileWeapon({ weapon, state, sourceAnimation, movementState,
                 break;
             case 'pointDefense':
                 break;
+            case 'beam':
+                break;
+            case 'beamTurret':
+                if (!target?.target) {
+                    return;
+                }
+                break;
         }
 
-        if (weapon.guidance === 'turret') {
+        if (weapon.type === 'ProjectileWeaponData') {
+            const projectile = makeProjectile({
+                projectileData: weapon,
+                position: exitPoint,
+                rotation,
+                sourceVelocity: movementState.velocity,
+                source: uuid,
+                target: target?.target
+            });
+            entities.set(v4(), projectile);
+        } else {
+            let exitPointData: ExitPointData | undefined;
+            if (sourceAnimation) {
+                exitPointData = getExitPointData(sourceAnimation, weapon, localState);
+            }
 
+            const beam = makeBeam({
+                beamData: weapon,
+                position: exitPoint,
+                rotation,
+                source: uuid,
+                parent: uuid,// TODO: Different for subs
+                exitPointData,
+                target: target?.target,
+            });
+            entities.set(v4(), beam);
         }
 
-        const projectile = makeProjectile({
-            projectileData: weapon,
-            position: exitPoint,
-            rotation,
-            sourceVelocity: movementState.velocity,
-            source: uuid,
-            target: target?.target
-        });
-        entities.set(v4(), projectile);
         if (weapon.burstCount) {
             localState.burstCount++;
         }

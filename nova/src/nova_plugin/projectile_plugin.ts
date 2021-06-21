@@ -12,10 +12,10 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementPhysicsComponent, MovementState, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
-import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { FireTimeProvider } from './fire_time';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback, Guidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
@@ -91,15 +91,6 @@ export function makeProjectile({
     return projectile.build();
 }
 
-const ProjectileFireTime = new Component<number>('ProjectileFireTime');
-const ProjectileFireTimeProvider = Provide({
-    provided: ProjectileFireTime,
-    args: [TimeResource] as const,
-    factory({ time }) {
-        return time;
-    }
-});
-
 function* getEvenlySpacedAngles(angle: number) {
     let current = new Angle(0);
     yield current;
@@ -152,7 +143,7 @@ export const ProjectileExpireEvent = new EcsEvent<Entity>('ProjectileExpire');
 
 const ProjectileLifespanSystem = new System({
     name: 'ProjectileLifespanSystem',
-    args: [ProjectileFireTimeProvider, TimeResource, MovementStateComponent,
+    args: [FireTimeProvider, TimeResource, MovementStateComponent,
         GameDataResource, Optional(TargetComponent), ProjectileDataComponent,
         ProjectileComponent, Entities, UUID, Emit] as const,
     step(fireTime, { time }, movement, gameData, target, projectileData,
@@ -192,25 +183,6 @@ const ProjectileGuidanceSystem = new System({
     }
 });
 
-function applyDamage(projectileData: ProjectileWeaponData, armor: Stat,
-    shield?: Stat, ionization?: Stat) {
-
-    if (projectileData.damage.ionization !== 0 && ionization) {
-        ionization.current += projectileData.damage.ionization;
-    }
-
-    if (shield) {
-        const minShield = -shield.max * 0.05;
-        shield.current = Math.max(minShield,
-            shield.current - projectileData.damage.shield);
-        if (shield.current > 0) {
-            return;
-        }
-    }
-
-    armor.current = Math.max(0, armor.current - projectileData.damage.armor)
-}
-
 export const ProjectileCollisionEvent
     = new EcsEvent<Entity>('ProjectileCollision');
 
@@ -233,7 +205,7 @@ const ProjectileCollisionSystem = new System({
         const otherIonization = other.components.get(IonizationComponent);
 
         if (otherArmor) {
-            applyDamage(projectileData, otherArmor, otherShield, otherIonization);
+            applyDamage(projectileData.damage, otherArmor, otherShield, otherIonization);
         }
         const self = entities.get(uuid);
         if (!self) {
