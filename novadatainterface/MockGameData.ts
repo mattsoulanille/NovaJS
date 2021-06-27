@@ -8,6 +8,7 @@ import { getDefaultOutfitData } from "./OutiftData";
 import { getDefaultPictData } from "./PictData";
 import { getDefaultPlanetData } from "./PlanetData";
 import { getDefaultShipData } from "./ShipData";
+import { getDefaultSoundFile } from "./SoundFile";
 import { getDefaultSpriteSheetData, getDefaultSpriteSheetFrames } from "./SpriteSheetData";
 import { getDefaultStatusBarData } from "./StatusBarData";
 import { getDefaultSystemData } from "./SystemData";
@@ -62,6 +63,7 @@ export class MockGameData implements GameDataInterface {
         System: new MockGettable(getDefaultSystemData()),
         TargetCorners: new MockGettable(getDefaultTargetCornersData()),
         Weapon: new MockGettable(getDefaultProjectileWeaponData()),
+        SoundFile: new MockGettable(getDefaultSoundFile()),
     };
     get ids(): Promise<NovaIDs> {
         const ids: NovaIDs = {} as NovaIDs;

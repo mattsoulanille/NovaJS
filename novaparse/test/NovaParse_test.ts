@@ -317,4 +317,9 @@ describe("NovaParse", function() {
         await expectAsync(data[NovaDataType.Outfit].get("nova:128")).toBeRejected();
         await expectAsync(data[NovaDataType.Planet].get("nova:128")).toBeRejected();
     });
+
+    it('Parses sound', async () => {
+        const s300 = await np.data.SoundFile.get('nova:300');
+        expect(s300.byteLength).toBeGreaterThan(0);
+    });
 });

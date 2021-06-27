@@ -11,6 +11,7 @@ import { PictData } from 'novadatainterface/PictData';
 import { PictImageData } from 'novadatainterface/PictImage';
 import { PlanetData } from 'novadatainterface/PlanetData';
 import { ShipData } from 'novadatainterface/ShipData';
+import { SoundFile } from 'novadatainterface/SoundFile';
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from 'novadatainterface/SpriteSheetData';
 import { StatusBarData } from 'novadatainterface/StatusBarData';
 import { SystemData } from 'novadatainterface/SystemData';
@@ -59,7 +60,8 @@ export class GameData implements GameDataInterface {
             SpriteSheetImage: this.addPictGettable<SpriteSheetImageData>(NovaDataType.SpriteSheetImage),
             SpriteSheetFrames: this.addGettable<SpriteSheetFramesData>(NovaDataType.SpriteSheetFrames),
             StatusBar: this.addGettable<StatusBarData>(NovaDataType.StatusBar),
-            Explosion: this.addGettable<ExplosionData>(NovaDataType.Explosion)
+            Explosion: this.addGettable<ExplosionData>(NovaDataType.Explosion),
+            SoundFile: this.addSoundFileGettable(),
         };
 
         this.ids = this.getIds();
@@ -115,6 +117,14 @@ export class GameData implements GameDataInterface {
         var dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string): Promise<T> => {
             return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png")).buffer;
+        });
+    }
+
+    private addSoundFileGettable() {
+        var dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
+        return new Gettable<SoundFile>(async (id: string) => {
+            return await (await fetch(urlJoin(dataPrefix, id))).arrayBuffer();
+            //return (await this.getUrl(urlJoin(dataPrefix, id)));
         });
     }
 

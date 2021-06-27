@@ -1,8 +1,6 @@
-
 import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "./ResourceHolderBase";
 import { Resource } from "resourceforkjs";
-
 
 
 class Reader {
@@ -293,10 +291,9 @@ export class SndResource extends BaseResource {
 
         return { /*note: sample.baseFreq,*/
             rate: sample.rate,
-            dat: data,
-
+            data,
             mp3Rate: mp3rate,
-            mp3Data: [...new SampleRateConvertAndScale(sample.rate / mp3rate,32768).convert(data)]
+            mp3Data: [...new SampleRateConvertAndScale(sample.rate / mp3rate, 32768).convert(data)]
         };
     }
 }

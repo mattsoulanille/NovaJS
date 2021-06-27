@@ -1,4 +1,4 @@
-import { readResourceFork } from "resourceforkjs"; // TODO: Add a declaration file
+import { readResourceFork } from "resourceforkjs";
 import { NovaResources, NovaResourceType } from "./resource_parsers/ResourceHolderBase";
 import { BoomResource } from "./resource_parsers/BoomResource";
 import { DescResource } from "./resource_parsers/DescResource";
@@ -12,21 +12,19 @@ import { SpinResource } from "./resource_parsers/SpinResource";
 import { SpobResource } from "./resource_parsers/SpobResource";
 import { SystResource } from "./resource_parsers/SystResource";
 import { WeapResource } from "./resource_parsers/WeapResource";
-
-
+import { SndResource } from "./resource_parsers/SndResource";
+import { $enum } from "ts-enum-util";
 
 
 // Reads a single plugin or nova file
 // Puts results in localIDSpace.
 async function readNovaFile(filePath: string, localIDSpace: NovaResources) {
-    var rf = await read(filePath);
+    const rf = await read(filePath);
 
-    //console.log(localIDSpace);
+    for (const resourceType of $enum(NovaResourceType).values()) {
+        const parser = getParser(<NovaResourceType>resourceType);
 
-    for (let resourceType in NovaResourceType) {
-        var parser = getParser(<NovaResourceType>resourceType);
-
-        for (let id in rf[resourceType]) {
+        for (const id in rf[resourceType]) {
             localIDSpace[resourceType][id] = new parser(rf[resourceType][id], localIDSpace);
         }
     }
@@ -67,7 +65,7 @@ parserMap[NovaResourceType.rlëD] = RledResource;
 //parserMap[NovaResourceType.röid] = ;
 parserMap[NovaResourceType.shän] = ShanResource;
 parserMap[NovaResourceType.shïp] = ShipResource;
-//parserMap[NovaResourceType.snd] = ;
+parserMap[NovaResourceType.snd] = SndResource;
 parserMap[NovaResourceType.spïn] = SpinResource;
 parserMap[NovaResourceType.spöb] = SpobResource;
 //parserMap[NovaResourceType.STR] = ;

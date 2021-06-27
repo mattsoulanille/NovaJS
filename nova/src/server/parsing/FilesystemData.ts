@@ -12,6 +12,7 @@ import { PictData } from "novadatainterface/PictData";
 import { PictImageData } from "novadatainterface/PictImage";
 import { PlanetData } from "novadatainterface/PlanetData";
 import { ShipData } from "novadatainterface/ShipData";
+import { SoundFile } from "novadatainterface/SoundFile";
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "novadatainterface/SpriteSheetData";
 import { StatusBarData } from "novadatainterface/StatusBarData";
 import { SystemData } from "novadatainterface/SystemData";
@@ -40,15 +41,13 @@ const Paths = {
     SpriteSheetImage: { path: "SpriteSheetImage", extension: "png" } as PathInfo,
     SpriteSheetFrames: { path: "SpriteSheetFrames", extension: "json" } as PathInfo,
     StatusBar: { path: "StatusBar", extension: "json" } as PathInfo,
-    Explosion: { path: "Explosion", extension: "json" } as PathInfo
+    Explosion: { path: "Explosion", extension: "json" } as PathInfo,
+    SoundFile: { path: "SoundFile", extension: "mp3" } as PathInfo,
 };
-
-
 
 class FilesystemData implements GameDataInterface {
     public ids: Promise<NovaIDs>;
     public data: NovaDataInterface;
-
 
     constructor(private rootPath: string) {
         this.data = {
@@ -66,7 +65,8 @@ class FilesystemData implements GameDataInterface {
             SpriteSheetImage: this.getFunction<SpriteSheetImageData>(Paths.SpriteSheetImage),
             SpriteSheetFrames: this.getFunction<SpriteSheetFramesData>(Paths.SpriteSheetFrames),
             StatusBar: this.getFunction<StatusBarData>(Paths.StatusBar),
-            Explosion: this.getFunction<ExplosionData>(Paths.Explosion)
+            Explosion: this.getFunction<ExplosionData>(Paths.Explosion),
+            SoundFile: this.getFunction<SoundFile>(Paths.SoundFile),
         }
         this.ids = this.buildIDs();
     }
@@ -113,9 +113,9 @@ class FilesystemData implements GameDataInterface {
             SpriteSheetFrames: await this.buildIDsForPath(Paths.SpriteSheetFrames),
             StatusBar: await this.buildIDsForPath(Paths.StatusBar),
             Explosion: await this.buildIDsForPath(Paths.Explosion),
+            SoundFile: await this.buildIDsForPath(Paths.SoundFile),
         }
     }
-
 
     buildIDsForPath(p: PathInfo): Promise<string[]> {
         return new Promise((fulfill, reject) => {

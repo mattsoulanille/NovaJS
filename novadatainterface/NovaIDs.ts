@@ -20,6 +20,7 @@ export function getDefaultNovaIDs(): NovaIDs {
         StatusBar: [],
         System: [],
         TargetCorners: [],
-        Weapon: []
+        Weapon: [],
+        SoundFile: [],
     }
 }
