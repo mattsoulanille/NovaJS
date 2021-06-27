@@ -29,7 +29,7 @@
         "@types/stats.js": "^0.17.0",
         "@types/supports-color": "^8.1.0",
         "@types/url-join": "^4.0.0",
-        "@types/ws": "^7.4.4",
+        "@types/ws": "^7.4.5",
         "argparse": "^2.0.1",
         "comlink": "^4.3.1",
         "immer": "^9.0.2",
@@ -80,6 +80,6 @@
         "supports-color": "^9.0.1",
         "ts-enum-util": "^4.0.2",
         "uuid": "^8.3.2",
-        "ws": "^7.4.6"
+        "ws": "^7.5.0"
     }
 }
