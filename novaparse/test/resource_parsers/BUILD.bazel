@@ -8,6 +8,7 @@ ts_library(
     srcs = [
         "PNGCompare.ts",
         "DefaultIDSpace.ts",
+        "expected_sounds.ts",
     ],
     module_name = "novaparse/test/resource_parsers",
     deps = [
@@ -36,6 +37,7 @@ ts_library(
         "SpobResource_test.ts",
         "SystResource_test.ts",
         "WeapResource_test.ts",
+        "SndResource_test.ts",
     ],
     deps = [
         "//novaparse/src/resource_parsers",
