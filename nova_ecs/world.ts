@@ -4,7 +4,7 @@ import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
-import { DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
+import { AddEvent, DeleteEvent, EcsEvent, SetEvent, StepEvent, UnknownEvent } from "./events";
 import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
 import { ProvideAsyncPlugin } from "./provider";
@@ -97,6 +97,10 @@ export class World {
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
             this.emitWrapped(DeleteEvent, undefined, [...deleted]);
+        });
+
+        this.state.entities.events.set.subscribe(addEntity => {
+            this.emitWrapped(AddEvent, undefined, [addEntity]);
         });
     }
 

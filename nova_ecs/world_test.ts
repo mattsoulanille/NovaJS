@@ -2,8 +2,8 @@ import 'jasmine';
 import { v4 } from 'uuid';
 import { Emit, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types';
 import { Component } from './component';
-import { EntityBuilder } from './entity';
-import { DeleteEvent, EcsEvent } from './events';
+import { Entity, EntityBuilder } from './entity';
+import { AddEvent, DeleteEvent, EcsEvent } from './events';
 import { Optional } from './optional';
 import { Plugin } from './plugin';
 import { Query } from './query';
@@ -858,6 +858,47 @@ describe('world', () => {
 
         expect(barDeleted).toEqual(new Set(['has foo']));
         expect(fooDeleted).toEqual(new Set([123]));
+    });
+
+    it('runs an add system when an entity is added', () => {
+        let resultUuid: string | undefined;
+        let resultEntity: Entity | undefined;
+        const AddSystem = new System({
+            name: 'AddSystem',
+            events: [AddEvent],
+            args: [UUID, GetEntity, AddEvent] as const,
+            step(uuid, entity) {
+                resultUuid = uuid;
+                resultEntity = entity;
+            }
+        });
+
+        world.addSystem(AddSystem);
+
+        const entity = new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 });
+
+        world.step();
+        expect(resultUuid).toBeUndefined();
+        expect(resultEntity).toBeUndefined();
+
+        const uuid = "some uuid";
+
+        world.entities.set(uuid, entity);
+        expect(resultUuid).toBeUndefined();
+        expect(resultEntity).toBeUndefined();
+
+        world.step();
+        expect(resultUuid).toBe(uuid);
+        expect(resultEntity).toBe(entity);
+
+        const entity2 = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'asdf' });
+
+        world.entities.set(uuid, entity2);
+        world.step();
+        expect(resultUuid).toBe(uuid);
+        expect(resultEntity).toBe(entity2);
     });
 
     it('runs the correct system if an entity\'s components are changed', () => {
