@@ -182,8 +182,8 @@ export function starfield({ density = 0.00002,
         name: 'StarfieldResize',
         events: [ResizeEvent],
         args: [StarfieldResource, ResizeEvent] as const,
-        step(starfield, resize) {
-            starfield.resize(...resize);
+        step(starfield, { x, y }) {
+            starfield.resize(x, y);
         }
     });
 

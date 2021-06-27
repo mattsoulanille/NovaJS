@@ -1,3 +1,3 @@
 import { EcsEvent } from 'nova_ecs/events';
 
-export const ResizeEvent = new EcsEvent<readonly [number, number]>('Resize');
+export const ResizeEvent = new EcsEvent<{ x: number, y: number }>('Resize');

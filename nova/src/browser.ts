@@ -39,7 +39,7 @@ const world = new World('test world');
 
 function resize() {
     app.renderer.resize(window.innerWidth, window.innerHeight);
-    world.emit(ResizeEvent, [window.innerWidth, window.innerHeight] as const);
+    world.emit(ResizeEvent, { x: window.innerWidth, y: window.innerHeight });
 }
 window.onresize = resize;
 

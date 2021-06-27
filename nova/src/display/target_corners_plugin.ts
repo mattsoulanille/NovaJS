@@ -16,7 +16,7 @@ import { Space } from "./space_resource";
 const NUM_CORNERS = 4;
 const TIME_TO_TARGET = 100; // milliseconds
 
-class TargetCorners {
+export class TargetCorners {
     private targetTime = 0;
     targetUuid?: string;
     container = new PIXI.Container();
@@ -25,6 +25,7 @@ class TargetCorners {
     built: Promise<void>;
 
     constructor(gameData: GameData, id = 'targetCorners') {
+        this.visible = false;
         this.container.zIndex = 1000;
         this.built = this.build(gameData, id);
 
