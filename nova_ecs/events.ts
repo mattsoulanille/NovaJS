@@ -16,7 +16,6 @@ export class EcsEvent<Data, DataSerialized = Data> {
 
 export const StepEvent = new EcsEvent<undefined>('step');
 export const DeleteEvent = new EcsEvent<undefined>('delete');
-export const SetEvent = new EcsEvent<undefined>('set');
 export const AddEvent = new EcsEvent<undefined>('add');
 
 export type EventData<E> = E extends EcsEvent<infer Data, any> ? Data : never;
