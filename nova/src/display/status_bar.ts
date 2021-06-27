@@ -13,7 +13,6 @@ import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { Renderer } from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ArmorComponent, ShieldComponent } from "../nova_plugin/health_plugin";
@@ -306,8 +305,8 @@ const StatusBarResize = new System({
     name: 'StatusBarResize',
     events: [ResizeEvent],
     args: [StatusBarComponent, ResizeEvent] as const,
-    step({ container }, [width]) {
-        container.position.x = width - container.width + 1;
+    step({ container }, { x }) {
+        container.position.x = x - container.width + 1;
         container.position.y = 0;
     }
 });

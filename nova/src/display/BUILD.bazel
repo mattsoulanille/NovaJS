@@ -1,9 +1,8 @@
-package(default_visibility = ["//visibility:public"])
-
 load("//:defaults.bzl", "ts_library")
 load("//:esbuild.bzl", "esbuild")
 load("//webtesting:web_test.bzl", "web_test")
 
+package(default_visibility = ["//visibility:public"])
 
 ts_library(
     name = "display",
@@ -21,10 +20,13 @@ ts_library(
         "resize_event.ts",
         "convex_hull_display_plugin.ts",
         "target_corners_plugin.ts",
+        "planet_corners_plugin.ts",
         "particles_plugin.ts",
         "fullscreen_plugin.ts",
         "explosion_plugin.ts",
         "beam_display_plugin.ts",
+        "spaceport_plugin.ts",
+        "screen_size_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
@@ -34,6 +36,7 @@ ts_library(
         "//nova/src/nova_plugin",
         "//nova/src/client/gamedata",
         "//nova/src/util",
+        "//nova/src/spaceport",
         "@npm//fp-ts",
         "@npm//pixi.js",
         "@npm//uuid",

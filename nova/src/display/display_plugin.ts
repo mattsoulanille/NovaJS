@@ -9,6 +9,9 @@ import { BeamDisplayPlugin } from "./beam_display_plugin";
 import { ExplosionPlugin } from "./explosion_plugin";
 import { FullscreenPlugin } from "./fullscreen_plugin";
 import { ParticlesPlugin } from "./particles_plugin";
+import { PlanetCornersPlugin } from "./planet_corners_plugin";
+import { ScreenSizePlugin } from "./screen_size_plugin";
+import { SpaceportPlugin } from "./spaceport_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
 import { starfield } from "./starfield_plugin";
@@ -36,6 +39,7 @@ export const Display: Plugin = {
         stage.addChild(space);
         world.resources.set(Stage, stage);
         world.resources.set(Space, space);
+        await world.addPlugin(ScreenSizePlugin);
         await world.addPlugin(starfield());
         await world.addPlugin(StatusBarPlugin);
         await world.addPlugin(AnimationGraphicPlugin);
@@ -45,5 +49,7 @@ export const Display: Plugin = {
         await world.addPlugin(FullscreenPlugin);
         await world.addPlugin(ExplosionPlugin);
         await world.addPlugin(BeamDisplayPlugin);
+        await world.addPlugin(PlanetCornersPlugin);
+        await world.addPlugin(SpaceportPlugin);
     }
 };

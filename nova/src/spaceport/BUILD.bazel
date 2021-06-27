@@ -1,0 +1,14 @@
+load("//:defaults.bzl", "ts_library")
+load("//:esbuild.bzl", "esbuild")
+
+package(default_visibility = ["//visibility:public"])
+
+ts_library(
+    name = "spaceport",
+    srcs = glob(["*.ts"]),
+    deps = [
+        "//nova/src/client/gamedata",
+        "@npm//pixi.js",
+        "@npm//rxjs",
+    ]
+)

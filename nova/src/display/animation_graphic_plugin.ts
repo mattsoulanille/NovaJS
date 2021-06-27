@@ -1,6 +1,6 @@
-import { Entities, UUID } from "nova_ecs/arg_types";
+import { Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
-import { DeleteEvent } from "nova_ecs/events";
+import { AddEvent, DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
@@ -74,10 +74,20 @@ const AnimationGraphicCleanup = new System({
     }
 });
 
+const AnimationGraphicInsert = new System({
+    name: 'AnimationGraphicInsert',
+    events: [AddEvent],
+    args: [AnimationGraphicComponent, Space] as const,
+    step(graphic, space) {
+        space.addChild(graphic.container);
+    }
+});
+
 export const AnimationGraphicPlugin: Plugin = {
     name: 'AnimationGraphicPlugin',
     build(world) {
         world.addSystem(ObjectDrawSystem);
         world.addSystem(AnimationGraphicCleanup);
+        world.addSystem(AnimationGraphicInsert);
     }
 }

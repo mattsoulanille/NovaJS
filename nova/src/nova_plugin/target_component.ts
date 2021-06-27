@@ -9,3 +9,5 @@ export const Target = t.type({
 export type Target = t.TypeOf<typeof Target>;
 
 export const TargetComponent = new Component<Target>('TargetComponent');
+
+
