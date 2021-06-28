@@ -296,7 +296,7 @@ export class SndResource extends BaseResource {
             dat: data,
 
             mp3Rate: mp3rate,
-            mp3Data: [...new SampleRateConvertAndScale(sample.rate / mp3rate).convert(data)]
+            mp3Data: [...new SampleRateConvertAndScale(sample.rate / mp3rate,32768).convert(data)]
         };
     }
 }
