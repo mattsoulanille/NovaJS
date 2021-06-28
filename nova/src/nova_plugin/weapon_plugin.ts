@@ -26,6 +26,7 @@ import { PlayerShipSelector } from './player_ship_plugin';
 import { makeProjectile } from './projectile_plugin';
 import { ControlStateEvent } from './ship_controller_plugin';
 import { ShipDataComponent } from './ship_plugin';
+import { SoundEvent } from './sound_event';
 import { Target, TargetComponent } from './target_component';
 
 
@@ -125,9 +126,9 @@ const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponentProvider, Entities,
         MovementStateComponent, TimeResource, GameDataResource, UUID, RunQuery,
-        Optional(TargetComponent), Optional(ShipDataComponent)] as const,
+        Optional(TargetComponent), Optional(ShipDataComponent), Emit] as const,
     step(weaponsState, weaponsLocalState, entities, movementState, time,
-        gameData, uuid, runQuery, target, shipData) {
+        gameData, uuid, runQuery, target, shipData, emit) {
         for (const [id, state] of weaponsState) {
             const weapon = gameData.data.Weapon.getCached(id);
             if (!weapon) {
@@ -159,6 +160,9 @@ const WeaponsSystem = new System({
                 case 'ProjectileWeaponData':
                 case 'BeamWeaponData':
                     stepWeapon(stepWeaponArgs as StepWeaponArgs<ProjectileWeaponData>);
+                    if (weapon.sound) {
+                        emit(SoundEvent, weapon.sound);
+                    }
                     break;
             }
         }

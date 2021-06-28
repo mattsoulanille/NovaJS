@@ -110,6 +110,7 @@ export interface BaseWeaponData extends BaseData {
     useFiringAnimation: boolean;
     fireSimultaneously: boolean;
     destroyShipWhenFiring: boolean;
+    sound?: string;
 }
 
 export function getDefaultBaseWeaponData(): BaseWeaponData {

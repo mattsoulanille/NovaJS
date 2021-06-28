@@ -3,9 +3,9 @@ load("//:defaults.bzl", "ts_library")
 package(default_visibility = ["//visibility:public"])
 
 ts_library(
-    name = "hull",
+    name = "lamejs",
     srcs = ["index.d.ts"],
     deps = [
-        "@npm//hull.js",
+        "@npm//lamejs",
     ],
 )

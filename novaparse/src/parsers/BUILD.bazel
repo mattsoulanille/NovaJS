@@ -10,6 +10,7 @@ ts_library(
         "//novadatainterface",
         "//novaparse/src/resource_parsers:resource_parsers",
         "//novaparse/src/hull",
+        "//novaparse/src/lamejs",
         "@npm//@types/node",
         "@npm//resourceforkjs",
         "@npm//pngjs",

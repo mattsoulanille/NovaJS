@@ -18,6 +18,7 @@ import { SystemData } from 'novadatainterface/SystemData';
 import { TargetCornersData } from 'novadatainterface/TargetCornersData';
 import { WeaponData } from 'novadatainterface/WeaponData';
 import * as PIXI from 'pixi.js';
+import * as sound from '@pixi/sound';
 import urlJoin from 'url-join';
 import { dataPath, idsPath } from '../../common/GameDataPaths';
 
@@ -121,10 +122,10 @@ export class GameData implements GameDataInterface {
     }
 
     private addSoundFileGettable() {
-        var dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
+        const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
         return new Gettable<SoundFile>(async (id: string) => {
-            return await (await fetch(urlJoin(dataPrefix, id))).arrayBuffer();
-            //return (await this.getUrl(urlJoin(dataPrefix, id)));
+            //return await (await fetch(urlJoin(dataPrefix, id))).arrayBuffer();
+            return (await this.getUrl(urlJoin(dataPrefix, id) + '.mp3'));
         });
     }
 
@@ -144,6 +145,12 @@ export class GameData implements GameDataInterface {
         const cicnPath = urlJoin(dataPath, NovaDataType.CicnImage, id + ".png");
         await this.data.CicnImage.get(id);
         return PIXI.Texture.from(cicnPath);
+    }
+
+    soundFromId(id: string) {
+        const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
+        const soundPath = urlJoin(dataPrefix, id) + '.mp3';
+        return sound.Sound.from(soundPath);
     }
 
     private async getIds(): Promise<NovaIDs> {

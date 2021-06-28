@@ -27,7 +27,6 @@ class GameDataServer {
     }
 
     private setupRoutes() {
-
         // The order in which these routes are set up matters.
         // Earlier routes take precedence over later ones.
         // NOTE: This can not be converted to RPCs because PIXI.js
@@ -35,6 +34,7 @@ class GameDataServer {
 
         this.app.get(path.join(dataPath, ":name/:item.png"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item.json"), this.requestFulfiller.bind(this));
+        this.app.get(path.join(dataPath, ":name/:item.mp3"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
 
