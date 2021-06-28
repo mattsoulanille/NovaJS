@@ -11,12 +11,14 @@ import { PictData } from 'novadatainterface/PictData';
 import { PictImageData } from 'novadatainterface/PictImage';
 import { PlanetData } from 'novadatainterface/PlanetData';
 import { ShipData } from 'novadatainterface/ShipData';
+import { SoundFile } from 'novadatainterface/SoundFile';
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from 'novadatainterface/SpriteSheetData';
 import { StatusBarData } from 'novadatainterface/StatusBarData';
 import { SystemData } from 'novadatainterface/SystemData';
 import { TargetCornersData } from 'novadatainterface/TargetCornersData';
 import { WeaponData } from 'novadatainterface/WeaponData';
 import * as PIXI from 'pixi.js';
+import * as sound from '@pixi/sound';
 import urlJoin from 'url-join';
 import { dataPath, idsPath } from '../../common/GameDataPaths';
 
@@ -59,7 +61,8 @@ export class GameData implements GameDataInterface {
             SpriteSheetImage: this.addPictGettable<SpriteSheetImageData>(NovaDataType.SpriteSheetImage),
             SpriteSheetFrames: this.addGettable<SpriteSheetFramesData>(NovaDataType.SpriteSheetFrames),
             StatusBar: this.addGettable<StatusBarData>(NovaDataType.StatusBar),
-            Explosion: this.addGettable<ExplosionData>(NovaDataType.Explosion)
+            Explosion: this.addGettable<ExplosionData>(NovaDataType.Explosion),
+            SoundFile: this.addSoundFileGettable(),
         };
 
         this.ids = this.getIds();
@@ -118,6 +121,14 @@ export class GameData implements GameDataInterface {
         });
     }
 
+    private addSoundFileGettable() {
+        const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
+        return new Gettable<SoundFile>(async (id: string) => {
+            //return await (await fetch(urlJoin(dataPrefix, id))).arrayBuffer();
+            return (await this.getUrl(urlJoin(dataPrefix, id) + '.mp3'));
+        });
+    }
+
     async textureFromPict(id: string): Promise<PIXI.Texture> {
         const pictPath = urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
         await this.data.PictImage.get(id);
@@ -134,6 +145,12 @@ export class GameData implements GameDataInterface {
         const cicnPath = urlJoin(dataPath, NovaDataType.CicnImage, id + ".png");
         await this.data.CicnImage.get(id);
         return PIXI.Texture.from(cicnPath);
+    }
+
+    soundFromId(id: string) {
+        const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
+        const soundPath = urlJoin(dataPrefix, id) + '.mp3';
+        return sound.Sound.from(soundPath);
     }
 
     private async getIds(): Promise<NovaIDs> {

@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
 import { BeamWeaponData, ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { map } from 'nova_ecs/datatypes/map';
@@ -26,6 +26,7 @@ import { PlayerShipSelector } from './player_ship_plugin';
 import { makeProjectile } from './projectile_plugin';
 import { ControlStateEvent } from './ship_controller_plugin';
 import { ShipDataComponent } from './ship_plugin';
+import { SoundEvent } from './sound_event';
 import { Target, TargetComponent } from './target_component';
 
 
@@ -125,9 +126,9 @@ const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponentProvider, Entities,
         MovementStateComponent, TimeResource, GameDataResource, UUID, RunQuery,
-        Optional(TargetComponent), Optional(ShipDataComponent)] as const,
+        Optional(TargetComponent), Optional(ShipDataComponent), Emit] as const,
     step(weaponsState, weaponsLocalState, entities, movementState, time,
-        gameData, uuid, runQuery, target, shipData) {
+        gameData, uuid, runQuery, target, shipData, emit) {
         for (const [id, state] of weaponsState) {
             const weapon = gameData.data.Weapon.getCached(id);
             if (!weapon) {
@@ -152,7 +153,11 @@ const WeaponsSystem = new System({
             const stepWeaponArgs: StepWeaponArgs<WeaponData> = {
                 entities, localState, movementState,
                 sourceAnimation: shipData?.animation,
-                state, target, time, uuid, weapon, runQuery
+                state, target, time, uuid, weapon, runQuery, emit
+            }
+
+            if (!state.firing) {
+                continue;
             }
 
             switch (weapon.type) {
@@ -193,15 +198,12 @@ type StepWeaponArgs<W extends WeaponData> = {
     entities: EntityMap,
     time: Time,
     runQuery: RunQueryFunction,
+    emit: EmitFunction,
 }
 
 function stepWeapon({ weapon, state, sourceAnimation, movementState,
-    uuid, target, entities, localState, time }: StepWeaponArgs<ProjectileWeaponData | BeamWeaponData>) {
+    uuid, target, entities, localState, time, emit }: StepWeaponArgs<ProjectileWeaponData | BeamWeaponData>) {
     const fireCount = weapon.fireSimultaneously ? state.count : 1;
-
-    if (!state.firing) {
-        return;
-    }
 
     let targetMovement: MovementState | undefined
     let quadrant: Quadrant | undefined;
@@ -287,6 +289,11 @@ function stepWeapon({ weapon, state, sourceAnimation, movementState,
                 target: target?.target,
             });
             entities.set(v4(), beam);
+        }
+
+        // TODO: Looping sounds
+        if (weapon.sound && !weapon.loopSound) {
+            emit(SoundEvent, weapon.sound);
         }
 
         if (weapon.burstCount) {

@@ -25,15 +25,15 @@ describe("SndResource", function() {
     });
     it("Should parse the 8 bit pcm sound", function() {
         expect(s1.sound.rate).toEqual(48000);
-        expect(s1.sound.dat.length).toEqual(8192);
-        expect(s1.sound.dat).toEqual(
+        expect(s1.sound.samples.length).toEqual(8192);
+        expect(s1.sound.samples).toEqual(
             pcm8
                 .map((v) => (v - 127.5) / 127.5));
     });
     it("Should parse the ima4 compressed sound", function() {
         expect(s2.sound.rate).toEqual(48000);
-        expect(s2.sound.dat.length).toEqual(8192);
-        expect(s2.sound.dat.map((v) => v * (1 << 18))).toEqual(
+        expect(s2.sound.samples.length).toEqual(8192);
+        expect(s2.sound.samples.map((v) => v * (1 << 18))).toEqual(
             ima4
         );
     });

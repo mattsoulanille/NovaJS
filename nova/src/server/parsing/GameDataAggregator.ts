@@ -13,10 +13,11 @@ import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "no
 import { StatusBarData } from "novadatainterface/StatusBarData";
 import { ExplosionData } from "novadatainterface/ExplosionData";
 import { PictImageData } from "novadatainterface/PictImage";
-import { NovaIDs } from "novadatainterface/NovaIDs";
+import { getDefaultNovaIDs, NovaIDs } from "novadatainterface/NovaIDs";
 import { Defaults } from "novadatainterface/Defaults";
 import { CicnImageData } from "novadatainterface/CicnImage";
 import { CicnData } from "novadatainterface/CicnData";
+import { SoundFile } from "novadatainterface/SoundFile";
 
 /**
  * Combines multiple GameDataInterface instances into a single GameDataInterface
@@ -48,7 +49,8 @@ class GameDataAggregator implements GameDataInterface {
             SpriteSheetImage: this.makeAggregator<SpriteSheetImageData>(NovaDataType.SpriteSheetImage),
             SpriteSheetFrames: this.makeAggregator<SpriteSheetFramesData>(NovaDataType.SpriteSheetFrames),
             StatusBar: this.makeAggregator<StatusBarData>(NovaDataType.StatusBar),
-            Explosion: this.makeAggregator<ExplosionData>(NovaDataType.Explosion)
+            Explosion: this.makeAggregator<ExplosionData>(NovaDataType.Explosion),
+            SoundFile: this.makeAggregator<SoundFile>(NovaDataType.SoundFile),
         };
 
         this.ids = this.getAllIDs();
@@ -90,23 +92,7 @@ class GameDataAggregator implements GameDataInterface {
     }
 
     private async getAllIDs(): Promise<NovaIDs> {
-        var IDs: NovaIDs = {
-            Explosion: [],
-            Outfit: [],
-            Pict: [],
-            PictImage: [],
-            Cicn: [],
-            CicnImage: [],
-            Planet: [],
-            Ship: [],
-            SpriteSheet: [],
-            SpriteSheetFrames: [],
-            SpriteSheetImage: [],
-            StatusBar: [],
-            System: [],
-            TargetCorners: [],
-            Weapon: []
-        };
+        const IDs = getDefaultNovaIDs();
 
         for (let i in this.dataSources) {
             var dataSource = this.dataSources[i];

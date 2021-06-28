@@ -11,6 +11,7 @@ import { FullscreenPlugin } from "./fullscreen_plugin";
 import { ParticlesPlugin } from "./particles_plugin";
 import { PlanetCornersPlugin } from "./planet_corners_plugin";
 import { ScreenSizePlugin } from "./screen_size_plugin";
+import { SoundPlugin } from "./sound_plugin";
 import { SpaceportPlugin } from "./spaceport_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
@@ -51,5 +52,6 @@ export const Display: Plugin = {
         await world.addPlugin(BeamDisplayPlugin);
         await world.addPlugin(PlanetCornersPlugin);
         await world.addPlugin(SpaceportPlugin);
+        await world.addPlugin(SoundPlugin);
     }
 };

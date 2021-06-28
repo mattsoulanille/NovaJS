@@ -43,19 +43,13 @@ export async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: s
         ...base
     };
 
-    var soundID: string | null = null;
-    /*
-    // Sound parsing is broken for some reason
+    let soundID: string | null = null;
     if (boom.sound) {
-        let sound = boom.idSpace["snd "][boom.sound];
-        if (sound) {
-            soundID = sound.globalID;
-        }
-        else {
+        soundID = boom.idSpace["snd "][boom.sound]?.globalID;
+        if (!soundID) {
             notFoundFunction("Missing snd " + boom.sound + " for bööm " + base.id);
         }
     }
-    */
 
     return {
         ...base,

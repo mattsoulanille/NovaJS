@@ -7,6 +7,7 @@ import { PictData } from "./PictData";
 import { PictImageData } from "./PictImage";
 import { PlanetData } from "./PlanetData";
 import { ShipData } from "./ShipData";
+import { SoundFile } from "./SoundFile";
 import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "./SpriteSheetData";
 import { StatusBarData } from "./StatusBarData";
 import { SystemData } from "./SystemData";
@@ -29,9 +30,9 @@ enum NovaDataType {
     SpriteSheetImage = "SpriteSheetImage",
     SpriteSheetFrames = "SpriteSheetFrames",
     StatusBar = "StatusBar",
-    Explosion = "Explosion"
+    Explosion = "Explosion",
+    SoundFile = "SoundFile",
 };
-
 
 // index: NovaDataType
 type NovaDataInterface = {
@@ -49,7 +50,8 @@ type NovaDataInterface = {
     SpriteSheetImage: Gettable<SpriteSheetImageData>,
     SpriteSheetFrames: Gettable<SpriteSheetFramesData>,
     StatusBar: Gettable<StatusBarData>,
-    Explosion: Gettable<ExplosionData>
+    Explosion: Gettable<ExplosionData>,
+    SoundFile: Gettable<SoundFile>,
 }
 
 class NovaIDNotFoundError extends Error { };

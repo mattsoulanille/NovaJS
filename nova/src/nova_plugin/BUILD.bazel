@@ -32,6 +32,7 @@ ts_library(
         "target_plugin.ts",
         "target_component.ts",
         "controls.ts",
+        "sound_event.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

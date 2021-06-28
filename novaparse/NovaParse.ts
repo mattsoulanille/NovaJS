@@ -37,6 +37,9 @@ import { SpobResource } from "./src/resource_parsers/SpobResource";
 import { SystResource } from "./src/resource_parsers/SystResource";
 import { WeapResource } from "./src/resource_parsers/WeapResource";
 import { Defaults } from "novadatainterface/Defaults";
+import { SoundFileParse } from "./src/parsers/SoundFileParse";
+import { SndResource } from "./src/resource_parsers/SndResource";
+import { SoundFile } from "novadatainterface/SoundFile";
 
 
 type ParseFunction<T extends BaseResource, O> = (resource: T, errorFunc: (message: string) => void) => Promise<O>;
@@ -138,7 +141,8 @@ export class NovaParse implements GameDataInterface {
             SpriteSheetImage: this.buildIDsForResource(idSpace.rlëD),
             SpriteSheetFrames: this.buildIDsForResource(idSpace.rlëD),
             StatusBar: this.buildIDsForResource(idSpace.ïntf),
-            Explosion: this.buildIDsForResource(idSpace.bööm)
+            Explosion: this.buildIDsForResource(idSpace.bööm),
+            SoundFile: this.buildIDsForResource(idSpace["snd "]),
         }
     }
 
@@ -160,7 +164,8 @@ export class NovaParse implements GameDataInterface {
             SpriteSheetImage: this.spriteSheetImageGettable,
             SpriteSheetFrames: this.spriteSheetFramesGettable,
             StatusBar: this.makeGettable<BaseResource, StatusBarData>(NovaResourceType.ïntf, StatusBarParse),
-            Explosion: this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse)
+            Explosion: this.makeGettable<BoomResource, ExplosionData>(NovaResourceType.bööm, ExplosionParse),
+            SoundFile: this.makeGettable<SndResource, SoundFile>(NovaResourceType.snd, SoundFileParse),
         }
 
         return data;

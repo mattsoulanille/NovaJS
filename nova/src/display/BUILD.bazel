@@ -27,6 +27,7 @@ ts_library(
         "beam_display_plugin.ts",
         "spaceport_plugin.ts",
         "screen_size_plugin.ts",
+        "sound_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

@@ -314,6 +314,11 @@
   dependencies:
     ismobilejs "^1.1.0"
 
+"@pixi/sound@^4.0.4":
+  version "4.0.4"
+  resolved "https://registry.yarnpkg.com/@pixi/sound/-/sound-4.0.4.tgz#a6bdf68ef587c1f733e126956a02404051344c8a"
+  integrity sha512-nJxJNBF6oJjOjudcxeibdgHDW/9MVAGYZFtJHzG+Yc/lwX5SeQFH+aIhJoDTOjJAolE8VYOnY4OMP9n/U6998g==
+
 "@pixi/sprite-animated@6.0.4":
   version "6.0.4"
   resolved "https://registry.yarnpkg.com/@pixi/sprite-animated/-/sprite-animated-6.0.4.tgz#dae6212184aeaf288b174008b85a5efd65aa8035"
@@ -1415,6 +1420,13 @@ karma@6.3.4:
     ua-parser-js "^0.7.28"
     yargs "^16.1.1"
 
+lamejs@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/lamejs/-/lamejs-1.2.0.tgz#0259f83db4666141a7b671b8caa6369d95177d08"
+  integrity sha1-Aln4PbRmYUGntnG4yqY2nZUXfQg=
+  dependencies:
+    use-strict "1.0.1"
+
 locate-path@^6.0.0:
   version "6.0.0"
   resolved "https://registry.yarnpkg.com/locate-path/-/locate-path-6.0.0.tgz#55321eb309febbc59c4801d931a72452a681d286"
@@ -2103,6 +2115,11 @@ url@^0.11.0:
   dependencies:
     punycode "1.3.2"
     querystring "0.2.0"
+
+use-strict@1.0.1:
+  version "1.0.1"
+  resolved "https://registry.yarnpkg.com/use-strict/-/use-strict-1.0.1.tgz#0bb80d94f49a4a05192b84a8c7d34e95f1a7e3a0"
+  integrity sha1-C7gNlPSaSgUZK4Sox9NOlfGn46A=
 
 utils-merge@1.0.1:
   version "1.0.1"

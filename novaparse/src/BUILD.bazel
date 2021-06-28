@@ -33,10 +33,11 @@ ts_library(
     module_name = "novaparse/src",
     srcs = glob(["*.ts"]),
     deps = [
-        "@npm//@types/node",
-        "@npm//resourceforkjs",
         "//novadatainterface",
         "//novaparse/src/resource_parsers:resource_parsers",
         "//novaparse/src/parsers",
+        "@npm//@types/node",
+        "@npm//resourceforkjs",
+        "@npm//ts-enum-util",
     ]
 )

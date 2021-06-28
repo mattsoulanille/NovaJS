@@ -1,5 +1,5 @@
 import { ExplosionData } from "novadatainterface/ExplosionData";
-import { Entities, UUID } from "nova_ecs/arg_types";
+import { Emit, Entities, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
@@ -15,6 +15,7 @@ import { v4 } from "uuid";
 import { ExplosionDataComponent } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ProjectileCollisionEvent, ProjectileDataComponent, ProjectileExpireEvent } from "../nova_plugin/projectile_plugin";
+import { SoundEvent } from "../nova_plugin/sound_event";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin";
 
 
@@ -26,13 +27,17 @@ const ExplosionState = new Component<{
 const ExplosionSystem = new System({
     name: 'ExplosionSystem',
     args: [AnimationGraphicComponent, ExplosionDataComponent,
-        ExplosionState, TimeResource, Entities, UUID] as const,
-    step(graphic, explosionData, explosionState, time, entities, uuid) {
+        ExplosionState, TimeResource, Entities, UUID, Emit] as const,
+    step(graphic, explosionData, explosionState, time, entities, uuid, emit) {
         if (!explosionState.startTime || !explosionState.lifetime) {
             explosionState.startTime = time.time;
             const frameTime = 30 / explosionData.rate;
             explosionState.lifetime = frameTime * Math.max(0,
                 ...[...graphic.sprites.values()].map(s => s.frames));
+
+            if (explosionData.sound) {
+                emit(SoundEvent, explosionData.sound)
+            }
         }
 
         const progress = (time.time - explosionState.startTime)
