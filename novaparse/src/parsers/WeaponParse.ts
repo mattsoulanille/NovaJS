@@ -10,13 +10,16 @@ import { FPS, TurnRateConversionFactor } from "./Constants";
 
 export const WEAP_SPEED_FACTOR = 3 / 10;
 
-async function BaseWeaponParse(weap: WeapResource, _notFoundFunction: (m: string) => void, base: BaseData): Promise<BaseWeaponData> {
+async function BaseWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, base: BaseData): Promise<BaseWeaponData> {
     // TODO: Implement ammo
 
     // Parse the weapon's sound
     let sound: string | undefined;
     if (weap.sound !== null) {
-        sound = weap.idSpace["snd "][weap.sound].globalID;
+        sound = weap.idSpace["snd "][weap.sound]?.globalID;
+        if (!sound) {
+            notFoundFunction(`Missing snd ${weap.sound} for wëap ${base.id}`);
+        }
     }
 
     return {
@@ -32,7 +35,8 @@ async function BaseWeaponParse(weap: WeapResource, _notFoundFunction: (m: string
         fireSimultaneously: weap.fireSimultaneously,
         shotSpeed: weap.speed * WEAP_SPEED_FACTOR,
         sound,
-        useFiringAnimation: weap.useFiringAnimation
+        loopSound: weap.loopSound,
+        useFiringAnimation: weap.useFiringAnimation,
     }
 }
 

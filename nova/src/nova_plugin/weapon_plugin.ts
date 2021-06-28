@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
 import { BeamWeaponData, ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { map } from 'nova_ecs/datatypes/map';
@@ -153,16 +153,17 @@ const WeaponsSystem = new System({
             const stepWeaponArgs: StepWeaponArgs<WeaponData> = {
                 entities, localState, movementState,
                 sourceAnimation: shipData?.animation,
-                state, target, time, uuid, weapon, runQuery
+                state, target, time, uuid, weapon, runQuery, emit
+            }
+
+            if (!state.firing) {
+                continue;
             }
 
             switch (weapon.type) {
                 case 'ProjectileWeaponData':
                 case 'BeamWeaponData':
                     stepWeapon(stepWeaponArgs as StepWeaponArgs<ProjectileWeaponData>);
-                    if (weapon.sound) {
-                        emit(SoundEvent, weapon.sound);
-                    }
                     break;
             }
         }
@@ -197,15 +198,12 @@ type StepWeaponArgs<W extends WeaponData> = {
     entities: EntityMap,
     time: Time,
     runQuery: RunQueryFunction,
+    emit: EmitFunction,
 }
 
 function stepWeapon({ weapon, state, sourceAnimation, movementState,
-    uuid, target, entities, localState, time }: StepWeaponArgs<ProjectileWeaponData | BeamWeaponData>) {
+    uuid, target, entities, localState, time, emit }: StepWeaponArgs<ProjectileWeaponData | BeamWeaponData>) {
     const fireCount = weapon.fireSimultaneously ? state.count : 1;
-
-    if (!state.firing) {
-        return;
-    }
 
     let targetMovement: MovementState | undefined
     let quadrant: Quadrant | undefined;
@@ -291,6 +289,11 @@ function stepWeapon({ weapon, state, sourceAnimation, movementState,
                 target: target?.target,
             });
             entities.set(v4(), beam);
+        }
+
+        // TODO: Looping sounds
+        if (weapon.sound && !weapon.loopSound) {
+            emit(SoundEvent, weapon.sound);
         }
 
         if (weapon.burstCount) {

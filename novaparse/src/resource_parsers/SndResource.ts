@@ -280,7 +280,7 @@ export class SndResource extends BaseResource {
         const sample = new Sample(bhr);
 
         //convert up to nearest mp3 rate using linear interp
-        const data = [...sample];
+        const samples = [...sample];
         let mp3rate: number = allowedMP3Rates[0];
         for (let i = 0; i < allowedMP3Rates.length; i++) {
             mp3rate = allowedMP3Rates[i];
@@ -291,9 +291,9 @@ export class SndResource extends BaseResource {
 
         return { /*note: sample.baseFreq,*/
             rate: sample.rate,
-            data,
+            samples,
             mp3Rate: mp3rate,
-            mp3Data: [...new SampleRateConvertAndScale(sample.rate / mp3rate, 32768).convert(data)]
+            mp3Samples: [...new SampleRateConvertAndScale(sample.rate / mp3rate, 32768).convert(samples)]
         };
     }
 }
