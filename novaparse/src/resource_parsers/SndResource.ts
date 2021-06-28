@@ -238,7 +238,7 @@ const COMMANDS = {
     getRateCmd: 85,     //{ get the pitch of a sampled sound }
 };
 
-
+const allowedMP3Rates = [8000, 11025, 12000, 16000, 22050, 24000, 32000, 44100, 48000] as const;
 export class SndResource extends BaseResource {
     constructor(resource: Resource, idSpace: NovaResources) {
         super(resource, idSpace);
@@ -250,7 +250,7 @@ export class SndResource extends BaseResource {
     // http://mirror.informatimago.com/next/developer.apple.com/documentation/mac/Sound/Sound-44.html#HEADING44-0
 
     //ok, so, nova only uses ima4 and 8 bit pcm samples, so lets just read those
-    get sound(): { rate: number, dat: number[] } {
+    get sound() {
         const r = new Reader(this.data);
         const format = r.read("H");
         if (format === 1) {
@@ -281,8 +281,36 @@ export class SndResource extends BaseResource {
         const bhr = new Reader(this.data).skip(command.arg2);
         const sample = new Sample(bhr);
 
-        return { /*note: sample.baseFreq,*/ rate: sample.rate, dat: [...sample] };
+        //convert up to nearest mp3 rate using linear interp
+        const data = [...sample];
+        let mp3rate: number = allowedMP3Rates[0];
+        for (let i = 0; i < allowedMP3Rates.length; i++) {
+            mp3rate = allowedMP3Rates[i];
+            if (mp3rate >= sample.rate) {
+                break;
+            }
+        }
 
+        return { /*note: sample.baseFreq,*/
+            rate: sample.rate,
+            dat: data,
+
+            mp3Rate: mp3rate,
+            mp3Data: [...new SampleRateConvertAndScale(sample.rate / mp3rate).convert(data)]
+        };
     }
 }
 
+export class SampleRateConvertAndScale {
+    constructor(public ratio: number, public scale = 1) { }
+    *convert(a: number[]): IterableIterator<number> {
+        let t = 0;
+        let i = 1;
+        while (i < a.length) {
+            yield (a[i - 1] * (1 - t) + a[i] * t) * this.scale;
+            t += this.ratio;
+            i += Math.floor(t);
+            t -= Math.floor(t);
+        }
+    }
+}
