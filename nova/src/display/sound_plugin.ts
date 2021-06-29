@@ -13,8 +13,10 @@ const SoundSystem = new System({
     events: [SoundEvent],
     args: [SoundEvent, GameDataResource, SingletonComponent] as const,
     step(id, gameData) {
-        const sound = (gameData as GameData).soundFromId(id);
-        sound.play();
+        const maybeSound = (gameData as GameData).data.Sound.getCached(id);
+        if (maybeSound) {
+            maybeSound.play();
+        }
     }
 });
 
