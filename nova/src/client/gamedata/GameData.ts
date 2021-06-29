@@ -41,7 +41,9 @@ class WeaponGettable extends Gettable<WeaponData> {
  * Retrieves game data from the server
  */
 export class GameData implements GameDataInterface {
-    public readonly data: NovaDataInterface;
+    public readonly data: NovaDataInterface & {
+        Sound: Gettable<sound.Sound>,
+    };
     public readonly ids: Promise<NovaIDs>;
 
     constructor() {
@@ -63,6 +65,7 @@ export class GameData implements GameDataInterface {
             StatusBar: this.addGettable<StatusBarData>(NovaDataType.StatusBar),
             Explosion: this.addGettable<ExplosionData>(NovaDataType.Explosion),
             SoundFile: this.addSoundFileGettable(),
+            Sound: this.addSoundGettable(),
         };
 
         this.ids = this.getIds();
@@ -76,7 +79,7 @@ export class GameData implements GameDataInterface {
     private async getUrl(url: string): Promise<Buffer> {
         return await new Promise(function(fulfill, reject) {
             //var loader = new PIXI.loaders.Loader();
-            var loader = new PIXI.Loader();
+            const loader = new PIXI.Loader();
             loader.add(url, url)
                 .load(function(_loader: any, resources: Partial<Record<string, PIXI.ILoaderResource>>) {
                     const resource = resources[url];
@@ -147,10 +150,24 @@ export class GameData implements GameDataInterface {
         return PIXI.Texture.from(cicnPath);
     }
 
-    soundFromId(id: string) {
+    private addSoundGettable() {
         const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
-        const soundPath = urlJoin(dataPrefix, id) + '.mp3';
-        return sound.Sound.from(soundPath);
+        return new Gettable<sound.Sound>(async (id) => {
+            const soundPath = urlJoin(dataPrefix, id) + '.mp3';
+            return new Promise((fulfill, reject) => {
+                sound.Sound.from({
+                    url: soundPath,
+                    preload: true,
+                    loaded: (err, sound) => {
+                        if (err || !sound) {
+                            reject(err);
+                            return;
+                        }
+                        fulfill(sound);
+                    }
+                });
+            })
+        });
     }
 
     private async getIds(): Promise<NovaIDs> {
