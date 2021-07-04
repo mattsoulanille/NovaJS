@@ -1,5 +1,5 @@
 import 'jasmine';
-import { Component } from './component';
+import { Component, UnknownComponent } from './component';
 import { EntityBuilder } from './entity';
 import { AsyncProviderResource, Provide, ProvideAsync } from './provider';
 import { System } from './system';
@@ -167,5 +167,42 @@ describe('provider', () => {
         await world.resources.get(AsyncProviderResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello there', 11]]);
+    });
+
+    it('deletes entries in provider map when the entity is removed', () => {
+        const world = new World();
+
+        const fooProvider = ProvideAsync({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            factory: async (bar) => {
+                await sleep(10);
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
+        const wordLengths: [string, number][] = [];
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
+
+        world.addSystem(providesFoo);
+
+        expect(world.resources.get(AsyncProviderResource)?.providers.size).toBe(0);
+
+        world.entities.set('word1', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+        world.step();
+        expect(world.resources.get(AsyncProviderResource)?.providers.size).toBe(1);
+
+        world.entities.delete('word1');
+        world.step();
+        expect(world.resources.get(AsyncProviderResource)?.providers.size).toBe(0);
     });
 });
