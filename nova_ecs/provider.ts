@@ -2,11 +2,13 @@ import { left, right } from "fp-ts/lib/Either";
 import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, Patch, setAutoFreeze } from "immer";
 import { ArgData, ArgsToData, ArgTypes, GetEntity, UUID } from "./arg_types";
 import { Component, ComponentData, UnknownComponent } from "./component";
+import { DeleteEvent } from "./events";
 import { Modifier } from "./modifier";
 import { Optional } from "./optional";
 import { Plugin } from "./plugin";
 import { Query } from "./query";
 import { Resource } from "./resource";
+import { System } from "./system";
 import { DefaultMap } from "./utils";
 
 type ProviderMapEntry = {
@@ -17,6 +19,7 @@ type ProviderMapEntry = {
     patches: Patch[],
 };
 
+// TODO?: Use a weakmap with entities as keys instead of a map with uuids as keys?
 export class AsyncProviderData {
     providers: DefaultMap<string /* Entity uuid */,
         Map<UnknownComponent /* Provided symbol */, ProviderMapEntry>>
@@ -129,9 +132,19 @@ export function ProvideAsync<Provided extends Component<any>, Args extends reado
     });
 }
 
+const CleanupProviderResourceSystem = new System({
+    name: 'CleanupProviderResourceSystem',
+    events: [DeleteEvent],
+    args: [UUID, AsyncProviderResource] as const,
+    step(uuid, providerResource) {
+        providerResource.providers.delete(uuid);
+    }
+});
+
 export const ProvideAsyncPlugin: Plugin = {
     name: 'ProvideAsync',
     build: (world) => {
         world.resources.set(AsyncProviderResource, new AsyncProviderData());
+        world.addSystem(CleanupProviderResourceSystem);
     }
 }
