@@ -1,11 +1,11 @@
-import { FactoryQueue } from "./FactoryQueue";
+import { FactoryQueue } from "./factory_queue";
 
-class FactoryQueueMap<Item extends { id: string }> {
 
+export class FactoryQueueMap<Item> {
     readonly items = new Map<string, FactoryQueue<Item>>();
     private _minimum!: number;
 
-    constructor(private readonly buildFunction: (id: string) => Promise<Item>, minimum: number) {
+    constructor(private readonly buildFunction: (id: string) => Promise<Item>, minimum: number, private getId: (item: Item) => string) {
         this.minimum = minimum;
     }
 
@@ -15,7 +15,7 @@ class FactoryQueueMap<Item extends { id: string }> {
 
     set minimum(n: number) {
         this._minimum = n;
-        for (let val of this.items.values()) {
+        for (const val of this.items.values()) {
             val.minimum = n;
         }
     }
@@ -41,8 +41,6 @@ class FactoryQueueMap<Item extends { id: string }> {
     }
 
     enqueue(i: Item) {
-        this.getQueue(i.id).enqueue(i);
+        this.getQueue(this.getId(i)).enqueue(i);
     }
 }
-
-export { FactoryQueueMap }
