@@ -86,6 +86,10 @@ export class World {
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
         this.addPlugin(ProvideAsyncPlugin);
+        this.resources.set(Entities, this.entities);
+        this.resources.set(RunQuery, this.runQuery);
+        this.resources.set(GetWorld, this);
+        this.resources.set(Emit, this.boundEmit);
         this.entities.set('singleton', new EntityBuilder()
             .addComponent(SingletonComponent, undefined)
             .setName('singleton')
@@ -300,22 +304,16 @@ export class World {
             // Queries always fulfill because if no entities match, they return [].
             const query = this.queries.get(arg);
             return right(query.getResult() as ArgData<T>);
-        } else if (arg === Entities) {
-            return right(this.state.entities as ArgData<T>);
         } else if (arg === Components) {
             return right(this.nameComponentMap as ArgData<T>);
         } else if (arg === UUID) {
             return right(uuid as ArgData<T>);
         } else if (arg === GetEntity) {
             return right(entity as ArgData<T>);
-        } else if (arg === Emit) {
-            return right(this.boundEmit as ArgData<T>);
         } else if (arg === GetArg) {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
                 this.getArg<T>(arg, entity, uuid, event)) as Right<ArgData<T>>;
-        } else if (arg === GetWorld) {
-            return right(this as ArgData<T>);
         } else if (arg instanceof EcsEvent) {
             if (!event) {
                 return left(undefined);
@@ -335,29 +333,27 @@ export class World {
             }
             return modifier.transform(...modifierQueryResults.right) as
                 Either<undefined, ArgData<T>>;
-        } else if (arg === RunQuery) {
-            const runQuery: RunQueryFunction =
-                <T extends readonly ArgTypes[] = ArgTypes[]>(query: Query<T>, uuid?: string | undefined) => {
-                    const queryCached = this.queries.get(query);
-                    if (uuid !== undefined) {
-                        const entity = this.entities.get(uuid);
-                        if (!entity) {
-                            return [];
-                        }
-                        const result = queryCached.getResultForEntity(entity, uuid);
-                        if (isLeft(result)) {
-                            return [];
-                        }
-                        return [result.right];
-                    }
-                    return queryCached.getResult();
-                }
-
-            return right(runQuery as ArgData<T>);
         } else {
             throw new Error(`Internal error: unrecognized arg ${arg}`);
         }
     }
+
+    private runQuery: RunQueryFunction =
+        <T extends readonly ArgTypes[] = ArgTypes[]>(query: Query<T>, uuid?: string | undefined) => {
+            const queryCached = this.queries.get(query);
+            if (uuid !== undefined) {
+                const entity = this.entities.get(uuid);
+                if (!entity) {
+                    return [];
+                }
+                const result = queryCached.getResultForEntity(entity, uuid);
+                if (isLeft(result)) {
+                    return [];
+                }
+                return [result.right];
+            }
+            return queryCached.getResult();
+        }
 
     toString() {
         return `World(${this.name ?? 'unnamed'})`;
