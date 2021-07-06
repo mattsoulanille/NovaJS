@@ -1,4 +1,5 @@
 import { ParticleConfig } from "novadatainterface/WeaponData";
+import { GetEntity } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { DeleteEvent } from "nova_ecs/events";
 import { FirstAvailable } from "nova_ecs/first_available";
@@ -11,7 +12,8 @@ import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
 import * as particles from "pixi-particles";
 import * as PIXI from "pixi.js";
-import { ProjectileCollisionEvent, ProjectileDataComponent } from "../nova_plugin/projectile_plugin";
+import { ProjectileDataComponent } from "../nova_plugin/projectile_data";
+import { ProjectileCollisionEvent } from "../nova_plugin/projectile_plugin";
 import { PixiAppResource } from "./pixi_app_resource";
 import { Space } from "./space_resource";
 
@@ -134,10 +136,11 @@ const OrphanEmittersSystem = new System({
 const TrailEmitterCleanup = new System({
     name: 'TrailEmitterCleanup',
     events: [DeleteEvent],
-    args: [TrailEmitterComponent, OrphanParticleEmitters, TimeResource] as const,
-    step(emitter, orphanEmitters, time) {
+    args: [TrailEmitterComponent, OrphanParticleEmitters, TimeResource, GetEntity] as const,
+    step(emitter, orphanEmitters, time, entity) {
         emitter.emit = false;
         orphanEmitters.set(emitter, time.time + emitter.maxLifetime * 1000);
+        entity.components.delete(TrailEmitterComponent);
     }
 });
 

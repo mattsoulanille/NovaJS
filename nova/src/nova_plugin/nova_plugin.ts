@@ -13,6 +13,7 @@ import { CollisionsPlugin } from './collisions_plugin';
 import { HealthPlugin } from "./health_plugin";
 import { TargetPlugin } from "./target_plugin";
 import { BeamPlugin } from "./beam_plugin";
+import { FireWeaponPlugin } from "./fire_weapon_plugin";
 
 // Users must add the multiplayer plugin and a display plugin.
 // Users must also add the NovaData resource.
@@ -26,6 +27,7 @@ export const Nova: Plugin = {
         world.addPlugin(PlanetPlugin);
         world.addPlugin(TimePlugin);
         world.addPlugin(MovementPlugin);
+        world.addPlugin(FireWeaponPlugin);
         world.addPlugin(ProjectilePlugin);
         world.addPlugin(WeaponPlugin);
         world.addPlugin(OutfitPlugin);

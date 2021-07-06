@@ -223,13 +223,15 @@ export function getDefaultBeamWeaponData(): BeamWeaponData {
 
 export interface BayWeaponData extends BaseWeaponData {
     type: "BayWeaponData",
-    shipID: string
+    guidance: BayGuidanceType,
+    shipID: string,
 }
 
 export function getDefaultBayWeaponData(): BayWeaponData {
     return {
         ...getDefaultBaseWeaponData(),
         type: "BayWeaponData",
+        guidance: "bay",
         shipID: getDefaultShipData().id
     };
 }

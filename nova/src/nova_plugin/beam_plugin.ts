@@ -1,5 +1,5 @@
-import { BeamWeaponData } from 'novadatainterface/WeaponData';
-import { Entities, UUID } from 'nova_ecs/arg_types';
+import { BeamWeaponData, WeaponData } from 'novadatainterface/WeaponData';
+import { Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -11,25 +11,19 @@ import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movemen
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
+import { v4 } from 'uuid';
 import { Hull, HullComponent, UpdateHullSystem } from './collisions_plugin';
 import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
-import { applyExitPoint } from './exit_point';
+import { applyExitPoint, ExitPointData } from './exit_point';
 import { FireTimeProvider } from './fire_time';
+import { OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { zeroOrderGuidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
+import { SoundEvent } from './sound_event';
 import { TargetComponent } from './target_component';
-import { sampleInaccuracy } from './weapon_plugin';
 
-
-export interface ExitPointData {
-    position: [number, number, number],
-    upCompress: [number, number],
-    downCompress: [number, number],
-}
 
 interface BeamState {
-    parent?: string, /* uuid of what is firing the beam */
-    source?: string, /* uuid of the source for collisions */
     pointToTarget?: boolean,
     exitPointData?: ExitPointData,
 }
@@ -37,55 +31,61 @@ interface BeamState {
 export const BeamStateComponent = new Component<BeamState>('BeamState');
 export const BeamDataComponent = new Component<BeamWeaponData>('BeamData');
 
-export function makeBeam({
-    beamData,
-    position,
-    rotation,
-    source,
-    parent,
-    target,
-    exitPointData,
-}: {
-    beamData: BeamWeaponData,
-    position: Position,
-    rotation: Angle,
-    source?: string,
-    parent?: string,
-    target?: string,
-    exitPointData?: ExitPointData,
-}) {
-    const { width, length } = beamData.beamAnimation;
-    const beamPoly = new SAT.Polygon(new SAT.Vector(0, 0), [
-        new SAT.Vector(-width / 2, 0),
-        new SAT.Vector(-width / 2, -length),
-        new SAT.Vector(width / 2, -length),
-        new SAT.Vector(width / 2, 0),
-    ]);
-
-    const beam = new EntityBuilder()
-        .setName(beamData.name)
-        .addComponent(MovementStateComponent, {
-            position,
-            rotation,
-            velocity: new Vector(0, 0),
-            accelerating: 0,
-            turnBack: false,
-            turning: 0,
-        }).addComponent(CollisionInteractionComponent, {
-            hitTypes: new Set(['normal'])
-        }).addComponent(HullComponent, {
-            hulls: [new Hull([beamPoly])],
-        }).addComponent(BeamStateComponent, {
-            exitPointData, source, parent,
-            pointToTarget: beamData.guidance === "beamTurret" ||
-                beamData.guidance === "pointDefenseBeam",
-        }).addComponent(BeamDataComponent, beamData);
-
-    if (target) {
-        beam.addComponent(TargetComponent, { target });
+class BeamWeaponEntry extends WeaponEntry {
+    declare data: BeamWeaponData;
+    constructor(data: WeaponData, runQuery: RunQueryFunction) {
+        if (data.type !== 'BeamWeaponData') {
+            throw new Error('Data must be BeamWeaponData');
+        }
+        super(data, runQuery);
     }
 
-    return beam;
+    fire(position: Position, angle: Angle, owner?: string, target?: string,
+        source?: string, _sourceVelocity?: Vector, exitPointData?: ExitPointData): boolean {
+        const { width, length } = this.data.beamAnimation;
+        const beamPoly = new SAT.Polygon(new SAT.Vector(0, 0), [
+            new SAT.Vector(-width / 2, 0),
+            new SAT.Vector(-width / 2, -length),
+            new SAT.Vector(width / 2, -length),
+            new SAT.Vector(width / 2, 0),
+        ]);
+
+        const beam = new EntityBuilder()
+            .setName(this.data.name)
+            .addComponent(MovementStateComponent, {
+                position,
+                rotation: angle,
+                velocity: new Vector(0, 0),
+                accelerating: 0,
+                turnBack: false,
+                turning: 0,
+            }).addComponent(CollisionInteractionComponent, {
+                hitTypes: new Set(['normal'])
+            }).addComponent(HullComponent, {
+                hulls: [new Hull([beamPoly])],
+            }).addComponent(BeamStateComponent, {
+                exitPointData,
+                pointToTarget: this.data.guidance === "beamTurret" ||
+                    this.data.guidance === "pointDefenseBeam",
+            }).addComponent(BeamDataComponent, this.data);
+
+        if (target) {
+            beam.addComponent(TargetComponent, { target });
+        }
+
+        if (owner) {
+            beam.addComponent(OwnerComponent, owner);
+        }
+        if (source) {
+            beam.addComponent(SourceComponent, source);
+        }
+
+        if (this.data.sound) {
+            this.emit(SoundEvent, this.data.sound);
+        }
+        this.entities.set(v4(), beam);
+        return true;
+    }
 }
 
 export const BeamSystem = new System({
@@ -93,17 +93,17 @@ export const BeamSystem = new System({
     before: [UpdateHullSystem],
     after: [MovementSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent,
-        FireTimeProvider, TimeResource, UUID, Entities,
+        FireTimeProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
         Optional(TargetComponent)] as const,
-    step(beamData, beamState, movement, fireTime, { time }, uuid, entities, target) {
+    step(beamData, beamState, movement, fireTime, { time }, uuid, entities, source, target) {
 
         const timeSinceFire = time - fireTime;
         if (timeSinceFire > beamData.shotDuration) {
             entities.delete(uuid);
         }
 
-        if (beamState.parent) {
-            const parent = entities.get(beamState.parent);
+        if (source) {
+            const parent = entities.get(source);
             const parentMovement = parent?.components
                 .get(MovementStateComponent);
             if (parentMovement) {
@@ -113,10 +113,9 @@ export const BeamSystem = new System({
                     Angle.fromAngleLike(parentMovement.rotation);
 
                 if (beamState.exitPointData) {
-                    const { position, upCompress, downCompress } =
-                        beamState.exitPointData;
-                    const exitPoint = applyExitPoint(position, parentMovement.rotation,
-                        upCompress, downCompress);
+                    const exitPoint = applyExitPoint(beamState.exitPointData,
+                        parentMovement.rotation)
+
                     movement.position = movement.position.add(exitPoint) as Position;
                 }
             }
@@ -136,16 +135,17 @@ export const BeamSystem = new System({
 const BeamCollisionSystem = new System({
     name: 'BeamCollisionSystem',
     events: [CollisionEvent],
-    args: [CollisionEvent, Entities, BeamStateComponent,
+    args: [CollisionEvent, Entities, Optional(OwnerComponent),
         BeamDataComponent, FireTimeProvider, TimeResource] as const,
-    step(collision, entities, beamState, beamData, fireTime,
+    step(collision, entities, owner, beamData, fireTime,
         { time, delta_ms }) {
 
         const other = entities.get(collision.other);
         if (!other) {
             return;
         }
-        if (collision.other === beamState.source) {
+        const otherOwner = other.components.get(OwnerComponent);
+        if (collision.other === owner || otherOwner === owner) {
             return;
         }
 
@@ -167,6 +167,12 @@ const BeamCollisionSystem = new System({
 export const BeamPlugin: Plugin = {
     name: 'BeamPlugin',
     build(world) {
+        const weaponConstructors = world.resources.get(WeaponConstructors);
+        if (!weaponConstructors) {
+            throw new Error('Expected WeaponConstructors to exist');
+        }
+        weaponConstructors.set('BeamWeaponData', BeamWeaponEntry);
+
         world.addSystem(BeamSystem);
         world.addSystem(BeamCollisionSystem);
     }

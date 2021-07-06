@@ -17,6 +17,7 @@ ts_library(
         "planet_plugin.ts",
         "make_planet.ts",
         "make_system.ts",
+        "projectile_data.ts",
         "projectile_plugin.ts",
         "fire_time.ts",
         "weapon_plugin.ts",
@@ -33,6 +34,7 @@ ts_library(
         "target_component.ts",
         "controls.ts",
         "sound_event.ts",
+        "fire_weapon_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

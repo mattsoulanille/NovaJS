@@ -245,6 +245,7 @@ async function BayWeaponParse(weap: WeapResource, notFoundFunction: (m: string) 
     return {
         ...baseWeapon,
         type: "BayWeaponData",
+        guidance: "bay",
         shipID
     }
 }
