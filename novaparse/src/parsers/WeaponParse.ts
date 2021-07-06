@@ -42,8 +42,6 @@ async function BaseWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
 
 
 async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, baseWeapon: BaseWeaponData): Promise<NotBayWeaponData> {
-
-
     let primaryExplosion = null;
     if (weap.explosion !== null) {
         let primaryExplosionResource = weap.idSpace.bööm[weap.explosion];
@@ -81,8 +79,28 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         passThroughShield: weap.passThroughShields ? 1 : 0,
     }
 
+    // Parse Submunition if it exists
+    const submunitions: Array<SubmunitionType> = [];
+    if (weap.submunition) {
+        var subResource = weap.idSpace.wëap[weap.submunition.id];
+        if (subResource) {
+            submunitions.push({
+                count: weap.submunition.count,
+                fireAtNearest: weap.submunition.fireAtNearest,
+                id: subResource.globalID,
+                limit: weap.submunition.limit,
+                subIfExpire: weap.submunition.subIfExpire,
+                theta: weap.submunition.theta * 2 * Math.PI / 360,
+            });
+        }
+        else {
+            notFoundFunction("Missing submunition id " + weap.submunition.id + " for wëap " + baseWeapon.id);
+        }
+    }
+
     return {
         ...baseWeapon,
+        submunitions,
         damage,
         oneAmmoPerBurst: weap.oneAmmoPerBurst,
         ionizationColor: weap.ionizeColor,
@@ -98,24 +116,6 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
 async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, baseWeapon: BaseWeaponData): Promise<ProjectileWeaponData> {
     var notBayBase = await NotBayWeaponParse(weap, notFoundFunction, baseWeapon);
 
-    // Parse Submunition if it exists
-    var submunitions: Array<SubmunitionType> = [];
-    if (weap.submunition) {
-        var subResource = weap.idSpace.wëap[weap.submunition.id];
-        if (subResource) {
-            submunitions.push({
-                count: weap.submunition.count,
-                fireAtNearest: weap.submunition.fireAtNearest,
-                id: subResource.globalID,
-                limit: weap.submunition.limit,
-                subIfExpire: weap.submunition.subIfExpire,
-                theta: weap.submunition.theta * 2 * Math.PI / 360,
-            });
-        }
-        else {
-            notFoundFunction("Missing submunition id " + weap.submunition.id + " for wëap " + notBayBase.id);
-        }
-    }
 
     if (!weap.graphic) {
         throw new Error("ProjectileWeapon " + baseWeapon.id + " had no graphic listed");
@@ -181,7 +181,6 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         ...notBayBase,
         type: "ProjectileWeaponData",
         guidance,
-        submunitions,
         proxRadius: weap.proxRadius,
         proxSafety: weap.proxSafety / FPS,
         trailParticles: weap.trailParticles,

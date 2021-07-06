@@ -31,7 +31,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
     }
 
     fire(position: Position, angle: Angle, owner?: string, target?: string,
-        source?: string, sourceVelocity?: Vector): boolean {
+        source?: string, sourceVelocity?: Vector): Entity {
 
         let velocity = new Vector(0, 0);
         if (this.data.guidance !== 'guided' && sourceVelocity) {
@@ -83,7 +83,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
             this.emit(SoundEvent, this.data.sound);
         }
 
-        return true;
+        return projectile;
     }
 }
 

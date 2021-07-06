@@ -4,11 +4,12 @@ import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { EntityBuilder } from 'nova_ecs/entity';
+import { Entity, EntityBuilder } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
@@ -16,7 +17,7 @@ import { Hull, HullComponent, UpdateHullSystem } from './collisions_plugin';
 import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { applyExitPoint, ExitPointData } from './exit_point';
 import { FireTimeProvider } from './fire_time';
-import { OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
+import { FireSubs, OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { zeroOrderGuidance } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { SoundEvent } from './sound_event';
@@ -31,6 +32,8 @@ interface BeamState {
 export const BeamStateComponent = new Component<BeamState>('BeamState');
 export const BeamDataComponent = new Component<BeamWeaponData>('BeamData');
 
+const BeamSubsQuery = new Query([MovementStateComponent] as const);
+
 class BeamWeaponEntry extends WeaponEntry {
     declare data: BeamWeaponData;
     constructor(data: WeaponData, runQuery: RunQueryFunction) {
@@ -41,7 +44,7 @@ class BeamWeaponEntry extends WeaponEntry {
     }
 
     fire(position: Position, angle: Angle, owner?: string, target?: string,
-        source?: string, _sourceVelocity?: Vector, exitPointData?: ExitPointData): boolean {
+        source?: string, _sourceVelocity?: Vector, exitPointData?: ExitPointData): Entity {
         const { width, length } = this.data.beamAnimation;
         const beamPoly = new SAT.Polygon(new SAT.Vector(0, 0), [
             new SAT.Vector(-width / 2, 0),
@@ -84,7 +87,14 @@ class BeamWeaponEntry extends WeaponEntry {
             this.emit(SoundEvent, this.data.sound);
         }
         this.entities.set(v4(), beam);
-        return true;
+        return beam;
+    }
+
+    fireSubs(source: string, sourceExpired = false) {
+        const [{ position, rotation }] = this.runQuery(BeamSubsQuery, source)[0];
+        const endOfBeam = position.add(rotation.getUnitVector()
+            .scale(this.data.beamAnimation.length)) as Position;
+        return super.fireSubs(source, sourceExpired, endOfBeam);
     }
 }
 
@@ -92,13 +102,14 @@ export const BeamSystem = new System({
     name: 'BeamSystem',
     before: [UpdateHullSystem],
     after: [MovementSystem],
-    args: [BeamDataComponent, BeamStateComponent, MovementStateComponent,
+    args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
         FireTimeProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
         Optional(TargetComponent)] as const,
-    step(beamData, beamState, movement, fireTime, { time }, uuid, entities, source, target) {
-
+    step(beamData, beamState, movement, fireSubs, fireTime, { time }, uuid,
+        entities, source, target) {
         const timeSinceFire = time - fireTime;
         if (timeSinceFire > beamData.shotDuration) {
+            fireSubs(beamData.id, uuid, true);
             entities.delete(uuid);
         }
 

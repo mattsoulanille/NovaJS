@@ -81,8 +81,8 @@ export function setIntersection<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): Set<T>
 }
 
 export class DefaultMap<K, V> extends Map<K, V> {
-    constructor(private factory: (key: K) => V) {
-        super();
+    constructor(private factory: (key: K) => V, entries: Iterable<[K, V]> = []) {
+        super(entries);
     }
 
     get(key: K): V {
