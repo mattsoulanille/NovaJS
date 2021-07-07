@@ -11,27 +11,64 @@ import { MovementPhysicsComponent, MovementStateComponent, MovementType } from '
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
+import { FactoryQueue } from '../common/factory_queue';
 import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
-import { FireTimeProvider } from './fire_time';
-import { FireSubs, OwnerComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
+import { FireTime, FireTimeProvider } from './fire_time';
+import { FireSubs, OwnerComponent, SourceComponent, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent, ProjectileDataComponent } from './projectile_data';
+import { ReturnToQueueComponent } from './return_to_queue_plugin';
 import { SoundEvent } from './sound_event';
 import { TargetComponent } from './target_component';
 
 
 class ProjectileWeaponEntry extends WeaponEntry {
     declare data: ProjectileWeaponData;
+    private factoryQueue: FactoryQueue<Entity>;
+
     constructor(data: WeaponData, runQuery: RunQueryFunction) {
         if (data.type !== 'ProjectileWeaponData') {
             throw new Error('Data must be ProjectileWeaponData');
         }
         super(data, runQuery);
+
+        const queueHolder = {} as { queue: FactoryQueue<Entity> };
+
+        this.factoryQueue = new FactoryQueue(() => {
+            const projectile = new EntityBuilder()
+                .addComponent(ProjectileDataComponent, this.data)
+                .addComponent(ProjectileComponent, { id: this.data.id })
+                .addComponent(MovementStateComponent, {
+                    position: new Position(0, 0),
+                    rotation: new Angle(0),
+                    velocity: new Vector(0, 0),
+                    accelerating: this.data.guidance === 'rocket' ? 1 : 0,
+                    turning: 0,
+                    turnBack: false,
+                }).addComponent(MovementPhysicsComponent, {
+                    acceleration: this.data.physics.acceleration || 1200,
+                    maxVelocity: this.data.guidance === 'rocket' ?
+                        this.data.physics.speed : Infinity,
+                    turnRate: this.data.physics.turnRate,
+                    movementType: this.data.guidance === 'guided'
+                        ? MovementType.INERTIALESS : MovementType.INERTIAL,
+                }).addComponent(CollisionInteractionComponent, {
+                    hitTypes: new Set(['normal']),
+                }).addComponent(ReturnToQueueComponent, queueHolder);
+            if (this.data.guidance === 'guided') {
+                projectile.addComponent(GuidanceComponent, {
+                    guidance: Guidance.firstOrder,
+                });
+            }
+
+            return projectile;
+        }, 1);
+        queueHolder.queue = this.factoryQueue;
     }
 
     fire(position: Position, angle: Angle, owner?: string, target?: string,
-        source?: string, sourceVelocity?: Vector): Entity {
+        source?: string, sourceVelocity?: Vector): Entity | undefined {
 
         let velocity = new Vector(0, 0);
         if (this.data.guidance !== 'guided' && sourceVelocity) {
@@ -42,40 +79,36 @@ class ProjectileWeaponEntry extends WeaponEntry {
                 .scale(this.data.physics.speed));
         }
 
-        const projectile = new EntityBuilder()
-            .setName(this.data.name)
-            .addComponent(ProjectileDataComponent, this.data)
-            .addComponent(ProjectileComponent, {
-                id: this.data.id,
-                source
-            }).addComponent(MovementStateComponent, {
-                position,
-                rotation: angle,
-                velocity,
-                accelerating: this.data.guidance === 'rocket' ? 1 : 0,
-                turning: 0,
-                turnBack: false,
-            }).addComponent(MovementPhysicsComponent, {
-                acceleration: this.data.physics.acceleration || 1200,
-                maxVelocity: this.data.guidance === 'rocket' ?
-                    this.data.physics.speed : Infinity,
-                turnRate: this.data.physics.turnRate,
-                movementType: this.data.guidance === 'guided'
-                    ? MovementType.INERTIALESS : MovementType.INERTIAL,
-            }).addComponent(CollisionInteractionComponent, {
-                hitTypes: new Set(['normal']),
-            });
+        const projectile = this.factoryQueue.dequeue();
+        if (!projectile) {
+            return undefined;
+        }
+
+        const movementState = projectile.components.get(MovementStateComponent)!;
+        movementState.position = position;
+        movementState.rotation = angle;
+        movementState.velocity = velocity;
+        movementState.turning = 0;
+
+        projectile.components.delete(FireTime);
+        projectile.components.delete(SubCounts);
 
         if (target) {
-            projectile.addComponent(TargetComponent, { target });
+            projectile.components.set(TargetComponent, { target });
+        } else {
+            projectile.components.delete(TargetComponent);
         }
-        if (this.data.guidance === 'guided') {
-            projectile.addComponent(GuidanceComponent, {
-                guidance: Guidance.firstOrder
-            });
+
+        if (source) {
+            projectile.components.set(SourceComponent, source);
+        } else {
+            projectile.components.delete(SourceComponent);
         }
+
         if (owner) {
-            projectile.addComponent(OwnerComponent, owner);
+            projectile.components.set(OwnerComponent, owner);
+        } else {
+            projectile.components.delete(OwnerComponent);
         }
 
         this.entities.set(v4(), projectile);

@@ -14,12 +14,14 @@ import { HealthPlugin } from "./health_plugin";
 import { TargetPlugin } from "./target_plugin";
 import { BeamPlugin } from "./beam_plugin";
 import { FireWeaponPlugin } from "./fire_weapon_plugin";
+import { ReturnToQueuePlugin } from "./return_to_queue_plugin";
 
 // Users must add the multiplayer plugin and a display plugin.
 // Users must also add the NovaData resource.
 export const Nova: Plugin = {
     name: 'Nova',
     build(world) {
+        world.addPlugin(ReturnToQueuePlugin);
         world.addPlugin(PlatformPlugin);
         world.addPlugin(DeltaPlugin);
         world.addPlugin(ShipPlugin);

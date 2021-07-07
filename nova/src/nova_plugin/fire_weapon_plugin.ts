@@ -225,7 +225,7 @@ export abstract class WeaponEntry {
                 const angle = angles.next().value || new Angle(0);
                 const subEntity = fireWeapon(sub.id, position ?? movement.position,
                     movement.rotation.add(angle), owner,
-                    target?.target, source, movement.velocity);
+                    target?.target, source);
                 if (subEntity) {
                     subs.push(subEntity);
                     const newCounts = new DefaultMap(() => 0, subCounts);
