@@ -1,141 +1,125 @@
-import { GameDataInterface } from 'novadatainterface/GameDataInterface';
-import { ProjectileWeaponData } from 'novadatainterface/WeaponData';
-import { Emit, Entities, UUID } from 'nova_ecs/arg_types';
-import { Component } from 'nova_ecs/component';
+import { ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
+import { Emit, Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity, EntityBuilder } from 'nova_ecs/entity';
-import { EntityMap } from 'nova_ecs/entity_map';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
-import { MovementPhysicsComponent, MovementState, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
+import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
+import { FactoryQueue } from '../common/factory_queue';
 import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
-import { FireTimeProvider } from './fire_time';
-import { GameDataResource } from './game_data_resource';
-import { firstOrderWithFallback, Guidance } from './guidance';
+import { FireTime, FireTimeProvider } from './fire_time';
+import { FireSubs, OwnerComponent, SourceComponent, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
+import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
-import { Stat } from './stat';
-import { Target, TargetComponent } from './target_component';
+import { ProjectileComponent, ProjectileDataComponent } from './projectile_data';
+import { ReturnToQueueComponent } from './return_to_queue_plugin';
+import { SoundEvent } from './sound_event';
+import { TargetComponent } from './target_component';
 
 
-export interface ProjectileType {
-    id: string,
-    source?: string,
-}
+class ProjectileWeaponEntry extends WeaponEntry {
+    declare data: ProjectileWeaponData;
+    private factoryQueue: FactoryQueue<Entity>;
 
-export const ProjectileComponent = new Component<ProjectileType>('Projectile');
-
-export const ProjectileDataComponent = new Component<ProjectileWeaponData>('ProjectileData');
-
-export const GuidanceComponent = new Component<{
-    guidance: Guidance,
-}>('GuidanceComponent');
-
-export function makeProjectile({
-    projectileData, position, rotation,
-    sourceVelocity = new Vector(0, 0),
-    source, target,
-}: {
-    projectileData: ProjectileWeaponData,
-    position: Position,
-    rotation: Angle,
-    sourceVelocity?: Vector,
-    source?: string,
-    target?: string,
-}) {
-    let velocity = new Vector(0, 0);
-    if (projectileData.guidance !== 'guided') {
-        velocity = velocity.add(sourceVelocity);
-    }
-    if (projectileData.guidance !== 'rocket') {
-        velocity = velocity.add(rotation.getUnitVector()
-            .scale(projectileData.physics.speed));
-    }
-
-    const projectile = new EntityBuilder()
-        .setName(projectileData.name)
-        .addComponent(ProjectileDataComponent, projectileData)
-        .addComponent(ProjectileComponent, {
-            id: projectileData.id,
-            source
-        }).addComponent(MovementStateComponent, {
-            position, rotation, velocity,
-            accelerating: projectileData.guidance === 'rocket' ? 1 : 0,
-            turning: 0,
-            turnBack: false,
-        }).addComponent(MovementPhysicsComponent, {
-            acceleration: projectileData.physics.acceleration || 1200,
-            maxVelocity: projectileData.guidance === 'rocket' ?
-                projectileData.physics.speed : Infinity,
-            turnRate: projectileData.physics.turnRate,
-            movementType: projectileData.guidance === 'guided'
-                ? MovementType.INERTIALESS : MovementType.INERTIAL,
-        }).addComponent(CollisionInteractionComponent, {
-            hitTypes: new Set(['normal']),
-        });
-
-    if (target) {
-        projectile.addComponent(TargetComponent, { target });
-    }
-    if (projectileData.guidance === 'guided') {
-        projectile.addComponent(GuidanceComponent, {
-            guidance: Guidance.firstOrder
-        });
-    }
-
-    return projectile.build();
-}
-
-function* getEvenlySpacedAngles(angle: number) {
-    let current = new Angle(0);
-    yield current;
-    while (true) {
-        current = current.add(angle);
-        yield current;
-        yield new Angle(-current.angle);
-    }
-}
-
-function* getRandomInCone(angle: number) {
-    while (true) {
-        yield new Angle((2 * Math.random() - 1) * angle);
-    }
-}
-
-function fireSubs(sourceMovement: MovementState, entities: EntityMap,
-    projectileData: ProjectileWeaponData, projectileType: ProjectileType,
-    gameData: GameDataInterface, sourceExpired: boolean, target?: Target) {
-
-    for (const sub of projectileData.submunitions) {
-        const angles = sub.theta < 0
-            ? getEvenlySpacedAngles(Math.abs(sub.theta))
-            : getRandomInCone(sub.theta);
-
-        for (let i = 0; i < sub.count; i++) {
-            if (!sub.subIfExpire && sourceExpired) {
-                continue;
-            }
-            const subWeapon = gameData.data.Weapon.getCached(sub.id);
-            const angle = angles.next().value || new Angle(0);
-
-            if (subWeapon?.type === 'ProjectileWeaponData') {
-                const subInstance = makeProjectile({
-                    projectileData: subWeapon,
-                    position: sourceMovement.position,
-                    rotation: sourceMovement.rotation.add(angle),
-                    source: projectileType.source,
-                    sourceVelocity: sourceMovement.velocity,
-                    target: target?.target,
-                });
-
-                entities.set(v4(), subInstance);
-            }
+    constructor(data: WeaponData, runQuery: RunQueryFunction) {
+        if (data.type !== 'ProjectileWeaponData') {
+            throw new Error('Data must be ProjectileWeaponData');
         }
+        super(data, runQuery);
+
+        const queueHolder = {} as { queue: FactoryQueue<Entity> };
+
+        this.factoryQueue = new FactoryQueue(() => {
+            const projectile = new EntityBuilder()
+                .addComponent(ProjectileDataComponent, this.data)
+                .addComponent(ProjectileComponent, { id: this.data.id })
+                .addComponent(MovementStateComponent, {
+                    position: new Position(0, 0),
+                    rotation: new Angle(0),
+                    velocity: new Vector(0, 0),
+                    accelerating: this.data.guidance === 'rocket' ? 1 : 0,
+                    turning: 0,
+                    turnBack: false,
+                }).addComponent(MovementPhysicsComponent, {
+                    acceleration: this.data.physics.acceleration || 1200,
+                    maxVelocity: this.data.guidance === 'rocket' ?
+                        this.data.physics.speed : Infinity,
+                    turnRate: this.data.physics.turnRate,
+                    movementType: this.data.guidance === 'guided'
+                        ? MovementType.INERTIALESS : MovementType.INERTIAL,
+                }).addComponent(CollisionInteractionComponent, {
+                    hitTypes: new Set(['normal']),
+                }).addComponent(ReturnToQueueComponent, queueHolder);
+            if (this.data.guidance === 'guided') {
+                projectile.addComponent(GuidanceComponent, {
+                    guidance: Guidance.firstOrder,
+                });
+            }
+
+            return projectile;
+        }, 1);
+        queueHolder.queue = this.factoryQueue;
+    }
+
+    fire(position: Position, angle: Angle, owner?: string, target?: string,
+        source?: string, sourceVelocity?: Vector): Entity | undefined {
+
+        let velocity = new Vector(0, 0);
+        if (this.data.guidance !== 'guided' && sourceVelocity) {
+            velocity = velocity.add(sourceVelocity);
+        }
+        if (this.data.guidance !== 'rocket') {
+            velocity = velocity.add(angle.getUnitVector()
+                .scale(this.data.physics.speed));
+        }
+
+        const projectile = this.factoryQueue.dequeue();
+        if (!projectile) {
+            return undefined;
+        }
+
+        const movementState = projectile.components.get(MovementStateComponent)!;
+        movementState.position = position;
+        movementState.rotation = angle;
+        movementState.velocity = velocity;
+        movementState.turning = 0;
+
+        projectile.components.delete(FireTime);
+        projectile.components.delete(SubCounts);
+
+        if (target) {
+            projectile.components.set(TargetComponent, { target });
+        } else {
+            projectile.components.delete(TargetComponent);
+        }
+
+        if (source) {
+            projectile.components.set(SourceComponent, source);
+        } else {
+            projectile.components.delete(SourceComponent);
+        }
+
+        if (owner) {
+            projectile.components.set(OwnerComponent, owner);
+        } else {
+            projectile.components.delete(OwnerComponent);
+        }
+
+        this.entities.set(v4(), projectile);
+        if (this.data.sound) {
+            this.emit(SoundEvent, {
+                id: this.data.sound,
+                loop: this.data.loopSound,
+            });
+        }
+
+        return projectile;
     }
 }
 
@@ -143,22 +127,18 @@ export const ProjectileExpireEvent = new EcsEvent<Entity>('ProjectileExpire');
 
 const ProjectileLifespanSystem = new System({
     name: 'ProjectileLifespanSystem',
-    args: [FireTimeProvider, TimeResource, MovementStateComponent,
-        GameDataResource, Optional(TargetComponent), ProjectileDataComponent,
-        ProjectileComponent, Entities, UUID, Emit] as const,
-    step(fireTime, { time }, movement, gameData, target, projectileData,
-        projectileType, entities, uuid, emit) {
+    args: [FireTimeProvider, TimeResource, ProjectileDataComponent, FireSubs,
+        Entities, UUID, Emit, ProjectileComponent] as const,
+    step(fireTime, { time }, projectileData, fireSubs, entities, uuid, emit) {
         if (time - fireTime > projectileData.shotDuration) {
-            fireSubs(movement, entities, projectileData, projectileType,
-                gameData, true /* source shot expired */, target);
-
+            fireSubs(projectileData.id, uuid, true);
             const self = entities.get(uuid);
             if (!self) {
                 console.warn(`Missing projectile ${uuid} that is expiring`);
                 return;
             }
-            emit(ProjectileExpireEvent, self);
             entities.delete(uuid);
+            emit(ProjectileExpireEvent, self);
         }
     },
 });
@@ -190,13 +170,14 @@ const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        ProjectileComponent, Emit] as const,
-    step(collision, entities, uuid, projectileData, projectileComponent, emit) {
+        Optional(OwnerComponent), Emit] as const,
+    step(collision, entities, uuid, projectileData, owner, emit) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
         }
-        if (collision.other === projectileComponent.source) {
+        const otherOwner = other.components.get(OwnerComponent);
+        if (collision.other === owner || otherOwner === owner) {
             return;
         }
 
@@ -220,6 +201,12 @@ const ProjectileCollisionSystem = new System({
 export const ProjectilePlugin: Plugin = {
     name: 'ProjectilePlugin',
     build(world) {
+        const weaponConstructors = world.resources.get(WeaponConstructors);
+        if (!weaponConstructors) {
+            throw new Error('Expected WeaponConstructors to exist');
+        }
+        weaponConstructors.set('ProjectileWeaponData', ProjectileWeaponEntry);
+
         world.addSystem(ProjectileGuidanceSystem);
         world.addSystem(ProjectileLifespanSystem);
         world.addSystem(ProjectileCollisionSystem);

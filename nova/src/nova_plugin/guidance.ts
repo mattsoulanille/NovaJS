@@ -1,3 +1,4 @@
+import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -49,3 +50,7 @@ export function firstOrderWithFallback(position: Position, velocity: Vector,
     const solutions = firstOrderGuidance(position, velocity, targetPosition, targetVelocity, shotSpeed);
     return solutions[0] ?? zeroOrderGuidance(position, targetPosition);
 }
+
+export const GuidanceComponent = new Component<{
+    guidance: Guidance,
+}>('GuidanceComponent');

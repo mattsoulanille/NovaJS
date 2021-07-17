@@ -8,8 +8,7 @@ import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
 import { World } from "./world";
 
-export const Entities = Symbol('Entities');
-export type EntitiesObject<T> = T extends typeof Entities ? EntityMap : never;
+export const Entities = new Resource<EntityMap>('Entities');
 
 export const Components = Symbol('Components');
 export type ComponentsObject<T> = T extends typeof Components
@@ -26,31 +25,24 @@ export type GetArgFunction = <T extends ArgTypes = ArgTypes>(arg: T)
     => Either<undefined, ArgData<T>>;
 export type GetArgSelector<T> = T extends typeof GetArg ? GetArgFunction : never;
 
-export const Emit = Symbol('Emit');
+export const Emit = new Resource<EmitFunction>('Emit');
 export type EmitFunction = <Data>(event: EcsEvent<Data, any>, data: Data,
     entities?: string[]) => void;
-export type EmitSelector<T> = T extends typeof Emit ? EmitFunction : never;
 
-export const GetWorld = Symbol('World');
-export type GetWorldSelector<T> = T extends typeof GetWorld ? World : never;
+export const GetWorld = new Resource<World>('GetWorld');
 
-export const RunQuery = Symbol('RunQuery');
+export const RunQuery = new Resource<RunQueryFunction>('RunQuery');
 export type RunQueryFunction = <T extends readonly ArgTypes[] = ArgTypes[]>(query: Query<T>, uuid?: string) => ArgsToData<T>[];
-export type RunQuerySelector<T> = T extends typeof RunQuery ? RunQueryFunction : never;
 
 // Types for args that are used to define a system or query. Passed in a tuple.
 export type ArgTypes = Component<any>
     | Query
     | Resource<any>
     | EcsEvent<any, any>
-    | typeof Entities
     | typeof Components
     | typeof UUID
     | typeof GetEntity
     | typeof GetArg
-    | typeof Emit
-    | typeof GetWorld
-    | typeof RunQuery
     | Modifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
@@ -60,14 +52,10 @@ export type ArgData<T> =
     | ResourceData<T>
     | QueryResults<T>
     | EventData<T>
-    | EntitiesObject<T>
     | ComponentsObject<T>
     | UUIDData<T>
     | GetEntityObject<T>
     | GetArgSelector<T>
-    | EmitSelector<T>
-    | GetWorldSelector<T>
-    | RunQuerySelector<T>
     | ModifierResult<T>
     | AllowUndefined<T>;
 

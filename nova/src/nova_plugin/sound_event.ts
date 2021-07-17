@@ -1,4 +1,4 @@
 import { EcsEvent } from 'nova_ecs/events';
 
 
-export const SoundEvent = new EcsEvent<string /* id */>('WeaponFire');
+export const SoundEvent = new EcsEvent<{ id: string, loop?: boolean }>('WeaponFire');

@@ -1,4 +1,3 @@
-import { Component } from 'nova_ecs/component';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Resource } from 'nova_ecs/resource';

@@ -1,12 +1,31 @@
-package(default_visibility = ["//visibility:public"])
 load("//:defaults.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 
+package(default_visibility = ["//visibility:public"])
 
 ts_library(
     name = "common",
-    srcs = glob(["*.ts"]),
+    srcs = glob(["*.ts"], exclude=["*_test.ts"]),
     deps = [
         "@npm//@types/node",
         "@npm//ts-enum-util",
     ]
+)
+
+ts_library(
+    name = "common_test_lib",
+    srcs = glob(["*_test.ts"]),
+    deps = [
+        ":common",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
+    ]
+)
+
+jasmine_node_test(
+    name = "common_test",
+    srcs = [
+        ":common_test_lib",
+    ],
+    link_workspace_root = True,
 )

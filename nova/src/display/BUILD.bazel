@@ -38,6 +38,7 @@ ts_library(
         "//nova/src/client/gamedata",
         "//nova/src/util",
         "//nova/src/spaceport",
+        "@npm//@pixi/sound",
         "@npm//fp-ts",
         "@npm//pixi.js",
         "@npm//uuid",

@@ -134,6 +134,7 @@ export function getDefaultBaseWeaponData(): BaseWeaponData {
 
 export interface NotBayWeaponData extends BaseWeaponData {
     damage: WeaponDamage;
+    submunitions: Array<SubmunitionType>,
     oneAmmoPerBurst: boolean;
     ionizationColor: number;
     shotDuration: number;
@@ -152,6 +153,7 @@ export function getDefaultNotBayWeaponData(): NotBayWeaponData {
             ionization: 0,
             passThroughShield: 0,
         },
+        submunitions: [],
         oneAmmoPerBurst: false,
         ionizationColor: 0xffffff,
         shotDuration: 7,
@@ -184,7 +186,6 @@ export function getDefaultParticles(): ParticleConfig {
 export interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData {
     type: "ProjectileWeaponData",
     guidance: ProjectileGuidanceType,
-    submunitions: Array<SubmunitionType>,
     proxRadius: number, // Proximity to something before it explodes
     proxSafety: number // Number of seconds after firing that the weapon won't explode
     trailParticles: ParticleConfig,
@@ -198,7 +199,6 @@ export function getDefaultProjectileWeaponData(): ProjectileWeaponData {
         ...getDefaultSpaceObjectData(),
         type: "ProjectileWeaponData",
         guidance: "unguided",
-        submunitions: [],
         proxRadius: 1,
         proxSafety: 0,
         trailParticles: getDefaultParticles(),
@@ -223,13 +223,15 @@ export function getDefaultBeamWeaponData(): BeamWeaponData {
 
 export interface BayWeaponData extends BaseWeaponData {
     type: "BayWeaponData",
-    shipID: string
+    guidance: BayGuidanceType,
+    shipID: string,
 }
 
 export function getDefaultBayWeaponData(): BayWeaponData {
     return {
         ...getDefaultBaseWeaponData(),
         type: "BayWeaponData",
+        guidance: "bay",
         shipID: getDefaultShipData().id
     };
 }

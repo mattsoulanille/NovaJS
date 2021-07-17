@@ -1,4 +1,5 @@
-import { Queue, QueueImpl } from "./Queue";
+import { Queue, QueueImpl } from "./queue";
+
 
 export class FactoryQueue<Item> implements Queue<Item> {
     buildingPromise: Promise<unknown>;
@@ -9,19 +10,19 @@ export class FactoryQueue<Item> implements Queue<Item> {
     }
 
     private async prebuild(c: number) {
-        let promises: Array<Promise<Item> | Item> = Array(c);
+        const promises: Array<Promise<Item> | Item> = Array(c);
         for (let i = 0; i < c; i++) {
             promises[i] = this.buildFunction();
         }
 
-        let items = await Promise.all(promises);
-        for (let item of items) {
+        const items = await Promise.all(promises);
+        for (const item of items) {
             this.queue.enqueue(item);
         }
     }
 
     private async buildToCountNoCheck(c: number) {
-        let deficit = c - this.queue.count;
+        const deficit = c - this.queue.count;
         if (deficit > 0) {
             await this.prebuild(deficit);
         }

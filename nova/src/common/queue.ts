@@ -7,7 +7,6 @@ export interface Queue<Item> {
 
 
 export class QueueImpl<Item> implements Queue<Item> {
-
     private items: (Item | undefined)[] = [];
     private startIndex = 0;
     private endIndex = 0;
