@@ -28,15 +28,6 @@ export const WeaponConstructors = new Resource<Map<WeaponData['type'],
 
 export const WeaponEntries = new Resource<Gettable<WeaponEntry | undefined>>('WeaponEntries');
 
-type FireWeaponFromEntity = (id: string, source: string)
-    => Entity | undefined;
-export const FireWeaponFromEntity = new Resource<FireWeaponFromEntity>('FireWeaponFromEntity');
-
-type FireWeapon = (id: string, position: Position, angle: Angle, owner?: string,
-    target?: string, source?: string, sourceVelocity?: Vector,
-    exitPointData?: ExitPointData) => Entity | undefined;
-export const FireWeapon = new Resource<FireWeapon>('FireWeapon');
-
 type FireSubs = (id: string, source: string, sourceExpired?: boolean) => Entity[];
 export const FireSubs = new Resource<FireSubs>('FireSubs');
 
@@ -133,15 +124,23 @@ const FireFromEntityQuery = new Query([WeaponsComponentProvider,
     Entities, MovementStateComponent, FirstAnimation,
     Optional(OwnerComponent), Optional(TargetComponent)] as const, 'FireFromEntityQuery');
 
-const SubsQuery = new Query([FireWeapon, MovementStateComponent, SubCountsProvider,
+const SubsQuery = new Query([WeaponEntries, MovementStateComponent, SubCountsProvider,
     Optional(OwnerComponent), Optional(TargetComponent)] as const);
 
-const ConstructorQuery = new Query([Entities, Emit, SingletonComponent] as const);
+const ConstructorQuery = new Query([Entities, Emit, WeaponEntries,
+    SingletonComponent] as const);
+
 export abstract class WeaponEntry {
     protected entities: EntityMap;
     protected emit: EmitFunction;
-    constructor(protected data: WeaponData, protected runQuery: RunQueryFunction) {
-        [this.entities, this.emit] = runQuery(ConstructorQuery)[0]
+    constructor(public data: WeaponData, protected runQuery: RunQueryFunction) {
+        let weaponEntries: Gettable<WeaponEntry | undefined>;
+        [this.entities, this.emit, weaponEntries] = runQuery(ConstructorQuery)[0];
+        if ('submunitions' in this.data) {
+            for (const sub of this.data.submunitions) {
+                weaponEntries.get(sub.id);
+            }
+        }
     }
 
     abstract fire(position: Position, angle: Angle, owner?: string,
@@ -202,7 +201,7 @@ export abstract class WeaponEntry {
     }
 
     fireSubs(source: string, sourceExpired = false, position?: Position): Entity[] {
-        const [fireWeapon, movement, subCounts, owner, target]
+        const [weaponEntries, movement, subCounts, owner, target]
             = this.runQuery(SubsQuery, source)[0];
         if (!('submunitions' in this.data)) {
             return [];
@@ -219,11 +218,15 @@ export abstract class WeaponEntry {
                 : getRandomInCone(sub.theta);
 
             for (let i = 0; i < sub.count; i++) {
+                const subWeapon = weaponEntries.getCached(sub.id);
+                if (!subWeapon) {
+                    continue;
+                }
                 if (!sub.subIfExpire && sourceExpired) {
                     continue;
                 }
                 const angle = angles.next().value || new Angle(0);
-                const subEntity = fireWeapon(sub.id, position ?? movement.position,
+                const subEntity = subWeapon.fire(position ?? movement.position,
                     movement.rotation.add(angle), owner,
                     target?.target, source);
                 if (subEntity) {
@@ -266,25 +269,6 @@ export const FireWeaponPlugin: Plugin = {
             return new construct(data, runQuery);
         });
         world.resources.set(WeaponEntries, weaponEntries);
-
-        world.resources.set(FireWeaponFromEntity, (id: string, source: string) => {
-            const weaponEntry = weaponEntries.getCached(id);
-            if (!weaponEntry) {
-                return undefined;
-            }
-            return weaponEntry.fireFromEntity(source);
-        });
-
-        world.resources.set(FireWeapon, (id: string, position: Position,
-            angle: Angle, owner?: string, target?: string, source?: string,
-            sourceVelocity?: Vector, exitPointData?: ExitPointData) => {
-            const weaponEntry = weaponEntries.getCached(id);
-            if (!weaponEntry) {
-                return undefined;
-            }
-            return weaponEntry.fire(position, angle, owner, target, source,
-                sourceVelocity, exitPointData);
-        });
 
         world.resources.set(FireSubs, (id: string, source: string,
             sourceExpired?: boolean) => {

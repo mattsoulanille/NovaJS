@@ -113,7 +113,10 @@ class ProjectileWeaponEntry extends WeaponEntry {
 
         this.entities.set(v4(), projectile);
         if (this.data.sound) {
-            this.emit(SoundEvent, this.data.sound);
+            this.emit(SoundEvent, {
+                id: this.data.sound,
+                loop: this.data.loopSound,
+            });
         }
 
         return projectile;

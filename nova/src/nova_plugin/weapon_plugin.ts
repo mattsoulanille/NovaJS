@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, UUID } from 'nova_ecs/arg_types';
+import { Emit, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
 import { EcsEvent } from 'nova_ecs/events';
@@ -10,7 +10,7 @@ import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { mod } from '../util/mod';
-import { FireWeaponFromEntity, WeaponLocalState, WeaponsComponent, WeaponsComponentProvider } from './fire_weapon_plugin';
+import { WeaponEntries, WeaponLocalState, WeaponsComponent, WeaponsComponentProvider } from './fire_weapon_plugin';
 import { GameDataResource } from './game_data_resource';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
@@ -55,16 +55,16 @@ function checkReloaded(weapon: WeaponData, localState: WeaponLocalState,
 const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponentProvider,
-        TimeResource, GameDataResource, UUID, FireWeaponFromEntity] as const,
-    step(weaponsState, weaponsLocalState, time, gameData, uuid, fireWeaponFromEntity) {
+        TimeResource, UUID, WeaponEntries] as const,
+    step(weaponsState, weaponsLocalState, time, uuid, weaponEntries) {
         for (const [id, state] of weaponsState) {
-            const weapon = gameData.data.Weapon.getCached(id);
+            const weapon = weaponEntries.getCached(id);
             if (!weapon) {
                 continue;
             }
 
             const localState = weaponsLocalState.get(id);
-            if (!checkReloaded(weapon, localState, state, time)) {
+            if (!checkReloaded(weapon.data, localState, state, time)) {
                 continue;
             }
 
@@ -72,13 +72,11 @@ const WeaponsSystem = new System({
                 continue;
             }
 
-            const fired = fireWeaponFromEntity(id, uuid);
-            if (fired) {
-                if (weapon.burstCount) {
-                    localState.burstCount++;
-                }
-                localState.lastFired = time.time;
+            const fired = weapon.fireFromEntity(uuid);
+            if (weapon.data.burstCount) {
+                localState.burstCount++;
             }
+            localState.lastFired = time.time;
         }
     }
 });

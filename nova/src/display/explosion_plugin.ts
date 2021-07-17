@@ -37,7 +37,7 @@ const ExplosionSystem = new System({
                 ...[...graphic.sprites.values()].map(s => s.frames));
 
             if (explosionData.sound) {
-                emit(SoundEvent, explosionData.sound)
+                emit(SoundEvent, { id: explosionData.sound })
             }
         }
 
