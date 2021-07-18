@@ -183,17 +183,18 @@ function modifiersPressed(event: KeyboardEvent, modifiers: string[]) {
     return true;
 }
 
-export function getAction(controls: Controls,
-    event: KeyboardEvent): ControlAction | undefined {
+export function getActions(controls: Controls,
+    event: KeyboardEvent): ControlAction[] {
     const possibleActions = controls.get(event.code);
     if (!possibleActions) {
-        return undefined;
+        return [];
     }
 
+    const actions: ControlAction[] = [];
     for (const { action, modifiers } of possibleActions) {
         if (modifiersPressed(event, modifiers)) {
-            return action;
+            actions.push(action);
         }
     }
-    return undefined;
+    return actions;
 }

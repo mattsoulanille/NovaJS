@@ -8,6 +8,9 @@ ts_library(
     srcs = glob(["*.ts"]),
     deps = [
         "//nova/src/client/gamedata",
+        "//novadatainterface",
+        "//nova/src/nova_plugin",
+        "//nova_ecs:ecs",
         "@npm//pixi.js",
         "@npm//rxjs",
     ]

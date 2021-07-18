@@ -1,5 +1,4 @@
 import * as t from 'io-ts';
-import { GameDataInterface } from 'novadatainterface/GameDataInterface';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
@@ -21,7 +20,7 @@ const OutfitsState = map(t.string /* Outfit id */, OutfitState);
 export type OutfitsState = t.TypeOf<typeof OutfitsState>;
 
 export const OutfitsStateComponent = new Component<OutfitsState>('OutfitsStateComponent');
-const AppliedOutfitsComponent = new Component<{}>('AppliedOutfitsComponent');
+export const AppliedOutfitsComponent = new Component<{}>('AppliedOutfitsComponent');
 
 export const ApplyOutfitsSystem = new System({
     name: "ApplyOutfitsSystem",
