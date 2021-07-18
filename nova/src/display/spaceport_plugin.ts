@@ -6,6 +6,7 @@ import { System } from 'nova_ecs/system';
 import { currentIfDraft } from 'nova_ecs/utils';
 import { SingletonComponent } from 'nova_ecs/world';
 import { GameData } from '../client/gamedata/GameData';
+import { ControlsSubject } from '../nova_plugin/controls_plugin';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
 import { LandEvent } from '../nova_plugin/planet_plugin';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin';
@@ -26,9 +27,10 @@ function deImmerify(entity: Entity) {
 const LandSystem = new System({
     name: 'LandSystem',
     events: [LandEvent],
-    args: [LandEvent, GameDataResource, UUID, Entities,
+    args: [LandEvent, GameDataResource, UUID, Entities, ControlsSubject,
         Stage, SpaceportResource, ScreenSize, PlayerShipSelector] as const,
-    step({ id }, gameData, uuid, entities, stage, spaceportResource, { x, y }) {
+    step({ id }, gameData, uuid, entities, controlsSubject, stage,
+        spaceportResource, { x, y }) {
         const playerShip = entities.get(uuid);
         if (!playerShip) {
             console.warn('Player ship is missing? Cannot land.');
@@ -37,10 +39,11 @@ const LandSystem = new System({
         entities.delete(uuid);
         deImmerify(playerShip);
 
-        const spaceport = new Spaceport(gameData as GameData, id, () => {
-            entities.set(uuid, playerShip);
-            stage.removeChild(spaceport.container);
-        });
+        const spaceport = new Spaceport(gameData as GameData, id, playerShip,
+            controlsSubject, (newShip) => {
+                entities.set(uuid, newShip);
+                stage.removeChild(spaceport.container);
+            });
         spaceport.container.position.x = x / 2;
         spaceport.container.position.y = y / 2;
 

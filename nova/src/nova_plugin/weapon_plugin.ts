@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, GetEntity, UUID } from 'nova_ecs/arg_types';
+import { Emit, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
 import { EcsEvent } from 'nova_ecs/events';

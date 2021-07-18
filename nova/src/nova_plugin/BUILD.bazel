@@ -33,6 +33,7 @@ ts_library(
         "target_plugin.ts",
         "target_component.ts",
         "controls.ts",
+        "controls_plugin.ts",
         "sound_event.ts",
         "fire_weapon_plugin.ts",
         "return_to_queue_plugin.ts",
@@ -54,6 +55,7 @@ ts_library(
         "@npm//@types/sat",
         "@npm//rbush",
         "@npm//@types/rbush",
+        "@npm//rxjs",
     ]
 )
 
