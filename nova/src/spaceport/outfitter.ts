@@ -12,7 +12,7 @@ import { Menu } from "./menu";
 
 
 const descWidth = 190;
-const FONT = {
+export const FONT = {
     normal: {
         fontFamily: "Geneva", fontSize: 10, fill: 0xffffff,
         align: 'left', wordWrap: true, wordWrapWidth: descWidth
@@ -113,7 +113,7 @@ export class Outfitter {
         }
 
         const itemGrid = await this.makeOutfitsGrid();
-        this.itemGrid = itemGrid
+        this.itemGrid = itemGrid;
         this.container.addChild(this.itemGrid.container);
 
         this.itemGrid.drawGrid();

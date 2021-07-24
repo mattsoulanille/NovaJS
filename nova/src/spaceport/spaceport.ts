@@ -9,6 +9,7 @@ import { WeaponsStateComponent } from '../nova_plugin/weapon_plugin';
 import { Button } from './button';
 import { Menu } from './menu';
 import { Outfitter } from './outfitter';
+import { Shipyard } from './shipyard';
 
 
 export class Spaceport {
@@ -16,6 +17,7 @@ export class Spaceport {
     readonly container = new PIXI.Container();
     private menu: Menu;
     private outfitter: Outfitter;
+    private shipyard: Shipyard;
 
     private font = {
         title: {
@@ -27,6 +29,7 @@ export class Spaceport {
             align: 'left', wordWrap: true, wordWrapWidth: 301
         } as const,
     };
+
 
     constructor(private gameData: GameData, private id: string,
         private playerShip: Entity, private controls: Observable<ControlEvent>,
@@ -54,6 +57,14 @@ export class Spaceport {
         this.outfitter.visible = false;
         buttons.outfitter.click.subscribe(() => this.outfitter.visible = true);
 
+        this.shipyard = new Shipyard(gameData, controls, playerShip, (newShip) => {
+            this.playerShip = newShip;
+            this.shipyard.visible = false;
+        });
+        this.shipyard.visible = false;
+
+        buttons.shipyard.click.subscribe(() => this.shipyard.visible = true);
+
         this.built = this.build();
     }
 
@@ -75,5 +86,6 @@ export class Spaceport {
         spaceportPict.position.y = -256;
         this.container.addChild(spaceportPict)
         this.container.addChild(this.outfitter.container);
+        this.container.addChild(this.shipyard.container);
     }
 }
