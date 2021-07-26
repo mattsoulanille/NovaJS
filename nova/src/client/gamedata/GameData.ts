@@ -2,7 +2,7 @@ import { BaseData } from 'novadatainterface/BaseData';
 import { CicnData } from 'novadatainterface/CicnData';
 import { CicnImageData } from 'novadatainterface/CicnImage';
 import { ExplosionData } from 'novadatainterface/ExplosionData';
-import { GameDataInterface } from 'novadatainterface/GameDataInterface';
+import { GameDataInterface, PreloadData } from 'novadatainterface/GameDataInterface';
 import { Gettable } from 'novadatainterface/Gettable';
 import { NovaDataInterface, NovaDataType } from 'novadatainterface/NovaDataInterface';
 import { NovaIDs } from 'novadatainterface/NovaIDs';
@@ -21,17 +21,17 @@ import * as PIXI from 'pixi.js';
 import * as sound from '@pixi/sound';
 import urlJoin from 'url-join';
 import { dataPath, idsPath } from '../../common/GameDataPaths';
-
+import PQueue from 'p-queue';
 
 class WeaponGettable extends Gettable<WeaponData> {
-    async get(id: string) {
+    async get(id: string, priority = 0) {
         if (id in this.data) {
             return await super.get(id);
         }
 
-        const weapon = await super.get(id);
+        const weapon = await super.get(id, priority);
         if (weapon.type === 'ProjectileWeaponData') {
-            await Promise.all(weapon.submunitions.map(s => this.get(s.id)));
+            await Promise.all(weapon.submunitions.map(s => this.get(s.id, priority)));
         }
         return weapon;
     }
@@ -45,6 +45,12 @@ export class GameData implements GameDataInterface {
         Sound: Gettable<sound.Sound>,
     };
     public readonly ids: Promise<NovaIDs>;
+    readonly preloadData: Promise<PreloadData>;
+    public loaded = Promise.resolve();
+    private loadQueue = new PQueue({
+        autoStart: true,
+        concurrency: 16,
+    });
 
     constructor() {
         // There should be a better way to do this. I'm repeating myself here.
@@ -68,34 +74,51 @@ export class GameData implements GameDataInterface {
             Sound: this.addSoundGettable(),
         };
 
-        this.ids = this.getIds();
+        this.preloadData = this.preload();
+        this.loaded = this.preloadData.then(() => { });
 
+        this.ids = this.getIds();
     }
 
     getSettings(file: string): Promise<unknown> {
         return this.getUrl(urlJoin("/settings", file));
     }
 
-    private async getUrl(url: string): Promise<Buffer> {
-        return await new Promise(function(fulfill, reject) {
-            //var loader = new PIXI.loaders.Loader();
-            const loader = new PIXI.Loader();
-            loader.add(url, url)
-                .load(function(_loader: any, resources: Partial<Record<string, PIXI.ILoaderResource>>) {
-                    const resource = resources[url];
-                    if (resource == undefined) {
-                        reject(`Resource ${url} not present on loaded url`)
-                        return;
-                    }
-                    if (resource.error) {
-                        reject(resource.error);
-                    }
-                    else {
-                        fulfill(resource.data);
-                    }
-                });
-        });
+    private async preload() {
+        const data = await (await fetch('/preloadData.json')).json() as PreloadData;
+        for (const [uncastKey, val] of Object.entries(data)) {
+            const key = uncastKey as keyof typeof data;
+            this.data[key].gotten = val;
+        }
+        return data;
+    }
 
+    private async getUrl(url: string, priority = 0): Promise<Buffer> {
+        await this.preloadData;
+        const loadPromise = this.loadQueue.add(() =>
+            new Promise<Buffer>(function(fulfill, reject) {
+                const loader = new PIXI.Loader();
+                loader.add(url, url)
+                    .load(function(_loader: any, resources: Partial<Record<string, PIXI.ILoaderResource>>) {
+                        const resource = resources[url];
+                        if (resource == undefined) {
+                            reject(`Resource ${url} not present on loaded url`)
+                            return;
+                        }
+                        if (resource.error) {
+                            reject(resource.error);
+                        }
+                        else {
+                            fulfill(resource.data);
+                        }
+                    });
+            }), { priority: -priority });
+
+        this.loaded = (async () => {
+            await this.loaded;
+            await loadPromise;
+        })();
+        return loadPromise;
     }
 
     private getDataPrefix(dataType: NovaDataType): string {
@@ -104,43 +127,55 @@ export class GameData implements GameDataInterface {
 
     private addGettable<T extends BaseData | SpriteSheetFramesData>(dataType: NovaDataType): Gettable<T> {
         const dataPrefix = this.getDataPrefix(dataType);
-        return new Gettable<T>(async (id: string): Promise<T> => {
-            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"))) as any;
+        return new Gettable<T>(async (id: string, priority: number): Promise<T> => {
+            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"), priority)) as any;
         });
     }
 
     private addWeaponGettable(): WeaponGettable {
         const dataPrefix = this.getDataPrefix(NovaDataType.Weapon);
-        return new WeaponGettable(async (id: string): Promise<WeaponData> => {
-            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"))) as any;
+        return new WeaponGettable(async (id: string, priority: number): Promise<WeaponData> => {
+            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"), priority)) as any;
         });
 
     }
 
     private addPictGettable<T extends PictImageData | SpriteSheetImageData>(dataType: NovaDataType): Gettable<T> {
         var dataPrefix = this.getDataPrefix(dataType);
-        return new Gettable<T>(async (id: string): Promise<T> => {
-            return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png")).buffer;
+        return new Gettable<T>(async (id: string, priority: number): Promise<T> => {
+            return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png", priority)).buffer;
         });
     }
 
     private addSoundFileGettable() {
         const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
-        return new Gettable<SoundFile>(async (id: string) => {
+        return new Gettable<SoundFile>(async (id: string, priority: number) => {
             //return await (await fetch(urlJoin(dataPrefix, id))).arrayBuffer();
-            return (await this.getUrl(urlJoin(dataPrefix, id) + '.mp3'));
+            return (await this.getUrl(urlJoin(dataPrefix, id) + '.mp3', priority));
         });
     }
 
-    async textureFromPict(id: string): Promise<PIXI.Texture> {
-        const pictPath = urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
-        await this.data.PictImage.get(id);
+    private url(id: string): string {
+        return urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
+    }
+
+    textureFromPict(id: string): PIXI.Texture {
+        return PIXI.Texture.from(this.url(id));
+    }
+
+    spriteFromPict(id: string) {
+        return PIXI.Sprite.from(this.url(id));
+    }
+
+    async textureFromPictAsync(id: string, priority?: number) {
+        const pictPath = this.url(id);
+        await this.data.PictImage.get(id, priority);
         return PIXI.Texture.from(pictPath);
     }
 
-    async spriteFromPict(id: string) {
+    async spriteFromPictAsync(id: string, priority?: number) {
         // TODO: Use this.data
-        var texture = await this.textureFromPict(id);
+        var texture = await this.textureFromPictAsync(id, priority);
         return new PIXI.Sprite(texture);
     }
 

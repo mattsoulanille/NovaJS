@@ -39,7 +39,7 @@ const PlanetTargetProvider = Provide({
     factory: () => ({ target: undefined }),
 });
 
-export const LandEvent = new EcsEvent<{ id: string }>('LandEvent');
+export const LandEvent = new EcsEvent<{ id: string, uuid: string }>('LandEvent');
 
 const AttemptLandingSystem = new System({
     name: 'AttemptLandingSystem',
@@ -64,8 +64,8 @@ const AttemptLandingSystem = new System({
             if (planetTarget.target === closestUuid) {
                 // Try to land
                 if (minSquared < 10_000 && velocity.lengthSquared < 3000
-                    && planetId) {
-                    emit(LandEvent, { id: planetId });
+                    && planetId && closestUuid) {
+                    emit(LandEvent, { id: planetId, uuid: closestUuid });
                 }
             }
 

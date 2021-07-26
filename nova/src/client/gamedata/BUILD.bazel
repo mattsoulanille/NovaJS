@@ -14,5 +14,6 @@ ts_library(
         "@npm//@pixi/sound",
         "@npm//url-join",
         "@npm//@types/url-join",
+        "@npm//p-queue",
     ]
 )

@@ -7,7 +7,7 @@ class CachelessGettable<T> extends Gettable<T> {
     }
 
     async get(id: string) {
-        return await this.getFunction(id);
+        return await this.getFunction(id, 0);
     }
 }
 

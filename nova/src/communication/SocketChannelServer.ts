@@ -48,7 +48,7 @@ export class SocketChannelServer implements ChannelServer {
         if (timeout) {
             this.timeout = timeout;
         } else {
-            this.timeout = 1000;
+            this.timeout = 30000;
         }
 
         this.wss.on("connection", this.onConnect.bind(this));

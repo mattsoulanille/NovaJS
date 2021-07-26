@@ -1,14 +1,24 @@
-type Builder<T> = (id: string) => Promise<T>;
+export type Builder<T> = (id: string, priority: number) => Promise<T>;
 
-class Gettable<T> {
+export type GettableData<G> = G extends Gettable<infer T> ? T : never;
+
+export class Gettable<T> {
     protected data: { [key: string]: Promise<T> } = {};
-    protected gotten: { [key: string]: T | Error } = {};
+    gotten: { [key: string]: T | Error } = {};
 
     constructor(protected getFunction: Builder<T>) { }
 
-    async get(id: string) {
+    async get(id: string, priority: number = 0) {
+        if (id in this.gotten) {
+            const val = this.gotten[id];
+            if (val instanceof Error) {
+                throw val;
+            }
+            return val;
+        }
+
         if (!(id in this.data)) {
-            this.data[id] = this.getFunction(id);
+            this.data[id] = this.getFunction(id, priority);
         }
 
         try {
@@ -33,6 +43,3 @@ class Gettable<T> {
         }
     }
 }
-
-export { Gettable, Builder };
-

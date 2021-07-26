@@ -38,6 +38,10 @@ class GameDataServer {
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
 
+        this.app.use('/preloadData.json', async (_req, res) => {
+            res.send(this.gameData.preloadData ? await this.gameData.preloadData : {});
+        });
+
         this.app.use(settingsPrefix,
             express.static(this.settingsPath));
 

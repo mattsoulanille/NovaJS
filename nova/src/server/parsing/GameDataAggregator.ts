@@ -1,6 +1,6 @@
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { GameDataInterface, PreloadData } from "novadatainterface/GameDataInterface";
 import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { Gettable } from "novadatainterface/Gettable";
+import { Gettable, GettableData } from "novadatainterface/Gettable";
 import { BaseData } from "novadatainterface/BaseData";
 import { ShipData } from "novadatainterface/ShipData";
 import { OutfitData } from "novadatainterface/OutiftData";
@@ -26,6 +26,7 @@ import { SoundFile } from "novadatainterface/SoundFile";
 class GameDataAggregator implements GameDataInterface {
     readonly data: NovaDataInterface;
     readonly ids: Promise<NovaIDs>;
+    readonly preloadData: Promise<PreloadData>;
     private dataSources: Array<GameDataInterface>;
     private warningReporter: (w: string) => void;
 
@@ -54,8 +55,9 @@ class GameDataAggregator implements GameDataInterface {
         };
 
         this.ids = this.getAllIDs();
-    }
 
+        this.preloadData = this.getPreloadData();
+    }
 
     getDataSources() {
         return this.dataSources;
@@ -102,6 +104,44 @@ class GameDataAggregator implements GameDataInterface {
             }
         }
         return IDs;
+    }
+
+    private async getPreloadData() {
+        const preloadDataList = (await Promise.all(this.dataSources.map(d => d.preloadData)))
+            .filter((d: PreloadData | undefined): d is PreloadData => Boolean(d));
+
+        const preloadData: PreloadData = {};
+        for (const entry of preloadDataList) {
+            for (const [uncastKey, dataMap] of Object.entries(entry)) {
+                const key = uncastKey as keyof typeof entry;
+                if (!preloadData[key]) {
+                    preloadData[key] = {};
+                }
+                const fullMap = preloadData[key]!;
+                for (const [id, val] of Object.entries(dataMap)) {
+                    fullMap[id] = val;
+                }
+            }
+        }
+
+        const outfit = this.preloadResource(NovaDataType.Outfit);
+        const ships = this.preloadResource(NovaDataType.Ship);
+        preloadData.Outfit = await outfit;
+        preloadData.Ship = await ships;
+        return preloadData;
+    }
+
+    private async preloadResource<Data extends NovaDataType>(dataType: Data) {
+        const allIds = await this.ids;
+        const ids = allIds[dataType];
+
+        const loaded = await Promise.all(ids.map(async (id) => {
+            const data = await this.data[dataType].get(id);
+            return [id, data];
+        }));
+        return Object.fromEntries(loaded) as {
+            [index: string]: GettableData<NovaDataInterface[Data]>
+        };
     }
 }
 
