@@ -10,37 +10,27 @@ import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin';
 import { Button } from './button';
 import { ItemGrid, ItemTile } from './item_grid';
 import { Menu } from './menu';
-import { MenuControls } from './menu_controls';
 import { FONT } from './outfitter';
 
 
-export class Shipyard {
-    container = new PIXI.Container();
+export class Shipyard extends Menu<Entity> {
     private pictContainer = new PIXI.Container();
-    menu: Menu;
-    private controls: MenuControls | undefined;
     itemGrid?: ItemGrid<ShipData>;
-    built = false;
-    private wrappedVisible = false;
     private text = {
         description: new PIXI.Text("", FONT.normal),
     }
 
-    constructor(private gameData: GameData,
-        private controlEvents: Observable<ControlEvent>,
-        private ship: Entity,
-        private setShip: (ship: Entity) => void) {
-
+    constructor(gameData: GameData,
+        controlEvents: Observable<ControlEvent>) {
+        super(gameData, "nova:8502", controlEvents);
         const buttons = {
             buy: new Button(gameData, "Buy", 60, { x: -20, y: 126 }),
             done: new Button(gameData, "Done", 60, { x: 100, y: 126 }),
         };
-
-        this.menu = new Menu(gameData, "nova:8502", buttons);
-        this.container.addChild(this.menu.container);
+        this.addButtons(buttons);
 
         buttons.buy.click.subscribe(this.buyShip.bind(this));
-        buttons.done.click.subscribe(this.depart.bind(this));
+        buttons.done.click.subscribe(this.done.bind(this));
 
         this.text.description.position.x = -27;
         this.text.description.position.y = -150;
@@ -51,11 +41,8 @@ export class Shipyard {
         this.build();
     }
 
-    private async build() {
-        if (this.built) {
-            return;
-        }
-
+    protected async build() {
+        await super.build();
         const itemGrid = await this.makeShipsGrid();
         this.itemGrid = itemGrid;
         this.container.addChild(itemGrid.container);
@@ -65,21 +52,20 @@ export class Shipyard {
         this.itemGrid.container.position.y = -153;
         this.itemGrid.activeTile.subscribe(this.setShipSelected.bind(this));
 
-        this.controls = new MenuControls(this.controlEvents, {
+        this.controls.controls = {
             left: () => itemGrid.left(),
             right: () => itemGrid.right(),
             up: () => itemGrid.up(),
             down: () => itemGrid.down(),
             buy: this.buyShip.bind(this),
-            depart: this.depart.bind(this),
-        });
-
-        this.built = true;
+            depart: this.done.bind(this),
+        };
     }
 
     private async makeShipsGrid() {
         const ids = (await this.gameData.ids).Ship;
-        const ships = await Promise.all(ids.map(id => this.gameData.data.Ship.get(id)));
+        const ships = await Promise.all(ids.map(id =>
+            this.gameData.data.Ship.get(id, 100)));
         ships.sort((a, b) => b.displayWeight - a.displayWeight);
         const itemGrid = new ItemGrid(this.gameData, ships);
         return itemGrid;
@@ -103,32 +89,14 @@ export class Shipyard {
         if (!this.itemGrid?.selection) {
             return;
         }
-        const multiplayerData = this.ship.components.get(MultiplayerData);
+        const multiplayerData = this.input.components.get(MultiplayerData);
         if (!multiplayerData) {
             console.warn('Missing multiplayer data for prior ship.');
             return;
         }
 
-        this.ship = makeShip(this.itemGrid.selection);
-        this.ship.components.set(PlayerShipSelector, undefined);
-        this.ship.components.set(MultiplayerData, multiplayerData);
-    }
-
-    private depart() {
-        this.setShip(this.ship);
-    }
-
-    set visible(visible: boolean) {
-        this.wrappedVisible = visible;
-        this.container.visible = visible;
-        if (visible) {
-            this.controls?.bind();
-        } else {
-            this.controls?.unbind();
-        }
-    }
-
-    get visible() {
-        return this.wrappedVisible;
+        this.input = makeShip(this.itemGrid.selection);
+        this.input.components.set(PlayerShipSelector, undefined);
+        this.input.components.set(MultiplayerData, multiplayerData);
     }
 }

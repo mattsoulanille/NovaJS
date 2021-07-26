@@ -12,9 +12,9 @@ import RBush, { BBox } from "rbush";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
 import { PixiAppResource } from "./pixi_app_resource";
-import { ResizeEvent } from "./resize_event";
 import { texturesFromFrames } from "./textures_from_frames";
 import { alea } from 'seedrandom';
+import { ResizeEvent } from "./screen_size_plugin";
 
 const STAR_ID = "nova:700";
 
