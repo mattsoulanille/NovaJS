@@ -13,5 +13,6 @@ ts_library(
         "//nova_ecs:ecs",
         "@npm//pixi.js",
         "@npm//rxjs",
+        "//nova_ecs/plugins",
     ]
 )

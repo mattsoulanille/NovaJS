@@ -28,7 +28,6 @@ export class Button {
     readonly click = new Subject<undefined>();
     private text: PIXI.Text;
     private wrappedState = 'normal';
-    readonly built: Promise<void>;
     private width: number;
 
     // See colr resource                                                              
@@ -77,26 +76,23 @@ export class Button {
             this.state = 'normal';
             this.click.next(undefined);
         });
-        this.built = this.build();
-    }
 
-    private async build() {
         for (const [name, { left, middle, right }] of this.buttonIds) {
             const stateContainer = this.states.get(name);
             if (!stateContainer) {
                 throw new Error('Button missing state container');
             }
-            const leftSprite = await this.gameData.spriteFromPict(left);
+            const leftSprite = this.gameData.spriteFromPict(left);
             leftSprite.anchor.x = 1;
             leftSprite.position.x = LEFT_POS;
             stateContainer.addChild(leftSprite);
 
             const middleSprite = new PIXI.TilingSprite(
-                await this.gameData.textureFromPict(middle), this.width, 25);
+                this.gameData.textureFromPict(middle), this.width, 25);
             middleSprite.position.x = LEFT_POS;
             stateContainer.addChild(middleSprite);
 
-            const rightSprite = await this.gameData.spriteFromPict(right);
+            const rightSprite = this.gameData.spriteFromPict(right);
             rightSprite.position.x = LEFT_POS + this.width;
             stateContainer.addChild(rightSprite);
 

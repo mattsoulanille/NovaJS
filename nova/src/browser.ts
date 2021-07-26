@@ -8,7 +8,7 @@ import { SocketChannelClient } from "./communication/SocketChannelClient";
 import { DebugSettings } from "./debug_settings";
 import { Display } from "./display/display_plugin";
 import { PixiAppResource } from "./display/pixi_app_resource";
-import { ResizeEvent } from "./display/resize_event";
+import { ResizeEvent } from "./display/screen_size_plugin";
 import { Stage } from "./display/stage_resource";
 import { GameDataResource } from "./nova_plugin/game_data_resource";
 import { Nova } from "./nova_plugin/nova_plugin";

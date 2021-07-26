@@ -17,7 +17,6 @@ ts_library(
         "status_bar.ts",
         "stage_resource.ts",
         "space_resource.ts",
-        "resize_event.ts",
         "convex_hull_display_plugin.ts",
         "target_corners_plugin.ts",
         "planet_corners_plugin.ts",

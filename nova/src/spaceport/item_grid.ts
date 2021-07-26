@@ -56,14 +56,14 @@ export class ItemTile<I extends Item> {
         this.container.addChild(this.quantityText);
     }
 
-    async build() {
+    build() {
         if (this.built) {
             return;
         }
 
         if (this.item.pict) {
-            const smallPict = await this.gameData.spriteFromPict(this.item.pict);
-            const largePict = await this.gameData.spriteFromPict(this.item.pict);
+            const smallPict = this.gameData.spriteFromPict(this.item.pict);
+            const largePict = this.gameData.spriteFromPict(this.item.pict);
             this.largePict.addChild(largePict);
             smallPict.anchor.x = 0.5;
             smallPict.position.x = TILE_SIZE[0] / 2;

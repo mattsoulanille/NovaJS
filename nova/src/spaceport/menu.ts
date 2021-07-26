@@ -1,32 +1,66 @@
 import * as PIXI from 'pixi.js';
+import { firstValueFrom, Observable, Subject } from 'rxjs';
+import { take } from 'rxjs/operators';
 import { GameData } from '../client/gamedata/GameData';
+import { ControlEvent } from '../nova_plugin/controls_plugin';
 import { Button } from './button';
+import { MenuControls } from './menu_controls';
 
 type Buttons = {
     [index: string]: Button,
 };
 
-export class Menu {
+export abstract class Menu<T> {
     container = new PIXI.Container();
-    readonly built: Promise<void>;
+    readonly buildPromise: Promise<void>;
+    built = false;
+    protected controls: MenuControls;
+    private results = new Subject<T>();
+    protected input!: T;
 
     constructor(protected gameData: GameData,
         private background: string,
-        public buttons: Buttons) {
-        this.built = this.build();
-    }
+        controlEvents: Observable<ControlEvent>) {
+        this.controls = new MenuControls(controlEvents);
 
-    private async build() {
-        const backgroundSprite =
-            await this.gameData.spriteFromPict(this.background);
+        const backgroundSprite = this.gameData.spriteFromPict(this.background);
         // So you can't press things behind this menu:
         backgroundSprite.interactive = true;
         backgroundSprite.anchor.x = 0.5;
         backgroundSprite.anchor.y = 0.5;
+        this.container.visible = false;
         this.container.addChild(backgroundSprite);
+        this.buildPromise = this.doBuild();
+    }
 
-        for (const button of Object.values(this.buttons)) {
+    private async doBuild() {
+        await this.build();
+        this.built = true;
+    }
+
+    addButtons(buttons: Buttons) {
+        for (const button of Object.values(buttons)) {
             this.container.addChild(button.container);
         }
+    }
+
+    protected async build() { }
+
+    protected setInput(input: T) {
+        this.input = input;
+    }
+
+    async show(input: T): Promise<T> {
+        this.container.visible = true;
+        this.controls.bind();
+        this.setInput(input);
+        const result = await firstValueFrom(this.results);
+        this.container.visible = false;
+        this.controls.unbind();
+        return result;
+    }
+
+    protected done() {
+        this.results.next(this.input);
     }
 }

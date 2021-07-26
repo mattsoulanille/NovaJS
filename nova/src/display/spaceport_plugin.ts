@@ -1,22 +1,23 @@
-import { Entities, UUID } from 'nova_ecs/arg_types';
+import { Entities, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { Plugin } from 'nova_ecs/plugin';
-import { Resource } from 'nova_ecs/resource';
+import { Provide } from 'nova_ecs/provider';
+import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { currentIfDraft } from 'nova_ecs/utils';
-import { SingletonComponent } from 'nova_ecs/world';
+import { Without } from 'nova_ecs/without';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlsSubject } from '../nova_plugin/controls_plugin';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
-import { LandEvent } from '../nova_plugin/planet_plugin';
+import { LandEvent, PlanetComponent } from '../nova_plugin/planet_plugin';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin';
 import { Spaceport } from '../spaceport/spaceport';
-import { ResizeEvent } from './resize_event';
-import { ScreenSize } from './screen_size_plugin';
+import { ResizeEvent, ScreenSize } from './screen_size_plugin';
 import { Stage } from './stage_resource';
 
 
-const SpaceportResource = new Resource<{ spaceport?: Spaceport }>("Spaceport");
+const SpaceportComponent = new Component<Spaceport>("Spaceport");
 
 function deImmerify(entity: Entity) {
     for (const [component, value] of entity.components) {
@@ -24,51 +25,64 @@ function deImmerify(entity: Entity) {
     }
 }
 
+const SpaceportProvider = Provide({
+    provided: SpaceportComponent,
+    args: [GameDataResource, ControlsSubject, Stage, PlanetComponent] as const,
+    factory(gameData, controls, stage, { id }) {
+        const spaceport = new Spaceport(gameData as GameData, id, controls);
+        stage.addChild(spaceport.container);
+        return spaceport;
+    }
+});
+
+const SpaceportQuery = new Query([SpaceportProvider] as const);
+
 const LandSystem = new System({
     name: 'LandSystem',
     events: [LandEvent],
-    args: [LandEvent, GameDataResource, UUID, Entities, ControlsSubject,
-        Stage, SpaceportResource, ScreenSize, PlayerShipSelector] as const,
-    step({ id }, gameData, uuid, entities, controlsSubject, stage,
-        spaceportResource, { x, y }) {
-        const playerShip = entities.get(uuid);
+    args: [LandEvent, UUID, Entities, RunQuery, ScreenSize, PlayerShipSelector] as const,
+    step({ uuid }, shipUuid, entities, runQuery, { x, y }) {
+        const spaceport = runQuery(SpaceportQuery, uuid)[0]?.[0];
+        if (!spaceport) {
+            return;
+        }
+
+        const playerShip = entities.get(shipUuid);
         if (!playerShip) {
             console.warn('Player ship is missing? Cannot land.');
             return;
         }
-        entities.delete(uuid);
+        entities.delete(shipUuid);
         deImmerify(playerShip);
 
-        const spaceport = new Spaceport(gameData as GameData, id, playerShip,
-            controlsSubject, (newShip) => {
-                entities.set(uuid, newShip);
-                stage.removeChild(spaceport.container);
-            });
         spaceport.container.position.x = x / 2;
         spaceport.container.position.y = y / 2;
-
-        stage.addChild(spaceport.container);
-
-        spaceportResource.spaceport = spaceport;
+        spaceport.show(playerShip).then(newShip => {
+            entities.set(shipUuid, newShip);
+        });
     }
+});
+
+const SpaceportAddSystem = new System({
+    name: 'SpaceportAdd',
+    args: [Without(SpaceportProvider), PlanetComponent] as const,
+    step() { }
 });
 
 const SpaceportResizeSystem = new System({
     name: 'SpaceportResize',
     events: [ResizeEvent],
-    args: [ResizeEvent, SpaceportResource, SingletonComponent] as const,
-    step({ x, y }, { spaceport }) {
-        if (spaceport) {
-            spaceport.container.position.x = x / 2;
-            spaceport.container.position.y = y / 2;
-        }
+    args: [ResizeEvent, SpaceportComponent] as const,
+    step({ x, y }, spaceport) {
+        spaceport.container.position.x = x / 2;
+        spaceport.container.position.y = y / 2;
     }
 });
 
 export const SpaceportPlugin: Plugin = {
     name: 'SpaceportPlugin',
     build(world) {
-        world.resources.set(SpaceportResource, {});
+        world.addSystem(SpaceportAddSystem);
         world.addSystem(LandSystem);
         world.addSystem(SpaceportResizeSystem);
     }

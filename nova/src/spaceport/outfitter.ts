@@ -1,9 +1,8 @@
 import { OutfitData } from "novadatainterface/OutiftData";
 import { DefaultMap } from "nova_ecs/utils";
 import * as PIXI from 'pixi.js';
-import { Observable, Subscription } from "rxjs";
+import { Observable } from "rxjs";
 import { GameData } from "../client/gamedata/GameData";
-import { ControlAction } from "../nova_plugin/controls";
 import { ControlEvent } from "../nova_plugin/controls_plugin";
 import { OutfitsState } from "../nova_plugin/outfit_plugin";
 import { Button } from "./button";
@@ -12,7 +11,7 @@ import { Menu } from "./menu";
 
 
 const descWidth = 190;
-const FONT = {
+export const FONT = {
     normal: {
         fontFamily: "Geneva", fontSize: 10, fill: 0xffffff,
         align: 'left', wordWrap: true, wordWrapWidth: descWidth
@@ -27,14 +26,11 @@ const FONT = {
     } as const,
 };
 
-export class Outfitter {
-    menu: Menu;
-    container = new PIXI.Container();
-    private wrappedVisible = false;
-    built = false;
+export class Outfitter extends Menu<OutfitsState> {
     private itemGrid?: ItemGrid<OutfitData>;
     private pictContainer = new PIXI.Container();
     private outfits: DefaultMap<string, number>;
+
     private text = {
         description: new PIXI.Text("", FONT.normal),
         itemPrice: new PIXI.Text("Item Price:", FONT.normal),
@@ -46,27 +42,22 @@ export class Outfitter {
         availableMass: new PIXI.Text("Available:", FONT.normal),
         freeMass: new PIXI.Text("", FONT.normal),
     }
-    private controlsSubscription: Subscription | undefined;
-    private controls = new Map<ControlAction, () => void>();
 
-    constructor(private gameData: GameData, outfits: OutfitsState,
-        private controlEvents: Observable<ControlEvent>,
-        private setOutfits: (outfits: OutfitsState) => void) {
-        this.outfits = new DefaultMap(() => 0,
-            [...outfits].map(([id, { count }]) => [id, count]));
+    constructor(gameData: GameData,
+        controlEvents: Observable<ControlEvent>) {
+        super(gameData, "nova:8502", controlEvents);
 
+        this.outfits = new DefaultMap(() => 0);
         const buttons = {
             buy: new Button(gameData, "Buy", 60, { x: -100, y: 126 }),
             sell: new Button(gameData, "Sell", 60, { x: 0, y: 126 }),
             done: new Button(gameData, "Done", 60, { x: 100, y: 126 })
         };
 
-        this.menu = new Menu(gameData, "nova:8502", buttons);
-        this.container.addChild(this.menu.container);
-
         buttons.buy.click.subscribe(this.buyOutfit.bind(this));
         buttons.sell.click.subscribe(this.sellOutfit.bind(this));
-        buttons.done.click.subscribe(this.depart.bind(this));
+        buttons.done.click.subscribe(this.done.bind(this));
+        this.addButtons(buttons);
 
         this.pictContainer.position.x = 174;
         this.pictContainer.position.y = -152.5;
@@ -104,16 +95,11 @@ export class Outfitter {
         for (const t of Object.values(this.text)) {
             this.container.addChild(t);
         }
-        this.build();
     }
 
-    private async build() {
-        if (this.built) {
-            return;
-        }
-
+    protected async build() {
         const itemGrid = await this.makeOutfitsGrid();
-        this.itemGrid = itemGrid
+        this.itemGrid = itemGrid;
         this.container.addChild(this.itemGrid.container);
 
         this.itemGrid.drawGrid();
@@ -121,29 +107,28 @@ export class Outfitter {
         this.itemGrid.container.position.y = -153;
         this.itemGrid.activeTile.subscribe(this.setOutfitSelected.bind(this));
 
-        this.controls = new Map([
-            ['left', () => itemGrid.left()],
-            ['right', () => itemGrid.right()],
-            ['up', () => itemGrid.up()],
-            ['down', () => itemGrid.down()],
-            ['buy', this.buyOutfit.bind(this)],
-            ['sell', this.sellOutfit.bind(this)],
-            ['depart', this.depart.bind(this)],
-        ]);
-
-        this.built = true;
+        this.controls.controls = {
+            left: () => itemGrid.left(),
+            right: () => itemGrid.right(),
+            up: () => itemGrid.up(),
+            down: () => itemGrid.down(),
+            buy: this.buyOutfit.bind(this),
+            sell: this.sellOutfit.bind(this),
+            depart: this.done.bind(this),
+        };
     }
 
     private async makeOutfitsGrid() {
         const ids = (await this.gameData.ids).Outfit;
-        const outfits = await Promise.all(ids.map(id => this.gameData.data.Outfit.get(id)));
+        const outfits = await Promise.all(ids.map(id =>
+            this.gameData.data.Outfit.get(id, 100)));
         outfits.sort((a, b) => b.displayWeight - a.displayWeight);
         const itemGrid = new ItemGrid(this.gameData, outfits);
         itemGrid.setCounts(this.outfits);
         return itemGrid;
     }
 
-    buyOutfit() {
+    private buyOutfit() {
         //const mass = this.itemGrid?.selection.physics.freeMass;
         //if (mass <= global.myShip.properties.physics.freeMass) {
         const id = this.itemGrid?.selection.id;
@@ -159,7 +144,7 @@ export class Outfitter {
         //}
     }
 
-    sellOutfit() {
+    private sellOutfit() {
         const id = this.itemGrid?.selection.id;
         if (!id) {
             return;
@@ -176,7 +161,7 @@ export class Outfitter {
         this.itemGrid?.setCounts(this.outfits);
     }
 
-    setOutfitSelected(outfitTile: ItemTile<OutfitData> | undefined) {
+    private setOutfitSelected(outfitTile: ItemTile<OutfitData> | undefined) {
         // Set Picture
         this.pictContainer.children.length = 0;
         this.text.description.text = "";
@@ -211,67 +196,22 @@ export class Outfitter {
         }
     }
 
-    setFreeMassText() {
+    private setFreeMassText() {
         //this.text.freeMass.text = formatMass(global.myShip.properties.physics.freeMass);
     }
 
-    set visible(visible: boolean) {
-        this.wrappedVisible = visible;
-        this.container.visible = visible;
-        if (visible) {
-            this.bindControls();
-        } else {
-            this.unbindControls();
-        }
+    protected setInput(input: OutfitsState) {
+        this.outfits = new DefaultMap(() => 0, [...input].map(
+            ([k, v]) => [k, v.count]));
+        super.setInput(input);
+        this.itemGrid?.setCounts(this.outfits);
     }
 
-    get visible() {
-        return this.wrappedVisible;
+    protected done() {
+        this.input = new Map([...this.outfits]
+            .map(([id, count]) => [id, { count }]));
+        super.done();
     }
-
-    show() {
-        this.setFreeMassText();
-        this.bindControls();
-    }
-
-    private depart() {
-        this.setOutfits(new Map([...this.outfits]
-            .map(([id, count]) => [id, { count }])));
-    }
-
-    private bindControls() {
-        this.controlsSubscription?.unsubscribe();
-        this.controlsSubscription =
-            this.controlEvents.subscribe(({ action, state }) => {
-                if (state === false) {
-                    return;
-                }
-                this.controls.get(action)?.();
-            });
-    }
-
-    private unbindControls() {
-        this.controlsSubscription?.unsubscribe();
-    }
-
-    // bindControls() {
-    //     super.bindControls();
-
-    //     var c = {};
-    //     c.depart = this.depart.bind(this);
-    //     c.left = this.itemGrid.left.bind(this.itemGrid);
-    //     c.up = this.itemGrid.up.bind(this.itemGrid);
-    //     c.right = this.itemGrid.right.bind(this.itemGrid);
-    //     c.down = this.itemGrid.down.bind(this.itemGrid);
-    //     c.buy = this.buyOutfit.bind(this);
-    //     c.sell = this.sellOutfit.bind(this);
-
-    //     this.boundControls = Object.keys(c).map(function(k) {
-    //         return this.controls.onStart(this.scope, k, c[k]);
-    //     }.bind(this));
-
-
-    // }
 }
 
 function addCommas(p: number) {

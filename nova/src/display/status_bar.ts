@@ -25,7 +25,7 @@ import { ChangeSecondaryEvent } from "../nova_plugin/weapon_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin";
 import { PixiAppResource } from "./pixi_app_resource";
-import { ResizeEvent } from "./resize_event";
+import { ResizeEvent } from "./screen_size_plugin";
 import { Stage } from "./stage_resource";
 
 
@@ -45,14 +45,13 @@ class StatusBar {
 
     private text: { [index: string]: PIXI.Text } = {};
 
-
     constructor(private statusBarData: StatusBarData, private gameData: GameData,
         private renderer: PIXI.Renderer | PIXI.AbstractRenderer) {
         this.buildPromise = this.build();
     }
 
     private async build() {
-        const background = await this.gameData.spriteFromPict(this.statusBarData.image);
+        const background = await this.gameData.spriteFromPictAsync(this.statusBarData.image);
         this.container.addChild(background);
         this.width = background.width;
         const dataAreas = this.statusBarData.dataAreas;
