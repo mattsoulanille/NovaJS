@@ -15,7 +15,7 @@
         "@bazel/concatjs": "^3.6.0",
         "@bazel/esbuild": "^3.6.0",
         "@bazel/ibazel": "^0.15.10",
-        "@bazel/jasmine": "^3.6.0",
+        "@bazel/jasmine": "^3.7.0",
         "@bazel/labs": "^3.6.0",
         "@bazel/typescript": "3.6.0",
         "@pixi/sound": "^4.0.4",
@@ -53,7 +53,7 @@
         "sat": "^0.9.0",
         "seedrandom": "^3.0.5",
         "stats.js": "^0.17.0",
-        "typescript": "~4.3.4",
+        "typescript": "~4.3.5",
         "url-join": "^4.0.1"
     },
     "scripts": {
