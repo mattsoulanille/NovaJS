@@ -72,7 +72,14 @@ const WeaponsSystem = new System({
                 continue;
             }
 
-            const fired = weapon.fireFromEntity(uuid);
+            if (weapon.data.fireSimultaneously) {
+                for (let i = 0; i < state.count; i++) {
+                    weapon.fireFromEntity(uuid);
+                }
+            } else {
+                weapon.fireFromEntity(uuid);
+            }
+
             if (weapon.data.burstCount) {
                 localState.burstCount++;
             }
