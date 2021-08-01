@@ -170,8 +170,8 @@ const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        Optional(OwnerComponent), Emit] as const,
-    step(collision, entities, uuid, projectileData, owner, emit) {
+        Optional(OwnerComponent), FireSubs, Emit] as const,
+    step(collision, entities, uuid, projectileData, owner, fireSubs, emit) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
@@ -193,6 +193,7 @@ const ProjectileCollisionSystem = new System({
             console.warn(`Missing projectile ${uuid} that is colliding`);
             return;
         }
+        fireSubs(projectileData.id, uuid, false);
         entities.delete(uuid);
         emit(ProjectileCollisionEvent, self);
     }
