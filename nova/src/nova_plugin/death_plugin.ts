@@ -63,18 +63,6 @@ function applyDamage(emit: EmitFunction, runQuery: RunQueryFunction,
     }
 }
 
-const DeathSystem: System = new System({
-    name: 'DeathSystem',
-    events: [CollisionEvent],
-    args: [ArmorComponent, UUID, TimeResource, Emit] as const,
-    step(armor, uuid, time, emit) {
-        if (armor.current === 0) {
-            emit(DeathEvent, time, [uuid]);
-        }
-    },
-    before: ['ArmorRecharge'],
-});
-
 export const DeathPlugin: Plugin = {
     name: 'DeathPlugin',
     build(world) {
@@ -83,6 +71,5 @@ export const DeathPlugin: Plugin = {
         world.resources.set(ApplyDamageResource, (damage, other, scale = 1) => {
             applyDamage(emit, runQuery, damage, other, scale);
         });
-        world.addSystem(DeathSystem);
     },
 }
