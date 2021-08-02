@@ -26,7 +26,7 @@
         "@types/pngjs": "^6.0.0",
         "@types/rbush": "^3.0.0",
         "@types/sat": "^0.0.31",
-        "@types/seedrandom": "^3.0.0",
+        "@types/seedrandom": "^3.0.1",
         "@types/stats.js": "^0.17.0",
         "@types/supports-color": "^8.1.0",
         "@types/url-join": "^4.0.0",
