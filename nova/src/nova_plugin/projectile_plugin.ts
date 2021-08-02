@@ -12,20 +12,23 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
-import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { ApplyDamageResource, DeathEvent } from './death_plugin';
 import { FireTime, FireTimeProvider } from './fire_time';
-import { FireSubs, OwnerComponent, SourceComponent, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
+import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
-import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
+import { ArmorComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent, ProjectileDataComponent } from './projectile_data';
 import { ReturnToQueueComponent } from './return_to_queue_plugin';
 import { SoundEvent } from './sound_event';
+import { Stat } from './stat';
 import { TargetComponent } from './target_component';
 
 
 class ProjectileWeaponEntry extends WeaponEntry {
     declare data: ProjectileWeaponData;
     private factoryQueue: FactoryQueue<Entity>;
+    protected pointDefenseRangeSquared: number;
 
     constructor(data: WeaponData, runQuery: RunQueryFunction) {
         if (data.type !== 'ProjectileWeaponData') {
@@ -33,7 +36,14 @@ class ProjectileWeaponEntry extends WeaponEntry {
         }
         super(data, runQuery);
 
+        this.pointDefenseRangeSquared = (data.physics.speed * data.shotDuration / 1000) ** 2;
+
         const queueHolder = {} as { queue: FactoryQueue<Entity> };
+
+        let hitTypes = new Set(['normal']);
+        if (data.guidance === 'pointDefense') {
+            hitTypes = new Set(['pointDefense']);
+        }
 
         this.factoryQueue = new FactoryQueue(() => {
             const projectile = new EntityBuilder()
@@ -54,12 +64,26 @@ class ProjectileWeaponEntry extends WeaponEntry {
                     movementType: this.data.guidance === 'guided'
                         ? MovementType.INERTIALESS : MovementType.INERTIAL,
                 }).addComponent(CollisionInteractionComponent, {
-                    hitTypes: new Set(['normal']),
+                    hitTypes,
+                    vulnerableTo: new Set(this.data.vulnerableTo),
                 }).addComponent(ReturnToQueueComponent, queueHolder);
             if (this.data.guidance === 'guided') {
                 projectile.addComponent(GuidanceComponent, {
                     guidance: Guidance.firstOrder,
                 });
+            }
+            if (this.data.vulnerableTo.includes('pointDefense')) {
+                projectile.addComponent(VulnerableToPD, undefined);
+                projectile.addComponent(ShieldComponent, new Stat({
+                    current: this.data.physics.shield,
+                    max: this.data.physics.shield,
+                    recharge: this.data.physics.shieldRecharge,
+                }));
+                projectile.addComponent(ArmorComponent, new Stat({
+                    current: this.data.physics.armor,
+                    max: this.data.physics.armor,
+                    recharge: this.data.physics.armorRecharge,
+                }));
             }
 
             return projectile;
@@ -89,6 +113,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
         movementState.rotation = angle;
         movementState.velocity = velocity;
         movementState.turning = 0;
+        movementState.turnTo = null;
 
         projectile.components.delete(FireTime);
         projectile.components.delete(SubCounts);
@@ -109,6 +134,16 @@ class ProjectileWeaponEntry extends WeaponEntry {
             projectile.components.set(OwnerComponent, owner);
         } else {
             projectile.components.delete(OwnerComponent);
+        }
+
+        const armor = projectile.components.get(ArmorComponent);
+        if (armor) {
+            armor.current = armor.max;
+        }
+
+        const shield = projectile.components.get(ShieldComponent);
+        if (shield) {
+            shield.current = shield.max;
         }
 
         this.entities.set(v4(), projectile);
@@ -170,8 +205,8 @@ const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        Optional(OwnerComponent), FireSubs, Emit] as const,
-    step(collision, entities, uuid, projectileData, owner, fireSubs, emit) {
+        Optional(OwnerComponent), FireSubs, ApplyDamageResource, Emit] as const,
+    step(collision, entities, uuid, projectileData, owner, fireSubs, applyDamage, emit) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
@@ -181,13 +216,12 @@ const ProjectileCollisionSystem = new System({
             return;
         }
 
-        const otherShield = other.components.get(ShieldComponent);
-        const otherArmor = other.components.get(ArmorComponent);
-        const otherIonization = other.components.get(IonizationComponent);
+        applyDamage(projectileData.damage, collision.other, 1);
 
-        if (otherArmor) {
-            applyDamage(projectileData.damage, otherArmor, otherShield, otherIonization);
+        if (!collision.initiator) {
+            return;
         }
+
         const self = entities.get(uuid);
         if (!self) {
             console.warn(`Missing projectile ${uuid} that is colliding`);
@@ -196,6 +230,15 @@ const ProjectileCollisionSystem = new System({
         fireSubs(projectileData.id, uuid, false);
         entities.delete(uuid);
         emit(ProjectileCollisionEvent, self);
+    }
+});
+
+const ProjectileDeathSystem = new System({
+    name: 'ProjectileDeathSystem',
+    events: [DeathEvent],
+    args: [Entities, UUID, DeathEvent, ProjectileComponent] as const,
+    step(entities, uuid) {
+        entities.delete(uuid);
     }
 });
 
@@ -211,5 +254,6 @@ export const ProjectilePlugin: Plugin = {
         world.addSystem(ProjectileGuidanceSystem);
         world.addSystem(ProjectileLifespanSystem);
         world.addSystem(ProjectileCollisionSystem);
+        world.addSystem(ProjectileDeathSystem);
     }
 }

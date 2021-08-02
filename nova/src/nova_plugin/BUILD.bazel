@@ -37,6 +37,7 @@ ts_library(
         "sound_event.ts",
         "fire_weapon_plugin.ts",
         "return_to_queue_plugin.ts",
+        "death_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

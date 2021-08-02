@@ -2,7 +2,7 @@ import { WeaponData } from "novadatainterface/WeaponData";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { WeaponLocalState } from "./fire_weapon_plugin";
-import { Animation } from 'novadatainterface/Animation';
+import { Animation, getDefaultExitPoints } from 'novadatainterface/Animation';
 
 
 export interface ExitPointData {
@@ -15,15 +15,16 @@ export function getExitPointData(sourceAnimation: Animation,
     weapon: WeaponData, localState: WeaponLocalState): ExitPointData {
     let position: [number, number, number] = [0, 0, 0];
 
+    const exitPoints = sourceAnimation.exitPoints ?? getDefaultExitPoints();
     if (weapon.exitType !== "center") {
-        const positions = sourceAnimation.exitPoints[weapon.exitType];
-        position = positions[localState?.exitIndex ?? 0];
+        const positions = exitPoints[weapon.exitType];
+        position = positions[localState?.exitIndex ?? 0] ?? position;
     }
 
     return {
         position,
-        downCompress: sourceAnimation.exitPoints.downCompress,
-        upCompress: sourceAnimation.exitPoints.upCompress,
+        downCompress: exitPoints.downCompress,
+        upCompress: exitPoints.upCompress,
     };
 }
 

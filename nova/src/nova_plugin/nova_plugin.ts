@@ -5,6 +5,7 @@ import { TimePlugin } from "nova_ecs/plugins/time_plugin";
 import { BeamPlugin } from "./beam_plugin";
 import { CollisionsPlugin } from './collisions_plugin';
 import { ControlsPlugin } from "./controls_plugin";
+import { DeathPlugin } from "./death_plugin";
 import { FireWeaponPlugin } from "./fire_weapon_plugin";
 import { HealthPlugin } from "./health_plugin";
 import { OutfitPlugin } from "./outfit_plugin";
@@ -31,6 +32,7 @@ export const Nova: Plugin = {
         world.addPlugin(PlanetPlugin);
         world.addPlugin(TimePlugin);
         world.addPlugin(MovementPlugin);
+        world.addPlugin(DeathPlugin);
         world.addPlugin(FireWeaponPlugin);
         world.addPlugin(ProjectilePlugin);
         world.addPlugin(WeaponPlugin);
