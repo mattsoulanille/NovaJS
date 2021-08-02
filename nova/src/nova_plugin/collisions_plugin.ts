@@ -87,10 +87,6 @@ function aHitsB(a: CollisionInteraction, b: CollisionInteraction) {
     return false;
 }
 
-function canCollide(a: CollisionInteraction, b: CollisionInteraction) {
-    return aHitsB(a, b) || aHitsB(b, a);
-}
-
 function convexPolysCollide(a: SAT.Polygon[], b: SAT.Polygon[]) {
     for (const polyA of a) {
         for (const polyB of b) {
@@ -204,13 +200,22 @@ export const CollisionSystem = new System({
 
             for (const other of maybeCollisions) {
                 const collisionPair = [entry.uuid, other.uuid].sort().join();
-                if (canCollide(entry.interaction, other.interaction) &&
+                const entryInitiates = aHitsB(entry.interaction, other.interaction);
+                const otherInitiates = aHitsB(other.interaction, entry.interaction);
+                const canCollide = entryInitiates || otherInitiates;
+                if (canCollide &&
                     !alreadyCollided.has(collisionPair) &&
                     convexPolysCollide(entry.hull.convexPolys,
                         other.hull.convexPolys)) {
                     alreadyCollided.add(collisionPair);
-                    emit(CollisionEvent, { other: other.uuid }, [entry.uuid]);
-                    emit(CollisionEvent, { other: entry.uuid }, [other.uuid]);
+                    emit(CollisionEvent, {
+                        other: other.uuid,
+                        initiator: entryInitiates
+                    }, [entry.uuid]);
+                    emit(CollisionEvent, {
+                        other: entry.uuid,
+                        initiator: otherInitiates
+                    }, [other.uuid]);
                 }
             }
         }

@@ -3,6 +3,7 @@ import { WeaponData } from 'novadatainterface/WeaponData';
 import { Emit, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
+import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
@@ -68,22 +69,27 @@ const WeaponsSystem = new System({
                 continue;
             }
 
-            if (!state.firing) {
+            if (!(state.firing
+                || weapon.data.guidance === 'pointDefense'
+                || weapon.data.guidance === 'pointDefenseBeam')) {
                 continue;
             }
 
+            let fired: Entity | undefined = undefined;
             if (weapon.data.fireSimultaneously) {
                 for (let i = 0; i < state.count; i++) {
-                    weapon.fireFromEntity(uuid);
+                    fired ||= weapon.fireFromEntity(uuid);
                 }
             } else {
-                weapon.fireFromEntity(uuid);
+                fired ||= weapon.fireFromEntity(uuid);
             }
 
-            if (weapon.data.burstCount) {
-                localState.burstCount++;
+            if (fired) {
+                if (weapon.data.burstCount) {
+                    localState.burstCount++;
+                }
+                localState.lastFired = time.time;
             }
-            localState.lastFired = time.time;
         }
     }
 });

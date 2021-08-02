@@ -1,7 +1,8 @@
+import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
 import { Gettable } from 'novadatainterface/Gettable';
 import { WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, EmitFunction, Entities, RunQuery, RunQueryFunction } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -10,6 +11,7 @@ import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
+import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { Query } from 'nova_ecs/query';
@@ -19,7 +21,7 @@ import { SingletonComponent } from 'nova_ecs/world';
 import { FirstAnimation } from './animation_plugin';
 import { applyExitPoint, ExitPointData, getExitPointData } from './exit_point';
 import { GameDataResource } from './game_data_resource';
-import { firstOrderWithFallback, zeroOrderGuidance } from './guidance';
+import { firstOrderWithFallback } from './guidance';
 import { TargetComponent } from './target_component';
 
 
@@ -119,20 +121,31 @@ function* getRandomInCone(angle: number) {
 
 export const SourceComponent = new Component<string>('Source');
 export const OwnerComponent = new Component<string>('Owner');
+export const OwnerProvider = Provide({
+    provided: OwnerComponent,
+    args: [UUID] as const,
+    factory: uuid => uuid,
+});
+
 
 const FireFromEntityQuery = new Query([WeaponsComponentProvider,
     Entities, MovementStateComponent, FirstAnimation,
-    Optional(OwnerComponent), Optional(TargetComponent)] as const, 'FireFromEntityQuery');
+    OwnerProvider, Optional(TargetComponent)] as const, 'FireFromEntityQuery');
 
 const SubsQuery = new Query([WeaponEntries, MovementStateComponent, SubCountsProvider,
-    Optional(OwnerComponent), Optional(TargetComponent)] as const);
+    OwnerProvider, Optional(TargetComponent)] as const);
 
 const ConstructorQuery = new Query([Entities, Emit, WeaponEntries,
     SingletonComponent] as const);
 
+export const VulnerableToPD = new Component<undefined>('VulnerableToPD');
+const PointDefenseQuery = new Query([MovementStateComponent,
+    OwnerProvider, UUID, Optional(TargetComponent), VulnerableToPD] as const);
+
 export abstract class WeaponEntry {
     protected entities: EntityMap;
     protected emit: EmitFunction;
+    protected abstract pointDefenseRangeSquared: number;
     constructor(public data: WeaponData, protected runQuery: RunQueryFunction) {
         let weaponEntries: Gettable<WeaponEntry | undefined>;
         [this.entities, this.emit, weaponEntries] = runQuery(ConstructorQuery)[0];
@@ -141,6 +154,11 @@ export abstract class WeaponEntry {
                 weaponEntries.get(sub.id);
             }
         }
+    }
+
+    protected guidance(exitPoint: Position, source: MovementState, target: MovementState) {
+        return firstOrderWithFallback(exitPoint, source.velocity, target.position,
+            target.velocity, this.data.shotSpeed);
     }
 
     abstract fire(position: Position, angle: Angle, owner?: string,
@@ -152,26 +170,24 @@ export abstract class WeaponEntry {
         if (!results[0]) {
             return undefined;
         }
-        const [weapons, entities, movement, animation, owner, target] = results[0];
+        const [weapons, entities, movement, animation, owner, targetVal] = results[0];
+        let target = targetVal?.target;
 
         const weapon = weapons.get(this.data.id);
         const { exitPoint, exitPointData } = getNextExitpoint(
             movement, animation, this.data, weapon);
 
         let targetMovement: MovementState | undefined;
-        if (target?.target) {
-            targetMovement = entities.get(target.target)?.components
+        if (target) {
+            targetMovement = entities.get(target)?.components
                 .get(MovementStateComponent);
         }
 
         let angle = movement.rotation;
         if ('guidance' in this.data) {
-            if (!target?.target && (this.data.guidance === 'beamTurret'
+            if (!target && (this.data.guidance === 'beamTurret'
                 || this.data.guidance === 'turret')) {
                 return undefined;
-            }
-            if (this.data.guidance === 'beamTurret' && targetMovement) {
-                angle = zeroOrderGuidance(exitPoint, targetMovement.position);
             }
 
             if (this.data.guidance === 'rearQuadrant') {
@@ -184,11 +200,40 @@ export abstract class WeaponEntry {
                 : undefined;
 
             if ((this.data.guidance === quadrant
-                || this.data.guidance === 'turret')
+                || this.data.guidance === 'turret'
+                || this.data.guidance === 'beamTurret')
                 && targetMovement) {
-                angle = firstOrderWithFallback(exitPoint,
-                    movement.velocity, targetMovement.position,
-                    targetMovement.velocity, this.data.shotSpeed);
+                angle = this.guidance(exitPoint, movement, targetMovement);
+            }
+
+            if (this.data.guidance === 'pointDefense' ||
+                this.data.guidance === 'pointDefenseBeam') {
+                const targets = this.runQuery(PointDefenseQuery);
+                let closest: MovementState | undefined = undefined
+                let closestUuid: string | undefined = undefined;
+                let distance2 = Infinity;
+                for (let [movement, targetOwner, uuid, otherTarget] of targets) {
+                    if (targetOwner === owner) {
+                        continue;
+                    }
+                    if (!(otherTarget?.target === owner
+                        || otherTarget?.target === source)) {
+                        continue;
+                    }
+                    const newDistance2 = movement.position.subtract(exitPoint).lengthSquared;
+                    if (newDistance2 < distance2) {
+                        closest = movement;
+                        closestUuid = uuid;
+                        distance2 = newDistance2;
+                    }
+                }
+
+                if (closest && distance2 <= this.pointDefenseRangeSquared) {
+                    angle = this.guidance(exitPoint, movement, closest);
+                    target = closestUuid;
+                } else {
+                    return undefined;
+                }
             }
             // TODO: Blindspots
         }
@@ -196,7 +241,8 @@ export abstract class WeaponEntry {
         if (inaccuracy) {
             angle = angle.add(sampleInaccuracy(this.data.accuracy));
         }
-        return this.fire(exitPoint, angle, owner ?? source, target?.target,
+
+        return this.fire(exitPoint, angle, owner ?? source, target,
             source, movement.velocity, exitPointData);
     }
 
@@ -217,14 +263,15 @@ export abstract class WeaponEntry {
                 ? getEvenlySpacedAngles(Math.abs(sub.theta))
                 : getRandomInCone(sub.theta);
 
+            const subWeapon = weaponEntries.getCached(sub.id);
+            if (!subWeapon) {
+                continue;
+            }
+            if (!sub.subIfExpire && sourceExpired) {
+                continue;
+            }
+
             for (let i = 0; i < sub.count; i++) {
-                const subWeapon = weaponEntries.getCached(sub.id);
-                if (!subWeapon) {
-                    continue;
-                }
-                if (!sub.subIfExpire && sourceExpired) {
-                    continue;
-                }
                 const angle = angles.next().value || new Angle(0);
                 const subEntity = subWeapon.fire(position ?? movement.position,
                     movement.rotation.add(angle), owner,
@@ -253,6 +300,14 @@ export const FireWeaponPlugin: Plugin = {
         if (!runQuery) {
             throw new Error('Expected RunQuery to exist');
         }
+
+        const deltaMaker = world.resources.get(DeltaResource);
+        if (!deltaMaker) {
+            throw new Error('Expected DeltaMaker to exist');
+        }
+        deltaMaker.addComponent(VulnerableToPD, {
+            componentType: t.undefined,
+        });
 
         world.addComponent(WeaponsComponent);
         world.addComponent(OwnerComponent);

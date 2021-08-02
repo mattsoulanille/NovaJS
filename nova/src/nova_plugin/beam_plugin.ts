@@ -7,19 +7,19 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity, EntityBuilder } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
-import { MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
+import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { Hull, HullComponent, UpdateHullSystem } from './collisions_plugin';
-import { applyDamage, CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { ApplyDamageResource } from './death_plugin';
 import { applyExitPoint, ExitPointData } from './exit_point';
 import { FireTimeProvider } from './fire_time';
 import { FireSubs, OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { zeroOrderGuidance } from './guidance';
-import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { SoundEvent } from './sound_event';
 import { TargetComponent } from './target_component';
 
@@ -36,11 +36,25 @@ const BeamSubsQuery = new Query([MovementStateComponent] as const);
 
 class BeamWeaponEntry extends WeaponEntry {
     declare data: BeamWeaponData;
+    protected pointDefenseRangeSquared: number;
+
+    private hitTypes: Set<string>;
     constructor(data: WeaponData, runQuery: RunQueryFunction) {
         if (data.type !== 'BeamWeaponData') {
             throw new Error('Data must be BeamWeaponData');
         }
         super(data, runQuery);
+        this.pointDefenseRangeSquared = data.beamAnimation.length ** 2;
+
+        this.hitTypes = new Set(['normal']);
+        if (data.guidance === 'pointDefenseBeam') {
+            this.hitTypes = new Set(['pointDefense']);
+        }
+    }
+
+    protected guidance(exitPoint: Position, _movement: MovementState,
+        targetMovement: MovementState) {
+        return zeroOrderGuidance(exitPoint, targetMovement.position);
     }
 
     fire(position: Position, angle: Angle, owner?: string, target?: string,
@@ -63,7 +77,7 @@ class BeamWeaponEntry extends WeaponEntry {
                 turnBack: false,
                 turning: 0,
             }).addComponent(CollisionInteractionComponent, {
-                hitTypes: new Set(['normal'])
+                hitTypes: this.hitTypes,
             }).addComponent(HullComponent, {
                 hulls: [new Hull([beamPoly])],
             }).addComponent(BeamStateComponent, {
@@ -150,8 +164,8 @@ const BeamCollisionSystem = new System({
     name: 'BeamCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, Optional(OwnerComponent),
-        BeamDataComponent, FireTimeProvider, TimeResource] as const,
-    step(collision, entities, owner, beamData, fireTime,
+        BeamDataComponent, FireTimeProvider, ApplyDamageResource, TimeResource] as const,
+    step(collision, entities, owner, beamData, fireTime, applyDamage,
         { time, delta_ms }) {
 
         const other = entities.get(collision.other);
@@ -163,18 +177,12 @@ const BeamCollisionSystem = new System({
             return;
         }
 
-        const otherShield = other.components.get(ShieldComponent);
-        const otherArmor = other.components.get(ArmorComponent);
-        const otherIonization = other.components.get(IonizationComponent);
-
         const timeSinceFire = time - fireTime;
         const lastTimeSinceFire = timeSinceFire - delta_ms;
         const damageTime = Math.min(delta_ms, beamData.shotDuration - lastTimeSinceFire);
         const scale = damageTime * 30 / 1000;
 
-        if (otherArmor) {
-            applyDamage(beamData.damage, otherArmor, otherShield, otherIonization, scale);
-        }
+        applyDamage(beamData.damage, collision.other, scale);
     }
 });
 
