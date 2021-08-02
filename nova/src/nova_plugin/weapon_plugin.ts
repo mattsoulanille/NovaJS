@@ -78,10 +78,10 @@ const WeaponsSystem = new System({
             let fired: Entity | undefined = undefined;
             if (weapon.data.fireSimultaneously) {
                 for (let i = 0; i < state.count; i++) {
-                    fired ||= weapon.fireFromEntity(uuid);
+                    fired = weapon.fireFromEntity(uuid) || fired;
                 }
             } else {
-                fired ||= weapon.fireFromEntity(uuid);
+                fired = weapon.fireFromEntity(uuid);
             }
 
             if (fired) {
