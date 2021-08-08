@@ -75,7 +75,7 @@
         "hull.js": "^1.0.1",
         "io-ts": "^2.2.16",
         "pixi-layers": "^0.3.1",
-        "pixi.js": "^6.0.4",
+        "pixi.js": "^6.1.1",
         "pngjs": "^6.0.0",
         "protobufjs": "^6.11.2",
         "resourceforkjs": "^0.1.0",
@@ -83,6 +83,6 @@
         "supports-color": "^9.0.2",
         "ts-enum-util": "^4.0.2",
         "uuid": "^8.3.2",
-        "ws": "^7.5.3"
+        "ws": "^8.0.0"
     }
 }
