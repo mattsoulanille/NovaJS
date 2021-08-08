@@ -58,7 +58,7 @@ describe("SocketChannelServer", function() {
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
-        webSocket.readyState = WebSocket.CONNECTING;
+        (webSocket as any).readyState = WebSocket.CONNECTING;
 
         expect(wssCallbacks["connection"][0]).toBeDefined();
         wssCallbacks["connection"][0](webSocket);
@@ -75,7 +75,7 @@ describe("SocketChannelServer", function() {
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
-        webSocket.readyState = WebSocket.CONNECTING;
+        (webSocket as any).readyState = WebSocket.CONNECTING;
         wssCallbacks["connection"][0](webSocket);
 
         const uuids = [...server.clients];
@@ -268,7 +268,7 @@ class ClientHarness {
         this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send", "removeAllListeners"]);
         const [callbacks, on] = trackOn();
         this.websocket.on.and.callFake(on);
-        this.websocket.readyState = WebSocket.CONNECTING;
+        (this.websocket as any).readyState = WebSocket.CONNECTING;
         this.callbacks = callbacks;
         this.websocket.send.and.callFake((data: any) => {
             const socketMessage =
@@ -282,13 +282,13 @@ class ClientHarness {
         });
     }
     open() {
-        this.websocket.readyState = WebSocket.OPEN;
+        (this.websocket as any).readyState = WebSocket.OPEN;
         this.callbacks["open"][0]();
     }
     close() {
-        this.websocket.readyState = WebSocket.CLOSING;
+        (this.websocket as any).readyState = WebSocket.CLOSING;
         this.callbacks["close"][0]();
-        this.websocket.readyState = WebSocket.CLOSED;
+        (this.websocket as any).readyState = WebSocket.CLOSED;
     }
     sendMessage(message: SocketMessage) {
         this.callbacks["message"][0](JSON.stringify(SocketMessage.encode(message)));
