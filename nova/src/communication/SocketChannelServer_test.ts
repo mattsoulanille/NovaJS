@@ -58,7 +58,7 @@ describe("SocketChannelServer", function() {
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
-        webSocket.readyState = WebSocket.CONNECTING;
+        spyOnProperty(webSocket, 'readyState', 'get').and.returnValue(WebSocket.CONNECTING);
 
         expect(wssCallbacks["connection"][0]).toBeDefined();
         wssCallbacks["connection"][0](webSocket);
@@ -75,7 +75,8 @@ describe("SocketChannelServer", function() {
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
-        webSocket.readyState = WebSocket.CONNECTING;
+        spyOnProperty(webSocket, 'readyState', 'get').and.returnValue(WebSocket.CONNECTING);
+
         wssCallbacks["connection"][0](webSocket);
 
         const uuids = [...server.clients];
@@ -260,15 +261,18 @@ describe("SocketChannelServer", function() {
 
 class ClientHarness {
     readonly websocket: jasmine.SpyObj<WebSocket>;
+    private readyState: WebSocket['readyState'];
     readonly callbacks: Callbacks;
+
     readonly messagesFromServer = new Subject<SocketMessage>();
     lastMessage?: SocketMessage;
 
     constructor(private server: SocketChannelServer) {
+        this.readyState = WebSocket.CONNECTING;
         this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send", "removeAllListeners"]);
         const [callbacks, on] = trackOn();
         this.websocket.on.and.callFake(on);
-        this.websocket.readyState = WebSocket.CONNECTING;
+        spyOnProperty(this.websocket, 'readyState', 'get').and.returnValue(this.readyState);
         this.callbacks = callbacks;
         this.websocket.send.and.callFake((data: any) => {
             const socketMessage =
@@ -282,13 +286,13 @@ class ClientHarness {
         });
     }
     open() {
-        this.websocket.readyState = WebSocket.OPEN;
+        this.readyState = WebSocket.OPEN;
         this.callbacks["open"][0]();
     }
     close() {
-        this.websocket.readyState = WebSocket.CLOSING;
+        this.readyState = WebSocket.CLOSING;
         this.callbacks["close"][0]();
-        this.websocket.readyState = WebSocket.CLOSED;
+        this.readyState = WebSocket.CLOSED;
     }
     sendMessage(message: SocketMessage) {
         this.callbacks["message"][0](JSON.stringify(SocketMessage.encode(message)));
