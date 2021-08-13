@@ -16,7 +16,7 @@
         "@bazel/esbuild": "^3.7.0",
         "@bazel/ibazel": "^0.15.10",
         "@bazel/jasmine": "^3.7.0",
-        "@bazel/labs": "^3.7.0",
+        "@bazel/labs": "^3.8.0",
         "@bazel/typescript": "3.7.0",
         "@pixi/sound": "^4.0.4",
         "@types/argparse": "^2.0.10",
