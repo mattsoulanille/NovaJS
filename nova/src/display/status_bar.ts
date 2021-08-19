@@ -11,6 +11,7 @@ import { MovementState, MovementStateComponent } from "nova_ecs/plugins/movement
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
+import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
@@ -282,28 +283,12 @@ class StatusBar {
     }
 }
 
-export const StatusBarComponent = new Component<StatusBar>('StatusBar');
-const StatusBarProvider = ProvideAsync({
-    provided: StatusBarComponent,
-    args: [GameDataResource, Stage, PixiAppResource] as const,
-    async factory(gameData, stage, app) {
-        // Casting to the client version of GameData, which includes
-        // helper functions for creating sprites from picts.
-        const statusBar = new StatusBar(await gameData.data.StatusBar.get("nova:128"),
-            gameData as GameData, app.renderer);
-        await statusBar.buildPromise;
-        stage.addChild(statusBar.container);
-        statusBar.container.position.x = window.innerWidth - statusBar.container.width;
-        statusBar.container.position.y = 0;
-
-        return statusBar;
-    }
-});
+export const StatusBarResource = new Resource<StatusBar>('StatusBar');
 
 const StatusBarResize = new System({
     name: 'StatusBarResize',
     events: [ResizeEvent],
-    args: [StatusBarComponent, ResizeEvent] as const,
+    args: [StatusBarResource, ResizeEvent] as const,
     step({ container }, { x }) {
         container.position.x = x - container.width + 1;
         container.position.y = 0;
@@ -318,7 +303,7 @@ const RadarTimeProvider = Provide({
 });
 const DrawRadar = new System({
     name: 'DrawRadar',
-    args: [RadarTimeProvider, TimeResource, StatusBarProvider, MovementStateComponent,
+    args: [RadarTimeProvider, TimeResource, StatusBarResource, MovementStateComponent,
         new Query([UUID, MovementStateComponent, ShipDataComponent] as const),
         new Query([UUID, MovementStateComponent, PlanetDataComponent] as const),
         PlayerShipSelector] as const,
@@ -332,7 +317,7 @@ const DrawRadar = new System({
 
 const DrawStatusBarStats = new System({
     name: 'DrawStatusBarStats',
-    args: [StatusBarProvider, ShieldComponent, ArmorComponent, PlayerShipSelector] as const,
+    args: [StatusBarResource, ShieldComponent, ArmorComponent, PlayerShipSelector] as const,
     step(statusBar, shield, armor) {
         statusBar.drawStats(shield, armor);
     }
@@ -341,7 +326,7 @@ const DrawStatusBarStats = new System({
 const DrawStatusBarSecondaryWeapon = new System({
     name: 'DrawStatusBarSecondaryWeapon',
     events: [ChangeSecondaryEvent],
-    args: [StatusBarProvider, ChangeSecondaryEvent, GameDataResource,
+    args: [StatusBarResource, ChangeSecondaryEvent, GameDataResource,
         PlayerShipSelector] as const,
     step(statusBar, activeSecondary, gameData) {
         if (activeSecondary.secondary) {
@@ -358,7 +343,7 @@ const TargetQuery = new Query([ShipDataComponent, Optional(ShieldComponent),
     Optional(ArmorComponent), Optional(AnimationGraphicComponent)] as const);
 const DrawStatusBarTarget = new System({
     name: 'DrawStatusBarTarget',
-    args: [StatusBarProvider, TargetComponent, RunQuery, PlayerShipSelector] as const,
+    args: [StatusBarResource, TargetComponent, RunQuery, PlayerShipSelector] as const,
     step(statusBar, { target }, runQuery) {
         if (!target) {
             statusBar.clearTarget();
@@ -374,8 +359,33 @@ const DrawStatusBarTarget = new System({
 
 export const StatusBarPlugin: Plugin = {
     name: 'StatusBar',
-    build(world) {
-        world.addComponent(StatusBarComponent);
+    async build(world) {
+        const gameData = world.resources.get(GameDataResource);
+        if (!gameData) {
+            throw new Error('Expected gameData resource to exist');
+        }
+
+        const stage = world.resources.get(Stage);
+        if (!stage) {
+            throw new Error('Expected Stage resource to exist');
+        }
+
+        const app = world.resources.get(PixiAppResource);
+        if (!app) {
+            throw new Error('Expected PIXI App resource to exist');
+        }
+
+        PixiAppResource
+
+        const statusBar = new StatusBar(await gameData.data.StatusBar.get("nova:128"),
+            gameData as GameData, app.renderer);
+        await statusBar.buildPromise;
+        stage.addChild(statusBar.container);
+        statusBar.container.position.x = window.innerWidth - statusBar.container.width;
+        statusBar.container.position.y = 0;
+
+        world.resources.set(StatusBarResource, statusBar);
+
         world.addSystem(DrawRadar);
         world.addSystem(StatusBarResize);
         world.addSystem(DrawStatusBarStats);
