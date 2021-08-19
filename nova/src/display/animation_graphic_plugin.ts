@@ -8,20 +8,36 @@ import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
 import { FirstAnimation } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
+import { PlanetComponent } from "../nova_plugin/planet_plugin";
+import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
+import { ProjectileComponent } from "../nova_plugin/projectile_data";
+import { ShipComponent } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { Space } from "./space_resource";
-
 
 export const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicLoader = ProvideAsync({
     provided: AnimationGraphicComponent,
-    args: [FirstAnimation, GameDataResource] as const,
-    async factory(animation, gameData) {
+    args: [FirstAnimation, GameDataResource, GetEntity] as const,
+    async factory(animation, gameData, entity) {
         const graphic = new AnimationGraphic({
             gameData: currentIfDraft(gameData)!,
             animation: currentIfDraft(animation)!,
         });
         await graphic.buildPromise;
+
+        // Order sprites
+        if (entity.components.has(PlayerShipSelector)) {
+            graphic.container.zIndex = 10;
+        } else if (entity.components.has(ProjectileComponent)) {
+            // TODO: Support projectiles above and below ships.
+            graphic.container.zIndex = 9;
+        } else if (entity.components.has(ShipComponent)) {
+            graphic.container.zIndex = 8;
+        } else if (entity.components.has(PlanetComponent)) {
+            graphic.container.zIndex = -10;
+        }
+
         return graphic;
     }
 });
