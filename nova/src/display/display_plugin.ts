@@ -16,13 +16,13 @@ import { SpaceportPlugin } from "./spaceport_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
 import { starfield } from "./starfield_plugin";
-import { StatusBarComponent, StatusBarPlugin } from "./status_bar";
+import { StatusBarResource, StatusBarPlugin } from "./status_bar";
 import { TargetCornersPlugin } from "./target_corners_plugin";
 
 
 const CenterShipSystem = new System({
     name: 'CenterShipPlugin',
-    args: [Space, MovementStateComponent, Optional(StatusBarComponent),
+    args: [Space, MovementStateComponent, Optional(StatusBarResource),
         PlayerShipSelector] as const,
     step(space, movementState, statusBar) {
         space.position.x = -movementState.position.x +
