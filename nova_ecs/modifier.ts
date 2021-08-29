@@ -6,7 +6,8 @@ import { Query } from "./query";
 type Transform<Args extends readonly any[], Result> =
     (...args: ArgsToData<Args>) => Either<undefined, ArgData<Result>>;
 
-export type UnknownModifier = Modifier<ArgTypes[], unknown>;
+export type UnknownModifier = Modifier<readonly ArgTypes[], unknown>;
+export type AnyModifier = Modifier<any, any>;
 
 export class Modifier<Args extends readonly ArgTypes[], Result> {
     query: Query<Args>;

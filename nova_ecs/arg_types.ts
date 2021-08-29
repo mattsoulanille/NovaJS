@@ -63,5 +63,9 @@ export type ArgsToData<Args> = {
     [K in keyof Args]: ArgData<Args[K]>
 }
 
+export type QueryArgs<Q> = Q extends Query<infer QueryArgs> ? QueryArgs : never;
+
 export type QueryResults<Q> =
     Q extends Query<infer QueryArgs> ? ArgsToData<QueryArgs>[] : never;
+
+export type ComponentsOnly<C> = C extends Component<any> ? C : never;

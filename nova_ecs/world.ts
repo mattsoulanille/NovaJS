@@ -7,7 +7,7 @@ import { EntityMapWrapped } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { Modifier, UnknownModifier } from "./modifier";
 import { Plugin } from './plugin';
-import { ProvideAsyncPlugin } from "./provider";
+import { ProvidePlugin } from "./provider";
 import { Query } from "./query";
 import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
@@ -85,7 +85,7 @@ export class World {
 
     constructor(private name?: string) {
         this.addPlugin(AsyncSystemPlugin);
-        this.addPlugin(ProvideAsyncPlugin);
+        this.addPlugin(ProvidePlugin);
         this.resources.set(Entities, this.entities);
         this.resources.set(RunQuery, this.runQuery);
         this.resources.set(GetWorld, this);
