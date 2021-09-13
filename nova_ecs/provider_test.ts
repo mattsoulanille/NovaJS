@@ -83,6 +83,50 @@ describe('Provide', () => {
         expect(wordLengths).toEqual([['hello', 123]]);
     });
 
+    it('runs the factory only once', () => {
+        const world = new World();
+
+        const factorySpy = jasmine.createSpy('factory', (bar) => {
+            return {
+                x: bar.y.length,
+            }
+        }).and.callThrough();
+
+        const fooProvider = Provide({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            factory: factorySpy,
+        });
+
+        const wordLengths: [string, number][] = [];
+
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
+
+        world.addSystem(providesFoo);
+
+        world.entities.set('word1', new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+
+        world.step();
+        world.step();
+        world.step();
+        world.step();
+
+        expect(wordLengths).toEqual([
+            ['hello', 5],
+            ['hello', 5],
+            ['hello', 5],
+            ['hello', 5],
+        ]);
+        expect(factorySpy).toHaveBeenCalledTimes(1);
+    });
+
     it('recreates the provided component when inputs change', () => {
         const world = new World();
 
