@@ -1,6 +1,6 @@
 import { left, right } from "fp-ts/lib/Either";
 import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, Patch, setAutoFreeze } from "immer";
-import { ArgData, ArgsToData, ArgTypes, ComponentsOnly, GetEntity, QueryArgs, UUID } from "./arg_types";
+import { ArgData, ArgsToData, ArgTypes, GetEntity, QueryArgs, UUID } from "./arg_types";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { DeleteEvent } from "./events";
 import { AnyModifier, Modifier } from "./modifier";
