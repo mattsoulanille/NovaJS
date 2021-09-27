@@ -83,7 +83,7 @@ export class World {
 
     private queries = new QueryCache(this.entities, this.getArg.bind(this));
 
-    constructor(private name?: string) {
+    constructor(readonly name?: string) {
         this.addPlugin(AsyncSystemPlugin);
         this.addPlugin(ProvidePlugin);
         this.resources.set(Entities, this.entities);

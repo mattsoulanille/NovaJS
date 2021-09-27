@@ -44,6 +44,7 @@ export class EventMap<K, V> extends Map<K, V> {
     readonly events = {
         delete: new SyncSubject<Set<[K, V]>>(),
         set: new SyncSubject<[K, V]>(),
+        setAlways: new SyncSubject<[K, V]>(), // Used for query cache
         // Add only triggers when it's a key not in the map
         add: new SyncSubject<[K, V]>(),
     }
@@ -53,9 +54,15 @@ export class EventMap<K, V> extends Map<K, V> {
         super.clear();
         this.events.delete.next(toDelete);
     }
-    set(key: K, value: V): this {
+    set(key: K, value: V, silent = false): this {
         let hadKeyAlready = this.has(key);
         super.set(key, value);
+        this.events?.setAlways.next([key, value]);
+        if (silent) {
+            // Do not emit events, except for setAlways
+            // because QueryCache must always know about changes.
+            return this;
+        }
 
         // When constructing with entries, events may
         // not yet be defined, hence the `?`.

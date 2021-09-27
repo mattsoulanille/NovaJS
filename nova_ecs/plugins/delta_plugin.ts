@@ -10,6 +10,8 @@ import { Resource } from '../resource';
 import { isLeft } from 'fp-ts/lib/Either';
 import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
 import { setDifference } from '../utils';
+import { EventMap } from 'nova_ecs/event_map';
+import { ComponentMap } from 'nova_ecs/component_map';
 
 
 export interface OptionalComponentDelta<Data, Delta> {
@@ -133,7 +135,9 @@ export class DeltaMaker {
                 newDraft = createDraft(data as Objectish);
             }
 
-            entity.components.set(component, newDraft);
+            // Use setSilent instead of set to avoid triggering a 'set' event.
+            (entity.components as EventMap<UnknownComponent, unknown>)
+                .set(component, newDraft, false /* Silent */);
         }
 
         const entityComponents = new Set(entity.components.keys());
@@ -188,6 +192,7 @@ export class DeltaMaker {
                 console.warn(`Failed to decode component ${componentName}`, decoded.left);
                 continue;
             }
+            // Use set instead of setSilent because this is a new component.
             entity.components.set(component, decoded.right);
         }
 
@@ -221,7 +226,9 @@ export class DeltaMaker {
             }
             const newData = applyDelta(currentData, componentDelta.right);
             if (newData !== undefined) {
-                entity.components.set(component, newData);
+                // Use setSilent because this is an existing component.
+                (entity.components as EventMap<UnknownComponent, unknown>)
+                    .set(component, newData, false /* Silent */);
             }
         }
 
