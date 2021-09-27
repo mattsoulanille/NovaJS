@@ -1,6 +1,7 @@
 import 'jasmine';
-import { Component } from './component';
+import { Component, UnknownComponent } from './component';
 import { EntityBuilder } from './entity';
+import { EventMap } from './event_map';
 import { AsyncProviderResource, Provide, ProvideAsync } from './provider';
 import { System } from './system';
 import { World } from './world';
@@ -198,6 +199,45 @@ describe('Provide', () => {
 
         // Note 'bye' still has 5 associated with it instead of 3.
         expect(wordLengths).toEqual([['hello', 5], ['bye', 5]]);
+    });
+
+    it('ignores silent changes to components', () => {
+        const world = new World();
+
+        const fooProvider = Provide({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            update: [BAR_COMPONENT],
+            factory: (bar) => {
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
+        const wordLengths: [string, number][] = [];
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
+
+        world.addSystem(providesFoo);
+        const word1 = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+
+        world.entities.set('word1', word1);
+        world.step();
+        expect(wordLengths).toEqual([['hello', 5]]);
+
+        (word1.components as EventMap<Component<any>, unknown>)
+            .set(BAR_COMPONENT, { y: 'bye' }, true /* Silent */);
+
+        world.step();
+        // Ignores the change and just returns the current value
+        expect(wordLengths).toEqual([['hello', 5], ['hello', 5]]);
     });
 });
 
@@ -421,5 +461,49 @@ describe('ProvideAsync', () => {
         expect(wordLengths).toEqual([['hello', 5], ['bye again', 9]]);
         // 'hello' finishes first, then 'bye again', then 'bye'.
         expect(foosProvided).toEqual([5, 9, 3]);
+    });
+
+    it('ignores when components are changed silently', async () => {
+        const world = new World();
+
+        const fooProvider = ProvideAsync({
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            update: [BAR_COMPONENT],
+            factory: async (bar) => {
+                await sleep(10);
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
+        const wordLengths: [string, number][] = [];
+        const providesFoo = new System({
+            name: 'providesFoo',
+            args: [BAR_COMPONENT, fooProvider] as const,
+            step: (bar, foo) => {
+                wordLengths.push([bar.y, foo.x]);
+            }
+        });
+
+        world.addSystem(providesFoo);
+        const word1 = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+
+        world.entities.set('word1', word1);
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncProviderResource)?.done;
+        world.step();
+        expect(wordLengths).toEqual([['hello', 5]]);
+
+        (word1.components as EventMap<Component<any>, unknown>)
+            .set(BAR_COMPONENT, { y: 'bye' }, true /* Silent */);
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncProviderResource)?.done;
+        world.step();
+        expect(wordLengths).toEqual([['hello', 5], ['hello', 5], ['hello', 5]]);
     });
 });

@@ -200,10 +200,12 @@ export const ProvidePlugin: Plugin = {
                 const entityUpdates = providerUpdate.get(uuid);
 
                 for (const providerUpdates of entityUpdates.values()) {
-                    if (!providerUpdates.update) {
-                        // If it's not known to be updating, check it.
-                        providerUpdates.update = providerUpdates.dependencies.has(component);
-                    }
+                    // If it's not known to be updating, check it.
+                    providerUpdates.update = providerUpdates.update
+                        || providerUpdates.dependencies.has(component);
+                    // The provider will then update its provided value on the next step
+                    // if it needs to.
+
                 }
             });
         world.addSystem(CleanupProviderResourcesSystem);

@@ -23,7 +23,7 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
             ([, entity]) => query.supportsEntity(entity)));
 
         const subscriptions = [
-            entities.events.set.subscribe(([uuid, entity]) => {
+            entities.events.setAlways.subscribe(([uuid, entity]) => {
                 if (this.entities.get(uuid) === entity) {
                     return;
                 }

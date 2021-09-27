@@ -11,6 +11,9 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
         addComponent: SyncSubject<[string, Entity, UnknownComponent]>,
         deleteComponent: SyncSubject<[string, Entity, UnknownComponent]>,
         changeComponent: SyncSubject<[string, Entity, UnknownComponent]>,
+        // Always emits on a changed component, even if changed silently.
+        // e.g. delta component sets silently to avoid triggering providers.
+        changeComponentAlways: SyncSubject<[string, Entity, UnknownComponent]>,
     };
 
     private entityChangeUnsubscribe = new Map<string,
@@ -21,6 +24,7 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
         this.events.addComponent = new SyncSubject();
         this.events.deleteComponent = new SyncSubject();
         this.events.changeComponent = new SyncSubject();
+        this.events.changeComponentAlways = new SyncSubject();
     }
 
     set(uuid: string, entity: Entity) {
@@ -44,6 +48,11 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
         });
         const s3 = componentEvents.set.subscribe(([component]) => {
             this.events.changeComponent.next([uuid, entity, component]);
+            this.events.changeComponentAlways.next([uuid, entity, component]);
+        });
+
+        const s4 = componentEvents.setAlways.subscribe(([component]) => {
+            this.events.changeComponentAlways.next([uuid, entity, component]);
         });
 
         this.entityChangeUnsubscribe.set(uuid, {
@@ -51,6 +60,7 @@ export class EntityMapWrapped extends EventMap<string, Entity> implements Entity
                 s1.unsubscribe();
                 s2.unsubscribe();
                 s3.unsubscribe();
+                s4.unsubscribe();
             }
         });
 
