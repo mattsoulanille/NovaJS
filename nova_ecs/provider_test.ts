@@ -1,8 +1,9 @@
 import 'jasmine';
-import { Component, UnknownComponent } from './component';
+import { AsyncSystemResource } from './async_system';
+import { Component } from './component';
 import { EntityBuilder } from './entity';
 import { EventMap } from './event_map';
-import { AsyncProviderResource, Provide, ProvideAsync } from './provider';
+import { Provide, ProvideAsync } from './provider';
 import { System } from './system';
 import { World } from './world';
 
@@ -17,30 +18,36 @@ const FOO_COMPONENT = new Component<{ x: number }>('foo');
 const BAR_COMPONENT = new Component<{ y: string }>('bar');
 
 describe('Provide', () => {
+    let world: World;
+    let wordLengths: [string, number][];
+    const fooProvider = Provide({
+        name: 'foo from bar',
+        provided: FOO_COMPONENT,
+        args: [BAR_COMPONENT] as const,
+        factory: (bar) => {
+            return {
+                x: bar.y.length
+            }
+        }
+    });
+
+    const logSystem = new System({
+        name: 'logSystem',
+        args: [BAR_COMPONENT, FOO_COMPONENT] as const,
+        step: (bar, foo) => {
+            wordLengths.push([bar.y, foo.x]);
+        }
+    });
+
+    beforeEach(() => {
+        world = new World();
+        wordLengths = [];
+    });
+
+
     it('provides a component if the entity is missing it', () => {
-        const world = new World();
-
-        const fooProvider = Provide({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            factory: (bar) => {
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
         world.entities.set('word1', new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
@@ -51,29 +58,8 @@ describe('Provide', () => {
     });
 
     it('returns the existing component if the entity has it', () => {
-        const world = new World();
-
-        const fooProvider = Provide({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            factory: (bar) => {
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
         world.entities.set('word1', new EntityBuilder()
             .addComponent(FOO_COMPONENT, { x: 123 })
@@ -85,8 +71,6 @@ describe('Provide', () => {
     });
 
     it('runs the factory only once', () => {
-        const world = new World();
-
         const factorySpy = jasmine.createSpy('factory', (bar) => {
             return {
                 x: bar.y.length,
@@ -94,22 +78,14 @@ describe('Provide', () => {
         }).and.callThrough();
 
         const fooProvider = Provide({
+            name: 'foo from bar',
             provided: FOO_COMPONENT,
             args: [BAR_COMPONENT] as const,
             factory: factorySpy,
         });
 
-        const wordLengths: [string, number][] = [];
-
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
         world.entities.set('word1', new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
@@ -129,9 +105,8 @@ describe('Provide', () => {
     });
 
     it('recreates the provided component when inputs change', () => {
-        const world = new World();
-
         const fooProvider = Provide({
+            name: 'foo from bar',
             provided: FOO_COMPONENT,
             args: [BAR_COMPONENT] as const,
             update: [BAR_COMPONENT],
@@ -142,16 +117,9 @@ describe('Provide', () => {
             }
         });
 
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
-        world.addSystem(providesFoo);
         const word1 = new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
 
@@ -165,28 +133,9 @@ describe('Provide', () => {
     });
 
     it('does not recreate the value if not tracking changed input', () => {
-        const world = new World();
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
-        const fooProvider = Provide({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            factory: (bar) => {
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
         const word1 = new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
 
@@ -202,29 +151,9 @@ describe('Provide', () => {
     });
 
     it('ignores silent changes to components', () => {
-        const world = new World();
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
-        const fooProvider = Provide({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            update: [BAR_COMPONENT],
-            factory: (bar) => {
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
         const word1 = new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
 
@@ -243,10 +172,35 @@ describe('Provide', () => {
 
 describe('ProvideAsync', () => {
     let clock: jasmine.Clock;
+    let world: World;
+    let wordLengths: [string, number][];
+
+    const fooProvider = ProvideAsync({
+        name: 'foo from bar',
+        provided: FOO_COMPONENT,
+        args: [BAR_COMPONENT] as const,
+        factory: async (bar) => {
+            await sleep(10);
+            return {
+                x: bar.y.length
+            }
+        }
+    });
+
+    const logSystem = new System({
+        name: 'logSystem',
+        args: [BAR_COMPONENT, FOO_COMPONENT] as const,
+        step: (bar, foo) => {
+            wordLengths.push([bar.y, foo.x]);
+        }
+    });
 
     beforeEach(() => {
         clock = jasmine.clock();
         clock.install();
+
+        world = new World();
+        wordLengths = [];
     });
 
     afterEach(() => {
@@ -254,30 +208,8 @@ describe('ProvideAsync', () => {
     });
 
     it('provides a component asynchronously', async () => {
-        const world = new World();
-
-        const fooProvider = ProvideAsync({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            factory: async (bar) => {
-                await sleep(10);
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
         world.entities.set('word1', new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
@@ -285,15 +217,30 @@ describe('ProvideAsync', () => {
         world.step();
         expect(wordLengths).toEqual([]);
         clock.tick(11);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
     });
 
-    it('async provider can modify args', async () => {
-        const world = new World();
+    it('returns the existing component if the entity has it', async () => {
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
+        world.entities.set('word1', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 })
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(wordLengths).toEqual([['hello', 123], ['hello', 123]]);
+    });
+
+    it('async provider can modify args', async () => {
         const fooProvider = ProvideAsync({
+            name: 'foo from bar',
             provided: FOO_COMPONENT,
             args: [BAR_COMPONENT] as const,
             factory: async (bar) => {
@@ -305,17 +252,8 @@ describe('ProvideAsync', () => {
             }
         });
 
-        const wordLengths: [string, number][] = [];
-
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
         world.entities.set('word1', new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
@@ -323,52 +261,14 @@ describe('ProvideAsync', () => {
         world.step();
         expect(wordLengths).toEqual([]);
         clock.tick(11);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello there', 11]]);
     });
 
-    it('deletes entries in provider map when the entity is removed', () => {
-        const world = new World();
-
-        const fooProvider = ProvideAsync({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            factory: async (bar) => {
-                await sleep(10);
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
-
-        expect(world.resources.get(AsyncProviderResource)?.providers.size).toBe(0);
-
-        world.entities.set('word1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
-        world.step();
-        expect(world.resources.get(AsyncProviderResource)?.providers.size).toBe(1);
-
-        world.entities.delete('word1');
-        world.step();
-        expect(world.resources.get(AsyncProviderResource)?.providers.size).toBe(0);
-    });
-
     it('recreates the provided component when inputs change', async () => {
-        const world = new World();
-
         const fooProvider = ProvideAsync({
+            name: 'foo from bar',
             provided: FOO_COMPONENT,
             args: [BAR_COMPONENT] as const,
             update: [BAR_COMPONENT],
@@ -380,40 +280,32 @@ describe('ProvideAsync', () => {
             }
         });
 
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
-        world.addSystem(providesFoo);
         const word1 = new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
 
         world.entities.set('word1', word1);
         world.step();
         clock.tick(11);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
 
         word1.components.set(BAR_COMPONENT, { y: 'bye' });
         world.step();
         clock.tick(11);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
-        expect(wordLengths).toEqual([['hello', 5], ['bye', 3]]);
+        expect(wordLengths).toEqual([['hello', 5], ['bye', 5], ['bye', 3]]);
     });
 
     it('ignores a provided value if it is out of date', async () => {
-        const world = new World();
-
         let sleepTime = 20;
-        let foosProvided: number[] = [];
+        const foosProvided: number[] = [];
         const fooProvider = ProvideAsync({
+            name: 'foo from bar',
             provided: FOO_COMPONENT,
             args: [BAR_COMPONENT] as const,
             update: [BAR_COMPONENT],
@@ -426,75 +318,56 @@ describe('ProvideAsync', () => {
             }
         });
 
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
-        world.addSystem(providesFoo);
         const word1 = new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
 
         world.entities.set('word1', word1);
         world.step();
         clock.tick(21);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
 
         // 'bye' will finish after 'bye again', but the value of bar should be
         // based on 'bye again', i.e. 9.
-        // sleepTime == 20 right now.
+        sleepTime = 20;
         word1.components.set(BAR_COMPONENT, { y: 'bye' });
         world.step();
         sleepTime = 10;
         word1.components.set(BAR_COMPONENT, { y: 'bye again' });
         world.step();
 
-        clock.tick(40);
-        await world.resources.get(AsyncProviderResource)?.done;
+        clock.tick(10);
+        clock.tick(30);
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
-        expect(wordLengths).toEqual([['hello', 5], ['bye again', 9]]);
+        expect(wordLengths).toEqual([
+            ['hello', 5],
+            ['bye', 5],
+            ['bye again', 5],
+            ['bye again', 9]
+        ]);
+        // Note that ['bye', 3] is not in the list even though its provider
+        // finished after 'bye again' 's provider.
+
         // 'hello' finishes first, then 'bye again', then 'bye'.
         expect(foosProvided).toEqual([5, 9, 3]);
     });
 
     it('ignores when components are changed silently', async () => {
-        const world = new World();
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
 
-        const fooProvider = ProvideAsync({
-            provided: FOO_COMPONENT,
-            args: [BAR_COMPONENT] as const,
-            update: [BAR_COMPONENT],
-            factory: async (bar) => {
-                await sleep(10);
-                return {
-                    x: bar.y.length
-                }
-            }
-        });
-
-        const wordLengths: [string, number][] = [];
-        const providesFoo = new System({
-            name: 'providesFoo',
-            args: [BAR_COMPONENT, fooProvider] as const,
-            step: (bar, foo) => {
-                wordLengths.push([bar.y, foo.x]);
-            }
-        });
-
-        world.addSystem(providesFoo);
         const word1 = new EntityBuilder()
             .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
 
         world.entities.set('word1', word1);
         world.step();
         clock.tick(11);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
 
@@ -502,7 +375,7 @@ describe('ProvideAsync', () => {
             .set(BAR_COMPONENT, { y: 'bye' }, true /* Silent */);
         world.step();
         clock.tick(11);
-        await world.resources.get(AsyncProviderResource)?.done;
+        await world.resources.get(AsyncSystemResource)?.done;
         world.step();
         expect(wordLengths).toEqual([['hello', 5], ['hello', 5], ['hello', 5]]);
     });

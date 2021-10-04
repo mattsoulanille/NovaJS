@@ -279,7 +279,7 @@ export class World {
     step() {
         this.eventQueue.push({
             event: StepEvent as UnknownEvent,
-            data: undefined,
+            data: true,
         });
 
         this.flush();
