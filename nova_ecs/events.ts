@@ -14,7 +14,7 @@ export class EcsEvent<Data, DataSerialized = Data> {
     }
 }
 
-export const StepEvent = new EcsEvent<undefined>('step');
+export const StepEvent = new EcsEvent<true>('step');
 export const DeleteEvent = new EcsEvent<undefined>('delete');
 export const AddEvent = new EcsEvent<undefined>('add');
 

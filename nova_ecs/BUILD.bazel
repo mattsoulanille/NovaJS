@@ -30,7 +30,6 @@ ts_library(
         "first_available.ts",
         "query_cache.ts",
         "without.ts",
-        "aggregator.ts",
     ],
     deps = [
         "@npm//io-ts",
@@ -53,7 +52,6 @@ ts_library(
         "first_available_test.ts",
         "entity_map_test.ts",
         "query_cache_test.ts",
-        "aggregator_test.ts",
     ],
     deps = [
         ":ecs",

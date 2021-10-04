@@ -36,6 +36,7 @@ const SquarePhysics = new Component<{
 }>('SquarePhysics')
 
 const SquareProvider = Provide({
+    name: 'Square graphics from physics',
     provided: SquareGraphics,
     args: [Stage, SquarePhysics] as const,
     factory: (container, physics) => {
@@ -55,7 +56,7 @@ const SquareProvider = Provide({
 
 const SquareSystem = new System({
     name: 'SquareSystem',
-    args: [SquareProvider, TimeResource, SquarePhysics, UUID, Entities] as const,
+    args: [SquareGraphics, TimeResource, SquarePhysics, UUID, Entities] as const,
     step: (graphics, time, physics, uuid, entities) => {
         graphics.rotation += time.delta_s * physics.rotationRate;
 
@@ -201,6 +202,7 @@ const Demo: Plugin = {
         world.resources.set(Stage, container);
 
         world.addPlugin(TimePlugin);
+        world.addSystem(SquareProvider);
         world.addSystem(SquareSystem);
         world.addSystem(SquareGraphicsCleanup);
         world.addSystem(AddSquares);
