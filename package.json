@@ -30,7 +30,7 @@
         "@types/stats.js": "^0.17.0",
         "@types/supports-color": "^8.1.0",
         "@types/url-join": "^4.0.1",
-        "@types/ws": "^7.4.4",
+        "@types/ws": "^8.2.0",
         "argparse": "^2.0.1",
         "comlink": "^4.3.1",
         "immer": "^9.0.6",
