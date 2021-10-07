@@ -68,8 +68,12 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
             originalEntity?.components.set(providerRunning, runningSymbol);
             providedValue = await factory(...args);
             if (originalEntity?.components.get(providerRunning) === runningSymbol) {
-                entity.components.delete(providerRunning);
-                entity.components.set(provided, providedValue);
+                // TODO: This should actually be `entity.components.delete` but that
+                // sometimes causes errors with immer (?).
+                originalEntity?.components.delete(providerRunning);
+                // This should actually be `entity.components.set` but that
+                // causes errors with certain objects (e.g. PlanetData).
+                originalEntity?.components.set(provided, providedValue);
             }
         }
     });

@@ -11,7 +11,7 @@ import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { mod } from '../util/mod';
-import { WeaponEntries, WeaponLocalState, WeaponsComponent, WeaponsComponentProvider } from './fire_weapon_plugin';
+import { WeaponEntries, WeaponLocalState, WeaponsComponent } from './fire_weapon_plugin';
 import { GameDataResource } from './game_data_resource';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
@@ -55,7 +55,7 @@ function checkReloaded(weapon: WeaponData, localState: WeaponLocalState,
 
 const WeaponsSystem = new System({
     name: 'WeaponsSystem',
-    args: [WeaponsStateComponent, WeaponsComponentProvider,
+    args: [WeaponsStateComponent, WeaponsComponent,
         TimeResource, UUID, WeaponEntries] as const,
     step(weaponsState, weaponsLocalState, time, uuid, weaponEntries) {
         for (const [id, state] of weaponsState) {
@@ -102,8 +102,9 @@ export const ActiveSecondaryWeapon =
     new Component<ActiveSecondary>('ActiveSecondaryWeapon');
 
 const ActiveSecondaryProvider = Provide({
+    name: "ActiveSecondaryProvider",
     provided: ActiveSecondaryWeapon,
-    args: [] as const,
+    args: [PlayerShipSelector] as const,
     factory: () => ({ secondary: null }),
 });
 
@@ -113,7 +114,7 @@ const ControlPlayerWeapons = new System({
     name: 'ControlPlayerWeapons',
     events: [ControlStateEvent],
     args: [ControlStateEvent, WeaponsStateComponent, WeaponsComponent,
-        ActiveSecondaryProvider, Emit, GameDataResource, PlayerShipSelector] as const,
+        ActiveSecondaryWeapon, Emit, GameDataResource, PlayerShipSelector] as const,
     step(controlState, weaponsState, weaponsData, activeSecondary, emit, gameData) {
         for (const [, weaponState] of weaponsState) {
             weaponState.firing = false;
@@ -189,6 +190,7 @@ export const WeaponPlugin: Plugin = {
         world.addSystem(WeaponsSystem);
         const platform = world.resources.get(PlatformResource);
         if (platform === 'browser') {
+            world.addSystem(ActiveSecondaryProvider);
             world.addSystem(ControlPlayerWeapons);
         }
         deltaMaker.addComponent(WeaponsStateComponent, {

@@ -1,6 +1,5 @@
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
-import { take } from 'rxjs/operators';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
 import { Button } from './button';

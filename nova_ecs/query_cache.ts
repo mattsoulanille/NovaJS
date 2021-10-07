@@ -51,7 +51,7 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
                 this.entityResults.delete(entity); // for `Optional` etc.
                 this.resultValid = false;
             }),
-            entities.events.changeComponent.subscribe(([, entity]) => {
+            entities.events.changeComponentAlways.subscribe(([, entity]) => {
                 this.entityResults.delete(entity);
                 this.resultValid = false;
             }),
@@ -85,21 +85,30 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
             return right(this.entityResults.get(entity)!);
         } else {
             // Create cache entry / result for entity.
-            const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
-            const rightResults: unknown[] = [];
-            for (const result of results) {
-                if (isLeft(result)) {
-                    return left(undefined);
+            try {
+                const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
+                const rightResults: unknown[] = [];
+                for (const result of results) {
+                    if (isLeft(result)) {
+                        return left(undefined);
+                    }
+                    rightResults.push(result.right);
                 }
-                rightResults.push(result.right);
-            }
 
-            const result = rightResults as unknown as ArgsToData<Args>;
+                const result = rightResults as unknown as ArgsToData<Args>;
 
-            if (isStep) {
-                this.entityResults.set(entity, result);
+                if (isStep) {
+                    this.entityResults.set(entity, result);
+                }
+                return right(result);
+            } catch (e) {
+                if (!(e instanceof Error)) {
+                    throw e;
+                } else {
+                    e.message = `${e.message} at query ${this.query.name}`;
+                    throw e;
+                }
             }
-            return right(result);
         }
     }
 

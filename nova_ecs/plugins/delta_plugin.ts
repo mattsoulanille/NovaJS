@@ -137,7 +137,7 @@ export class DeltaMaker {
 
             // Use setSilent instead of set to avoid triggering a 'set' event.
             (entity.components as EventMap<UnknownComponent, unknown>)
-                .set(component, newDraft, false /* Silent */);
+                .set(component, newDraft, true /* Silent */);
         }
 
         const entityComponents = new Set(entity.components.keys());
@@ -228,7 +228,7 @@ export class DeltaMaker {
             if (newData !== undefined) {
                 // Use setSilent because this is an existing component.
                 (entity.components as EventMap<UnknownComponent, unknown>)
-                    .set(component, newData, false /* Silent */);
+                    .set(component, newData, true /* Silent */);
             }
         }
 

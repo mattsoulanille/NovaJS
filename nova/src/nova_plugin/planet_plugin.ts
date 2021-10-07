@@ -9,9 +9,11 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
+import { AnimationComponent } from './animation_plugin';
 import { GameDataResource } from './game_data_resource';
 import { PlayerShipSelector } from './player_ship_plugin';
 import { ControlStateEvent } from './ship_controller_plugin';
+import { ShipComponent } from './ship_plugin';
 import { Target } from './target_component';
 
 export const PlanetType = t.type({
@@ -24,6 +26,7 @@ export const PlanetComponent = new Component<PlanetType>('Planet');
 export const PlanetDataComponent = new Component<PlanetData>('PlanetData');
 
 export const PlanetDataProvider = ProvideAsync({
+    name: "PlanetDataProvider",
     provided: PlanetDataComponent,
     args: [GameDataResource, PlanetComponent] as const,
     factory: async (gameData, planet) => {
@@ -34,8 +37,9 @@ export const PlanetDataProvider = ProvideAsync({
 export const PlanetTargetComponent = new Component<Target>('PlanetTargetComponent');
 
 const PlanetTargetProvider = Provide({
+    name: "PlanetTargetProvider",
     provided: PlanetTargetComponent,
-    args: [] as const,
+    args: [ShipComponent] as const,
     factory: () => ({ target: undefined }),
 });
 
@@ -45,7 +49,7 @@ const AttemptLandingSystem = new System({
     name: 'AttemptLandingSystem',
     events: [ControlStateEvent] as const,
     args: [new Query([UUID, MovementStateComponent, PlanetComponent] as const),
-        MovementStateComponent, PlanetTargetProvider,
+        MovementStateComponent, PlanetTargetComponent,
         ControlStateEvent, Emit, PlayerShipSelector] as const,
     step(planets, { position, velocity }, planetTarget, controls, emit) {
         if (controls.get('land') === 'start') {
@@ -74,6 +78,14 @@ const AttemptLandingSystem = new System({
     }
 });
 
+const PlanetAnimationProvider = Provide({
+    name: "PlanetAnimationProvider",
+    provided: AnimationComponent,
+    update: [PlanetDataComponent],
+    args: [PlanetDataComponent],
+    factory: planetData => planetData.animation,
+});
+
 export const PlanetPlugin: Plugin = {
     name: 'PlanetPlugin',
     build(world) {
@@ -90,6 +102,9 @@ export const PlanetPlugin: Plugin = {
         deltaMaker.addComponent(PlanetTargetComponent, {
             componentType: Target,
         });
+        world.addSystem(PlanetTargetProvider);
+        world.addSystem(PlanetAnimationProvider);
+        world.addSystem(PlanetDataProvider);
         world.addSystem(AttemptLandingSystem);
     }
 };

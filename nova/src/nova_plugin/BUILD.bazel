@@ -19,7 +19,7 @@ ts_library(
         "make_system.ts",
         "projectile_data.ts",
         "projectile_plugin.ts",
-        "fire_time.ts",
+        "create_time.ts",
         "weapon_plugin.ts",
         "beam_plugin.ts",
         "guidance.ts",

@@ -2,7 +2,6 @@ import { ParticleConfig } from "novadatainterface/WeaponData";
 import { GetEntity } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { DeleteEvent } from "nova_ecs/events";
-import { FirstAvailable } from "nova_ecs/first_available";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
@@ -22,6 +21,7 @@ export const TrailParticlesComponent =
     new Component<ParticleConfig>('TrailParticlesComponent');
 
 const TrailParticlesProvider = Provide({
+    name: "TrailParticlesProvider",
     provided: TrailParticlesComponent,
     args: [ProjectileDataComponent] as const,
     factory(projectileData) {
@@ -29,15 +29,11 @@ const TrailParticlesProvider = Provide({
     }
 });
 
-const FirstTrailParticles = FirstAvailable([
-    TrailParticlesComponent,
-    TrailParticlesProvider,
-]);
-
 export const HitParticlesComponent =
     new Component<ParticleConfig>('HitParticlesComponent');
 
 const HitParticlesProvider = Provide({
+    name: "HitParticlesProvider",
     provided: HitParticlesComponent,
     args: [ProjectileDataComponent] as const,
     factory(projectileData) {
@@ -105,8 +101,9 @@ function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
 
 const ParticleTextureResource = new Resource<PIXI.Texture>('ParticleTexture');
 const TrailEmitterProvider = Provide({
+    name: "TrailEmitterProvider",
     provided: TrailEmitterComponent,
-    args: [FirstTrailParticles, PixiAppResource,
+    args: [TrailParticlesComponent, PixiAppResource,
         Space, ParticleTextureResource] as const,
     factory(particleConfig, app, space, texture) {
         const emitter = makeEmitter(space, texture, app.ticker.FPS, particleConfig);
@@ -146,7 +143,7 @@ const TrailEmitterCleanup = new System({
 
 const TrailEmitterSystem = new System({
     name: "TrailEmitterSystem",
-    args: [MovementStateComponent, TrailEmitterProvider, TimeResource] as const,
+    args: [MovementStateComponent, TrailEmitterComponent, TimeResource] as const,
     step({ position }, emitter, time) {
         emitter.updateOwnerPos(position.x, position.y);
         emitter.update(time.delta_s);
@@ -192,6 +189,9 @@ export const ParticlesPlugin: Plugin = {
         world.resources.set(ParticleTextureResource, texture);
         world.resources.set(OrphanParticleEmitters, new Map());
 
+        world.addSystem(TrailParticlesProvider);
+        world.addSystem(HitParticlesProvider);
+        world.addSystem(TrailEmitterProvider);
         world.addSystem(TrailEmitterSystem);
         world.addSystem(TrailEmitterCleanup);
         world.addSystem(OrphanEmittersSystem);

@@ -1,60 +1,40 @@
 import { Animation } from "novadatainterface/Animation";
 import { ExplosionData } from "novadatainterface/ExplosionData";
 import { Component } from "nova_ecs/component";
-import { FirstAvailable } from "nova_ecs/first_available";
 import { Plugin } from "nova_ecs/plugin";
 import { Provide } from "nova_ecs/provider";
-import { PlanetDataProvider } from "./planet_plugin";
 import { ProjectileDataComponent } from "./projectile_data";
-import { ShipDataProvider } from "./ship_plugin";
 
 export const AnimationComponent = new Component<Animation>('AnimationComponent');
 
-const ShipAnimationComponentProvider = Provide({
-    provided: AnimationComponent,
-    args: [ShipDataProvider],
-    factory: (shipData) => {
-        return shipData.animation;
-    }
-});
+const animationFactory = (a: { animation: Animation }) => a.animation;
 
-const PlanetAnimationComponentProvider = Provide({
+const ProjectileAnimationProvider = Provide({
+    name: "ProjectileAnimationProvider",
     provided: AnimationComponent,
-    args: [PlanetDataProvider],
-    factory: (shipData) => {
-        return shipData.animation;
-    }
-});
-
-const ProjectileAnimationComponentProvider = Provide({
-    provided: AnimationComponent,
+    update: [ProjectileDataComponent],
     args: [ProjectileDataComponent],
-    factory: (projectile) => {
-        return projectile.animation;
-    }
+    factory: animationFactory,
 });
 
 export const ExplosionDataComponent
     = new Component<ExplosionData>('ExplosionData');
 
-const ExplosionAnimationComponentProvider = Provide({
+const ExplosionAnimationProvider = Provide({
+    name: "ExplosionAnimationProvider",
     provided: AnimationComponent,
+    update: [ExplosionDataComponent],
     args: [ExplosionDataComponent],
-    factory: explosion => explosion.animation,
+    factory: animationFactory,
 });
-
-export const FirstAnimation = FirstAvailable([
-    AnimationComponent,
-    ShipAnimationComponentProvider,
-    PlanetAnimationComponentProvider,
-    ProjectileAnimationComponentProvider,
-    ExplosionAnimationComponentProvider,
-]);
 
 export const AnimationPlugin: Plugin = {
     name: 'AnimationPlugin',
     build(world) {
         world.addComponent(AnimationComponent);
         world.addComponent(ExplosionDataComponent);
+
+        world.addSystem(ProjectileAnimationProvider);
+        world.addSystem(ExplosionAnimationProvider);
     }
 }

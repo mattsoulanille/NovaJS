@@ -15,9 +15,9 @@ import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { Hull, HullComponent, UpdateHullSystem } from './collisions_plugin';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { CreateTime } from './create_time';
 import { ApplyDamageResource } from './death_plugin';
 import { applyExitPoint, ExitPointData } from './exit_point';
-import { FireTimeProvider } from './fire_time';
 import { FireSubs, OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { zeroOrderGuidance } from './guidance';
 import { SoundEvent } from './sound_event';
@@ -120,7 +120,7 @@ export const BeamSystem = new System({
     before: [UpdateHullSystem],
     after: [MovementSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
-        FireTimeProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
+        CreateTime, TimeResource, UUID, Entities, Optional(SourceComponent),
         Optional(TargetComponent)] as const,
     step(beamData, beamState, movement, fireSubs, fireTime, { time }, uuid,
         entities, source, target) {
@@ -164,7 +164,7 @@ const BeamCollisionSystem = new System({
     name: 'BeamCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, Optional(OwnerComponent),
-        BeamDataComponent, FireTimeProvider, ApplyDamageResource, TimeResource] as const,
+        BeamDataComponent, CreateTime, ApplyDamageResource, TimeResource] as const,
     step(collision, entities, owner, beamData, fireTime, applyDamage,
         { time, delta_ms }) {
 
