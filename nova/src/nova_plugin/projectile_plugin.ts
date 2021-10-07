@@ -13,8 +13,8 @@ import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { CreateTime } from './create_time';
 import { ApplyDamageResource, DeathEvent } from './death_plugin';
-import { FireTime, FireTimeProvider } from './fire_time';
 import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
 import { ArmorComponent, ShieldComponent } from './health_plugin';
@@ -115,7 +115,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
         movementState.turning = 0;
         movementState.turnTo = null;
 
-        projectile.components.delete(FireTime);
+        projectile.components.delete(CreateTime);
         projectile.components.delete(SubCounts);
 
         if (target) {
@@ -162,7 +162,7 @@ export const ProjectileExpireEvent = new EcsEvent<Entity>('ProjectileExpire');
 
 const ProjectileLifespanSystem = new System({
     name: 'ProjectileLifespanSystem',
-    args: [FireTimeProvider, TimeResource, ProjectileDataComponent, FireSubs,
+    args: [CreateTime, TimeResource, ProjectileDataComponent, FireSubs,
         Entities, UUID, Emit, ProjectileComponent] as const,
     step(fireTime, { time }, projectileData, fireSubs, entities, uuid, emit) {
         if (time - fireTime > projectileData.shotDuration) {

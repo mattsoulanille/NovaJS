@@ -1,13 +1,11 @@
 import { WeaponDamage } from 'novadatainterface/WeaponData';
-import { Emit, EmitFunction, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, RunQuery, RunQueryFunction } from 'nova_ecs/arg_types';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
-import { System } from 'nova_ecs/system';
-import { CollisionEvent } from './collision_interaction';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent } from './projectile_data';
 

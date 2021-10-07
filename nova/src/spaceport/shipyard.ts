@@ -98,5 +98,7 @@ export class Shipyard extends Menu<Entity> {
         this.input = makeShip(this.itemGrid.selection);
         this.input.components.set(PlayerShipSelector, undefined);
         this.input.components.set(MultiplayerData, multiplayerData);
+        // For convenience
+        (window as any).myShip = this.input;
     }
 }

@@ -7,8 +7,7 @@ export type UnknownResource = Resource<unknown>;
  * Resources are not attached to Entities, and there is only a single instance
  * of each Resource in a world.
  */
-export class Resource<Data> extends
-    Component<Data> {
+export class Resource<Data> extends Component<Data> {
     toString() {
         return `Resource(${this.name})`;
     }

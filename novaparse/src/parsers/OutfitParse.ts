@@ -58,24 +58,23 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
             }
             physics[<PerFrameTimes1000>fType] = fVal * FPS / 1000;
         }
-        else if (fType == "deionize") {
+        else if (fType === "deionize") {
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            physics["deionize"] = fVal * FPS / 100;
+            physics[fType] = fVal * FPS / 100;
         }
-        else if (fType == "turnRate") {
+        else if (fType === "turnRate") {
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            physics["deionize"] = fVal * TurnRateConversionFactor;
+            physics[fType] = fVal * TurnRateConversionFactor;
         }
-        else if (fType == "energyRecharge") {
+        else if (fType === "energyRecharge") {
             if (typeof fVal !== "number") {
                 throw new Error("Wrong type. Expected number");
             }
-            physics["energyRecharge"] = FPS / fVal;
-
+            physics[fType] = FPS / fVal;
         }
         else {
             //throw new Error("Unknown outfit function " + fType + " on outfit " + base.id);

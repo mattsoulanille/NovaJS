@@ -168,6 +168,23 @@ describe('Provide', () => {
         // Ignores the change and just returns the current value
         expect(wordLengths).toEqual([['hello', 5], ['hello', 5]]);
     });
+
+    it('provides a component once the entity has the input component', () => {
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
+
+        const word1 = new EntityBuilder().build();
+
+        world.entities.set('word1', word1);
+        world.step();
+        world.step();
+        world.step();
+        expect(wordLengths).toEqual([]);
+
+        word1.components.set(BAR_COMPONENT, { y: 'hello' });
+        world.step();
+        expect(wordLengths).toEqual([['hello', 5]]);
+    });
 });
 
 describe('ProvideAsync', () => {

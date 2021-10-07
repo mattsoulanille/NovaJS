@@ -2,7 +2,7 @@ import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/Animation';
 import { Gettable } from 'novadatainterface/Gettable';
 import { WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, EmitFunction, Entities, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, Entities, GetEntity, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -13,12 +13,12 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { Provide, ProvideAsync } from 'nova_ecs/provider';
+import { Provide } from 'nova_ecs/provider';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { DefaultMap } from 'nova_ecs/utils';
 import { SingletonComponent } from 'nova_ecs/world';
-import { FirstAnimation } from './animation_plugin';
+import { AnimationComponent } from './animation_plugin';
 import { applyExitPoint, ExitPointData, getExitPointData } from './exit_point';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback } from './guidance';
@@ -34,11 +34,6 @@ type FireSubs = (id: string, source: string, sourceExpired?: boolean) => Entity[
 export const FireSubs = new Resource<FireSubs>('FireSubs');
 
 export const SubCounts = new Component<DefaultMap<string, number>>('SubCount');
-export const SubCountsProvider = Provide({
-    provided: SubCounts,
-    args: [] as const,
-    factory: () => new DefaultMap<string, number>(() => 0),
-});
 
 export interface WeaponLocalState {
     lastFired: number,
@@ -50,10 +45,11 @@ export interface WeaponLocalState {
 type WeaponsLocalState = DefaultMap<string, WeaponLocalState>;
 export const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
 // TODO: This doesn't update if the set or count of weapons changes.
-export const WeaponsComponentProvider = ProvideAsync({
+export const WeaponsComponentProvider = Provide({
+    name: "WeaponsComponentProvider",
     provided: WeaponsComponent,
     args: [] as const,
-    async factory() {
+    factory() {
         return new DefaultMap(() => ({
             lastFired: 0,
             burstCount: 0,
@@ -121,26 +117,21 @@ function* getRandomInCone(angle: number) {
 
 export const SourceComponent = new Component<string>('Source');
 export const OwnerComponent = new Component<string>('Owner');
-export const OwnerProvider = Provide({
-    provided: OwnerComponent,
-    args: [UUID] as const,
-    factory: uuid => uuid,
-});
 
 
-const FireFromEntityQuery = new Query([WeaponsComponentProvider,
-    Entities, MovementStateComponent, FirstAnimation,
-    OwnerProvider, Optional(TargetComponent)] as const, 'FireFromEntityQuery');
+const FireFromEntityQuery = new Query([Optional(WeaponsComponent),
+    Entities, MovementStateComponent, AnimationComponent,
+Optional(OwnerComponent), Optional(TargetComponent), GetEntity] as const, 'FireFromEntityQuery');
 
-const SubsQuery = new Query([WeaponEntries, MovementStateComponent, SubCountsProvider,
-    OwnerProvider, Optional(TargetComponent)] as const);
+const SubsQuery = new Query([WeaponEntries, MovementStateComponent, Optional(SubCounts),
+    Optional(OwnerComponent), Optional(TargetComponent), GetEntity] as const);
 
 const ConstructorQuery = new Query([Entities, Emit, WeaponEntries,
     SingletonComponent] as const);
 
 export const VulnerableToPD = new Component<undefined>('VulnerableToPD');
-const PointDefenseQuery = new Query([MovementStateComponent,
-    OwnerProvider, UUID, Optional(TargetComponent), VulnerableToPD] as const);
+const PointDefenseQuery = new Query([MovementStateComponent, Optional(OwnerComponent),
+    UUID, Optional(TargetComponent), VulnerableToPD] as const);
 
 export abstract class WeaponEntry {
     protected entities: EntityMap;
@@ -170,8 +161,18 @@ export abstract class WeaponEntry {
         if (!results[0]) {
             return undefined;
         }
-        const [weapons, entities, movement, animation, owner, targetVal] = results[0];
+        let [weapons, entities, movement, animation, owner, targetVal, entity] = results[0];
         let target = targetVal?.target;
+        if (!weapons) {
+            weapons = new DefaultMap(() => ({
+                lastFired: 0,
+                burstCount: 0,
+                reloadingBurst: false,
+                wasFiring: false,
+                exitIndex: 0,
+            }));
+            entity.components.set(WeaponsComponent, weapons);
+        }
 
         const weapon = weapons.get(this.data.id);
         const { exitPoint, exitPointData } = getNextExitpoint(
@@ -213,6 +214,9 @@ export abstract class WeaponEntry {
                 let closestUuid: string | undefined = undefined;
                 let distance2 = Infinity;
                 for (let [movement, targetOwner, uuid, otherTarget] of targets) {
+                    if (!targetOwner) {
+                        targetOwner = uuid;
+                    }
                     if (targetOwner === owner) {
                         continue;
                     }
@@ -247,10 +251,20 @@ export abstract class WeaponEntry {
     }
 
     fireSubs(source: string, sourceExpired = false, position?: Position): Entity[] {
-        const [weaponEntries, movement, subCounts, owner, target]
+        let [weaponEntries, movement, subCounts, owner, target, sourceEntity]
             = this.runQuery(SubsQuery, source)[0];
         if (!('submunitions' in this.data)) {
             return [];
+        }
+        if (!owner) {
+            owner = source;
+            // Does this really need to be set?
+            sourceEntity.components.set(OwnerComponent, owner);
+        }
+        if (!subCounts) {
+            subCounts = new DefaultMap(() => 0);
+            // Does this really need to be set?
+            sourceEntity.components.set(SubCounts, subCounts);
         }
 
         const subs: Entity[] = [];
@@ -309,6 +323,7 @@ export const FireWeaponPlugin: Plugin = {
             componentType: t.undefined,
         });
 
+        world.addSystem(WeaponsComponentProvider);
         world.addComponent(WeaponsComponent);
         world.addComponent(OwnerComponent);
         world.addComponent(SourceComponent);

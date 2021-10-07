@@ -16,6 +16,7 @@ import { Target, TargetComponent } from "./target_component";
 const TargetIndexComponent = new Component<{ index: number }>('TargetIndexComponent');
 
 const TargetIndexProvider = Provide({
+    name: "TargetIndexProvider",
     provided: TargetIndexComponent,
     args: [] as const,
     factory: () => ({ index: -1 }),
@@ -26,7 +27,7 @@ export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
 const ChooseTargetSystem = new System({
     name: 'ChooseTarget',
     events: [ControlStateEvent],
-    args: [ControlStateEvent, TargetComponent, TargetIndexProvider, UUID,
+    args: [ControlStateEvent, TargetComponent, TargetIndexComponent, UUID,
         new Query([UUID, MovementStateComponent, ShipComponent] as const),
         Emit, MovementStateComponent, PlayerShipSelector] as const,
     step(controlState, target, index, uuid, ships, emit, movementState) {
@@ -82,6 +83,7 @@ export const TargetPlugin: Plugin = {
             componentType: Target,
         });
 
+        world.addSystem(TargetIndexProvider);
         world.addSystem(ChooseTargetSystem);
     }
 }

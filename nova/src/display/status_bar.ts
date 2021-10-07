@@ -1,7 +1,7 @@
 import { PlanetData } from "novadatainterface/PlanetData";
 import { ShipData } from "novadatainterface/ShipData";
 import { StatusBarData, StatusBarDataArea } from "novadatainterface/StatusBarData";
-import { RunQuery, UUID } from "nova_ecs/arg_types";
+import { GetEntity, RunQuery, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
@@ -9,7 +9,6 @@ import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementState, MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
-import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
@@ -296,18 +295,17 @@ const StatusBarResize = new System({
 });
 
 const RadarTime = new Component<{ lastTime: number }>('RadarTime');
-const RadarTimeProvider = Provide({
-    provided: RadarTime,
-    args: [] as const,
-    factory: () => ({ lastTime: 0 }),
-});
 const DrawRadar = new System({
     name: 'DrawRadar',
-    args: [RadarTimeProvider, TimeResource, StatusBarResource, MovementStateComponent,
-        new Query([UUID, MovementStateComponent, ShipDataComponent] as const),
-        new Query([UUID, MovementStateComponent, PlanetDataComponent] as const),
-        PlayerShipSelector] as const,
-    step(radarTime, { time }, statusBar, { position }, ships, planets) {
+    args: [Optional(RadarTime), TimeResource, StatusBarResource, MovementStateComponent,
+    new Query([UUID, MovementStateComponent, ShipDataComponent] as const),
+    new Query([UUID, MovementStateComponent, PlanetDataComponent] as const),
+        GetEntity, PlayerShipSelector] as const,
+    step(radarTime, { time }, statusBar, { position }, ships, planets, entity) {
+        if (!radarTime) {
+            radarTime = { lastTime: 0 };
+            entity.components.set(RadarTime, radarTime);
+        }
         if (time - radarTime.lastTime > statusBar.radarPeriod) {
             statusBar.drawRadar(position, ships, planets);
             radarTime.lastTime = time;

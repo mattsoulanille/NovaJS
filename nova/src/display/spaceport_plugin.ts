@@ -26,6 +26,7 @@ function deImmerify(entity: Entity) {
 }
 
 const SpaceportProvider = Provide({
+    name: "SpaceportProvider",
     provided: SpaceportComponent,
     args: [GameDataResource, ControlsSubject, Stage, PlanetComponent] as const,
     factory(gameData, controls, stage, { id }) {
@@ -35,7 +36,7 @@ const SpaceportProvider = Provide({
     }
 });
 
-const SpaceportQuery = new Query([SpaceportProvider] as const);
+const SpaceportQuery = new Query([SpaceportComponent] as const);
 
 const LandSystem = new System({
     name: 'LandSystem',
@@ -63,12 +64,6 @@ const LandSystem = new System({
     }
 });
 
-const SpaceportAddSystem = new System({
-    name: 'SpaceportAdd',
-    args: [Without(SpaceportProvider), PlanetComponent] as const,
-    step() { }
-});
-
 const SpaceportResizeSystem = new System({
     name: 'SpaceportResize',
     events: [ResizeEvent],
@@ -82,7 +77,7 @@ const SpaceportResizeSystem = new System({
 export const SpaceportPlugin: Plugin = {
     name: 'SpaceportPlugin',
     build(world) {
-        world.addSystem(SpaceportAddSystem);
+        world.addSystem(SpaceportProvider);
         world.addSystem(LandSystem);
         world.addSystem(SpaceportResizeSystem);
     }

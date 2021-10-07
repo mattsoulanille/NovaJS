@@ -6,15 +6,16 @@ import { Provide } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import * as SAT from "sat";
-import { FirstHull, UpdateHullSystem } from "../nova_plugin/collisions_plugin";
+import { HullComponent, UpdateHullSystem } from "../nova_plugin/collisions_plugin";
 import { Space } from "./space_resource";
 
 
 const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
 
 const GraphicsProvider = Provide({
+    name: "ConvexHullGraphicsProvider",
     provided: ConvexHullGraphicsComponent,
-    args: [Space] as const,
+    args: [Space, HullComponent] as const,
     factory: (space) => {
         const graphics = new PIXI.Graphics();
         graphics.zIndex = 1000;
@@ -59,7 +60,7 @@ const COLORS = [
 
 const ConvexHullGraphicsSystem = new System({
     name: 'ConvexHullGraphics',
-    args: [FirstHull, GraphicsProvider] as const,
+    args: [HullComponent, ConvexHullGraphicsComponent] as const,
     after: [UpdateHullSystem],
     step(hull, graphics) {
         graphics.clear();
@@ -87,10 +88,12 @@ export const ConvexHullDisplayPlugin: Plugin = {
     name: 'ConvexHullDisplayPlugin',
     build(world) {
         world.addComponent(ConvexHullGraphicsComponent);
+        world.addSystem(GraphicsProvider);
         world.addSystem(ConvexHullGraphicsSystem);
         world.addSystem(HullGraphicsCleanup);
     },
     remove(world) {
+        world.removeSystem(GraphicsProvider);
         world.removeSystem(ConvexHullGraphicsSystem);
         world.removeSystem(HullGraphicsCleanup);
         const space = world.resources.get(Space);

@@ -2,7 +2,6 @@ import { Emit, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Vector } from "nova_ecs/datatypes/vector";
-import { FirstAvailable } from "nova_ecs/first_available";
 import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
@@ -14,7 +13,7 @@ import { SingletonComponent } from "nova_ecs/world";
 import RBush, { BBox } from "rbush";
 import * as SAT from "sat";
 import { getFrameFromMovement } from "../util/get_frame_and_angle";
-import { FirstAnimation } from "./animation_plugin";
+import { AnimationComponent } from "./animation_plugin";
 import { CollisionEvent, CollisionInteraction, CollisionInteractionComponent } from "./collision_interaction";
 import { GameDataResource } from "./game_data_resource";
 import { ShipComponent } from "./ship_plugin";
@@ -34,8 +33,9 @@ export const HullComponent = new Component<{
 }>('HullComponent');
 
 const HullProvider = ProvideAsync({
+    name: "HullProvider",
     provided: HullComponent,
-    args: [FirstAnimation, GameDataResource] as const,
+    args: [AnimationComponent, GameDataResource] as const,
     async factory(animation, gameData) {
         const spriteSheet = await gameData.data.SpriteSheet
             .get(animation.images.baseImage.id);
@@ -48,8 +48,6 @@ const HullProvider = ProvideAsync({
         return { hulls };
     }
 });
-
-export const FirstHull = FirstAvailable([HullComponent, HullProvider]);
 
 interface RBushEntry extends BBox {
     uuid: string,
@@ -98,19 +96,14 @@ function convexPolysCollide(a: SAT.Polygon[], b: SAT.Polygon[]) {
     return false;
 }
 
-// TODO: This might not be the best way of setting this.
-const ShipCollisionInteraction = Provide({
+const ShipCollisionInteractionProvider = Provide({
+    name: "ShipCollisionInteractionProvider",
     provided: CollisionInteractionComponent,
     args: [ShipComponent] as const,
     factory: () => ({
         vulnerableTo: new Set(['normal']),
     }),
 });
-
-const CollisionInteractionFirst = FirstAvailable([
-    CollisionInteractionComponent,
-    ShipCollisionInteraction,
-]);
 
 function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
     return {
@@ -145,7 +138,7 @@ function rotateAabb(bbox: BBox, angle: number | Angle): BBox {
 
 export const UpdateHullSystem = new System({
     name: "ActiveHullSystem",
-    args: [MovementStateComponent, FirstHull, Optional(FirstAnimation)] as const,
+    args: [MovementStateComponent, HullComponent, Optional(AnimationComponent)] as const,
     step(movement, hull, animation) {
         let frame = 0;
         let angle: number;
@@ -167,8 +160,8 @@ export const UpdateHullSystem = new System({
 export const CollisionSystem = new System({
     name: "CollisionSystem",
     after: [UpdateHullSystem],
-    args: [RBushResource, new Query([FirstHull, MovementStateComponent,
-        UUID, CollisionInteractionFirst] as const),
+    args: [RBushResource, new Query([HullComponent, MovementStateComponent,
+        UUID, CollisionInteractionComponent] as const),
         Emit, SingletonComponent] as const,
     step(rbush, colliders, emit) {
         rbush.clear();
@@ -236,6 +229,10 @@ export const CollisionsPlugin: Plugin = {
     build(world) {
         world.addComponent(HullComponent);
         world.resources.set(RBushResource, new RBush());
+
+        world.addSystem(HullProvider);
+        world.addSystem(ShipCollisionInteractionProvider);
+
         world.addSystem(UpdateHullSystem);
         world.addSystem(CollisionSystem);
         //world.addSystem(LogCollisionSystem);

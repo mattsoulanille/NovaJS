@@ -3,7 +3,7 @@ import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { Entity } from "nova_ecs/entity";
-import { MovementPhysicsComponent, MovementStateComponent, MovementType } from "nova_ecs/plugins/movement_plugin";
+import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { ArmorComponent, IonizationComponent, ShieldComponent } from "./health_plugin";
 import { OutfitsStateComponent } from "./outfit_plugin";
 import { ShipComponent } from "./ship_plugin";
@@ -19,12 +19,6 @@ export function makeShip(shipData: ShipData): Entity {
     }
     ship.components.set(ShipComponent, {
         id: shipData.id
-    }).set(MovementPhysicsComponent, {
-        acceleration: shipData.physics.acceleration,
-        maxVelocity: shipData.physics.speed,
-        movementType: shipData.physics.inertialess
-            ? MovementType.INERTIALESS : MovementType.INERTIAL,
-        turnRate: shipData.physics.turnRate
     }).set(MovementStateComponent, {
         accelerating: 0,
         position: new Position(600 * (Math.random() - 0.5),

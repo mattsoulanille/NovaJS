@@ -1,12 +1,12 @@
-import { Entities, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
-import { AddEvent, DeleteEvent } from "nova_ecs/events";
+import { AddEvent, DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
-import { Provide, ProvideAsync } from "nova_ecs/provider";
+import { ProvideAsync } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
-import { FirstAnimation } from "../nova_plugin/animation_plugin";
+import { AnimationComponent } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlanetComponent } from "../nova_plugin/planet_plugin";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
@@ -15,11 +15,13 @@ import { ShipComponent } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { Space } from "./space_resource";
 
+const AnimationGraphicLoaded = new EcsEvent<AnimationGraphic>('AnimationGraphicLoaded');
 export const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
 const AnimationGraphicLoader = ProvideAsync({
+    name: "AnimationGraphicLoader",
     provided: AnimationGraphicComponent,
-    args: [FirstAnimation, GameDataResource, GetEntity] as const,
-    async factory(animation, gameData, entity) {
+    args: [AnimationComponent, GameDataResource, GetEntity, Emit, UUID] as const,
+    async factory(animation, gameData, entity, emit, uuid) {
         const graphic = new AnimationGraphic({
             gameData: currentIfDraft(gameData)!,
             animation: currentIfDraft(animation)!,
@@ -38,22 +40,24 @@ const AnimationGraphicLoader = ProvideAsync({
             graphic.container.zIndex = -10;
         }
 
+        emit(AnimationGraphicLoaded, graphic, [uuid]);
         return graphic;
     }
 });
 
-// Add the graphic to the PIXI container in a synchronous provider. Othewise,
+// Add the graphic to the PIXI container in a synchronous system. Othewise,
 // the check that makes sure the entity is still in the world may be
 // invalid.
-export const AnimationGraphicProvider = Provide({
-    provided: AnimationGraphicComponent,
-    args: [AnimationGraphicLoader, Space, Entities, UUID] as const,
-    factory(graphic, space, entities, uuid) {
+export const AnimationGraphicProvider = new System({
+    name: "AnimationGraphicProvider",
+    events: [AnimationGraphicLoaded],
+    args: [AnimationGraphicLoaded, Space, Entities, UUID] as const,
+    step(graphic, space, entities, uuid) {
         // Only add the graphic to the container if the entity still exists
         if (entities.has(uuid)) {
             space.addChild(graphic.container);
         } else {
-            console.log(uuid);
+            console.log(`Not adding graphic for ${uuid} since it is no longer in the system`);
         }
         return graphic;
     }
@@ -61,7 +65,7 @@ export const AnimationGraphicProvider = Provide({
 
 export const ObjectDrawSystem = new System({
     name: "ObjectDrawSystem",
-    args: [MovementStateComponent, AnimationGraphicProvider] as const,
+    args: [MovementStateComponent, AnimationGraphicComponent] as const,
     step: (movementState, graphic) => {
         if (movementState.turning < 0) {
             graphic.setFramesToUse('left');
@@ -102,6 +106,8 @@ const AnimationGraphicInsert = new System({
 export const AnimationGraphicPlugin: Plugin = {
     name: 'AnimationGraphicPlugin',
     build(world) {
+        world.addSystem(AnimationGraphicLoader);
+        world.addSystem(AnimationGraphicProvider);
         world.addSystem(ObjectDrawSystem);
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(AnimationGraphicInsert);
