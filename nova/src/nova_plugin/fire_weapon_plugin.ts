@@ -23,7 +23,7 @@ import { applyExitPoint, ExitPointData, getExitPointData } from './exit_point';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback } from './guidance';
 import { TargetComponent } from './target_component';
-
+import { WeaponsStateComponent } from './weapons_state';
 
 export const WeaponConstructors = new Resource<Map<WeaponData['type'],
     { new(data: WeaponData, runQuery: RunQueryFunction): WeaponEntry }>>('WeaponConstructors');
@@ -48,7 +48,7 @@ export const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsCompone
 export const WeaponsComponentProvider = Provide({
     name: "WeaponsComponentProvider",
     provided: WeaponsComponent,
-    args: [] as const,
+    args: [WeaponsStateComponent] as const,
     factory() {
         return new DefaultMap(() => ({
             lastFired: 0,
@@ -118,9 +118,8 @@ function* getRandomInCone(angle: number) {
 export const SourceComponent = new Component<string>('Source');
 export const OwnerComponent = new Component<string>('Owner');
 
-
 const FireFromEntityQuery = new Query([Optional(WeaponsComponent),
-    Entities, MovementStateComponent, AnimationComponent,
+    Entities, MovementStateComponent, AnimationComponent, UUID,
 Optional(OwnerComponent), Optional(TargetComponent), GetEntity] as const, 'FireFromEntityQuery');
 
 const SubsQuery = new Query([WeaponEntries, MovementStateComponent, Optional(SubCounts),
@@ -161,7 +160,10 @@ export abstract class WeaponEntry {
         if (!results[0]) {
             return undefined;
         }
-        let [weapons, entities, movement, animation, owner, targetVal, entity] = results[0];
+        let [weapons, entities, movement, animation, uuid, owner, targetVal, entity] = results[0];
+        if (!owner) {
+            owner = uuid;
+        }
         let target = targetVal?.target;
         if (!weapons) {
             weapons = new DefaultMap(() => ({

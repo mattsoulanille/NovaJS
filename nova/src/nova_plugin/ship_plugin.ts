@@ -6,6 +6,7 @@ import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementPhysicsComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { AnimationComponent } from './animation_plugin';
+import { CollisionInteractionComponent } from './collision_interaction';
 import { GameDataResource } from './game_data_resource';
 import { OutfitsStateComponent } from './outfit_plugin';
 
@@ -64,6 +65,15 @@ const ShipAnimationProvider = Provide({
     factory: shipData => shipData.animation,
 });
 
+const ShipCollisionInteractionProvider = Provide({
+    name: "ShipCollisionInteractionProvider",
+    provided: CollisionInteractionComponent,
+    args: [ShipComponent] as const,
+    factory: () => ({
+        vulnerableTo: new Set(['normal']),
+    }),
+});
+
 export const ShipPlugin: Plugin = {
     name: "ShipPlugin",
     build(world) {
@@ -74,6 +84,7 @@ export const ShipPlugin: Plugin = {
         world.addComponent(ShipComponent);
         world.addComponent(ShipDataComponent);
 
+        world.addSystem(ShipCollisionInteractionProvider);
         world.addSystem(ShipDataProvider);
         world.addSystem(ShipAnimationProvider);
         world.addSystem(ShipOutfitsProvider);

@@ -21,6 +21,7 @@ ts_library(
         "projectile_plugin.ts",
         "create_time.ts",
         "weapon_plugin.ts",
+        "weapons_state.ts",
         "beam_plugin.ts",
         "guidance.ts",
         "exit_point.ts",
