@@ -1,8 +1,6 @@
-import * as t from 'io-ts';
 import { WeaponData } from 'novadatainterface/WeaponData';
 import { Emit, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
-import { map } from 'nova_ecs/datatypes/map';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
@@ -16,18 +14,7 @@ import { GameDataResource } from './game_data_resource';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
 import { ControlStateEvent } from './ship_controller_plugin';
-
-const WeaponState = t.intersection([t.type({
-    count: t.number,
-    firing: t.boolean,
-}), t.partial({
-    target: t.string,
-})]);
-export type WeaponState = t.TypeOf<typeof WeaponState>;
-
-const WeaponsState = map(t.string /* weapon id */, WeaponState);
-export type WeaponsState = t.TypeOf<typeof WeaponsState>;
-export const WeaponsStateComponent = new Component<WeaponsState>('WeaponsStateComponent');
+import { WeaponsState, WeaponsStateComponent, WeaponState } from './weapons_state';
 
 function checkReloaded(weapon: WeaponData, localState: WeaponLocalState,
     state: WeaponState, time: Time): boolean {

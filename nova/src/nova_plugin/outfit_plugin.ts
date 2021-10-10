@@ -8,8 +8,7 @@ import { MovementPhysics, MovementType } from 'nova_ecs/plugins/movement_plugin'
 import { ProvideAsync } from 'nova_ecs/provider';
 import { DefaultMap } from '../common/DefaultMap';
 import { GameDataResource } from './game_data_resource';
-import { WeaponsStateComponent, WeaponState } from './weapon_plugin';
-
+import { WeaponsStateComponent, WeaponState } from './weapons_state';
 
 const OutfitState = t.type({
     count: t.number,

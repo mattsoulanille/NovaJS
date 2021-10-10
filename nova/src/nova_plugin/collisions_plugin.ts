@@ -5,7 +5,7 @@ import { Vector } from "nova_ecs/datatypes/vector";
 import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
-import { Provide, ProvideAsync } from "nova_ecs/provider";
+import { ProvideAsync } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
@@ -16,7 +16,6 @@ import { getFrameFromMovement } from "../util/get_frame_and_angle";
 import { AnimationComponent } from "./animation_plugin";
 import { CollisionEvent, CollisionInteraction, CollisionInteractionComponent } from "./collision_interaction";
 import { GameDataResource } from "./game_data_resource";
-import { ShipComponent } from "./ship_plugin";
 
 
 export class Hull {
@@ -35,7 +34,7 @@ export const HullComponent = new Component<{
 const HullProvider = ProvideAsync({
     name: "HullProvider",
     provided: HullComponent,
-    args: [AnimationComponent, GameDataResource] as const,
+    args: [AnimationComponent, GameDataResource, CollisionInteractionComponent] as const,
     async factory(animation, gameData) {
         const spriteSheet = await gameData.data.SpriteSheet
             .get(animation.images.baseImage.id);
@@ -95,15 +94,6 @@ function convexPolysCollide(a: SAT.Polygon[], b: SAT.Polygon[]) {
     }
     return false;
 }
-
-const ShipCollisionInteractionProvider = Provide({
-    name: "ShipCollisionInteractionProvider",
-    provided: CollisionInteractionComponent,
-    args: [ShipComponent] as const,
-    factory: () => ({
-        vulnerableTo: new Set(['normal']),
-    }),
-});
 
 function translateAabb(bbox: BBox, { x, y }: { x: number, y: number }): BBox {
     return {
@@ -231,7 +221,6 @@ export const CollisionsPlugin: Plugin = {
         world.resources.set(RBushResource, new RBush());
 
         world.addSystem(HullProvider);
-        world.addSystem(ShipCollisionInteractionProvider);
 
         world.addSystem(UpdateHullSystem);
         world.addSystem(CollisionSystem);

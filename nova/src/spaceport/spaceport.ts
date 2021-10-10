@@ -7,7 +7,7 @@ import { ControlEvent } from '../nova_plugin/controls_plugin';
 import { WeaponsComponent } from '../nova_plugin/fire_weapon_plugin';
 import { ArmorComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/health_plugin';
 import { AppliedOutfitsComponent, OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
-import { WeaponsStateComponent } from '../nova_plugin/weapon_plugin';
+import { WeaponsStateComponent } from '../nova_plugin/weapons_state';
 import { Button } from './button';
 import { Menu } from './menu';
 import { MenuControls } from './menu_controls';
