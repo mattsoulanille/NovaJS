@@ -12,14 +12,14 @@
   resolved "https://registry.yarnpkg.com/@bazel/buildifier/-/buildifier-4.0.1.tgz#52cfbad5cbb86e9183a29dde2370cd465730ea0d"
   integrity sha512-BTmtvJbeeEVrqRApI1gr5hvPgYcHLpdGJ5EXNXEWO692ztMPSj5fB/dH0xUlaW45jn6LimYx8ymqTMhj3538og==
 
-"@bazel/concatjs@^3.8.0":
-  version "3.8.0"
-  resolved "https://registry.yarnpkg.com/@bazel/concatjs/-/concatjs-3.8.0.tgz#a6b2483f7799c58652fbe5347ab2b3063a1ae6ad"
-  integrity sha512-Qi/Glf407LKz7wC3VAGwtm+Sjr/b+RLv7ESdlMekOlzMCK83OWA0aNhKtbSKZ36hJ/ToDgEWtjus7o6svsJECQ==
+"@bazel/concatjs@^4.4.0":
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/@bazel/concatjs/-/concatjs-4.4.0.tgz#4a69345bf27391e6da58e5df58b27a81eaecf55c"
+  integrity sha512-lxA/yHKFN9q7L6lvA6GgZwceU7SjSNrGxh/AV7db+klzHfV9jHpvE/yo2yCmUi/nrOq8TC7SUJnLWqFx1rl24g==
   dependencies:
     protobufjs "6.8.8"
     source-map-support "0.5.9"
-    tsutils "2.27.2"
+    tsutils "3.21.0"
 
 "@bazel/esbuild@^3.8.0":
   version "3.8.0"
@@ -1897,6 +1897,13 @@ tsutils@2.27.2:
   version "2.27.2"
   resolved "https://registry.yarnpkg.com/tsutils/-/tsutils-2.27.2.tgz#60ba88a23d6f785ec4b89c6e8179cac9b431f1c7"
   integrity sha512-qf6rmT84TFMuxAKez2pIfR8UCai49iQsfB7YWVjV1bKpy/d0PWT5rEOSM6La9PiHZ0k1RRZQiwVdVJfQ3BPHgg==
+  dependencies:
+    tslib "^1.8.1"
+
+tsutils@3.21.0:
+  version "3.21.0"
+  resolved "https://registry.yarnpkg.com/tsutils/-/tsutils-3.21.0.tgz#b48717d394cea6c1e096983eed58e9d61715b623"
+  integrity sha512-mHKK3iUXL+3UF6xL5k0PEhKRUBKPBCv/+RkEOpjRWxxx27KKRBmmA60A9pgOUvMi8GKhRMPEmjBRPzs2W7O1OA==
   dependencies:
     tslib "^1.8.1"
 
