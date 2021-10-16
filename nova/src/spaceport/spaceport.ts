@@ -1,12 +1,9 @@
 import { Entity } from 'nova_ecs/entity';
-import { MovementPhysicsComponent } from 'nova_ecs/plugins/movement_plugin';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
-import { WeaponsComponent } from '../nova_plugin/fire_weapon_plugin';
-import { ArmorComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/health_plugin';
-import { AppliedOutfitsComponent, OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
+import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state';
 import { Button } from './button';
 import { Menu } from './menu';
@@ -50,7 +47,7 @@ export class Spaceport extends Menu<Entity> {
             this.input.components.set(OutfitsStateComponent, newOutfits);
             // Delete these so they are re-created with the new outfits.
             // this.input.components.delete(WeaponsStateComponent);
-            // this.input.components.delete(WeaponsComponent);
+            this.input.components.delete(WeaponsStateComponent);
             // this.input.components.delete(AppliedOutfitsComponent);
             // this.input.components.delete(ShieldComponent);
             // this.input.components.delete(ArmorComponent);

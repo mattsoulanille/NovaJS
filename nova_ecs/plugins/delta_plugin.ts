@@ -193,7 +193,10 @@ export class DeltaMaker {
                 continue;
             }
             // Use set instead of setSilent because this is a new component.
-            entity.components.set(component, decoded.right);
+            //entity.components.set(component, decoded.right);
+            (entity.components as EventMap<UnknownComponent, unknown>)
+                .set(component, decoded.right, true /* Silent */);
+
         }
 
         // Apply component deltas

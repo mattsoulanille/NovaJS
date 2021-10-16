@@ -48,6 +48,7 @@ export const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsCompone
 export const WeaponsComponentProvider = Provide({
     name: "WeaponsComponentProvider",
     provided: WeaponsComponent,
+    update: [WeaponsStateComponent],
     args: [WeaponsStateComponent] as const,
     factory() {
         return new DefaultMap(() => ({

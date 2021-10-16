@@ -25,7 +25,6 @@ export const ShipDataProvider = ProvideAsync({
     args: [GameDataResource, ShipComponent] as const,
     update: [ShipComponent],
     factory: async (gameData, ship) => {
-        console.log('providing shipData ' + ship.id);
         return await gameData.data.Ship.get(ship.id);
     }
 });
@@ -34,7 +33,9 @@ export const ShipOutfitsProvider = Provide({
     name: "ShipOutfitsProvider",
     provided: OutfitsStateComponent,
     args: [ShipDataComponent] as const,
-    update: [ShipDataComponent],
+    // Not ShipDataComponent because then this would always be provided
+    // since ShipDataComponent is always provided since it's not multiplayer.
+    update: [ShipComponent],
     factory(shipData) {
         return new Map(Object.entries(shipData.outfits)
             .map(([id, count]) => [id, { count }]));
