@@ -151,6 +151,18 @@ describe('Provide', () => {
     });
 
     it('ignores silent changes to components', () => {
+        const fooProvider = Provide({
+            name: 'foo from bar',
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            update: [BAR_COMPONENT],
+            factory: (bar) => {
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
@@ -161,12 +173,15 @@ describe('Provide', () => {
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
 
+        word1.components.set(BAR_COMPONENT, { y: 'asdf' });
+        world.step();
+
         (word1.components as EventMap<Component<any>, unknown>)
             .set(BAR_COMPONENT, { y: 'bye' }, true /* Silent */);
-
         world.step();
-        // Ignores the change and just returns the current value
-        expect(wordLengths).toEqual([['hello', 5], ['hello', 5]]);
+
+        // Ignores the change to 'bye' and just returns the current value
+        expect(wordLengths).toEqual([['hello', 5], ['asdf', 4], ['bye', 4]]);
     });
 
     it('provides a component once the entity has the input component', () => {
@@ -375,6 +390,19 @@ describe('ProvideAsync', () => {
     });
 
     it('ignores when components are changed silently', async () => {
+        const fooProvider = ProvideAsync({
+            name: 'foo from bar',
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            update: [BAR_COMPONENT],
+            factory: async (bar) => {
+                await sleep(10);
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
@@ -388,12 +416,23 @@ describe('ProvideAsync', () => {
         world.step();
         expect(wordLengths).toEqual([['hello', 5]]);
 
+        word1.components.set(BAR_COMPONENT, { y: 'asdf' });
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+        expect(wordLengths).toEqual([['hello', 5], ['asdf', 5], ['asdf', 4]]);
+
         (word1.components as EventMap<Component<any>, unknown>)
             .set(BAR_COMPONENT, { y: 'bye' }, true /* Silent */);
         world.step();
         clock.tick(11);
         await world.resources.get(AsyncSystemResource)?.done;
         world.step();
-        expect(wordLengths).toEqual([['hello', 5], ['hello', 5], ['hello', 5]]);
+        expect(wordLengths).toEqual([
+            ['hello', 5],
+            ['asdf', 5], ['asdf', 4], // Changes to 4
+            ['bye', 4], ['bye', 4], // Does not change to 3
+        ]);
     });
 });
