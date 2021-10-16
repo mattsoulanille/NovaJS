@@ -32,9 +32,6 @@ export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided
                 return;
             }
             providedValue = factory(...args);
-            if (providedValue instanceof Promise) {
-                return;
-            }
 
             entity.components.set(provided, providedValue);
         }

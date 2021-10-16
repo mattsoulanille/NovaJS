@@ -241,8 +241,12 @@ export function multiplayer(communicator: Communicator,
                         warn(`'${message.source}' tried to modify entity '${uuid}'`);
                         continue;
                     }
-
-                    deltaMaker.applyDelta(entity, entityDelta);
+                    try {
+                        deltaMaker.applyDelta(entity, entityDelta);
+                    } catch (e) {
+                        console.warn(`Failed to apply delta to ${uuid}`);
+                        console.warn(e);
+                    }
                 }
             }
             // Reset messages since they've been processed.
