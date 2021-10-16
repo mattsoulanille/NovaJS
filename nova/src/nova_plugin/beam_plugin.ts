@@ -22,6 +22,7 @@ import { FireSubs, OwnerComponent, sampleInaccuracy, SourceComponent, WeaponCons
 import { zeroOrderGuidance } from './guidance';
 import { SoundEvent } from './sound_event';
 import { TargetComponent } from './target_component';
+import { WeaponsSystem } from './weapon_plugin';
 
 
 interface BeamState {
@@ -118,7 +119,7 @@ class BeamWeaponEntry extends WeaponEntry {
 export const BeamSystem = new System({
     name: 'BeamSystem',
     before: [UpdateHullSystem],
-    after: [MovementSystem],
+    after: [MovementSystem, WeaponsSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
         CreateTime, TimeResource, UUID, Entities, Optional(SourceComponent),
         Optional(TargetComponent)] as const,

@@ -7,7 +7,6 @@ import * as PIXI from "pixi.js";
 import { BeamDataComponent, BeamSystem } from "../nova_plugin/beam_plugin";
 import { Space } from "./space_resource";
 
-
 const BeamGraphicsResource = new Resource<PIXI.Graphics>('BeamGraphics');
 
 const ClearBeams = new System({

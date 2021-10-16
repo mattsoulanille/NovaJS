@@ -40,7 +40,7 @@ function checkReloaded(weapon: WeaponData, localState: WeaponLocalState,
     return true;
 }
 
-const WeaponsSystem = new System({
+export const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponent,
         TimeResource, UUID, WeaponEntries] as const,
