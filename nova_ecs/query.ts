@@ -1,6 +1,6 @@
 import { ArgTypes } from "./arg_types";
 import { Component, UnknownComponent } from "./component";
-import { Modifier, UnknownModifier } from "./modifier";
+import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { Resource, UnknownResource } from "./resource";
 import { subset, WithComponents } from "./utils";
 
@@ -21,7 +21,7 @@ export class Query<QueryArgs extends readonly ArgTypes[]
     readonly queries: Query[];
 
     constructor(readonly args: QueryArgs, readonly name?: string) {
-        const modifiers = args.filter(arg => arg instanceof Modifier) as UnknownModifier[];
+        const modifiers = args.filter(arg => arg instanceof ArgModifier) as UnknownArgModifier[];
         const modifierComponents = modifiers
             .map(modifier => modifier.query.components)
             .reduce((a, b) => new Set([...a, ...b]), new Set());

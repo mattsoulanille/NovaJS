@@ -1,7 +1,7 @@
 import { right } from 'fp-ts/lib/Either';
 import 'jasmine';
 import { Component } from './component';
-import { Modifier } from './modifier';
+import { ArgModifier } from './arg_modifier';
 import { Query } from './query';
 import { Resource } from './resource';
 
@@ -37,7 +37,7 @@ describe('query', () => {
     });
 
     it('includes components and resources from modifiers', () => {
-        const exampleModifier = new Modifier({
+        const exampleModifier = new ArgModifier({
             query: new Query([FOO_COMPONENT, BAZ_RESOURCE] as const),
             transform: (foo, _baz) => {
                 return right(foo as any);

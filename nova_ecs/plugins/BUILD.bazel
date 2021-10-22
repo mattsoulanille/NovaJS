@@ -12,6 +12,7 @@ ts_library(
         "multiplayer_plugin.ts",
         "movement_plugin.ts",
         "serializer_plugin.ts",
+        #"modifier_plugin.ts",
         "delta.ts",
         "delta_plugin.ts",
         "keyboard_plugin.ts",
@@ -33,6 +34,7 @@ ts_library(
         "multiplayer_plugin_test.ts",
         "movement_plugin_test.ts",
         "serializer_plugin_test.ts",
+        #"modifier_plugin_test.ts",
         "delta_plugin_test.ts",
     ],
     deps = [

@@ -3,7 +3,7 @@ import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap } from "./entity_map";
 import { EcsEvent, EventData } from "./events";
-import { Modifier, ModifierResult } from "./modifier";
+import { ArgModifier, ArgModifierResult } from "./arg_modifier";
 import { Query } from "./query";
 import { Resource, ResourceData } from "./resource";
 import { World } from "./world";
@@ -43,7 +43,7 @@ export type ArgTypes = Component<any>
     | typeof UUID
     | typeof GetEntity
     | typeof GetArg
-    | Modifier<readonly ArgTypes[], any>;
+    | ArgModifier<readonly ArgTypes[], any>;
 
 type AllowUndefined<T> = T extends undefined ? T : never;
 
@@ -56,7 +56,7 @@ export type ArgData<T> =
     | UUIDData<T>
     | GetEntityObject<T>
     | GetArgSelector<T>
-    | ModifierResult<T>
+    | ArgModifierResult<T>
     | AllowUndefined<T>;
 
 export type ArgsToData<Args> = {

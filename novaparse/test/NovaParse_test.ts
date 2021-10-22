@@ -15,7 +15,7 @@ import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData } from "..
 import { getDefaultStatusBarColors, getDefaultStatusBarDataAreas } from "../../novadatainterface/StatusBarData";
 import { WeaponData } from "../../novadatainterface/WeaponData";
 import { NovaParse } from "../NovaParse";
-import { FPS, TurnRateConversionFactor } from "../src/parsers/Constants";
+import { FPS, ShipTurnRateConversionFactor } from "../src/parsers/Constants";
 import { getPNG } from "./resource_parsers/PNGCompare";
 
 // Bazel no longer patches require.
@@ -76,7 +76,7 @@ describe("NovaParse", function() {
         expect(s128.physics.deionize).toEqual(24 / 100 * FPS);
         expect(s128.physics.speed).toEqual(12);
         expect(s128.physics.acceleration).toEqual(11);
-        expect(s128.physics.turnRate).toEqual(13 * TurnRateConversionFactor);
+        expect(s128.physics.turnRate).toEqual(13 * ShipTurnRateConversionFactor);
         expect(s128.physics.mass).toEqual(5678);
         expect(s128.physics.freeMass).toEqual(4234);
         expect(s128.physics.inertialess).toEqual(true);

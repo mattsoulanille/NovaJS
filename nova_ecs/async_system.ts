@@ -27,7 +27,7 @@ export const AsyncSystemResource = new Resource<AsyncSystemData>('AsyncSystemRes
 export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
     extends BaseSystemArgs<StepArgTypes> {
     step: (...args: ArgsToData<StepArgTypes>) =>
-        Promise<void | ArgsToData<StepArgTypes>>;
+        Promise<void | boolean>;
 }
 
 enablePatches();
@@ -65,7 +65,12 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
 
                 // TODO: This error handling is wrong.
                 entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)
-                    .then(() => {
+                    .then(apply => {
+                        if (apply != null && !apply) {
+                            // Do not apply patches
+                            return;
+                        }
+
                         let patches: Patch[] | undefined;
 
                         finishDraft(draftArgs, (forwardPatches) => {

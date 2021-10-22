@@ -1,12 +1,12 @@
 import { left, right } from "fp-ts/lib/Either";
 import { ArgTypes } from "./arg_types";
-import { Modifier } from "./modifier";
+import { ArgModifier } from "./arg_modifier";
 import { Optional } from "./optional";
 import { Query } from "./query";
 
 
 export function Without<V extends ArgTypes>(value: V) {
-    return new Modifier({
+    return new ArgModifier({
         query: new Query([Optional(value)]),
         transform: (val) => {
             if (val !== undefined) {

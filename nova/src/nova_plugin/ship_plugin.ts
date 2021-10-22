@@ -1,14 +1,21 @@
 import * as t from 'io-ts';
-import { ShipData } from "novadatainterface/ShipData";
+import { ShipData, ShipPhysics } from "novadatainterface/ShipData";
 import { Component } from 'nova_ecs/component';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
+import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
-import { MovementPhysicsComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
+import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { AnimationComponent } from './animation_plugin';
 import { CollisionInteractionComponent } from './collision_interaction';
 import { GameDataResource } from './game_data_resource';
-import { OutfitsStateComponent } from './outfit_plugin';
+import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
+import { applyOutfitPhysics, OutfitsStateComponent } from './outfit_plugin';
+import { Stat } from './stat';
+import { TargetComponent } from './target_component';
 
 export const ShipType = t.type({
     id: t.string // Not a UUID. A nova id.
@@ -42,19 +49,35 @@ export const ShipOutfitsProvider = Provide({
     }
 });
 
-export const ShipMovementPhysicsProvider = ProvideAsync({
+export const ShipPhysicsComponent = new Component<ShipPhysics>('ShipPhysicsComponent');
+
+export const ShipPhysicsProvider = ProvideAsync({
+    name: "ShipPhysicsProvider",
+    provided: ShipPhysicsComponent,
+    args: [ShipDataComponent, GameDataResource, OutfitsStateComponent] as const,
+    update: [ShipDataComponent, OutfitsStateComponent],
+    async factory(shipData, gameData, outfitsState) {
+        const outfits = await Promise.all(
+            [...outfitsState].map(async ([id, { count }]) =>
+                [await gameData.data.Outfit.get(id), count] as const
+            ));
+        return applyOutfitPhysics(shipData.physics, outfits);
+    }
+});
+
+export const ShipMovementPhysicsProvider = Provide({
     name: "ShipMovementPhysicsProvider",
     provided: MovementPhysicsComponent,
-    args: [ShipDataComponent] as const,
-    update: [ShipDataComponent],
-    async factory(shipData) {
+    update: [ShipPhysicsComponent],
+    args: [ShipPhysicsComponent] as const,
+    factory(physics) {
         return {
-            acceleration: shipData.physics.acceleration,
-            maxVelocity: shipData.physics.speed,
-            movementType: shipData.physics.inertialess
+            acceleration: physics.acceleration,
+            maxVelocity: physics.speed,
+            movementType: physics.inertialess
                 ? MovementType.INERTIALESS : MovementType.INERTIAL,
-            turnRate: shipData.physics.turnRate,
-        }
+            turnRate: physics.turnRate,
+        };
     },
 });
 
@@ -75,6 +98,74 @@ const ShipCollisionInteractionProvider = Provide({
     }),
 });
 
+const ShipShieldProvider = Provide({
+    name: "ShipShieldProvider",
+    provided: ShieldComponent,
+    update: [ShipPhysicsComponent],
+    args: [ShipPhysicsComponent, Optional(ShieldComponent)] as const,
+    factory(physics, shield) {
+        return new Stat({
+            current: shield?.current ?? physics.shield,
+            max: physics.shield,
+            recharge: physics.shieldRecharge,
+        });
+    }
+});
+
+const ShipArmorProvider = Provide({
+    name: "ShipArmorProvider",
+    provided: ArmorComponent,
+    update: [ShipPhysicsComponent],
+    args: [ShipPhysicsComponent, Optional(ArmorComponent)] as const,
+    factory(physics, armor) {
+        return new Stat({
+            current: armor?.current ?? physics.armor,
+            max: physics.armor,
+            recharge: physics.armorRecharge,
+        });
+    }
+});
+
+const ShipIonizationProvider = Provide({
+    name: "ShipIonizationProvider",
+    provided: IonizationComponent,
+    update: [ShipPhysicsComponent],
+    args: [ShipPhysicsComponent, Optional(IonizationComponent)] as const,
+    factory(physics, ionization) {
+        return new Stat({
+            current: ionization?.current ?? physics.ionization,
+            max: physics.ionization,
+            recharge: -physics.deionize,
+        });
+    }
+});
+
+const ShipMovementStateProvider = Provide({
+    name: "ShipMovementStateProvider",
+    provided: MovementStateComponent,
+    args: [ShipComponent],
+    factory() {
+        return {
+            accelerating: 0,
+            position: new Position(600 * (Math.random() - 0.5),
+                (600 * (Math.random() - 0.5))),
+            rotation: new Angle(Math.random() * 2 * Math.PI),
+            turnBack: false,
+            turning: 0,
+            velocity: new Vector(0, 0),
+        }
+    }
+});
+
+const ShipTargetComponentProvider = Provide({
+    name: "ShipTaretComponentProvider",
+    provided: TargetComponent,
+    args: [ShipComponent],
+    factory() {
+        return { target: undefined };
+    }
+});
+
 export const ShipPlugin: Plugin = {
     name: "ShipPlugin",
     build(world) {
@@ -89,10 +180,16 @@ export const ShipPlugin: Plugin = {
         world.addSystem(ShipDataProvider);
         world.addSystem(ShipAnimationProvider);
         world.addSystem(ShipOutfitsProvider);
+        world.addSystem(ShipPhysicsProvider);
         world.addSystem(ShipMovementPhysicsProvider);
+        world.addSystem(ShipShieldProvider);
+        world.addSystem(ShipArmorProvider);
+        world.addSystem(ShipIonizationProvider);
+        world.addSystem(ShipMovementStateProvider);
+        world.addSystem(ShipTargetComponentProvider);
 
         deltaMaker.addComponent(ShipComponent, {
-            componentType: ShipType
+            componentType: ShipType,
         });
     }
 }

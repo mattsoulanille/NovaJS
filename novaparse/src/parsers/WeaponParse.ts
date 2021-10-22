@@ -6,7 +6,7 @@ import { BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGui
 import { BLEND_MODES } from "novadatainterface/BlendModes";
 import { WeapResource } from "../resource_parsers/WeapResource";
 import { BaseParse } from "./BaseParse";
-import { FPS, TurnRateConversionFactor } from "./Constants";
+import { FPS, ShipTurnRateConversionFactor } from "./Constants";
 
 export const WEAP_SPEED_FACTOR = 3 / 10;
 
@@ -197,7 +197,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
             mass: 0,
             shieldRecharge: 0,
             speed: baseWeapon.shotSpeed,
-            turnRate: weap.turnRate * TurnRateConversionFactor,
+            turnRate: weap.turnRate * ShipTurnRateConversionFactor,
             shield: 0,
             armor: weap.durability,
             inertialess: guidance === 'guided',
