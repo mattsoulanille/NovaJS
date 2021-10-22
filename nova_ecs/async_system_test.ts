@@ -6,6 +6,8 @@ import { Component, ComponentData } from './component';
 import { Angle } from './datatypes/angle';
 import { Vector } from './datatypes/vector';
 import { EntityBuilder } from './entity';
+import { EcsEvent, StepEvent } from './events';
+import { Optional } from './optional';
 import { Query } from './query';
 import { System } from './system';
 import { World } from './world';
@@ -289,5 +291,67 @@ describe('async system', () => {
             .toEqual(124);
         expect(world.entities.get('secondEntity')?.components.get(FOO_COMPONENT)?.x)
             .toEqual(457);
+    });
+
+    it('returning false cancels applying patches', async () => {
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [BAR_COMPONENT],
+            step: async (bar) => {
+                await sleep(0);
+                bar.y = 'changed bar asynchronously';
+                return false;
+            }
+        });
+
+        const uuid = v4();
+        world.entities.set(uuid, new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'not changed' }));
+        const handle = world.entities.get(uuid)!;
+
+        world.addSystem(asyncSystem);
+        world.step();
+        clock.tick(1);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(handle.components.get(BAR_COMPONENT)?.y)
+            .toEqual('not changed');
+    });
+    it('can run from an event', async () => {
+        const event = new EcsEvent<string>('TestEvent');
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            events: [StepEvent, event],
+            args: [BAR_COMPONENT, Optional(event)] as const,
+            step: async (bar, newVal) => {
+                if (!newVal) {
+                    return;
+                }
+                await sleep(10);
+                bar.y = newVal;
+            }
+        });
+
+        const entity = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'not changed' });
+        world.entities.set('test entity', entity);
+
+        world.addSystem(asyncSystem);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        world.emit(event, 'changed bar');
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(entity.components.get(BAR_COMPONENT)?.y)
+            .toEqual('changed bar');
     });
 });

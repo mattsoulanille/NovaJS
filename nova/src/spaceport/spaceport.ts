@@ -4,13 +4,13 @@ import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
+import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin';
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state';
 import { Button } from './button';
 import { Menu } from './menu';
 import { MenuControls } from './menu_controls';
 import { Outfitter } from './outfitter';
 import { Shipyard } from './shipyard';
-
 
 export class Spaceport extends Menu<Entity> {
     private outfitter: Outfitter;
@@ -46,13 +46,9 @@ export class Spaceport extends Menu<Entity> {
             const newOutfits = await this.outfitter.show(outfits);
             this.input.components.set(OutfitsStateComponent, newOutfits);
             // Delete these so they are re-created with the new outfits.
-            // this.input.components.delete(WeaponsStateComponent);
+            // TODO: Find a better way to do this.
             this.input.components.delete(WeaponsStateComponent);
-            // this.input.components.delete(AppliedOutfitsComponent);
-            // this.input.components.delete(ShieldComponent);
-            // this.input.components.delete(ArmorComponent);
-            // this.input.components.delete(IonizationComponent);
-            // this.input.components.delete(MovementPhysicsComponent);
+            this.input.components.delete(ShipPhysicsComponent);
             this.controls.bind();
         };
         buttons.outfitter.click.subscribe(showOutfitter);

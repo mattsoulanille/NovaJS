@@ -1,11 +1,11 @@
 import { isRight, Right, right } from "fp-ts/lib/Either";
 import { ArgData, ArgTypes, GetArg } from "./arg_types";
-import { Modifier } from "./modifier";
+import { ArgModifier } from "./arg_modifier";
 import { Query } from "./query";
 
 export function Optional<V extends ArgTypes>(value: V):
-    Modifier<readonly [typeof GetArg], V | undefined> {
-    return new Modifier({
+    ArgModifier<readonly [typeof GetArg], V | undefined> {
+    return new ArgModifier({
         query: new Query([GetArg] as const),
         transform: (getArg) => {
             const result = getArg(value);

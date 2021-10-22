@@ -5,24 +5,28 @@ import { Component } from "./component";
 import { EcsEvent, StepEvent } from "./events";
 import { Optional } from "./optional";
 import { Plugin } from "./plugin";
-import { System } from "./system";
+import { System, SystemArgs } from "./system";
 import { DefaultMap } from "./utils";
 
 export const ChangeEvents = new DefaultMap<Component<any>, EcsEvent<true>>(
     component => new EcsEvent(`${component.name} changed`));
 
-export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided, update, factory, args }: {
-    name: string,
-    provided: Component<Data>,
-    update?: Iterable<Component<any>>,
-    factory: (...args: ArgsToData<Args>) => Data,
-    args: Args,
-}) {
+
+type Without<T, K> = Pick<T, Exclude<keyof T, K>>;
+type ProvideArgs<Data, Args extends readonly ArgTypes[]> =
+    Without<SystemArgs<Args>, 'step' | 'events'> & {
+        provided: Component<Data>,
+        factory: (...args: ArgsToData<Args>) => Data,
+        update?: Iterable<Component<any>>,
+    };
+
+export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided, update, factory, args, before, after }: ProvideArgs<Data, Args>) {
     const updateEvents = [...update ?? []].map(component => ChangeEvents.get(component));
 
     return new System({
         name,
         events: [StepEvent, ...updateEvents],
+        before, after,
         args: [Optional(provided), GetEntity, Optional(StepEvent), ...args] as const,
         step(providedValue, entity, step, ...args) {
             if (providedValue !== undefined && step) {
@@ -38,19 +42,22 @@ export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided
     });
 }
 
-export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, provided, update, factory, args }: {
-    name: string,
-    provided: Component<Data>,
-    update?: Iterable<Component<any>>,
-    factory: (...args: ArgsToData<Args>) => Data | Promise<Data>,
-    args: Args,
-}) {
+type ProvideAsyncArgs<Data, Args extends readonly ArgTypes[]> =
+    Without<SystemArgs<Args>, 'step' | 'events'> & {
+        provided: Component<Data>,
+        factory: (...args: ArgsToData<Args>) => Data | Promise<Data>,
+        update?: Iterable<Component<any>>,
+    };
+
+
+export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, provided, update, factory, args, before, after }: ProvideAsyncArgs<Data, Args>) {
     const updateEvents = [...update ?? []].map(component => ChangeEvents.get(component));
     const providerRunning = new Component<Symbol>(`${name} running`);
 
     return new AsyncSystem({
         name,
         events: [StepEvent, ...updateEvents],
+        before, after,
         args: [Optional(provided), Optional(providerRunning),
             GetEntity, Optional(StepEvent), ...args] as const,
         async step(providedValue, running, entity, step, ...args) {

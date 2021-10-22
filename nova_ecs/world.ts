@@ -5,7 +5,7 @@ import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
-import { Modifier, UnknownModifier } from "./modifier";
+import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { Plugin } from './plugin';
 import { ProvidePlugin } from "./provider";
 import { Query } from "./query";
@@ -323,8 +323,8 @@ export class World {
                 return right(data as ArgData<T>);
             }
             return left(undefined);
-        } else if (arg instanceof Modifier) {
-            const modifier = arg as UnknownModifier;
+        } else if (arg instanceof ArgModifier) {
+            const modifier = arg as UnknownArgModifier;
             const query = this.queries.get(modifier.query);
             const modifierQueryResults =
                 query.getResultForEntity(entity, uuid, event);
