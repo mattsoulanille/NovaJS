@@ -15,7 +15,7 @@ import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { Hull, HullComponent, UpdateHullSystem } from './collisions_plugin';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
-import { CreateTime } from './create_time';
+import { CreateTime, CreateTimeArgProvider } from './create_time';
 import { ApplyDamageResource } from './death_plugin';
 import { applyExitPoint, ExitPointData } from './exit_point';
 import { FireSubs, OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
@@ -121,7 +121,7 @@ export const BeamSystem = new System({
     before: [UpdateHullSystem],
     after: [MovementSystem, WeaponsSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
-        CreateTime, TimeResource, UUID, Entities, Optional(SourceComponent),
+        CreateTimeArgProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
         Optional(TargetComponent)] as const,
     step(beamData, beamState, movement, fireSubs, fireTime, { time }, uuid,
         entities, source, target) {
