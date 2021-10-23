@@ -80,6 +80,7 @@ container_image(
 
 # To debug this, run 'bazel run -c dbg //nova:nova_image'
 # Then 'docker run -it --rm --entrypoint=/bin/bash bazel/nova:nova_image' (or 'sh')
+# https://github.com/bazelbuild/rules_docker#debugging-lang_image-rules
 nodejs_image(
     name = "nova_image",
     binary = ":nova",
