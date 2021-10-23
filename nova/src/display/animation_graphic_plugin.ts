@@ -3,7 +3,7 @@ import { Component } from "nova_ecs/component";
 import { AddEvent, DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
-import { ProvideAsync } from "nova_ecs/provider";
+import { Provide, ProvideAsync } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import { currentIfDraft } from "nova_ecs/utils";
 import { AnimationComponent } from "../nova_plugin/animation_plugin";
@@ -15,11 +15,11 @@ import { ShipComponent } from "../nova_plugin/ship_plugin";
 import { AnimationGraphic } from "./animation_graphic";
 import { Space } from "./space_resource";
 
-const AnimationGraphicLoaded = new EcsEvent<AnimationGraphic>('AnimationGraphicLoaded');
 export const AnimationGraphicComponent = new Component<AnimationGraphic>('AnimationGraphic');
+const AnimationGraphicLoadedComponent = new Component<AnimationGraphic>('AnimationGraphicLoaded');
 const AnimationGraphicLoader = ProvideAsync({
     name: "AnimationGraphicLoader",
-    provided: AnimationGraphicComponent,
+    provided: AnimationGraphicLoadedComponent,
     args: [AnimationComponent, GameDataResource, GetEntity, Emit, UUID] as const,
     async factory(animation, gameData, entity, emit, uuid) {
         const graphic = new AnimationGraphic({
@@ -40,7 +40,6 @@ const AnimationGraphicLoader = ProvideAsync({
             graphic.container.zIndex = -10;
         }
 
-        emit(AnimationGraphicLoaded, graphic, [uuid]);
         return graphic;
     }
 });
@@ -48,11 +47,11 @@ const AnimationGraphicLoader = ProvideAsync({
 // Add the graphic to the PIXI container in a synchronous system. Othewise,
 // the check that makes sure the entity is still in the world may be
 // invalid.
-export const AnimationGraphicProvider = new System({
+export const AnimationGraphicProvider = Provide({
     name: "AnimationGraphicProvider",
-    events: [AnimationGraphicLoaded],
-    args: [AnimationGraphicLoaded, Space, Entities, UUID] as const,
-    step(graphic, space, entities, uuid) {
+    provided: AnimationGraphicComponent,
+    args: [AnimationGraphicLoadedComponent, Space, Entities, UUID] as const,
+    factory(graphic, space, entities, uuid) {
         // Only add the graphic to the container if the entity still exists
         if (entities.has(uuid)) {
             space.addChild(graphic.container);
