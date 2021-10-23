@@ -34,7 +34,6 @@ ts_library(
         "@npm//comlink",
         "//novaparse",
         "//nova/src/common",
-        #"//nova/src/engine",
         "//nova/src/communication:communication_server_lib",
         "//nova/src/server",
         "//nova/src/server/parsing",
@@ -42,8 +41,6 @@ ts_library(
         "//nova_ecs/plugins",
         "//nova/src/nova_plugin",
         "//nova/src/server/parsing:nova_parse_worker_lib",
-        #"//nova/src:gameloop_lib",
-        #"@npm//protobufjs",
     ],
     data = [
         "//:tsconfig.json"
@@ -51,16 +48,14 @@ ts_library(
 )
 
 data = [
-    #":server_bundle",
     ":server",
     "//nova/settings",
     ":nova_data",
     "//nova/src:static_files",
     "//nova/src:browser_bundle",
     "//nova/src/server/parsing:nova_parse_worker_bundle",
-    #"//nova/src/engine_lib",
-    "//nova/src/communication:communication_lib",
-    "//nova/src/communication:communication_server_lib",
+    # "//nova/src/communication:communication_lib",
+    # "//nova/src/communication:communication_server_lib",
     #"@npm//comlink",
     #"@npm//:node_modules",
     # "//nova/src/proto:protobufjs_bundle",
@@ -70,10 +65,10 @@ data = [
 
 nodejs_binary(
     name = "nova",
-    #entry_point = "server_bundle.ts",
     entry_point = "server.ts",
     data = data,
-    link_workspace_root = True,
+    # TODO: Don't patch the module resolver?
+    templated_args = ["--bazel_patch_module_resolver"],
 )
 
 container_image(
@@ -83,12 +78,11 @@ container_image(
     stamp = True,
 )
 
+# To debug this, run 'bazel run -c dbg //nova:nova_image'
+# Then 'docker run -it --rm --entrypoint=/bin/bash bazel/nova:nova_image' (or 'sh')
 nodejs_image(
     name = "nova_image",
-    entry_point = "server.ts",
-    # npm deps will be put into their own layer
-    data = data,
-    link_workspace_root = True,
+    binary = ":nova",
     base = ":port_image",
 )
 
