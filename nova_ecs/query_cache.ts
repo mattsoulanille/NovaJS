@@ -8,8 +8,19 @@ import { DefaultMap } from "./utils";
 import { World } from "./world";
 
 
-class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
-    entities: Map<string, Entity>;
+interface QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
+    readonly valid: boolean;
+    unsubscribe: () => void;
+    getResultForEntity(entity: Entity, uuid: string,
+        event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>>;
+    getResult({ entities, event }?: {
+        entities?: Iterable<[string, Entity]>,
+        event?: readonly [EcsEvent<unknown>, unknown],
+    }): QueryResults<Query<Args>>;
+}
+
+class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
+    private entities: Map<string, Entity>;
     private entityResults = new Map<Entity, ArgsToData<Args>>();
     private wrappedResult: ArgsToData<Args>[] = []
     private resultValid = false;
@@ -176,10 +187,61 @@ class QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
     }
 }
 
+class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> implements QueryCacheEntry<Args> {
+
+    readonly valid = true;
+
+    constructor(private queryCache: QueryCache,
+        private query: Query,
+        private getArg: World['getArg'],
+        private entities: EntityMapWrapped) {
+    }
+
+    unsubscribe = () => { };
+
+    getResultForEntity(entity: Entity, uuid: string,
+        event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>> {
+        try {
+            const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
+            const rightResults: unknown[] = [];
+            for (const result of results) {
+                if (isLeft(result)) {
+                    return left(undefined);
+                }
+                rightResults.push(result.right);
+            }
+
+            const result = rightResults as unknown as ArgsToData<Args>;
+            return right(result);
+        } catch (e) {
+            if (!(e instanceof Error)) {
+                throw e;
+            } else {
+                e.message = `${e.message} at query ${this.query.name}`;
+                throw e;
+            }
+        }
+    }
+    getResult({ entities, event }: {
+        entities?: Iterable<[string, Entity]>,
+        event?: readonly [EcsEvent<unknown>, unknown],
+    } = {}): ArgsToData<Args>[] {
+        const supportedEntities = [...entities ?? this.entities].filter(
+            ([, entity]) => this.query.supportsEntity(entity));
+
+        const queryResults = supportedEntities.map(([uuid, entity]) =>
+            [entity, this.getResultForEntity(entity, uuid, event)] as const)
+            .filter((results): results is [Entity, Right<ArgsToData<Args>>] => isRight(results[1]))
+            .map(rightResults => rightResults[1].right);
+
+        return queryResults;
+    }
+}
+
 type QueryArgsList = readonly ArgTypes[];
 export class QueryCache extends DefaultMap<Query, QueryCacheEntry> {
     constructor(entities: EntityMapWrapped, getArg: World['getArg']) {
-        super((query: Query) => new QueryCacheEntry(this, query, getArg, entities));
+        super((query: Query) => new CachedQueryCacheEntry(this, query, getArg, entities));
     }
 
     get<Args extends QueryArgsList>(query: Query<Args>): QueryCacheEntry<Args> {

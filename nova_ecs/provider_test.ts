@@ -1,4 +1,7 @@
+import produce, { createDraft, finishDraft } from 'immer';
 import 'jasmine';
+import { Defaults } from 'novadatainterface/Defaults';
+import { PlanetData } from 'novadatainterface/PlanetData';
 import { AsyncSystemResource } from './async_system';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
@@ -434,5 +437,92 @@ describe('ProvideAsync', () => {
             ['asdf', 5], ['asdf', 4], // Changes to 4
             ['bye', 4], ['bye', 4], // Does not change to 3
         ]);
+    });
+
+    it('can return an argument as the provided value', async () => {
+        const OtherFoo = new Component<{ x: number }>('other foo');
+        const fooProvider = ProvideAsync({
+            name: 'foo from otherFoo',
+            provided: FOO_COMPONENT,
+            args: [OtherFoo],
+            async factory(otherFoo) {
+                await sleep(10);
+                return otherFoo;
+            }
+        });
+
+        world.addSystem(fooProvider);
+
+        const testEntity = new EntityBuilder()
+            .addComponent(OtherFoo, { x: 123 }).build();
+        world.entities.set('testEntity', testEntity);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(testEntity.components.get(FOO_COMPONENT))
+            .toEqual({ x: 123 });
+    });
+
+    it('works with larger objects', async () => {
+        const PlanetDataComponent = new Component<PlanetData>('PlanetData');
+        const PlanetDataProvider = ProvideAsync({
+            name: 'PlanetDataProvider',
+            provided: PlanetDataComponent,
+            args: [BAR_COMPONENT] as const,
+            async factory(_bar) {
+                await sleep(10);
+                return Defaults.Planet;
+            }
+        });
+
+        world.addSystem(PlanetDataProvider);
+
+        const testEntity = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        world.entities.set('testEntity', testEntity);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(testEntity.components.get(PlanetDataComponent))
+            .toEqual(Defaults.Planet);
+    });
+
+    it('can provide data that is already drafted', async () => {
+        const OtherFoo = new Component<{ x: number }>('other foo');
+        const fooProvider = ProvideAsync({
+            name: 'foo from otherFoo',
+            provided: FOO_COMPONENT,
+            args: [OtherFoo],
+            async factory(otherFoo) {
+                await sleep(10);
+                return { ...otherFoo };
+            }
+        });
+
+        world.addSystem(fooProvider);
+
+        let otherFooData = { x: 123 };
+        const draftFoo = createDraft(otherFooData);
+
+        const testEntity = new EntityBuilder()
+            .addComponent(OtherFoo, draftFoo).build();
+        world.entities.set('testEntity', testEntity);
+
+        world.step();
+        finishDraft(draftFoo);
+        testEntity.components.set(OtherFoo, { x: 456 });
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+
+        world.step();
+
+        const resultFoo = testEntity.components.get(FOO_COMPONENT);
+        expect(resultFoo).toEqual({ x: 123 });
     });
 });
