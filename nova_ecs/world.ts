@@ -1,11 +1,11 @@
 import { Either, isLeft, left, Right, right } from "fp-ts/lib/Either";
+import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
-import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { Plugin } from './plugin';
 import { ProvidePlugin } from "./provider";
 import { Query } from "./query";

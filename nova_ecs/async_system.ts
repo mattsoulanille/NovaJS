@@ -1,5 +1,4 @@
 import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, isDraft, isDraftable, Patch, setAutoFreeze } from "immer";
-import { ArgModifier } from "./arg_modifier";
 import { ArgsToData, ArgTypes, UUID } from "./arg_types";
 import { DeleteEvent, StepEvent } from "./events";
 import { Optional } from "./optional";

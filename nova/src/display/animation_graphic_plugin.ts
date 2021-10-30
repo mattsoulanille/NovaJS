@@ -1,6 +1,6 @@
 import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
-import { AddEvent, DeleteEvent, EcsEvent } from "nova_ecs/events";
+import { AddEvent, DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Provide, ProvideAsync } from "nova_ecs/provider";
