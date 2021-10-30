@@ -1,4 +1,4 @@
-import { original } from "immer";
+import { isDraft, original } from "immer";
 import { ArgsToData, ArgTypes, GetEntity } from "./arg_types";
 import { AsyncSystem } from "./async_system";
 import { Component } from "./component";
@@ -72,17 +72,20 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
             originalEntity?.components.set(providerRunning, runningSymbol);
             providedValue = await factory(...args);
             if (originalEntity?.components.get(providerRunning) === runningSymbol) {
-                // TODO: This should actually be `entity.components.delete` but that
-                // sometimes causes errors with immer (?).
-                //entity.components.delete(providerRunning);
-                originalEntity?.components.delete(providerRunning);
-                // This should actually be `entity.components.set` but that
-                // causes errors with certain objects (e.g. PlanetData).
-                originalEntity?.components.set(provided, providedValue);
-                //entity.components.set(provided, providedValue);
+                // TODO: This may have issues when switching worlds.
+                // Probably use a global resource to store whether it's running instead.
+                entity.components.delete(providerRunning);
+                entity.components.set(provided, originalIfDraft(providedValue));
             }
         }
     });
+}
+
+function originalIfDraft<T>(val: T): T {
+    if (isDraft(val)) {
+        return original(val)!;
+    }
+    return val;
 }
 
 export const ProvidePlugin: Plugin = {

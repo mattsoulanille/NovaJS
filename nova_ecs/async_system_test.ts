@@ -1,3 +1,4 @@
+import { createDraft, finishDraft } from 'immer';
 import 'jasmine';
 import { v4 } from 'uuid';
 import { Entities, UUID } from './arg_types';
@@ -353,5 +354,73 @@ describe('async system', () => {
 
         expect(entity.components.get(BAR_COMPONENT)?.y)
             .toEqual('changed bar');
+    });
+
+    it('can use a draft that is later revoked as an arg', async () => {
+        const foos: number[] = [];
+        const logSystem = new AsyncSystem({
+            name: 'LogSystem',
+            args: [FOO_COMPONENT],
+            async step(foo) {
+                await sleep(10);
+                foos.push(foo.x);
+            }
+        });
+
+        world.addSystem(logSystem);
+
+        const foo = { x: 123 };
+        const draftFoo = createDraft(foo);
+        const entity = new EntityBuilder()
+            .addComponent(FOO_COMPONENT, draftFoo)
+            .build();
+
+        world.entities.set('testEntity', entity);
+
+        world.step();
+        finishDraft(draftFoo);
+        entity.components.set(FOO_COMPONENT, { x: 456 });
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(foos).toEqual([123]);
+    });
+
+    it('works with classes that can not be drafted', async () => {
+        class TestClass {
+            constructor(public x: number) { }
+            foo() {
+                return this.x;
+            }
+        }
+
+        const TestClassComponent = new Component<TestClass>('TestClassComponent');
+
+        const nums: number[] = [];
+        const logSystem = new AsyncSystem({
+            name: 'LogSystem',
+            args: [TestClassComponent],
+            async step(testClass) {
+                await sleep(10);
+                nums.push(testClass.foo());
+            }
+        });
+
+        world.addSystem(logSystem);
+
+        const testData = new TestClass(123);
+        const entity = new EntityBuilder()
+            .addComponent(TestClassComponent, testData)
+            .build();
+
+        world.entities.set('testEntity', entity);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(nums).toEqual([123]);
     });
 });

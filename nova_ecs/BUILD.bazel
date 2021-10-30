@@ -57,6 +57,7 @@ ts_library(
     deps = [
         ":ecs",
         "//nova_ecs/datatypes",
+        "//novadatainterface",
         "@npm//@types/jasmine",
         "@npm//io-ts",
         "@npm//fp-ts",

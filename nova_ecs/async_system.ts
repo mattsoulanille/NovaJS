@@ -1,4 +1,4 @@
-import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, Patch, setAutoFreeze } from "immer";
+import { applyPatches, createDraft, enableMapSet, enablePatches, finishDraft, isDraft, isDraftable, Patch, setAutoFreeze } from "immer";
 import { ArgsToData, ArgTypes, UUID } from "./arg_types";
 import { Plugin } from "./plugin";
 import { Resource } from "./resource";
@@ -61,25 +61,53 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 entityStatus.patches = [];
 
                 //const currentArgs = getCurrentArgs(systemArgs.args, stepArgs);
-                const draftArgs = createDraft(stepArgs);
+
+                // Although, it looks simpler, can't do the following:
+                // 'const draftArgs = createDraft(stepArgs);'
+                // Must individually draft arguments so that if the argument
+                // is already a draft, immer knows to use the original
+                // (instead of the draft proxy) as the new draft's base.
+                // Otherwise, when the original argument (which is a draft) is
+                // finished, looking at the async system's draft of it will
+                // look at the original arg's proxy, which is revoked.
+                const draftArgs = stepArgs.map(arg => {
+                    if (isDraftable(arg)) {
+                        return createDraft(arg as Object);
+                    }
+                    return arg;
+                }) as typeof stepArgs;
 
                 // TODO: This error handling is wrong.
-                entityStatus.promise = systemArgs.step(...draftArgs as typeof stepArgs)
+                entityStatus.promise = systemArgs.step(...draftArgs)
                     .then(apply => {
                         if (apply != null && !apply) {
                             // Do not apply patches
                             return;
                         }
 
-                        let patches: Patch[] | undefined;
+                        const patches: Patch[] = [];
+                        for (let i = 0; i < draftArgs.length; i++) {
+                            const arg = draftArgs[i];
+                            if (!isDraft(arg)) {
+                                continue;
+                            }
 
-                        finishDraft(draftArgs, (forwardPatches) => {
-                            patches = forwardPatches;
-                        });
+                            let argPatches: Patch[] | undefined;
+                            finishDraft(arg, (forwardPatches) => {
+                                argPatches = forwardPatches;
+                            });
 
-                        if (!patches) {
-                            throw new Error('Got no patches when calling async system');
+                            if (!argPatches) {
+                                throw new Error('Got no patches when calling async system');
+                            }
+                            for (let patch of argPatches) {
+                                // Edit the patch path to include the index
+                                // of the argument.
+                                patch.path.unshift(i);
+                            }
+                            patches.push(...argPatches);
                         }
+
                         if (patches.length > 0) {
                             entityStatus.patches.push(patches);
                         }
