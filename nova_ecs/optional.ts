@@ -1,6 +1,6 @@
 import { isRight, Right, right } from "fp-ts/lib/Either";
-import { ArgData, ArgTypes, GetArg } from "./arg_types";
 import { ArgModifier } from "./arg_modifier";
+import { ArgData, ArgTypes, GetArg } from "./arg_types";
 import { Query } from "./query";
 
 export function Optional<V extends ArgTypes>(value: V):

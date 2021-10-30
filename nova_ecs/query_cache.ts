@@ -13,7 +13,7 @@ interface QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]
     unsubscribe: () => void;
     getResultForEntity(entity: Entity, uuid: string,
         event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>>;
-    getResult({ entities, event }?: {
+    getResult(args?: {
         entities?: Iterable<[string, Entity]>,
         event?: readonly [EcsEvent<unknown>, unknown],
     }): QueryResults<Query<Args>>;

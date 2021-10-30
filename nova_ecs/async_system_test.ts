@@ -131,6 +131,176 @@ describe('async system', () => {
         expect(fooValues).toEqual([1, 1, 1, 2, 2, 2]);
     });
 
+    it('exclusive systems run one at a time', async () => {
+        // Exclusive systems run only one async call
+        // at a time per each entity.
+        const fooValues: number[] = [];
+        const largeFooValues: number[] = [];
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [FOO_COMPONENT],
+            exclusive: true,
+            step: async (foo) => {
+                await sleep(10);
+                foo.x += 1;
+                if (foo.x > 100) {
+                    largeFooValues.push(foo.x);
+                } else {
+                    fooValues.push(foo.x);
+                }
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.entities.set('small foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+        world.entities.set('large foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 1000 }));
+
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+
+        expect(fooValues).toEqual([1, 2]);
+        expect(largeFooValues).toEqual([1001, 1002]);
+    });
+
+    it('does not run if applying patches', async () => {
+        // Systems that skip when there are patches to apply
+        // do not run if there are patches from a previous run
+        // that need to be applied.
+        const fooValues: number[] = [];
+        const largeFooValues: number[] = [];
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [FOO_COMPONENT],
+            skipIfApplyingPatches: true,
+            step: async (foo) => {
+                await sleep(10);
+                foo.x += 1;
+                if (foo.x > 100) {
+                    largeFooValues.push(foo.x);
+                } else {
+                    fooValues.push(foo.x);
+                }
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.entities.set('small foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+        world.entities.set('large foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 1000 }));
+
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        // First one only applies patches. The rest still run.
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+
+        expect(fooValues).toEqual([1, 1, 1, 2, 2]);
+        expect(largeFooValues).toEqual([1001, 1001, 1001, 1002, 1002]);
+    });
+
+    it('always runs on events even if exclusive', async () => {
+        const fooValues: number[] = [];
+        const largeFooValues: number[] = [];
+        const AddEvent = new EcsEvent<number>('AddEvent');
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            exclusive: true,
+            events: [StepEvent, AddEvent],
+            args: [FOO_COMPONENT, Optional(AddEvent)] as const,
+            step: async (foo, add) => {
+                await sleep(10);
+                foo.x += add ?? 1;
+                if (foo.x > 100) {
+                    largeFooValues.push(foo.x);
+                } else {
+                    fooValues.push(foo.x);
+                }
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.entities.set('small foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+        world.entities.set('large foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 1000 }));
+
+        world.step();
+        world.step();
+        world.emit(AddEvent, 10);
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+        world.step();
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+
+        expect(fooValues).toEqual([1, 10, 11]);
+        expect(largeFooValues).toEqual([1001, 1010, 1011]);
+    });
+
+    it('always runs on events even if it skips when applying patches', async () => {
+        const fooValues: number[] = [];
+        const largeFooValues: number[] = [];
+        const AddEvent = new EcsEvent<number>('AddEvent');
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            skipIfApplyingPatches: true,
+            events: [AddEvent],
+            args: [FOO_COMPONENT, AddEvent] as const,
+            step: async (foo, add) => {
+                await sleep(10);
+                foo.x += add;
+                if (foo.x > 100) {
+                    largeFooValues.push(foo.x);
+                } else {
+                    fooValues.push(foo.x);
+                }
+            }
+        });
+
+        world.addSystem(asyncSystem);
+        world.entities.set('small foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 0 }));
+        world.entities.set('large foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 1000 }));
+
+        world.emit(AddEvent, 1);
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.emit(AddEvent, 4);
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.emit(AddEvent, 7);
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(fooValues).toEqual([1, 5, 12]);
+        expect(largeFooValues).toEqual([1001, 1005, 1012]);
+    });
+
     it('passes an async version of entities', async () => {
         const addEntitySystem = new AsyncSystem({
             name: 'AddEntity',
@@ -422,5 +592,40 @@ describe('async system', () => {
         world.step();
 
         expect(nums).toEqual([123]);
+    });
+
+    it('deletes an entity\'s async system data when it is removed', async () => {
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [FOO_COMPONENT],
+            step: async (foo) => {
+                await sleep(10);
+                foo.x++;
+            }
+        });
+
+        let entity = new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 0 });
+        world.entities.set('test entity', entity);
+
+        world.addSystem(asyncSystem);
+
+        world.step();
+        world.entities.delete('test entity');
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        world.entities.set('test entity', entity);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        // If the async system data is not cleaned up, it will
+        // run twice and x will be 2.
+        expect(entity.components.get(FOO_COMPONENT)?.x)
+            .toEqual(1);
     });
 });
