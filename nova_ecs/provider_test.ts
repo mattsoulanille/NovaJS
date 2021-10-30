@@ -1,4 +1,4 @@
-import produce, { createDraft, finishDraft } from 'immer';
+import { createDraft, finishDraft } from 'immer';
 import 'jasmine';
 import { Defaults } from 'novadatainterface/Defaults';
 import { PlanetData } from 'novadatainterface/PlanetData';
@@ -524,5 +524,34 @@ describe('ProvideAsync', () => {
 
         const resultFoo = testEntity.components.get(FOO_COMPONENT);
         expect(resultFoo).toEqual({ x: 123 });
+    });
+
+    it('tries again if an entity is removed before complete and reinserted', async () => {
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
+
+        let entity = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        world.entities.set('word1', entity);
+
+        world.step();
+        world.entities.delete('word1');
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        world.entities.set('word1', entity);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(entity.components.get(FOO_COMPONENT)?.x).toEqual(5);
     });
 });
