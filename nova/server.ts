@@ -104,10 +104,10 @@ async function startGame() {
     await world.addPlugin(multiplayerPlugin);
     await world.addPlugin(ServerPlugin);
     await world.addPlugin(Nova);
-    repl.repl.context.addEnemy = async () => {
+    repl.repl.context.addEnemy = async (id?: string) => {
         const ids = await gameData.ids;
-        const randomShipId = ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
-        const randomShip = await gameData.data.Ship.get(randomShipId);
+        id = id ?? ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
+        const randomShip = await gameData.data.Ship.get(id);
         const ship = makeShip(randomShip);
         ship.components.set(MultiplayerData, {
             owner: 'server',
