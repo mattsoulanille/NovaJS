@@ -1,6 +1,0 @@
-syntax = "proto3";
-
-
-message PlanetDelta { // Next = 2
-  string id = 1;
-}

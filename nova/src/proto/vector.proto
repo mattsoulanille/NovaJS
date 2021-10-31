@@ -1,6 +1,0 @@
-syntax = "proto3";
-
-message Vector { // Next = 3
-  double x = 1;
-  double y = 2;
-}
