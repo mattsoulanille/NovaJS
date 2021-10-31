@@ -301,6 +301,35 @@ describe('async system', () => {
         expect(largeFooValues).toEqual([1001, 1005, 1012]);
     });
 
+    it('exclusive systems that also skip their run when applying patches' +
+        ' can still run after applying patches', async () => {
+            const fooValues: number[] = [];
+            const asyncSystem = new AsyncSystem({
+                name: 'AsyncSystem',
+                skipIfApplyingPatches: true,
+                exclusive: true,
+                args: [FOO_COMPONENT] as const,
+                step: async (foo) => {
+                    await sleep(10);
+                    foo.x++;
+                    fooValues.push(foo.x);
+                }
+            });
+
+            world.addSystem(asyncSystem);
+            world.entities.set('FooEntity', new EntityBuilder()
+                .addComponent(FOO_COMPONENT, { x: 0 }));
+
+            for (let i = 0; i < 4; i++) {
+                world.step();
+                clock.tick(11);
+                await world.resources.get(AsyncSystemResource)?.done;
+                world.step();
+            }
+
+            expect(fooValues).toEqual([1, 2, 3, 4]);
+        });
+
     it('passes an async version of entities', async () => {
         const addEntitySystem = new AsyncSystem({
             name: 'AddEntity',

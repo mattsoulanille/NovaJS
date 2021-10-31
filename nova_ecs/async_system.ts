@@ -60,7 +60,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 if (systemArgs.exclusive && entityStatus.running && canSkip) {
                     return;
                 }
-                entityStatus.running = true;
+                entityStatus.running = true; // Only for exclusive systems.
 
                 // Apply patches from the previous complete run.
                 // Note that this only runs if the entity still exists.
@@ -77,6 +77,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 delete (stepArgs as any)[Symbol.for('immer-state')];
                 entityStatus.patches = [];
                 if (willSkip) {
+                    entityStatus.running = false;
                     return;
                 }
 
