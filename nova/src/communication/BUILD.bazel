@@ -6,25 +6,15 @@ load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 ts_library(
     name = "communication_lib",
     srcs = [
-        #"RpcChannel.ts",
         "Channel.ts",
         "SocketMessage.ts",
         "CommunicatorMessage.ts",
-        #"GetChanges.ts",
-        #"OverwriteState.ts",
-        #"FilterDelta.ts",
-        #"getKeyDelta.ts",
     ],
     deps = [
         "@npm//rxjs",
-        #"@npm//protobufjs",
         "@npm//io-ts",
         "@npm//immer",
         "//nova_ecs/plugins",
-        #"//nova/src/proto:protobufjs_bundle",
-        #"//nova/src/engine",
-        #"//nova/src/engine:utils",
-        #"//nova/src/common",
     ]
 )
 
@@ -43,13 +33,8 @@ ts_library(
         "@npm//rxjs",
         "@npm//ws",
         "@npm//@types/ws",
-        #"@npm//google-protobuf",
-        #"@npm//@types/google-protobuf",
         "@npm//fp-ts",
         "//nova_ecs/plugins",
-        #"//nova/src/common",
-        #"//nova/src/engine",
-        #"//nova/src/engine:utils",
     ]
 )
 
@@ -61,17 +46,12 @@ ts_library(
     ],
     deps = [
         ":communication_lib",
-        #"@npm//protobufjs",
         "@npm//@types/node",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//rxjs",
         "@npm//fp-ts",
         "//nova_ecs/plugins",
-        #"//nova/src/common",
-        #"//nova/src/engine",
-        #"//nova/src/engine:utils",
-        #"//nova/src/proto:protobufjs_bundle",
     ]
 )
 
