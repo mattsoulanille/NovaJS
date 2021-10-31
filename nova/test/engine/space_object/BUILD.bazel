@@ -1,5 +1,0 @@
-package(default_visibility = ["//visibility:public"])
-
-load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
-load("//:defaults.bzl", "ts_library")
-
