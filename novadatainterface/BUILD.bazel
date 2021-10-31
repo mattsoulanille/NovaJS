@@ -17,7 +17,10 @@ pack_png(
 
 ts_library(
     name = "novadatainterface",
-    srcs = glob(["*.ts"], exclude=["*_test.ts"]) + [
+    srcs = glob(
+        ["*.ts"],
+        exclude = ["*_test.ts"],
+    ) + [
         ":default_pict",
         ":default_rled",
     ],
@@ -33,10 +36,10 @@ ts_library(
     srcs = glob(["*_test.ts"]),
     deps = [
         ":novadatainterface",
+        "@npm//@types/jasmine",
         "@npm//@types/node",
         "@npm//jasmine",
-        "@npm//@types/jasmine",
-    ]
+    ],
 )
 
 jasmine_node_test(
@@ -46,6 +49,7 @@ jasmine_node_test(
 
 pkg_npm(
     name = "novadatainterface_pkg",
+    package_name = "novadatainterface",
     srcs = ["package.json"],
     deps = [
         ":novadatainterface",

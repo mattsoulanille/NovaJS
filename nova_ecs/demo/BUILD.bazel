@@ -1,11 +1,10 @@
 package(default_visibility = ["//visibility:public"])
 
-load("//:defaults.bzl", "ts_library")
+load("//:defaults.bzl", "ts_library", "esbuild")
 load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
 load("@npm//@bazel/concatjs:index.bzl", "concatjs_devserver")
 load("@build_bazel_rules_nodejs//internal/npm_install:npm_umd_bundle.bzl", "npm_umd_bundle")
 load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
-load("//:esbuild.bzl", "esbuild")
 
 
 ts_library(
@@ -26,17 +25,13 @@ ts_library(
 
 esbuild(
     name = "demo_bundle",
-    args = [
-        "--keep-names",
-        "--resolve-extensions=.mjs,.js",
-    ],
+    args = {
+        "keepNames": True,
+    },
     entry_point = "demo.ts",
     target = "es2015",
     minify = False,
     sources_content = True,
-    define = [
-        "process.env.NODE_ENV=\"browser\""
-    ],
     link_workspace_root = True,
     deps = [
         ":demo_lib",
