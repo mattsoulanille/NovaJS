@@ -554,4 +554,50 @@ describe('ProvideAsync', () => {
 
         expect(entity.components.get(FOO_COMPONENT)?.x).toEqual(5);
     });
+
+    it('tries again if the factory throws an error', async () => {
+        let willThrow = true;
+        const onErrorSpy = jasmine.createSpy('onErrorSpy');
+        const fooProvider = ProvideAsync({
+            name: 'foo from bar',
+            provided: FOO_COMPONENT,
+            args: [BAR_COMPONENT] as const,
+            update: [BAR_COMPONENT],
+            onError: onErrorSpy,
+            factory: (bar) => {
+                if (willThrow) {
+                    throw new Error('Provider throwing error');
+                }
+                return {
+                    x: bar.y.length
+                }
+            }
+        });
+
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
+
+        const entity = new EntityBuilder()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        world.entities.set('word1', entity);
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(wordLengths).toEqual([]);
+        expect(entity.components.has(FOO_COMPONENT)).toBeFalse();
+        expect(onErrorSpy).toHaveBeenCalled();
+
+        willThrow = false;
+
+        world.step();
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+
+        expect(wordLengths).toEqual([['hello', 5]]);
+        expect(entity.components.get(FOO_COMPONENT)).toEqual({ x: 5 });
+    });
 });

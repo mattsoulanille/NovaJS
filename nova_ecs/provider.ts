@@ -55,10 +55,10 @@ type ProvideAsyncArgs<Data, Args extends readonly ArgTypes[]> =
         provided: Component<Data>,
         factory: (...args: ArgsToData<Args>) => Data | Promise<Data>,
         update?: Iterable<Component<any>>,
+        onError?: (err: Error) => void,
     };
 
-
-export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, provided, update, factory, args, before, after }: ProvideAsyncArgs<Data, Args>) {
+export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, provided, update, factory, args, before, after, onError }: ProvideAsyncArgs<Data, Args>) {
     const updateEvents = [...update ?? []].map(component => ChangeEvents.get(component));
 
     return new AsyncSystem({
@@ -80,7 +80,6 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
             // Otherwise, it will only actually be set once this function completes.
             const runningSymbol = Symbol(); // Unique to this run
 
-
             if (!originalData.has(name)) {
                 originalData.set(name, new Map());
             }
@@ -89,16 +88,22 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
             // it only applies after this instance finishes.
             const originalDataForProvider = originalData.get(name)!;
             originalDataForProvider.set(uuid, runningSymbol);
-            providedValue = await factory(...args);
-            if (originalDataForProvider.get(uuid) === runningSymbol) {
-                // If this instance of the provider is the most recent run,
-                // then apply the provided data.
-
-                // Set this on the draft so it gets applied after the async system
-                // runs and applies the changes that were made.
-                asyncProviderData.get(name)?.delete(uuid);
-                entity.components.set(provided,
-                    originalIfDraft(providedValue));
+            try {
+                providedValue = await factory(...args);
+                if (originalDataForProvider.get(uuid) === runningSymbol) {
+                    // If this instance of the provider is the most recent run,
+                    // then apply the provided data.
+                    entity.components.set(
+                        provided, originalIfDraft(providedValue));
+                }
+            } catch (e) {
+                (onError ?? console.warn)(e);
+            } finally {
+                if (originalDataForProvider.get(uuid) === runningSymbol) {
+                    // Set this on the draft so it gets applied after the async system
+                    // runs and applies the changes that were made.
+                    asyncProviderData.get(name)?.delete(uuid);
+                }
             }
         }
     });
