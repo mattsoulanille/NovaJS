@@ -1,7 +1,6 @@
 package(default_visibility = ["//visibility:public"])
 
-load("//:defaults.bzl", "ts_library")
-load("//:esbuild.bzl", "esbuild")
+load("//:defaults.bzl", "ts_library", "esbuild")
 
 
 ts_library(
@@ -36,17 +35,13 @@ ts_library(
 
 esbuild(
     name = "nova_parse_worker_bundle",
-    args = [
-        "--keep-names", # For convenience. Can be removed.
-        "--resolve-extensions=.mjs,.js",
-    ],
+    args = {
+        "keepNames": True, # For convenience. Can be removed.
+    },
     entry_point = "nova_parse_worker.ts",
     platform = "node",
     minify = False,
     sources_content = True,
-    define = [
-        "process.env.NODE_ENV=\"node\""
-    ],
     deps = [
         ":nova_parse_worker_lib",
     ],

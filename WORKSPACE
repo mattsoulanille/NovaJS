@@ -16,8 +16,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "build_bazel_rules_nodejs",
-    sha256 = "e79c08a488cc5ac40981987d862c7320cee8741122a2649e9b08e850b6f20442",
-    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/3.8.0/rules_nodejs-3.8.0.tar.gz"],
+    sha256 = "3aa6296f453ddc784e1377e0811a59e1e6807da364f44b27856e34f5042043fe",
+    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/4.4.2/rules_nodejs-4.4.2.tar.gz"],
 )
 
 # Use node 16
@@ -164,35 +164,8 @@ load("@bazel_toolchains//rules:rbe_repo.bzl", "rbe_autoconfig")
 # otherwise refer to RBE docs.
 rbe_autoconfig(name = "rbe_default")
 
-_ESBUILD_VERSION = "0.12.1"
-# Setup esbuild dependencies
-http_archive(
-    name = "esbuild_darwin",
-    urls = [
-        "https://registry.npmjs.org/esbuild-darwin-64/-/esbuild-darwin-64-%s.tgz" % _ESBUILD_VERSION,
-    ],
-    strip_prefix = "package",
-    build_file_content = """exports_files(["bin/esbuild"])""",
-    sha256 = "efb34692bfa34db61139eb8e46cd6cf767a42048f41c8108267279aaf58a948f",
-)
-http_archive(
-    name = "esbuild_windows",
-    urls = [
-        "https://registry.npmjs.org/esbuild-windows-64/-/esbuild-windows-64-%s.tgz" % _ESBUILD_VERSION,
-    ],
-    strip_prefix = "package",
-    build_file_content = """exports_files(["esbuild.exe"])""",
-    sha256 = "10439647b11c7fd1d9647fd98d022fe2188b4877d2d0b4acbe857f4e764b17a9",
-)
-http_archive(
-    name = "esbuild_linux",
-    urls = [
-        "https://registry.npmjs.org/esbuild-linux-64/-/esbuild-linux-64-%s.tgz" % _ESBUILD_VERSION,
-    ],
-    strip_prefix = "package",
-    build_file_content = """exports_files(["bin/esbuild"])""",
-    sha256 = "de8409b90ec3c018ffd899b49ed5fc462c61b8c702ea0f9da013e0e1cd71549a",
-)
+load("@build_bazel_rules_nodejs//toolchains/esbuild:esbuild_repositories.bzl", "esbuild_repositories")
+esbuild_repositories(npm_repository = "npm")
 
 load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
 git_repository(

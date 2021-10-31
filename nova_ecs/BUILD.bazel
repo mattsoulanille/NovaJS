@@ -6,65 +6,65 @@ load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
 ts_library(
     name = "ecs",
-    module_name = "nova_ecs",
     srcs = [
-        "entity.ts",
-        "component.ts",
-        "system.ts",
-        "query.ts",
-        "resource.ts",
-        "world.ts",
-        "utils.ts",
-        "plugin.ts",
+        "arg_modifier.ts",
         "arg_types.ts",
         "async_system.ts",
+        "component.ts",
         "component_map.ts",
+        "entity.ts",
         "entity_map.ts",
-        "resource_map.ts",
-        "mutable_immutable_map_handle.ts",
-        "arg_modifier.ts",
-        "optional.ts",
-        "provider.ts",
-        "provide_arg.ts",
-        "events.ts",
         "event_map.ts",
+        "events.ts",
         "first_available.ts",
+        "mutable_immutable_map_handle.ts",
+        "optional.ts",
+        "plugin.ts",
+        "provide_arg.ts",
+        "provider.ts",
+        "query.ts",
         "query_cache.ts",
+        "resource.ts",
+        "resource_map.ts",
+        "system.ts",
+        "utils.ts",
         "without.ts",
+        "world.ts",
     ],
+    module_name = "nova_ecs",
     deps = [
-        "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//immer",
+        "@npm//io-ts",
         "@npm//rxjs",
-    ]
+    ],
 )
 
 ts_library(
     name = "ecs_test_lib",
     testonly = True,
     srcs = [
-        "system_test.ts",
-        "world_test.ts",
-        "utils_test.ts",
         "async_system_test.ts",
-        "query_test.ts",
-        "provider_test.ts",
-        "first_available_test.ts",
         "entity_map_test.ts",
+        "first_available_test.ts",
+        "provider_test.ts",
         "query_cache_test.ts",
+        "query_test.ts",
+        "system_test.ts",
+        "utils_test.ts",
+        "world_test.ts",
     ],
     deps = [
         ":ecs",
         "//nova_ecs/datatypes",
         "//novadatainterface",
         "@npm//@types/jasmine",
-        "@npm//io-ts",
+        "@npm//@types/uuid",
         "@npm//fp-ts",
         "@npm//immer",
+        "@npm//io-ts",
         "@npm//uuid",
-        "@npm//@types/uuid",
-    ]
+    ],
 )
 
 jasmine_node_test(
@@ -82,13 +82,14 @@ filegroup(
 
 pkg_npm(
     name = "ecs_pkg",
+    package_name = "nova_ecs",
     srcs = ["package.json"],
+    nested_packages = [
+        "//nova_ecs/datatypes:datatypes_pkg",
+        "//nova_ecs/plugins:plugins_pkg",
+    ],
     deps = [
         ":ecs",
         ":ecs_es6",
     ],
-    nested_packages = [
-        "//nova_ecs/datatypes:datatypes_pkg",
-        "//nova_ecs/plugins:plugins_pkg",
-    ]
 )
