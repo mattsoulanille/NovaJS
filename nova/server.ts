@@ -27,7 +27,7 @@ import { v4 } from "uuid";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
-
+console.log('test');
 const Settings = t.partial({
     port: t.number,
     relativeDataPath: t.string,
