@@ -12,7 +12,7 @@
     "devDependencies": {
         "@bazel/bazelisk": "^1.10.1",
         "@bazel/buildifier": "4.2.3",
-        "@bazel/concatjs": "^4.4.2",
+        "@bazel/concatjs": "^4.4.6",
         "@bazel/esbuild": "^4.4.2",
         "@bazel/ibazel": "^0.15.10",
         "@bazel/jasmine": "^4.4.2",
@@ -72,7 +72,7 @@
     "dependencies": {
         "@types/uuid": "^8.3.1",
         "express": "^4.17.1",
-        "fp-ts": "^2.11.1",
+        "fp-ts": "^2.11.5",
         "hull.js": "^1.0.1",
         "io-ts": "^2.2.16",
         "pixi-layers": "^0.3.1",
