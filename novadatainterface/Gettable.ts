@@ -26,7 +26,7 @@ export class Gettable<T> {
             this.gotten[id] = val;
             return val;
         } catch (e) {
-            this.gotten[id] = e;
+            this.gotten[id] = e as Error;
             throw e;
         }
     }

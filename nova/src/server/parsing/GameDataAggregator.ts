@@ -80,7 +80,7 @@ class GameDataAggregator implements GameDataInterface {
                         }
                     }
                     else {
-                        errors.push(e.toString());
+                        errors.push(String(e));
                     }
                 }
             }

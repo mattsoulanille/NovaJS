@@ -11,19 +11,16 @@ class PictResource extends BaseResource {
         super(resource, idSpace);
     }
 
-
     get png(): PNG {
         var PICT: PICTParse;
         try {
             PICT = new PICTParse(this.data);
         }
         catch (e) {
-            throw new PNGError("PICT id " + this.id + " failed to parse: " + e.message);
+            throw new PNGError("PICT id " + this.id + " failed to parse: " + e);
         }
         return PICT.PNG;
     }
-
-
 }
 
 export { PictResource, PNGError };
