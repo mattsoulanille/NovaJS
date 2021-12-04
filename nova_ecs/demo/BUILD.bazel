@@ -2,10 +2,8 @@ package(default_visibility = ["//visibility:public"])
 
 load("//:defaults.bzl", "ts_library", "esbuild")
 load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
-load("@npm//@bazel/concatjs:index.bzl", "concatjs_devserver")
-load("@build_bazel_rules_nodejs//internal/npm_install:npm_umd_bundle.bzl", "npm_umd_bundle")
 load("@build_bazel_rules_nodejs//:index.bzl", "js_library")
-
+load("@npm//http-server:index.bzl", "http_server")
 
 ts_library(
     name = "demo_lib",
@@ -38,8 +36,14 @@ esbuild(
     ],
 )
 
-# There's no UMD bundle for PIXI.js, so just using this as a server.
-concatjs_devserver(
+http_server(
     name = "demo",
-    static_files = ["index.html", ":demo_bundle"],
+    data = [
+        "index.html",
+        ":demo_bundle",
+    ],
+    args = [
+        "./nova_ecs/demo",
+        "-p", "8000",
+    ],
 )
