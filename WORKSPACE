@@ -24,15 +24,7 @@ http_archive(
 load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
 node_repositories(
     package_json = ["//:package.json"],
-    node_version = "16.0.0",
-    node_repositories = {
-        "16.0.0-darwin_amd64": ("node-v16.0.0-darwin-x64.tar.xz", "node-v16.0.0-darwin-x64", "66ecffa48b98cf1ca4d038b42b74f05bfc4d31681e2aa43a1ba50919ea23823b"),
-        "16.0.0-linux_amd64": ("node-v16.0.0-linux-x64.tar.xz", "node-v16.0.0-linux-x64", "1736446bb102e19942addce29f6a12b157ca71f38b9159d0446f51ba69618b8d"),
-        "16.0.0-windows_amd64": ("node-v16.0.0-win-x64.zip", "node-v16.0.0-win-x64", "99c2b01afb8d966fc876ec30ac7dfdbd9da9b17a3daeda92c19ce657ab9bea61")
-    },
-    node_urls = [
-        "https://nodejs.org/dist/v{version}/{filename}",
-    ]
+    node_version = "16.6.2",
 )
 
 # The yarn_install rule runs yarn anytime the package.json or yarn.lock file changes.
