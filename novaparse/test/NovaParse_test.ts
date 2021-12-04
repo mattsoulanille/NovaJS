@@ -61,7 +61,8 @@ describe("NovaParse", function() {
             fail();
         } catch (e) {
             //expect(e).toBeInstanceOf(NovaIDNotFoundError);
-            expect(e.message).toEqual("No matching dësc for shïp of id nova:130");
+            expect(e).toBeInstanceOf(Error);
+            expect((e as Error).message).toEqual("No matching dësc for shïp of id nova:130");
         }
 
         expect(s128.pict).toEqual("nova:5000");

@@ -212,10 +212,10 @@
   dependencies:
     ismobilejs "^1.1.0"
 
-"@pixi/sound@^4.0.4":
-  version "4.0.4"
-  resolved "https://registry.yarnpkg.com/@pixi/sound/-/sound-4.0.4.tgz#a6bdf68ef587c1f733e126956a02404051344c8a"
-  integrity sha512-nJxJNBF6oJjOjudcxeibdgHDW/9MVAGYZFtJHzG+Yc/lwX5SeQFH+aIhJoDTOjJAolE8VYOnY4OMP9n/U6998g==
+"@pixi/sound@^4.0.6":
+  version "4.0.6"
+  resolved "https://registry.yarnpkg.com/@pixi/sound/-/sound-4.0.6.tgz#29f347f527b16b80b014371b53c7d2c497c01b14"
+  integrity sha512-K0niCK6msIflDewdRGXeDTTeOgfQuH/BPzOe1TxjJMssiiN7YveqhOOMwVeTX2elkQfkUzZX87UhK2WMUp4/OQ==
 
 "@pixi/sprite-animated@6.2.0":
   version "6.2.0"
@@ -2074,10 +2074,10 @@ typescript@^3.1.6:
   resolved "https://registry.yarnpkg.com/typescript/-/typescript-3.9.10.tgz#70f3910ac7a51ed6bef79da7800690b19bf778b8"
   integrity sha512-w6fIxVE/H1PkLKcCPsFqKE7Kv7QUwhU8qQY2MueZXWx5cPZdwFupLgKK3vntcK98BtNHZtAF4LA/yl2a7k8R6Q==
 
-typescript@~4.3.5:
-  version "4.3.5"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.3.5.tgz#4d1c37cc16e893973c45a06886b7113234f119f4"
-  integrity sha512-DqQgihaQ9cUrskJo9kIyW/+g0Vxsk8cDtZ52a3NGh0YNTfpUSArXSohyUGnvbPazEPLu398C0UxmKSOrPumUzA==
+typescript@~4.5.2:
+  version "4.5.2"
+  resolved "https://registry.yarnpkg.com/typescript/-/typescript-4.5.2.tgz#8ac1fba9f52256fdb06fb89e4122fa6a346c2998"
+  integrity sha512-5BlMof9H1yGt0P8/WF+wPNw6GfctgGjXp5hkblpyT+8rkASSmkUKMXrxR0Xg8ThVCi/JnHQiKXeBaEwCeQwMFw==
 
 ua-parser-js@^0.7.30:
   version "0.7.31"

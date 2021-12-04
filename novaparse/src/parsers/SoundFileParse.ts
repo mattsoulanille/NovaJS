@@ -8,7 +8,7 @@ export async function SoundFileParse(sound: SndResource): Promise<ArrayBuffer> {
     try {
         ({ mp3Samples, mp3Rate } = sound.sound);
     } catch (e) {
-        console.warn(e?.message ?? e);
+        console.warn(e);
         mp3Samples = [];
         mp3Rate = 8000;
     }
