@@ -33,6 +33,7 @@
         "@types/ws": "^7.4.4",
         "argparse": "^2.0.1",
         "comlink": "^4.3.1",
+        "http-server": "^14.0.0",
         "immer": "^9.0.6",
         "io-ts-types": "^0.5.16",
         "jasmine": "^3.9.0",
