@@ -18,13 +18,11 @@ import { EncodedEntity, SerializerResource } from './serializer_plugin';
 export interface Communicator {
     uuid: string | undefined;
     peers: BehaviorSubject<Set<string>>,
-    messages: Observable<unknown>,
-    sendMessage(message: unknown, destination?: string): void;
+    messages: Observable<{ source: string, message: unknown }>,
+    sendMessage(message: unknown, destination?: string | Set<string>): void;
 }
 
-export const Message = t.intersection([t.type({
-    source: t.string, // UUID of the client or server the message came from.
-}), t.partial({
+export const Message = t.partial({
     delta: map(t.string /* Entity UUID */, EntityDelta),
     state: map(t.string /* Entity UUID */, EncodedEntity),
     requestState: t.type({
@@ -35,7 +33,7 @@ export const Message = t.intersection([t.type({
     ownedUuids: t.array(t.string),
     admins: set(t.string),
     peers: set(t.string),
-})]);
+});
 export type Message = t.TypeOf<typeof Message>;
 
 export interface PeersState {
@@ -49,13 +47,18 @@ export const PeersEvent = new EcsEvent<PeersState>('PeersEvent');
 
 export const MultiplayerData = new Component<{ owner: string }>('MultiplayerData');
 
+export interface MessageWithSource<M> {
+    message: M,
+    source: string,
+}
+
 export const Comms = new Component<{
     ownedUuids: Set<string>,
     admins: Set<string>,
     uuid: string | undefined,
     stateRequests: Map<string /* peer uuid */, Set<string /* Entity uuid */>>,
     lastEntities: Map<string, string>, // entity, owner
-    messages: Message[],
+    messages: MessageWithSource<Message>[],
     initialStateRequested: boolean,
 }>('Comms');
 
@@ -79,20 +82,23 @@ const PeersSystem = new System({
 
 export const NewOwnedEntityEvent = new EcsEvent<string>('NewOwnedEntityEvent');
 
-export const MultiplayerMessageEvent = new EcsEvent<unknown>('MultiplayerMessageEvent');
+export const MultiplayerMessageEvent =
+    new EcsEvent<MessageWithSource<unknown>>('MultiplayerMessageEvent');
 const MessageSystem = new System({
     name: 'MessageSystem',
     events: [MultiplayerMessageEvent],
     args: [MultiplayerMessageEvent, Comms] as const,
-    step: (multiplayerMessage, comms) => {
-        const maybeMessage = Message.decode(multiplayerMessage);
+    step: ({ message, source }, comms) => {
+        const maybeMessage = Message.decode(message);
         if (isLeft(maybeMessage)) {
             console.warn('Failed to decode message');
             return;
         }
-        comms.messages.push(maybeMessage.right);
+        comms.messages.push({ message: maybeMessage.right, source });
     }
 });
+
+export const CommunicatorResource = new Resource<Communicator>('CommunicatorResource');
 
 export function multiplayer(communicator: Communicator,
     warn: (message: string) => void = console.warn): Plugin {
@@ -117,7 +123,6 @@ export function multiplayer(communicator: Communicator,
             // Request initial state
             if (!comms.initialStateRequested) {
                 sendMessage({
-                    source: comms.uuid,
                     requestState: {
                         uuids: new Set(),
                         invert: true,
@@ -142,8 +147,8 @@ export function multiplayer(communicator: Communicator,
             const removed = new Set<string>();
 
             // Apply changes from messages
-            for (const message of comms.messages) {
-                const peerIsAdmin = comms.admins.has(message.source);
+            for (const { source, message } of comms.messages) {
+                const peerIsAdmin = comms.admins.has(source);
 
                 // Set admins
                 if (peerIsAdmin && message.admins) {
@@ -171,20 +176,20 @@ export function multiplayer(communicator: Communicator,
                         return [entityUuid, serializer.encode(entity)]
                     }));
 
-                    sendMessage({ source: comms.uuid, state }, message.source);
+                    sendMessage({ state }, source);
                 }
 
                 // Remove entities
                 for (const uuid of message.remove ?? []) {
                     if (entityMap.has(uuid) &&
-                        (entityMap.get(uuid)?.data.owner === message.source || peerIsAdmin)) {
+                        (entityMap.get(uuid)?.data.owner === source || peerIsAdmin)) {
                         entities.delete(uuid);
                         fullStateRequests.delete(uuid);
                         added.delete(uuid);
                         removed.add(uuid);
                         entityMap.delete(uuid);
                     } else {
-                        warn(`'${message.source}' tried to remove ${uuid}`);
+                        warn(`'${source}' tried to remove ${uuid}`);
                     }
                 }
 
@@ -203,9 +208,9 @@ export function multiplayer(communicator: Communicator,
                         continue;
                     }
                     if (entityMap.has(uuid)
-                        && entityMap.get(uuid)?.data.owner !== message.source
+                        && entityMap.get(uuid)?.data.owner !== source
                         && !peerIsAdmin) {
-                        warn(`'${message.source}' tried to replace existing entity '${uuid}'`);
+                        warn(`'${source}' tried to replace existing entity '${uuid}'`);
                         continue;
                     }
 
@@ -237,8 +242,8 @@ export function multiplayer(communicator: Communicator,
                     }
                     const { entity, data } = entityMap.get(uuid)!;
 
-                    if (message.source !== data.owner && !comms.admins.has(message.source)) {
-                        warn(`'${message.source}' tried to modify entity '${uuid}'`);
+                    if (source !== data.owner && !comms.admins.has(source)) {
+                        warn(`'${source}' tried to modify entity '${uuid}'`);
                         continue;
                     }
                     try {
@@ -255,7 +260,6 @@ export function multiplayer(communicator: Communicator,
             if (fullStateRequests.size > 0) {
                 // Request state from a trusted source
                 sendMessage({
-                    source: comms.uuid,
                     requestState: {
                         uuids: fullStateRequests,
                         invert: false,
@@ -310,9 +314,7 @@ export function multiplayer(communicator: Communicator,
                 }
             }
 
-            const changes: Message = {
-                source: comms.uuid,
-            };
+            const changes: Message = {};
 
             let send = false;
             if (delta.size > 0) {
@@ -341,6 +343,7 @@ export function multiplayer(communicator: Communicator,
 
     function build(world: World) {
         world.addPlugin(DeltaPlugin);
+        world.resources.set(CommunicatorResource, communicator);
         const deltaMaker = world.resources.get(DeltaResource);
         if (!deltaMaker) {
             throw new Error('Expected delta maker resource to exist');

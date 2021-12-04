@@ -1056,6 +1056,59 @@ describe('world', () => {
         expect(bars).toEqual(['Hello', 'Bye']);
     });
 
+    it('allows replacing resources', () => {
+        const bazes: string[][] = [];
+        const getsBaz = new System({
+            name: 'GetsBaz',
+            args: [BAZ_RESOURCE, SingletonComponent] as const,
+            step(baz) {
+                bazes.push(baz.z);
+            }
+        });
+
+        world.resources.set(BAZ_RESOURCE, { z: ['a', 'b'] });
+        world.addSystem(getsBaz);
+        world.step();
+
+        world.resources.set(BAZ_RESOURCE, { z: ['c', 'd'] });
+        world.step();
+
+        expect(bazes).toEqual([
+            ['a', 'b'],
+            ['c', 'd'],
+        ]);
+    });
+
+    it('allows event-triggered systems to access resources', () => {
+        const bazes: string[][] = [];
+        const GetBazEvent = new EcsEvent('GetBazEvent');
+        const getsBaz = new System({
+            name: 'GetsBaz',
+            events: [GetBazEvent],
+            args: [BAZ_RESOURCE, SingletonComponent] as const,
+            step(baz) {
+                bazes.push(baz.z);
+            }
+        });
+
+        world.resources.set(BAZ_RESOURCE, { z: ['a', 'b'] });
+        world.addSystem(getsBaz);
+        world.emit(GetBazEvent, undefined);
+        world.step();
+
+        world.resources.set(BAZ_RESOURCE, { z: ['fdsa', 'asdf'] });
+        world.step();
+
+        world.resources.set(BAZ_RESOURCE, { z: ['c', 'd'] });
+        world.emit(GetBazEvent, undefined);
+        world.step();
+
+        expect(bazes).toEqual([
+            ['a', 'b'],
+            ['c', 'd'],
+        ]);
+    });
+
     it('allows getting the world as an argument', () => {
         let gotWorld: World | undefined;
         const getsWorld = new System({
@@ -1352,5 +1405,30 @@ describe('world', () => {
         expect(fooResultsOnBar!).toEqual([]);
         expect(fooResultsOnFooBar!).toEqual([[{ x: 456 }]]);
         expect(fooResultsOnMissing!).toEqual([]);
+    });
+
+    it('emits events that occur', () => {
+        const addCallback = jasmine.createSpy('addCallback');
+        world.events.get(AddEvent).subscribe(addCallback);
+
+        world.entities.set('foo', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+
+        world.entities.set('bar', new EntityBuilder()
+            .addComponent(FOO_COMPONENT, { x: 123 }));
+
+        expect(addCallback).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-emits events that are sent into the world', () => {
+        const TestEvent = new EcsEvent<string>('TestEvent');
+        const testEventCallback = jasmine.createSpy('testEventCallback');
+        world.events.get(TestEvent).subscribe(testEventCallback);
+
+        world.emit(TestEvent, 'Hello');
+        world.emit(TestEvent, 'world');
+
+        const calls = testEventCallback.calls.all().map(c => c.args);
+        expect(calls).toEqual([['Hello'], ['world']]);
     });
 });

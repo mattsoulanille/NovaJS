@@ -2,15 +2,20 @@ import { isLeft } from "fp-ts/lib/Either";
 import produce from "immer";
 import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { BehaviorSubject, Subject } from "rxjs";
-import { ChannelServer } from "./Channel";
+import { ChannelServer, MessageWithSourceType } from "./Channel";
 import { CommunicatorMessage, MessageType } from "./CommunicatorMessage";
 
 
 export class CommunicatorServer implements Communicator {
-    readonly messages = new Subject<unknown>();
-    readonly peers = new BehaviorSubject(new Set<string>());
+    readonly messages = new Subject<{ source: string, message: unknown }>();
+    readonly peers: BehaviorSubject<Set<string>>;
 
     constructor(private channel: ChannelServer, public uuid = 'server') {
+        this.peers = new BehaviorSubject(channel.clients);
+        for (const peer of this.peers.value) {
+            this.sendUuid(peer);
+        }
+
         // Handle messages from the channel
         channel.message.subscribe(({ message: commMessage, source }) => {
             const maybeMessage = CommunicatorMessage.decode(commMessage);
@@ -24,29 +29,20 @@ export class CommunicatorServer implements Communicator {
             }
 
             const message = maybeMessage.right.message;
-
-            // TODO: Fix this
-            (message as { source: string }).source = source;
-
             const destination = maybeMessage.right.destination;
-            if (destination) {
-                if (destination === this.uuid) {
-                    this.messages.next(message);
-                } else {
-                    if (this.channel.clients.has(destination)) {
-                        this.sendMessage(message, destination);
-                    }
-                }
+
+            let destSet: Set<string>;
+            if (destination instanceof Set) {
+                destSet = destination;
+            } else if (typeof destination === 'string') {
+                destSet = new Set([destination]);
             } else {
-                // Rebroadcast messages
-                for (const otherId of this.channel.clients) {
-                    if (otherId !== source) {
-                        this.sendMessage(message, otherId);
-                    }
-                }
-                // And receive the message ourselves.
-                this.messages.next(message);
+                destSet = new Set([...this.peers.value]);
+                destSet.delete(source);
+                destSet.add(this.uuid);
             }
+
+            this.sendMessageWithSource(message, source, destSet);
         });
 
         // Send new clients a uuid
@@ -75,19 +71,26 @@ export class CommunicatorServer implements Communicator {
         }, uuid);
     }
 
-    sendMessage(message: unknown, destination?: string) {
+    private sendMessageWithSource(message: unknown, source: string,
+        destination: Iterable<string>) {
         const communicatorMessage: CommunicatorMessage = {
             type: MessageType.message,
-            message
-        }
+            message, source
+        };
 
-        if (destination) {
-            this.send(communicatorMessage, destination);
-        } else {
-            for (const clientId of this.channel.clients) {
-                this.send(communicatorMessage, clientId);
+        for (const dest of destination) {
+            if (dest === this.uuid) {
+                this.messages.next({ message, source });
+            } else if (this.channel.clients.has(dest)) {
+                this.send(communicatorMessage, dest);
             }
         }
+
+    }
+
+    sendMessage(message: unknown, destination?: string | Set<string>) {
+        this.sendMessageWithSource(message, this.uuid,
+            destination ?? this.peers.value);
     }
 }
 

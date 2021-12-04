@@ -9,12 +9,16 @@ ts_library(
         "Channel.ts",
         "SocketMessage.ts",
         "CommunicatorMessage.ts",
+        "MultiRoomCommunicator.ts",
     ],
     deps = [
         "@npm//rxjs",
         "@npm//io-ts",
+        "@npm//fp-ts",
         "@npm//immer",
         "//nova_ecs/plugins",
+        "//nova_ecs/datatypes",
+        "//nova_ecs:ecs",
     ]
 )
 

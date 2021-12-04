@@ -14,10 +14,6 @@ const SetControlledShip = new System({
     args: [NewOwnedEntityEvent, Entities] as const,
     step: (newEntity, entities) => {
         if (entities.has(newEntity)) {
-            // This rarely happens, but is looping over all the entities
-            // too expensive? Probably not.
-            // When queries are cached, use a query for just the multiplayer
-            // entities as an optimization.
             for (const entity of entities.values()) {
                 entity.components.delete(PlayerShipSelector);
             }

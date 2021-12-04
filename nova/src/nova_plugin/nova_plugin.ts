@@ -1,50 +1,113 @@
+import { Component } from "nova_ecs/component";
+import { EntityBuilder } from "nova_ecs/entity";
+import { AddEvent, DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
-import { DeltaPlugin } from "nova_ecs/plugins/delta_plugin";
-import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
-import { TimePlugin } from "nova_ecs/plugins/time_plugin";
-import { AnimationPlugin } from "./animation_plugin";
-import { BeamPlugin } from "./beam_plugin";
-import { CollisionsPlugin } from './collisions_plugin';
-import { ControlsPlugin } from "./controls_plugin";
-import { CreateTimePlugin } from "./create_time";
-import { DeathPlugin } from "./death_plugin";
-import { FireWeaponPlugin } from "./fire_weapon_plugin";
-import { HealthPlugin } from "./health_plugin";
-import { OutfitPlugin } from "./outfit_plugin";
-import { PlanetPlugin } from "./planet_plugin";
-import { PlatformPlugin } from "./platform_plugin";
-import { ProjectilePlugin } from "./projectile_plugin";
-import { ReturnToQueuePlugin } from "./return_to_queue_plugin";
-import { ShipController } from "./ship_controller_plugin";
-import { ShipPlugin } from "./ship_plugin";
-import { TargetPlugin } from "./target_plugin";
-import { WeaponPlugin } from "./weapon_plugin";
+import { DeltaResource } from "nova_ecs/plugins/delta_plugin";
+import { CommunicatorResource, multiplayer, MultiplayerData, NewOwnedEntityEvent } from "nova_ecs/plugins/multiplayer_plugin";
+import { Resource } from "nova_ecs/resource";
+import { System } from "nova_ecs/system";
+import { World } from "nova_ecs/world";
+import { MultiRoom } from "../communication/MultiRoomCommunicator";
+import { GameDataResource } from "./game_data_resource";
+import { WorldJumpPlugin } from "./jump_plugin";
+import { makeSystem } from "./make_system";
+import { SystemsResource } from "./systems_resource";
 
-// Users must add the multiplayer plugin and a display plugin.
-// Users must also add the NovaData resource.
-export const Nova: Plugin = {
-    name: 'Nova',
-    build(world) {
-        world.addPlugin(TimePlugin);
-        world.addPlugin(CreateTimePlugin);
-        world.addPlugin(ReturnToQueuePlugin);
-        world.addPlugin(PlatformPlugin);
-        world.addPlugin(DeltaPlugin);
-        world.addPlugin(ShipPlugin);
-        world.addPlugin(AnimationPlugin);
-        world.addPlugin(ControlsPlugin);
-        world.addPlugin(ShipController);
-        world.addPlugin(PlanetPlugin);
-        world.addPlugin(MovementPlugin);
-        world.addPlugin(DeathPlugin);
-        world.addPlugin(FireWeaponPlugin);
-        world.addPlugin(ProjectilePlugin);
-        world.addPlugin(WeaponPlugin);
-        world.addPlugin(OutfitPlugin);
-        world.addPlugin(CollisionsPlugin);
-        world.addPlugin(HealthPlugin);
-        world.addPlugin(TargetPlugin);
-        world.addPlugin(BeamPlugin);
+
+export const SystemComponent = new Component<World>('SystemComponent');
+export const ActiveSystemComponent = new Component<true>('ActiveSystemComponent');
+
+const StepSystemSystem = new System({
+    name: "StepSystemSystem",
+    args: [SystemComponent, ActiveSystemComponent] as const,
+    step(system) {
+        system.step();
     }
-};
+});
+
+export const MultiplayerCountComponent =
+    new Component<{ count: number }>('MultiplayerCountComponent');
+export const MultiRoomResource = new Resource<MultiRoom>('MultiRoomResource');
+
+export const NovaPlugin: Plugin = {
+    name: 'NovaPlugin',
+    async build(world) {
+        const gameData = world.resources.get(GameDataResource);
+        if (!gameData) {
+            throw new Error('GameDataResource must exist');
+        }
+        const communicator = world.resources.get(CommunicatorResource);
+        if (!communicator) {
+            throw new Error('CommunicatorResource must exist');
+        }
+        const multiRoom = world.resources.get(MultiRoomResource);
+        if (!multiRoom) {
+            throw new Error('MultiRoomResource must exist');
+        }
+
+        world.addSystem(StepSystemSystem);
+
+        const systems = await Promise.all(
+            (await gameData.ids).System
+                .map(async id => [id, makeSystem(id, gameData)] as const));
+
+        world.resources.set(SystemsResource, new Map(systems));
+
+        for (const [id, system] of systems) {
+            await system.addPlugin(multiplayer(multiRoom.join(id),
+                message => `System ${id}: ${message}`));
+
+            const systemEntity = new EntityBuilder()
+                .addComponent(SystemComponent, system)
+                .addComponent(MultiplayerCountComponent, { count: 0 })
+                .build();
+            world.entities.set(id, systemEntity);
+
+            // Track active systems by subscribing to the add and remove events
+            // instead of using an ecs system that listens to those events because
+            // the ecs system will not run if the nova system is not active.
+            system.events.get(AddEvent).subscribe(([, addedEntity]) => {
+                const multiplayerData = addedEntity.components.get(MultiplayerData);
+
+                if (multiplayerData && multiplayerData.owner !== 'server') {
+                    const count = ++systemEntity.components
+                        .get(MultiplayerCountComponent)!.count;
+                    if (count > 0) {
+                        systemEntity.components.set(ActiveSystemComponent, true);
+                    }
+                };
+            });
+            system.events.get(DeleteEvent).subscribe(entities => {
+                for (const [, deletedEntity] of entities) {
+                    const multiplayerData = deletedEntity.components
+                        .get(MultiplayerData);
+                    if (multiplayerData && multiplayerData.owner !== 'server') {
+                        systemEntity.components
+                            .get(MultiplayerCountComponent)!.count++;
+                    }
+                }
+                const count = systemEntity.components.get(MultiplayerCountComponent)!.count;
+                if (count < 0) {
+                    console.warn(`System ${id} has ${count} multiplayer objects`);
+                }
+                if (count <= 0) {
+                    systemEntity.components.get(MultiplayerCountComponent)!.count = 0;
+                    systemEntity.components.delete(ActiveSystemComponent);
+                }
+            });
+
+            // Set initial active systems based on the initial system state
+            // for (const entity of system.entities.values()) {
+            //     if (entity.components.has(MultiplayerData)) {
+            //         systemEntity.components.set(ActiveSystemComponent, true);
+            //     }
+            // }
+
+            // system.events.get(NewOwnedEntityEvent).subscribe(uuid => {
+            //     console.log(`New owned entity ${uuid}`);
+            // });
+        }
+        await world.addPlugin(WorldJumpPlugin);
+    }
+}
 

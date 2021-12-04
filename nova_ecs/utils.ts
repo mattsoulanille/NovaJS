@@ -92,3 +92,8 @@ export class DefaultMap<K, V> extends Map<K, V> {
         return super.get(key)!;
     }
 }
+
+export function isPromise(p: unknown): p is Promise<unknown> {
+    return typeof p !== 'undefined'
+        && typeof (p as any).then === 'function';
+}

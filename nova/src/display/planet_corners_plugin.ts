@@ -57,6 +57,15 @@ export const PlanetCornersPlugin: Plugin = {
         space.addChild(targetCorners.container);
         world.resources.set(PlanetCornersResource, targetCorners);
         world.addSystem(DrawPlanetCornersSystem);
+    },
+    remove(world) {
+        const targetCorners = world.resources.get(PlanetCornersResource);
+        const space = world.resources.get(Space);
+        if (targetCorners) {
+            space?.removeChild(targetCorners.container);
+        }
+        world.removeSystem(DrawPlanetCornersSystem);
+        world.resources.delete(PlanetCornersResource);
     }
 }
 

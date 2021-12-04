@@ -31,17 +31,21 @@ const CenterShipSystem = new System({
     }
 });
 
+const starfieldPlugin = starfield();
+
 export const Display: Plugin = {
     name: 'Display',
     build: async (world) => {
         const stage = new PIXI.Container();
+        stage.name = 'Stage';
         const space = new PIXI.Container();
+        space.name = 'Space';
         space.sortableChildren = true;
         stage.addChild(space);
         world.resources.set(Stage, stage);
         world.resources.set(Space, space);
         await world.addPlugin(ScreenSizePlugin);
-        await world.addPlugin(starfield());
+        await world.addPlugin(starfieldPlugin);
         await world.addPlugin(StatusBarPlugin);
         await world.addPlugin(AnimationGraphicPlugin);
         world.addSystem(CenterShipSystem);
@@ -53,5 +57,31 @@ export const Display: Plugin = {
         await world.addPlugin(PlanetCornersPlugin);
         await world.addPlugin(SpaceportPlugin);
         await world.addPlugin(SoundPlugin);
+    },
+    remove: (world) => {
+        world.removePlugin(SoundPlugin);
+        world.removePlugin(SpaceportPlugin);
+        world.removePlugin(PlanetCornersPlugin);
+        world.removePlugin(BeamDisplayPlugin);
+        world.removePlugin(ExplosionPlugin);
+        world.removePlugin(FullscreenPlugin);
+        world.removePlugin(ParticlesPlugin);
+        world.removePlugin(TargetCornersPlugin);
+
+        world.removeSystem(CenterShipSystem);
+
+        world.removePlugin(AnimationGraphicPlugin);
+        world.removePlugin(StatusBarPlugin);
+        world.removePlugin(starfieldPlugin);
+        world.removePlugin(ScreenSizePlugin);
+
+        const stage = world.resources.get(Stage);
+        const space = world.resources.get(Space);
+        if (stage && space) {
+            stage.removeChild(space);
+        }
+
+        world.resources.delete(Stage);
+        world.resources.delete(Space);
     }
 };

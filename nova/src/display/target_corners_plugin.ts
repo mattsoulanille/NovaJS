@@ -142,5 +142,14 @@ export const TargetCornersPlugin: Plugin = {
         space.addChild(targetCorners.container);
         world.resources.set(TargetCornersResource, targetCorners);
         world.addSystem(DrawTargetCornersSystem);
+    },
+    remove(world) {
+        world.removeSystem(DrawTargetCornersSystem);
+        const space = world.resources.get(Space);
+        const targetCorners = world.resources.get(TargetCornersResource);
+        if (space && targetCorners) {
+            space.removeChild(targetCorners.container);
+        }
+        world.resources.delete(TargetCornersResource);
     }
 }

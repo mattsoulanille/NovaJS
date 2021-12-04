@@ -8,5 +8,6 @@ ts_library(
     deps = [
         "//novadatainterface",
         "//nova_ecs/plugins",
+        "//nova_ecs:ecs",
     ]
 )

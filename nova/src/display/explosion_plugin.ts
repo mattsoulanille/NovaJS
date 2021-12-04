@@ -155,5 +155,10 @@ export const ExplosionPlugin: Plugin = {
         world.addSystem(ExplosionSystem);
         world.addSystem(ProjectileExplosionSystem);
         world.addSystem(SecondaryExplosionSystem);
+    },
+    remove(world) {
+        world.removeSystem(ExplosionSystem);
+        world.removeSystem(ProjectileExplosionSystem);
+        world.removeSystem(SecondaryExplosionSystem);
     }
 }

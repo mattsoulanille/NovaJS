@@ -46,10 +46,10 @@ function buildPNG(frames: Array<PNG>): PNG {
         let frame = frames[f];
 
         // Validation for sanity
-        if (frame.width != singleFrameWidth || frame.height != singleFrameHeight) {
-            throw new DimensionError("Wrong dimensions " + frame.width + " by " + frame.height
-                + ". Expected " + singleFrameWidth + " by " + singleFrameHeight + ".");
-        }
+        // if (frame.width != singleFrameWidth || frame.height != singleFrameHeight) {
+        //     throw new DimensionError("Wrong dimensions " + frame.width + " by " + frame.height
+        //         + ". Expected " + singleFrameWidth + " by " + singleFrameHeight + ".");
+        // }
 
         var col = f % SHEET_LOOP;
         var row = Math.floor(f / SHEET_LOOP);

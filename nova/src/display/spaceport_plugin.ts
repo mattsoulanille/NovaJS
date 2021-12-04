@@ -1,28 +1,21 @@
 import { Emit, Entities, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
-import { Entity } from 'nova_ecs/entity';
 import { Plugin } from 'nova_ecs/plugin';
-import { ChangeEvents, Provide } from 'nova_ecs/provider';
+import { Provide } from 'nova_ecs/provider';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
-import { currentIfDraft } from 'nova_ecs/utils';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlsSubject } from '../nova_plugin/controls_plugin';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
 import { LandEvent, PlanetComponent } from '../nova_plugin/planet_plugin';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin';
 import { Spaceport } from '../spaceport/spaceport';
+import { deImmerify } from '../util/deimmerify';
 import { ResizeEvent, ScreenSize } from './screen_size_plugin';
 import { Stage } from './stage_resource';
 
 
 const SpaceportComponent = new Component<Spaceport>("Spaceport");
-
-function deImmerify(entity: Entity) {
-    for (const [component, value] of entity.components) {
-        entity.components.set(component, currentIfDraft(value));
-    }
-}
 
 const SpaceportProvider = Provide({
     name: "SpaceportProvider",
@@ -79,5 +72,10 @@ export const SpaceportPlugin: Plugin = {
         world.addSystem(SpaceportProvider);
         world.addSystem(LandSystem);
         world.addSystem(SpaceportResizeSystem);
+    },
+    remove(world) {
+        world.removeSystem(SpaceportProvider);
+        world.removeSystem(LandSystem);
+        world.removeSystem(SpaceportResizeSystem);
     }
 }

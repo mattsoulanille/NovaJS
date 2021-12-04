@@ -15,6 +15,7 @@ import { PixiAppResource } from "./pixi_app_resource";
 import { texturesFromFrames } from "./textures_from_frames";
 import { alea } from 'seedrandom';
 import { ResizeEvent } from "./screen_size_plugin";
+import { Stage } from "./stage_resource";
 
 const STAR_ID = "nova:700";
 
@@ -47,6 +48,7 @@ class Starfield {
         this.positionFactorRange = positionFactorRange;
         this.container.addChild(this.graphics);
         const count = density * (2 * BOUNDARY) ** 2;
+        this.container.name = 'Starfield';
 
         this.random = alea(seed ?? 'stars');
         for (let i = 0; i < count; i++) {
@@ -194,9 +196,13 @@ export function starfield({ density = 0.00002,
             if (!gameData) {
                 throw new Error('Expected GameData resource to exist');
             }
-            const app = world.resources.get(PixiAppResource);
-            if (!app) {
-                throw new Error('Expected PixiApp resource to exist');
+            // const app = world.resources.get(PixiAppResource);
+            // if (!app) {
+            //     throw new Error('Expected PixiApp resource to exist');
+            // }
+            const stage = world.resources.get(Stage);
+            if (!stage) {
+                throw new Error('Expected Stage resource to exist');
             }
 
             const { frames } = await gameData.data.SpriteSheetFrames.get(STAR_ID);
@@ -209,10 +215,22 @@ export function starfield({ density = 0.00002,
 
             //starfield.resize(app.screen.width, app.screen.height);
             starfield.resize(window.innerWidth, window.innerHeight);
-            app.stage.addChild(starfield.container);
+            stage.addChild(starfield.container);
             world.resources.set(StarfieldResource, starfield);
             world.addSystem(StarfieldResize);
             world.addSystem(StarfieldSystem);
+        },
+        remove(world) {
+            world.removeSystem(StarfieldResize);
+            world.removeSystem(StarfieldSystem);
+
+            const starfield = world.resources.get(StarfieldResource);
+            const app = world.resources.get(PixiAppResource);
+            if (starfield && app) {
+                console.log('removing starfield');
+                app.stage.removeChild(starfield.container);
+            }
+            world.resources.delete(StarfieldResource);
         }
     }
 }

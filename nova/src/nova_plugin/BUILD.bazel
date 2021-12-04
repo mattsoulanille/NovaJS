@@ -7,6 +7,7 @@ ts_library(
     name = "nova_plugin",
     srcs = [
         "nova_plugin.ts",
+        "system_plugin.ts",
         "platform_plugin.ts",
         "game_data_resource.ts",
         "server_plugin.ts",
@@ -39,12 +40,15 @@ ts_library(
         "fire_weapon_plugin.ts",
         "return_to_queue_plugin.ts",
         "death_plugin.ts",
+        "jump_plugin.ts",
+        "systems_resource.ts",
     ],
     deps = [
         "//nova_ecs:ecs",
         "//nova_ecs/plugins",
         "//nova_ecs/datatypes",
         "//novadatainterface",
+        "//nova/src/communication:communication_lib",
         "//nova/src/common",
         "//nova/src/client/gamedata",
         "//nova/src/util",

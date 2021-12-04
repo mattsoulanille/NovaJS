@@ -6,6 +6,7 @@ import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
+import { SyncSubject } from "./event_map";
 import { Plugin } from './plugin';
 import { ProvidePlugin } from "./provider";
 import { Query } from "./query";
@@ -13,7 +14,7 @@ import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
-import { topologicalSort } from './utils';
+import { DefaultMap, isPromise, topologicalSort } from './utils';
 
 // How do you serialize components and make sure the receiver
 // knows which is which?
@@ -60,6 +61,11 @@ interface EcsEventWithEntities<Data> {
     entities?: Array<string | [string, Entity]>;
 }
 
+interface WorldEventsMap extends ReadonlyMap<UnknownEvent, SyncSubject<unknown>> {
+    get<Data>(event: EcsEvent<Data>): SyncSubject<Data>
+    has<Data>(event: EcsEvent<Data>): true;
+}
+
 export class World {
     private readonly state = {
         entities: new EntityMapWrapped(),
@@ -82,6 +88,10 @@ export class World {
     private boundEmit: EmitFunction = this.emit.bind(this);
 
     private queries = new QueryCache(this.entities, this.getArg.bind(this));
+    readonly events = new DefaultMap<UnknownEvent, SyncSubject<unknown>>(
+        () => new SyncSubject()) as WorldEventsMap;
+    private pluginPromises = new Map<Plugin, Promise<void>>();
+    readonly plugins = new Set<Plugin>();
 
     constructor(readonly name?: string) {
         this.addPlugin(AsyncSystemPlugin);
@@ -100,11 +110,11 @@ export class World {
 
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
-            this.emitWrapped(DeleteEvent, undefined, [...deleted]);
+            this.emitWrapped(DeleteEvent, deleted, [...deleted]);
         });
 
         this.state.entities.events.set.subscribe(addEntity => {
-            this.emitWrapped(AddEvent, undefined, [addEntity]);
+            this.emitWrapped(AddEvent, addEntity, [addEntity]);
         });
     }
 
@@ -119,16 +129,32 @@ export class World {
             data,
             entities
         });
+        this.events.get(event).next(data);
     }
 
     async addPlugin(plugin: Plugin) {
         // TODO: Namespace component and system names? Perhaps use ':' or '/' to
         // denote namespace vs name. Use a proxy like NovaData uses.
-        await plugin.build(this);
+        if (this.plugins.has(plugin)) {
+            console.warn(`Not adding plugin ${plugin.name} since it is already added`);
+            return;
+        }
+
+        this.plugins.add(plugin);
+        const pluginPromise = plugin.build(this);
+        if (isPromise(pluginPromise)) {
+            this.pluginPromises.set(plugin, pluginPromise);
+            await pluginPromise;
+        }
     }
 
-    removePlugin(plugin: Plugin) {
+    async removePlugin(plugin: Plugin) {
+        if (this.pluginPromises.has(plugin)) {
+            await this.pluginPromises.get(plugin)!;
+        }
         plugin.remove?.(this);
+        this.plugins.delete(plugin);
+        this.pluginPromises.delete(plugin);
     }
 
     addResource(resource: Resource<any>): this {

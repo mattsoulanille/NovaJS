@@ -1,4 +1,5 @@
 import * as t from 'io-ts';
+import { set } from 'nova_ecs/datatypes/set';
 
 
 export enum MessageType {
@@ -17,7 +18,8 @@ export const CommunicatorMessage = t.union([
             message: t.unknown,
         }),
         t.partial({
-            destination: t.string,
+            source: t.string,
+            destination: t.union([t.string, set(t.string)]),
         })
     ])
 ]);

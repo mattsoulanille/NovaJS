@@ -110,5 +110,12 @@ export const AnimationGraphicPlugin: Plugin = {
         world.addSystem(ObjectDrawSystem);
         world.addSystem(AnimationGraphicCleanup);
         world.addSystem(AnimationGraphicInsert);
+    },
+    remove(world) {
+        world.removeSystem(AnimationGraphicLoader);
+        world.removeSystem(AnimationGraphicProvider);
+        world.removeSystem(ObjectDrawSystem);
+        world.removeSystem(AnimationGraphicCleanup);
+        world.removeSystem(AnimationGraphicInsert);
     }
 }
