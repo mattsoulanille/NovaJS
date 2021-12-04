@@ -1,6 +1,6 @@
 load("//:defaults.bzl", "ts_library")
 load("//:esbuild.bzl", "esbuild")
-load("//webtesting:web_test.bzl", "web_test")
+#load("//webtesting:web_test.bzl", "web_test")
 
 package(default_visibility = ["//visibility:public"])
 
