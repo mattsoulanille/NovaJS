@@ -10,6 +10,7 @@ ts_library(
     srcs = [
         "time_plugin.ts",
         "multiplayer_plugin.ts",
+        "mock_communicator.ts",
         "movement_plugin.ts",
         "serializer_plugin.ts",
         #"modifier_plugin.ts",

@@ -18,6 +18,7 @@ import { EncodedEntity, SerializerResource } from './serializer_plugin';
 export interface Communicator {
     uuid: string | undefined;
     peers: BehaviorSubject<Set<string>>,
+    servers: BehaviorSubject<Set<string>>,
     messages: Observable<{ source: string, message: unknown }>,
     sendMessage(message: unknown, destination?: string | Set<string>): void;
 }

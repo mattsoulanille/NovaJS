@@ -1,43 +1,17 @@
 import { isDraft } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
-import { BehaviorSubject, Subject } from 'rxjs';
 import { Entities, UUID } from '../arg_types';
 import { Component } from '../component';
 import { EntityBuilder } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
-import { applyObjectDelta, getObjectDelta } from './delta';
 import { DeltaResource } from './delta_plugin';
-import { Communicator, Message, multiplayer, MultiplayerData } from './multiplayer_plugin';
+import { MockCommunicator } from './mock_communicator';
+import { multiplayer, MultiplayerData } from './multiplayer_plugin';
 
 const BarComponent = new Component<{ y: string }>("Bar");
 const NonMultiplayer = new Component<{ z: string }>('NonMultiplayer');
-
-class MockCommunicator implements Communicator {
-    peers = new BehaviorSubject(new Set<string>());
-    messages = new Subject<unknown>();
-    allMessages: unknown[] = [];
-
-    constructor(public uuid: string | undefined,
-        public mockPeers: Map<string, MockCommunicator> = new Map()) {
-        this.messages.subscribe(message => this.allMessages.push(message));
-    }
-
-    sendMessage(message: Message, destination?: string) {
-        const JSONified = JSON.parse(JSON.stringify(message)) as unknown;
-
-        if (destination) {
-            this.mockPeers.get(destination)?.messages.next(JSONified);
-        } else {
-            for (const peer of this.mockPeers.values()) {
-                if (peer.uuid !== this.uuid) {
-                    peer.messages.next(JSONified);
-                }
-            }
-        }
-    }
-}
 
 describe('Multiplayer Plugin', () => {
     let world1: World;

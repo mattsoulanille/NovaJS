@@ -7,7 +7,7 @@ import { CommunicatorResource, multiplayer, MultiplayerData, NewOwnedEntityEvent
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { World } from "nova_ecs/world";
-import { MultiRoom } from "../communication/MultiRoomCommunicator";
+import { MultiRoom } from "../communication/multi_room_communicator";
 import { GameDataResource } from "./game_data_resource";
 import { WorldJumpPlugin } from "./jump_plugin";
 import { makeSystem } from "./make_system";

@@ -12,7 +12,7 @@ import path from "path";
 import { v4 } from "uuid";
 import { Worker } from "worker_threads";
 import { CommunicatorServer } from "./src/communication/CommunicatorServer";
-import { MultiRoom } from './src/communication/MultiRoomCommunicator';
+import { MultiRoom } from './src/communication/multi_room_communicator';
 import { SocketChannelServer } from "./src/communication/SocketChannelServer";
 import { GameDataResource } from './src/nova_plugin/game_data_resource';
 import { makeShip } from "./src/nova_plugin/make_ship";

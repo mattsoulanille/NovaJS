@@ -13,6 +13,7 @@ export class CommunicatorClient implements Communicator {
     constructor(private channel: ChannelClient) {
         channel.message.subscribe(this.onMessage.bind(this));
     }
+    servers = new BehaviorSubject(new Set(['server'])); // TODO: Get this from the server
 
     private onMessage(message: unknown) {
         const maybeMessage = CommunicatorMessage.decode(message);

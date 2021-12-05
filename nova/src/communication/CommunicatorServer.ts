@@ -2,19 +2,25 @@ import { isLeft } from "fp-ts/lib/Either";
 import produce from "immer";
 import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { BehaviorSubject, Subject } from "rxjs";
-import { ChannelServer, MessageWithSourceType } from "./Channel";
+import { ChannelServer } from "./Channel";
 import { CommunicatorMessage, MessageType } from "./CommunicatorMessage";
 
 
 export class CommunicatorServer implements Communicator {
     readonly messages = new Subject<{ source: string, message: unknown }>();
     readonly peers: BehaviorSubject<Set<string>>;
+    readonly servers: BehaviorSubject<Set<string>>;
 
     constructor(private channel: ChannelServer, public uuid = 'server') {
         this.peers = new BehaviorSubject(channel.clients);
         for (const peer of this.peers.value) {
             this.sendUuid(peer);
         }
+        if (uuid !== 'server') {
+            throw new Error('UUIDs other than \'server\' are not yet supported');
+        }
+
+        this.servers = new BehaviorSubject(new Set([uuid]));
 
         // Handle messages from the channel
         channel.message.subscribe(({ message: commMessage, source }) => {

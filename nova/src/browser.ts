@@ -5,7 +5,7 @@ import * as PIXI from "pixi.js";
 import Stats from 'stats.js';
 import { GameData } from "./client/gamedata/GameData";
 import { CommunicatorClient } from "./communication/CommunicatorClient";
-import { MultiRoom } from "./communication/MultiRoomCommunicator";
+import { MultiRoom } from "./communication/multi_room_communicator";
 import { SocketChannelClient } from "./communication/SocketChannelClient";
 import { DebugSettings } from "./debug_settings";
 import { Display } from "./display/display_plugin";
