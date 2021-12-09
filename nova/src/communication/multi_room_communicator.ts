@@ -1,7 +1,7 @@
 import { isLeft } from "fp-ts/lib/Either";
 import * as t from 'io-ts';
 import { set } from "nova_ecs/datatypes/set";
-import { Communicator, MessageWithSource } from "nova_ecs/plugins/multiplayer_plugin";
+import { Communicator, MessageWithSource, Peers } from "nova_ecs/plugins/multiplayer_plugin";
 import { DefaultMap, setDifference } from "nova_ecs/utils";
 import { BehaviorSubject, EMPTY, Observable, of } from "rxjs";
 import { filter, map, mergeMap, tap } from "rxjs/operators";
@@ -23,7 +23,7 @@ class RoomCommunicator implements Communicator {
     constructor(private communicator: Communicator,
         public messages: Observable<MessageWithSource<unknown>>,
         public sendMessage: (message: unknown, destination?: string) => void,
-        public peers: BehaviorSubject<Set<string>>,
+        public peers: Peers,
         public servers: BehaviorSubject<Set<string>>) { }
     get uuid() {
         return this.communicator.uuid;
@@ -31,8 +31,9 @@ class RoomCommunicator implements Communicator {
 }
 
 export class MultiRoom {
-    private roomMap: DefaultMap<string, Communicator>;
-    private roomPeers = new DefaultMap<string, Set<string>>(() => new Set());
+    private roomMap: DefaultMap<string, [Communicator, () => void]>;
+    private roomPeers = new DefaultMap<string, Peers>(() =>
+        new Peers(new BehaviorSubject(new Set())));
 
     constructor(private communicator: Communicator) {
         const messages = communicator.messages.pipe(
@@ -63,33 +64,51 @@ export class MultiRoom {
                 filter(({ message }) => 'inRoom' in message)
             ).subscribe(({ message, source }) => {
                 const peers = this.roomPeers.get(message.room);
+                const currentPeers = new Set([...peers.current.value]);
                 if (message.inRoom) {
-                    peers.add(source);
+                    currentPeers.add(source);
+                    peers.current.next(currentPeers);
                 } else {
-                    peers.delete(source);
+                    currentPeers.delete(source);
+                    peers.current.next(currentPeers);
                 }
 
                 communicator.sendMessage(RoomMessage.encode({
                     room: message.room,
-                    peers,
-                }), peers);
-            })
+                    peers: currentPeers,
+                }), currentPeers);
+            });
         }
 
+        communicator.peers.leave.subscribe(peer => {
+            for (const [, peers] of this.roomPeers) {
+                if (peers.current.value.has(peer)) {
+                    const newPeers = new Set([...peers.current.value]);
+                    newPeers.delete(peer);
+                    peers.current.next(newPeers);
+                }
+            }
+        });
+
         this.roomMap = new DefaultMap(key => {
+            // TODO: Correctly clean up subscriptions
+            const cleanup = () => {
+                s1.unsubscribe();
+            }
+
             const roomMessages = messages.pipe(
                 filter(({ message }) => message.room === key)
             );
 
-            const peers = new BehaviorSubject(new Set<string>());
-            roomMessages.pipe(
+            const peers = this.roomPeers.get(key);
+            const s1 = roomMessages.pipe(
                 filter(({ message }) => Boolean(message.peers)),
                 filter(({ source }) => communicator.servers.value.has(source))
             ).subscribe(({ message }) => {
-                peers.next(message.peers!);
+                peers.current.next(message.peers!);
             });
 
-            return new RoomCommunicator(
+            return [new RoomCommunicator(
                 communicator,
                 roomMessages.pipe(
                     filter(({ message }) => 'message' in message),
@@ -102,7 +121,7 @@ export class MultiRoom {
                     } else if (typeof destination === 'string') {
                         destSet = new Set([destination]);
                     } else {
-                        destSet = new Set(peers.value);
+                        destSet = new Set(peers.current.value);
                         // Don't send to self
                         destSet.delete(communicator.uuid ?? '');
                     }
@@ -113,12 +132,12 @@ export class MultiRoom {
                 },
                 peers,
                 communicator.servers,
-            );
+            ), cleanup];
         });
     }
 
     join(room: string) {
-        const communicatorRoom = this.roomMap.get(room);
+        const [communicatorRoom] = this.roomMap.get(room);
         // Notify the server that we are in this room.
         this.communicator.sendMessage(RoomMessage.encode({
             room: room,
@@ -133,5 +152,11 @@ export class MultiRoom {
             room: room,
             inRoom: false,
         }), [...this.communicator.servers.value][0]);
+        const [, cleanup] = this.roomMap.get(room);
+        this.roomPeers.delete(room);
+        this.roomMap.delete(room)
+        if (cleanup) {
+            cleanup()
+        }
     }
 }

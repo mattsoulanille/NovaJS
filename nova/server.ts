@@ -16,7 +16,7 @@ import { MultiRoom } from './src/communication/multi_room_communicator';
 import { SocketChannelServer } from "./src/communication/SocketChannelServer";
 import { GameDataResource } from './src/nova_plugin/game_data_resource';
 import { makeShip } from "./src/nova_plugin/make_ship";
-import { ActiveSystemComponent, MultiRoomResource, NovaPlugin, SystemComponent } from './src/nova_plugin/nova_plugin';
+import { MultiRoomResource, NovaPlugin } from './src/nova_plugin/nova_plugin';
 import { ServerPlugin } from "./src/nova_plugin/server_plugin";
 import { NovaRepl } from "./src/server/nova_repl";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
@@ -100,8 +100,6 @@ async function startGame() {
     world.resources.set(MultiRoomResource, multiRoom);
     await world.addPlugin(NovaPlugin);
 
-    systemWorld = world.entities.get('nova:130')!.components.get(SystemComponent)!;
-    world.entities.get('nova:130')!.components.set(ActiveSystemComponent, true);
     repl.repl.context.world = world;
 
     await world.addPlugin(ServerPlugin);

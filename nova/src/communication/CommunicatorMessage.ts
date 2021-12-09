@@ -5,6 +5,7 @@ import { set } from 'nova_ecs/datatypes/set';
 export enum MessageType {
     uuid,
     message,
+    peers,
 }
 
 export const CommunicatorMessage = t.union([
@@ -21,7 +22,11 @@ export const CommunicatorMessage = t.union([
             source: t.string,
             destination: t.union([t.string, set(t.string)]),
         })
-    ])
+    ]),
+    t.type({
+        type: t.literal(MessageType.peers),
+        peers: set(t.string),
+    }),
 ]);
 
 export type CommunicatorMessage = t.TypeOf<typeof CommunicatorMessage>;

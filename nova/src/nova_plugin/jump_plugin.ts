@@ -22,7 +22,7 @@ export interface FinishJump {
     uuid: string,
     to: string,
 }
-const FinishJumpEvent = new EcsEvent<FinishJump>('FinishJumpEvent');
+export const FinishJumpEvent = new EcsEvent<FinishJump>('FinishJumpEvent');
 
 const JumpFromSystem = new System({
     name: 'JumpFromSystem',
@@ -44,7 +44,7 @@ const PlayerJumpControl = new System({
     step(controlState, emit, uuid, systemId) {
         if (controlState.get('hyperjump') === 'start') {
             const currentId = systemId ? Number(systemId.split(':')[1]) : 128;
-            const id = (currentId + 1 - 128) % 600 + 128;
+            const id = (currentId + 1 - 128) % 6 + 128;
             const randomSystem = `nova:${id}`;
             emit(InitiateJumpEvent, { to: randomSystem }, [uuid]);
         }

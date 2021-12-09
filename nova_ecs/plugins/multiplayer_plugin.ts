@@ -1,6 +1,7 @@
 import { isLeft } from 'fp-ts/lib/Either';
+import produce from 'immer';
 import * as t from 'io-ts';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { Emit, Entities, GetEntity, UUID } from '../arg_types';
 import { Component } from '../component';
 import { map } from '../datatypes/map';
@@ -11,13 +12,60 @@ import { Query } from '../query';
 import { Resource } from '../resource';
 import { System } from '../system';
 import { setDifference } from '../utils';
-import { SingletonComponent, World } from '../world';
+import { World } from '../world';
 import { DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
 import { EncodedEntity, SerializerResource } from './serializer_plugin';
 
+export class Peers {
+    readonly current: BehaviorSubject<Set<string>>;
+    readonly join: Subject<string>;
+    readonly leave: Subject<string>;
+
+    constructor(p: BehaviorSubject<Set<string>> | {
+        join: Subject<string>;
+        leave: Subject<string>;
+        initial?: Set<string>;
+    }) {
+        if (p instanceof BehaviorSubject) {
+            this.current = p;
+            const join = new Subject<string>();
+            this.join = join;
+            const leave = new Subject<string>();
+            this.leave = leave;
+            let lastPeers = new Set([...p.value]);
+            p.subscribe(peers => {
+                const joined = setDifference(peers, lastPeers);
+                const left = setDifference(lastPeers, peers);
+                for (const peer of joined) {
+                    join.next(peer);
+                }
+                for (const peer of left) {
+                    leave.next(peer);
+                }
+                lastPeers = new Set([...peers]);
+            });
+        } else {
+            const { join, leave, initial } = p;
+            this.current = new BehaviorSubject(initial ?? new Set());
+            join.subscribe(peer => {
+                this.current.next(produce(this.current.value, peers => {
+                    peers.add(peer)
+                }));
+            });
+            leave.subscribe(peer => {
+                this.current.next(produce(this.current.value, peers => {
+                    peers.delete(peer)
+                }));
+            });
+            this.join = join;
+            this.leave = leave;
+        }
+    }
+}
+
 export interface Communicator {
     uuid: string | undefined;
-    peers: BehaviorSubject<Set<string>>,
+    peers: Peers,
     servers: BehaviorSubject<Set<string>>,
     messages: Observable<{ source: string, message: unknown }>,
     sendMessage(message: unknown, destination?: string | Set<string>): void;
@@ -37,15 +85,6 @@ export const Message = t.partial({
 });
 export type Message = t.TypeOf<typeof Message>;
 
-export interface PeersState {
-    removedPeers: Set<string>,
-    addedPeers: Set<string>,
-    peers: Set<string>,
-};
-
-export const PeersFromCommunicator = new EcsEvent<Set<string>>();
-export const PeersEvent = new EcsEvent<PeersState>('PeersEvent');
-
 export const MultiplayerData = new Component<{ owner: string }>('MultiplayerData');
 
 export interface MessageWithSource<M> {
@@ -63,23 +102,6 @@ export const Comms = new Component<{
     initialStateRequested: boolean,
 }>('Comms');
 
-const PeersResource = new Resource<{ peers: Set<string> }>('PeersResource');
-
-const PeersSystem = new System({
-    name: 'PeersSystem',
-    events: [PeersFromCommunicator],
-    args: [PeersFromCommunicator, PeersResource, Emit, SingletonComponent] as const,
-    step: (peersFromCommunicator, peersResource, emit) => {
-        const addedPeers = setDifference(peersFromCommunicator, peersResource.peers);
-        const removedPeers = setDifference(peersResource.peers, peersFromCommunicator);
-        peersResource.peers = peersFromCommunicator;
-        emit(PeersEvent, {
-            addedPeers,
-            removedPeers,
-            peers: peersResource.peers
-        });
-    }
-});
 
 export const NewOwnedEntityEvent = new EcsEvent<string>('NewOwnedEntityEvent');
 
@@ -123,13 +145,16 @@ export function multiplayer(communicator: Communicator,
 
             // Request initial state
             if (!comms.initialStateRequested) {
-                sendMessage({
-                    requestState: {
-                        uuids: new Set(),
-                        invert: true,
-                    }
-                }, randomAdmin());
-                comms.initialStateRequested = true;
+                const admin = randomAdmin();
+                if (admin) {
+                    sendMessage({
+                        requestState: {
+                            uuids: new Set(),
+                            invert: true,
+                        }
+                    }, admin);
+                    comms.initialStateRequested = true;
+                }
             }
 
             function sendMessage(message: Message, destination?: string) {
@@ -358,8 +383,6 @@ export function multiplayer(communicator: Communicator,
 
         world.addSystem(multiplayerSystem);
         world.addSystem(MessageSystem);
-        world.resources.set(PeersResource, { peers: new Set<string>() });
-        world.addSystem(PeersSystem);
         world.addComponent(MultiplayerData);
         world.singletonEntity.components.set(Comms, {
             ownedUuids: new Set<string>(),
@@ -373,10 +396,6 @@ export function multiplayer(communicator: Communicator,
 
         communicator.messages.subscribe(message => {
             world.emit(MultiplayerMessageEvent, message);
-        });
-
-        communicator.peers.subscribe(peers => {
-            world.emit(PeersFromCommunicator, peers);
         });
     }
 

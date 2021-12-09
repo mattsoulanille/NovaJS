@@ -12,6 +12,7 @@ export class SocketChannelClient implements ChannelClient {
     readonly timeout: number;
     private keepaliveTimeout?: NodeJS.Timeout;
     private messageListener: (m: MessageEvent) => void;
+    private messageQueue: SocketMessage[] = [];
 
     constructor({ webSocket, warn, timeout, webSocketFactory }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number, webSocketFactory?: () => WebSocket }) {
         this.webSocketFactory = webSocketFactory ?? (() => {
@@ -76,7 +77,13 @@ export class SocketChannelClient implements ChannelClient {
     private sendRaw(message: SocketMessage) {
         this.reconnectIfClosed();
         if (this.webSocket.readyState === this.webSocket.OPEN) {
+            for (const message of this.messageQueue) {
+                this.webSocket.send(JSON.stringify(SocketMessage.encode(message)));
+            }
+            this.messageQueue.length = 0;
             this.webSocket.send(JSON.stringify(SocketMessage.encode(message)));
+        } else {
+            this.messageQueue.push(message);
         }
     }
 

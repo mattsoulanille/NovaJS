@@ -41,8 +41,8 @@ describe('Multiplayer Plugin', () => {
         world2 = new World('world2');
         world2.addPlugin(multiplayer(world2Communicator, error));
 
-        world1Communicator.peers.next(peers);
-        world2Communicator.peers.next(peers);
+        world1Communicator.peers.current.next(peers);
+        world2Communicator.peers.current.next(peers);
 
         world1.addComponent(BarComponent);
         world2.addComponent(BarComponent);

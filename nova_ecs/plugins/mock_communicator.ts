@@ -1,15 +1,19 @@
-import { BehaviorSubject, Subject } from 'rxjs';
-import { Communicator, Message } from './multiplayer_plugin';
+import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { Communicator, Message, Peers } from './multiplayer_plugin';
+
 
 
 export class MockCommunicator implements Communicator {
-    peers = new BehaviorSubject(new Set<string>());
+    peers: Peers;
     messages = new Subject<{ message: unknown; source: string; }>();
     allMessages: unknown[] = [];
     servers = new BehaviorSubject(new Set(['server']));
 
     constructor(public uuid: string | undefined,
         public mockPeers: Map<string, MockCommunicator> = new Map()) {
+        const peers = new BehaviorSubject(new Set<string>());
+        this.peers = new Peers(peers);
+        peers.next(new Set([...mockPeers.keys()]));
         this.messages.subscribe(message => this.allMessages.push(message));
     }
 
