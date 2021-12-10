@@ -10,7 +10,7 @@
         "path": "path-browserify"
     },
     "devDependencies": {
-        "@bazel/bazelisk": "^1.10.1",
+        "@bazel/bazelisk": "^1.11.0",
         "@bazel/buildifier": "4.2.4",
         "@bazel/concatjs": "^4.4.6",
         "@bazel/esbuild": "^4.4.6",
