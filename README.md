@@ -3,7 +3,7 @@ NovaJS
 
 This is an experiment in making Escape Velocity Nova run in the browser. Escape Velocity Nova (EV Nova) is a game created by [Ambrosia Software](http://www.ambrosiasw.com/) in collaboration with [ATMOS](https://en.wikipedia.org/wiki/ATMOS_Software).
 
-[Here's a running example that supports multiplayer](http://54.173.49.38/) (works in modern browsers). This version is running release [0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js), an earlier version written in JavaScript. The main branch's version is undergoing a rewrite / redesign, and is not at feature parity with the JS version yet. [Here's a running example of the main branch](https://nova-x2e2pof5ua-uc.a.run.app).
+[Here's a live demo of the main branch](https://nova-x2e2pof5ua-uc.a.run.app) (supports multiplayer, works in modern browsers). There's also a [demo of the alpha js release](http://54.173.49.38/), which is an earlier version written in JavaScript ([0.1-alpha-js](https://github.com/mattsoulanille/NovaJS/releases/tag/v0.1-alpha-js)).
 
 #### Controls (mostly standard EV Nova):
 * Arrow keys to move
@@ -12,10 +12,10 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 * L while moving slowly over a planet to land
 * Tab to select a target
 * W to choose a secondary weapon
-* **Left Shift to fire secondary weapon** (not Ctrl since that's used by Windows)
+* **Left Shift to fire secondary weapon** (not only Ctrl since that's used by Windows)
 * R to choose nearest target
 * Hold A to point towards target.
-* Z for afterburner (if installed)
+* J to jump (loops through 6 systems for now)
 * **Scroll down in the outfitter and shipyard with the arrow keys to see more items**
 
 ### Project Goals
