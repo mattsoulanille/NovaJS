@@ -177,7 +177,7 @@ export class World {
 
     private removeResource(resource: Resource<any>): boolean {
         // Removes the resource from the nameResourceMap if possible.
-        // Called by ResourceMap.
+        // Called by ResourceMap when deleting a resource.
         if (this.nameResourceMap.get(resource.name) !== resource) {
             return false;
         }
