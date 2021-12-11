@@ -167,14 +167,14 @@ class ShanResource extends BaseResource {
         }
 
 
-
+        // upCompress and downCompress values are assumed to be 100 if they are 0
         this.exitPoints = {
             gun: doPos(d, 72, 80, 144),
             turret: doPos(d, 88, 96, 152),
             guided: doPos(d, 104, 112, 160),
             beam: doPos(d, 120, 128, 168),
-            upCompress: [d.getInt16(136), d.getInt16(138)],
-            downCompress: [d.getInt16(140), d.getInt16(142)]
+            upCompress: [d.getInt16(136) || 100, d.getInt16(138) || 100],
+            downCompress: [d.getInt16(140) || 100, d.getInt16(142) || 100]
         };
     }
 }
