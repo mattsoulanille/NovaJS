@@ -60,22 +60,22 @@ export const JumpPlugin: Plugin = {
     }
 };
 
-// Pass jump events between systems.
-// TODO: Support changing set of systems.
-export const WorldJumpPlugin: Plugin = {
-    name: 'WorldJumpPlugin',
-    build(world) {
-        const systems = world.resources.get(SystemsResource);
-        if (!systems) {
-            throw new Error('World must have systems resource');
-        }
+// // Pass jump events between systems.
+// // TODO: Support changing set of systems.
+// export const WorldJumpPlugin: Plugin = {
+//     name: 'WorldJumpPlugin',
+//     build(world) {
+//         const systems = world.resources.get(SystemsResource);
+//         if (!systems) {
+//             throw new Error('World must have systems resource');
+//         }
 
-        for (const [, system] of systems) {
-            system.events.get(FinishJumpEvent).subscribe(
-                ({ entity, to, uuid }) => {
-                    const destination = systems.get(to) ?? system;
-                    destination.entities.set(uuid, entity);
-                });
-        }
-    }
-}
+//         for (const [, system] of systems) {
+//             system.events.get(FinishJumpEvent).subscribe(
+//                 ({ entity, to, uuid }) => {
+//                     const destination = systems.get(to) ?? system;
+//                     destination.entities.set(uuid, entity);
+//                 });
+//         }
+//     }
+// }

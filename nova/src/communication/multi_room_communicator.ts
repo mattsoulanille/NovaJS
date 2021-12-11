@@ -3,8 +3,8 @@ import * as t from 'io-ts';
 import { set } from "nova_ecs/datatypes/set";
 import { Communicator, MessageWithSource, Peers } from "nova_ecs/plugins/multiplayer_plugin";
 import { DefaultMap, setDifference } from "nova_ecs/utils";
-import { BehaviorSubject, EMPTY, Observable, of } from "rxjs";
-import { filter, map, mergeMap, tap } from "rxjs/operators";
+import { BehaviorSubject, EMPTY, Observable, of, Subject } from "rxjs";
+import { filter, map, mergeMap, takeUntil, tap } from "rxjs/operators";
 
 const RoomMessage = t.intersection([
     t.type({
@@ -92,16 +92,19 @@ export class MultiRoom {
 
         this.roomMap = new DefaultMap(key => {
             // TODO: Correctly clean up subscriptions
+            const finish = new Subject();
             const cleanup = () => {
-                s1.unsubscribe();
+                finish.next(true);
             }
 
             const roomMessages = messages.pipe(
+                takeUntil(finish),
                 filter(({ message }) => message.room === key)
             );
 
             const peers = this.roomPeers.get(key);
-            const s1 = roomMessages.pipe(
+            roomMessages.pipe(
+                takeUntil(finish),
                 filter(({ message }) => Boolean(message.peers)),
                 filter(({ source }) => communicator.servers.value.has(source))
             ).subscribe(({ message }) => {
@@ -111,6 +114,7 @@ export class MultiRoom {
             return [new RoomCommunicator(
                 communicator,
                 roomMessages.pipe(
+                    takeUntil(finish),
                     filter(({ message }) => 'message' in message),
                     map(({ message, source }) => ({ message: message.message, source }))
                 ),
