@@ -1,6 +1,4 @@
 load("//:defaults.bzl", "ts_library")
-load("//:esbuild.bzl", "esbuild")
-#load("//webtesting:web_test.bzl", "web_test")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -27,6 +25,7 @@ ts_library(
         "spaceport_plugin.ts",
         "screen_size_plugin.ts",
         "sound_plugin.ts",
+        "ship_animation_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

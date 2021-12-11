@@ -58,7 +58,7 @@ export class SpriteSheetSprite {
             return;
         }
         if (frame < 0 || frame >= this.textures.length) {
-            console.warn(`Frame out of range [0, ${this.textures.length})`);
+            //console.warn(`Frame out of range [0, ${this.textures.length})`);
             return;
         }
         if (frame % 1 !== 0) {
