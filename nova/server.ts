@@ -1,30 +1,28 @@
+import * as Comlink from 'comlink';
+//import nodeEndpoint from "comlink/dist/esm/node-adapter";
+import nodeEndpoint from "comlink/dist/umd/node-adapter";
 import express from "express";
+import { isLeft } from "fp-ts/lib/Either";
 import fs from "fs";
 import http from "http";
-import path from "path";
-import { NovaParse } from "../novaparse/NovaParse";
-import { CommunicatorServer } from "./src/communication/CommunicatorServer";
-import { SocketChannelServer } from "./src/communication/SocketChannelServer";
+import * as t from 'io-ts';
 import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { World } from "nova_ecs/world";
-import { GameDataResource } from "./src/nova_plugin/game_data_resource";
-import { Nova } from "./src/nova_plugin/nova_plugin";
+import path from "path";
+import { v4 } from "uuid";
+import { Worker } from "worker_threads";
+import { CommunicatorServer } from "./src/communication/CommunicatorServer";
+import { MultiRoom } from './src/communication/multi_room_communicator';
+import { SocketChannelServer } from "./src/communication/SocketChannelServer";
+import { GameDataResource } from './src/nova_plugin/game_data_resource';
+import { makeShip } from "./src/nova_plugin/make_ship";
+import { MultiRoomResource, NovaPlugin } from './src/nova_plugin/nova_plugin';
 import { ServerPlugin } from "./src/nova_plugin/server_plugin";
 import { NovaRepl } from "./src/server/nova_repl";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
 import { GameDataAggregator } from "./src/server/parsing/GameDataAggregator";
-import { setupRoutes } from "./src/server/setupRoutes";
-import * as t from 'io-ts';
-import { isLeft } from "fp-ts/lib/Either";
-import { makeSystem } from "./src/nova_plugin/make_system";
-import { Worker } from "worker_threads";
-import * as Comlink from 'comlink';
-//import nodeEndpoint from "comlink/dist/esm/node-adapter";
-import nodeEndpoint from "comlink/dist/umd/node-adapter";
 import { NovaParseWorkerApi } from "./src/server/parsing/nova_parse_worker";
-import { makeShip } from "./src/nova_plugin/make_ship";
-import { v4 } from "uuid";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { setupRoutes } from "./src/server/setupRoutes";
 //import { NovaRepl } from "./src/server/NovaRepl";
 
 
@@ -66,6 +64,7 @@ const novaParseWorkerPath = runfiles.resolve(
     "novajs/nova/src/server/parsing/nova_parse_worker_bundle.js");
 
 let world: World;
+let systemWorld: World;
 const repl = new NovaRepl();
 
 let communicator: CommunicatorServer;
@@ -91,19 +90,19 @@ async function startGame() {
         console.log("listening at port " + port);
     });
 
-    // Make the communicator after the systems are built so clients can't connect
-    // until everthing is ready.
     communicator = new CommunicatorServer(channel);
+    const multiRoom = new MultiRoom(communicator);
     // TODO: Don't just give the server the 'server' uuid
-    const multiplayerPlugin = multiplayer(communicator);
 
-    world = await makeSystem('nova:130', gameData);
+    world = new World();
+    world.resources.set(GameDataResource, gameData);
+    await world.addPlugin(multiplayer(multiRoom.join('main room')));
+    world.resources.set(MultiRoomResource, multiRoom);
+    await world.addPlugin(NovaPlugin);
+
     repl.repl.context.world = world;
 
-    world.resources.set(GameDataResource, gameData);
-    await world.addPlugin(multiplayerPlugin);
     await world.addPlugin(ServerPlugin);
-    await world.addPlugin(Nova);
     repl.repl.context.addEnemy = async (id?: string) => {
         const ids = await gameData.ids;
         id = id ?? ids.Ship[Math.floor(Math.random() * ids.Ship.length)];
@@ -112,7 +111,7 @@ async function startGame() {
         ship.components.set(MultiplayerData, {
             owner: 'server',
         });
-        world.entities.set(v4(), ship);
+        systemWorld.entities.set(v4(), ship);
     }
 
     stepper();

@@ -30,6 +30,7 @@ export class Spaceport extends Menu<Entity> {
     constructor(gameData: GameData, private id: string,
         controlEvents: Observable<ControlEvent>) {
         super(gameData, "nova:8500", controlEvents);
+        this.container.name = 'Spaceport';
 
         const buttons = {
             outfitter: new Button(gameData, "Outfitter", 120, { x: 160, y: 116 }),

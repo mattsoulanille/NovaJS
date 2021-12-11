@@ -4,6 +4,8 @@ import { Entity } from "./entity";
 import { EntityMapWrapped } from "./entity_map";
 import { DeleteEvent, EcsEvent, StepEvent } from "./events";
 import { Query } from "./query";
+import { UnknownResource } from "./resource";
+import { ResourceMapWrapped } from "./resource_map";
 import { DefaultMap } from "./utils";
 import { World } from "./world";
 
@@ -22,6 +24,7 @@ interface QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]
 class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
     private entities: Map<string, Entity>;
     private entityResults = new Map<Entity, ArgsToData<Args>>();
+    private resources: Map<UnknownResource, unknown>;
     private wrappedResult: ArgsToData<Args>[] = []
     private resultValid = false;
     unsubscribe: () => void;
@@ -29,9 +32,12 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
     constructor(private queryCache: QueryCache,
         private query: Query,
         private getArg: World['getArg'],
-        entities: EntityMapWrapped) {
+        entities: EntityMapWrapped,
+        resources: ResourceMapWrapped) {
         this.entities = new Map([...entities].filter(
             ([, entity]) => query.supportsEntity(entity)));
+        this.resources = new Map([...resources].filter(
+            ([resource]) => query.resources.has(resource)));
 
         const subscriptions = [
             entities.events.setAlways.subscribe(([uuid, entity]) => {
@@ -71,6 +77,20 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
                     this.entities.delete(uuid);
                 }
                 this.entityResults.delete(entity);
+                this.resultValid = false;
+            }),
+            resources.events.setAlways.subscribe(([resource, val]) => {
+                if (!query.resources.has(resource)) {
+                    // Don't need to care about or track resources
+                    // that the query doesn't use.
+                    return;
+                }
+                if (this.resources.get(resource) === val) {
+                    return;
+                }
+                this.resources.set(resource, val);
+                // Resources are global, so delete all cached results for entities.
+                this.entityResults.clear();
                 this.resultValid = false;
             }),
         ];
@@ -194,7 +214,8 @@ class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTy
     constructor(private queryCache: QueryCache,
         private query: Query,
         private getArg: World['getArg'],
-        private entities: EntityMapWrapped) {
+        private entities: EntityMapWrapped,
+        private resources: ResourceMapWrapped) {
     }
 
     unsubscribe = () => { };
@@ -240,8 +261,8 @@ class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTy
 
 type QueryArgsList = readonly ArgTypes[];
 export class QueryCache extends DefaultMap<Query, QueryCacheEntry> {
-    constructor(entities: EntityMapWrapped, getArg: World['getArg']) {
-        super((query: Query) => new CachedQueryCacheEntry(this, query, getArg, entities));
+    constructor(entities: EntityMapWrapped, resources: ResourceMapWrapped, getArg: World['getArg']) {
+        super((query: Query) => new CachedQueryCacheEntry(this, query, getArg, entities, resources));
     }
 
     get<Args extends QueryArgsList>(query: Query<Args>): QueryCacheEntry<Args> {

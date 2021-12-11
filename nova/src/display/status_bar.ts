@@ -48,6 +48,7 @@ class StatusBar {
     constructor(private statusBarData: StatusBarData, private gameData: GameData,
         private renderer: PIXI.Renderer | PIXI.AbstractRenderer) {
         this.buildPromise = this.build();
+        this.container.name = 'StatusBar';
     }
 
     private async build() {
@@ -373,8 +374,6 @@ export const StatusBarPlugin: Plugin = {
             throw new Error('Expected PIXI App resource to exist');
         }
 
-        PixiAppResource
-
         const statusBar = new StatusBar(await gameData.data.StatusBar.get("nova:128"),
             gameData as GameData, app.renderer);
         await statusBar.buildPromise;
@@ -389,5 +388,19 @@ export const StatusBarPlugin: Plugin = {
         world.addSystem(DrawStatusBarStats);
         world.addSystem(DrawStatusBarSecondaryWeapon);
         world.addSystem(DrawStatusBarTarget);
+    },
+    remove(world) {
+        world.removeSystem(DrawRadar);
+        world.removeSystem(StatusBarResize);
+        world.removeSystem(DrawStatusBarStats);
+        world.removeSystem(DrawStatusBarSecondaryWeapon);
+        world.removeSystem(DrawStatusBarTarget);
+
+        const stage = world.resources.get(Stage);
+        const statusBar = world.resources.get(StatusBarResource);
+        if (stage && statusBar) {
+            stage.removeChild(statusBar.container);
+        }
+        world.resources.delete(StatusBarResource);
     }
 }

@@ -9,12 +9,16 @@ ts_library(
         "Channel.ts",
         "SocketMessage.ts",
         "CommunicatorMessage.ts",
+        "multi_room_communicator.ts",
     ],
     deps = [
         "@npm//rxjs",
         "@npm//io-ts",
+        "@npm//fp-ts",
         "@npm//immer",
         "//nova_ecs/plugins",
+        "//nova_ecs/datatypes",
+        "//nova_ecs:ecs",
     ]
 )
 
@@ -73,12 +77,14 @@ ts_library(
     srcs = [
         "SocketChannelServer_test.ts",
         "SocketChannelClient_test.ts",
+        "multi_room_communicator_test.ts",
      ],
     deps = [
         ":test_utils_lib",
         ":communication_server_lib",
         ":communication_client_lib",
         ":communication_lib",
+        "//nova_ecs/plugins",
         "@npm//fp-ts",
         "@npm//@types/node",
         "@npm//typescript",

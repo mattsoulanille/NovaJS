@@ -51,9 +51,20 @@ export const BeamDisplayPlugin: Plugin = {
             throw new Error('Expected space resource');
         }
         const beamGraphics = new PIXI.Graphics();
+        beamGraphics.name = 'BeamGraphics';
         world.resources.set(BeamGraphicsResource, beamGraphics);
         space.addChild(beamGraphics);
         world.addSystem(ClearBeams);
         world.addSystem(BeamDisplaySystem);
+    },
+    remove(world) {
+        const space = world.resources.get(Space);
+        const beamGraphics = world.resources.get(BeamGraphicsResource);
+        if (space && beamGraphics) {
+            space.removeChild(beamGraphics);
+        }
+        world.removeSystem(BeamDisplaySystem);
+        world.removeSystem(ClearBeams);
+        world.resources.delete(BeamGraphicsResource);
     }
 }

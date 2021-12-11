@@ -22,5 +22,9 @@ export const ScreenSizePlugin: Plugin = {
         world.resources.set(ScreenSize,
             { x: window.innerWidth, y: window.innerHeight })
         world.addSystem(ResizeSystem);
+    },
+    remove(world) {
+        world.removeSystem(ResizeSystem);
+        world.resources.delete(ScreenSize);
     }
 }

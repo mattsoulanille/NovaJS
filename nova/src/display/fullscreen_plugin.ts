@@ -20,5 +20,8 @@ export const FullscreenPlugin: Plugin = {
     name: "FullscreenPlugin",
     build(world) {
         world.addSystem(FullscreenSystem);
+    },
+    remove(world) {
+        world.removeSystem(FullscreenSystem);
     }
 }

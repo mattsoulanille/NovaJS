@@ -35,6 +35,7 @@ ts_library(
         "//nova_ecs/plugins",
         "//nova/src/nova_plugin",
         "//nova/src/communication:communication_client_lib",
+        "//nova/src/communication:communication_lib",
         "//nova/src/client/gamedata",
         "@npm//uuid",
         "@npm//@types/uuid",
@@ -69,7 +70,7 @@ esbuild(
     },
     entry_point = "browser.ts",
     target = "es2015",
-    minify = True,
+    minify = False,
     sources_content = True,
     deps = [
         ":browser_lib",

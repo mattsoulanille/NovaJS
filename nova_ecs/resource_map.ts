@@ -12,7 +12,7 @@ export interface ResourceMap extends Map<UnknownResource, unknown> {
     delete(resource: Resource<any>): boolean;
 }
 
-export class ResourceMapWrapped extends Map<UnknownResource, unknown> implements ResourceMap {
+export class ResourceMapWrapped extends EventMap<UnknownResource, unknown> implements ResourceMap {
     constructor(private addResource: (resource: Resource<any>) => void,
         private removeResource: (resource: Resource<any>) => boolean) {
         super();

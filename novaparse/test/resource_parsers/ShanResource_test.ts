@@ -299,8 +299,8 @@ describe("ShanResource", function() {
             [0, 0, 0],
             [0, 0, 0],
             [0, 0, 0]],
-            "upCompress": [0, 0],
-            "downCompress": [0, 0]
+            "upCompress": [100, 100],
+            "downCompress": [100, 100]
         });
     });
 });

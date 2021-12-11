@@ -37,5 +37,9 @@ export const SoundPlugin: Plugin = {
     build(world) {
         world.resources.set(LoopingSounds, new Map());
         world.addSystem(SoundSystem);
+    },
+    remove(world) {
+        world.removeSystem(SoundSystem);
+        world.resources.delete(LoopingSounds);
     }
 }

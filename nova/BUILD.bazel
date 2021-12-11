@@ -35,6 +35,7 @@ ts_library(
         "//novaparse",
         "//nova/src/common",
         "//nova/src/communication:communication_server_lib",
+        "//nova/src/communication:communication_lib",
         "//nova/src/server",
         "//nova/src/server/parsing",
         "//nova_ecs:ecs",

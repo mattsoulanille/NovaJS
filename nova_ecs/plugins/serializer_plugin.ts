@@ -13,7 +13,7 @@ interface ComponentTypeMap<K extends Component<any>>
     set<Data>(key: Component<Data>, val: t.Type<Data, unknown, unknown>): this;
 }
 
-const EntityState = t.intersection([
+export const EntityState = t.intersection([
     t.type({
         components: map(t.string /* Component Name */, t.unknown /* State */),
     }),
@@ -22,7 +22,7 @@ const EntityState = t.intersection([
     })
 ]);
 
-type EntityState = t.TypeOf<typeof EntityState>;
+export type EntityState = t.TypeOf<typeof EntityState>;
 
 export class Serializer {
     readonly componentTypes: ComponentTypeMap<UnknownComponent> = new Map();

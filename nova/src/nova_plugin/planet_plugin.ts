@@ -86,6 +86,7 @@ const PlanetAnimationProvider = Provide({
     factory: planetData => planetData.animation,
 });
 
+// TODO: Make planets multiplayer aware
 export const PlanetPlugin: Plugin = {
     name: 'PlanetPlugin',
     build(world) {
