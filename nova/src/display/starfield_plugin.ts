@@ -9,13 +9,12 @@ import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import RBush, { BBox } from "rbush";
+import { alea } from 'seedrandom';
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
-import { PixiAppResource } from "./pixi_app_resource";
-import { texturesFromFrames } from "./textures_from_frames";
-import { alea } from 'seedrandom';
 import { ResizeEvent } from "./screen_size_plugin";
 import { Stage } from "./stage_resource";
+import { texturesFromFrames } from "./textures_from_frames";
 
 const STAR_ID = "nova:700";
 
@@ -206,16 +205,17 @@ export function starfield({ density = 0.00002,
             }
 
             const { frames } = await gameData.data.SpriteSheetFrames.get(STAR_ID);
-            const textures = await texturesFromFrames(frames);
+            const textures = texturesFromFrames(frames);
             const starfield = new Starfield({
                 textures,
                 density,
                 positionFactorRange,
+                seed: world.name,
             });
 
             //starfield.resize(app.screen.width, app.screen.height);
             starfield.resize(window.innerWidth, window.innerHeight);
-            stage.addChild(starfield.container);
+            stage.addChildAt(starfield.container, 0);
             world.resources.set(StarfieldResource, starfield);
             world.addSystem(StarfieldResize);
             world.addSystem(StarfieldSystem);
@@ -225,10 +225,10 @@ export function starfield({ density = 0.00002,
             world.removeSystem(StarfieldSystem);
 
             const starfield = world.resources.get(StarfieldResource);
-            const app = world.resources.get(PixiAppResource);
-            if (starfield && app) {
+            const stage = world.resources.get(Stage);
+            if (starfield && stage) {
                 console.log('removing starfield');
-                app.stage.removeChild(starfield.container);
+                stage.removeChild(starfield.container);
             }
             world.resources.delete(StarfieldResource);
         }

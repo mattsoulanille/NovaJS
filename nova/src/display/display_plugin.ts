@@ -36,7 +36,7 @@ const starfieldPlugin = starfield();
 
 export const Display: Plugin = {
     name: 'Display',
-    build: async (world) => {
+    async build(world) {
         const stage = new PIXI.Container();
         stage.name = 'Stage';
         const space = new PIXI.Container();
@@ -60,22 +60,22 @@ export const Display: Plugin = {
         await world.addPlugin(SoundPlugin);
         await world.addPlugin(ShipAnimationPlugin);
     },
-    remove: (world) => {
-        world.removePlugin(SoundPlugin);
-        world.removePlugin(SpaceportPlugin);
-        world.removePlugin(PlanetCornersPlugin);
-        world.removePlugin(BeamDisplayPlugin);
-        world.removePlugin(ExplosionPlugin);
-        world.removePlugin(FullscreenPlugin);
-        world.removePlugin(ParticlesPlugin);
-        world.removePlugin(TargetCornersPlugin);
+    async remove(world) {
+        await world.removePlugin(SoundPlugin);
+        await world.removePlugin(SpaceportPlugin);
+        await world.removePlugin(PlanetCornersPlugin);
+        await world.removePlugin(BeamDisplayPlugin);
+        await world.removePlugin(ExplosionPlugin);
+        await world.removePlugin(FullscreenPlugin);
+        await world.removePlugin(ParticlesPlugin);
+        await world.removePlugin(TargetCornersPlugin);
 
         world.removeSystem(CenterShipSystem);
 
-        world.removePlugin(AnimationGraphicPlugin);
-        world.removePlugin(StatusBarPlugin);
-        world.removePlugin(starfieldPlugin);
-        world.removePlugin(ScreenSizePlugin);
+        await world.removePlugin(AnimationGraphicPlugin);
+        await world.removePlugin(StatusBarPlugin);
+        await world.removePlugin(starfieldPlugin);
+        await world.removePlugin(ScreenSizePlugin);
 
         const stage = world.resources.get(Stage);
         const space = world.resources.get(Space);
