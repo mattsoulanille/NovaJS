@@ -87,15 +87,17 @@ export class World {
     private eventQueue: EcsEventWithEntities<unknown>[] = [];
     private boundEmit: EmitFunction = this.emit.bind(this);
 
-    private queries = new QueryCache(this.entities, this.getArg.bind(this));
+    private queries = new QueryCache(this.entities, this.resources, this.getArg.bind(this));
     readonly events = new DefaultMap<UnknownEvent, SyncSubject<unknown>>(
         () => new SyncSubject()) as WorldEventsMap;
     private pluginPromises = new Map<Plugin, Promise<void>>();
     readonly plugins = new Set<Plugin>();
 
-    constructor(readonly name?: string) {
-        this.addPlugin(AsyncSystemPlugin);
-        this.addPlugin(ProvidePlugin);
+    constructor(readonly name?: string, readonly basePlugins =
+        new Set([AsyncSystemPlugin, ProvidePlugin])) {
+        for (const plugin of basePlugins) {
+            this.addPlugin(plugin);
+        }
         this.resources.set(Entities, this.entities);
         this.resources.set(RunQuery, this.runQuery);
         this.resources.set(GetWorld, this);
@@ -120,6 +122,13 @@ export class World {
 
     emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: string[]) {
         this.emitWrapped(event, data, entities);
+    }
+
+    async removeAllPlugins() {
+        const plugins = [...this.plugins].reverse().filter(p => !this.basePlugins.has(p));
+        for (const plugin of plugins) {
+            await this.removePlugin(plugin);
+        }
     }
 
     private emitWrapped<Data>(event: EcsEvent<Data, any>, data: Data,
@@ -167,6 +176,8 @@ export class World {
     }
 
     private removeResource(resource: Resource<any>): boolean {
+        // Removes the resource from the nameResourceMap if possible.
+        // Called by ResourceMap.
         if (this.nameResourceMap.get(resource.name) !== resource) {
             return false;
         }

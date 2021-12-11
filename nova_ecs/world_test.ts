@@ -372,6 +372,40 @@ describe('world', () => {
         expect(stepData).toEqual(['plugin component']);
     });
 
+    it('removes a plugin', () => {
+        const stepData: string[] = [];
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [BAR_COMPONENT],
+            step: (bar) => {
+                stepData.push(bar.y);
+            }
+        });
+        const plugin: Plugin = {
+            name: 'Test Plugin',
+            build(world) {
+                world.entities.set(v4(), new EntityBuilder()
+                    .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
+                world.addSystem(testSystem);
+            },
+            remove(world) {
+                world.removeSystem(testSystem);
+            }
+        };
+
+        world.addPlugin(plugin);
+        world.step();
+
+        expect(stepData).toEqual(['plugin component']);
+
+        world.removePlugin(plugin);
+        expect(world.plugins.has(plugin)).toBeFalse();
+
+        world.step();
+        // No additional data is added
+        expect(stepData).toEqual(['plugin component']);
+    });
+
     it('supports modifying an existing entity\'s components', () => {
         const barData: string[] = [];
         const fooBarData: [number, string][] = [];
@@ -1430,5 +1464,39 @@ describe('world', () => {
 
         const calls = testEventCallback.calls.all().map(c => c.args);
         expect(calls).toEqual([['Hello'], ['world']]);
+    });
+
+    it('removeAllPlugins() removes all non-base plugins', () => {
+        const stepData: string[] = [];
+        const testSystem = new System({
+            name: 'TestSystem',
+            args: [BAR_COMPONENT],
+            step: (bar) => {
+                stepData.push(bar.y);
+            }
+        });
+        const plugin: Plugin = {
+            name: 'Test Plugin',
+            build(world) {
+                world.entities.set(v4(), new EntityBuilder()
+                    .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
+                world.addSystem(testSystem);
+            },
+            remove(world) {
+                world.removeSystem(testSystem);
+            }
+        };
+
+        world.addPlugin(plugin);
+        world.step();
+
+        expect(stepData).toEqual(['plugin component']);
+
+        world.removeAllPlugins();
+        expect(world.plugins).toEqual(world.basePlugins);
+
+        world.step();
+        // No additional data is added
+        expect(stepData).toEqual(['plugin component']);
     });
 });
