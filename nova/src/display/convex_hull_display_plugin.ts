@@ -1,3 +1,4 @@
+import { GetEntity } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { DeleteEvent } from "nova_ecs/events";
@@ -27,9 +28,10 @@ const GraphicsProvider = Provide({
 const HullGraphicsCleanup = new System({
     name: 'HullGraphicCleanup',
     events: [DeleteEvent],
-    args: [ConvexHullGraphicsComponent, Space] as const,
-    step: (graphics, space) => {
+    args: [ConvexHullGraphicsComponent, Space, GetEntity] as const,
+    step: (graphics, space, entity) => {
         space.removeChild(graphics);
+        entity.components.delete(ConvexHullGraphicsComponent);
     }
 });
 

@@ -22,7 +22,6 @@ import { makeShip } from "./nova_plugin/make_ship";
 import { makeSystem, SystemIdResource } from "./nova_plugin/make_system";
 import { MultiRoomResource, NovaPlugin, SystemComponent } from "./nova_plugin/nova_plugin";
 import { PlayerShipSelector } from "./nova_plugin/player_ship_plugin";
-import { SystemsResource } from "./nova_plugin/systems_resource";
 
 
 const gameData = new GameData();
@@ -71,6 +70,8 @@ async function jumpTo({ entity, to, uuid }: { entity: Entity, to: string, uuid: 
     }
 
     const newSystem = makeSystem(to, gameData);
+    (window as any).novaDebug = new DebugSettings(newSystem, (window as any).novaDebug);
+
     (window as any).system = newSystem;
     newSystem.resources.set(PixiAppResource, app);
     await newSystem.addPlugin(Display);
