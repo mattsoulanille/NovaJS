@@ -1,3 +1,8 @@
+import { AbstractRenderer, BaseRenderTexture, Renderer, RenderTexture } from "@pixi/core";
+import { Container } from "@pixi/display";
+import { Graphics } from "@pixi/graphics";
+import { Sprite } from "@pixi/sprite";
+import { Text, TextStyle } from "@pixi/text";
 import { PlanetData } from "novadatainterface/PlanetData";
 import { ShipData } from "novadatainterface/ShipData";
 import { StatusBarData, StatusBarDataArea } from "novadatainterface/StatusBarData";
@@ -12,7 +17,6 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
-import * as PIXI from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ArmorComponent, ShieldComponent } from "../nova_plugin/health_plugin";
@@ -30,25 +34,25 @@ import { Stage } from "./stage_resource";
 
 
 class StatusBar {
-    readonly container = new PIXI.Container();
+    readonly container = new Container();
     readonly buildPromise: Promise<void>;
     built = false;
     width = 0;
     private radarScale = new Vector(6000, 6000);
-    private radar = new PIXI.Graphics();
+    private radar = new Graphics();
     radarPeriod = 200;
-    private statsGraphics = new PIXI.Graphics();
+    private statsGraphics = new Graphics();
 
-    private targetContainer = new PIXI.Container();
-    private noTargetContainer = new PIXI.Container();
-    private targetSprite = new PIXI.Sprite();
+    private targetContainer = new Container();
+    private noTargetContainer = new Container();
+    private targetSprite = new Sprite();
 
-    private text: { [index: string]: PIXI.Text } = {};
+    private text: { [index: string]: Text } = {};
 
     constructor(private statusBarData: StatusBarData, private gameData: GameData,
-        private renderer: PIXI.Renderer | PIXI.AbstractRenderer) {
+        private renderer: Renderer | AbstractRenderer) {
         this.buildPromise = this.build();
-        this.container.name = 'StatusBar';
+        // this.container.name = 'StatusBar';
     }
 
     private async build() {
@@ -71,34 +75,34 @@ class StatusBar {
     }
 
     private makeText() {
-        const font = new PIXI.TextStyle({
+        const font = new TextStyle({
             fontFamily: 'Geneva',
             fontSize: 12,
             align: 'center',
             fill: this.statusBarData.colors.brightText,
         });
-        const dimFont = new PIXI.TextStyle({
+        const dimFont = new TextStyle({
             fontFamily: 'Geneva',
             fontSize: 12,
             align: 'center',
             fill: this.statusBarData.colors.dimText,
         });
 
-        const secondaryWeaponContainer = new PIXI.Container();
+        const secondaryWeaponContainer = new Container();
         this.container.addChild(secondaryWeaponContainer);
         secondaryWeaponContainer.position.x =
             this.statusBarData.dataAreas.weapons.position[0];
         secondaryWeaponContainer.position.y =
             this.statusBarData.dataAreas.weapons.position[1];
 
-        this.text.noWeapon = new PIXI.Text("No Secondary Weapon", dimFont);
+        this.text.noWeapon = new Text("No Secondary Weapon", dimFont);
         this.text.noWeapon.anchor.x = 0.5;
         this.text.noWeapon.anchor.y = 0.5;
         this.text.noWeapon.position.x = this.statusBarData.dataAreas.weapons.size[0] / 2;
         this.text.noWeapon.position.y = this.statusBarData.dataAreas.weapons.size[1] / 2;;
         secondaryWeaponContainer.addChild(this.text.noWeapon);
 
-        this.text.weapon = new PIXI.Text("", font);
+        this.text.weapon = new Text("", font);
         this.text.weapon.anchor.x = 0.5;
         this.text.weapon.anchor.y = 0.5;
         this.text.weapon.position.x = this.statusBarData.dataAreas.weapons.size[0] / 2;
@@ -117,14 +121,14 @@ class StatusBar {
         var size = [this.statusBarData.dataAreas.targeting.size[0],
         this.statusBarData.dataAreas.targeting.size[1]];
 
-        this.text.shield = new PIXI.Text('Shield:', dimFont);
+        this.text.shield = new Text('Shield:', dimFont);
         this.text.shield.anchor.y = 1;
         this.text.shield.position.x = 6;
         this.text.shield.position.y = size[1] - 3;
 
         this.targetContainer.addChild(this.text.shield);
 
-        this.text.armor = new PIXI.Text('Armor:', dimFont);
+        this.text.armor = new Text('Armor:', dimFont);
         this.text.armor.anchor.y = 1;
         this.text.armor.position.x = 6;
         this.text.armor.position.y = size[1] - 3;
@@ -132,7 +136,7 @@ class StatusBar {
         this.targetContainer.addChild(this.text.armor);
 
 
-        this.text.percent = new PIXI.Text("100%", font);
+        this.text.percent = new Text("100%", font);
         this.text.percent.anchor.y = 1;
         this.text.percent.position.x = 49;
         this.text.percent.position.y = size[1] - 3;
@@ -142,7 +146,7 @@ class StatusBar {
         const middle = [this.statusBarData.dataAreas.targeting.size[0] / 2,
         this.statusBarData.dataAreas.targeting.size[1] / 2 - 15];
 
-        this.text.noTarget = new PIXI.Text("No Target", dimFont);
+        this.text.noTarget = new Text("No Target", dimFont);
         this.text.noTarget.anchor.x = 0.5;
         this.text.noTarget.anchor.y = 0.5;
         this.text.noTarget.position.x = middle[0];
@@ -150,7 +154,7 @@ class StatusBar {
 
         this.noTargetContainer.addChild(this.text.noTarget);
 
-        this.text.targetName = new PIXI.Text("Name Placeholder", font);
+        this.text.targetName = new Text("Name Placeholder", font);
         this.text.targetName.anchor.x = 0.5;
         this.text.targetName.anchor.y = 0.5;
         this.text.targetName.position.x = middle[0];
@@ -158,7 +162,7 @@ class StatusBar {
 
         this.targetContainer.addChild(this.text.targetName);
 
-        this.text.targetImagePlaceholder = new PIXI.Text("No target image", dimFont);
+        this.text.targetImagePlaceholder = new Text("No target image", dimFont);
         this.text.targetImagePlaceholder.anchor.x = 0.5;
         this.text.targetImagePlaceholder.anchor.y = 0.5;
     }
@@ -253,10 +257,10 @@ class StatusBar {
 
         if (shipGraphic) {
             const shipContainer = shipGraphic?.container;
-            const baseRenderTexture = new PIXI.BaseRenderTexture({
+            const baseRenderTexture = new BaseRenderTexture({
                 width: shipGraphic.size.x, height: shipGraphic.size.y,
             });
-            const renderTexture = new PIXI.RenderTexture(baseRenderTexture);
+            const renderTexture = new RenderTexture(baseRenderTexture);
 
             shipContainer.setTransform();
             shipContainer.position.x = shipGraphic.size.x / 2;

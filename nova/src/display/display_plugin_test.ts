@@ -5,21 +5,22 @@ import { EntityBuilder } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
 import { Display } from './display_plugin';
-import * as PIXI from 'pixi.js';
 import { PixiAppResource } from "./pixi_app_resource";
 import { Stage } from "./stage_resource";
 import { AnimationComponent } from "../nova_plugin/animation_plugin";
+import { Container } from "@pixi/display";
+import { Application } from "@pixi/app";
 
 describe('display plugin', () => {
     let world: World
     let gameData: MockGameData;
-    let stage: PIXI.Container;
+    let stage: Container;
 
     beforeEach(() => {
         world = new World();
         gameData = new MockGameData();
         world.resources.set(GameDataResource, gameData);
-        world.resources.set(PixiAppResource, new PIXI.Application());
+        world.resources.set(PixiAppResource, new Application());
         world.addPlugin(Display);
         stage = world.resources.get(Stage)!;
     });

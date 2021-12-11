@@ -1,5 +1,5 @@
-import * as PIXI from "pixi.js";
+import { Application } from "@pixi/app";
 import { Resource } from "nova_ecs/resource";
 
 
-export const PixiAppResource = new Resource<PIXI.Application>('PixiAppResource');
+export const PixiAppResource = new Resource<Application>('PixiAppResource');

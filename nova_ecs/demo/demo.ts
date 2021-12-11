@@ -1,4 +1,7 @@
-import { Query } from "nova_ecs/query";
+import { Application } from "@pixi/app";
+import { Container } from "@pixi/display";
+import { Graphics } from "@pixi/graphics";
+import { Text, TextStyle } from "@pixi/text";
 import { Entities, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { EntityBuilder } from "nova_ecs/entity";
@@ -6,23 +9,28 @@ import { DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { TimePlugin, TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Provide } from "nova_ecs/provider";
+import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
-import * as PIXI from "pixi.js";
-import { v4 } from "uuid";
 import { World } from "nova_ecs/world";
 import Stats from 'stats.js';
+import { v4 } from "uuid";
+import { TickerPlugin } from "@pixi/ticker";
+import * as core from '@pixi/core';
 
 
-const Stage = new Resource<PIXI.Container>('Stage');
-const SquareGraphics = new Component<PIXI.Graphics>('SquareGraphics');
+Application.registerPlugin(TickerPlugin);
+//Renderer.registerPlugin('batch', BatchRenderer);
+
+const Stage = new Resource<Container>('Stage');
+const SquareGraphics = new Component<Graphics>('SquareGraphics');
 
 const SquareGraphicsCleanup = new System({
     name: 'SquareGraphicsCleanup',
     events: [DeleteEvent],
     args: [SquareGraphics, Stage] as const,
     step: (graphics, container) => {
-        container.removeChild(graphics as PIXI.Graphics);
+        container.removeChild(graphics as Graphics);
     }
 });
 
@@ -40,7 +48,7 @@ const SquareProvider = Provide({
     provided: SquareGraphics,
     args: [Stage, SquarePhysics] as const,
     factory: (container, physics) => {
-        const graphics = new PIXI.Graphics();
+        const graphics = new Graphics();
         graphics.beginFill(0xFFFFFF);
         if (Math.random() < 0.5) {
             graphics.drawRect(-3, -3, 6, 6);
@@ -167,7 +175,7 @@ const AddSquares = new System({
     }
 });
 
-const TextComponent = new Component<PIXI.Text>('Text');
+const TextComponent = new Component<Text>('Text');
 
 const CountSquares = new System({
     name: 'CountSquares',
@@ -198,7 +206,7 @@ const ChangeMax = new System({
 const Demo: Plugin = {
     name: 'Demo',
     build: (world) => {
-        const container = new PIXI.Container();
+        const container = new Container();
         world.resources.set(Stage, container);
 
         world.addPlugin(TimePlugin);
@@ -219,7 +227,7 @@ const Demo: Plugin = {
             }).build());
 
 
-        const entityCountText = new PIXI.Text('asdfasdfasdf', new PIXI.TextStyle({
+        const entityCountText = new Text('asdfasdfasdf', new TextStyle({
             fill: 0xffffff
         }));
 
@@ -242,7 +250,7 @@ const Demo: Plugin = {
 }
 
 function main() {
-    const app = new PIXI.Application({
+    const app = new Application({
         autoDensity: true
     });
 
@@ -262,13 +270,13 @@ function main() {
     if (!demoStage) {
         throw new Error('demo stage not created');
     }
+
     app.stage.addChild(demoStage);
     app.ticker.add(() => {
         stats.begin();
         world.step();
         stats.end();
     });
-
 }
 
 main();

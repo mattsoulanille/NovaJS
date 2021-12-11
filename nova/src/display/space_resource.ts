@@ -1,4 +1,4 @@
+import { Container } from "@pixi/display";
 import { Resource } from "nova_ecs/resource";
-import * as PIXI from "pixi.js";
 
-export const Space = new Resource<PIXI.Container>('SpaceContainer');
+export const Space = new Resource<Container>('SpaceContainer');

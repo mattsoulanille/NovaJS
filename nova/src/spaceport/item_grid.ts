@@ -1,7 +1,8 @@
-import * as PIXI from 'pixi.js';
+import { Text } from '@pixi/text';
 import { BehaviorSubject } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
-
+import { Graphics } from '@pixi/graphics';
+import { Container } from '@pixi/display';
 
 const TILE_SIZE = [83, 54];
 
@@ -29,21 +30,21 @@ export class ItemTile<I extends Item> {
     private lineWidth = 1;
     private dimStyle = [this.lineWidth, this.colors.dim] as const;
     private brightStyle = [this.lineWidth, this.colors.bright] as const;
-    private graphics = new PIXI.Graphics();
+    private graphics = new Graphics();
     private wrappedQuantity = 0;
-    private quantityText: PIXI.Text;
-    readonly container = new PIXI.Container();
+    private quantityText: Text;
+    readonly container = new Container();
     private wrappedActive = false;
     public built = false;
-    public largePict = new PIXI.Container();
+    public largePict = new Container();
 
     constructor(private gameData: GameData, readonly item: I) {
-        const nameText = new PIXI.Text(item.name, this.font.normal);
+        const nameText = new Text(item.name, this.font.normal);
         nameText.anchor.x = 0.5;
         nameText.position.x = TILE_SIZE[0] / 2;
         nameText.position.y = TILE_SIZE[1] / 2;
 
-        this.quantityText = new PIXI.Text("", this.font.normal);
+        this.quantityText = new Text("", this.font.normal);
         this.quantityText.anchor.x = 1;
         this.quantityText.position.x = TILE_SIZE[0] - 2;
         this.quantityText.position.y = 2;
@@ -141,7 +142,7 @@ const BOX_COUNT = [4, 5];
 
 export class ItemGrid<I extends Item> {
     public activeTile = new BehaviorSubject<ItemTile<I> | undefined>(undefined);
-    public container = new PIXI.Container();
+    public container = new Container();
     private selectionIndex = -1;
     private scroll = 0;
     private tilesDict = new Map<string, ItemTile<I>>();

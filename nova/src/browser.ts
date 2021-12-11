@@ -1,10 +1,13 @@
+import { Application } from "@pixi/app";
+import { SCALE_MODES } from "@pixi/constants";
+import { Renderer } from '@pixi/core';
+import { InteractionManager } from '@pixi/interaction';
+import { settings } from "@pixi/settings";
+import { TickerPlugin } from "@pixi/ticker";
 import { Entity, EntityBuilder } from "nova_ecs/entity";
-import { AddEvent } from "nova_ecs/events";
 import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { System } from "nova_ecs/system";
 import { World } from "nova_ecs/world";
-import * as PIXI from "pixi.js";
-import { firstValueFrom, take, filter } from "rxjs";
+import { filter, firstValueFrom } from "rxjs";
 import Stats from 'stats.js';
 import { v4 } from "uuid";
 import { GameData } from "./client/gamedata/GameData";
@@ -23,19 +26,18 @@ import { makeSystem, SystemIdResource } from "./nova_plugin/make_system";
 import { MultiRoomResource, NovaPlugin, SystemComponent } from "./nova_plugin/nova_plugin";
 import { PlayerShipSelector } from "./nova_plugin/player_ship_plugin";
 
+Application.registerPlugin(TickerPlugin);
+Renderer.registerPlugin('interaction', InteractionManager);
+
 
 const gameData = new GameData();
 (window as any).gameData = gameData;
-(window as any).PIXI = PIXI;
 
 const pixelRatio = window.devicePixelRatio || 1;
-PIXI.settings.RESOLUTION = pixelRatio;
-PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
+settings.RESOLUTION = pixelRatio;
+settings.SCALE_MODE = SCALE_MODES.LINEAR;
 
-// TODO: Using WebGL 1 (instead of 2) seems to make the game smoother, but
-// this will likely change in the future.
-//PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2;
-const app = new PIXI.Application({
+const app = new Application({
     width: window.innerWidth * pixelRatio,
     height: window.innerHeight * pixelRatio,
     autoDensity: true

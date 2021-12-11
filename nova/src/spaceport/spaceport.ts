@@ -1,5 +1,5 @@
+import { Text } from '@pixi/text';
 import { Entity } from 'nova_ecs/entity';
-import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
@@ -30,7 +30,7 @@ export class Spaceport extends Menu<Entity> {
     constructor(gameData: GameData, private id: string,
         controlEvents: Observable<ControlEvent>) {
         super(gameData, "nova:8500", controlEvents);
-        this.container.name = 'Spaceport';
+        //this.container.name = 'Spaceport';
 
         const buttons = {
             outfitter: new Button(gameData, "Outfitter", 120, { x: 160, y: 116 }),
@@ -74,12 +74,12 @@ export class Spaceport extends Menu<Entity> {
     async build() {
         await super.build();
         const data = await this.gameData.data.Planet.get(this.id);
-        const title = new PIXI.Text(data.name, this.font.title);
+        const title = new Text(data.name, this.font.title);
         title.position.x = -24;
         title.position.y = 39;
         this.container.addChild(title);
 
-        const desc = new PIXI.Text(data.landingDesc, this.font.desc);
+        const desc = new Text(data.landingDesc, this.font.desc);
         desc.position.x = -149;
         desc.position.y = 70;
         this.container.addChild(desc);

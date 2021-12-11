@@ -1,9 +1,11 @@
+import { Texture } from "@pixi/core";
+import { Container } from "@pixi/display";
+import { Sprite } from "@pixi/sprite";
 import { Entities } from "nova_ecs/arg_types";
 import { Plugin } from 'nova_ecs/plugin';
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
-import * as PIXI from "pixi.js";
 import { GameData } from "../client/gamedata/GameData";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin";
@@ -19,9 +21,9 @@ const TIME_TO_TARGET = 100; // milliseconds
 export class TargetCorners {
     private targetTime = 0;
     targetUuid?: string;
-    container = new PIXI.Container();
-    private sprites: PIXI.Sprite[] = [];
-    private textures = new Map<string, PIXI.Texture>();
+    container = new Container();
+    private sprites: Sprite[] = [];
+    private textures = new Map<string, Texture>();
     built: Promise<void>;
 
     constructor(gameData: GameData, id = 'targetCorners') {
@@ -30,7 +32,7 @@ export class TargetCorners {
         this.built = this.build(gameData, id);
 
         for (let i = 0; i < NUM_CORNERS; i++) {
-            const sprite = new PIXI.Sprite();
+            const sprite = new Sprite();
 
             // The texture we have is the top left corner of a square. Unrotate it by
             // adding pi/4. Then re-rotate it by subtracting pi/NUM_CORNERS.

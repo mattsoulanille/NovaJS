@@ -17,8 +17,8 @@ export function makeShip(shipData: ShipData): Entity {
         id: shipData.id
     }).set(MovementStateComponent, {
         accelerating: 0,
-        position: new Position(600 * (Math.random() - 0.5),
-            (600 * (Math.random() - 0.5))),
+        position: new Position(0 * (Math.random() - 0.5),
+            (0 * (Math.random() - 0.5))),
         rotation: new Angle(Math.random() * 2 * Math.PI),
         turnBack: false,
         turning: 0,

@@ -1,4 +1,4 @@
-import * as PIXI from 'pixi.js';
+import { Container } from '@pixi/display';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
@@ -10,7 +10,7 @@ type Buttons = {
 };
 
 export abstract class Menu<T> {
-    container = new PIXI.Container();
+    container = new Container();
     readonly buildPromise: Promise<void>;
     built = false;
     protected controls: MenuControls;

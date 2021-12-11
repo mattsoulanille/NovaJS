@@ -1,13 +1,13 @@
+import { Graphics } from '@pixi/graphics';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from "nova_ecs/world";
-import * as PIXI from "pixi.js";
 import { BeamDataComponent, BeamSystem } from "../nova_plugin/beam_plugin";
 import { Space } from "./space_resource";
 
-const BeamGraphicsResource = new Resource<PIXI.Graphics>('BeamGraphics');
+const BeamGraphicsResource = new Resource<Graphics>('BeamGraphics');
 
 const ClearBeams = new System({
     name: 'ClearBeams',
@@ -50,8 +50,8 @@ export const BeamDisplayPlugin: Plugin = {
         if (!space) {
             throw new Error('Expected space resource');
         }
-        const beamGraphics = new PIXI.Graphics();
-        beamGraphics.name = 'BeamGraphics';
+        const beamGraphics = new Graphics();
+        //beamGraphics.name = 'BeamGraphics';
         world.resources.set(BeamGraphicsResource, beamGraphics);
         space.addChild(beamGraphics);
         world.addSystem(ClearBeams);

@@ -1,6 +1,9 @@
-import * as PIXI from 'pixi.js';
+import { Container } from '@pixi/display';
 import { Subject } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
+import { Text, TextMetrics, TextStyle } from '@pixi/text';
+import { TilingSprite } from '@pixi/sprite-tiling'
+import '@pixi/interaction';
 
 const BUTTON_IDS = new Map([
     ['normal', {
@@ -23,10 +26,10 @@ const BUTTON_IDS = new Map([
 const LEFT_POS = 13.2 // TODO: infer from texture width
 
 export class Button {
-    container = new PIXI.Container();
-    private states = new Map<string, PIXI.Container>();
+    container = new Container();
+    private states = new Map<string, Container>();
     readonly click = new Subject<undefined>();
-    private text: PIXI.Text;
+    private text: Text;
     private wrappedState = 'normal';
     private width: number;
 
@@ -44,12 +47,12 @@ export class Button {
         this.container.position.x = position?.x ?? 0;
         this.container.position.y = position?.y ?? 0;
 
-        this.text = new PIXI.Text(text, this.font.get("normal")!);
+        this.text = new Text(text, this.font.get("normal")!);
         this.text.anchor.x = 0.5;
         this.text.anchor.y = 0.5;
 
-        const textMetrics = PIXI.TextMetrics.measureText(text,
-            this.text.style as PIXI.TextStyle); // This required cast may be a types bug
+        const textMetrics = TextMetrics.measureText(text,
+            this.text.style as TextStyle); // This required cast may be a types bug
         this.width = width ?? textMetrics.width;
 
         const height = 25; // TODO: infer from texture height
@@ -58,7 +61,7 @@ export class Button {
 
         // Create a container for each state
         for (const name of this.buttonIds.keys()) {
-            const container = new PIXI.Container();
+            const container = new Container();
             this.container.addChild(container);
             this.states.set(name, container);
         }
@@ -87,7 +90,7 @@ export class Button {
             leftSprite.position.x = LEFT_POS;
             stateContainer.addChild(leftSprite);
 
-            const middleSprite = new PIXI.TilingSprite(
+            const middleSprite = new TilingSprite(
                 this.gameData.textureFromPict(middle), this.width, 25);
             middleSprite.position.x = LEFT_POS;
             stateContainer.addChild(middleSprite);

@@ -1,3 +1,8 @@
+import { Texture } from '@pixi/core';
+import { Loader, LoaderResource } from '@pixi/loaders';
+import * as sound from '@pixi/sound';
+import { Sprite } from '@pixi/sprite';
+import { SpritesheetLoader } from '@pixi/spritesheet';
 import { BaseData } from 'novadatainterface/BaseData';
 import { CicnData } from 'novadatainterface/CicnData';
 import { CicnImageData } from 'novadatainterface/CicnImage';
@@ -17,11 +22,11 @@ import { StatusBarData } from 'novadatainterface/StatusBarData';
 import { SystemData } from 'novadatainterface/SystemData';
 import { TargetCornersData } from 'novadatainterface/TargetCornersData';
 import { WeaponData } from 'novadatainterface/WeaponData';
-import * as PIXI from 'pixi.js';
-import * as sound from '@pixi/sound';
+import PQueue from 'p-queue';
 import urlJoin from 'url-join';
 import { dataPath, idsPath } from '../../common/GameDataPaths';
-import PQueue from 'p-queue';
+
+Loader.registerPlugin(SpritesheetLoader);
 
 class WeaponGettable extends Gettable<WeaponData> {
     async get(id: string, priority = 0) {
@@ -97,9 +102,9 @@ export class GameData implements GameDataInterface {
         await this.preloadData;
         const loadPromise = this.loadQueue.add(() =>
             new Promise<Buffer>(function(fulfill, reject) {
-                const loader = new PIXI.Loader();
+                const loader = new Loader();
                 loader.add(url, url)
-                    .load(function(_loader: any, resources: Partial<Record<string, PIXI.ILoaderResource>>) {
+                    .load(function(_loader: any, resources: Partial<Record<string, LoaderResource>>) {
                         const resource = resources[url];
                         if (resource == undefined) {
                             reject(`Resource ${url} not present on loaded url`)
@@ -159,30 +164,30 @@ export class GameData implements GameDataInterface {
         return urlJoin(dataPath, NovaDataType.PictImage, id + ".png");
     }
 
-    textureFromPict(id: string): PIXI.Texture {
-        return PIXI.Texture.from(this.url(id));
+    textureFromPict(id: string): Texture {
+        return Texture.from(this.url(id));
     }
 
     spriteFromPict(id: string) {
-        return PIXI.Sprite.from(this.url(id));
+        return Sprite.from(this.url(id));
     }
 
     async textureFromPictAsync(id: string, priority?: number) {
         const pictPath = this.url(id);
         await this.data.PictImage.get(id, priority);
-        return PIXI.Texture.from(pictPath);
+        return Texture.from(pictPath);
     }
 
     async spriteFromPictAsync(id: string, priority?: number) {
         // TODO: Use this.data
         var texture = await this.textureFromPictAsync(id, priority);
-        return new PIXI.Sprite(texture);
+        return new Sprite(texture);
     }
 
-    async textureFromCicn(id: string): Promise<PIXI.Texture> {
+    async textureFromCicn(id: string): Promise<Texture> {
         const cicnPath = urlJoin(dataPath, NovaDataType.CicnImage, id + ".png");
         await this.data.CicnImage.get(id);
-        return PIXI.Texture.from(cicnPath);
+        return Texture.from(cicnPath);
     }
 
     private addSoundGettable() {

@@ -1,3 +1,4 @@
+import { Graphics } from "@pixi/graphics";
 import { GetEntity } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Vector } from "nova_ecs/datatypes/vector";
@@ -5,20 +6,19 @@ import { DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { Provide } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
-import * as PIXI from "pixi.js";
 import * as SAT from "sat";
 import { HullComponent, UpdateHullSystem } from "../nova_plugin/collisions_plugin";
 import { Space } from "./space_resource";
 
 
-const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
+const ConvexHullGraphicsComponent = new Component<Graphics>('ConvexHullGraphics');
 
 const GraphicsProvider = Provide({
     name: "ConvexHullGraphicsProvider",
     provided: ConvexHullGraphicsComponent,
     args: [Space, HullComponent] as const,
     factory: (space) => {
-        const graphics = new PIXI.Graphics();
+        const graphics = new Graphics();
         graphics.zIndex = 1000;
         space.addChild(graphics);
         return graphics;
@@ -35,7 +35,7 @@ const HullGraphicsCleanup = new System({
     }
 });
 
-function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000) {
+function drawPoly(poly: SAT.Polygon, graphics: Graphics, color = 0xff0000) {
     graphics.lineStyle(0.5, color);
     const points = poly.points.map(v => Vector.fromVectorLike(v)
         .rotate(poly.angle).add(poly.pos));

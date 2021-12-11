@@ -1,7 +1,7 @@
 import { GameDataInterface } from "novadatainterface/GameDataInterface";
-import * as PIXI from "pixi.js";
 import { Animation } from "novadatainterface/Animation";
 import { SpriteSheetSprite } from "./sprite_sheet_sprite";
+import { Container } from "@pixi/display";
 
 /**
  * An AnimationGraphic is responsible for managing all the PIXI Sprites
@@ -10,7 +10,7 @@ import { SpriteSheetSprite } from "./sprite_sheet_sprite";
  */
 export class AnimationGraphic {
     // AnimationGraphic is not a Drawable since it doesn't draw a state.
-    readonly container = new PIXI.Container();
+    readonly container = new Container();
     protected readonly gameData: GameDataInterface;
     readonly sprites = new Map<string, SpriteSheetSprite>();
     private wrappedProgress = 0;

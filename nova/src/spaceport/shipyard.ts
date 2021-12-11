@@ -1,7 +1,8 @@
+import { Container } from '@pixi/display';
+import { Text } from '@pixi/text';
 import { ShipData } from 'novadatainterface/ShipData';
 import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
@@ -14,10 +15,10 @@ import { FONT } from './outfitter';
 
 
 export class Shipyard extends Menu<Entity> {
-    private pictContainer = new PIXI.Container();
+    private pictContainer = new Container();
     itemGrid?: ItemGrid<ShipData>;
     private text = {
-        description: new PIXI.Text("", FONT.normal),
+        description: new Text("", FONT.normal),
     }
 
     constructor(gameData: GameData,

@@ -1,6 +1,7 @@
+import { Container } from "@pixi/display";
+import { Text } from "@pixi/text";
 import { OutfitData } from "novadatainterface/OutiftData";
 import { DefaultMap } from "nova_ecs/utils";
-import * as PIXI from 'pixi.js';
 import { Observable } from "rxjs";
 import { GameData } from "../client/gamedata/GameData";
 import { ControlEvent } from "../nova_plugin/controls_plugin";
@@ -28,19 +29,19 @@ export const FONT = {
 
 export class Outfitter extends Menu<OutfitsState> {
     private itemGrid?: ItemGrid<OutfitData>;
-    private pictContainer = new PIXI.Container();
+    private pictContainer = new Container();
     private outfits: DefaultMap<string, number>;
 
     private text = {
-        description: new PIXI.Text("", FONT.normal),
-        itemPrice: new PIXI.Text("Item Price:", FONT.normal),
-        price: new PIXI.Text("5,000 cr", FONT.normal),
-        youHave: new PIXI.Text("You Have:", FONT.normal),
-        count: new PIXI.Text("∞ cr", FONT.normal),
-        itemMass: new PIXI.Text("Item Mass:", FONT.normal),
-        mass: new PIXI.Text("3", FONT.normal),
-        availableMass: new PIXI.Text("Available:", FONT.normal),
-        freeMass: new PIXI.Text("", FONT.normal),
+        description: new Text("", FONT.normal),
+        itemPrice: new Text("Item Price:", FONT.normal),
+        price: new Text("5,000 cr", FONT.normal),
+        youHave: new Text("You Have:", FONT.normal),
+        count: new Text("∞ cr", FONT.normal),
+        itemMass: new Text("Item Mass:", FONT.normal),
+        mass: new Text("3", FONT.normal),
+        availableMass: new Text("Available:", FONT.normal),
+        freeMass: new Text("", FONT.normal),
     }
 
     constructor(gameData: GameData,

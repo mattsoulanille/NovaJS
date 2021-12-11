@@ -10,8 +10,11 @@ ts_library(
     deps = [
         "//nova/src/common",
         "//novadatainterface",
-        "@npm//pixi.js",
         "@npm//@pixi/sound",
+        "@npm//@pixi/sprite",
+        "@npm//@pixi/core",
+        "@npm//@pixi/loaders",
+        "@npm//@pixi/spritesheet",
         "@npm//url-join",
         "@npm//@types/url-join",
         "@npm//p-queue",

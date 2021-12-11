@@ -1,3 +1,6 @@
+import { Texture } from "@pixi/core";
+import { Container } from "@pixi/display";
+import { Graphics } from "@pixi/graphics";
 import { ParticleConfig } from "novadatainterface/WeaponData";
 import { GetEntity } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
@@ -9,13 +12,16 @@ import { Provide } from "nova_ecs/provider";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
-import * as particles from "pixi-particles";
-import * as PIXI from "pixi.js";
 import { ProjectileDataComponent } from "../nova_plugin/projectile_data";
 import { ProjectileCollisionEvent } from "../nova_plugin/projectile_plugin";
 import { PixiAppResource } from "./pixi_app_resource";
 import { Space } from "./space_resource";
+import "@pixi/ticker";
+import * as particles from '@pixi/particle-emitter';
+import { upgradeConfig } from "@pixi/particle-emitter";
+//import { Renderer } from '@pixi/core';
 
+//Renderer.registerPlugin('particle', ParticleRenderer);
 
 export const TrailParticlesComponent =
     new Component<ParticleConfig>('TrailParticlesComponent');
@@ -44,9 +50,9 @@ const HitParticlesProvider = Provide({
 const TrailEmitterComponent =
     new Component<particles.Emitter>('TrailEmitterComponent');
 
-function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
+function makeEmitter(space: Container, texture: Texture,
     fps: number, particleConfig: ParticleConfig): particles.Emitter {
-    return new particles.Emitter(space, [texture], {
+    return new particles.Emitter(space, upgradeConfig({
         alpha: {
             start: 1,
             end: 0,
@@ -96,10 +102,10 @@ function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
         particlesPerWave: particleConfig.count,
         particleSpacing: 0,
         angleStart: 0
-    });
+    }, [texture]));
 }
 
-const ParticleTextureResource = new Resource<PIXI.Texture>('ParticleTexture');
+const ParticleTextureResource = new Resource<Texture>('ParticleTexture');
 const TrailEmitterProvider = Provide({
     name: "TrailEmitterProvider",
     provided: TrailEmitterComponent,
@@ -181,7 +187,7 @@ export const ParticlesPlugin: Plugin = {
             throw new Error('Expected world to have pixi app resource');
         }
 
-        const graphics = new PIXI.Graphics();
+        const graphics = new Graphics();
         graphics.lineStyle(10, 0xFFFFFF);
         graphics.moveTo(0, 0);
         graphics.lineTo(10, 0);

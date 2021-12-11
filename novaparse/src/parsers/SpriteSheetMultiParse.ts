@@ -151,11 +151,9 @@ function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
 
     return {
         frames: frameInfoObj,
-        meta
+        meta: meta,
     }
 }
-
-
 
 // Parses SpriteSheet, SpriteSheetImage, and SpriteSheetFrames at the same time
 // They are separated from each other due to PIXI.js peculiarities.

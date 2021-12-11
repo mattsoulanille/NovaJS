@@ -13,7 +13,12 @@ ts_library(
     deps = [
         "//nova_ecs:ecs",
         "//nova_ecs/plugins",
-        "@npm//pixi.js",
+        "@npm//@pixi/app",
+        "@npm//@pixi/display",
+        "@npm//@pixi/graphics",
+        "@npm//@pixi/text",
+        "@npm//@pixi/ticker",
+        "@npm//@pixi/core",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//stats.js",

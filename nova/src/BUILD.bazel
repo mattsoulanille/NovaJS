@@ -42,8 +42,13 @@ ts_library(
         "@npm//stats.js",
         "@npm//@types/stats.js",
         "@npm//@types/node",
-        "@npm//pixi.js",
         "@npm//rxjs",
+        "@npm//@pixi/app",
+        "@npm//@pixi/constants",
+        "@npm//@pixi/core",
+        "@npm//@pixi/interaction",
+        "@npm//@pixi/settings",
+        "@npm//@pixi/ticker",
     ]
 )
 

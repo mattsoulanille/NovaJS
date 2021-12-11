@@ -1,13 +1,16 @@
 // The system boundary should probably not be defined in position.ts.
 // This is the distance from the center of the system to the boundary.
 // The system width and height are both 2*BOUNDARY
+import { Texture } from "@pixi/core";
+import { Container } from "@pixi/display";
+import { Graphics } from "@pixi/graphics";
+import { Sprite } from "@pixi/sprite";
 import { BOUNDARY } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
-import * as PIXI from "pixi.js";
 import RBush, { BBox } from "rbush";
 import { alea } from 'seedrandom';
 import { GameDataResource } from "../nova_plugin/game_data_resource";
@@ -19,25 +22,25 @@ import { texturesFromFrames } from "./textures_from_frames";
 const STAR_ID = "nova:700";
 
 interface StarfieldArgs {
-    textures: PIXI.Texture[],
+    textures: Texture[],
     density: number,
     positionFactorRange: [number, number],
     seed?: string,
 }
 
 interface Star extends BBox {
-    sprite: PIXI.Sprite,
+    sprite: Sprite,
     position: Vector,
     factor: number,
 }
 
 class Starfield {
-    private textures: PIXI.Texture[];
+    private textures: Texture[];
     private positionFactorRange: [number, number];
-    container = new PIXI.Container();
+    container = new Container();
     private rbush = new RBush<Star>();
     private screen = { width: 100, height: 100 };
-    private graphics = new PIXI.Graphics();
+    private graphics = new Graphics();
     private fudge: number;
     private random: () => number;
     private visibleStars: Star[] = [];
@@ -47,7 +50,7 @@ class Starfield {
         this.positionFactorRange = positionFactorRange;
         this.container.addChild(this.graphics);
         const count = density * (2 * BOUNDARY) ** 2;
-        this.container.name = 'Starfield';
+        //this.container.name = 'Starfield';
 
         this.random = alea(seed ?? 'stars');
         for (let i = 0; i < count; i++) {
@@ -65,7 +68,7 @@ class Starfield {
     private makeStar(): Star {
         const texture = this.textures[
             Math.floor(this.random() * this.textures.length)];
-        const sprite = new PIXI.Sprite(texture);
+        const sprite = new Sprite(texture);
         sprite.visible = false;
         this.container.addChild(sprite);
         // TODO: not uniform
