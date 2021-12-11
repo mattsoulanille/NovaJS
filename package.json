@@ -33,6 +33,7 @@
         "@types/ws": "^8.2.1",
         "argparse": "^2.0.1",
         "comlink": "^4.3.1",
+        "esbuild-visualizer": "^0.3.1",
         "http-server": "^14.0.0",
         "immer": "^9.0.7",
         "io-ts-types": "^0.5.16",
