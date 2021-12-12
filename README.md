@@ -15,7 +15,8 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 * **Left Shift to fire secondary weapon** (not only Ctrl since that's used by Windows)
 * R to choose nearest target
 * Hold A to point towards target.
-* J to jump (loops through 6 systems for now)
+* M to open the map and select a system to jump to.
+* J to jump.
 * **Scroll down in the outfitter and shipyard with the arrow keys to see more items**
 
 ### Project Goals
