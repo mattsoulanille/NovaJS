@@ -286,7 +286,7 @@ class WeapResource extends BaseResource {
             velocity: d.getInt16(38),
             lifeMin: d.getInt16(40),
             lifeMax: d.getInt16(42),
-            color: getColor32(44)
+            color: getColor32(44) % 0xff000000,
         };
 
         this.beamLength = d.getInt16(48);
@@ -345,7 +345,7 @@ class WeapResource extends BaseResource {
             lifeMin: hitParticleLife,
             lifeMax: hitParticleLife,
             velocity: d.getInt16(80),
-            color: getColor32(82),
+            color: getColor32(82) % 0xff000000,
 
         };
 
