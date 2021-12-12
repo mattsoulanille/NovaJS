@@ -45,6 +45,7 @@ class SystemGraph {
     private routes: Map<string, string[]>;
     private systemCircles: Map<string, [PIXI.Container, PIXI.Graphics]>;
     private mapContainer: PIXI.Container;
+    private maskedContainer: PIXI.Container;
 
     constructor(systems: SystemData[], private currentSystem: string,
         private size = { x: 456, y: 419 }) {
@@ -67,26 +68,32 @@ class SystemGraph {
             .on('touchmove', onDragMove);
 
         this.mapContainer = new PIXI.Container();
-        this.container.addChild(this.mapContainer);
         this.mapContainer.addChild(this.graphics);
+
+        this.maskedContainer = new PIXI.Container();
         const mask = new PIXI.Graphics();
         mask.lineStyle(1);
         mask.beginFill(0xff0000);
         mask.drawRect(0, 0, size.x, size.y);
-        this.mapContainer.mask = mask;
+        this.maskedContainer.mask = mask;
         this.container.addChild(mask);
+
+        this.maskedContainer.addChild(this.mapContainer);
+        this.container.addChild(this.maskedContainer);
 
         this.links = [...this.getUniqueLinks()];
 
         this.systemCircles = new Map(systems.map(s => {
             const graphics = new PIXI.Graphics();
             drawSystem(s, graphics, this.scale);
-            const container = new PIXI.Container;
-            container.interactive = true;
-            container.on('click', () => {
+            const container = new PIXI.Container();
+            const circleContainer = new PIXI.Container();
+            container.addChild(circleContainer);
+            circleContainer.interactive = true;
+            circleContainer.on('click', () => {
                 this.onClickSystem(s.id);
             });
-            container.addChild(graphics);
+            circleContainer.addChild(graphics);
 
             const nameText = new PIXI.Text(s.name, SYSTEM_TEXT);
             nameText.position.x = 10;
@@ -108,6 +115,7 @@ class SystemGraph {
                 this.size.x / 2 - pos[0],
                 this.size.y / 2 - pos[1]
             );
+            this.updateTransform();
         }
     }
 
@@ -121,12 +129,13 @@ class SystemGraph {
     }
 
     draw(scale = this.scale) {
+        this.mapContainer.cacheAsBitmap = false;
         this.scale = scale;
         this.graphics.clear();
         this.drawLinks();
         this.drawRoute();
-        //this.drawSystems();
         this.placeSystems();
+        this.mapContainer.cacheAsBitmap = true;
     }
 
     private onDragStart(event: PIXI.InteractionEvent) {
@@ -151,8 +160,15 @@ class SystemGraph {
         }
     }
 
+    private updateTransform() {
+        // Since the map is cached as a bitmap, this updates the positions
+        // of the system circles so they can be clicked again.
+        this.mapContainer.containerUpdateTransform();
+    }
+
     private onDragEnd() {
         this.dragData = undefined;
+        this.updateTransform();
     }
 
     private onClickSystem(system: string) {
