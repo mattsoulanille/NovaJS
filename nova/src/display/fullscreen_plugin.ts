@@ -1,7 +1,7 @@
 import { Plugin } from 'nova_ecs/plugin';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
-import { ControlStateEvent } from '../nova_plugin/ship_controller_plugin';
+import { ControlStateEvent } from '../nova_plugin/control_state_event';
 import { PixiAppResource } from './pixi_app_resource';
 
 

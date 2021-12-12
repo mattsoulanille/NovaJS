@@ -7,8 +7,8 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Provide } from "nova_ecs/provider";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
+import { ControlStateEvent } from "./control_state_event";
 import { PlayerShipSelector } from "./player_ship_plugin";
-import { ControlStateEvent } from "./ship_controller_plugin";
 import { ShipComponent } from "./ship_plugin";
 import { Target, TargetComponent } from "./target_component";
 

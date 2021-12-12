@@ -9,11 +9,11 @@ import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
 import { mod } from '../util/mod';
+import { ControlStateEvent } from './control_state_event';
 import { WeaponEntries, WeaponLocalState, WeaponsComponent } from './fire_weapon_plugin';
 import { GameDataResource } from './game_data_resource';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
-import { ControlStateEvent } from './ship_controller_plugin';
 import { WeaponsState, WeaponsStateComponent, WeaponState } from './weapons_state';
 
 function checkReloaded(weapon: WeaponData, localState: WeaponLocalState,

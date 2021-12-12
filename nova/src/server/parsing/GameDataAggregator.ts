@@ -126,8 +126,10 @@ class GameDataAggregator implements GameDataInterface {
 
         const outfit = this.preloadResource(NovaDataType.Outfit);
         const ships = this.preloadResource(NovaDataType.Ship);
+        const systems = this.preloadResource(NovaDataType.System);
         preloadData.Outfit = await outfit;
         preloadData.Ship = await ships;
+        preloadData.System = await systems;
         return preloadData;
     }
 

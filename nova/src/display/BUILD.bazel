@@ -23,6 +23,7 @@ ts_library(
         "explosion_plugin.ts",
         "beam_display_plugin.ts",
         "spaceport_plugin.ts",
+        "starmap_plugin.ts",
         "screen_size_plugin.ts",
         "sound_plugin.ts",
         "ship_animation_plugin.ts",

@@ -1,24 +1,19 @@
 import { Emit } from 'nova_ecs/arg_types';
-import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { KeyboardPlugin } from 'nova_ecs/plugins/keyboard_plugin';
 import { MovementPhysicsComponent, MovementStateComponent, MovementSystem, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
-import { ControlAction } from './controls';
 import { EcsControlEvent } from './controls_plugin';
+import { ControlState, ControlStateEvent } from './control_state_event';
 import { PlatformResource } from './platform_plugin';
 import { PlayerShipPlugin, PlayerShipSelector } from './player_ship_plugin';
 import { TargetComponent } from './target_component';
 
 
-export type ControlState = Map<ControlAction, false | 'start' | 'repeat' | true>;
-
 // A resource because the ship may change.
 const ControlStateResource = new Resource<ControlState>('ControlStateResource');
-
-export const ControlStateEvent = new EcsEvent<ControlState>('ControlState');
 
 const UpdateControlState = new System({
     name: 'UpdateControlState',
