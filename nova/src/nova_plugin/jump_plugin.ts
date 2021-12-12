@@ -1,21 +1,32 @@
-import { System } from "nova_ecs/system";
-import { EcsEvent } from "nova_ecs/events";
-import { Entity } from "nova_ecs/entity";
 import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Component } from "nova_ecs/component";
+import { Entity } from "nova_ecs/entity";
+import { EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
-import { SystemComponent } from "./nova_plugin";
-import { ControlStateEvent } from "./ship_controller_plugin";
-import { PlayerShipSelector } from "./player_ship_plugin";
-import { SystemsResource } from "./systems_resource";
+import { Provide } from "nova_ecs/provider";
+import { System } from "nova_ecs/system";
 import { deImmerify } from "../util/deimmerify";
-import { SystemIdResource } from "./make_system";
-import { Optional } from "nova_ecs/optional";
-import { GameDataResource } from "./game_data_resource";
+import { ControlStateEvent } from "./control_state_event";
+import { PlayerShipSelector } from "./player_ship_plugin";
+import { SystemIdResource } from "./system_id_resource";
 
 export interface InitiateJump {
     to: string /* system uuid */,
 }
-const InitiateJumpEvent = new EcsEvent<InitiateJump>('InitiateJumpEvent');
+export const InitiateJumpEvent = new EcsEvent<InitiateJump>('InitiateJumpEvent');
+
+export type JumpRoute = {
+    route: string[],
+};
+export const JumpRouteComponent = new Component<JumpRoute>('JumpRouteComponent');
+const JumpRouteProvider = Provide({
+    name: 'JumpRouteProvider',
+    args: [PlayerShipSelector] as const,
+    provided: JumpRouteComponent,
+    factory() {
+        return { route: [] };
+    }
+});
 
 export interface FinishJump {
     entity: Entity,
@@ -39,14 +50,15 @@ const JumpFromSystem = new System({
 const PlayerJumpControl = new System({
     name: 'PlayerJumpControl',
     events: [ControlStateEvent],
-    args: [ControlStateEvent, Emit, UUID, SystemIdResource,
+    args: [ControlStateEvent, Emit, UUID, SystemIdResource, JumpRouteComponent,
         PlayerShipSelector] as const,
-    step(controlState, emit, uuid, systemId) {
+    step(controlState, emit, uuid, systemId, jumpRoute) {
         if (controlState.get('hyperjump') === 'start') {
-            const currentId = systemId ? Number(systemId.split(':')[1]) : 128;
-            const id = (currentId + 1 - 128) % 6 + 128;
-            const randomSystem = `nova:${id}`;
-            emit(InitiateJumpEvent, { to: randomSystem }, [uuid]);
+            // TODO: Prevent this from being called twice before a jump.
+            const nextSystem = jumpRoute.route.shift();
+            if (nextSystem) {
+                emit(InitiateJumpEvent, { to: nextSystem }, [uuid]);
+            }
         }
     }
 });
@@ -57,6 +69,7 @@ export const JumpPlugin: Plugin = {
     build(world) {
         world.addSystem(JumpFromSystem);
         world.addSystem(PlayerJumpControl);
+        world.addSystem(JumpRouteProvider);
     }
 };
 

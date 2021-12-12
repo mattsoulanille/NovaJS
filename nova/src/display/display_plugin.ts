@@ -17,6 +17,7 @@ import { SpaceportPlugin } from "./spaceport_plugin";
 import { Space } from "./space_resource";
 import { Stage } from "./stage_resource";
 import { starfield } from "./starfield_plugin";
+import { StarmapPlugin } from "./starmap_plugin";
 import { StatusBarResource, StatusBarPlugin } from "./status_bar";
 import { TargetCornersPlugin } from "./target_corners_plugin";
 
@@ -57,11 +58,14 @@ export const Display: Plugin = {
         await world.addPlugin(BeamDisplayPlugin);
         await world.addPlugin(PlanetCornersPlugin);
         await world.addPlugin(SpaceportPlugin);
+        await world.addPlugin(StarmapPlugin);
         await world.addPlugin(SoundPlugin);
         await world.addPlugin(ShipAnimationPlugin);
     },
     async remove(world) {
+        await world.removePlugin(ShipAnimationPlugin);
         await world.removePlugin(SoundPlugin);
+        await world.removePlugin(StarmapPlugin);
         await world.removePlugin(SpaceportPlugin);
         await world.removePlugin(PlanetCornersPlugin);
         await world.removePlugin(BeamDisplayPlugin);

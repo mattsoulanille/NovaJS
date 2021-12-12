@@ -6,10 +6,10 @@ import { Resource } from "nova_ecs/resource";
 import { SingletonComponent, World } from "nova_ecs/world";
 import { GameDataResource } from "./game_data_resource";
 import { makePlanet } from "./make_planet";
+import { SystemIdResource } from "./system_id_resource";
 import { SystemPlugin } from "./system_plugin";
 
 
-export const SystemIdResource = new Resource<string>('SystemIdResource');
 const AddedPlanetsResource = new Resource<{ val: boolean }>('AddedPlanetsResource');
 
 const MakePlanetsSystem = new AsyncSystem({

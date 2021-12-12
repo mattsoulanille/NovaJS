@@ -19,9 +19,10 @@ import { Stage } from "./display/stage_resource";
 import { GameDataResource } from "./nova_plugin/game_data_resource";
 import { FinishJumpEvent } from "./nova_plugin/jump_plugin";
 import { makeShip } from "./nova_plugin/make_ship";
-import { makeSystem, SystemIdResource } from "./nova_plugin/make_system";
+import { makeSystem } from "./nova_plugin/make_system";
 import { MultiRoomResource, NovaPlugin, SystemComponent } from "./nova_plugin/nova_plugin";
 import { PlayerShipSelector } from "./nova_plugin/player_ship_plugin";
+import { SystemIdResource } from "./nova_plugin/system_id_resource";
 
 
 const gameData = new GameData();
