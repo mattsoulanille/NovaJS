@@ -340,10 +340,10 @@ describe("WeapResource", function() {
 
 
     it("should parse trailParticles color", function() {
-        expect(unguided.trailParticles.color).toEqual(0xFF242526);
-        expect(beam.trailParticles.color).toEqual(0xFF000000);
-        expect(missile.trailParticles.color).toEqual(0xFF1B1C1D);
-        expect(turret.trailParticles.color).toEqual(0xFFFFFFFF);
+        expect(unguided.trailParticles.color).toEqual(0x242526);
+        expect(beam.trailParticles.color).toEqual(0x000000);
+        expect(missile.trailParticles.color).toEqual(0x1B1C1D);
+        expect(turret.trailParticles.color).toEqual(0xFFFFFF);
     });
 
     it("should parse beamLength", function() {
@@ -542,10 +542,10 @@ describe("WeapResource", function() {
     });
 
     it("should parse hitParticles color", function() {
-        expect(unguided.hitParticles.color).toEqual(0xFF2C2D2E);
-        expect(beam.hitParticles.color).toEqual(0xFF000000);
-        expect(missile.hitParticles.color).toEqual(0xFF232425);
-        expect(turret.hitParticles.color).toEqual(0xFFFFFFFF);
+        expect(unguided.hitParticles.color).toEqual(0x2C2D2E);
+        expect(beam.hitParticles.color).toEqual(0x000000);
+        expect(missile.hitParticles.color).toEqual(0x232425);
+        expect(turret.hitParticles.color).toEqual(0xFFFFFF);
     });
 
     it("should parse exitType", function() {

@@ -9,7 +9,7 @@ import { Provide } from "nova_ecs/provider";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
-import * as particles from "pixi-particles";
+import * as particles from "@pixi/particle-emitter";
 import * as PIXI from "pixi.js";
 import { ProjectileDataComponent } from "../nova_plugin/projectile_data";
 import { ProjectileCollisionEvent } from "../nova_plugin/projectile_plugin";
@@ -46,7 +46,7 @@ const TrailEmitterComponent =
 
 function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
     fps: number, particleConfig: ParticleConfig): particles.Emitter {
-    return new particles.Emitter(space, [texture], {
+    return new particles.Emitter(space, particles.upgradeConfig({
         alpha: {
             start: 1,
             end: 0,
@@ -96,7 +96,7 @@ function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
         particlesPerWave: particleConfig.count,
         particleSpacing: 0,
         angleStart: 0
-    });
+    }, [texture]));
 }
 
 const ParticleTextureResource = new Resource<PIXI.Texture>('ParticleTexture');

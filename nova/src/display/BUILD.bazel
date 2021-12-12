@@ -47,7 +47,7 @@ ts_library(
         "@npm//@types/sat",
         "@npm//rbush",
         "@npm//@types/rbush",
-        "@npm//pixi-particles",
+        "@npm//@pixi/particle-emitter",
         "@npm//seedrandom",
         "@npm//@types/seedrandom",
     ]
