@@ -17,6 +17,7 @@ import { PixiAppResource } from "./pixi_app_resource";
 import { Space } from "./space_resource";
 
 
+const ParticleContainerResource = new Resource<PIXI.Container>('ParticleContainerResource');
 export const TrailParticlesComponent =
     new Component<ParticleConfig>('TrailParticlesComponent');
 
@@ -44,16 +45,16 @@ const HitParticlesProvider = Provide({
 const TrailEmitterComponent =
     new Component<particles.Emitter>('TrailEmitterComponent');
 
-function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
+function makeEmitter(container: PIXI.Container, texture: PIXI.Texture,
     fps: number, particleConfig: ParticleConfig): particles.Emitter {
-    return new particles.Emitter(space, particles.upgradeConfig({
+    return new particles.Emitter(container, particles.upgradeConfig({
         alpha: {
             start: 1,
             end: 0,
         },
         scale: {
-            start: 0.1,
-            end: 0.1,
+            start: 1,
+            end: 1,
             minimumScaleMultiplier: 1,
         },
         color: {
@@ -95,7 +96,7 @@ function makeEmitter(space: PIXI.Container, texture: PIXI.Texture,
         spawnType: "burst",
         particlesPerWave: particleConfig.count,
         particleSpacing: 0,
-        angleStart: 0
+        angleStart: 0,
     }, [texture]));
 }
 
@@ -104,9 +105,10 @@ const TrailEmitterProvider = Provide({
     name: "TrailEmitterProvider",
     provided: TrailEmitterComponent,
     args: [TrailParticlesComponent, PixiAppResource,
-        Space, ParticleTextureResource] as const,
-    factory(particleConfig, app, space, texture) {
-        const emitter = makeEmitter(space, texture, app.ticker.FPS, particleConfig);
+        ParticleContainerResource, ParticleTextureResource] as const,
+    factory(particleConfig, app, particleContainer, texture) {
+        const emitter = makeEmitter(particleContainer, texture, app.ticker.FPS,
+            particleConfig);
         emitter.emit = true;
         return emitter;
     }
@@ -182,12 +184,31 @@ export const ParticlesPlugin: Plugin = {
         }
 
         const graphics = new PIXI.Graphics();
-        graphics.lineStyle(10, 0xFFFFFF);
+        graphics.lineStyle(1, 0xFFFFFF, 1, 0);
         graphics.moveTo(0, 0);
-        graphics.lineTo(10, 0);
+        graphics.lineTo(1, 0);
         const texture = app.renderer.generateTexture(graphics);
         world.resources.set(ParticleTextureResource, texture);
         world.resources.set(OrphanParticleEmitters, new Map());
+
+        const space = world.resources.get(Space);
+        if (!space) {
+            throw new Error('Expected world to have Space resource');
+        }
+        const particleContainer = new PIXI.ParticleContainer(20_000, {
+            alpha: false,
+            position: true,
+            rotation: false,
+            scale: false,
+            tint: false,
+            uvs: false,
+            vertices: false,
+        });
+        particleContainer.autoResize = true;
+        particleContainer.baseTexture = texture.baseTexture;
+
+        space.addChild(particleContainer);
+        world.resources.set(ParticleContainerResource, particleContainer);
 
         world.addSystem(TrailParticlesProvider);
         world.addSystem(HitParticlesProvider);
