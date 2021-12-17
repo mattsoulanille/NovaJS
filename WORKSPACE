@@ -24,7 +24,7 @@ http_archive(
 load("@build_bazel_rules_nodejs//:index.bzl", "node_repositories")
 node_repositories(
     package_json = ["//:package.json"],
-    node_version = "16.6.2",
+    node_version = "17.2.0",
 )
 
 # The yarn_install rule runs yarn anytime the package.json or yarn.lock file changes.
