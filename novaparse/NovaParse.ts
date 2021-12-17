@@ -242,6 +242,9 @@ export class NovaParse implements GameDataInterface {
                 // No pict found for this ship, so look up the first
                 // ship's baseImage in the baseImagePICTMap
                 var shan = ship.idSpace.shän[ship.id];
+                if (!shan) {
+                    continue
+                }
                 var baseImageLocalID = shan.images.baseImage.ID;
                 var baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID].globalID;
                 shipPICTMap[shipGlobalID] = baseImagePICTMap[baseImageGlobalID];
