@@ -1,6 +1,6 @@
 import { BaseData } from "novadatainterface/BaseData";
 import { BaseParse } from "./BaseParse";
-import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, Hull, FrameInfo, ConvexHull, DefaultImageLocation } from "novadatainterface/SpriteSheetData";
+import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, Hull, FrameInfo, ConvexHull, DefaultImageLocation, getDefaultConvexHull } from "novadatainterface/SpriteSheetData";
 import { RledResource } from "../resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import * as path from "path";
@@ -103,7 +103,10 @@ function makeConvexHull(png: PNG): ConvexHull {
     var visibleArray = makeVisibleArray(png);
     // TODO: Maybe replace this with rust's fast convex hull
     var hullWithRepeat = hull(visibleArray, Infinity) as ConvexHull;
-    //var hullWithRepeat: ConvexHull = [[-10, -10], [10, -10], [10, 10], [-10, 10], [1, 2]];
+    // If the hull is empty, return the default conved hull instead.
+    if (hullWithRepeat.length === 0 || hullWithRepeat[0] === undefined) {
+        return getDefaultConvexHull();
+    }
     // Cut off the last point since it's the same as the first.
     return hullWithRepeat.slice(0, hullWithRepeat.length - 1);
 }
