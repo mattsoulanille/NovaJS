@@ -1,10 +1,15 @@
+import { AsyncSystemResource } from 'nova_ecs/async_system';
 import { Entity } from 'nova_ecs/entity';
+import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
+import { GameDataResource } from '../nova_plugin/game_data_resource';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
 import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin';
+import { SystemIdResource } from '../nova_plugin/system_id_resource';
+import { SystemPlugin } from '../nova_plugin/system_plugin';
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state';
 import { Button } from './button';
 import { Menu } from './menu';
@@ -58,7 +63,22 @@ export class Spaceport extends Menu<Entity> {
 
         const showShipyard = async () => {
             this.controls.unbind();
-            this.input = await this.shipyard.show(this.input);
+            const newInput = await this.shipyard.show(this.input);
+            if (newInput !== this.input) {
+                // Construct a fake system and run providers so that outfits of the new
+                // ship are provided.
+                const shipBuildWorld = new World('outfit builder');
+                shipBuildWorld.resources.set(GameDataResource, gameData);
+                shipBuildWorld.resources.set(SystemIdResource, 'nova:128');
+                await shipBuildWorld.addPlugin(SystemPlugin);
+                shipBuildWorld.entities.set('ship', newInput);
+                shipBuildWorld.step();
+                await shipBuildWorld.resources.get(AsyncSystemResource)?.done;
+                shipBuildWorld.step();
+                shipBuildWorld.entities.delete('ship');
+            }
+            this.input = newInput;
+
             this.controls.bind();
         };
         buttons.shipyard.click.subscribe(showShipyard);
