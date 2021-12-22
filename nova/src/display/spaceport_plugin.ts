@@ -1,4 +1,4 @@
-import { Emit, Entities, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, GetEntity, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Plugin } from 'nova_ecs/plugin';
 import { Provide } from 'nova_ecs/provider';
@@ -33,18 +33,13 @@ const SpaceportQuery = new Query([SpaceportComponent] as const);
 const LandSystem = new System({
     name: 'LandSystem',
     events: [LandEvent],
-    args: [LandEvent, UUID, Entities, RunQuery, ScreenSize, Emit, PlayerShipSelector] as const,
-    step({ uuid }, shipUuid, entities, runQuery, { x, y }, _emit) {
+    args: [LandEvent, UUID, Entities, RunQuery, ScreenSize, GetEntity, PlayerShipSelector] as const,
+    step({ uuid }, shipUuid, entities, runQuery, { x, y }, playerShip) {
         const spaceport = runQuery(SpaceportQuery, uuid)[0]?.[0];
         if (!spaceport) {
             return;
         }
 
-        const playerShip = entities.get(shipUuid);
-        if (!playerShip) {
-            console.warn('Player ship is missing? Cannot land.');
-            return;
-        }
         entities.delete(shipUuid);
         deImmerify(playerShip);
 
