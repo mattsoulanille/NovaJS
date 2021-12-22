@@ -1,11 +1,16 @@
+import { PlanetData } from 'novadatainterface/PlanetData';
 import { AsyncSystemResource } from 'nova_ecs/async_system';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
+import { ArmorComponent, ShieldComponent } from '../nova_plugin/health_plugin';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
 import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin';
 import { SystemIdResource } from '../nova_plugin/system_id_resource';
@@ -20,6 +25,7 @@ import { Shipyard } from './shipyard';
 export class Spaceport extends Menu<Entity> {
     private outfitter: Outfitter;
     private shipyard: Shipyard;
+    private data?: PlanetData;
 
     private font = {
         title: {
@@ -94,6 +100,7 @@ export class Spaceport extends Menu<Entity> {
     async build() {
         await super.build();
         const data = await this.gameData.data.Planet.get(this.id);
+        this.data = data;
         const title = new PIXI.Text(data.name, this.font.title);
         title.position.x = -24;
         title.position.y = 39;
@@ -110,5 +117,24 @@ export class Spaceport extends Menu<Entity> {
         this.container.addChild(spaceportPict)
         this.container.addChild(this.outfitter.container);
         this.container.addChild(this.shipyard.container);
+    }
+
+    protected done() {
+        if (this.data) {
+            const movement = this.input.components.get(MovementStateComponent);
+            if (movement) {
+                movement.position = new Position(...this.data.position);
+                movement.velocity = new Vector(0, 0);
+            }
+            const shield = this.input.components.get(ShieldComponent);
+            if (shield) {
+                shield.current = shield.max;
+            }
+            const armor = this.input.components.get(ArmorComponent);
+            if (armor) {
+                armor.current = armor.max;
+            }
+        }
+        super.done();
     }
 }
