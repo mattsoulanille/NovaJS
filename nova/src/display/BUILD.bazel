@@ -32,7 +32,7 @@ ts_library(
         "//nova_ecs:ecs",
         "//nova_ecs/datatypes",
         "//nova_ecs/plugins",
-        "//novadatainterface",
+        "//nova_data_interface",
         "//nova/src/nova_plugin",
         "//nova/src/client/gamedata",
         "//nova/src/util",
@@ -67,7 +67,7 @@ ts_library(
 #         "@npm//@types/jasmine",
 #         "@npm//pixi.js",
 #         "//nova_ecs:ecs",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/nova_plugin",
 #     ]
 # )

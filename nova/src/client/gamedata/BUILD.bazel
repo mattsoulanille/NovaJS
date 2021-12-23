@@ -9,7 +9,7 @@ ts_library(
     srcs = glob(["*.ts"]),
     deps = [
         "//nova/src/common",
-        "//novadatainterface",
+        "//nova_data_interface",
         "@npm//pixi.js",
         "@npm//@pixi/sound",
         "@npm//url-join",

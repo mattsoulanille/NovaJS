@@ -16,8 +16,8 @@ ts_library(
         "@npm//@types/uuid",
         "@npm//fp-ts",
         "@npm//comlink",
-        "//novadatainterface",
-        "//novaparse",
+        "//nova_data_interface",
+        "//nova_parse",
     ]
 )
 
@@ -29,7 +29,7 @@ ts_library(
     deps = [
         "@npm//comlink",
         "@npm//@types/node",
-        "//novaparse",
+        "//nova_parse",
     ],
 )
 

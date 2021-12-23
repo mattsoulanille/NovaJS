@@ -26,13 +26,13 @@
         "nova/*",
         "dist/bin/nova/*"
       ],
-      "novadatainterface/*": [
-        "novadatainterface/*",
-        "dist/bin/novadatainterface/*"
+      "nova_data_interface/*": [
+        "nova_data_interface/*",
+        "dist/bin/nova_data_interface/*"
       ],
-      "novaparse/*": [
-        "novaparse/*",
-        "dist/bin/novaparse/*"
+      "nova_parse/*": [
+        "nova_parse/*",
+        "dist/bin/nova_parse/*"
       ],
       "nova_ecs/*": [
         "nova_ecs/*",

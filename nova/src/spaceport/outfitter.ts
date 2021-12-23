@@ -1,4 +1,4 @@
-import { OutfitData } from "novadatainterface/OutiftData";
+import { OutfitData } from "nova_data_interface/OutiftData";
 import { DefaultMap } from "nova_ecs/utils";
 import * as PIXI from 'pixi.js';
 import { Observable } from "rxjs";

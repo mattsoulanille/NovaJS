@@ -1,7 +1,7 @@
-import { AnimationImage } from "novadatainterface/Animation";
-import { GameDataInterface } from "novadatainterface/GameDataInterface";
+import { AnimationImage } from "nova_data_interface/Animation";
+import { GameDataInterface } from "nova_data_interface/GameDataInterface";
 import * as PIXI from "pixi.js";
-import { AnimationImageIndex } from "novadatainterface/Animation";
+import { AnimationImageIndex } from "nova_data_interface/Animation";
 import { texturesFromFrames } from "./textures_from_frames";
 import { mod } from "../util/mod";
 import { getFrameAndAngle } from "../util/get_frame_and_angle";

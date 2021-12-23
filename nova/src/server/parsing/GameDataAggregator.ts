@@ -1,23 +1,23 @@
-import { GameDataInterface, PreloadData } from "novadatainterface/GameDataInterface";
-import { NovaDataInterface, NovaDataType } from "novadatainterface/NovaDataInterface";
-import { Gettable, GettableData } from "novadatainterface/Gettable";
-import { BaseData } from "novadatainterface/BaseData";
-import { ShipData } from "novadatainterface/ShipData";
-import { OutfitData } from "novadatainterface/OutiftData";
-import { WeaponData } from "novadatainterface/WeaponData";
-import { PictData } from "novadatainterface/PictData";
-import { PlanetData } from "novadatainterface/PlanetData";
-import { SystemData } from "novadatainterface/SystemData";
-import { TargetCornersData } from "novadatainterface/TargetCornersData";
-import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "novadatainterface/SpriteSheetData";
-import { StatusBarData } from "novadatainterface/StatusBarData";
-import { ExplosionData } from "novadatainterface/ExplosionData";
-import { PictImageData } from "novadatainterface/PictImage";
-import { getDefaultNovaIDs, NovaIDs } from "novadatainterface/NovaIDs";
-import { Defaults } from "novadatainterface/Defaults";
-import { CicnImageData } from "novadatainterface/CicnImage";
-import { CicnData } from "novadatainterface/CicnData";
-import { SoundFile } from "novadatainterface/SoundFile";
+import { GameDataInterface, PreloadData } from "nova_data_interface/GameDataInterface";
+import { NovaDataInterface, NovaDataType } from "nova_data_interface/NovaDataInterface";
+import { Gettable, GettableData } from "nova_data_interface/Gettable";
+import { BaseData } from "nova_data_interface/BaseData";
+import { ShipData } from "nova_data_interface/ShipData";
+import { OutfitData } from "nova_data_interface/OutiftData";
+import { WeaponData } from "nova_data_interface/WeaponData";
+import { PictData } from "nova_data_interface/PictData";
+import { PlanetData } from "nova_data_interface/PlanetData";
+import { SystemData } from "nova_data_interface/SystemData";
+import { TargetCornersData } from "nova_data_interface/TargetCornersData";
+import { SpriteSheetData, SpriteSheetImageData, SpriteSheetFramesData } from "nova_data_interface/SpriteSheetData";
+import { StatusBarData } from "nova_data_interface/StatusBarData";
+import { ExplosionData } from "nova_data_interface/ExplosionData";
+import { PictImageData } from "nova_data_interface/PictImage";
+import { getDefaultNovaIDs, NovaIDs } from "nova_data_interface/NovaIDs";
+import { Defaults } from "nova_data_interface/Defaults";
+import { CicnImageData } from "nova_data_interface/CicnImage";
+import { CicnData } from "nova_data_interface/CicnData";
+import { SoundFile } from "nova_data_interface/SoundFile";
 
 /**
  * Combines multiple GameDataInterface instances into a single GameDataInterface

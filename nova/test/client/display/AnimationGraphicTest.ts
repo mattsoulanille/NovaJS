@@ -1,7 +1,7 @@
 import { AnimationGraphic } from "novajs/nova/src/client/display/AnimationGraphic";
 import { Position } from "novajs/nova/src/engine/Position";
-import { MockGameData } from "novadatainterface/MockGameData";
-import { getDefaultAnimation } from "novadatainterface/Animation";
+import { MockGameData } from "nova_data_interface/MockGameData";
+import { getDefaultAnimation } from "nova_data_interface/Animation";
 import { SpaceObjectState } from "novajs/nova/src/proto/space_object_state_pb";
 import * as PIXI from "pixi.js";
 

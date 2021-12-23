@@ -1,0 +1,16 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:defaults.bzl", "ts_library")
+
+ts_library(
+    name = "resource_parsers",
+    srcs = glob(["*.ts"]),
+    module_name = "nova_parse/src/resource_parsers",
+    deps = [
+        "@npm//@types/node",
+        "//nova_data_interface",
+        "@npm//resourceforkjs",
+        "@npm//pngjs",
+        "@npm//@types/pngjs",
+    ],
+)

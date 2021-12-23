@@ -17,7 +17,7 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 #         "@npm//pixi.js",
 #         "//nova/src/client/display",
 #         "//nova/src/common",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/proto:protobufjs_bundle",
 #         "//nova/src/engine",
 #     ]
@@ -41,7 +41,7 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 #         "@npm//pixi.js",
 #         "//nova/src/client/display",
 #         "//nova/src/common",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/proto:protobufjs_bundle",
 #         "//nova/src/engine",
 #     ]
@@ -65,7 +65,7 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 #         "@npm//pixi.js",
 #         "//nova/src/client/display",
 #         "//nova/src/common",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/proto:protobufjs_bundle",
 #         "//nova/src/engine",
 #     ]
@@ -89,7 +89,7 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 #         "@npm//pixi.js",
 #         "//nova/src/client/display",
 #         "//nova/src/common",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/engine",
 #     ]
 # )
@@ -113,7 +113,7 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 #         "//nova/src/proto:protobufjs_bundle",
 #         "//nova/src/client/display",
 #         "//nova/src/common",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/engine",
 #     ]
 # )
@@ -137,7 +137,7 @@ load("@novajs//:mocha_ts_test.bzl", "mocha_ts_test")
 #         "//nova/src/proto:protobufjs_bundle",
 #         "//nova/src/client/display",
 #         "//nova/src/common",
-#         "//novadatainterface",
+#         "//nova_data_interface",
 #         "//nova/src/engine",
 #     ]
 # )

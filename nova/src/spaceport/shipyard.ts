@@ -1,4 +1,4 @@
-import { ShipData } from 'novadatainterface/ShipData';
+import { ShipData } from 'nova_data_interface/ShipData';
 import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import * as PIXI from 'pixi.js';

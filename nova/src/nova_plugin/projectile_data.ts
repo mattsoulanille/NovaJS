@@ -1,4 +1,4 @@
-import { ProjectileWeaponData } from 'novadatainterface/WeaponData';
+import { ProjectileWeaponData } from 'nova_data_interface/WeaponData';
 import { Component } from 'nova_ecs/component';
 
 

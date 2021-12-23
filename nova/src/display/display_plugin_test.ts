@@ -1,6 +1,6 @@
-import { Animation } from "novadatainterface/Animation";
-import { Defaults } from 'novadatainterface/Defaults';
-import { MockGameData } from 'novadatainterface/MockGameData';
+import { Animation } from "nova_data_interface/Animation";
+import { Defaults } from 'nova_data_interface/Defaults';
+import { MockGameData } from 'nova_data_interface/MockGameData';
 import { EntityBuilder } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { GameDataResource } from '../nova_plugin/game_data_resource';

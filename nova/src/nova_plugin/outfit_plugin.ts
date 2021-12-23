@@ -1,8 +1,8 @@
 import produce from 'immer';
 import * as t from 'io-ts';
-import { GameDataInterface } from 'novadatainterface/GameDataInterface';
-import { OutfitData, OutfitPhysics } from 'novadatainterface/OutiftData';
-import { ShipPhysics } from 'novadatainterface/ShipData';
+import { GameDataInterface } from 'nova_data_interface/GameDataInterface';
+import { OutfitData, OutfitPhysics } from 'nova_data_interface/OutiftData';
+import { ShipPhysics } from 'nova_data_interface/ShipData';
 import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
 import { Plugin } from 'nova_ecs/plugin';

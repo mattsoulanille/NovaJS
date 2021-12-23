@@ -1,4 +1,4 @@
-import { BeamWeaponData, WeaponData } from 'novadatainterface/WeaponData';
+import { BeamWeaponData, WeaponData } from 'nova_data_interface/WeaponData';
 import { Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';

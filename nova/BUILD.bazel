@@ -32,7 +32,7 @@ ts_library(
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//comlink",
-        "//novaparse",
+        "//nova_parse",
         "//nova/src/common",
         "//nova/src/communication:communication_server_lib",
         "//nova/src/communication:communication_lib",
