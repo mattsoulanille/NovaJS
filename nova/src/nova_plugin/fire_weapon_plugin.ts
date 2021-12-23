@@ -100,20 +100,35 @@ export function sampleInaccuracy(accuracy: number) {
     return 2 * (Math.random() - 0.5) * accuracy * (2 * Math.PI / 360);
 }
 
-function* getEvenlySpacedAngles(angle: number) {
-    let current = new Angle(0);
-    yield current;
-    while (true) {
-        current = current.add(angle);
-        yield current;
-        yield new Angle(-current.angle);
+/**
+ * Returns evenly spaced angles centered around zero with a given spacing
+ * inbetween.
+ */
+export function getEvenlySpacedAngles(spacing: number, count: number) {
+    const angles: Angle[] = [];
+    let offset: number;
+    if (count % 2 === 1) {
+        angles.push(new Angle(0));
+        offset = spacing;
+        count--;
+    } else {
+        offset = spacing / 2;
     }
+
+    for (let i = 0; i < count / 2; i++) {
+        const angle = i * spacing + offset;
+        angles.push(new Angle(angle));
+        angles.push(new Angle(-angle));
+    }
+    return angles;
 }
 
-function* getRandomInCone(angle: number) {
-    while (true) {
-        yield new Angle((2 * Math.random() - 1) * angle);
+function getRandomInCone(angle: number, count: number) {
+    const angles: Angle[] = [];
+    for (let i = 0; i < count; i++) {
+        angles[i] = new Angle((2 * Math.random() - 1) * angle);
     }
+    return angles;
 }
 
 export const SourceComponent = new Component<string>('Source');
@@ -279,8 +294,8 @@ export abstract class WeaponEntry {
             }
 
             const angles = sub.theta < 0
-                ? getEvenlySpacedAngles(Math.abs(sub.theta))
-                : getRandomInCone(sub.theta);
+                ? getEvenlySpacedAngles(Math.abs(sub.theta), sub.count)
+                : getRandomInCone(sub.theta, sub.count);
 
             const subWeapon = weaponEntries.getCached(sub.id);
             if (!subWeapon) {
@@ -291,7 +306,7 @@ export abstract class WeaponEntry {
             }
 
             for (let i = 0; i < sub.count; i++) {
-                const angle = angles.next().value || new Angle(0);
+                const angle = angles[i] || new Angle(0);
                 const subEntity = subWeapon.fire(position ?? movement.position,
                     movement.rotation.add(angle), owner,
                     target?.target, source);
