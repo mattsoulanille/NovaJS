@@ -1,14 +1,14 @@
 import "jasmine";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
-import { EntityMapWrapped } from './entity_map';
+import { EntityMapWithEvents } from './entity_map';
 
 const FooComponent = new Component<{ x: number }>('foo');
 const BarComponent = new Component<{ y: string }>('bar');
 
 describe('entity map', () => {
     it('emits when a component is added to an entity', async () => {
-        const entityMap = new EntityMapWrapped();
+        const entityMap = new EntityMapWithEvents();
         const changed = new Promise<[string, Entity, UnknownComponent]>((fulfill) => {
             entityMap.events.addComponent.subscribe(fulfill);
         });
@@ -22,7 +22,7 @@ describe('entity map', () => {
     });
 
     it('emits when a component is removed from an entity', async () => {
-        const entityMap = new EntityMapWrapped();
+        const entityMap = new EntityMapWithEvents();
         const changed = new Promise<[string, Entity, UnknownComponent]>((fulfill) => {
             entityMap.events.deleteComponent.subscribe(fulfill);
         });
@@ -38,7 +38,7 @@ describe('entity map', () => {
     });
 
     it('does not emit when a component is replaced', async () => {
-        const entityMap = new EntityMapWrapped();
+        const entityMap = new EntityMapWithEvents();
         let called = false;
         const changed = new Promise<[string, Entity, UnknownComponent]>((fulfill) => {
             entityMap.events.addComponent.subscribe(v => {

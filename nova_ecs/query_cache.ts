@@ -1,7 +1,7 @@
 import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
 import { ArgsToData, ArgTypes, QueryResults } from "./arg_types";
 import { Entity } from "./entity";
-import { EntityMapWrapped } from "./entity_map";
+import { EntityMapWithEvents } from "./entity_map";
 import { DeleteEvent, EcsEvent, StepEvent } from "./events";
 import { Query } from "./query";
 import { UnknownResource } from "./resource";
@@ -32,7 +32,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
     constructor(private queryCache: QueryCache,
         private query: Query,
         private getArg: World['getArg'],
-        entities: EntityMapWrapped,
+        entities: EntityMapWithEvents,
         resources: ResourceMapWrapped) {
         this.entities = new Map([...entities].filter(
             ([, entity]) => query.supportsEntity(entity)));
@@ -214,7 +214,7 @@ class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTy
     constructor(private queryCache: QueryCache,
         private query: Query,
         private getArg: World['getArg'],
-        private entities: EntityMapWrapped,
+        private entities: EntityMapWithEvents,
         private resources: ResourceMapWrapped) {
     }
 
@@ -261,7 +261,7 @@ class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTy
 
 type QueryArgsList = readonly ArgTypes[];
 export class QueryCache extends DefaultMap<Query, QueryCacheEntry> {
-    constructor(entities: EntityMapWrapped, resources: ResourceMapWrapped, getArg: World['getArg']) {
+    constructor(entities: EntityMapWithEvents, resources: ResourceMapWrapped, getArg: World['getArg']) {
         super((query: Query) => new CachedQueryCacheEntry(this, query, getArg, entities, resources));
     }
 
