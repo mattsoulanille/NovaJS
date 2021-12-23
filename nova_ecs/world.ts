@@ -4,7 +4,7 @@ import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, Ge
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity, EntityBuilder } from "./entity";
-import { EntityMapWrapped } from "./entity_map";
+import { EntityMapWithEvents } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { SyncSubject } from "./event_map";
 import { Plugin } from './plugin';
@@ -68,7 +68,7 @@ interface WorldEventsMap extends ReadonlyMap<UnknownEvent, SyncSubject<unknown>>
 
 export class World {
     private readonly state = {
-        entities: new EntityMapWrapped(),
+        entities: new EntityMapWithEvents(),
         resources: new ResourceMapWrapped(this.addResource.bind(this),
             this.removeResource.bind(this)),
     };

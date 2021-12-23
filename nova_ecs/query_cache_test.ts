@@ -2,7 +2,7 @@ import { right } from 'fp-ts/lib/Either';
 import 'jasmine';
 import { Component } from './component';
 import { EntityBuilder } from './entity';
-import { EntityMapWrapped } from './entity_map';
+import { EntityMapWithEvents } from './entity_map';
 import { Query } from './query';
 import { QueryCache } from './query_cache';
 import { Resource } from './resource';
@@ -14,12 +14,12 @@ const BarComponent = new Component<{ y: string }>('BarComponent');
 const BazResource = new Resource<{ z: string[] }>('baz');
 
 describe('query cache', () => {
-    let entities: EntityMapWrapped;
+    let entities: EntityMapWithEvents;
     let resources: ResourceMapWrapped;
     let getArg: jasmine.Spy<World['getArg']>;
     let queryCache: QueryCache;
     beforeEach(() => {
-        entities = new EntityMapWrapped();
+        entities = new EntityMapWithEvents();
         resources = new ResourceMapWrapped(() => { }, () => true);
         getArg = jasmine.createSpy<World['getArg']>('getArg');
         queryCache = new QueryCache(entities, resources, getArg);
