@@ -71,9 +71,11 @@ ts_library(
     name = "nova_plugin_test_lib",
     srcs = [
         "controls_test.ts",
+        "fire_weapon_plugin_test.ts",
     ],
     deps = [
         ":nova_plugin",
+        "//nova_ecs/datatypes",
         "@npm//io-ts",
         "@npm//fp-ts",
         "@npm//@types/jasmine",
@@ -82,7 +84,8 @@ ts_library(
 
 jasmine_node_test(
     name = "nova_plugin_test",
-    link_workspace_root = True, # Why is this necessary for `bazel test`
+    # TODO: Don't require patching the module resolver?
+    templated_args = ["--bazel_patch_module_resolver"],
     srcs = [
         ":nova_plugin_test_lib",
     ]
