@@ -69,7 +69,7 @@ const repl = new NovaRepl();
 
 let communicator: CommunicatorServer;
 async function startGame() {
-    // Set up the novaparse webworker
+    // Set up the nova_parse webworker
     const novaParseWorker = new Worker(novaParseWorkerPath);
     const novaParseWorkerApi = Comlink.wrap<NovaParseWorkerApi>(
         nodeEndpoint(novaParseWorker));
@@ -78,7 +78,7 @@ async function startGame() {
     const novaFileData = await novaParseWorkerApi.novaParse;
     //const novaFileData = new NovaParse(novaDataPath, false);
     if (!novaFileData) {
-        throw new Error("Expected novaparse worker to be defined");
+        throw new Error("Expected nova_parse worker to be defined");
     }
     const gameData = new GameDataAggregator([filesystemData, novaFileData]);
     repl.repl.context.gameData = gameData;

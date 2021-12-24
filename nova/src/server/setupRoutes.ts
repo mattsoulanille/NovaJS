@@ -2,8 +2,8 @@ import * as express from "express";
 import { Express } from "express";
 import * as path from 'path';
 import { idsPath, dataPath, settingsPrefix } from "../common/GameDataPaths";
-import { GameDataInterface } from "../../../novadatainterface/GameDataInterface";
-import { NovaDataType } from "../../../novadatainterface/NovaDataInterface";
+import { GameDataInterface } from "../../../nova_data_interface/GameDataInterface";
+import { NovaDataType } from "../../../nova_data_interface/NovaDataInterface";
 
 
 /**

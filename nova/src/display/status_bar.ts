@@ -1,6 +1,6 @@
-import { PlanetData } from "novadatainterface/PlanetData";
-import { ShipData } from "novadatainterface/ShipData";
-import { StatusBarData, StatusBarDataArea } from "novadatainterface/StatusBarData";
+import { PlanetData } from "nova_data_interface/PlanetData";
+import { ShipData } from "nova_data_interface/ShipData";
+import { StatusBarData, StatusBarDataArea } from "nova_data_interface/StatusBarData";
 import { GetEntity, RunQuery, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Position } from "nova_ecs/datatypes/position";

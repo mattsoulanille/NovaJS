@@ -1,4 +1,4 @@
-import { SystemData } from "novadatainterface/SystemData";
+import { SystemData } from "nova_data_interface/SystemData";
 import * as PIXI from 'pixi.js';
 import { Observable } from "rxjs";
 import { GameData } from "../client/gamedata/GameData";

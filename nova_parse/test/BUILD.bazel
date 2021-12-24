@@ -1,0 +1,55 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:defaults.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+
+# WARNING: Using directory labels here. That means bazel can't
+# detect changes to files within these directories. It only
+# detects when the directories change via addition or deletion
+# of files. It's necessary because the files in these directories
+# have spaces in their names. See the documentation at
+# https://docs.bazel.build/versions/master/build-ref.html#label_directory
+filegroup(
+    name = "nova_parse_test_files",
+    srcs = [
+        "IDSpaceHandlerTestFilesystem",
+        "novaParseTestFilesystem",
+        "testSpriteSheetImage.png",
+        "zephyrFrames.json",
+        "testSpriteSheet.json",
+        "testSpriteSheetFrames.json",
+    ]
+)
+
+ts_library(
+    name = "unit_test_sources",
+    testonly = True,
+    srcs = [
+        "IDSpaceHandler_test.ts",
+        "NovaParse_test.ts",
+        "readNovaFile_test.ts",
+    ],
+    deps = [
+        "//nova_parse/src:nova_parse_libraries",
+        "//nova_parse/src/resource_parsers",
+        "//nova_parse/src/parsers",
+        "//nova_parse",
+        "//nova_data_interface",
+        "@npm//@types/node",
+        "@npm//jasmine",
+        "@npm//@types/jasmine",
+        "@npm//pngjs",
+        "@npm//@types/pngjs",
+        "//nova_parse/test/resource_parsers:test_utils",
+    ]
+)
+
+jasmine_node_test(
+    name = "unit_tests",
+    srcs = [":unit_test_sources"],
+    data = [
+        "//nova_parse/test/resource_parsers/files",
+        ":nova_parse_test_files",
+        "//nova_data_interface",
+    ]
+)

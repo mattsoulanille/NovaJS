@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
-import { Animation } from 'novadatainterface/Animation';
-import { Gettable } from 'novadatainterface/Gettable';
-import { WeaponData } from 'novadatainterface/WeaponData';
+import { Animation } from 'nova_data_interface/Animation';
+import { Gettable } from 'nova_data_interface/Gettable';
+import { WeaponData } from 'nova_data_interface/WeaponData';
 import { Emit, EmitFunction, Entities, GetEntity, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';

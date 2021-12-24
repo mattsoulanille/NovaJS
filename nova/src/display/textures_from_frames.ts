@@ -1,4 +1,4 @@
-import { FrameInfo } from "novadatainterface/SpriteSheetData";
+import { FrameInfo } from "nova_data_interface/SpriteSheetData";
 import * as PIXI from "pixi.js";
 
 export function texturesFromFrames(frames: { [index: string]: FrameInfo }) {

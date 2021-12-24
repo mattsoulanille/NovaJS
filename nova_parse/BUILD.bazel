@@ -1,0 +1,19 @@
+package(default_visibility = ["//visibility:public"])
+
+
+load("//:defaults.bzl", "ts_library")
+load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
+
+ts_library(
+    name = "nova_parse",
+    srcs = ["NovaParse.ts"],
+    module_name = "nova_parse",
+    deps = [
+        "@npm//@types/node",
+        "@npm//resourceforkjs",
+        "//nova_data_interface",
+        "//nova_parse/src/resource_parsers",
+        "//nova_parse/src:nova_parse_libraries",
+        "//nova_parse/src/parsers",
+    ]
+)

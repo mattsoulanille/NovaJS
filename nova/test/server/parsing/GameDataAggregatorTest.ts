@@ -1,13 +1,13 @@
 import * as chai from "chai";
 import * as chaiAsPromised from "chai-as-promised";
 import "mocha";
-import { GameDataInterface } from "../../../../novadatainterface/GameDataInterface";
-import { NovaDataInterface } from "../../../../novadatainterface/NovaDataInterface";
-import { Gettable } from "../../../../novadatainterface/Gettable";
-import { BaseData } from "../../../../novadatainterface/BaseData";
+import { GameDataInterface } from "../../../../nova_data_interface/GameDataInterface";
+import { NovaDataInterface } from "../../../../nova_data_interface/NovaDataInterface";
+import { Gettable } from "../../../../nova_data_interface/Gettable";
+import { BaseData } from "../../../../nova_data_interface/BaseData";
 import { GameDataAggregator } from "../../../src/server/parsing/GameDataAggregator";
 
-import { NovaIDs, DefaultNovaIDs } from "../../../../novadatainterface/NovaIDs";
+import { NovaIDs, DefaultNovaIDs } from "../../../../nova_data_interface/NovaIDs";
 
 
 before(function() {

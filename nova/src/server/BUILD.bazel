@@ -17,7 +17,7 @@ ts_library(
         "@npm//express",
         "@npm//@types/express",
         #"//nova/src/proto:protobufjs_bundle",
-        "//novadatainterface",
+        "//nova_data_interface",
         "//nova/src/server/parsing",
         #"//nova/src/engine",
         "//nova/src/common",

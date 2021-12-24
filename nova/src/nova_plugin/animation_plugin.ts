@@ -1,5 +1,5 @@
-import { Animation } from "novadatainterface/Animation";
-import { ExplosionData } from "novadatainterface/ExplosionData";
+import { Animation } from "nova_data_interface/Animation";
+import { ExplosionData } from "nova_data_interface/ExplosionData";
 import { Component } from "nova_ecs/component";
 import { Plugin } from "nova_ecs/plugin";
 import { Provide } from "nova_ecs/provider";

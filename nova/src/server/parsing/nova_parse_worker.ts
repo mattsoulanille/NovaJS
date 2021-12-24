@@ -1,6 +1,6 @@
 import * as Comlink from "comlink";
 import nodeEndpoint from "comlink/dist/esm/node-adapter";
-import { NovaParse } from "novaparse/NovaParse";
+import { NovaParse } from "nova_parse/NovaParse";
 import { parentPort } from "worker_threads";
 
 let novaParse: NovaParse | undefined;

@@ -1,4 +1,4 @@
-import { WeaponDamage } from 'novadatainterface/WeaponData';
+import { WeaponDamage } from 'nova_data_interface/WeaponData';
 import { Emit, EmitFunction, RunQuery, RunQueryFunction } from 'nova_ecs/arg_types';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';

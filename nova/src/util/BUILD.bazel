@@ -6,7 +6,7 @@ ts_library(
     name = "util",
     srcs = glob(["*.ts"]),
     deps = [
-        "//novadatainterface",
+        "//nova_data_interface",
         "//nova_ecs/plugins",
         "//nova_ecs:ecs",
     ]

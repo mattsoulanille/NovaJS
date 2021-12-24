@@ -1,8 +1,8 @@
 import { PlanetDrawable } from "novajs/nova/src/client/display/PlanetDrawable";
 import { Position } from "novajs/nova/src/engine/Position";
 import { PlanetState } from "novajs/nova/src/proto/planet_state_pb";
-import { MockGameData } from "novadatainterface/MockGameData";
-import { getDefaultPlanetData } from "novadatainterface/PlanetData";
+import { MockGameData } from "nova_data_interface/MockGameData";
+import { getDefaultPlanetData } from "nova_data_interface/PlanetData";
 
 describe("PlanetDrawable", function() {
 

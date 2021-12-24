@@ -1,4 +1,4 @@
-import { WeaponData } from 'novadatainterface/WeaponData';
+import { WeaponData } from 'nova_data_interface/WeaponData';
 import { Emit, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';

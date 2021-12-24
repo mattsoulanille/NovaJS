@@ -1,5 +1,5 @@
 import * as t from 'io-ts';
-import { ShipData, ShipPhysics } from "novadatainterface/ShipData";
+import { ShipData, ShipPhysics } from "nova_data_interface/ShipData";
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';

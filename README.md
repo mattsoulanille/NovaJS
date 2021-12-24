@@ -124,11 +124,9 @@ Accepting PRs, but this project is still in early stages. Documentation is poor 
 ## Project Structure
 The project is organized as a monorepo and has several subpackages:
 * `nova`: The server, client, and engine for NovaJS.
-* `novaparse`: Parses Nova Files and Plug-ins.
-* `novadatainterface`: The interface implemented by `novaparse` and used by `nova`. It's a separate package because it made development easier while the project was using lerna to manage its monorepo, but it could perhaps be merged into `nova` (but this is low priority).
+* `nova_parse`: Parses Nova Files and Plug-ins.
+* `nova_data_interface`: The interface implemented by `nova_parse` and used by `nova`. It's a separate package because it made development easier while the project was using lerna to manage its monorepo, but it could perhaps be merged into `nova` (but this is low priority).
 * `nova_ecs`: The Entity Component System used by NovaJS.
-
-(Why does `nova_ecs` use snake case while the others don't? I don't actually know. I should change `novaparse` and `novadatainterface` into `nova_parse` and `nova_data_interface`)
 
 ## Known Bugs
 * Ship velocity scaling is wrong in that ships are far too fast. I think the scale should be 3/10 of what it currently is, but Nova gives a speed boost to the player when they're not playing in strict mode, so I don't know what the actual scale is. Perhaps the coordinate system needs to be redone so that no scaling is needed for non-player ships?

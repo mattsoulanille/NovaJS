@@ -49,7 +49,7 @@ ts_library(
         "//nova_ecs:ecs",
         "//nova_ecs/plugins",
         "//nova_ecs/datatypes",
-        "//novadatainterface",
+        "//nova_data_interface",
         "//nova/src/communication:communication_lib",
         "//nova/src/common",
         "//nova/src/client/gamedata",
