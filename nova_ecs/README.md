@@ -95,13 +95,55 @@ world.step();
 ```
 
 ### Resource
-This documentation is TODO, but a resource is essentially a globally available component that's added to the world instead of to an entity. Similar to Bevy's [Resource](https://bevyengine.org/learn/book/getting-started/resources/).
+A resource is again, similar to Bevy's [Resource](https://bevyengine.org/learn/book/getting-started/resources/). A resource differs from a component by being a globally unique piece of data. Real time/elapsed time is a good example, it is globally true and generally shouldn't be changed. 
+
+Taken from time_plugin.ts, circa late 2021
+```ts
+export const TimeResource = new Resource<Time>('time');
+
+export const TimeSystem = new System({
+    name: 'time',
+    args: [TimeResource, SingletonComponent] as const,
+    step: (time) => {
+        const now = new Date().getTime();
+        time.delta_ms = now - time.time;
+        time.delta_s = time.delta_ms / 1000;
+        time.time = now;
+        time.frame++;
+    }
+});
+```
 
 ### Query
-This documentation is TODO. Similar to Bevy's Query. Everything uses it. `args` of `System` are actually just used to create a query.
+Similar to Bevy's [Query](https://bevy-cheatbook.github.io/programming/queries.html). 
+
+Queries are simply connections to access entities. Queries can be used individually, or with bundles of components. They can also be filtered by using *with/without*. Everything uses it to pass data. `args` of `System` are actually just used to create a query.
+
+Here's an excerpt from collisions_plugin.ts, circa late 2021
+```ts
+export const CollisionSystem = new System({
+    name: "CollisionSystem",
+    after: [UpdateHullSystem],
+    args: [RBushResource, new Query([HullComponent, MovementStateComponent,
+        UUID, CollisionInteractionComponent] as const),
+        Emit, SingletonComponent] as const,
+    step(rbush, colliders, emit) {
+        rbush.clear();
+```
+
+In this case, a query is used to return mthe hull and movement components so that the visuals can work with the collision system.
 
 ### Modifier
 This documentation is TODO. Allows doing more with queries than just requiring components. See `optional.ts` and `provider.ts` for example uses.
 
 ### Plugins
-Docs TODO, but they essentially are just functions that the world calls with itself.
+Plugins are essentially libraries that allow for the fast and modular ability to add and subtract features from a given subset of options. You can pretty quickly utilize them using this syntax.
+
+```ts
+fn main() {
+    App::build()
+        .add_plugins(DefaultPlugins)
+        .add_plugin(HelloPlugin)
+        .run();
+}
+```
