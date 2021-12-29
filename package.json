@@ -81,7 +81,7 @@
         "pngjs": "^6.0.0",
         "protobufjs": "^6.11.2",
         "resourceforkjs": "^0.1.0",
-        "rxjs": "^7.4.0",
+        "rxjs": "^7.5.1",
         "supports-color": "^9.2.1",
         "ts-enum-util": "^4.0.2",
         "uuid": "^8.3.2",
