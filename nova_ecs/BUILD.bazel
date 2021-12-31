@@ -30,9 +30,12 @@ ts_library(
         "utils.ts",
         "without.ts",
         "world.ts",
+        "bin_set.ts",
     ],
     module_name = "nova_ecs",
     deps = [
+        "@npm//uuid",
+        "@npm//@types/uuid",
         "@npm//fp-ts",
         "@npm//immer",
         "@npm//io-ts",
@@ -53,6 +56,7 @@ ts_library(
         "system_test.ts",
         "utils_test.ts",
         "world_test.ts",
+        "bin_set_test.ts",
     ],
     deps = [
         ":ecs",

@@ -1,4 +1,4 @@
-import { Entity, EntityBuilder } from "nova_ecs/entity";
+import { Entity } from "nova_ecs/entity";
 import { AddEvent } from "nova_ecs/events";
 import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { System } from "nova_ecs/system";
@@ -89,7 +89,7 @@ async function jumpTo({ entity, to, uuid }: { entity: Entity, to: string, uuid: 
 
     newSystem.events.get(FinishJumpEvent).subscribe(jumpTo);
 
-    world.entities.set(to, new EntityBuilder()
+    world.entities.set(to, new Entity()
         .addComponent(SystemComponent, newSystem));
 
     // Wait for the server to connect

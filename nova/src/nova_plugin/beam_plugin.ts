@@ -4,7 +4,7 @@ import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { Entity, EntityBuilder } from 'nova_ecs/entity';
+import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
@@ -68,7 +68,7 @@ class BeamWeaponEntry extends WeaponEntry {
             new SAT.Vector(width / 2, 0),
         ]);
 
-        const beam = new EntityBuilder()
+        const beam = new Entity()
             .setName(this.data.name)
             .addComponent(MovementStateComponent, {
                 position,

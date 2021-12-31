@@ -1,7 +1,7 @@
 import { Animation } from "novadatainterface/Animation";
 import { Defaults } from 'novadatainterface/Defaults';
 import { MockGameData } from 'novadatainterface/MockGameData';
-import { EntityBuilder } from 'nova_ecs/entity';
+import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
 import { Display } from './display_plugin';
@@ -38,7 +38,7 @@ describe('display plugin', () => {
             prefix: 'test',
         }
 
-        const testEntity = new EntityBuilder()
+        const testEntity = new Entity()
             .addComponent(AnimationComponent, animation)
 
         const spriteSheetFrames = await gameData.data.SpriteSheetFrames.get('test:128');

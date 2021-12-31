@@ -7,10 +7,7 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { PlanetComponent } from "./planet_plugin";
 
 export function makePlanet(planetData: PlanetData): Entity {
-    const planet: Entity = {
-        components: new Map(),
-        name: planetData.name,
-    };
+    const planet = new Entity(planetData.name);
 
     planet.components.set(PlanetComponent, {
         id: planetData.id,

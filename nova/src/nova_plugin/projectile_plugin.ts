@@ -3,7 +3,7 @@ import { Emit, Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { Entity, EntityBuilder } from 'nova_ecs/entity';
+import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
@@ -46,7 +46,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
         }
 
         this.factoryQueue = new FactoryQueue(() => {
-            const projectile = new EntityBuilder()
+            const projectile = new Entity(this.data.name)
                 .addComponent(ProjectileDataComponent, this.data)
                 .addComponent(ProjectileComponent, { id: this.data.id })
                 .addComponent(MovementStateComponent, {

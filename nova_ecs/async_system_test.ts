@@ -6,7 +6,7 @@ import { AsyncSystem, AsyncSystemResource } from './async_system';
 import { Component, ComponentData } from './component';
 import { Angle } from './datatypes/angle';
 import { Vector } from './datatypes/vector';
-import { EntityBuilder } from './entity';
+import { Entity } from './entity';
 import { EcsEvent, StepEvent } from './events';
 import { Optional } from './optional';
 import { Query } from './query';
@@ -55,7 +55,7 @@ describe('async system', () => {
         });
 
         const uuid = v4();
-        world.entities.set(uuid, new EntityBuilder()
+        world.entities.set(uuid, new Entity()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
         const handle = world.entities.get(uuid)!;
 
@@ -89,7 +89,7 @@ describe('async system', () => {
         });
 
         const uuid = v4();
-        world.entities.set(uuid, new EntityBuilder()
+        world.entities.set(uuid, new Entity()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
 
         world.addSystem(asyncSystem);
@@ -114,7 +114,7 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -152,9 +152,9 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set('small foo', new EntityBuilder()
+        world.entities.set('small foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.entities.set('large foo', new EntityBuilder()
+        world.entities.set('large foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 1000 }));
 
         world.step();
@@ -194,9 +194,9 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set('small foo', new EntityBuilder()
+        world.entities.set('small foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.entities.set('large foo', new EntityBuilder()
+        world.entities.set('large foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 1000 }));
 
         world.step();
@@ -236,9 +236,9 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set('small foo', new EntityBuilder()
+        world.entities.set('small foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.entities.set('large foo', new EntityBuilder()
+        world.entities.set('large foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 1000 }));
 
         world.step();
@@ -278,9 +278,9 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set('small foo', new EntityBuilder()
+        world.entities.set('small foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.entities.set('large foo', new EntityBuilder()
+        world.entities.set('large foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 1000 }));
 
         world.emit(AddEvent, 1);
@@ -317,7 +317,7 @@ describe('async system', () => {
             });
 
             world.addSystem(asyncSystem);
-            world.entities.set('FooEntity', new EntityBuilder()
+            world.entities.set('FooEntity', new Entity()
                 .addComponent(FOO_COMPONENT, { x: 0 }));
 
             for (let i = 0; i < 4; i++) {
@@ -336,16 +336,14 @@ describe('async system', () => {
             args: [Entities, UUID, BAR_COMPONENT] as const,
             step: async (entities, uuid) => {
                 await sleep(10);
-                entities.set('test uuid', new EntityBuilder()
-                    .addComponent(FOO_COMPONENT, { x: 123 }).build());
+                entities.set('test uuid', new Entity()
+                    .addComponent(FOO_COMPONENT, { x: 123 }));
                 entities.delete(uuid);
             }
         });
 
-        world.entities.set('remove me', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'bar' })
-            .build()
-        );
+        world.entities.set('remove me', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'bar' }));
 
         world.addSystem(addEntitySystem);
 
@@ -365,7 +363,7 @@ describe('async system', () => {
             velocity: new Vector(1, 2),
             rotation: new Angle(3),
         };
-        const movable = new EntityBuilder()
+        const movable = new Entity()
             .addComponent(MovementComponent, expectedMovementComponent);
 
         const addedMovement = new Component<{ added: boolean }>('added');
@@ -415,7 +413,7 @@ describe('async system', () => {
 
         world.addSystem(asyncSystem);
         world.addSystem(syncSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -447,9 +445,9 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }))
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 }))
 
         world.step();
@@ -473,9 +471,9 @@ describe('async system', () => {
         });
 
         world.addSystem(asyncSystem);
-        world.entities.set('firstEntity', new EntityBuilder()
+        world.entities.set('firstEntity', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }))
-        world.entities.set('secondEntity', new EntityBuilder()
+        world.entities.set('secondEntity', new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 }))
 
         world.step();
@@ -505,7 +503,7 @@ describe('async system', () => {
         });
 
         const uuid = v4();
-        world.entities.set(uuid, new EntityBuilder()
+        world.entities.set(uuid, new Entity()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
         const handle = world.entities.get(uuid)!;
 
@@ -533,7 +531,7 @@ describe('async system', () => {
             }
         });
 
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .addComponent(BAR_COMPONENT, { y: 'not changed' });
         world.entities.set('test entity', entity);
 
@@ -570,9 +568,8 @@ describe('async system', () => {
 
         const foo = { x: 123 };
         const draftFoo = createDraft(foo);
-        const entity = new EntityBuilder()
-            .addComponent(FOO_COMPONENT, draftFoo)
-            .build();
+        const entity = new Entity()
+            .addComponent(FOO_COMPONENT, draftFoo);
 
         world.entities.set('testEntity', entity);
 
@@ -609,9 +606,8 @@ describe('async system', () => {
         world.addSystem(logSystem);
 
         const testData = new TestClass(123);
-        const entity = new EntityBuilder()
-            .addComponent(TestClassComponent, testData)
-            .build();
+        const entity = new Entity()
+            .addComponent(TestClassComponent, testData);
 
         world.entities.set('testEntity', entity);
 
@@ -633,7 +629,7 @@ describe('async system', () => {
             }
         });
 
-        let entity = new EntityBuilder()
+        let entity = new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 });
         world.entities.set('test entity', entity);
 

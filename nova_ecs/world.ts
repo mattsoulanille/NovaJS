@@ -3,7 +3,7 @@ import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
-import { Entity, EntityBuilder } from "./entity";
+import { Entity } from "./entity";
 import { EntityMapWithEvents } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { SyncSubject } from "./event_map";
@@ -102,10 +102,9 @@ export class World {
         this.resources.set(RunQuery, this.runQuery);
         this.resources.set(GetWorld, this);
         this.resources.set(Emit, this.boundEmit);
-        this.entities.set('singleton', new EntityBuilder()
+        this.entities.set('singleton', new Entity()
             .addComponent(SingletonComponent, undefined)
-            .setName('singleton')
-            .build());
+            .setName('singleton'));
 
         // Get the handle for the singleton entity.
         this.singletonEntity = this.entities.get('singleton')!;

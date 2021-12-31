@@ -44,11 +44,7 @@ export class Serializer {
                 return maybeState;
             }
             const state = maybeState.right;
-
-            const entity: Entity = {
-                components: new Map(),
-                name: state.name,
-            };
+            const entity = new Entity(state.name);
 
             for (const [componentName, encodedData] of state.components) {
                 const component = this.componentsByName.get(componentName);

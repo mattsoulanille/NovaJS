@@ -1,7 +1,7 @@
 import { Query } from "nova_ecs/query";
 import { Entities, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
-import { EntityBuilder } from "nova_ecs/entity";
+import { Entity } from "nova_ecs/entity";
 import { DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { TimePlugin, TimeResource } from "nova_ecs/plugins/time_plugin";
@@ -150,7 +150,7 @@ const AddSquares = new System({
                     color |= (Math.pow(c, gamma) * 255) & 0xff;
                 }
 
-                entities.set(v4(), new EntityBuilder()
+                entities.set(v4(), new Entity()
                     .addComponent(SquarePhysics, {
                         color,
                         position,
@@ -161,7 +161,7 @@ const AddSquares = new System({
                         },
                         createTime: time.time,
                         life,
-                    }).build());
+                    }));
             }
         }
     }
@@ -208,7 +208,7 @@ const Demo: Plugin = {
         world.addSystem(AddSquares);
         world.addSystem(CountSquares);
         world.addSystem(ChangeMax);
-        world.entities.set('squareEmitter', new EntityBuilder()
+        world.entities.set('squareEmitter', new Entity()
             .addComponent(AddSquaresComponent, {
                 count: 3,
                 period: 0,
@@ -216,7 +216,7 @@ const Demo: Plugin = {
                 radius: 160,
                 speed: 4,
                 max: 200
-            }).build());
+            }));
 
 
         const entityCountText = new PIXI.Text('asdfasdfasdf', new PIXI.TextStyle({
@@ -226,9 +226,8 @@ const Demo: Plugin = {
         entityCountText.anchor.y = 1;
 
         container.addChild(entityCountText);
-        world.entities.set('entityCount', new EntityBuilder()
-            .addComponent(TextComponent, entityCountText)
-            .build())
+        world.entities.set('entityCount', new Entity()
+            .addComponent(TextComponent, entityCountText));
 
         document.addEventListener('keydown', (evt) => {
             if (evt.code === 'Equal') {

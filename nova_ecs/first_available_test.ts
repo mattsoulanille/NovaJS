@@ -1,6 +1,6 @@
 import 'jasmine';
 import { Component } from './component';
-import { EntityBuilder } from './entity';
+import { Entity } from './entity';
 import { FirstAvailable } from './first_available';
 import { System } from './system';
 import { World } from './world';
@@ -13,18 +13,15 @@ describe('first available', () => {
     it('returns the first available component', () => {
         const world = new World();
 
-        const fooOnly = new EntityBuilder()
-            .addComponent(FooComponent, { x: 123 })
-            .build();
+        const fooOnly = new Entity()
+            .addComponent(FooComponent, { x: 123 });
 
-        const barOnly = new EntityBuilder()
-            .addComponent(BarComponent, { y: 'hello' })
-            .build();
+        const barOnly = new Entity()
+            .addComponent(BarComponent, { y: 'hello' });
 
-        const hasBoth = new EntityBuilder()
+        const hasBoth = new Entity()
             .addComponent(FooComponent, { x: 456 })
-            .addComponent(BarComponent, { y: 'should not be added' })
-            .build();
+            .addComponent(BarComponent, { y: 'should not be added' });
 
         const values = new Set<string | number>();
         const fooBarSystem = new System({

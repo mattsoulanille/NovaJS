@@ -1,5 +1,4 @@
 import { UnknownComponent } from "./component";
-import { ComponentMap } from "./component_map";
 import { Entity } from "./entity";
 import { EventMap, SyncSubject } from "./event_map";
 
@@ -33,10 +32,7 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
             this.entityChangeUnsubscribe.get(uuid)?.unsubscribe();
         }
 
-        // Set components to an EventMap
-        const componentsEventMap = new EventMap(entity.components);
-        const componentEvents = componentsEventMap.events;
-        entity.components = componentsEventMap as ComponentMap;
+        const componentEvents = entity.components.events;
 
         const s1 = componentEvents.add.subscribe(([component]) => {
             this.events.addComponent.next([uuid, entity, component]);

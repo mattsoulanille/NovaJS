@@ -4,7 +4,7 @@ import 'jasmine';
 import { GetEntity } from 'nova_ecs/arg_types';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
-import { EntityBuilder } from '../entity';
+import { Entity } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
 import { DeltaMaker, DeltaPlugin, DeltaResource, OptionalComponentDelta } from './delta_plugin';
@@ -69,11 +69,10 @@ describe('Delta Plugin', () => {
     });
 
     it('sends the state of new components', () => {
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
-            .addComponent(BarComponent, { y: 'Hello' })
-            .build();
+            .addComponent(BarComponent, { y: 'Hello' });
 
         const firstDelta = deltaMaker1.getDelta(entity);
         if (!firstDelta?.componentStates) {
@@ -92,11 +91,10 @@ describe('Delta Plugin', () => {
     });
 
     it('sends the state of replaced components', () => {
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
-            .addComponent(BarComponent, { y: 'Hello' })
-            .build();
+            .addComponent(BarComponent, { y: 'Hello' });
 
         const firstDelta = deltaMaker1.getDelta(entity);
         if (!firstDelta?.componentStates) {
@@ -125,11 +123,10 @@ describe('Delta Plugin', () => {
     });
 
     it('creates new components that were sent', () => {
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
-            .addComponent(BarComponent, { y: 'Hello' })
-            .build();
+            .addComponent(BarComponent, { y: 'Hello' });
 
         const delta = deltaMaker1.getDelta(entity);
         if (!delta) {
@@ -137,7 +134,7 @@ describe('Delta Plugin', () => {
             return;
         }
 
-        const entity2 = new EntityBuilder().build();
+        const entity2 = new Entity();
         deltaMaker2.applyDelta(entity2, delta);
 
         expect(entity2.components.get(FooComponent))
@@ -148,14 +145,13 @@ describe('Delta Plugin', () => {
     });
 
     it('updates components with deltas', () => {
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
             .addComponent(BarComponent, { y: 'Hello' })
-            .addComponent(SetComponent, { s: new Set(['asdf']) })
-            .build();
+            .addComponent(SetComponent, { s: new Set(['asdf']) });
 
-        const entity2 = new EntityBuilder(entity).build();
+        const entity2 = new Entity(entity.name, entity.components);
 
         const fooBarSystem = new System({
             name: 'FooBarSystem',
@@ -194,13 +190,12 @@ describe('Delta Plugin', () => {
     });
 
     it('removes deleted components', () => {
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
-            .addComponent(BarComponent, { y: 'Hello' })
-            .build();
+            .addComponent(BarComponent, { y: 'Hello' });
 
-        const entity2 = new EntityBuilder(entity).build();
+        const entity2 = new Entity(entity.name, entity.components);
 
         const removeFooSystem = new System({
             name: 'FooBarSystem',
