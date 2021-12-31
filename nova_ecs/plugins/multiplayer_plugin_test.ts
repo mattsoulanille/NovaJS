@@ -3,7 +3,7 @@ import * as t from 'io-ts';
 import 'jasmine';
 import { Entities, UUID } from '../arg_types';
 import { Component } from '../component';
-import { EntityBuilder } from '../entity';
+import { Entity } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
 import { DeltaResource } from './delta_plugin';
@@ -80,13 +80,13 @@ describe('Multiplayer Plugin', () => {
         });
         world2.addSystem(reportSystem);
 
-        world1.entities.set('test entity uuid', new EntityBuilder()
+        world1.entities.set('test entity uuid', new Entity()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             })
             .addComponent(BarComponent, {
                 y: 'a test component',
-            }).build());
+            }));
 
         world1.step();
         world2.step();
@@ -117,13 +117,13 @@ describe('Multiplayer Plugin', () => {
         });
         world2.addSystem(reportSystem);
 
-        world1.entities.set('test entity uuid', new EntityBuilder()
+        world1.entities.set('test entity uuid', new Entity()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             })
             .addComponent(BarComponent, {
                 y: 'a test component',
-            }).build());
+            }));
 
         world1.step();
         world2.step();
@@ -168,13 +168,13 @@ describe('Multiplayer Plugin', () => {
 
         world1.addSystem(removeBarSystem);
         const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new EntityBuilder()
+        world1.entities.set(testUuid, new Entity()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             })
             .addComponent(BarComponent, {
                 y: 'a test component',
-            }).build());
+            }));
 
         world1.step();
         world2.step();
@@ -195,12 +195,12 @@ describe('Multiplayer Plugin', () => {
 
     it('drafts components of entities it owns', () => {
         const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new EntityBuilder()
+        world1.entities.set(testUuid, new Entity()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             }).addComponent(BarComponent, {
                 y: 'a test component',
-            }).build());
+            }));
 
         world1.step();
 
@@ -210,12 +210,12 @@ describe('Multiplayer Plugin', () => {
 
     it('does not draft components of entities it does not own', () => {
         const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new EntityBuilder()
+        world1.entities.set(testUuid, new Entity()
             .addComponent(MultiplayerData, {
                 owner: 'not me',
             }).addComponent(BarComponent, {
                 y: 'a test component',
-            }).build());
+            }));
 
         world1.step();
 
@@ -225,14 +225,14 @@ describe('Multiplayer Plugin', () => {
 
     it('does not draft non-multiplayer components', () => {
         const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new EntityBuilder()
+        world1.entities.set(testUuid, new Entity()
             .addComponent(MultiplayerData, {
                 owner: 'world1 uuid',
             }).addComponent(BarComponent, {
                 y: 'a test component',
             }).addComponent(NonMultiplayer, {
                 z: 'not multiplayer'
-            }).build());
+            }));
 
         world1.step();
 

@@ -4,7 +4,7 @@ import { Defaults } from 'novadatainterface/Defaults';
 import { PlanetData } from 'novadatainterface/PlanetData';
 import { AsyncSystemResource } from './async_system';
 import { Component } from './component';
-import { EntityBuilder } from './entity';
+import { Entity } from './entity';
 import { EventMap } from './event_map';
 import { Provide, ProvideAsync } from './provider';
 import { System } from './system';
@@ -52,8 +52,8 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        world.entities.set('word1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+        world.entities.set('word1', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         world.step();
 
@@ -64,9 +64,9 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        world.entities.set('word1', new EntityBuilder()
+        world.entities.set('word1', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         world.step();
 
@@ -90,8 +90,8 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        world.entities.set('word1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+        world.entities.set('word1', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         world.step();
         world.step();
@@ -123,8 +123,8 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('word1', word1);
         world.step();
@@ -139,8 +139,8 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('word1', word1);
         world.step();
@@ -169,8 +169,8 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('word1', word1);
         world.step();
@@ -191,7 +191,7 @@ describe('Provide', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder().build();
+        const word1 = new Entity();
 
         world.entities.set('word1', word1);
         world.step();
@@ -246,8 +246,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        world.entities.set('word1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+        world.entities.set('word1', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         world.step();
         expect(wordLengths).toEqual([]);
@@ -261,9 +261,9 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        world.entities.set('word1', new EntityBuilder()
+        world.entities.set('word1', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         world.step();
         clock.tick(11);
@@ -290,8 +290,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        world.entities.set('word1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build());
+        world.entities.set('word1', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         world.step();
         expect(wordLengths).toEqual([]);
@@ -318,8 +318,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('word1', word1);
         world.step();
@@ -356,8 +356,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('word1', word1);
         world.step();
@@ -409,8 +409,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const word1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const word1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('word1', word1);
         world.step();
@@ -453,8 +453,8 @@ describe('ProvideAsync', () => {
 
         world.addSystem(fooProvider);
 
-        const testEntity = new EntityBuilder()
-            .addComponent(OtherFoo, { x: 123 }).build();
+        const testEntity = new Entity()
+            .addComponent(OtherFoo, { x: 123 });
         world.entities.set('testEntity', testEntity);
 
         world.step();
@@ -480,8 +480,8 @@ describe('ProvideAsync', () => {
 
         world.addSystem(PlanetDataProvider);
 
-        const testEntity = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const testEntity = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
         world.entities.set('testEntity', testEntity);
 
         world.step();
@@ -510,8 +510,8 @@ describe('ProvideAsync', () => {
         let otherFooData = { x: 123 };
         const draftFoo = createDraft(otherFooData);
 
-        const testEntity = new EntityBuilder()
-            .addComponent(OtherFoo, draftFoo).build();
+        const testEntity = new Entity()
+            .addComponent(OtherFoo, draftFoo);
         world.entities.set('testEntity', testEntity);
 
         world.step();
@@ -530,8 +530,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        let entity = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        let entity = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
         world.entities.set('word1', entity);
 
         world.step();
@@ -577,8 +577,8 @@ describe('ProvideAsync', () => {
         world.addSystem(fooProvider);
         world.addSystem(logSystem);
 
-        const entity = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' }).build();
+        const entity = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
         world.entities.set('word1', entity);
 
         world.step();

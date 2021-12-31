@@ -1,7 +1,7 @@
 import { right } from 'fp-ts/lib/Either';
 import 'jasmine';
 import { Component } from './component';
-import { EntityBuilder } from './entity';
+import { Entity } from './entity';
 import { EntityMapWithEvents } from './entity_map';
 import { Query } from './query';
 import { QueryCache } from './query_cache';
@@ -33,17 +33,17 @@ describe('query cache', () => {
 
     it('gets query args for each supported entity', () => {
         const query = new Query([FooComponent]);
-        const e1 = new EntityBuilder()
-            .addComponent(FooComponent, { x: 123 })
-            .build();
+        const e1 = new Entity()
+            .addComponent(FooComponent, { x: 123 });
+
         entities.set('e1', e1);
-        const e2 = new EntityBuilder()
-            .addComponent(FooComponent, { x: 456 })
-            .build();
+        const e2 = new Entity()
+            .addComponent(FooComponent, { x: 456 });
+
         entities.set('e2', e2);
-        const e3 = new EntityBuilder()
-            .addComponent(BarComponent, { y: 'hello' })
-            .build();
+        const e3 = new Entity()
+            .addComponent(BarComponent, { y: 'hello' });
+
         entities.set('e3', e3);
 
         const cached = queryCache.get(query);
@@ -55,9 +55,9 @@ describe('query cache', () => {
 
     it('caches results', () => {
         const query = new Query([FooComponent]);
-        const e1 = new EntityBuilder()
-            .addComponent(FooComponent, { x: 123 })
-            .build();
+        const e1 = new Entity()
+            .addComponent(FooComponent, { x: 123 });
+
         entities.set('e1', e1);
 
         const cached = queryCache.get(query);
@@ -70,9 +70,9 @@ describe('query cache', () => {
 
     it('uses cache when an entity is set to the same value', () => {
         const query = new Query([FooComponent]);
-        const e1 = new EntityBuilder()
-            .addComponent(FooComponent, { x: 123 })
-            .build();
+        const e1 = new Entity()
+            .addComponent(FooComponent, { x: 123 });
+
         entities.set('e1', e1);
 
         const cached = queryCache.get(query);
@@ -89,9 +89,9 @@ describe('query cache', () => {
 
     it('invalidates cache when an entity is set to a different value', () => {
         const query = new Query([FooComponent]);
-        const e1 = new EntityBuilder()
-            .addComponent(FooComponent, { x: 123 })
-            .build();
+        const e1 = new Entity()
+            .addComponent(FooComponent, { x: 123 });
+
         entities.set('e1', e1);
 
         const cached = queryCache.get(query);
@@ -100,9 +100,9 @@ describe('query cache', () => {
         cached.getResult();
         expect(getArg).toHaveBeenCalledTimes(1);
 
-        entities.set('e1', new EntityBuilder()
-            .addComponent(FooComponent, { x: 123 })
-            .build());
+        entities.set('e1', new Entity()
+            .addComponent(FooComponent, { x: 123 }));
+
         cached.getResult();
 
         expect(getArg).toHaveBeenCalledTimes(2);
@@ -110,7 +110,7 @@ describe('query cache', () => {
 
     it('uses cache when a resource is set to the same value', () => {
         const query = new Query([BazResource]);
-        const e1 = new EntityBuilder().build();
+        const e1 = new Entity();
         entities.set('e1', e1);
         const resourceVal = { z: ['foo', 'bar'] };
         resources.set(BazResource, resourceVal);
@@ -129,7 +129,7 @@ describe('query cache', () => {
 
     it('invalidates the cache when a resource changes', () => {
         const query = new Query([BazResource]);
-        const e1 = new EntityBuilder().build();
+        const e1 = new Entity();
         entities.set('e1', e1);
         resources.set(BazResource, { z: ['foo', 'bar'] });
 

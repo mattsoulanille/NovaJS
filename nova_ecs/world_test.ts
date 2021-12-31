@@ -2,7 +2,7 @@ import 'jasmine';
 import { v4 } from 'uuid';
 import { Emit, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types';
 import { Component } from './component';
-import { Entity, EntityBuilder } from './entity';
+import { Entity } from './entity';
 import { AddEvent, DeleteEvent, EcsEvent } from './events';
 import { Optional } from './optional';
 import { Plugin } from './plugin';
@@ -57,10 +57,10 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' })
-            .build()
+
         );
         world.step();
 
@@ -77,7 +77,7 @@ describe('world', () => {
             }
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' })
         );
@@ -99,7 +99,7 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.step();
@@ -123,9 +123,9 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.entities.set('example uuid', new EntityBuilder()
+        world.entities.set('example uuid', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
@@ -152,7 +152,7 @@ describe('world', () => {
 
         world.resources.set(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         world.step();
@@ -172,7 +172,7 @@ describe('world', () => {
 
         world.resources.set(BAZ_RESOURCE, { z: ['foo', 'bar'] });
         world.addSystem(testSystem);
-        world.entities.set('entityUuid', new EntityBuilder()
+        world.entities.set('entityUuid', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         world.step();
@@ -229,7 +229,7 @@ describe('world', () => {
             systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
         }
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(BAR_COMPONENT, { y: 'unset' }));
 
         world.step();
@@ -286,7 +286,7 @@ describe('world', () => {
             systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
         }
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(BAR_COMPONENT, { y: 'unset' }));
 
         world.step();
@@ -306,11 +306,11 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
             .addComponent(BAR_COMPONENT, { y: 'FooBar' }));
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 }));
 
         world.step();
@@ -333,9 +333,9 @@ describe('world', () => {
         });
 
         world.addSystem(testSystem);
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
-        world.entities.set('example uuid', new EntityBuilder()
+        world.entities.set('example uuid', new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 })
             .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
@@ -354,7 +354,7 @@ describe('world', () => {
         const plugin: Plugin = {
             name: 'Test Plugin',
             build: (world) => {
-                world.entities.set(v4(), new EntityBuilder()
+                world.entities.set(v4(), new Entity()
                     .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
                 world.addSystem(new System({
                     name: 'TestSystem',
@@ -384,7 +384,7 @@ describe('world', () => {
         const plugin: Plugin = {
             name: 'Test Plugin',
             build(world) {
-                world.entities.set(v4(), new EntityBuilder()
+                world.entities.set(v4(), new Entity()
                     .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
                 world.addSystem(testSystem);
             },
@@ -431,7 +431,7 @@ describe('world', () => {
         world.addSystem(barSystem);
 
         const uuid = v4();
-        world.entities.set(uuid, new EntityBuilder());
+        world.entities.set(uuid, new Entity());
         const entity = world.entities.get(uuid)!;
         world.step();
         entity.components.set(BAR_COMPONENT, { y: 'added bar' });
@@ -459,20 +459,21 @@ describe('world', () => {
             }
         });
 
-        world.entities.set('e1 uuid', new EntityBuilder()
+        world.entities.set('e1 uuid', new Entity()
             .addComponent(BAR_COMPONENT, { y: 'e1' })
             .addComponent(FOO_COMPONENT, { x: 0 }));
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(BAR_COMPONENT, { y: 'e2' })
             .addComponent(FOO_COMPONENT, { x: 0 }));
 
         world.addSystem(testSystem);
         world.step();
-        const entityBlueprint = new EntityBuilder(world.entities.get('e1 uuid')).build();
-        expect(entityBlueprint).toBeDefined();
+        const e1 = world.entities.get('e1 uuid');
+        const entity = new Entity(e1?.name, e1?.components);
+        expect(entity).toBeDefined();
         world.entities.delete('e1 uuid');
         world.step();
-        world.entities.set(v4(), entityBlueprint!);
+        world.entities.set(v4(), entity!);
         world.step();
 
         expect(stepData).toEqual([
@@ -566,7 +567,7 @@ describe('world', () => {
         const component2 = new Component<string>('TestComponent');
 
         const uuid = v4();
-        world.entities.set(uuid, new EntityBuilder()
+        world.entities.set(uuid, new Entity()
             .addComponent(component1, 'foobar'));
         const handle = world.entities.get(uuid);
 
@@ -584,10 +585,10 @@ describe('world', () => {
             }
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 7 })
         );
 
@@ -611,7 +612,7 @@ describe('world', () => {
             }
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 7 })
             .addComponent(BAR_COMPONENT, { y: 'bar component data' })
         );
@@ -645,7 +646,7 @@ describe('world', () => {
             after: [addBarSystem]
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 7 })
         );
 
@@ -662,7 +663,7 @@ describe('world', () => {
             name: 'AddEntity',
             args: [Entities, BAR_COMPONENT] as const,
             step: (entities) => {
-                entities.set(v4(), new EntityBuilder()
+                entities.set(v4(), new Entity()
                     .addComponent(FOO_COMPONENT, { x: 123 }));
             }
         });
@@ -681,7 +682,7 @@ describe('world', () => {
             after: [addEntitySystem]
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(BAR_COMPONENT, { y: 'not the right bar' })
         );
 
@@ -712,7 +713,7 @@ describe('world', () => {
             after: new Set([fooSystem])
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 4 })
         );
 
@@ -737,11 +738,11 @@ describe('world', () => {
             }
         });
 
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(FOO_COMPONENT, { x: 4 })
             .setName('entity 1')
         );
-        world.entities.set(v4(), new EntityBuilder()
+        world.entities.set(v4(), new Entity()
             .addComponent(BAR_COMPONENT, { y: 'hello' })
             .setName('entity 2')
         );
@@ -762,7 +763,7 @@ describe('world', () => {
         });
 
         const uuid = v4();
-        world.entities.set(uuid, new EntityBuilder()
+        world.entities.set(uuid, new Entity()
             .addComponent(BAR_COMPONENT, { y: 'not changed' }));
 
         const handle = world.entities.get(uuid)!;
@@ -803,9 +804,8 @@ describe('world', () => {
         });
 
         const componentVal = new MutableObject('unchanged');
-        world.entities.set('example uuid', new EntityBuilder()
-            .addComponent(MUTABLE_COMPONENT, componentVal)
-            .build());
+        world.entities.set('example uuid', new Entity()
+            .addComponent(MUTABLE_COMPONENT, componentVal));
 
         world.addSystem(changeComponentSystem);
 
@@ -828,16 +828,15 @@ describe('world', () => {
         });
 
         world.addSystem(deleteSystem);
-        world.entities.set('entity1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'no foo' })
-            .build());
-        world.entities.set('entity2', new EntityBuilder()
+        world.entities.set('entity1', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'no foo' }));
+
+        world.entities.set('entity2', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'has foo' })
-            .build());
-        world.entities.set('entity3', new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 321 })
-            .build());
+            .addComponent(BAR_COMPONENT, { y: 'has foo' }));
+
+        world.entities.set('entity3', new Entity()
+            .addComponent(FOO_COMPONENT, { x: 321 }));
 
         world.step();
         world.step();
@@ -873,16 +872,15 @@ describe('world', () => {
         });
 
         world.addSystem(onDeleteSystem);
-        world.entities.set('entity1', new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'no foo' })
-            .build());
-        world.entities.set('entity2', new EntityBuilder()
+        world.entities.set('entity1', new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'no foo' }));
+
+        world.entities.set('entity2', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'has foo' })
-            .build());
-        world.entities.set('entity3', new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 321 })
-            .build());
+            .addComponent(BAR_COMPONENT, { y: 'has foo' }));
+
+        world.entities.set('entity3', new Entity()
+            .addComponent(FOO_COMPONENT, { x: 321 }));
 
         world.step();
         world.step();
@@ -909,7 +907,7 @@ describe('world', () => {
 
         world.addSystem(AddSystem);
 
-        const entity = new EntityBuilder()
+        const entity = new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 });
 
         world.step();
@@ -926,7 +924,7 @@ describe('world', () => {
         expect(resultUuid).toBe(uuid);
         expect(resultEntity).toBe(entity);
 
-        const entity2 = new EntityBuilder()
+        const entity2 = new Entity()
             .addComponent(BAR_COMPONENT, { y: 'asdf' });
 
         world.entities.set(uuid, entity2);
@@ -946,10 +944,9 @@ describe('world', () => {
         });
 
         world.addSystem(fooBarSystem);
-        world.entities.set('e', new EntityBuilder()
+        world.entities.set('e', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'hello' })
-            .build());
+            .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
         const entity = world.entities.get('e')!;
 
@@ -985,9 +982,8 @@ describe('world', () => {
 
         world.addSystem(fooSystem);
         world.addSystem(reportSystem);
-        world.entities.set('e', new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 100 })
-            .build());
+        world.entities.set('e', new Entity()
+            .addComponent(FOO_COMPONENT, { x: 100 }));
 
         world.step();
         world.emit(AddEvent, 5);
@@ -1033,10 +1029,8 @@ describe('world', () => {
         world.addSystem(fooSystem);
         world.addSystem(reportSystem);
         world.addSystem(emitSystem);
-        world.entities.set('e', new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 100 })
-            .build());
-
+        world.entities.set('e', new Entity()
+            .addComponent(FOO_COMPONENT, { x: 100 }));
 
         world.step();
         world.step();
@@ -1192,7 +1186,7 @@ describe('world', () => {
         world.addSystem(barSystem);
         world.addSystem(fooBarSystem);
 
-        const entity = new EntityBuilder().build();
+        const entity = new Entity();
         world.entities.set('test entity', entity);
 
         systemsRun.push(new Set());
@@ -1234,17 +1228,15 @@ describe('world', () => {
         });
 
         world.addSystem(barSystem);
-        const e1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hi' })
-            .build();
+        const e1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hi' });
 
         world.entities.set('e1', e1);
 
         world.step();
 
-        const e2 = new EntityBuilder()
-            .addComponent(FOO_COMPONENT, { x: 123 })
-            .build();
+        const e2 = new Entity()
+            .addComponent(FOO_COMPONENT, { x: 123 });
         world.entities.set('e2', e2);
 
         world.step();
@@ -1263,9 +1255,8 @@ describe('world', () => {
         });
 
         world.addSystem(barSystem);
-        const e1 = new EntityBuilder()
-            .addComponent(BAR_COMPONENT, { y: 'hello' })
-            .build();
+        const e1 = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
 
         world.entities.set('e1', e1);
         world.step();
@@ -1310,10 +1301,9 @@ describe('world', () => {
 
         world.addSystem(fooSystem);
         world.addSystem(barSystem);
-        world.entities.set('e1', new EntityBuilder()
+        world.entities.set('e1', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 })
-            .addComponent(BAR_COMPONENT, { y: 'asdf' })
-            .build());
+            .addComponent(BAR_COMPONENT, { y: 'asdf' }));
 
         world.step();
 
@@ -1375,13 +1365,13 @@ describe('world', () => {
 
         world.addSystem(runQuerySystem);
 
-        world.entities.set('foo', new EntityBuilder()
+        world.entities.set('foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
-        world.entities.set('bar', new EntityBuilder()
+        world.entities.set('bar', new Entity()
             .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
-        world.entities.set('foobar', new EntityBuilder()
+        world.entities.set('foobar', new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 })
             .addComponent(BAR_COMPONENT, { y: 'bye' }));
 
@@ -1423,13 +1413,13 @@ describe('world', () => {
 
         world.addSystem(runQuerySystem);
 
-        world.entities.set('foo', new EntityBuilder()
+        world.entities.set('foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
-        world.entities.set('bar', new EntityBuilder()
+        world.entities.set('bar', new Entity()
             .addComponent(BAR_COMPONENT, { y: 'hello' }));
 
-        world.entities.set('foobar', new EntityBuilder()
+        world.entities.set('foobar', new Entity()
             .addComponent(FOO_COMPONENT, { x: 456 })
             .addComponent(BAR_COMPONENT, { y: 'bye' }));
 
@@ -1445,10 +1435,10 @@ describe('world', () => {
         const addCallback = jasmine.createSpy('addCallback');
         world.events.get(AddEvent).subscribe(addCallback);
 
-        world.entities.set('foo', new EntityBuilder()
+        world.entities.set('foo', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
-        world.entities.set('bar', new EntityBuilder()
+        world.entities.set('bar', new Entity()
             .addComponent(FOO_COMPONENT, { x: 123 }));
 
         expect(addCallback).toHaveBeenCalledTimes(2);
@@ -1478,7 +1468,7 @@ describe('world', () => {
         const plugin: Plugin = {
             name: 'Test Plugin',
             build(world) {
-                world.entities.set(v4(), new EntityBuilder()
+                world.entities.set(v4(), new Entity()
                     .addComponent(BAR_COMPONENT, { y: 'plugin component' }));
                 world.addSystem(testSystem);
             },

@@ -1,32 +1,35 @@
-import { immerable } from "immer";
+import { BinSet, BinSetC } from "./bin_set";
 import { Component, UnknownComponent } from "./component";
 import { ComponentMap } from "./component_map";
+import { EventMap } from "./event_map";
+import { Query } from "./query";
 
 export type ComponentTypes = Set<UnknownComponent>;
 
-export interface Entity {
-    components: ComponentMap,
-    name?: string;
-}
+export class Entity {
+    readonly components: ComponentMap;
+    readonly componentsBinSet: BinSet<UnknownComponent>;
+    public supportedQueries = new Map<Query, boolean>();
 
-/**
- * A convenience class for creating Entities
- */
-export class EntityBuilder {
-    [immerable] = true;
-    components: ComponentMap;
-    name?: string;
+    constructor(public name?: string, components?: ComponentMap) {
+        this.components = new EventMap(components ?? []) as ComponentMap;
 
-    constructor(entity?: Entity) {
-        this.components = new Map([...entity?.components ?? []]) as ComponentMap;
-        this.name = entity?.name;
-    }
+        this.componentsBinSet = BinSetC.of(new Set(this.components.keys()));
 
-    build(): Entity {
-        return {
-            components: this.components,
-            name: this.name,
-        };
+        const clearSupportedQueries = () => {
+            this.supportedQueries.clear();
+        }
+        this.components.events.add.subscribe(clearSupportedQueries);
+        this.components.events.add.subscribe(([component]) => {
+            this.componentsBinSet.add(component);
+        });
+
+        this.components.events.delete.subscribe(clearSupportedQueries);
+        this.components.events.delete.subscribe((deleted) => {
+            for (const [component] of deleted) {
+                this.componentsBinSet.delete(component);
+            }
+        });
     }
 
     addComponent<Data>(component: Component<Data>, data: Data): this {

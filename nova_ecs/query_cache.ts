@@ -29,6 +29,9 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
     private resultValid = false;
     unsubscribe: () => void;
 
+    private entitySupportedCacheHit = 0;
+    private entitySupportedCacheMiss = 0;
+
     constructor(private queryCache: QueryCache,
         private query: Query,
         private getArg: World['getArg'],
@@ -39,12 +42,27 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         this.resources = new Map([...resources].filter(
             ([resource]) => query.resources.has(resource)));
 
+        const supported = (query: Query, entity: Entity) => {
+            const savedVal = entity.supportedQueries.get(query);
+            if (savedVal) {
+                this.entitySupportedCacheHit++;
+                return true;
+            } else if (savedVal === false) {
+                this.entitySupportedCacheHit++;
+                return false;
+            }
+            const newVal = query.supportsEntity(entity);
+            entity.supportedQueries.set(query, newVal);
+            this.entitySupportedCacheMiss++;
+            return newVal;
+        }
+
         const subscriptions = [
             entities.events.setAlways.subscribe(([uuid, entity]) => {
                 if (this.entities.get(uuid) === entity) {
                     return;
                 }
-                if (query.supportsEntity(entity)) {
+                if (supported(query, entity)) {
                     this.entities.set(uuid, entity);
                 } else {
                     this.entities.delete(uuid);
@@ -54,7 +72,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
             }),
             entities.events.delete.subscribe((vals) => {
                 for (const [uuid, entity] of vals) {
-                    if (query.supportsEntity(entity)) {
+                    if (supported(query, entity)) {
                         this.resultValid = false;
                     }
                     this.entities.delete(uuid);
@@ -62,7 +80,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
                 }
             }),
             entities.events.addComponent.subscribe(([uuid, entity]) => {
-                if (query.supportsEntity(entity)) {
+                if (supported(query, entity)) {
                     this.entities.set(uuid, entity);
                 }
                 this.entityResults.delete(entity); // for `Optional` etc.
@@ -73,7 +91,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
                 this.resultValid = false;
             }),
             entities.events.deleteComponent.subscribe(([uuid, entity, component]) => {
-                if (query.components.has(component) && !query.supportsEntity(entity)) {
+                if (query.components.has(component) && !supported(query, entity)) {
                     this.entities.delete(uuid);
                 }
                 this.entityResults.delete(entity);

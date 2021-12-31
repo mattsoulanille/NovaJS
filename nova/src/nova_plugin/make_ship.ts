@@ -7,10 +7,7 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { ShipComponent } from "./ship_plugin";
 
 export function makeShip(shipData: ShipData): Entity {
-    const ship: Entity = {
-        components: new Map(),
-        name: shipData.name,
-    }
+    const ship = new Entity(shipData.name);
 
     // Set initial movement state for consistency.
     ship.components.set(ShipComponent, {

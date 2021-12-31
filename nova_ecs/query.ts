@@ -1,8 +1,10 @@
-import { ArgTypes } from "./arg_types";
-import { Component, UnknownComponent } from "./component";
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
+import { ArgTypes } from "./arg_types";
+import { BinSetC, BinSet } from "./bin_set";
+import { Component, UnknownComponent } from "./component";
+import { Entity } from "./entity";
 import { Resource, UnknownResource } from "./resource";
-import { subset, WithComponents } from "./utils";
+import { subset } from "./utils";
 
 
 const querySymbol = Symbol('Query');
@@ -19,6 +21,7 @@ export class Query<QueryArgs extends readonly ArgTypes[]
     readonly components: ReadonlySet<UnknownComponent>;
     readonly resources: ReadonlySet<UnknownResource>;
     readonly queries: Query[];
+    readonly componentsBinSet: BinSet<UnknownComponent>;
 
     constructor(readonly args: QueryArgs, readonly name?: string) {
         const modifiers = args.filter(arg => arg instanceof ArgModifier) as UnknownArgModifier[];
@@ -42,10 +45,12 @@ export class Query<QueryArgs extends readonly ArgTypes[]
 
         this.queries = [...(this.args.filter(
             (a): a is Query => (a instanceof Query)))];
+
+        this.componentsBinSet = BinSetC.of(this.components);
     }
 
-    supportsEntity(entity: WithComponents) {
-        return subset(this.components, new Set(entity.components.keys()));
+    supportsEntity(entity: Entity) {
+        return this.componentsBinSet.isSubsetOf(entity.componentsBinSet);
     }
 
     toString() {

@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { Entities, UUID } from 'nova_ecs/arg_types';
-import { EntityBuilder } from "nova_ecs/entity";
+import { Entity } from "nova_ecs/entity";
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from "nova_ecs/plugin";
 import { CommunicatorResource, multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
@@ -94,7 +94,7 @@ export const ServerPlugin: Plugin = {
                     // Create the system if it doesn't exist yet.
                     if (!world.entities.has(systemId)) {
                         const system = makeSystem(systemId, gameData);
-                        world.entities.set(systemId, new EntityBuilder()
+                        world.entities.set(systemId, new Entity()
                             .addComponent(SystemComponent, system));
 
                         console.log(`Created system ${systemId}`);

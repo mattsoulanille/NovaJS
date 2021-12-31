@@ -1,6 +1,6 @@
 import "jasmine";
 import { Component, UnknownComponent } from "./component";
-import { Entity, EntityBuilder } from "./entity";
+import { Entity } from "./entity";
 import { EntityMapWithEvents } from './entity_map';
 
 const FooComponent = new Component<{ x: number }>('foo');
@@ -13,7 +13,7 @@ describe('entity map', () => {
             entityMap.events.addComponent.subscribe(fulfill);
         });
 
-        const entity = new EntityBuilder().build();
+        const entity = new Entity();
         entityMap.set('testEntity', entity);
 
         entity.components.set(BarComponent, { y: 'hello' });
@@ -27,9 +27,8 @@ describe('entity map', () => {
             entityMap.events.deleteComponent.subscribe(fulfill);
         });
 
-        const entity = new EntityBuilder()
-            .addComponent(BarComponent, { y: 'hello' })
-            .build();
+        const entity = new Entity()
+            .addComponent(BarComponent, { y: 'hello' });
         entityMap.set('testEntity', entity);
 
         entity.components.delete(BarComponent);
@@ -47,9 +46,8 @@ describe('entity map', () => {
             });
         });
 
-        const entity = new EntityBuilder()
-            .addComponent(BarComponent, { y: 'hello' })
-            .build();
+        const entity = new Entity()
+            .addComponent(BarComponent, { y: 'hello' });
         entityMap.set('testEntity', entity);
 
         entity.components.set(BarComponent, { y: 'bye' });
