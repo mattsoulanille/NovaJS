@@ -174,7 +174,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
             return this.wrappedResult;
         }
 
-        let supportedEntities: [string, Entity][];
+        let supportedEntities: Iterable<[string, Entity]>;
         if (entities || event?.[0] === DeleteEvent) {
             supportedEntities = [...entities ?? this.entities].filter(([uuid, entity]) => {
                 // Don't rely on the cached query for DeleteEvent because
@@ -186,14 +186,17 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
                 return this.entities.has(uuid);
             });
         } else {
-            supportedEntities = [...this.entities];
+            supportedEntities = this.entities;
         }
 
-        const queryResults = supportedEntities.map(([uuid, entity]) =>
-            [entity, this.getResultForEntity(entity, uuid, event)] as const)
-            .filter((results): results is [Entity, Right<ArgsToData<Args>>] => isRight(results[1]))
-            .map(rightResults => rightResults[1].right);
-
+        const queryResults: QueryResults<Query<Args>> = [];
+        for (const [uuid, entity] of supportedEntities) {
+            const result = this.getResultForEntity(entity, uuid, event);
+            if (isLeft(result)) {
+                continue;
+            }
+            queryResults.push(result.right);
+        }
 
         // Don't cache events other than Step
         if (!isStep || entities) {
