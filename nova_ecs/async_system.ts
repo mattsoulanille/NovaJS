@@ -74,7 +74,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 for (const patches of entityStatus.patches) {
                     applyPatches(stepArgs, patches);
                 }
-                delete (stepArgs as any)[Symbol.for('immer-state')];
+                (stepArgs as any)[Symbol.for('immer-state')] = false;
                 entityStatus.patches = [];
                 if (willSkip) {
                     entityStatus.running = false;
