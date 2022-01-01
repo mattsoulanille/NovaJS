@@ -286,7 +286,6 @@ export class World {
     }
 
     private runEvent(eventWithEntities: EcsEventWithEntities<unknown>) {
-        // TODO: Cache this probably.
         const systems = this.systems.filter(s => s.events.has(eventWithEntities.event));
 
         // Default to all entities if none are specified. When defaulting to all,
