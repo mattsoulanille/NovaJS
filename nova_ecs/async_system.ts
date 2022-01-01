@@ -133,10 +133,10 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                         entityStatus.running = false;
                     });
 
-                asyncSystemData.done = (async () => {
-                    await asyncSystemData.done;
-                    await entityStatus.promise;
-                })();
+                asyncSystemData.done = Promise.all([
+                    asyncSystemData.done,
+                    entityStatus.promise
+                ]).then(() => {/* Ignore non-errors */ });
             }
         });
     }
