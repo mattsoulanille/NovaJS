@@ -1,6 +1,6 @@
 import { Emit, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
-import { EcsEvent } from "nova_ecs/events";
+import { DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { DeltaResource } from "nova_ecs/plugins/delta_plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
@@ -24,12 +24,13 @@ const TargetIndexProvider = Provide({
 
 export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
 
+
+const TargetsQuery = new Query([UUID, MovementStateComponent, ShipComponent] as const);
 const ChooseTargetSystem = new System({
     name: 'ChooseTarget',
     events: [ControlStateEvent],
     args: [ControlStateEvent, TargetComponent, TargetIndexComponent, UUID,
-        new Query([UUID, MovementStateComponent, ShipComponent] as const),
-        Emit, MovementStateComponent, PlayerShipSelector] as const,
+        TargetsQuery, Emit, MovementStateComponent, PlayerShipSelector] as const,
     step(controlState, target, index, uuid, ships, emit, movementState) {
         if (controlState.get('nearestTarget') === 'start') {
             const [closestUuid, _distance, newIndex] = ships
@@ -71,6 +72,19 @@ const ChooseTargetSystem = new System({
     }
 });
 
+const TargetRemovedSystem = new System({
+    name: 'TargetRemovedSystem',
+    events: [DeleteEvent],
+    args: [UUID, new Query([TargetComponent] as const)] as const,
+    step(uuid, withTarget) {
+        for (const [target] of withTarget) {
+            if (target.target === uuid) {
+                target.target = undefined;
+            }
+        }
+    }
+});
+
 export const TargetPlugin: Plugin = {
     name: "TargetPlugin",
     build(world) {
@@ -85,5 +99,6 @@ export const TargetPlugin: Plugin = {
 
         world.addSystem(TargetIndexProvider);
         world.addSystem(ChooseTargetSystem);
+        world.addSystem(TargetRemovedSystem);
     }
 }
