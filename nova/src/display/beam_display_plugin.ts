@@ -1,14 +1,13 @@
-import { UUID } from 'nova_ecs/arg_types';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
-import seedrandom from 'seedrandom';
 import { BeamDataComponent, BeamSystem } from "../nova_plugin/beam_plugin";
 import { Space } from "./space_resource";
-PIXI.settings.CREATE_IMAGE_BITMAP = false;
+
+
 const BeamGraphicsResource = new Resource<PIXI.Graphics>('BeamGraphics');
 
 const ClearBeams = new System({
