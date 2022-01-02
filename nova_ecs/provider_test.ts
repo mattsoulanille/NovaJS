@@ -600,4 +600,23 @@ describe('ProvideAsync', () => {
         expect(wordLengths).toEqual([['hello', 5]]);
         expect(entity.components.get(FOO_COMPONENT)).toEqual({ x: 5 });
     });
+
+    it('does not provide if the provided value is changed while the provider is running', async () => {
+        world.addSystem(fooProvider);
+        world.addSystem(logSystem);
+
+        const entity = new Entity()
+            .addComponent(BAR_COMPONENT, { y: 'hello' });
+        world.entities.set('word1', entity);
+
+        world.step();
+        expect(wordLengths).toEqual([]);
+        entity.components.set(FOO_COMPONENT, { x: 123 });
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+        world.step();
+        // Not ['hello', 5] since 123 was provided while the provider was running.
+        expect(wordLengths).toEqual([['hello', 123]]);
+        expect(entity.components.get(FOO_COMPONENT)?.x).toEqual(123);
+    });
 });

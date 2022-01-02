@@ -70,6 +70,8 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
         skipIfApplyingPatches: true,
         exclusive: true,
         async step(providedValue, asyncProviderData, uuid, entity, step, ...args) {
+            const originalProvidedValue = entity.components.get(provided);
+
             const originalData = originalIfDraft(asyncProviderData);
             const running = originalData.get(name)?.get(uuid);
             if ((running || providedValue !== undefined) && step) {
@@ -90,9 +92,17 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
             originalDataForProvider.set(uuid, runningSymbol);
             try {
                 providedValue = await factory(...args);
+
+                // If this instance of the provider is the most recent run,
+                // then apply the provided data.
                 if (originalDataForProvider.get(uuid) === runningSymbol) {
-                    // If this instance of the provider is the most recent run,
-                    // then apply the provided data.
+
+                    // If the provided value is changed while the provider is running,
+                    // don't set the value.
+                    // TODO: Is this desirable?
+                    if (entity.components.get(provided) !== originalProvidedValue) {
+                        return;
+                    }
                     entity.components.set(
                         provided, originalIfDraft(providedValue));
                 }
