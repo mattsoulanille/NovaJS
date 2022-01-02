@@ -219,7 +219,9 @@ describe("NovaParse", function() {
                 coronaColor: 0xFF191A1B,
                 coronaFalloff: 24,
                 length: 19,
-                width: 20
+                width: 20,
+                lightningDensity: 28,
+                lightningAmplitude: 29,
             });
         }
     });
