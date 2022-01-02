@@ -44,6 +44,7 @@ ts_library(
         "death_plugin.ts",
         "jump_plugin.ts",
         "systems_resource.ts",
+        "npc_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

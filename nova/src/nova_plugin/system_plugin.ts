@@ -11,6 +11,7 @@ import { DeathPlugin } from "./death_plugin";
 import { FireWeaponPlugin } from "./fire_weapon_plugin";
 import { HealthPlugin } from "./health_plugin";
 import { JumpPlugin } from "./jump_plugin";
+import { NpcPlugin } from "./npc_plugin";
 import { OutfitPlugin } from "./outfit_plugin";
 import { PlanetPlugin } from "./planet_plugin";
 import { PlatformPlugin } from "./platform_plugin";
@@ -47,6 +48,7 @@ export const SystemPlugin: Plugin = {
         world.addPlugin(TargetPlugin);
         world.addPlugin(BeamPlugin);
         world.addPlugin(JumpPlugin);
+        world.addPlugin(NpcPlugin);
     }
 };
 
