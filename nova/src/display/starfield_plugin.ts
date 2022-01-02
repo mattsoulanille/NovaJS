@@ -227,7 +227,6 @@ export function starfield({ density = 0.00002,
             const starfield = world.resources.get(StarfieldResource);
             const stage = world.resources.get(Stage);
             if (starfield && stage) {
-                console.log('removing starfield');
                 stage.removeChild(starfield.container);
             }
             world.resources.delete(StarfieldResource);
