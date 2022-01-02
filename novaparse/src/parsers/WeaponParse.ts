@@ -221,11 +221,13 @@ async function BeamWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
         type: "BeamWeaponData",
         guidance,
         beamAnimation: {
+            lightningAmplitude: weap.lightningAmplitude,
+            lightningDensity: weap.lightningDensity,
             beamColor: weap.beamColor,
             coronaColor: weap.coronaColor,
             coronaFalloff: weap.coronaFalloff,
             length: weap.beamLength,
-            width: weap.beamWidth
+            width: weap.beamWidth,
         }
     }
 }

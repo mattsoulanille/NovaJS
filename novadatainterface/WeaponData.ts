@@ -63,6 +63,8 @@ export interface BeamAnimation {
     beamColor: number;
     coronaColor: number;
     coronaFalloff: number; // Pixels of corona on each side
+    lightningDensity: number;
+    lightningAmplitude: number;
 }
 
 export function getDefaultBeamAnimation(): BeamAnimation {
@@ -71,7 +73,9 @@ export function getDefaultBeamAnimation(): BeamAnimation {
         width: 6,
         beamColor: 0xffffff,
         coronaColor: 0x8888ff,
-        coronaFalloff: 4
+        coronaFalloff: 4,
+        lightningDensity: 0,
+        lightningAmplitude: 0,
     }
 }
 
