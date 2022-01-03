@@ -39,7 +39,7 @@
         "http-server": "^14.0.0",
         "immer": "^9.0.7",
         "io-ts-types": "^0.5.16",
-        "jasmine": "^3.10.0",
+        "jasmine": "^4.0.0",
         "jasmine-core": "^3.10.1",
         "karma": "6.3.9",
         "karma-chrome-launcher": "^3.1.0",
