@@ -12,6 +12,7 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
+import { CompositeHull, HullComponent } from './collisions_plugin';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
 import { ApplyDamageResource, DeathEvent } from './death_plugin';
@@ -23,6 +24,7 @@ import { ReturnToQueueComponent } from './return_to_queue_plugin';
 import { SoundEvent } from './sound_event';
 import { Stat } from './stat';
 import { TargetComponent } from './target_component';
+import * as SAT from "sat";
 
 
 class ProjectileWeaponEntry extends WeaponEntry {
@@ -86,6 +88,15 @@ class ProjectileWeaponEntry extends WeaponEntry {
                 }));
             }
 
+            if (this.data.proxRadius) {
+                const proxHull = new CompositeHull([
+                    new SAT.Circle(new SAT.Vector(0, 0), this.data.proxRadius)
+                ]);
+                projectile.components.set(HullComponent, {
+                    hulls: [proxHull],
+                    singleHull: true,
+                });
+            }
             return projectile;
         }, 1);
         queueHolder.queue = this.factoryQueue;

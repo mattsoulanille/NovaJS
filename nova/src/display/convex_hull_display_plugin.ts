@@ -35,7 +35,7 @@ const HullGraphicsCleanup = new System({
     }
 });
 
-function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000) {
+function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000, drawNormals = true) {
     graphics.lineStyle(0.5, color);
     const points = poly.points.map(v => Vector.fromVectorLike(v)
         .rotate(poly.angle).add(poly.pos));
@@ -45,6 +45,24 @@ function drawPoly(poly: SAT.Polygon, graphics: PIXI.Graphics, color = 0xff0000) 
         graphics.lineTo(x, y);
     }
     graphics.lineTo(x0, y0);
+
+    // Draw normals to the polygon edges pointing inwards toward the center
+    if (drawNormals) {
+        for (let i = 0; i < points.length - 1; i++) {
+            const start = points[i];
+            const end = points[i + 1];
+            const middle = new Vector((start.x + end.x) / 2, (start.y + end.y) / 2);
+            const normal = end.subtract(start).normalize().rotate(Math.PI / 2);
+            const normalEnd = middle.add(normal.scale(10));
+            graphics.moveTo(middle.x, middle.y);
+            graphics.lineTo(normalEnd.x, normalEnd.y);
+        }
+    }
+}
+
+function drawCircle(circle: SAT.Circle, graphics: PIXI.Graphics, color = 0xff0000) {
+    graphics.lineStyle(0.5, color);
+    graphics.drawCircle(circle.pos.x, circle.pos.y, circle.r);
 }
 
 const COLORS = [
@@ -73,10 +91,14 @@ const ConvexHullGraphicsSystem = new System({
             return;
         }
 
-        for (let i = 0; i < activeHull.convexPolys.length; i++) {
-            const convexPoly = activeHull.convexPolys[i];
+        for (let i = 0; i < activeHull.shapes.length; i++) {
+            const shape = activeHull.shapes[i];
             const color = COLORS[i % COLORS.length]
-            drawPoly(convexPoly, graphics, color);
+            if (shape instanceof SAT.Polygon) {
+                drawPoly(shape, graphics, color);
+            } else {
+                drawCircle(shape, graphics, color);
+            }
         }
 
         // Draw bounding box

@@ -13,7 +13,7 @@ import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
-import { Hull, HullComponent, UpdateHullSystem } from './collisions_plugin';
+import { CompositeHull, HullComponent, UpdateHullSystem } from './collisions_plugin';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { CreateTime, CreateTimeArgProvider } from './create_time';
 import { ApplyDamageResource } from './death_plugin';
@@ -80,7 +80,7 @@ class BeamWeaponEntry extends WeaponEntry {
             }).addComponent(CollisionInteractionComponent, {
                 hitTypes: this.hitTypes,
             }).addComponent(HullComponent, {
-                hulls: [new Hull([beamPoly])],
+                hulls: [new CompositeHull([beamPoly])],
             }).addComponent(BeamStateComponent, {
                 exitPointData,
                 pointToTarget: this.data.guidance === "beamTurret" ||
