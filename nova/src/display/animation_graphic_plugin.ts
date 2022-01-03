@@ -1,4 +1,4 @@
-import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { AddEvent, DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
@@ -20,8 +20,8 @@ const AnimationGraphicLoadedComponent = new Component<AnimationGraphic>('Animati
 const AnimationGraphicLoader = ProvideAsync({
     name: "AnimationGraphicLoader",
     provided: AnimationGraphicLoadedComponent,
-    args: [AnimationComponent, GameDataResource, GetEntity, Emit, UUID] as const,
-    async factory(animation, gameData, entity, emit, uuid) {
+    args: [AnimationComponent, GameDataResource, GetEntity] as const,
+    async factory(animation, gameData, entity) {
         const graphic = new AnimationGraphic({
             gameData: currentIfDraft(gameData)!,
             animation: currentIfDraft(animation)!,

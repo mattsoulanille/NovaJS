@@ -25,20 +25,23 @@ export class Stat {
     private wrappedCurrent: Box<number>;
     private wrappedRecharge: Box<number>;
     private wrappedMax: Box<number>;
+    private wrappedMin: Box<number>;
 
-    constructor({ current, recharge, max }: {
+    constructor({ current, recharge, max, min }: {
         current: number,
         recharge: number,
         max: number,
+        min?: number,
     }) {
         this.wrappedCurrent = new Box(current);
         this.wrappedRecharge = new Box(recharge);
         this.wrappedMax = new Box(max);
+        this.wrappedMin = new Box(min ?? 0);
     }
 
     step(delta: number) {
-        this.wrappedCurrent.wrappedVal = Math.min(this.max,
-            this.current + this.recharge * delta);
+        this.wrappedCurrent.wrappedVal = Math.max(this.min,
+            Math.min(this.max, this.current + this.recharge * delta));
     }
 
     get percent() {
@@ -61,6 +64,12 @@ export class Stat {
             changed = true;
         }
 
+        if (this.wrappedMin.changed) {
+            delta.min = this.min;
+            this.wrappedMin.changed = false;
+            changed = true;
+        }
+
         if (this.wrappedRecharge.changed) {
             delta.recharge = this.recharge;
             this.wrappedRecharge.changed = false;
@@ -80,6 +89,10 @@ export class Stat {
 
         if (delta.max !== undefined) {
             this.wrappedMax.wrappedVal = delta.max;
+        }
+
+        if (delta.min !== undefined) {
+            this.wrappedMin.wrappedVal = delta.min;
         }
 
         if (delta.recharge !== undefined) {
@@ -107,12 +120,19 @@ export class Stat {
     set max(val: number) {
         this.wrappedMax.val = val;
     }
+    get min() {
+        return this.wrappedMin.val;
+    }
+    set min(val: number) {
+        this.wrappedMin.val = val;
+    }
 }
 
 const StatContents = {
     current: t.number,
     recharge: t.number,
     max: t.number,
+    min: t.number,
 };
 
 const statState = t.type(StatContents);
@@ -128,6 +148,7 @@ export const stat = new t.Type('Stat',
     (stat) => (statState.encode({
         current: stat.current,
         max: stat.max,
+        min: stat.min,
         recharge: stat.recharge,
     }))
 );

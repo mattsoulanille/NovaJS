@@ -19,6 +19,9 @@ const healthStats = [ShieldComponent, ArmorComponent, IonizationComponent]
         }
     })] as const);
 
+export const IonizationColorComponent =
+    new Component<{ color: number }>('IonizationColorComponent');
+
 export const HealthPlugin: Plugin = {
     name: "HealthPlugin",
     build(world) {

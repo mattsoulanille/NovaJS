@@ -18,6 +18,7 @@
         "@bazel/jasmine": "^4.5.0",
         "@bazel/labs": "^4.5.0",
         "@bazel/typescript": "4.5.0",
+        "@pixi/filter-color-matrix": "^6.2.1",
         "@pixi/particle-emitter": "^5.0.2",
         "@pixi/sound": "^4.1.0",
         "@types/argparse": "^2.0.10",

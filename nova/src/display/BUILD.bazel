@@ -40,6 +40,7 @@ ts_library(
         "@npm//@pixi/sound",
         "@npm//fp-ts",
         "@npm//pixi.js",
+        "@npm//@pixi/filter-color-matrix",
         "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//immer",

@@ -10,7 +10,7 @@ import { Observable } from 'rxjs';
 import { GameData } from '../client/gamedata/GameData';
 import { ControlEvent } from '../nova_plugin/controls_plugin';
 import { GameDataResource } from '../nova_plugin/game_data_resource';
-import { ArmorComponent, ShieldComponent } from '../nova_plugin/health_plugin';
+import { ArmorComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/health_plugin';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin';
 import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin';
 import { SystemIdResource } from '../nova_plugin/system_id_resource';
@@ -133,6 +133,10 @@ export class Spaceport extends Menu<Entity> {
             const armor = this.input.components.get(ArmorComponent);
             if (armor) {
                 armor.current = armor.max;
+            }
+            const ionization = this.input.components.get(IonizationComponent);
+            if (ionization) {
+                ionization.current = 0;
             }
         }
         super.done();

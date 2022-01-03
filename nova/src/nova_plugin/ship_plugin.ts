@@ -7,12 +7,12 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
-import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
+import { MovementPhysics, MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { AnimationComponent } from './animation_plugin';
 import { CollisionInteractionComponent } from './collision_interaction';
 import { GameDataResource } from './game_data_resource';
-import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
+import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { applyOutfitPhysics, OutfitsStateComponent } from './outfit_plugin';
 import { Stat } from './stat';
 import { TargetComponent } from './target_component';
@@ -65,20 +65,22 @@ export const ShipPhysicsProvider = ProvideAsync({
     }
 });
 
+export function getShipMovementPhysics(physics: ShipPhysics): MovementPhysics {
+    return {
+        acceleration: physics.acceleration,
+        maxVelocity: physics.speed,
+        movementType: physics.inertialess
+            ? MovementType.INERTIALESS : MovementType.INERTIAL,
+        turnRate: physics.turnRate,
+    };
+}
+
 export const ShipMovementPhysicsProvider = Provide({
     name: "ShipMovementPhysicsProvider",
     provided: MovementPhysicsComponent,
     update: [ShipPhysicsComponent],
     args: [ShipPhysicsComponent] as const,
-    factory(physics) {
-        return {
-            acceleration: physics.acceleration,
-            maxVelocity: physics.speed,
-            movementType: physics.inertialess
-                ? MovementType.INERTIALESS : MovementType.INERTIAL,
-            turnRate: physics.turnRate,
-        };
-    },
+    factory: getShipMovementPhysics,
 });
 
 const ShipAnimationProvider = Provide({
@@ -107,6 +109,7 @@ const ShipShieldProvider = Provide({
         return new Stat({
             current: shield?.current ?? physics.shield,
             max: physics.shield,
+            min: -physics.shield * 0.05,
             recharge: physics.shieldRecharge,
         });
     }
@@ -121,6 +124,7 @@ const ShipArmorProvider = Provide({
         return new Stat({
             current: armor?.current ?? physics.armor,
             max: physics.armor,
+            min: 0,
             recharge: physics.armorRecharge,
         });
     }
@@ -133,10 +137,20 @@ const ShipIonizationProvider = Provide({
     args: [ShipPhysicsComponent, Optional(IonizationComponent)] as const,
     factory(physics, ionization) {
         return new Stat({
-            current: ionization?.current ?? physics.ionization,
+            current: ionization?.current ?? 0,
             max: physics.ionization,
+            min: 0,
             recharge: -physics.deionize,
         });
+    }
+});
+
+const ShipIonizationColorProvider = Provide({
+    name: "ShipIonizationColorProvider",
+    provided: IonizationColorComponent,
+    args: [] as const,
+    factory() {
+        return { color: 0x888888 };
     }
 });
 
@@ -185,6 +199,7 @@ export const ShipPlugin: Plugin = {
         world.addSystem(ShipShieldProvider);
         world.addSystem(ShipArmorProvider);
         world.addSystem(ShipIonizationProvider);
+        world.addSystem(ShipIonizationColorProvider);
         world.addSystem(ShipMovementStateProvider);
         world.addSystem(ShipTargetComponentProvider);
 
