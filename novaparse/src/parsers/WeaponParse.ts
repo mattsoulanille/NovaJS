@@ -76,6 +76,7 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         shield: weap.shieldDamage,
         armor: weap.armorDamage,
         ionization: weap.ionization,
+        ionizationColor: weap.ionizeColor,
         passThroughShield: weap.passThroughShields ? 1 : 0,
     }
 
@@ -103,7 +104,6 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         submunitions,
         damage,
         oneAmmoPerBurst: weap.oneAmmoPerBurst,
-        ionizationColor: weap.ionizeColor,
         shotDuration: weap.duration * 1000 / FPS,
         primaryExplosion,
         secondaryExplosion,

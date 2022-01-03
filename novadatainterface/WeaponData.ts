@@ -97,6 +97,7 @@ export interface WeaponDamage {
     shield: number;
     armor: number;
     ionization: number;
+    ionizationColor: number;
     passThroughShield: number; // Factor of damage that passes through shield. 1 means all
 }
 
@@ -140,7 +141,6 @@ export interface NotBayWeaponData extends BaseWeaponData {
     damage: WeaponDamage;
     submunitions: Array<SubmunitionType>,
     oneAmmoPerBurst: boolean;
-    ionizationColor: number;
     shotDuration: number;
     primaryExplosion: string | null;
     secondaryExplosion: string | null;
@@ -155,11 +155,11 @@ export function getDefaultNotBayWeaponData(): NotBayWeaponData {
             shield: 1,
             armor: 1,
             ionization: 0,
+            ionizationColor: 0xffffff,
             passThroughShield: 0,
         },
         submunitions: [],
         oneAmmoPerBurst: false,
-        ionizationColor: 0xffffff,
         shotDuration: 7,
         primaryExplosion: null,
         secondaryExplosion: null,

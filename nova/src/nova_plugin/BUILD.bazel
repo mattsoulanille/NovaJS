@@ -45,6 +45,7 @@ ts_library(
         "jump_plugin.ts",
         "systems_resource.ts",
         "npc_plugin.ts",
+        "ionization_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

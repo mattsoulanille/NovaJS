@@ -6,14 +6,14 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
-import { ArmorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
+import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent } from './projectile_data';
 
 type ApplyDamage = (damage: WeaponDamage, other: string, scale?: number) => void;
 
 const DamageQuery = new Query([Optional(ShieldComponent), Optional(ArmorComponent),
-Optional(IonizationComponent), Optional(ProjectileComponent),
-    TimeResource] as const);
+Optional(IonizationComponent), Optional(IonizationColorComponent),
+Optional(ProjectileComponent), TimeResource] as const);
 
 export const DeathEvent = new EcsEvent<Time>('DeathEvent');
 
@@ -27,7 +27,7 @@ function applyDamage(emit: EmitFunction, runQuery: RunQueryFunction,
         return;
     }
 
-    const [shield, armor, ionization, otherIsProjectile, time] = result;
+    const [shield, armor, ionization, ionizationColor, otherIsProjectile, time] = result;
     if (!armor) {
         return;
     }
@@ -44,12 +44,13 @@ function applyDamage(emit: EmitFunction, runQuery: RunQueryFunction,
 
     if (damage.ionization !== 0 && ionization) {
         ionization.current += damage.ionization * scale;
+        if (ionizationColor) {
+            ionizationColor.color = damage.ionizationColor;
+        }
     }
 
     if (shield) {
-        const minShield = -shield.max * 0.05;
-        shield.current = Math.max(minShield,
-            shield.current - damage.shield * scale);
+        shield.current -= damage.shield * scale;
         if (shield.current > 0) {
             return;
         }
