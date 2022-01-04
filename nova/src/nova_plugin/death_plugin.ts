@@ -49,7 +49,7 @@ function applyDamage(emit: EmitFunction, runQuery: RunQueryFunction,
         }
     }
 
-    if (shield) {
+    if (shield && !damage.passThroughShield) {
         shield.current -= damage.shield * scale;
         if (shield.current > 0) {
             return;

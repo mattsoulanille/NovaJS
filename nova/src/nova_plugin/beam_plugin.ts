@@ -13,7 +13,7 @@ import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
-import { CompositeHull, HullComponent, UpdateHullSystem } from './collisions_plugin';
+import { CompositeHull, HurtboxHullComponent, UpdateHitboxHullSystem } from './collisions_plugin';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { CreateTime, CreateTimeArgProvider } from './create_time';
 import { ApplyDamageResource } from './death_plugin';
@@ -79,9 +79,8 @@ class BeamWeaponEntry extends WeaponEntry {
                 turning: 0,
             }).addComponent(CollisionInteractionComponent, {
                 hitTypes: this.hitTypes,
-            }).addComponent(HullComponent, {
-                hulls: [new CompositeHull([beamPoly])],
-            }).addComponent(BeamStateComponent, {
+            }).addComponent(HurtboxHullComponent, new CompositeHull([beamPoly])
+            ).addComponent(BeamStateComponent, {
                 exitPointData,
                 pointToTarget: this.data.guidance === "beamTurret" ||
                     this.data.guidance === "pointDefenseBeam",
@@ -118,7 +117,7 @@ class BeamWeaponEntry extends WeaponEntry {
 
 export const BeamSystem = new System({
     name: 'BeamSystem',
-    before: [UpdateHullSystem],
+    before: [UpdateHitboxHullSystem],
     after: [MovementSystem, WeaponsSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
         CreateTimeArgProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
