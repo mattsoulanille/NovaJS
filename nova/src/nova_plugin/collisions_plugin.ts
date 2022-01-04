@@ -289,8 +289,15 @@ export const CollisionSystem = new System({
                     continue; // Hurtboxes can only hit hitboxes.
                 }
                 const collisionPair = [entry.uuid, other.uuid].sort().join();
-                const entryInitiates = aHitsB(entry.interaction, other.interaction);
-                const otherInitiates = aHitsB(other.interaction, entry.interaction);
+                // The initiator of a collision must have its hurtbox overlap the other
+                // collier's hitbox. If the inverse is allowed, then a missile's prox radius
+                // overlapping a point defense weapon can be considered a collision initiated
+                // by the point defense weapon, meaning the point defense weapon can hit the
+                // missile by hitting its prox radius (bad).
+                const entryInitiates = aHitsB(entry.interaction, other.interaction)
+                    && entry.type === 'hurtbox';
+                const otherInitiates = aHitsB(other.interaction, entry.interaction)
+                    && other.type === 'hurtbox';
                 const canCollide = entryInitiates || otherInitiates;
                 if (canCollide &&
                     !alreadyCollided.has(collisionPair) &&
