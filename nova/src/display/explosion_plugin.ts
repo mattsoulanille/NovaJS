@@ -88,7 +88,10 @@ const SecondaryExplosionSystem = new System({
 
         // TODO: Fix these types in position.ts
         const pos = position.add(randomPointInCircle(80)) as Position;
-        entities.set(v4(), makeExplosion(explosion.explosion, pos));
+        entities.set(v4(), makeExplosion({
+            ...explosion.explosion,
+            sound: null,
+        }, pos));
     }
 });
 
