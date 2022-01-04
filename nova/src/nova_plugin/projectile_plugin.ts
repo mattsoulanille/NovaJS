@@ -97,6 +97,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
                 ]);
                 projectile.components.set(HurtboxHullComponent, proxHull);
             }
+
             return projectile;
         }, 1);
         queueHolder.queue = this.factoryQueue;
@@ -223,8 +224,8 @@ const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        Optional(OwnerComponent), FireSubs, ApplyDamageResource, Emit] as const,
-    step(collision, entities, uuid, projectileData, owner, fireSubs, applyDamage, emit) {
+        Optional(OwnerComponent), FireSubs, ApplyDamageResource, TimeResource, CreateTime, Emit] as const,
+    step(collision, entities, uuid, projectileData, owner, fireSubs, applyDamage, time, createTime, emit) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
@@ -234,9 +235,15 @@ const ProjectileCollisionSystem = new System({
             return;
         }
 
+        if (projectileData.proxSafety * 1000 + createTime > time.time) {
+            // Prox safety is not done yet.
+            return;
+        }
+
         applyDamage(projectileData.damage, collision.other, 1);
 
         if (!collision.initiator) {
+            // We are hit by point defense
             return;
         }
 

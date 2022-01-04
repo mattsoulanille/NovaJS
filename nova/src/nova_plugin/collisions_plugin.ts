@@ -247,6 +247,7 @@ export const UpdateHurtboxHullSystem = new System({
     name: "UpdateHurtboxHullSystem",
     args: [MovementStateComponent, HurtboxHullComponent, Optional(AnimationComponent)] as const,
     step: UpdateHitboxHullSystem.step,
+    after: [MovementSystem],
 });
 
 export const CollisionSystem = new System({
