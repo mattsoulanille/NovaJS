@@ -7,16 +7,17 @@ import { Provide } from "nova_ecs/provider";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import * as SAT from "sat";
-import { HullComponent, UpdateHullSystem } from "../nova_plugin/collisions_plugin";
+import { HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from "../nova_plugin/collisions_plugin";
 import { Space } from "./space_resource";
 
 
-const ConvexHullGraphicsComponent = new Component<PIXI.Graphics>('ConvexHullGraphics');
+const HitboxHullGraphicsComponent = new Component<PIXI.Graphics>('HitboxHullGraphics');
+const HurtboxHullGraphicsComponent = new Component<PIXI.Graphics>('HurtboxHullGraphics');
 
-const GraphicsProvider = Provide({
-    name: "ConvexHullGraphicsProvider",
-    provided: ConvexHullGraphicsComponent,
-    args: [Space, HullComponent] as const,
+const HitboxGraphicsProvider = Provide({
+    name: "HitboxHullGraphicsProvider",
+    provided: HitboxHullGraphicsComponent,
+    args: [Space, HitboxHullComponent] as const,
     factory: (space) => {
         const graphics = new PIXI.Graphics();
         graphics.zIndex = 1000;
@@ -25,13 +26,35 @@ const GraphicsProvider = Provide({
     }
 });
 
-const HullGraphicsCleanup = new System({
-    name: 'HullGraphicCleanup',
+const HitboxGraphicsCleanup = new System({
+    name: 'HitboxHullGraphicCleanup',
     events: [DeleteEvent],
-    args: [ConvexHullGraphicsComponent, Space, GetEntity] as const,
+    args: [HitboxHullGraphicsComponent, Space, GetEntity] as const,
     step: (graphics, space, entity) => {
         space.removeChild(graphics);
-        entity.components.delete(ConvexHullGraphicsComponent);
+        entity.components.delete(HitboxHullGraphicsComponent);
+    }
+});
+
+const HurtboxGraphicsProvider = Provide({
+    name: "HurtboxHullGraphicsProvider",
+    provided: HurtboxHullGraphicsComponent,
+    args: [Space, HurtboxHullComponent] as const,
+    factory: (space) => {
+        const graphics = new PIXI.Graphics();
+        graphics.zIndex = 1000;
+        space.addChild(graphics);
+        return graphics;
+    }
+});
+
+const HurtboxGraphicsCleanup = new System({
+    name: 'HurtboxHullGraphicCleanup',
+    events: [DeleteEvent],
+    args: [HurtboxHullGraphicsComponent, Space, GetEntity] as const,
+    step: (graphics, space, entity) => {
+        space.removeChild(graphics);
+        entity.components.delete(HurtboxHullGraphicsComponent);
     }
 });
 
@@ -78,21 +101,14 @@ const COLORS = [
     0x00ff88,
 ];
 
-const ConvexHullGraphicsSystem = new System({
-    name: 'ConvexHullGraphics',
-    args: [HullComponent, ConvexHullGraphicsComponent] as const,
-    after: [UpdateHullSystem],
+const HitboxHullGraphicsSystem = new System({
+    name: 'HitboxHullGraphics',
+    args: [HitboxHullComponent, HitboxHullGraphicsComponent] as const,
+    after: [UpdateHitboxHullSystem],
     step(hull, graphics) {
         graphics.clear();
-
-        const activeHull = hull.activeHull;
-        const bbox = hull.computedBbox;
-        if (!activeHull || !bbox) {
-            return;
-        }
-
-        for (let i = 0; i < activeHull.shapes.length; i++) {
-            const shape = activeHull.shapes[i];
+        for (let i = 0; i < hull.shapes.length; i++) {
+            const shape = hull.shapes[i];
             const color = COLORS[i % COLORS.length]
             if (shape instanceof SAT.Polygon) {
                 drawPoly(shape, graphics, color);
@@ -102,31 +118,45 @@ const ConvexHullGraphicsSystem = new System({
         }
 
         // Draw bounding box
+        const bbox = hull.bbox;
         graphics.lineStyle(0.5, 0x4488ff);
         graphics.drawRect(bbox.minX, bbox.minY,
             bbox.maxX - bbox.minX, bbox.maxY - bbox.minY);
     }
 });
 
+const HurtboxHullGraphicsSystem = new System({
+    name: 'HurtboxHullGraphics',
+    args: [HurtboxHullComponent, HurtboxHullGraphicsComponent] as const,
+    after: [UpdateHurtboxHullSystem],
+    step: HitboxHullGraphicsSystem.step,
+});
+
 export const ConvexHullDisplayPlugin: Plugin = {
     name: 'ConvexHullDisplayPlugin',
     build(world) {
-        world.addComponent(ConvexHullGraphicsComponent);
-        world.addSystem(GraphicsProvider);
-        world.addSystem(ConvexHullGraphicsSystem);
-        world.addSystem(HullGraphicsCleanup);
+        world.addComponent(HitboxHullGraphicsComponent);
+        world.addSystem(HitboxGraphicsProvider);
+        world.addSystem(HurtboxGraphicsProvider);
+        world.addSystem(HitboxHullGraphicsSystem);
+        world.addSystem(HurtboxHullGraphicsSystem);
+        world.addSystem(HitboxGraphicsCleanup);
+        world.addSystem(HurtboxGraphicsCleanup);
     },
     remove(world) {
-        world.removeSystem(GraphicsProvider);
-        world.removeSystem(ConvexHullGraphicsSystem);
-        world.removeSystem(HullGraphicsCleanup);
+        world.removeSystem(HitboxGraphicsProvider);
+        world.removeSystem(HurtboxGraphicsProvider);
+        world.removeSystem(HitboxHullGraphicsSystem);
+        world.removeSystem(HurtboxHullGraphicsSystem);
+        world.removeSystem(HitboxGraphicsCleanup);
+        world.removeSystem(HurtboxGraphicsCleanup);
         const space = world.resources.get(Space);
         for (const entity of world.entities.values()) {
-            const graphics = entity.components.get(ConvexHullGraphicsComponent);
+            const graphics = entity.components.get(HitboxHullGraphicsComponent);
             if (graphics && space) {
                 space.removeChild(graphics);
             }
-            entity.components.delete(ConvexHullGraphicsComponent);
+            entity.components.delete(HitboxHullGraphicsComponent);
         }
     }
 }

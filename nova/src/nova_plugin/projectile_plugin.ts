@@ -9,14 +9,18 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
+import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
-import { CompositeHull, HullComponent } from './collisions_plugin';
+import { AnimationComponent } from './animation_plugin';
+import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from './collisions_plugin';
 import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
 import { ApplyDamageResource, DeathEvent } from './death_plugin';
 import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
+import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
 import { ArmorComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent, ProjectileDataComponent } from './projectile_data';
@@ -24,7 +28,6 @@ import { ReturnToQueueComponent } from './return_to_queue_plugin';
 import { SoundEvent } from './sound_event';
 import { Stat } from './stat';
 import { TargetComponent } from './target_component';
-import * as SAT from "sat";
 
 
 class ProjectileWeaponEntry extends WeaponEntry {
@@ -92,10 +95,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
                 const proxHull = new CompositeHull([
                     new SAT.Circle(new SAT.Vector(0, 0), this.data.proxRadius)
                 ]);
-                projectile.components.set(HullComponent, {
-                    hulls: [proxHull],
-                    singleHull: true,
-                });
+                projectile.components.set(HurtboxHullComponent, proxHull);
             }
             return projectile;
         }, 1);
@@ -212,6 +212,13 @@ const ProjectileGuidanceSystem = new System({
 export const ProjectileCollisionEvent
     = new EcsEvent<Entity>('ProjectileCollision');
 
+const ProjectileHurtboxProvider = ProvideAsync({
+    name: "ProjectileHurtboxProvider",
+    provided: HurtboxHullComponent,
+    args: [AnimationComponent, GameDataResource, CollisionInteractionComponent, ProjectileComponent] as const,
+    factory: hullFromAnimation,
+});
+
 const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
@@ -266,5 +273,6 @@ export const ProjectilePlugin: Plugin = {
         world.addSystem(ProjectileLifespanSystem);
         world.addSystem(ProjectileCollisionSystem);
         world.addSystem(ProjectileDeathSystem);
+        world.addSystem(ProjectileHurtboxProvider);
     }
 }

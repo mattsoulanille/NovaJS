@@ -1,3 +1,5 @@
+import { Animation } from "novadatainterface/Animation";
+import { GameDataInterface } from "novadatainterface/GameDataInterface";
 import { Emit, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
@@ -134,34 +136,33 @@ class MultiFrameHull extends Hull {
     }
 }
 
-export const HullComponent = new Component<{
-    hulls: Hull[],
-    singleHull?: boolean,
-    activeHull?: Hull,
-    computedBbox?: BBox,
-}>('HullComponent');
+export const HitboxHullComponent = new Component<Hull>('HitboxHullComponent');
+export const HurtboxHullComponent = new Component<Hull>('HurtboxHullComponent');
 
-const HullProvider = ProvideAsync({
-    name: "HullProvider",
-    provided: HullComponent,
+export async function hullFromAnimation(animation: Animation, gameData: GameDataInterface) {
+    const spriteSheet = await gameData.data.SpriteSheet
+        .get(animation.images.baseImage.id);
+
+    const hulls = spriteSheet.hulls.map(hull =>
+        hull.map(convexHull => new SAT.Polygon(new SAT.Vector(),
+            convexHull.slice().reverse().map(([x, y]) => new SAT.Vector(x, -y)))))
+        .map(convexPolys => new CompositeHull(convexPolys));
+
+    return new MultiFrameHull(hulls);
+}
+
+const HitboxHullProvider = ProvideAsync({
+    name: "HitboxProvider",
+    provided: HitboxHullComponent,
     args: [AnimationComponent, GameDataResource, CollisionInteractionComponent] as const,
-    async factory(animation, gameData) {
-        const spriteSheet = await gameData.data.SpriteSheet
-            .get(animation.images.baseImage.id);
-
-        const hulls = spriteSheet.hulls.map(hull =>
-            hull.map(convexHull => new SAT.Polygon(new SAT.Vector(),
-                convexHull.slice().reverse().map(([x, y]) => new SAT.Vector(x, -y)))))
-            .map(convexPolys => new CompositeHull(convexPolys));
-
-        return { hulls };
-    }
+    factory: hullFromAnimation,
 });
 
 interface RBushEntry extends BBox {
     uuid: string,
     interaction: CollisionInteraction,
     hull: Hull,
+    type: 'hitbox' | 'hurtbox',
 };
 
 export const RBushResource = new Resource<RBush<RBushEntry>>("RBushResource");
@@ -222,54 +223,56 @@ function rotateAabb(bbox: BBox, angle: number | Angle): BBox {
     };
 }
 
-export const UpdateHullSystem = new System({
-    name: "ActiveHullSystem",
-    args: [MovementStateComponent, HullComponent, Optional(AnimationComponent)] as const,
+export const UpdateHitboxHullSystem = new System({
+    name: "UpdateHitboxHullSystem",
+    args: [MovementStateComponent, HitboxHullComponent, Optional(AnimationComponent)] as const,
     step(movement, hull, animation) {
-        if (hull.singleHull) {
-            hull.activeHull = hull.hulls[0];
-            hull.activeHull.angle = movement.rotation.angle;
-        } else {
+        let angle = movement.rotation.angle;
+        if (hull instanceof MultiFrameHull) {
             let frame = 0;
-            let angle: number;
             if (animation) {
                 ({ frame, angle } = getFrameFromMovement(animation, movement));
-            } else {
-                angle = movement.rotation.angle;
             }
-            hull.activeHull = hull.hulls[frame];
-            hull.activeHull.angle = angle;
+            hull.frame = frame;
         }
 
-        hull.activeHull.pos.x = movement.position.x;
-        hull.activeHull.pos.y = movement.position.y;
+        hull.pos.x = movement.position.x;
+        hull.pos.y = movement.position.y;
+        hull.angle = angle;
     },
     after: [MovementSystem],
 });
 
+export const UpdateHurtboxHullSystem = new System({
+    name: "UpdateHurtboxHullSystem",
+    args: [MovementStateComponent, HurtboxHullComponent, Optional(AnimationComponent)] as const,
+    step: UpdateHitboxHullSystem.step,
+});
+
 export const CollisionSystem = new System({
     name: "CollisionSystem",
-    after: [UpdateHullSystem],
-    args: [RBushResource, new Query([HullComponent, UUID,
-        CollisionInteractionComponent] as const),
+    after: [UpdateHitboxHullSystem],
+    args: [RBushResource,
+        new Query([HitboxHullComponent, UUID, CollisionInteractionComponent] as const),
+        new Query([HurtboxHullComponent, UUID, CollisionInteractionComponent] as const),
         Emit, SingletonComponent] as const,
-    step(rbush, colliders, emit) {
+    step(rbush, hitboxColliders, hurtboxColliders, emit) {
         rbush.clear();
 
-        const entries: RBushEntry[] =
-            colliders.map(([hull, uuid, interaction]) => {
-                if (!hull.activeHull) {
-                    hull.activeHull = hull.hulls[0];
-                }
-                const entry = hull.activeHull.bbox as RBushEntry;
-                entry.uuid = uuid;
-                entry.interaction = interaction;
-                entry.hull = hull.activeHull;
+        function makeRbushEntry(type: 'hitbox' | 'hurtbox', [hull, uuid, interaction]:
+            readonly [Hull, string, CollisionInteraction]): RBushEntry {
+            const entry = hull.bbox as RBushEntry;
+            entry.uuid = uuid;
+            entry.interaction = interaction;
+            entry.hull = hull;
+            entry.type = type;
+            return entry;
+        }
 
-                hull.activeHull = hull.activeHull;
-                hull.computedBbox = entry;
-                return entry;
-            });
+        const entries = [
+            ...hitboxColliders.map(data => makeRbushEntry('hitbox', data)),
+            ...hurtboxColliders.map(data => makeRbushEntry('hurtbox', data)),
+        ];
 
         rbush.load(entries);
 
@@ -277,11 +280,13 @@ export const CollisionSystem = new System({
         const alreadyCollided = new Set<string>();
 
         for (const entry of entries) {
-            //const maybeCollisions = rbush.search(entry)
-            const maybeCollisions = entries
+            const maybeCollisions = rbush.search(entry)
                 .filter(found => found !== entry);
 
             for (const other of maybeCollisions) {
+                if (entry.type === other.type) {
+                    continue; // Hurtboxes can only hit hitboxes.
+                }
                 const collisionPair = [entry.uuid, other.uuid].sort().join();
                 const entryInitiates = aHitsB(entry.interaction, other.interaction);
                 const otherInitiates = aHitsB(other.interaction, entry.interaction);
@@ -316,12 +321,13 @@ const LogCollisionSystem = new System({
 export const CollisionsPlugin: Plugin = {
     name: 'CollisionsPlugin',
     build(world) {
-        world.addComponent(HullComponent);
+        //world.addComponent(HullComponent);
         world.resources.set(RBushResource, new RBush());
 
-        world.addSystem(HullProvider);
+        world.addSystem(HitboxHullProvider);
 
-        world.addSystem(UpdateHullSystem);
+        world.addSystem(UpdateHitboxHullSystem);
+        world.addSystem(UpdateHurtboxHullSystem);
         world.addSystem(CollisionSystem);
         //world.addSystem(LogCollisionSystem);
     }
