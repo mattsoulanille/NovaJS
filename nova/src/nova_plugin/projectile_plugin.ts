@@ -16,7 +16,7 @@ import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
 import { AnimationComponent } from './animation_plugin';
 import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from './collisions_plugin';
-import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
 import { ApplyDamageResource, DeathEvent } from './death_plugin';
 import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
@@ -68,10 +68,15 @@ class ProjectileWeaponEntry extends WeaponEntry {
                     turnRate: this.data.physics.turnRate,
                     movementType: this.data.guidance === 'guided'
                         ? MovementType.INERTIALESS : MovementType.INERTIAL,
-                }).addComponent(CollisionInteractionComponent, {
+                }).addComponent(CollisionHitterComponent, {
                     hitTypes,
-                    vulnerableTo: new Set(this.data.vulnerableTo),
                 }).addComponent(ReturnToQueueComponent, queueHolder);
+
+            if (this.data.vulnerableTo) {
+                projectile.addComponent(CollisionVulnerabilityComponent, {
+                    vulnerableTo: new Set(this.data.vulnerableTo),
+                });
+            }
             if (this.data.guidance === 'guided') {
                 projectile.addComponent(GuidanceComponent, {
                     guidance: Guidance.firstOrder,
@@ -216,7 +221,7 @@ export const ProjectileCollisionEvent
 const ProjectileHurtboxProvider = ProvideAsync({
     name: "ProjectileHurtboxProvider",
     provided: HurtboxHullComponent,
-    args: [AnimationComponent, GameDataResource, CollisionInteractionComponent, ProjectileComponent] as const,
+    args: [AnimationComponent, GameDataResource, CollisionHitterComponent, ProjectileComponent] as const,
     factory: hullFromAnimation,
 });
 

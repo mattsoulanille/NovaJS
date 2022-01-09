@@ -10,7 +10,7 @@ import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementPhysics, MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { Provide, ProvideAsync } from 'nova_ecs/provider';
 import { AnimationComponent } from './animation_plugin';
-import { CollisionInteractionComponent } from './collision_interaction';
+import { CollisionVulnerabilityComponent } from './collision_interaction';
 import { GameDataResource } from './game_data_resource';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { applyOutfitPhysics, OutfitsStateComponent } from './outfit_plugin';
@@ -93,7 +93,7 @@ const ShipAnimationProvider = Provide({
 
 const ShipCollisionInteractionProvider = Provide({
     name: "ShipCollisionInteractionProvider",
-    provided: CollisionInteractionComponent,
+    provided: CollisionVulnerabilityComponent,
     args: [ShipComponent] as const,
     factory: () => ({
         vulnerableTo: new Set(['normal']),

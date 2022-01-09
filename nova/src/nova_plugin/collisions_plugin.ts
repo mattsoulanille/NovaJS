@@ -16,7 +16,7 @@ import RBush, { BBox } from "rbush";
 import * as SAT from "sat";
 import { getFrameFromMovement } from "../util/get_frame_and_angle";
 import { AnimationComponent } from "./animation_plugin";
-import { CollisionEvent, CollisionInteraction, CollisionInteractionComponent } from "./collision_interaction";
+import { CollisionEvent, CollisionHitter, CollisionHitterComponent, CollisionVulnerability, CollisionVulnerabilityComponent } from "./collision_interaction";
 import { GameDataResource } from "./game_data_resource";
 
 type Shape = SAT.Polygon | SAT.Circle;
@@ -58,11 +58,14 @@ export class CompositeHull extends Hull {
     private wrappedPos = new SAT.Vector(0, 0);
     constructor(readonly shapes: Shape[]) {
         super();
-        this.pos = this.wrappedPos; // Set pos on shapes
+        this.pos = new SAT.Vector(0, 0); // Set position on shapes
         this.bboxShape = getBoundingBox(shapes);
     }
 
     set pos(position: SAT.Vector) {
+        if (this.pos === position) {
+            return;
+        }
         for (const shape of this.shapes) {
             shape.pos = position;
         }
@@ -74,6 +77,9 @@ export class CompositeHull extends Hull {
     }
 
     set angle(angle: number) {
+        if (angle === this.wrappedAngle) {
+            return;
+        }
         for (const shape of this.shapes) {
             if ('setAngle' in shape) {
                 shape.setAngle(angle);
@@ -93,41 +99,33 @@ export class CompositeHull extends Hull {
 
 class MultiFrameHull extends Hull {
     private activeHull: Hull;
-    private wrappedPos = new SAT.Vector(0, 0);
+    public pos = new SAT.Vector(0, 0);
     private wrappedAngle = 0;
     constructor(private hulls: Hull[]) {
         super();
-        this.pos = this.wrappedPos; // Set pos on shapes
         this.activeHull = hulls[0];
+        this.activeHull.pos = this.pos;
     }
     get shapes() {
         return this.activeHull.shapes;
     }
-
-    set pos(position: SAT.Vector) {
-        for (const hull of this.hulls) {
-            hull.pos = position;
-        }
-        this.wrappedPos = position;
-    }
-    get pos() {
-        return this.wrappedPos;
-    }
-
     get angle() {
         return this.wrappedAngle;
     }
     set angle(angle: number) {
-        for (const hull of this.hulls) {
-            hull.angle = angle;
-        }
+        this.activeHull.angle = angle;
     }
     set frame(frame: number) {
         const newHull = this.hulls[frame];
+        if (newHull === this.activeHull) {
+            return;
+        }
         if (!newHull) {
             console.warn(`Tried to set hull to ${frame} but only ${this.hulls.length} are available`);
             return;
         }
+        newHull.angle = this.wrappedAngle;
+        newHull.pos = this.pos;
         this.activeHull = newHull;
     }
 
@@ -154,16 +152,25 @@ export async function hullFromAnimation(animation: Animation, gameData: GameData
 const HitboxHullProvider = ProvideAsync({
     name: "HitboxProvider",
     provided: HitboxHullComponent,
-    args: [AnimationComponent, GameDataResource, CollisionInteractionComponent] as const,
+    args: [AnimationComponent, GameDataResource, CollisionVulnerabilityComponent] as const,
     factory: hullFromAnimation,
 });
 
-interface RBushEntry extends BBox {
+enum RBushEntryType {
+    hurtbox,
+    hitbox,
+}
+
+type RBushEntry = BBox & {
     uuid: string,
-    interaction: CollisionInteraction,
     hull: Hull,
-    type: 'hitbox' | 'hurtbox',
-};
+} & ({
+    type: RBushEntryType.hurtbox,
+    hitter: CollisionHitter,
+} | {
+    type: RBushEntryType.hitbox,
+    vulnerability: CollisionVulnerability,
+});
 
 export const RBushResource = new Resource<RBush<RBushEntry>>("RBushResource");
 
@@ -184,12 +191,10 @@ export function getBoundingBox(shapes: Shape[]): BBox {
         }));
 }
 
-function aHitsB(a: CollisionInteraction, b: CollisionInteraction) {
-    if (a.hitTypes && b.vulnerableTo) {
-        for (const hitType of a.hitTypes) {
-            if (b.vulnerableTo.has(hitType)) {
-                return true;
-            }
+function aHitsB(a: CollisionHitter, b: CollisionVulnerability) {
+    for (const hitType of a.hitTypes) {
+        if (b.vulnerableTo.has(hitType)) {
+            return true;
         }
     }
     return false;
@@ -254,25 +259,30 @@ export const CollisionSystem = new System({
     name: "CollisionSystem",
     after: [UpdateHitboxHullSystem],
     args: [RBushResource,
-        new Query([HitboxHullComponent, UUID, CollisionInteractionComponent] as const),
-        new Query([HurtboxHullComponent, UUID, CollisionInteractionComponent] as const),
+        new Query([HitboxHullComponent, UUID, CollisionVulnerabilityComponent] as const),
+        new Query([HurtboxHullComponent, UUID, CollisionHitterComponent] as const),
         Emit, SingletonComponent] as const,
     step(rbush, hitboxColliders, hurtboxColliders, emit) {
         rbush.clear();
 
-        function makeRbushEntry(type: 'hitbox' | 'hurtbox', [hull, uuid, interaction]:
-            readonly [Hull, string, CollisionInteraction]): RBushEntry {
+        function makeRbushEntry(type: RBushEntryType, [hull, uuid, interaction]:
+            readonly [Hull, string, CollisionHitter | CollisionVulnerability]): RBushEntry {
             const entry = hull.bbox as RBushEntry;
             entry.uuid = uuid;
-            entry.interaction = interaction;
+            if ('vulnerableTo' in interaction) {
+                (entry as { vulnerability: CollisionVulnerability })
+                    .vulnerability = interaction;
+            } else {
+                (entry as { hitter: CollisionHitter }).hitter = interaction;
+            }
             entry.hull = hull;
             entry.type = type;
             return entry;
         }
 
         const entries = [
-            ...hitboxColliders.map(data => makeRbushEntry('hitbox', data)),
-            ...hurtboxColliders.map(data => makeRbushEntry('hurtbox', data)),
+            ...hitboxColliders.map(data => makeRbushEntry(RBushEntryType.hitbox, data)),
+            ...hurtboxColliders.map(data => makeRbushEntry(RBushEntryType.hurtbox, data)),
         ];
 
         rbush.load(entries);
@@ -294,22 +304,31 @@ export const CollisionSystem = new System({
                 // overlapping a point defense weapon can be considered a collision initiated
                 // by the point defense weapon, meaning the point defense weapon can hit the
                 // missile by hitting its prox radius (bad).
-                const entryInitiates = aHitsB(entry.interaction, other.interaction)
-                    && entry.type === 'hurtbox';
-                const otherInitiates = aHitsB(other.interaction, entry.interaction)
-                    && other.type === 'hurtbox';
-                const canCollide = entryInitiates || otherInitiates;
+                let entryInitiates: boolean;
+                let hitter: CollisionHitter;
+                let vulnerability: CollisionVulnerability;
+                if (entry.type === RBushEntryType.hurtbox) {
+                    entryInitiates = true;
+                    hitter = entry.hitter;
+                    vulnerability = (other as
+                        { vulnerability: CollisionVulnerability }).vulnerability;
+                } else {
+                    entryInitiates = false;
+                    vulnerability = entry.vulnerability;
+                    hitter = (other as { hitter: CollisionHitter }).hitter;
+                }
+                const canCollide = aHitsB(hitter, vulnerability);
                 if (canCollide &&
                     !alreadyCollided.has(collisionPair) &&
                     entry.hull.collides(other.hull)) {
                     alreadyCollided.add(collisionPair);
                     emit(CollisionEvent, {
                         other: other.uuid,
-                        initiator: entryInitiates
+                        initiator: entryInitiates,
                     }, [entry.uuid]);
                     emit(CollisionEvent, {
                         other: entry.uuid,
-                        initiator: otherInitiates
+                        initiator: !entryInitiates,
                     }, [other.uuid]);
                 }
             }
