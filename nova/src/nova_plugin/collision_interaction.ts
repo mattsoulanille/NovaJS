@@ -2,12 +2,15 @@ import { Component } from "nova_ecs/component";
 import { EcsEvent } from "nova_ecs/events";
 
 
-export interface CollisionInteraction {
-    vulnerableTo?: Set<unknown>;
-    hitTypes?: Set<unknown>;
+export interface CollisionHitter {
+    hitTypes: Set<unknown>;
 }
 
-export const CollisionInteractionComponent =
-    new Component<CollisionInteraction>('CollisionTypes');
+export interface CollisionVulnerability {
+    vulnerableTo: Set<unknown>;
+}
+
+export const CollisionHitterComponent = new Component<CollisionHitter>('CollisionHitter');
+export const CollisionVulnerabilityComponent = new Component<CollisionVulnerability>('CollisionVulnurability');
 
 export const CollisionEvent = new EcsEvent<{ other: string, initiator: boolean }>('CollisionEvent');

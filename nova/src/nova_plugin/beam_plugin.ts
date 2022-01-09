@@ -14,7 +14,7 @@ import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { CompositeHull, HurtboxHullComponent, UpdateHitboxHullSystem } from './collisions_plugin';
-import { CollisionEvent, CollisionInteractionComponent } from './collision_interaction';
+import { CollisionEvent, CollisionHitterComponent } from './collision_interaction';
 import { CreateTime, CreateTimeArgProvider } from './create_time';
 import { ApplyDamageResource } from './death_plugin';
 import { applyExitPoint, ExitPointData } from './exit_point';
@@ -77,7 +77,7 @@ class BeamWeaponEntry extends WeaponEntry {
                 accelerating: 0,
                 turnBack: false,
                 turning: 0,
-            }).addComponent(CollisionInteractionComponent, {
+            }).addComponent(CollisionHitterComponent, {
                 hitTypes: this.hitTypes,
             }).addComponent(HurtboxHullComponent, new CompositeHull([beamPoly])
             ).addComponent(BeamStateComponent, {
