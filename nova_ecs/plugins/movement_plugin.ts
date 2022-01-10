@@ -162,7 +162,8 @@ export const MovementPlugin: Plugin = {
                 // Omit position.
                 // Send everything if a delta is detected.
                 const same = a.turning === b.turning &&
-                    a.accelerating === b.accelerating;
+                    a.accelerating === b.accelerating &&
+                    a.turnTo === b.turnTo;
 
                 if (same) {
                     return;
