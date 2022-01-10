@@ -72,7 +72,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
                     hitTypes,
                 }).addComponent(ReturnToQueueComponent, queueHolder);
 
-            if (this.data.vulnerableTo) {
+            if (this.data.vulnerableTo.length) {
                 projectile.addComponent(CollisionVulnerabilityComponent, {
                     vulnerableTo: new Set(this.data.vulnerableTo),
                 });
