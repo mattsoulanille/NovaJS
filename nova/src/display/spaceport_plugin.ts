@@ -1,6 +1,8 @@
 import { Emit, Entities, GetEntity, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
+import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
+import { CommunicatorResource, MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Provide } from 'nova_ecs/provider';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
@@ -33,8 +35,8 @@ const SpaceportQuery = new Query([SpaceportComponent] as const);
 const LandSystem = new System({
     name: 'LandSystem',
     events: [LandEvent],
-    args: [LandEvent, UUID, Entities, RunQuery, ScreenSize, GetEntity, PlayerShipSelector] as const,
-    step({ uuid }, shipUuid, entities, runQuery, { x, y }, playerShip) {
+    args: [LandEvent, UUID, Entities, RunQuery, ScreenSize, GetEntity, Optional(CommunicatorResource), PlayerShipSelector] as const,
+    step({ uuid }, shipUuid, entities, runQuery, { x, y }, playerShip, communicator) {
         const spaceport = runQuery(SpaceportQuery, uuid)[0]?.[0];
         if (!spaceport) {
             return;
@@ -46,6 +48,11 @@ const LandSystem = new System({
         spaceport.container.position.x = x / 2;
         spaceport.container.position.y = y / 2;
         spaceport.show(playerShip).then(newShip => {
+            if (communicator?.uuid) {
+                newShip.components.set(MultiplayerData, {
+                    owner: communicator.uuid,
+                });
+            }
             entities.set(shipUuid, newShip);
         });
     }
