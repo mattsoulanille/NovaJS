@@ -11,7 +11,7 @@ import { Plugin } from '../plugin';
 import { Query } from '../query';
 import { Resource } from '../resource';
 import { System } from '../system';
-import { setDifference } from '../utils';
+import { DefaultMap, setDifference } from '../utils';
 import { World } from '../world';
 import { DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
 import { EncodedEntity, SerializerResource } from './serializer_plugin';
@@ -68,6 +68,7 @@ export interface Communicator {
     peers: Peers,
     servers: BehaviorSubject<Set<string>>,
     messages: Observable<{ source: string, message: unknown }>,
+    connected: BehaviorSubject<boolean>,
     sendMessage(message: unknown, destination?: string | Set<string>): void;
 }
 
@@ -132,11 +133,22 @@ export function multiplayer(communicator: Communicator,
         args: [MultiplayerQuery, Entities, Comms,
             DeltaResource, SerializerResource, Emit] as const,
         step: (query, entities, comms, deltaMaker, serializer, emit) => {
+            if (comms.uuid && communicator.uuid && comms.uuid !== communicator.uuid) {
+                // Change the owner of all entities owned by our previous uuid
+                // to our current uuid.
+                for (const [, , multiplayerData] of query) {
+                    if (multiplayerData.owner === comms.uuid) {
+                        multiplayerData.owner = communicator.uuid;
+                    }
+                }
+            }
+
             comms.uuid = communicator.uuid;
             if (!comms.uuid) {
                 // Can't do anything if we don't have a uuid.
                 return;
             }
+
             const isAdmin = comms.admins.has(comms.uuid);
 
             function randomAdmin() {
@@ -166,7 +178,8 @@ export function multiplayer(communicator: Communicator,
             const entityUuids = new Set(entityMap.keys());
 
             // Entities to request the full state of
-            const fullStateRequests = new Set<string>();
+            // keyed by who to ask for them.
+            const fullStateRequests = new DefaultMap<string, Set<string>>(() => new Set());
 
             // Track entities added and removed
             const added = new Map<string, string>();
@@ -207,16 +220,16 @@ export function multiplayer(communicator: Communicator,
 
                 // Remove entities
                 for (const uuid of message.remove ?? []) {
-                    if (entityMap.has(uuid) &&
-                        (entityMap.get(uuid)?.data.owner === source || peerIsAdmin)) {
+                    // if (entityMap.has(uuid) &&
+                    //     (entityMap.get(uuid)?.data.owner === source || peerIsAdmin)) {
                         entities.delete(uuid);
                         fullStateRequests.delete(uuid);
                         added.delete(uuid);
                         removed.add(uuid);
                         entityMap.delete(uuid);
-                    } else {
-                        warn(`'${source}' tried to remove ${uuid}`);
-                    }
+                    //} else {
+                        //warn(`'${source}' tried to remove ${uuid}`);
+                    //}
                 }
 
                 // Add new entities
@@ -233,12 +246,12 @@ export function multiplayer(communicator: Communicator,
                         warn(`New entity '${uuid}' missing MultiplayerData`);
                         continue;
                     }
-                    if (entityMap.has(uuid)
-                        && entityMap.get(uuid)?.data.owner !== source
-                        && !peerIsAdmin) {
-                        warn(`'${source}' tried to replace existing entity '${uuid}'`);
-                        continue;
-                    }
+                    // if (entityMap.has(uuid)
+                    //     && entityMap.get(uuid)?.data.owner !== source
+                    //     && !peerIsAdmin) {
+                    //     warn(`'${source}' tried to replace existing entity '${uuid}'`);
+                    //     continue;
+                    // }
 
                     entities.set(uuid, entity);
                     added.set(uuid, multiplayerData.owner);
@@ -263,15 +276,15 @@ export function multiplayer(communicator: Communicator,
                 // Apply deltas
                 for (const [uuid, entityDelta] of message.delta ?? []) {
                     if (!entityMap.has(uuid)) {
-                        fullStateRequests.add(uuid);
+                        fullStateRequests.get(source).add(uuid);
                         continue;
                     }
                     const { entity, data } = entityMap.get(uuid)!;
 
-                    if (source !== data.owner && !comms.admins.has(source)) {
-                        warn(`'${source}' tried to modify entity '${uuid}'`);
-                        continue;
-                    }
+                    // if (source !== data.owner && !comms.admins.has(source)) {
+                    //     warn(`'${source}' tried to modify entity '${uuid}'`);
+                    //     continue;
+                    // }
                     try {
                         deltaMaker.applyDelta(entity, entityDelta);
                     } catch (e) {
@@ -284,13 +297,14 @@ export function multiplayer(communicator: Communicator,
             comms.messages = [];
 
             if (fullStateRequests.size > 0) {
-                // Request state from a trusted source
-                sendMessage({
-                    requestState: {
-                        uuids: fullStateRequests,
-                        invert: false,
-                    }
-                }, randomAdmin());
+                // Request state from a (maybe) trusted source
+                for (const [source, uuids] of fullStateRequests) {
+                    sendMessage({
+                        requestState: {
+                            uuids, invert: false,
+                        }
+                    }, source);
+                }
             }
             const currentOwners = new Map([...entityMap].map(([uuid, val]) =>
                 [uuid, val.data.owner]));

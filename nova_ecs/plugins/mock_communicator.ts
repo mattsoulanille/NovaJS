@@ -1,4 +1,4 @@
-import { BehaviorSubject, Observable, Subject } from 'rxjs';
+import { BehaviorSubject, Subject } from 'rxjs';
 import { Communicator, Message, Peers } from './multiplayer_plugin';
 
 
@@ -8,6 +8,7 @@ export class MockCommunicator implements Communicator {
     messages = new Subject<{ message: unknown; source: string; }>();
     allMessages: unknown[] = [];
     servers = new BehaviorSubject(new Set(['server']));
+    connected = new BehaviorSubject(true);
 
     constructor(public uuid: string | undefined,
         public mockPeers: Map<string, MockCommunicator> = new Map()) {

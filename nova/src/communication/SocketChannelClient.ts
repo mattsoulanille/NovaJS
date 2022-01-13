@@ -1,16 +1,18 @@
 import { isRight } from "fp-ts/lib/Either";
-import { Subject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 import { ChannelClient } from "./Channel";
 import { SocketMessage } from "./SocketMessage";
 
 export class SocketChannelClient implements ChannelClient {
     readonly message = new Subject<unknown>();
+    readonly connected = new BehaviorSubject(false);
 
     webSocket: WebSocket;
     private webSocketFactory: () => WebSocket;
     warn: (m: string) => void;
     readonly timeout: number;
     private keepaliveTimeout?: NodeJS.Timeout;
+    private pingsSentSinceMessage = 0;
     private messageListener: (m: MessageEvent) => void;
     private messageQueue: SocketMessage[] = [];
 
@@ -35,11 +37,12 @@ export class SocketChannelClient implements ChannelClient {
         this.webSocket.removeEventListener("message", this.messageListener);
         if (this.webSocket.readyState === this.webSocket.CONNECTING
             || this.webSocket.readyState === this.webSocket.OPEN) {
-            this.webSocket.close();
+            this.disconnect();
         }
         this.webSocket = this.webSocketFactory();
         this.webSocket.addEventListener("message", this.messageListener);
         this.resetTimeout();
+        this.sendPing();
     }
 
     reconnectIfClosed() {
@@ -53,25 +56,46 @@ export class SocketChannelClient implements ChannelClient {
         this.sendRaw({ message });
     }
 
+    private sendPing() {
+        this.sendRaw({ ping: true });
+        this.pingsSentSinceMessage++;
+    }
+
+    private keepaliveTimeoutCallback = () => {
+        if (this.webSocket.readyState === this.webSocket.CLOSED
+            || this.webSocket.readyState === this.webSocket.CLOSING
+            || this.pingsSentSinceMessage > 0) {
+            this.disconnect();
+            this.warn("Lost connection. Reconnecting...");
+            this.reconnect();
+        }
+
+        this.sendPing();
+        this.resetTimeout();
+    }
+
     resetTimeout() {
         if (this.keepaliveTimeout !== undefined) {
             clearTimeout(this.keepaliveTimeout);
         }
+        this.keepaliveTimeout = setTimeout(
+            this.keepaliveTimeoutCallback, this.timeout);
 
-        this.keepaliveTimeout = setTimeout(() => {
-            if (this.webSocket.readyState === this.webSocket.CLOSED
-                || this.webSocket.readyState === this.webSocket.CLOSING) {
-                this.warn("Lost connection. Reconnecting...");
-                this.reconnect();
-                return;
-            }
+        // this.keepaliveTimeout = setTimeout(() => {
+        //     if (this.webSocket.readyState === this.webSocket.CLOSED
+        //         || this.webSocket.readyState === this.webSocket.CLOSING) {
+        //         this.disconnect();
+        //         this.warn("Lost connection. Reconnecting...");
+        //         this.reconnect();
+        //         return;
+        //     }
 
-            this.sendRaw({ ping: true });
-            this.keepaliveTimeout = setTimeout(() => {
-                this.warn("Lost connection. Reconnecting...");
-                this.reconnect();
-            }, this.timeout);
-        }, this.timeout);
+        //     this.sendPing();
+        //     this.keepaliveTimeout = setTimeout(() => {
+        //         this.warn("Lost connection. Reconnecting...");
+        //         this.reconnect();
+        //     }, this.timeout);
+        // }, this.timeout);
     }
 
     private sendRaw(message: SocketMessage) {
@@ -89,6 +113,11 @@ export class SocketChannelClient implements ChannelClient {
 
     private async handleMessage(messageEvent: MessageEvent) {
         this.resetTimeout();
+        this.pingsSentSinceMessage = 0;
+        if (!this.connected.value) {
+            this.warn("Connected");
+            this.connected.next(true);
+        }
 
         const data = messageEvent.data;
         let socketMessage: SocketMessage;
@@ -126,5 +155,6 @@ export class SocketChannelClient implements ChannelClient {
         this.webSocket.removeEventListener(
             "message", this.messageListener);
         this.webSocket.close();
+        this.connected.next(false);
     }
 }
