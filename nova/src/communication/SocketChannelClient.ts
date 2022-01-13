@@ -15,8 +15,15 @@ export class SocketChannelClient implements ChannelClient {
     private pingsSentSinceMessage = 0;
     private messageListener: (m: MessageEvent) => void;
     private messageQueue: SocketMessage[] = [];
+    private maxPings: number
 
-    constructor({ webSocket, warn, timeout, webSocketFactory }: { webSocket?: WebSocket, warn?: ((m: string) => void), timeout?: number, webSocketFactory?: () => WebSocket }) {
+    constructor({ webSocket, warn, timeout, webSocketFactory, maxPings }: {
+        webSocket?: WebSocket,
+        warn?: ((m: string) => void),
+        timeout?: number,
+        webSocketFactory?: () => WebSocket,
+        maxPings?: number,
+    }) {
         this.webSocketFactory = webSocketFactory ?? (() => {
             if (location.protocol === "https:") {
                 return new WebSocket(`wss://${location.host}`);
@@ -27,6 +34,7 @@ export class SocketChannelClient implements ChannelClient {
         this.webSocket = webSocket ?? this.webSocketFactory();
         this.warn = warn ?? console.warn;
         this.timeout = timeout ?? 1200;
+        this.maxPings = maxPings ?? 3;
 
         this.messageListener = this.handleMessage.bind(this)
         this.webSocket.addEventListener("message", this.messageListener);
@@ -64,7 +72,7 @@ export class SocketChannelClient implements ChannelClient {
     private keepaliveTimeoutCallback = () => {
         if (this.webSocket.readyState === this.webSocket.CLOSED
             || this.webSocket.readyState === this.webSocket.CLOSING
-            || this.pingsSentSinceMessage > 0) {
+            || this.pingsSentSinceMessage > this.maxPings) {
             this.disconnect();
             this.warn("Lost connection. Reconnecting...");
             this.reconnect();
