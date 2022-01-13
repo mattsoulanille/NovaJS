@@ -3,6 +3,7 @@ import { Component, UnknownComponent } from "./component";
 import { ComponentMap } from "./component_map";
 import { EventMap } from "./event_map";
 import { Query } from "./query";
+import { World } from "./world";
 
 export type ComponentTypes = Set<UnknownComponent>;
 
@@ -45,5 +46,11 @@ export class Entity {
     setName(name: string): this {
         this.name = name;
         return this;
+    }
+
+    get componentsByName() {
+        // For debugging only. Not performant.
+        return new Map([...this.components].map(([component, value]) =>
+            [component.name, value] as const));
     }
 }
