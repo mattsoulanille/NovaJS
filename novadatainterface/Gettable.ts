@@ -4,17 +4,14 @@ export type GettableData<G> = G extends Gettable<infer T> ? T : never;
 
 export class Gettable<T> {
     protected data: { [key: string]: Promise<T> } = {};
-    gotten: { [key: string]: T | Error } = {};
+    gotten: { [key: string]: T } = {};
 
-    constructor(protected getFunction: Builder<T>) { }
+    constructor(protected getFunction: Builder<T>,
+        protected warn: (message: unknown) => void = console.warn) { }
 
     async get(id: string, priority: number = 0) {
         if (id in this.gotten) {
-            const val = this.gotten[id];
-            if (val instanceof Error) {
-                throw val;
-            }
-            return val;
+            return this.gotten[id];
         }
 
         if (!(id in this.data)) {
@@ -26,17 +23,15 @@ export class Gettable<T> {
             this.gotten[id] = val;
             return val;
         } catch (e) {
-            this.gotten[id] = e as Error;
+            delete this.data[id];
             throw e;
         }
     }
 
     getCached(id: string): T | undefined {
         const cached = this.gotten[id];
-        if (cached instanceof Error) {
-            throw cached;
-        } else if (!cached) {
-            this.get(id);
+        if (!cached) {
+            this.get(id).catch(error => this.warn(error));
             return undefined;
         } else {
             return cached;

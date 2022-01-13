@@ -15,8 +15,10 @@ function getFunc(id: string) {
 
 describe("Gettable", function() {
     let g: Gettable<string>;
+    let warn: (message: unknown) => void;
     beforeEach(function() {
-        g = new Gettable<string>(getFunc);
+        warn = jasmine.createSpy('warn');
+        g = new Gettable<string>(getFunc, warn);
     });
 
     it("Should get values", async function() {
@@ -28,13 +30,14 @@ describe("Gettable", function() {
         await expectAsync(g.get("foo")).toBeRejectedWith(new Error("got foo!"));
     });
 
-    it("getOrFail fails if not cached", () => {
+    it("getCached fails if not cached", () => {
         expect(g.getCached("hello")).toBeUndefined();
     });
 
-    it("getOrFail throws errors that happened when getting", async () => {
+    it("getCached fails if an error occurs in the getter", async () => {
+        expect(g.getCached("foo")).toBeUndefined();
         await expectAsync(g.get("foo")).toBeRejectedWith(new Error("got foo!"));
-        expect(() => g.getCached("foo")).toThrowError("got foo!");
+        expect(warn).toHaveBeenCalledTimes(1);
     });
 
     it("getOrFail gets cached resources", async () => {
