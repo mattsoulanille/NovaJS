@@ -2,7 +2,7 @@ import { isLeft } from "fp-ts/lib/Either";
 import * as t from 'io-ts';
 import { set } from "nova_ecs/datatypes/set";
 import { Communicator, MessageWithSource, Peers } from "nova_ecs/plugins/multiplayer_plugin";
-import { DefaultMap, setDifference } from "nova_ecs/utils";
+import { DefaultMap } from "nova_ecs/utils";
 import { BehaviorSubject, EMPTY, Observable, of, Subject } from "rxjs";
 import { filter, map, mergeMap, takeUntil, tap } from "rxjs/operators";
 
@@ -24,7 +24,8 @@ class RoomCommunicator implements Communicator {
         public messages: Observable<MessageWithSource<unknown>>,
         public sendMessage: (message: unknown, destination?: string) => void,
         public peers: Peers,
-        public servers: BehaviorSubject<Set<string>>) { }
+        public servers: BehaviorSubject<Set<string>>,
+        public connected: BehaviorSubject<boolean>) { }
     get uuid() {
         return this.communicator.uuid;
     }
@@ -136,7 +137,18 @@ export class MultiRoom {
                 },
                 peers,
                 communicator.servers,
+                communicator.connected,
             ), cleanup];
+        });
+
+        if (communicator.connected.value) {
+            this.joinCurrentRooms();
+        }
+
+        communicator.connected.subscribe(connected => {
+            if (connected) {
+                this.joinCurrentRooms();
+            }
         });
     }
 
@@ -161,6 +173,12 @@ export class MultiRoom {
         this.roomMap.delete(room)
         if (cleanup) {
             cleanup()
+        }
+    }
+
+    private joinCurrentRooms() {
+        for (const [room] of this.roomMap) {
+            this.join(room);
         }
     }
 }

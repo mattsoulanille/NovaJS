@@ -98,9 +98,39 @@ describe('MultiRoomCommunicator', () => {
         mockPeers.delete(c2.uuid!);
         const newPeers = new Set([c1.uuid, serverCommunicator.uuid]);
         serverCommunicator.peers.current.next(new Set([c1.uuid!, serverCommunicator.uuid!]));
-
         c1.peers.current.next(new Set([c1.uuid!, serverCommunicator.uuid!]));
+
         expect(serverRoom1.peers.current.value).toEqual(newPeers);
         expect(r1Room1.peers.current.value).toEqual(newPeers);
+    });
+
+    xit('peer joins its rooms when it connects', () => {
+        const serverRoom1 = server.join('room1');
+        const r1Room1 = r1.join('room1');
+        const r2Room1 = r2.join('room1');
+
+        mockPeers.delete(c2.uuid!);
+        const newPeers = new Set([c1.uuid, serverCommunicator.uuid]);
+        // Remove the peer from the server to simulate a disconnect.
+        serverCommunicator.peers.current.next(new Set([c1.uuid!, serverCommunicator.uuid!]));
+        c1.peers.current.next(new Set([c1.uuid!, serverCommunicator.uuid!]));
+
+        // Add the peer back
+        mockPeers.set(c2.uuid!, c2);
+        serverCommunicator.peers.current.next(new Set([
+            c1.uuid!, c2.uuid!, serverCommunicator.uuid!]));
+        c1.peers.current.next(new Set([
+            c1.uuid!, c2.uuid!, serverCommunicator.uuid!]));
+
+        const r1Messages: { message: unknown, source: string }[] = [];
+        r1Room1.messages.subscribe(m => r1Messages.push(m));
+
+        // Test sending a message from the peer that was just connected.
+        r2Room1.sendMessage("This is a test from r2");
+        console.log((server as any).roomPeers.get('room1').current.value);
+        expect(r1Messages).toEqual([{
+            message: 'This is a test from r2',
+            source: c2.uuid!,
+        }])
     });
 });

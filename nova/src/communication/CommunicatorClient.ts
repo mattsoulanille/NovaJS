@@ -8,9 +8,11 @@ import { CommunicatorMessage, MessageType } from "./CommunicatorMessage";
 export class CommunicatorClient implements Communicator {
     readonly messages = new Subject<{ source: string, message: unknown }>();
     readonly peers = new Peers(new BehaviorSubject(new Set()));
+    readonly connected: BehaviorSubject<boolean>;
     uuid: string | undefined = undefined;
 
     constructor(private channel: ChannelClient) {
+        this.connected = channel.connected;
         channel.message.subscribe(this.onMessage.bind(this));
     }
     servers = new BehaviorSubject(new Set(['server'])); // TODO: Get this from the server

@@ -1,6 +1,6 @@
-import { isLeft, isRight } from "fp-ts/lib/Either";
+import { isLeft } from "fp-ts/lib/Either";
 import { Communicator, Peers } from "nova_ecs/plugins/multiplayer_plugin";
-import { BehaviorSubject, groupBy, map, mergeMap, Subject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 import { ChannelServer } from "./Channel";
 import { CommunicatorMessage, MessageType } from "./CommunicatorMessage";
 
@@ -9,8 +9,10 @@ export class CommunicatorServer implements Communicator {
     readonly messages = new Subject<{ source: string, message: unknown }>();
     readonly peers: Peers;
     readonly servers: BehaviorSubject<Set<string>>;
+    readonly connected: BehaviorSubject<boolean>;
 
     constructor(private channel: ChannelServer, public uuid = 'server') {
+        this.connected = channel.connected;
         const peerJoin = new Subject<string>();
         const peerLeave = new Subject<string>();
         this.peers = new Peers({

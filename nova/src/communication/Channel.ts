@@ -1,4 +1,4 @@
-import { Subject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 
 export interface MessageWithSourceType<M> {
     message: M;
@@ -17,11 +17,13 @@ export interface ChannelServer {
     readonly clientConnect: Subject<string>;
     readonly clientDisconnect: Subject<string>;
     readonly clients: Set<string>;
+    readonly connected: BehaviorSubject<boolean>;
 }
 
 export interface ChannelClient {
     send(message: unknown): void,
     disconnect(): void
+    readonly connected: BehaviorSubject<boolean>;
 
     readonly message: Subject<unknown>;
 }

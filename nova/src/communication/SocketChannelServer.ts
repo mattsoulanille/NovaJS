@@ -1,7 +1,7 @@
 import { isLeft } from "fp-ts/lib/Either";
 import https from "https";
 import http from "http";
-import { Subject } from "rxjs";
+import { BehaviorSubject, Subject } from "rxjs";
 import { v4 } from "uuid";
 import WebSocket from "ws";
 import { ChannelServer, MessageWithSourceType } from "./Channel";
@@ -16,6 +16,7 @@ export class SocketChannelServer implements ChannelServer {
     readonly message = new Subject<MessageWithSourceType<unknown>>();
     readonly clientConnect = new Subject<string>();
     readonly clientDisconnect = new Subject<string>();
+    readonly connected = new BehaviorSubject(true); // Server is always connected
 
     private clientMap = new Map<string, Client>();
     readonly wss: WebSocket.Server;
