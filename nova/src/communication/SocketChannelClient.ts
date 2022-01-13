@@ -80,22 +80,6 @@ export class SocketChannelClient implements ChannelClient {
         }
         this.keepaliveTimeout = setTimeout(
             this.keepaliveTimeoutCallback, this.timeout);
-
-        // this.keepaliveTimeout = setTimeout(() => {
-        //     if (this.webSocket.readyState === this.webSocket.CLOSED
-        //         || this.webSocket.readyState === this.webSocket.CLOSING) {
-        //         this.disconnect();
-        //         this.warn("Lost connection. Reconnecting...");
-        //         this.reconnect();
-        //         return;
-        //     }
-
-        //     this.sendPing();
-        //     this.keepaliveTimeout = setTimeout(() => {
-        //         this.warn("Lost connection. Reconnecting...");
-        //         this.reconnect();
-        //     }, this.timeout);
-        // }, this.timeout);
     }
 
     private sendRaw(message: SocketMessage) {
