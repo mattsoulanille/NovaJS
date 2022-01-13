@@ -37,8 +37,8 @@ PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
 // this will likely change in the future.
 //PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2;
 const app = new PIXI.Application({
-    width: window.innerWidth * pixelRatio,
-    height: window.innerHeight * pixelRatio,
+    width: window.innerWidth,
+    height: window.innerHeight,
     autoDensity: true
 });
 
