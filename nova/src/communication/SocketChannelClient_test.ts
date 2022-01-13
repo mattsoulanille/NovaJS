@@ -168,7 +168,8 @@ describe("SocketChannelClient", function() {
             webSocket,
             warn,
             timeout: 10,
-            webSocketFactory
+            webSocketFactory,
+            maxPings: 0,
         });
 
         clock.tick(21);
