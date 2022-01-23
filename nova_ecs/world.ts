@@ -111,26 +111,15 @@ export class World {
 
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
-            this.emitWrapped(DeleteEvent, deleted, [...deleted].map(([, b]) => b));
+            this.emit(DeleteEvent, deleted, [...deleted].map(([, b]) => b));
         });
 
         this.state.entities.events.set.subscribe(addEntity => {
-            this.emitWrapped(AddEvent, addEntity, [addEntity[1]]);
+            this.emit(AddEvent, addEntity, [addEntity[1]]);
         });
     }
 
-    emit<Data>(event: EcsEvent<Data, any>, data: Data, entities?: string[]) {
-        this.emitWrapped(event, data, entities);
-    }
-
-    async removeAllPlugins() {
-        const plugins = [...this.plugins].reverse().filter(p => !this.basePlugins.has(p));
-        for (const plugin of plugins) {
-            await this.removePlugin(plugin);
-        }
-    }
-
-    private emitWrapped<Data>(event: EcsEvent<Data, any>, data: Data,
+    emit<Data>(event: EcsEvent<Data, any>, data: Data,
         entities?: (string | Entity)[]) {
         this.eventQueue.push({
             event: event as UnknownEvent,
@@ -138,6 +127,13 @@ export class World {
             entities
         });
         this.events.get(event).next(data);
+    }
+
+    async removeAllPlugins() {
+        const plugins = [...this.plugins].reverse().filter(p => !this.basePlugins.has(p));
+        for (const plugin of plugins) {
+            await this.removePlugin(plugin);
+        }
     }
 
     async addPlugin(plugin: Plugin) {

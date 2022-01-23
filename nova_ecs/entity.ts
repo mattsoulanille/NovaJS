@@ -10,7 +10,7 @@ export class Entity {
     readonly components: ComponentMap;
     readonly componentsBinSet: BinSet<UnknownComponent>;
     public supportedQueries = new Map<Query, boolean>();
-    public uuid: string = '';
+    public readonly uuid: string = '';
 
     constructor(public name?: string, components?: ComponentMap) {
         this.components = new EventMap(components ?? []) as ComponentMap;
