@@ -32,7 +32,7 @@ async function readNovaFile(filePath: string, localIDSpace: NovaResources) {
 
 function read(path: string) {
     // Whether or not to use resource fork
-    var useRF = (path.slice(-5) !== ".ndat");
+    var useRF = path.slice(-5) !== ".ndat" && path.slice(-5) !== ".npif";
     return readResourceFork(path, useRF);
 }
 
