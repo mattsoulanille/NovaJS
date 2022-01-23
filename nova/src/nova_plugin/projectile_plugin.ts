@@ -1,5 +1,5 @@
 import { ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, GetEntity, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -11,12 +11,11 @@ import { MovementPhysicsComponent, MovementStateComponent, MovementType } from '
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
-import { SingletonComponent } from 'nova_ecs/world';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
 import { AnimationComponent } from './animation_plugin';
-import { BlastDamageComponent, BlastIgnoreComponent, BlastPlugin } from './blast_plugin';
+import { BlastDamageComponent, BlastIgnoreComponent } from './blast_plugin';
 import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from './collisions_plugin';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
@@ -184,7 +183,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
     }
 }
 
-export const ProjectileExpireEvent = new EcsEvent<Entity>('ProjectileExpire');
+export const ProjectileExpireEvent = new EcsEvent<undefined>('ProjectileExpire');
 
 const ProjectileLifespanSystem = new System({
     name: 'ProjectileLifespanSystem',
@@ -199,7 +198,7 @@ const ProjectileLifespanSystem = new System({
                 return;
             }
             entities.delete(uuid);
-            emit(ProjectileExpireEvent, self);
+            emit(ProjectileExpireEvent, undefined, [self]);
         }
     },
 });
@@ -269,29 +268,24 @@ const ProjectileCollisionSystem = new System({
         fireSubs(projectileData.id, uuid, false);
         entities.delete(uuid);
         // TODO: Refactor emit to accept full entities instead of just uuids.
-        emit(ProjectileCollisionEvent, self);
+        emit(ProjectileCollisionEvent, other, [self]);
     }
 });
 
-export const ProjectileExplodeEvent = new EcsEvent<Entity>('ProjectileExplodeEvent');
+export const ProjectileExplodeEvent = new EcsEvent<Entity | undefined>('ProjectileExplodeEvent');
 
 const ProjectileExplodeSystem = new System({
     name: 'ProjectileExplodeSystem',
     events: [ProjectileExpireEvent, ProjectileCollisionEvent],
-    args: [Optional(ProjectileExpireEvent), Optional(ProjectileCollisionEvent),
-        Emit, SingletonComponent] as const,
-    step(expire, collide, emit) {
-        const projectile = expire ?? collide;
-        const projectileData = projectile?.components.get(ProjectileDataComponent);
-        if (!projectileData) {
-            return;
-        }
-        if (collide) {
-            emit(ProjectileExplodeEvent, projectile!);
+    args: [ProjectileDataComponent, Optional(ProjectileCollisionEvent),
+        GetEntity, Emit] as const,
+    step(projectileData, other, self, emit) {
+        if (other) {
+            emit(ProjectileExplodeEvent, other, [self]);
             return;
         }
         if (projectileData.detonateWhenShotExpires) {
-            emit(ProjectileExplodeEvent, projectile!);
+            emit(ProjectileExplodeEvent, undefined, [self]);
         }
     }
 });
@@ -299,36 +293,28 @@ const ProjectileExplodeSystem = new System({
 const ProjectileBlastSystem = new System({
     name: 'ProjectileBlastSystem',
     events: [ProjectileExplodeEvent],
-    args: [ProjectileExplodeEvent, Entities, SingletonComponent] as const,
-    step(projectile, entities) {
-        const projectileData = projectile?.components.get(ProjectileDataComponent);
-        if (!projectileData) {
-            return;
-        }
-        const blastHull = projectile.components.get(ProjectileBlastHull);
-        if (!blastHull) {
-            return;
-        }
-        const hitter = projectile.components.get(CollisionHitterComponent);
-        if (!hitter) {
-            return;
-        }
-        const movement = projectile.components.get(MovementStateComponent);
-        if (!movement) {
-            return;
-        }
-
+    args: [ProjectileDataComponent, ProjectileBlastHull, CollisionHitterComponent,
+        MovementStateComponent, Optional(OwnerComponent), Entities,
+        ProjectileExplodeEvent] as const,
+    step(projectileData, blastHull, hitter, movement, owner, entities, other) {
         const blastIgnore = new Set<string>();
         // TODO: Tag ship that was hit as immune to explosion, since it's already hit.
-        if (!projectileData.blastHurtsFiringShip) {
+        if (!projectileData.blastHurtsFiringShip && owner) {
             // TODO: Compute this accounting for subs, escorts, etc.
+            blastIgnore.add(owner);
             // const projectile
             // blast.components.set(BlastIgnoreComponent,
             //                      new Set([projectile.]));
         }
 
+        if (other) {
+            // The projectile already damaged this entity, so
+            // the blast should ignore it.
+            blastIgnore.add(other.uuid);
+        }
+
         const damage = projectileData.damage;
-        const blast = new Entity(`${projectile.name} Blast`)
+        const blast = new Entity(`${projectileData.name} Blast`)
             .addComponent(BlastDamageComponent, damage)
             .addComponent(BlastIgnoreComponent, blastIgnore)
             .addComponent(HurtboxHullComponent, blastHull)

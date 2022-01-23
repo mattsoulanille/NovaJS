@@ -177,13 +177,10 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         let supportedEntities: Iterable<Entity>;
         if (entities || event?.[0] === DeleteEvent) {
             supportedEntities = [...entities ?? this.entities.values()].filter(entity => {
-                // Don't rely on the cached query for DeleteEvent because
-                // the entity (and its entry in the cached query) have already
-                // been removed.
-                if (event?.[0] === DeleteEvent) {
-                    return this.query.supportsEntity(entity);
-                }
-                return this.entities.has(entity.uuid);
+                // Don't rely on the cached query when checking if the entity is supported
+                // because the entity (and its entry in the cached query) may have already
+                // been removed (e.g. in the case of DeleteEvent).
+                return this.entities.has(entity.uuid) || this.query.supportsEntity(entity);
             });
         } else {
             supportedEntities = this.entities.values();

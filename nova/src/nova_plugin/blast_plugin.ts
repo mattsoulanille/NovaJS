@@ -1,7 +1,6 @@
 import { WeaponDamage } from 'novadatainterface/WeaponData';
 import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
-import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { ProvideArg } from 'nova_ecs/provide_arg';
@@ -27,7 +26,6 @@ const BlastCollisionSystem = new System({
         if (ignore?.has(collision.other)) {
             return;
         }
-
         applyDamage(damage, collision.other, 1);
     }
 });
