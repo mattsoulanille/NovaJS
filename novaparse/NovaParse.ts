@@ -218,7 +218,10 @@ export class NovaParse implements GameDataInterface {
                 continue; // If it's not found, there's no baseImage to map from
             }
             var baseImageLocalID = shan.images.baseImage.ID;
-            var baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID].globalID;
+            var baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID]?.globalID;
+            if (!baseImageGlobalID) {
+                continue;
+            }
 
             // Don't overwrite if it already exists. The first ship with the
             // baseImage determines the PICT
@@ -246,8 +249,12 @@ export class NovaParse implements GameDataInterface {
                     continue
                 }
                 var baseImageLocalID = shan.images.baseImage.ID;
-                var baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID].globalID;
-                shipPICTMap[shipGlobalID] = baseImagePICTMap[baseImageGlobalID];
+                var baseImageGlobalID = shan.idSpace.rlëD[baseImageLocalID]?.globalID;
+                if (baseImageGlobalID) {
+                    shipPICTMap[shipGlobalID] = baseImagePICTMap[baseImageGlobalID];
+                } else {
+                    shipPICTMap[shipGlobalID] = "default";
+                }
             }
         }
         return shipPICTMap;

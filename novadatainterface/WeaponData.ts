@@ -145,6 +145,9 @@ export interface NotBayWeaponData extends BaseWeaponData {
     primaryExplosion: string | null;
     secondaryExplosion: string | null;
     knockback: number;
+    blastRadius: number;
+    blastHurtsFiringShip: boolean,
+    detonateWhenShotExpires: boolean,
     damageType: DamageType; // Should this be a set?
 }
 
@@ -164,6 +167,9 @@ export function getDefaultNotBayWeaponData(): NotBayWeaponData {
         primaryExplosion: null,
         secondaryExplosion: null,
         knockback: 0,
+        blastRadius: 0,
+        blastHurtsFiringShip: false,
+        detonateWhenShotExpires: false,
         damageType: "normal",
     }
 }
