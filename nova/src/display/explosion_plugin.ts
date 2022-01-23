@@ -15,7 +15,7 @@ import { v4 } from "uuid";
 import { ExplosionDataComponent } from "../nova_plugin/animation_plugin";
 import { GameDataResource } from "../nova_plugin/game_data_resource";
 import { ProjectileDataComponent } from "../nova_plugin/projectile_data";
-import { ProjectileCollisionEvent, ProjectileExpireEvent } from "../nova_plugin/projectile_plugin";
+import { ProjectileCollisionEvent, ProjectileExpireEvent, ProjectileExplodeEvent } from "../nova_plugin/projectile_plugin";
 import { SoundEvent } from "../nova_plugin/sound_event";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin";
 
@@ -97,11 +97,10 @@ const SecondaryExplosionSystem = new System({
 
 const ProjectileExplosionSystem = new System({
     name: 'ProjectileExplosionSystem',
-    events: [ProjectileExpireEvent, ProjectileCollisionEvent],
-    args: [Optional(ProjectileExpireEvent), Optional(ProjectileCollisionEvent),
-        GameDataResource, Entities, SingletonComponent] as const,
-    step(expire, collide, gameData, entities) {
-        const projectile = expire ?? collide;
+    events: [ProjectileExplodeEvent],
+    args: [ProjectileExplodeEvent, GameDataResource,
+        Entities, SingletonComponent] as const,
+    step(projectile, gameData, entities) {
         const projectileData = projectile?.components.get(ProjectileDataComponent);
         const movement = projectile?.components.get(MovementStateComponent);
         if (!projectileData || !movement) {

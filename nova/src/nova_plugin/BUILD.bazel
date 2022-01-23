@@ -46,6 +46,7 @@ ts_library(
         "systems_resource.ts",
         "npc_plugin.ts",
         "ionization_plugin.ts",
+        "blast_plugin.ts",
     ],
     deps = [
         "//nova_ecs:ecs",

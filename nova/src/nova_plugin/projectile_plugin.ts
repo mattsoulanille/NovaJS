@@ -11,10 +11,12 @@ import { MovementPhysicsComponent, MovementStateComponent, MovementType } from '
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { ProvideAsync } from 'nova_ecs/provider';
 import { System } from 'nova_ecs/system';
+import { SingletonComponent } from 'nova_ecs/world';
 import * as SAT from "sat";
 import { v4 } from 'uuid';
 import { FactoryQueue } from '../common/factory_queue';
 import { AnimationComponent } from './animation_plugin';
+import { BlastDamageComponent, BlastIgnoreComponent, BlastPlugin } from './blast_plugin';
 import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from './collisions_plugin';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
@@ -23,7 +25,7 @@ import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, W
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
 import { ArmorComponent, ShieldComponent } from './health_plugin';
-import { ProjectileComponent, ProjectileDataComponent } from './projectile_data';
+import { ProjectileBlastHull, ProjectileComponent, ProjectileDataComponent } from './projectile_data';
 import { ReturnToQueueComponent } from './return_to_queue_plugin';
 import { SoundEvent } from './sound_event';
 import { Stat } from './stat';
@@ -101,6 +103,13 @@ class ProjectileWeaponEntry extends WeaponEntry {
                     new SAT.Circle(new SAT.Vector(0, 0), this.data.proxRadius)
                 ]);
                 projectile.components.set(HurtboxHullComponent, proxHull);
+            }
+
+            if (this.data.blastRadius) {
+                const blastHull = new CompositeHull([
+                    new SAT.Circle(new SAT.Vector(0, 0), this.data.blastRadius)
+                ]);
+                projectile.components.set(ProjectileBlastHull, blastHull);
             }
 
             return projectile;
@@ -259,7 +268,80 @@ const ProjectileCollisionSystem = new System({
         }
         fireSubs(projectileData.id, uuid, false);
         entities.delete(uuid);
+        // TODO: Refactor emit to accept full entities instead of just uuids.
         emit(ProjectileCollisionEvent, self);
+    }
+});
+
+export const ProjectileExplodeEvent = new EcsEvent<Entity>('ProjectileExplodeEvent');
+
+const ProjectileExplodeSystem = new System({
+    name: 'ProjectileExplodeSystem',
+    events: [ProjectileExpireEvent, ProjectileCollisionEvent],
+    args: [Optional(ProjectileExpireEvent), Optional(ProjectileCollisionEvent),
+        Emit, SingletonComponent] as const,
+    step(expire, collide, emit) {
+        const projectile = expire ?? collide;
+        const projectileData = projectile?.components.get(ProjectileDataComponent);
+        if (!projectileData) {
+            return;
+        }
+        if (collide) {
+            emit(ProjectileExplodeEvent, projectile!);
+            return;
+        }
+        if (projectileData.detonateWhenShotExpires) {
+            emit(ProjectileExplodeEvent, projectile!);
+        }
+    }
+});
+
+const ProjectileBlastSystem = new System({
+    name: 'ProjectileBlastSystem',
+    events: [ProjectileExplodeEvent],
+    args: [ProjectileExplodeEvent, Entities, SingletonComponent] as const,
+    step(projectile, entities) {
+        const projectileData = projectile?.components.get(ProjectileDataComponent);
+        if (!projectileData) {
+            return;
+        }
+        const blastHull = projectile.components.get(ProjectileBlastHull);
+        if (!blastHull) {
+            return;
+        }
+        const hitter = projectile.components.get(CollisionHitterComponent);
+        if (!hitter) {
+            return;
+        }
+        const movement = projectile.components.get(MovementStateComponent);
+        if (!movement) {
+            return;
+        }
+
+        const blastIgnore = new Set<string>();
+        // TODO: Tag ship that was hit as immune to explosion, since it's already hit.
+        if (!projectileData.blastHurtsFiringShip) {
+            // TODO: Compute this accounting for subs, escorts, etc.
+            // const projectile
+            // blast.components.set(BlastIgnoreComponent,
+            //                      new Set([projectile.]));
+        }
+
+        const damage = projectileData.damage;
+        const blast = new Entity(`${projectile.name} Blast`)
+            .addComponent(BlastDamageComponent, damage)
+            .addComponent(BlastIgnoreComponent, blastIgnore)
+            .addComponent(HurtboxHullComponent, blastHull)
+            .addComponent(CollisionHitterComponent, hitter)
+            .addComponent(MovementStateComponent, {
+                position: movement.position,
+                accelerating: 0,
+                rotation: new Angle(0),
+                turning: 0,
+                turnBack: false,
+                velocity: new Vector(0, 0),
+            });
+        entities.set(v4(), blast);
     }
 });
 
@@ -286,5 +368,7 @@ export const ProjectilePlugin: Plugin = {
         world.addSystem(ProjectileCollisionSystem);
         world.addSystem(ProjectileDeathSystem);
         world.addSystem(ProjectileHurtboxProvider);
+        world.addSystem(ProjectileExplodeSystem);
+        world.addSystem(ProjectileBlastSystem);
     }
 }
