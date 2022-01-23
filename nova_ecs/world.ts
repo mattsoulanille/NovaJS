@@ -58,7 +58,7 @@ export const SingletonComponent = new Component<undefined>('SingletonComponent')
 interface EcsEventWithEntities<Data> {
     event: EcsEvent<Data, any>;
     data: Data;
-    entities?: Array<string | [string, Entity]>;
+    entities?: Array<string | Entity>;
 }
 
 interface WorldEventsMap extends ReadonlyMap<UnknownEvent, SyncSubject<unknown>> {
@@ -111,11 +111,11 @@ export class World {
 
         this.state.entities.events.delete.subscribe(deleted => {
             // Emit delete when an entity is deleted.
-            this.emitWrapped(DeleteEvent, deleted, [...deleted]);
+            this.emitWrapped(DeleteEvent, deleted, [...deleted].map(([, b]) => b));
         });
 
         this.state.entities.events.set.subscribe(addEntity => {
-            this.emitWrapped(AddEvent, addEntity, [addEntity]);
+            this.emitWrapped(AddEvent, addEntity, [addEntity[1]]);
         });
     }
 
@@ -131,7 +131,7 @@ export class World {
     }
 
     private emitWrapped<Data>(event: EcsEvent<Data, any>, data: Data,
-        entities?: string[] | Array<[string, Entity]>) {
+        entities?: (string | Entity)[]) {
         this.eventQueue.push({
             event: event as UnknownEvent,
             data,
@@ -290,15 +290,15 @@ export class World {
 
         // Default to all entities if none are specified. When defaulting to all,
         // this includes entities added in the same step.
-        let entities: [string, Entity][] | undefined;
+        let entities: Entity[] | undefined;
         if (eventWithEntities.entities) {
             entities = eventWithEntities.entities.map(entry => {
                 if (typeof entry === 'string') {
-                    return [entry, this.state.entities.get(entry)];
+                    return this.state.entities.get(entry);
                 } else {
                     return entry;
                 }
-            }).filter((entry): entry is [string, Entity] => Boolean(entry[1]));
+            }).filter((entry): entry is Entity => Boolean(entry));
         }
 
         const event = [eventWithEntities.event, eventWithEntities.data] as const;
@@ -321,7 +321,7 @@ export class World {
     }
 
     private getArg<T extends ArgTypes = ArgTypes>(arg: T,
-        entity: Entity, uuid: string,
+        entity: Entity,
         event?: readonly [EcsEvent<unknown>, unknown]):
         Either<undefined, ArgData<T>> {
         if (arg instanceof Resource) {
@@ -342,13 +342,13 @@ export class World {
         } else if (arg === Components) {
             return right(this.nameComponentMap as ArgData<T>);
         } else if (arg === UUID) {
-            return right(uuid as ArgData<T>);
+            return right(entity.uuid as ArgData<T>);
         } else if (arg === GetEntity) {
             return right(entity as ArgData<T>);
         } else if (arg === GetArg) {
             // TODO: Why don't these types work?
             return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
-                this.getArg<T>(arg, entity, uuid, event)) as Right<ArgData<T>>;
+                this.getArg<T>(arg, entity, event)) as Right<ArgData<T>>;
         } else if (arg instanceof EcsEvent) {
             if (!event) {
                 return left(undefined);
@@ -362,7 +362,7 @@ export class World {
             const modifier = arg as UnknownArgModifier;
             const query = this.queries.get(modifier.query);
             const modifierQueryResults =
-                query.getResultForEntity(entity, uuid, event);
+                query.getResultForEntity(entity, event);
             if (isLeft(modifierQueryResults)) {
                 return left(undefined);
             }
@@ -381,7 +381,7 @@ export class World {
                 if (!entity) {
                     return [];
                 }
-                const result = queryCached.getResultForEntity(entity, uuid);
+                const result = queryCached.getResultForEntity(entity);
                 if (isLeft(result)) {
                     return [];
                 }

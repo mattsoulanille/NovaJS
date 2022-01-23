@@ -13,10 +13,10 @@ import { World } from "./world";
 interface QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
     readonly valid: boolean;
     unsubscribe: () => void;
-    getResultForEntity(entity: Entity, uuid: string,
+    getResultForEntity(entity: Entity,
         event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>>;
     getResult(args?: {
-        entities?: Iterable<[string, Entity]>,
+        entities?: Iterable<Entity>,
         event?: readonly [EcsEvent<unknown>, unknown],
     }): QueryResults<Query<Args>>;
 }
@@ -120,7 +120,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         }
     }
 
-    getResultForEntity(entity: Entity, uuid: string,
+    getResultForEntity(entity: Entity,
         event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>> {
 
         const isStep = event ? event[0] === StepEvent : true;
@@ -135,7 +135,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         } else {
             // Create cache entry / result for entity.
             try {
-                const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
+                const results = this.query.args.map(arg => this.getArg(arg, entity, event));
                 const rightResults: unknown[] = [];
                 for (const result of results) {
                     if (isLeft(result)) {
@@ -162,7 +162,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
     }
 
     getResult({ entities, event }: {
-        entities?: Iterable<[string, Entity]>,
+        entities?: Iterable<Entity>,
         event?: readonly [EcsEvent<unknown>, unknown],
     } = {}): QueryResults<Query<Args>> {
 
@@ -174,24 +174,24 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
             return this.wrappedResult;
         }
 
-        let supportedEntities: Iterable<[string, Entity]>;
+        let supportedEntities: Iterable<Entity>;
         if (entities || event?.[0] === DeleteEvent) {
-            supportedEntities = [...entities ?? this.entities].filter(([uuid, entity]) => {
+            supportedEntities = [...entities ?? this.entities.values()].filter(entity => {
                 // Don't rely on the cached query for DeleteEvent because
                 // the entity (and its entry in the cached query) have already
                 // been removed.
                 if (event?.[0] === DeleteEvent) {
                     return this.query.supportsEntity(entity);
                 }
-                return this.entities.has(uuid);
+                return this.entities.has(entity.uuid);
             });
         } else {
-            supportedEntities = this.entities;
+            supportedEntities = this.entities.values();
         }
 
         const queryResults: QueryResults<Query<Args>> = [];
-        for (const [uuid, entity] of supportedEntities) {
-            const result = this.getResultForEntity(entity, uuid, event);
+        for (const entity of supportedEntities) {
+            const result = this.getResultForEntity(entity, event);
             if (isLeft(result)) {
                 continue;
             }
@@ -241,10 +241,10 @@ class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTy
 
     unsubscribe = () => { };
 
-    getResultForEntity(entity: Entity, uuid: string,
+    getResultForEntity(entity: Entity,
         event?: readonly [EcsEvent<unknown>, unknown]): Either<undefined, ArgsToData<Args>> {
         try {
-            const results = this.query.args.map(arg => this.getArg(arg, entity, uuid, event));
+            const results = this.query.args.map(arg => this.getArg(arg, entity, event));
             const rightResults: unknown[] = [];
             for (const result of results) {
                 if (isLeft(result)) {
@@ -265,14 +265,14 @@ class CachelessQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTy
         }
     }
     getResult({ entities, event }: {
-        entities?: Iterable<[string, Entity]>,
+        entities?: Iterable<Entity>,
         event?: readonly [EcsEvent<unknown>, unknown],
     } = {}): ArgsToData<Args>[] {
-        const supportedEntities = [...entities ?? this.entities].filter(
-            ([, entity]) => this.query.supportsEntity(entity));
+        const supportedEntities = [...entities ?? this.entities.values()].filter(
+            entity => this.query.supportsEntity(entity));
 
-        const queryResults = supportedEntities.map(([uuid, entity]) =>
-            [entity, this.getResultForEntity(entity, uuid, event)] as const)
+        const queryResults = supportedEntities.map(entity =>
+            [entity, this.getResultForEntity(entity, event)] as const)
             .filter((results): results is [Entity, Right<ArgsToData<Args>>] => isRight(results[1]))
             .map(rightResults => rightResults[1].right);
 
