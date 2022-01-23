@@ -20,7 +20,7 @@ import { CollisionEvent, CollisionHitter, CollisionHitterComponent, CollisionVul
 import { GameDataResource } from "./game_data_resource";
 
 type Shape = SAT.Polygon | SAT.Circle;
-abstract class Hull {
+export abstract class Hull {
     abstract shapes: Shape[];
     abstract pos: SAT.Vector;
     abstract angle: number;

@@ -4,6 +4,7 @@ import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
 import { TimePlugin } from "nova_ecs/plugins/time_plugin";
 import { AnimationPlugin } from "./animation_plugin";
 import { BeamPlugin } from "./beam_plugin";
+import { BlastPlugin } from "./blast_plugin";
 import { CollisionsPlugin } from './collisions_plugin';
 import { ControlsPlugin } from "./controls_plugin";
 import { CreateTimePlugin } from "./create_time";
@@ -51,6 +52,7 @@ export const SystemPlugin: Plugin = {
         world.addPlugin(JumpPlugin);
         world.addPlugin(NpcPlugin);
         world.addPlugin(IonizedPlugin);
+        world.addPlugin(BlastPlugin);
     }
 };
 
