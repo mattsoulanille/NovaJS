@@ -1137,6 +1137,12 @@ describe('world', () => {
         ]);
     });
 
+    it('does not crash when an event references a non-existant entity', () => {
+        const GetBazEvent = new EcsEvent('GetBazEvent');
+        world.emit(GetBazEvent, undefined, ['non-existant entity uuid']);
+        world.step();
+    });
+
     it('allows getting the world as an argument', () => {
         let gotWorld: World | undefined;
         const getsWorld = new System({
@@ -1488,5 +1494,10 @@ describe('world', () => {
         world.step();
         // No additional data is added
         expect(stepData).toEqual(['plugin component']);
+    });
+
+    it('marks entities with their uuid', () => {
+        world.entities.set('foo', new Entity());
+        expect(world.entities.get('foo')?.uuid).toEqual('foo');
     });
 });

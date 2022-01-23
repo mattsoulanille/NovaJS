@@ -49,8 +49,8 @@ describe('query cache', () => {
         const cached = queryCache.get(query);
         getArg.and.returnValue(right({ x: 0 }));
         cached.getResult();
-        expect(getArg).toHaveBeenCalledWith(FooComponent, e1, 'e1', undefined);
-        expect(getArg).toHaveBeenCalledWith(FooComponent, e2, 'e2', undefined);
+        expect(getArg).toHaveBeenCalledWith(FooComponent, e1, undefined);
+        expect(getArg).toHaveBeenCalledWith(FooComponent, e2, undefined);
     });
 
     it('caches results', () => {
