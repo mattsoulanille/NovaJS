@@ -27,7 +27,10 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
     }
 
     set(uuid: string, entity: Entity) {
-        entity.uuid = uuid;
+        // This is the only place where the entity's uuid should be set.
+        // 'uuid' is marked as readonly to avoid accidentally setting it elsewhere.
+        (entity as { uuid: string }).uuid = uuid;
+
         const current = this.get(uuid);
         if (current && current !== entity) {
             this.entityChangeUnsubscribe.get(uuid)?.unsubscribe();

@@ -1462,6 +1462,34 @@ describe('world', () => {
         expect(calls).toEqual([['Hello'], ['world']]);
     });
 
+    it('events can be emitted to a mix of uuids and entities', () => {
+        const TestEvent = new EcsEvent<string>('TestEvent');
+
+        const reported: Set<number> = new Set();
+        const ReportSystem = new System({
+            name: 'ReportSystem',
+            events: [TestEvent],
+            args: [FOO_COMPONENT] as const,
+            step(foo) {
+                reported.add(foo.x);
+            }
+        });
+        world.addSystem(ReportSystem);
+
+        const e0 = new Entity().addComponent(FOO_COMPONENT, { x: 0 });
+        const e1 = new Entity().addComponent(FOO_COMPONENT, { x: 1 });
+        const e2 = new Entity().addComponent(FOO_COMPONENT, { x: 2 });
+
+        world.entities.set('e0', e0);
+        world.entities.set('e1', e1);
+        world.entities.set('e2', e2);
+
+        world.emit(TestEvent, 'foo', ['e0', e1]);
+        world.step();
+        expect(reported).toEqual(new Set([0, 1]));
+
+    });
+
     it('removeAllPlugins() removes all non-base plugins', () => {
         const stepData: string[] = [];
         const testSystem = new System({
