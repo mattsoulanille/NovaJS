@@ -12,7 +12,7 @@
     "devDependencies": {
         "@bazel/bazelisk": "^1.11.0",
         "@bazel/buildifier": "4.2.4",
-        "@bazel/concatjs": "^4.6.0",
+        "@bazel/concatjs": "^5.0.2",
         "@bazel/esbuild": "^4.6.0",
         "@bazel/ibazel": "^0.15.10",
         "@bazel/jasmine": "^4.6.0",
