@@ -1,5 +1,5 @@
 import "jasmine";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { SndResource } from "../../src/resource_parsers/SndResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 import { ima4, pcm8 } from "./expected_sounds";

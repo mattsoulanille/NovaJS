@@ -1,5 +1,5 @@
 import "jasmine";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { RledResource } from "../../src/resource_parsers/RledResource";
 import { PNG } from "pngjs";
 import { getPNG, getFrames, applyMask, PNGCustomMatchers } from "./PNGCompare"

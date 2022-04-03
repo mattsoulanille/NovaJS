@@ -12,7 +12,7 @@ ts_library(
         "//novaparse/src/hull",
         "//novaparse/src/lamejs",
         "@npm//@types/node",
-        "@npm//resourceforkjs",
+        "//resource_fork",
         "@npm//pngjs",
         "@npm//@types/pngjs",
     ],

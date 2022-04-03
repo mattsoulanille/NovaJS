@@ -14,7 +14,7 @@ load("//:defaults.bzl", "ts_library")
 #     name = "read_nova_file",
 #     srcs = ["readNovaFile.ts"],
 #     deps = [
-#         "@npm//resourceforkjs",
+#         "//resource_fork",
 #         "//novaparse/src/resource_parsers:resource_parsers",
 #     ]
 # )
@@ -23,7 +23,7 @@ load("//:defaults.bzl", "ts_library")
 #     name = "idspace_handler",
 #     srcs = ["IDSpaceHandler.ts"],
 #     deps = [
-#         "@npm//resourceforkjs",
+#         "//resource_fork",
 #         "//novaparse/src/resource_parsers:resource_parsers",
 #     ]
 # )
@@ -36,8 +36,8 @@ ts_library(
         "//novadatainterface",
         "//novaparse/src/resource_parsers:resource_parsers",
         "//novaparse/src/parsers",
+        "//resource_fork",
         "@npm//@types/node",
-        "@npm//resourceforkjs",
         "@npm//ts-enum-util",
     ]
 )

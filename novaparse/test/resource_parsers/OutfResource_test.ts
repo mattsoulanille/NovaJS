@@ -1,5 +1,5 @@
 import "jasmine";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { OutfResource } from "../../src/resource_parsers/OutfResource";
 import { NovaResources } from "../../src/resource_parsers/ResourceHolderBase";
 import { defaultIDSpace } from "./DefaultIDSpace";

@@ -1,0 +1,35 @@
+package(default_visibility = ["//visibility:public"])
+
+load("//:defaults.bzl", "ts_library")
+load("@npm//@bazel/jasmine:index.bzl", "jasmine_node_test")
+load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
+
+ts_library(
+    name = "resource_fork",
+    srcs = glob(["*.ts"], exclude=["*_test.ts"]),
+    module_name = "resource_fork",
+    deps = [
+        "@npm//@types/node",
+    ],
+)
+
+ts_library(
+    name = "resource_fork_test_lib",
+    srcs = glob(["*_test.ts"]),
+    deps = [
+        ":resource_fork",
+        "@npm//jasmine",
+        "@npm//@types/node",
+        "@npm//@types/jasmine",
+    ],
+)
+
+jasmine_node_test(
+    name = "resource_fork_test",
+    srcs = [
+        ":resource_fork_test_lib",
+    ],
+    data = [
+        "test.ndat",
+    ],
+)

@@ -1,5 +1,5 @@
 import "jasmine";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { SpobResource } from "../../src/resource_parsers/SpobResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 

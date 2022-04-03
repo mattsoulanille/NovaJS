@@ -1,6 +1,6 @@
 import { BaseResource } from "./NovaResourceBase";
 import { NovaResources } from "./ResourceHolderBase";
-import { Resource } from "resourceforkjs";
+import { Resource } from "resource_fork";
 
 type OutfitFunctions = Array<[string, number | boolean]>;
 class OutfResource extends BaseResource {
