@@ -9,7 +9,7 @@ ts_library(
     deps = [
         "@npm//@types/node",
         "//novadatainterface",
-        "@npm//resourceforkjs",
+        "//resource_fork",
         "@npm//pngjs",
         "@npm//@types/pngjs",
     ],

@@ -1,6 +1,6 @@
 import { BaseResource } from "./NovaResourceBase";
 import { NovaResources, NovaResourceType } from "./ResourceHolderBase";
-import { Resource } from "resourceforkjs";
+import { Resource } from "resource_fork";
 
 
 // These take up little space and take little time to parse, so

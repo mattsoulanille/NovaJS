@@ -6,7 +6,7 @@
 // import { assert } from "chai";
 // import { ShanResource } from "../../src/resource_parsers/ShanResource";
 // import { defaultIDSpace } from "../resource_parsers/DefaultIDSpace";
-// import { readResourceFork, ResourceMap } from "resourceforkjs";
+// import { readResourceFork, ResourceMap } from "resource_fork";
 // import { Animation } from "novadatainterface/Animation";
 // import { ShanParse } from "../../src/parsers/ShanParse";
 

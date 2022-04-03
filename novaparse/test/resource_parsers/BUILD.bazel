@@ -46,7 +46,7 @@ ts_library(
         "@npm//@types/pngjs",
         "@npm//jasmine",
         "@npm//@types/jasmine",
-        "@npm//resourceforkjs",
+        "//resource_fork",
         ":test_utils",
     ]
 )

@@ -10,7 +10,7 @@ ts_library(
     module_name = "novaparse",
     deps = [
         "@npm//@types/node",
-        "@npm//resourceforkjs",
+        "//resource_fork",
         "//novadatainterface",
         "//novaparse/src/resource_parsers",
         "//novaparse/src:novaparse_libraries",

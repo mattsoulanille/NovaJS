@@ -1,5 +1,5 @@
 import "jasmine";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { WeapResource } from "../../src/resource_parsers/WeapResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 

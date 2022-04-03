@@ -1,4 +1,4 @@
-import { Resource } from "resourceforkjs";
+import { Resource } from "resource_fork";
 import { NovaResources } from "./ResourceHolderBase";
 
 

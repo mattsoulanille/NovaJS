@@ -1,5 +1,5 @@
 import "jasmine";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { SystResource } from "novaparse/src/resource_parsers/SystResource";
 import { defaultIDSpace } from "./DefaultIDSpace";
 

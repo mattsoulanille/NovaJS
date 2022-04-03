@@ -1,4 +1,4 @@
-import { readResourceFork } from "resourceforkjs";
+import { readResourceFork } from "resource_fork";
 import { NovaResources, NovaResourceType } from "./resource_parsers/ResourceHolderBase";
 import { BoomResource } from "./resource_parsers/BoomResource";
 import { DescResource } from "./resource_parsers/DescResource";

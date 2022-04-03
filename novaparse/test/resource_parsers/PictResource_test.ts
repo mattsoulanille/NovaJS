@@ -1,6 +1,6 @@
 import "jasmine";
 import { PNG } from "pngjs";
-import { readResourceFork, ResourceMap } from "resourceforkjs";
+import { readResourceFork, ResourceMap } from "resource_fork";
 import { NovaResources } from "../../src/resource_parsers/ResourceHolderBase";
 import { PictResource } from "../../src/resource_parsers/PictResource";
 import { getPNG, PNGCustomMatchers } from "./PNGCompare";
