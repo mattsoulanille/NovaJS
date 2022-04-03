@@ -76,7 +76,6 @@ container_image(
     name = "port_image",
     base = "@nodejs_image_base//image",
     ports = ["8000"],
-    stamp = True,
 )
 
 # To debug this, run 'bazel run -c dbg //nova:nova_image'
