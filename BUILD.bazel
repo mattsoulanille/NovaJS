@@ -16,6 +16,9 @@ container_image(
     base = "@bazel_image//image",
     cmd = "",
     entrypoint = "",
+    tags = [
+        "noci"
+    ],
 )
 
 container_run_and_commit_layer(
@@ -25,6 +28,9 @@ container_run_and_commit_layer(
         "apt install -y unzip libnss3 libxss1 libatk-bridge2.0-0 libgtk-3-0",
     ],
     image = ":bazel_base.tar",
+    tags = [
+        "noci"
+    ],
 )
 
 container_image(
@@ -32,6 +38,9 @@ container_image(
     base = "@bazel_image//image",
     layers = [
         ":bazel_webtesting_layer",
+    ],
+    tags = [
+        "noci"
     ],
 )
 
@@ -42,4 +51,7 @@ container_push(
     registry = "gcr.io",
     repository = "novajs-303605/bazel_webtesting",
     tag = "latest",
+    tags = [
+        "noci"
+    ],
 )

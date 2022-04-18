@@ -83,6 +83,7 @@ build:ci --remote_http_cache=https://storage.googleapis.com/bazel-remote-cache-n
 # Use https://github.com/Evertz/bru
 common:bru --bes_backend=grpc://localhost:5000
 common:bru --bes_results_url=http://localhost:8080/invocation
+build:ci --test_tag_filters=-noci --build_tag_filters=-noci
 
 # Load any settings specific to the current user.
 # .bazelrc.user should appear in .gitignore so that settings are not shared with team members
