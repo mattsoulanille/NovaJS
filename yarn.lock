@@ -12,10 +12,10 @@
   resolved "https://registry.yarnpkg.com/@bazel/buildifier/-/buildifier-4.2.4.tgz#48d4da5638ef0e0a650dda28beaa07d9c8124520"
   integrity sha512-PwzTnPqD3W0fjdXY2qwnwh+BPeKAYsfOr4rPwH6u5j9MPHCOa9YRI7Qj8ZwmHC1hhORBYJoTQt589/mXYwfX+g==
 
-"@bazel/concatjs@^4.6.0":
-  version "4.6.0"
-  resolved "https://registry.yarnpkg.com/@bazel/concatjs/-/concatjs-4.6.0.tgz#7ed6ea8e1065057544fba351ca22bc2143d8a3a9"
-  integrity sha512-KtPpQxN/JcRHM8Miof8kDpgHczPycDlOl6mggKdbhMppBh64FKIIyNAKnngKswaFU+2WJiJs17YwDEJBB+Yqrg==
+"@bazel/concatjs@^5.4.1":
+  version "5.4.1"
+  resolved "https://registry.yarnpkg.com/@bazel/concatjs/-/concatjs-5.4.1.tgz#590b7944d89136863ba4e3e264c555b0efc815de"
+  integrity sha512-E5lVBdJNeTcXgDM4phmY2JbHdwWIJZ61ls22McXpWhsDlfItURhNuzxbg/+8gDDX0AlMsJnBpAtFLNVH5c2xwA==
   dependencies:
     protobufjs "6.8.8"
     source-map-support "0.5.9"
@@ -1803,13 +1803,6 @@ requires-port@^1.0.0:
   resolved "https://registry.yarnpkg.com/requires-port/-/requires-port-1.0.0.tgz#925d2601d39ac485e091cf0da5c6e694dc3dcaff"
   integrity sha1-kl0mAdOaxIXgkc8NpcbmlNw9yv8=
 
-resourceforkjs@^0.1.0:
-  version "0.1.0"
-  resolved "https://registry.yarnpkg.com/resourceforkjs/-/resourceforkjs-0.1.0.tgz#090fc9754381d74fb105b1ba044afd12dcf2db00"
-  integrity sha512-2riuNS2qfy2uLaqG+GUnIsGSow4adoxK8vVQQeqoiJxktpO/YldSrzTPSBzL/9KeQIecKc27+vadb6edVtVNcQ==
-  dependencies:
-    typescript "^3.1.6"
-
 rfdc@^1.3.0:
   version "1.3.0"
   resolved "https://registry.yarnpkg.com/rfdc/-/rfdc-1.3.0.tgz#d0b7c441ab2720d05dc4cf26e01c89631d9da08b"
@@ -2077,11 +2070,6 @@ type-is@~1.6.18:
   dependencies:
     media-typer "0.3.0"
     mime-types "~2.1.24"
-
-typescript@^3.1.6:
-  version "3.9.10"
-  resolved "https://registry.yarnpkg.com/typescript/-/typescript-3.9.10.tgz#70f3910ac7a51ed6bef79da7800690b19bf778b8"
-  integrity sha512-w6fIxVE/H1PkLKcCPsFqKE7Kv7QUwhU8qQY2MueZXWx5cPZdwFupLgKK3vntcK98BtNHZtAF4LA/yl2a7k8R6Q==
 
 typescript@~4.5.4:
   version "4.5.4"
