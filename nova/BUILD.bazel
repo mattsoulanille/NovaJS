@@ -85,6 +85,8 @@ nodejs_image(
     name = "nova_image",
     binary = ":nova",
     base = ":port_image",
+    node_repository_name = "nodejs_linux_amd64",
+    include_node_repo_args = False,
 )
 
 container_push(
