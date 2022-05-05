@@ -1,4 +1,4 @@
-load("@npm//@bazel/typescript:index.bzl", _ts_library = "ts_library")
+load("@npm//@bazel/concatjs:index.bzl", _ts_library = "ts_library")
 load("@npm//@bazel/esbuild:index.bzl", _esbuild = "esbuild")
 load("@npm//esbuild-visualizer:index.bzl", "esbuild_visualizer")
 
