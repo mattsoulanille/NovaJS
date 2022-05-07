@@ -82,7 +82,7 @@
         "pngjs": "^6.0.0",
         "protobufjs": "^6.11.2",
         "rxjs": "^7.5.2",
-        "supports-color": "^9.2.1",
+        "supports-color": "^9.2.2",
         "ts-enum-util": "^4.0.2",
         "uuid": "^8.3.2",
         "ws": "8.6.0"
