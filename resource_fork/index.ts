@@ -13,27 +13,26 @@ type ResourceMap = {
 }
 
 async function readResourceFork(p: string, readResourceFork = true): Promise<ResourceMap> {
-
-    var filePath: string;
+    let filePath: string;
     if (readResourceFork) {
         filePath = path.normalize(p + "/..namedfork/rsrc");
     }
     else {
         filePath = path.normalize(p);
     }
-    var resources: ResourceMap = {};
+    const resources: ResourceMap = {};
 
-    var buffer = await readFile(filePath);
+    const buffer = await readFile(filePath);
     //this.u8 = new Uint8Array(this.buffer);
     //this.u32 = new Uint32Array(this.buffer);
-    var dataView = new DataView(buffer);
+    const dataView = new DataView(buffer);
 
 
     // Offset and length of resource data and resource map
-    var o_data = dataView.getUint32(0);
-    var o_map = dataView.getUint32(1 * 4);
-    var l_data = dataView.getUint32(2 * 4);
-    var l_map = dataView.getUint32(3 * 4);
+    const o_data = dataView.getUint32(0);
+    const o_map = dataView.getUint32(1 * 4);
+    const l_data = dataView.getUint32(2 * 4);
+    const l_map = dataView.getUint32(3 * 4);
 
     // Verify that the file is actually in resource fork format
     if (o_data !== dataView.getUint32(o_map) ||
@@ -45,36 +44,36 @@ async function readResourceFork(p: string, readResourceFork = true): Promise<Res
 
 
     // Get resource map
-    var resource_data = new DataView(buffer, o_data, l_data);
-    var resource_map = new DataView(buffer, o_map, l_map);
+    const resource_data = new DataView(buffer, o_data, l_data);
+    const resource_map = new DataView(buffer, o_map, l_map);
 
     // Get type and name list
     // Make sure to account for the resource map's byteOffset
-    var o_type_list = resource_map.getUint16(24) + resource_map.byteOffset;
-    var o_name_list = resource_map.getUint16(26) + resource_map.byteOffset;
-    var type_list = new DataView(buffer, o_type_list, o_name_list - o_type_list);
-    var name_list = new DataView(buffer, o_name_list); // continues to end of buffer
+    const o_type_list = resource_map.getUint16(24) + resource_map.byteOffset;
+    const o_name_list = resource_map.getUint16(26) + resource_map.byteOffset;
+    const type_list = new DataView(buffer, o_type_list, o_name_list - o_type_list);
+    const name_list = new DataView(buffer, o_name_list); // continues to end of buffer
 
     // Type List
     // 2 bytes: Number of resource types in the map minus 1 (no one uses resource fork without using at
     // least one resource, so they get an extra type by doing this)
-    var n_types = (type_list.getUint16(0) + 1) & 0xffff; // keep within uint16
+    const n_types = (type_list.getUint16(0) + 1) & 0xffff; // keep within uint16
 
 
     //this.resources = {};
 
     // read each resource
-    for (var i = 0; i < n_types; i++) {
-        var resource_type_array =
+    for (let i = 0; i < n_types; i++) {
+        const resource_type_array =
             [type_list.getUint8(2 + 8 * i),
             type_list.getUint8(3 + 8 * i),
             type_list.getUint8(4 + 8 * i),
             type_list.getUint8(5 + 8 * i)];
 
-        var resource_type = decode_macroman(resource_type_array);
+        const resource_type = decode_macroman(resource_type_array);
 
-        var quantity = type_list.getUint16(6 + 8 * i) + 1;
-        var offset = type_list.getUint16(8 + 8 * i);
+        const quantity = type_list.getUint16(6 + 8 * i) + 1;
+        const offset = type_list.getUint16(8 + 8 * i);
 
 
         if (resources.hasOwnProperty(resource_type)) {
@@ -82,37 +81,37 @@ async function readResourceFork(p: string, readResourceFork = true): Promise<Res
         }
         resources[resource_type] = [];
 
-        for (var j = 0; j < quantity; j++) {
-            var resType = resource_type;
-            var resId = type_list.getUint16(offset + 12 * j);
-            var resName: string;
+        for (let j = 0; j < quantity; j++) {
+            const resType = resource_type;
+            const resId = type_list.getUint16(offset + 12 * j);
+            let resName: string;
 
-            var o_name = type_list.getUint16(offset + 12 * j + 2);
+            const o_name = type_list.getUint16(offset + 12 * j + 2);
             if (o_name == 0xffff) {
                 resName = "";
             }
             else {
-                var name_len = name_list.getUint8(o_name);
-                var current_name_list = [];
-                for (var k = 0; k < name_len; k++) {
+                const name_len = name_list.getUint8(o_name);
+                const current_name_list = [];
+                for (let k = 0; k < name_len; k++) {
                     current_name_list.push(name_list.getUint8(o_name + 1 + k));
                 }
                 resName = decode_macroman(current_name_list);
             }
 
 
-            //var attrs = this.type_list.getUint8(offset + 12*j + 4);
+            //const attrs = this.type_list.getUint8(offset + 12*j + 4);
 
-            var tmsb = type_list.getUint8(offset + 12 * j + 5);
-            var t = type_list.getUint16(offset + 12 * j + 6);
+            const tmsb = type_list.getUint8(offset + 12 * j + 5);
+            const t = type_list.getUint16(offset + 12 * j + 6);
 
-            var o_rdat = (tmsb << 16) + t;
-            var l_rdat = resource_data.getUint32(o_rdat);
-            var resData = new DataView(buffer,
+            const o_rdat = (tmsb << 16) + t;
+            const l_rdat = resource_data.getUint32(o_rdat);
+            const resData = new DataView(buffer,
                 resource_data.byteOffset + o_rdat + 4,
                 l_rdat);
 
-            var res = new Resource(resType, resId, resName, resData);
+            const res = new Resource(resType, resId, resName, resData);
             resources[resource_type][res.id] = res;
         }
     }
@@ -134,11 +133,11 @@ function readFile(filePath: string): Promise<ArrayBuffer> {
 
 // see https://gist.github.com/jrus/3113240
 function decode_macroman(mac_roman_bytearray: Array<number>): string {
-    var byte, char_array, idx;
-    var high_chars_unicode = 'ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü\n†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø\n¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄€‹›ﬁﬂ\n‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ'.replace(/\n/g, '');
+    let byte, char_array, idx;
+    const high_chars_unicode = 'ÄÅÇÉÑÖÜáàâäãåçéèêëíìîïñóòôöõúùûü\n†°¢£§•¶ß®©™´¨≠ÆØ∞±≤≥¥µ∂∑∏π∫ªºΩæø\n¿¡¬√ƒ≈∆«»… ÀÃÕŒœ–—“”‘’÷◊ÿŸ⁄€‹›ﬁﬂ\n‡·‚„‰ÂÊÁËÈÍÎÏÌÓÔÒÚÛÙıˆ˜¯˘˙˚¸˝˛ˇ'.replace(/\n/g, '');
 
     char_array = (function() {
-        var i, ref, results;
+        let i, ref, results;
         results = [];
         for (idx = i = 0, ref = mac_roman_bytearray.length; 0 <= ref ? i < ref : i > ref; idx = 0 <= ref ? ++i : --i) {
             byte = mac_roman_bytearray[idx];
@@ -168,16 +167,16 @@ class Resource {
         this.data = data;
     }
     get shortArray() {
-        var arr = [];
-        for (var i = 0; i < this.data.byteLength; i++) {
+        const arr = [];
+        for (let i = 0; i < this.data.byteLength; i++) {
             arr.push(this.data.getUint8(i));
         }
         return arr;
     }
     get hexString() {
         // for conveniently viewing the data
-        var hexArr = this.shortArray.map(function(n) {
-            var hex = n.toString(16);
+        const hexArr = this.shortArray.map(function(n) {
+            let hex = n.toString(16);
             if (hex.length === 1) {
                 hex = "0" + hex;
             }
@@ -188,21 +187,21 @@ class Resource {
     }
 
     get shortString() {
-        var shortArr = this.shortArray;
+        const shortArr = this.shortArray;
         return shortArr.map(function(n) {
             return n.toString();
         }).join(" ");
     }
 
     get intArray() {
-        var arr = [];
-        for (var i = 0; i < this.data.byteLength; i += 2) {
+        const arr = [];
+        for (let i = 0; i < this.data.byteLength; i += 2) {
             arr.push(this.data.getUint16(i));
         }
         return arr;
     }
     get intString() {
-        var intArr = this.intArray;
+        const intArr = this.intArray;
         return intArr.map(function(n) {
             return n.toString();
         }).join(" ");
