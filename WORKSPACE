@@ -205,9 +205,10 @@ _nodejs_image_repos()
 load("@io_bazel_rules_docker//container:pull.bzl", "container_pull")
 
 # Load base bazel container for building the CI container
+# https://console.cloud.google.com/gcr/images/cloud-builders/global/bazel
 container_pull(
     name = "bazel_image",
     registry = "gcr.io",
     repository = "cloud-builders/bazel",
-    digest = "sha256:9faaccc351f9b172ab74b8607b3afe0f057e95b2975cfb5146be51fbc78603fd"
+    digest = "sha256:ffae30fa83005dcdba4359f4aba4dfdd26c43f572665657ad1fccf1d30de48f4"
 )
