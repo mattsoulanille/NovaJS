@@ -4,7 +4,7 @@
 	"dist"
   ],
   "compilerOptions": {
-	"target": "es2017",
+	"target": "es2020",
 	"module": "commonjs",
 	"lib": ["dom", "dom.iterable", "esnext", "scripthost"],
 	"declaration": true,

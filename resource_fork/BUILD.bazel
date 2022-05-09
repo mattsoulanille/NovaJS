@@ -31,5 +31,6 @@ jasmine_node_test(
     ],
     data = [
         "test.ndat",
+        "test.rez",
     ],
 )
