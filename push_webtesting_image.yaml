@@ -2,7 +2,7 @@ steps:
   # Push the image
   - name: gcr.io/cloud-builders/bazel
     id: push_container
-    args: ['run', '--config=ci', '--google_default_credentials', '//:push_bazel_webtesting_image']
+    args: ['run', '--google_default_credentials', '//:push_bazel_webtesting_image']
 
 timeout: 900s
 options:
