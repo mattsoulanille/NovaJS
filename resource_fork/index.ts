@@ -1,5 +1,6 @@
 import * as path from "path";
 import * as fs from "fs";
+import { unpack } from "./struct";
 
 // see https://developer.apple.com/legacy/library/documentation/mac/pdf/MoreMacintoshToolbox.pdf#page=151
 // for info on resource fork
@@ -12,6 +13,110 @@ type ResourceMap = {
     }
 }
 
+export function isRez(dataView: DataView): boolean {
+    const header = unpack('<cccc', dataView)[0].join('');
+    return header === 'BRGR';
+}
+
+
+interface RezOffset {
+    offset: number,
+    size: number,
+}
+
+interface RezMapHeader {
+    numTypes: number,
+}
+
+interface RezTypeInfo {
+    resType: string,
+    offset: number,
+    quantity: number,
+}
+
+interface RezResourceInfo {
+    index: number,
+    resType: string,
+    id: number,
+    name: string;
+}
+
+/**
+ * Read a rez file and return a resource fork dataview
+ *
+ * Adapted from https://andrews05.github.io/evstuff/sources/plugconvert.c
+ */
+export function readRez(dataView: DataView): ResourceMap {
+    let pos: number = 0;
+    const [[h1, h2, h3, h4, version], newPos] = unpack('<ccccII', dataView);
+    pos = newPos;
+    const header = h1 + h2 + h3 + h4;
+    if (version !== 1 && header !== 'BRGR') {
+        throw new Error('Invalid rez format');
+    }
+
+    let firstIndex, numEntries: number
+    [[firstIndex, numEntries], pos] = unpack('<xxxxII', dataView, pos);
+    const numResources = numEntries - 1;
+
+    const offsets: RezOffset[] = [];
+    const resourceData: DataView[] = [];
+    for (let i = 0; i < numEntries; i++) {
+        let offset, size: number;
+        [[offset, size], pos] = unpack('<III', dataView, pos);
+        const resData = new DataView(dataView.buffer,
+                                     dataView.byteOffset + offset, size)
+        offsets.push({offset, size});
+        resourceData.push(resData);
+    }
+
+    let numTypes: number;
+    // Seek to the last resource's offset
+    pos = offsets[numResources].offset;
+    [[, numTypes], pos] = unpack('>II', dataView, pos);
+
+    const resources: ResourceMap = {};
+    pos += 12 * numTypes; // Skip the RezTypeInfo map since we don't need it
+    // const resourceTypes: RezTypeInfo[] = []
+    // for (let i = 0; i < numTypes; i++) {
+    //     const res = unpack('>BBBBII', dataView, pos);
+    //     pos = res[1];
+    //     const [c1, c2, c3, c4, offset, quantity] = res[0];
+    //     const resType = decode_macroman([c1, c2, c3, c4]);
+    //     resourceTypes.push({resType, offset, quantity});
+    // }
+    
+    const resourceInfos: RezResourceInfo[] = [];
+    for (let i = 0; i < numResources; i++) {
+        //let [index, id]: [number, number];
+        //let [resType, name]: [string, string];
+        const [[index, c1, c2, c3, c4, id], newPos] = unpack('>IBBBBH', dataView, pos);
+        pos = newPos;
+        const resType = decode_macroman([c1, c2, c3, c4]);
+
+        // Read name as a max 256 byte null terminated string.
+        const nameList: number[] = [];
+        for (let i = 0; i < 256; i++) {
+            const val = dataView.getUint8(pos);
+            if (val === 0) {
+                pos += 256 - i;
+                break;
+            }
+            pos++;
+            nameList.push(val);
+        }
+        const name = decode_macroman(nameList);
+        resourceInfos.push({id, index, name, resType});
+
+        if (!resources.hasOwnProperty(resType)) {
+            resources[resType] = {};
+        }
+        resources[resType][id] = new Resource(resType, id, name, resourceData[index - 1]);
+    }
+
+    return resources;
+}
+
 async function readResourceFork(p: string, readResourceFork = true): Promise<ResourceMap> {
     let filePath: string;
     if (readResourceFork) {
@@ -20,13 +125,15 @@ async function readResourceFork(p: string, readResourceFork = true): Promise<Res
     else {
         filePath = path.normalize(p);
     }
-    const resources: ResourceMap = {};
 
     const buffer = await readFile(filePath);
-    //this.u8 = new Uint8Array(this.buffer);
-    //this.u32 = new Uint32Array(this.buffer);
     const dataView = new DataView(buffer);
 
+    if (isRez(dataView)) {
+        return readRez(dataView);
+    }
+
+    const resources: ResourceMap = {};
 
     // Offset and length of resource data and resource map
     const o_data = dataView.getUint32(0);
@@ -41,7 +148,6 @@ async function readResourceFork(p: string, readResourceFork = true): Promise<Res
         l_map !== dataView.getUint32(o_map + 12)) {
         throw ("Not a valid resourceFork file");
     }
-
 
     // Get resource map
     const resource_data = new DataView(buffer, o_data, l_data);
@@ -151,9 +257,6 @@ function decode_macroman(mac_roman_bytearray: Array<number>): string {
     })();
     return char_array.join('');
 }
-
-
-
 
 class Resource {
     readonly data: DataView;
