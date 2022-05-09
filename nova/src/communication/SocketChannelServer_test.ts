@@ -43,7 +43,7 @@ describe("SocketChannelServer", function() {
 
     it("binds to the websocket's `connection` listener", () => {
         new SocketChannelServer({
-            wss
+            wss, timeout: 10,
         });
 
         expect(wss.on).toHaveBeenCalled();
@@ -52,10 +52,11 @@ describe("SocketChannelServer", function() {
 
     it("binds listeners to a client's socket", () => {
         new SocketChannelServer({
-            wss
+            wss, timeout:10,
         });
 
-        const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
+        const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
+                                                          ["on", "removeAllListeners"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
         (webSocket as any).readyState = WebSocket.CONNECTING;
@@ -70,9 +71,10 @@ describe("SocketChannelServer", function() {
 
     it("creates an entry for a new client in the clients set", () => {
         const server = new SocketChannelServer({
-            wss
+            wss, timeout:10,
         });
-        const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on"]);
+        const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
+                                                          ["on", "removeAllListeners"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
         (webSocket as any).readyState = WebSocket.CONNECTING;
@@ -84,7 +86,7 @@ describe("SocketChannelServer", function() {
 
     it("emits when a client connects", async () => {
         const server = new SocketChannelServer({
-            wss
+            wss, timeout:10,
         });
 
         // Connect client 1
@@ -103,7 +105,7 @@ describe("SocketChannelServer", function() {
 
     it("emits when a client disconnects", async () => {
         const server = new SocketChannelServer({
-            wss
+            wss, timeout:10,
         });
 
         // Connect client 1
@@ -123,7 +125,7 @@ describe("SocketChannelServer", function() {
 
     it("send() sends a message to a peer", () => {
         const server = new SocketChannelServer({
-            wss
+            wss, timeout:10,
         });
 
         const testMessage = {
@@ -145,7 +147,7 @@ describe("SocketChannelServer", function() {
 
     it("emits messages sent by clients", async () => {
         const server = new SocketChannelServer({
-            wss
+            wss, timeout:10,
         });
 
         // Connect client 1
@@ -244,7 +246,7 @@ describe("SocketChannelServer", function() {
 
     it("replies to pings", async () => {
         const server = new SocketChannelServer({
-            wss,
+            wss, timeout:10,
         });
 
         // Connect client 1
