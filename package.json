@@ -40,7 +40,7 @@
         "immer": "^9.0.12",
         "io-ts-types": "^0.5.16",
         "jasmine": "^4.1.0",
-        "jasmine-core": "^4.0.1",
+        "jasmine-core": "^4.1.1",
         "karma": "6.3.19",
         "karma-chrome-launcher": "^3.1.0",
         "karma-firefox-launcher": "^2.1.2",
@@ -74,7 +74,7 @@
     "dependencies": {
         "@types/uuid": "^8.3.4",
         "express": "^4.17.2",
-        "fp-ts": "^2.11.9",
+        "fp-ts": "^2.12.1",
         "hull.js": "^1.0.2",
         "io-ts": "^2.2.16",
         "pixi-layers": "^0.3.1",
