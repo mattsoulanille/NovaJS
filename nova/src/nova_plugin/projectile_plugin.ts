@@ -1,5 +1,5 @@
 import { ProjectileWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, Entities, GetEntity, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitNow, Entities, GetEntity, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -237,8 +237,8 @@ const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        Optional(OwnerComponent), FireSubs, TimeResource, CreateTime, Emit] as const,
-    step(collision, entities, uuid, projectileData, owner, fireSubs, time, createTime, emit) {
+        Optional(OwnerComponent), FireSubs, TimeResource, CreateTime, EmitNow] as const,
+    step(collision, entities, uuid, projectileData, owner, fireSubs, time, createTime, emitNow) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
@@ -249,14 +249,7 @@ const ProjectileCollisionSystem = new System({
         }
 
         if (projectileData.proxSafety * 1000 + createTime > time.time) {
-            // Prox safety is not done yet.
-            return;
-        }
-
-        emit(DamagedEvent, { damage: projectileData.damage, damager: uuid }, [collision.other]);
-
-        if (!collision.initiator) {
-            // We are hit by point defense
+            // Prox safety is still active. Do not collide.
             return;
         }
 
@@ -265,10 +258,17 @@ const ProjectileCollisionSystem = new System({
             console.warn(`Missing projectile ${uuid} that is colliding`);
             return;
         }
+
+        emitNow(DamagedEvent, { damage: projectileData.damage, damager: uuid }, [collision.other]);
+
+        if (!collision.initiator) {
+            // We are hit by point defense
+            return;
+        }
+
         fireSubs(projectileData.id, uuid, false);
         entities.delete(uuid);
-        // TODO: Refactor emit to accept full entities instead of just uuids.
-        emit(ProjectileCollisionEvent, other, [self]);
+        emitNow(ProjectileCollisionEvent, other, [self]);
     }
 });
 

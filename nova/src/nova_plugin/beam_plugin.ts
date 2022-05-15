@@ -1,5 +1,5 @@
 import { BeamWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Emit, Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { EmitNow, Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -164,8 +164,8 @@ const BeamCollisionSystem = new System({
     name: 'BeamCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, Optional(OwnerComponent),
-        BeamDataComponent, CreateTime, Emit, TimeResource, UUID] as const,
-    step(collision, entities, owner, beamData, fireTime, emit,
+        BeamDataComponent, CreateTime, EmitNow, TimeResource, UUID] as const,
+    step(collision, entities, owner, beamData, fireTime, emitNow,
         { time, delta_ms }, uuid) {
 
         const other = entities.get(collision.other);
@@ -182,7 +182,7 @@ const BeamCollisionSystem = new System({
         const damageTime = Math.min(delta_ms, beamData.shotDuration - lastTimeSinceFire);
         const scale = damageTime * 30 / 1000;
 
-        emit(DamagedEvent, { damage: beamData.damage, damager: uuid, scale }, [collision.other]);
+        emitNow(DamagedEvent, { damage: beamData.damage, damager: uuid, scale }, [collision.other]);
     }
 });
 

@@ -1,12 +1,16 @@
 import { WeaponDamage } from 'novadatainterface/WeaponData';
 import { Emit, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
+import { MovementPhysicsComponent, MovementState, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
+import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent } from './projectile_data';
+import { ShipPhysicsComponent } from './ship_plugin';
 
 // const DamageQuery = new Query([Optional(ShieldComponent), Optional(ArmorComponent),
 // Optional(IonizationComponent), Optional(IonizationColorComponent),
@@ -55,14 +59,44 @@ const DamageSystem = new System({
     }
 });
 
+const MovementQuery = new Query([MovementStateComponent] as const);
+const KnockbackSystem = new System({
+    name: 'KnockbackSystem',
+    events: [DamagedEvent],
+    args: [DamagedEvent, MovementStateComponent, MovementPhysicsComponent,
+        Optional(ShipPhysicsComponent), RunQuery] as const,
+    step({ damage, damager, scale = 1 }, movementState, movementPhysics, shipPhysics, runQuery) {
+        const val = runQuery(MovementQuery, damager);
+        if (!val[0]) {
+            return;
+        }
+        const [otherMovement] = val[0];
+
+
+        let targetMass = 1;
+        if (shipPhysics) {
+            targetMass = shipPhysics.mass || 1;
+        }
+
+        if (movementPhysics.movementType === MovementType.INERTIAL) {
+            movementState.velocity = movementState.velocity.add(otherMovement.rotation
+                .getUnitVector().scale(damage.knockback * scale / targetMass));
+        } else if (movementPhysics.movementType === MovementType.INERTIALESS) {
+            // TODO
+        }
+    }
+});
+
 export const DeathPlugin: Plugin = {
     name: 'DeathPlugin',
     build(world) {
         //const runQuery = world.resources.get(RunQuery)!;
         //const emit = world.resources.get(Emit)!;
         world.addSystem(DamageSystem);
+        world.addSystem(KnockbackSystem);
     },
     remove(world) {
         world.removeSystem(DamageSystem);
+        world.removeSystem(KnockbackSystem);
     }
 }
