@@ -6,7 +6,7 @@ import { Vector, VectorLike } from '../datatypes/vector';
 import { Entity } from '../entity';
 import { System } from '../system';
 import { World } from '../world';
-import { MovementPhysicsComponent, MovementPlugin, MovementStateComponent, MovementSystem, MovementType } from './movement_plugin';
+import { approachVec, MovementPhysicsComponent, MovementPlugin, MovementStateComponent, MovementSystem, MovementType } from './movement_plugin';
 import { TimePlugin } from './time_plugin';
 
 describe('Movement Plugin', () => {
@@ -149,5 +149,16 @@ describe('Movement Plugin', () => {
             0,
             new Angle(50).angle,
         ]);
+    });
+
+    it('approachVec approaches a target vector', () => {
+        // 3,4,5 triangle for nice numbers
+        const current = new Vector(1, 1);
+        const target = current.add(new Vector(3, 4).scale(4));
+
+        const res = approachVec(target, current, 5 * 2);
+        const expected = current.add(new Vector(3, 4).scale(2));
+        expect(res.x).toBeCloseTo(expected.x);
+        expect(res.y).toBeCloseTo(expected.y);
     });
 });

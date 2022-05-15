@@ -4,7 +4,7 @@ import { EntityMap } from 'nova_ecs/entity_map';
 import { Component } from '../component';
 import { Angle, AngleType } from '../datatypes/angle';
 import { Position, PositionType } from '../datatypes/position';
-import { VectorType } from '../datatypes/vector';
+import { Vector, VectorLike, VectorType } from '../datatypes/vector';
 import { Plugin } from '../plugin';
 import { System } from '../system';
 import { applyObjectDelta } from './delta';
@@ -40,6 +40,7 @@ export const MovementState = t.intersection([t.type({
     accelerating: t.number,
 }), t.partial({
     turnTo: t.union([AngleType, t.string /* target UUID */, t.null]),
+    targetSpeed: t.number,
 })]);
 export type MovementState = t.TypeOf<typeof MovementState>;
 
@@ -86,13 +87,17 @@ function inertialessControls(state: MovementState, physics: MovementPhysics,
     time: Time, entities: EntityMap) {
     handleTurning(state, physics, time, entities);
 
-    // Yes, it's inefficient, but it keeps a single source of
-    // truth for velocity / speed.
-    let speed = state.velocity.length;
-    speed += state.accelerating * physics.acceleration * time.delta_s;
-    speed = Math.min(speed, physics.maxVelocity);
-    speed = Math.max(speed, 0);
-    state.velocity = state.rotation.getUnitVector().scale(speed)
+    if (state.targetSpeed === undefined) {
+        state.targetSpeed = state.velocity.length;
+    }
+
+    state.targetSpeed += state.accelerating * physics.acceleration * time.delta_s;
+    state.targetSpeed = Math.min(state.targetSpeed, physics.maxVelocity);
+    state.targetSpeed = Math.max(state.targetSpeed, 0);
+
+    const targetVelocity = state.rotation.getUnitVector().scale(state.targetSpeed);
+    state.velocity = approachVec(targetVelocity, state.velocity,
+        physics.acceleration * time.delta_s * 2);
     updatePosition(state, time);
 }
 
@@ -126,6 +131,18 @@ function handleTurning(state: MovementState, physics: MovementPhysics,
 
     state.rotation = state.rotation
         .add(state.turning * physics.turnRate * time.delta_s);
+}
+
+export function approachVec<T extends Vector>(target: T, current: T, maxDelta: number): T {
+    if (current.x === target.x && current.y === target.y) {
+        return target;
+    }
+    const difference = target.subtract(current);
+    if (difference.lengthSquared < maxDelta ** 1.2) {
+        return target;
+    }
+
+    return current.add(difference.normalize().scale(maxDelta)) as T;
 }
 
 function turnToAngle(state: MovementState, physics: MovementPhysics,
