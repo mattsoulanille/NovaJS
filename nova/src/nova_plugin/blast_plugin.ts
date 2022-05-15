@@ -1,5 +1,5 @@
 import { WeaponDamage } from 'novadatainterface/WeaponData';
-import { Entities, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
@@ -7,7 +7,7 @@ import { ProvideArg } from 'nova_ecs/provide_arg';
 import { System } from 'nova_ecs/system';
 import { CollisionSystem } from './collisions_plugin';
 import { CollisionEvent } from './collision_interaction';
-import { ApplyDamageResource } from './death_plugin';
+import { DamagedEvent } from './death_plugin';
 
 
 // Damage done by a blast.
@@ -21,12 +21,12 @@ const BlastCollisionSystem = new System({
     name: 'BlastCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, BlastDamageComponent,
-        Optional(BlastIgnoreComponent), ApplyDamageResource] as const,
-    step(collision, damage, ignore, applyDamage) {
+        Optional(BlastIgnoreComponent), Emit, UUID] as const,
+    step(collision, damage, ignore, emit, uuid) {
         if (ignore?.has(collision.other)) {
             return;
         }
-        applyDamage(damage, collision.other, 1);
+        emit(DamagedEvent, { damage, damager: uuid }, [collision.other])
     }
 });
 

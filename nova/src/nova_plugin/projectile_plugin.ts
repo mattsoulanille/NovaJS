@@ -19,7 +19,7 @@ import { BlastDamageComponent, BlastIgnoreComponent } from './blast_plugin';
 import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from './collisions_plugin';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
-import { ApplyDamageResource, DeathEvent } from './death_plugin';
+import { DamagedEvent, DeathEvent } from './death_plugin';
 import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
@@ -237,8 +237,8 @@ const ProjectileCollisionSystem = new System({
     name: 'ProjectileCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, UUID, ProjectileDataComponent,
-        Optional(OwnerComponent), FireSubs, ApplyDamageResource, TimeResource, CreateTime, Emit] as const,
-    step(collision, entities, uuid, projectileData, owner, fireSubs, applyDamage, time, createTime, emit) {
+        Optional(OwnerComponent), FireSubs, TimeResource, CreateTime, Emit] as const,
+    step(collision, entities, uuid, projectileData, owner, fireSubs, time, createTime, emit) {
         const other = entities.get(collision.other);
         if (!other) {
             return;
@@ -253,7 +253,7 @@ const ProjectileCollisionSystem = new System({
             return;
         }
 
-        applyDamage(projectileData.damage, collision.other, 1);
+        emit(DamagedEvent, { damage: projectileData.damage, damager: uuid }, [collision.other]);
 
         if (!collision.initiator) {
             // We are hit by point defense

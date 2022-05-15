@@ -1,5 +1,5 @@
 import { BeamWeaponData, WeaponData } from 'novadatainterface/WeaponData';
-import { Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
+import { Emit, Entities, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -16,7 +16,7 @@ import { v4 } from 'uuid';
 import { CompositeHull, HurtboxHullComponent, UpdateHitboxHullSystem } from './collisions_plugin';
 import { CollisionEvent, CollisionHitterComponent } from './collision_interaction';
 import { CreateTime, CreateTimeArgProvider } from './create_time';
-import { ApplyDamageResource } from './death_plugin';
+import { DamagedEvent } from './death_plugin';
 import { applyExitPoint, ExitPointData } from './exit_point';
 import { FireSubs, OwnerComponent, sampleInaccuracy, SourceComponent, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { zeroOrderGuidance } from './guidance';
@@ -164,9 +164,9 @@ const BeamCollisionSystem = new System({
     name: 'BeamCollisionSystem',
     events: [CollisionEvent],
     args: [CollisionEvent, Entities, Optional(OwnerComponent),
-        BeamDataComponent, CreateTime, ApplyDamageResource, TimeResource] as const,
-    step(collision, entities, owner, beamData, fireTime, applyDamage,
-        { time, delta_ms }) {
+        BeamDataComponent, CreateTime, Emit, TimeResource, UUID] as const,
+    step(collision, entities, owner, beamData, fireTime, emit,
+        { time, delta_ms }, uuid) {
 
         const other = entities.get(collision.other);
         if (!other) {
@@ -182,7 +182,7 @@ const BeamCollisionSystem = new System({
         const damageTime = Math.min(delta_ms, beamData.shotDuration - lastTimeSinceFire);
         const scale = damageTime * 30 / 1000;
 
-        applyDamage(beamData.damage, collision.other, scale);
+        emit(DamagedEvent, { damage: beamData.damage, damager: uuid, scale }, [collision.other]);
     }
 });
 
