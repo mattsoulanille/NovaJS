@@ -1,5 +1,6 @@
 import { WeaponDamage } from 'novadatainterface/WeaponData';
 import { Emit, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
 import { Optional } from 'nova_ecs/optional';
@@ -8,6 +9,7 @@ import { MovementPhysicsComponent, MovementState, MovementStateComponent, Moveme
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
+import { BlastDamageComponent } from './blast_plugin';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent } from './projectile_data';
 import { ShipPhysicsComponent } from './ship_plugin';
@@ -59,7 +61,7 @@ const DamageSystem = new System({
     }
 });
 
-const MovementQuery = new Query([MovementStateComponent] as const);
+const MovementQuery = new Query([MovementStateComponent, Optional(BlastDamageComponent)] as const);
 const KnockbackSystem = new System({
     name: 'KnockbackSystem',
     events: [DamagedEvent],
@@ -70,20 +72,21 @@ const KnockbackSystem = new System({
         if (!val[0]) {
             return;
         }
-        const [otherMovement] = val[0];
-
+        const [otherMovement, isBlast] = val[0];
 
         let targetMass = 1;
         if (shipPhysics) {
             targetMass = shipPhysics.mass || 1;
         }
 
-        if (movementPhysics.movementType === MovementType.INERTIAL) {
-            movementState.velocity = movementState.velocity.add(otherMovement.rotation
-                .getUnitVector().scale(damage.knockback * scale / targetMass));
-        } else if (movementPhysics.movementType === MovementType.INERTIALESS) {
-            // TODO
+        let direction: Vector;
+        if (isBlast) {
+            direction = movementState.position.subtract(otherMovement.position).normalize();
+        } else {
+            direction = otherMovement.rotation.getUnitVector();
         }
+        movementState.velocity = movementState.velocity.add(
+            direction.scale(damage.knockback * scale / targetMass * 5));
     }
 });
 
