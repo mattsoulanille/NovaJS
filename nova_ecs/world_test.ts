@@ -1,6 +1,6 @@
 import 'jasmine';
 import { v4 } from 'uuid';
-import { Emit, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types';
+import { Emit, EmitNow, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types';
 import { Component } from './component';
 import { Entity } from './entity';
 import { AddEvent, DeleteEvent, EcsEvent } from './events';
@@ -1045,6 +1045,41 @@ describe('world', () => {
         //   fooSystem adds to foo.
         expect(fooVals).toEqual([100, 110, 120, 130]);
     });
+
+    it('runs systems triggered by emitNow immediately', () => {
+        const AddEvent = new EcsEvent<number>();
+
+        const fooVals: number[] = [];
+        const fooSystem = new System({
+            name: 'fooSystem',
+            events: [AddEvent],
+            args: [AddEvent, FOO_COMPONENT] as const,
+            step: (add, foo) => {
+                foo.x += add;
+            }
+        });
+
+        const emitSystem = new System({
+            name: 'emitEvent',
+            args: [EmitNow, FOO_COMPONENT, Entities, UUID] as const,
+            step: (emitNow, foo, entities, uuid) => {
+                emitNow(AddEvent, 10);
+                fooVals.push(foo.x);
+                entities.delete(uuid);
+            }
+        });
+
+        world.singletonEntity.components.set(BAR_COMPONENT, { y: '' });
+        world.addSystem(fooSystem);
+        world.addSystem(emitSystem);
+        world.entities.set('e', new Entity()
+            .addComponent(FOO_COMPONENT, { x: 100 }));
+
+        world.step();
+        expect(fooVals).toEqual([110]);
+        expect(world.entities.get('e')).toBeUndefined();
+    });
+
 
     it('allows a system to be triggered by multiple events', () => {
         const FooEvent = new EcsEvent<number>('FooEvent');

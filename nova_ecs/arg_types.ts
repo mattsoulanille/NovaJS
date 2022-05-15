@@ -26,6 +26,7 @@ export type GetArgFunction = <T extends ArgTypes = ArgTypes>(arg: T)
 export type GetArgSelector<T> = T extends typeof GetArg ? GetArgFunction : never;
 
 export const Emit = new Resource<EmitFunction>('Emit');
+export const EmitNow = new Resource<EmitFunction>('EmitNow');
 export type EmitFunction = <Data>(event: EcsEvent<Data, any>, data: Data,
     entities?: (string | Entity)[]) => void;
 

@@ -1,6 +1,6 @@
 import { Either, isLeft, left, Right, right } from "fp-ts/lib/Either";
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
-import { ArgData, ArgTypes, Components, Emit, EmitFunction, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
+import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -85,7 +85,6 @@ export class World {
     singletonEntity: Entity;
 
     private eventQueue: EcsEventWithEntities<unknown>[] = [];
-    private boundEmit: EmitFunction = this.emit.bind(this);
 
     private queries = new QueryCache(this.entities, this.resources, this.getArg.bind(this));
     readonly events = new DefaultMap<UnknownEvent, SyncSubject<unknown>>(
@@ -101,7 +100,8 @@ export class World {
         this.resources.set(Entities, this.entities);
         this.resources.set(RunQuery, this.runQuery);
         this.resources.set(GetWorld, this);
-        this.resources.set(Emit, this.boundEmit);
+        this.resources.set(Emit, this.emit.bind(this));
+        this.resources.set(EmitNow, this.emitNow.bind(this));
         this.entities.set('singleton', new Entity()
             .addComponent(SingletonComponent, undefined)
             .setName('singleton'));
@@ -119,13 +119,24 @@ export class World {
         });
     }
 
+    emitNow<Data>(event: EcsEvent<Data, any>, data: Data,
+        entities?: (string | Entity)[]) {
+        this.runEvent({
+            event: event as UnknownEvent,
+            data,
+            entities,
+        });
+        this.events.get(event).next(data);
+    }
+
     emit<Data>(event: EcsEvent<Data, any>, data: Data,
         entities?: (string | Entity)[]) {
         this.eventQueue.push({
             event: event as UnknownEvent,
             data,
-            entities
+            entities,
         });
+        // TODO: Should this emit now, or once the event runs?
         this.events.get(event).next(data);
     }
 
