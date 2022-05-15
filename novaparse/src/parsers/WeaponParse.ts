@@ -78,6 +78,7 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         ionization: weap.ionization,
         ionizationColor: weap.ionizeColor,
         passThroughShield: weap.passThroughShields ? 1 : 0,
+        knockback: weap.impact,
     }
 
     // Parse Submunition if it exists
@@ -107,7 +108,6 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         shotDuration: weap.duration * 1000 / FPS,
         primaryExplosion,
         secondaryExplosion,
-        knockback: weap.impact,
         blastRadius: weap.blastRadius,
         blastHurtsFiringShip: weap.hitsFiringShip,
         detonateWhenShotExpires: weap.flak,
