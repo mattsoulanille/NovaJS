@@ -99,6 +99,7 @@ export interface WeaponDamage {
     ionization: number;
     ionizationColor: number;
     passThroughShield: number; // Factor of damage that passes through shield. 1 means all
+    knockback: number;
 }
 
 export type FireGroup = "primary" | "secondary" | "pointDefense";
@@ -144,7 +145,6 @@ export interface NotBayWeaponData extends BaseWeaponData {
     shotDuration: number;
     primaryExplosion: string | null;
     secondaryExplosion: string | null;
-    knockback: number;
     blastRadius: number;
     blastHurtsFiringShip: boolean,
     detonateWhenShotExpires: boolean,
@@ -160,13 +160,13 @@ export function getDefaultNotBayWeaponData(): NotBayWeaponData {
             ionization: 0,
             ionizationColor: 0xffffff,
             passThroughShield: 0,
+            knockback: 0,
         },
         submunitions: [],
         oneAmmoPerBurst: false,
         shotDuration: 7,
         primaryExplosion: null,
         secondaryExplosion: null,
-        knockback: 0,
         blastRadius: 0,
         blastHurtsFiringShip: false,
         detonateWhenShotExpires: false,
