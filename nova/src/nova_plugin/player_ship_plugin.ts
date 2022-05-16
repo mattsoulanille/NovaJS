@@ -3,6 +3,7 @@ import { Component } from "nova_ecs/component";
 import { System } from 'nova_ecs/system';
 import { NewOwnedEntityEvent } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Entities } from 'nova_ecs/arg_types';
+import { OwnerComponent } from './fire_weapon_plugin';
 
 
 // Used to mark the single ship that's under control.

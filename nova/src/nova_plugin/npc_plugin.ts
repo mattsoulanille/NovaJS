@@ -46,18 +46,17 @@ const ChooseRandomTargetAI = new System({
     }
 });
 
-const FollowComponent = new Component<undefined>('FollowComponent');
+export const FollowComponent = new Component<undefined>('FollowComponent');
 const FollowAI = new System({
     name: 'FollowAndShootAI',
     args: [MovementStateComponent, TargetComponent, FollowComponent] as const,
     step(movementState, target) {
         movementState.turnTo = target.target;
         movementState.accelerating = 1;
-
     }
 });
 
-const ShootAllWeaponsComponent = new Component<undefined>('ShootAllWeaponsComponent');
+export const ShootAllWeaponsComponent = new Component<undefined>('ShootAllWeaponsComponent');
 const ShootAllWeaponsAI = new System({
     name: 'ShootAllWeaponsAI',
     args: [WeaponsStateComponent, TargetComponent, ShootAllWeaponsComponent] as const,
@@ -70,7 +69,7 @@ const ShootAllWeaponsAI = new System({
 });
 
 
-const DeathAIComponent = new Component<undefined>('DeathAIComponent');
+export const DeathAIComponent = new Component<undefined>('DeathAIComponent');
 const DeathAI = new System({
     name: 'DeathAI',
     events: [DeathEvent],
