@@ -451,10 +451,10 @@
   resolved "https://registry.yarnpkg.com/@types/sat/-/sat-0.0.31.tgz#6f0bb95f333649fb8d77ae8909e5ed104fe477bb"
   integrity sha512-P4SVw79XheP1p92useDVpLYYOUQ6lpw2L7IdQz4dD23DZ8DiC1STgPOh72hjR5IZJBPQbzlICAbmjCKbwyYuxg==
 
-"@types/seedrandom@^3.0.1":
-  version "3.0.1"
-  resolved "https://registry.yarnpkg.com/@types/seedrandom/-/seedrandom-3.0.1.tgz#1254750a4fec4aff2ebec088ccd0bb02e91fedb4"
-  integrity sha512-giB9gzDeiCeloIXDgzFBCgjj1k4WxcDrZtGl6h1IqmUPlxF+Nx8Ve+96QCyDZ/HseB/uvDsKbpib9hU5cU53pw==
+"@types/seedrandom@^3.0.2":
+  version "3.0.2"
+  resolved "https://registry.yarnpkg.com/@types/seedrandom/-/seedrandom-3.0.2.tgz#7f30db28221067a90b02e73ffd46b6685b18df1a"
+  integrity sha512-YPLqEOo0/X8JU3rdiq+RgUKtQhQtrppE766y7vMTu8dGML7TVtZNiiiaC/hhU9Zqw9UYopXxhuWWENclMVBwKQ==
 
 "@types/serve-static@*":
   version "1.13.10"
