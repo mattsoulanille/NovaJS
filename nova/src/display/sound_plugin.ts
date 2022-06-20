@@ -39,7 +39,7 @@ export const SoundPlugin: Plugin = {
     name: 'SoundPlugin',
     build(world) {
         world.resources.set(LoopingSounds, new Map());
-        world.resources.set(VolumeResource, {volume: 0.015});
+        world.resources.set(VolumeResource, {volume: 0.045});
         world.addSystem(SoundSystem);
     },
     remove(world) {
