@@ -16,8 +16,8 @@ load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
 
 http_archive(
     name = "build_bazel_rules_nodejs",
-    sha256 = "e328cb2c9401be495fa7d79c306f5ee3040e8a03b2ebb79b022e15ca03770096",
-    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/5.4.2/rules_nodejs-5.4.2.tar.gz"],
+    sha256 = "f10a3a12894fc3c9bf578ee5a5691769f6805c4be84359681a785a0c12e8d2b6",
+    urls = ["https://github.com/bazelbuild/rules_nodejs/releases/download/5.5.3/rules_nodejs-5.5.3.tar.gz"],
 )
 
 # Install rules_nodejs dependencies.
@@ -33,7 +33,6 @@ nodejs_register_toolchains(
     node_version = "17.2.0",
 )
 
-
 load("@rules_nodejs//nodejs:yarn_repositories.bzl", "yarn_repositories")
 
 yarn_repositories(
@@ -48,12 +47,12 @@ load("@build_bazel_rules_nodejs//:index.bzl", "yarn_install")
 yarn_install(
     # Name this npm so that Bazel Label references look like @npm//package
     name = "npm",
-    yarn = "@yarn//:bin/yarn",
-    package_json = "//:package.json",
-    yarn_lock = "//:yarn.lock",
     exports_directories_only = False,
-    symlink_node_modules = True,
+    package_json = "//:package.json",
     package_path = "/",
+    symlink_node_modules = True,
+    yarn = "@yarn//:bin/yarn",
+    yarn_lock = "//:yarn.lock",
 )
 
 # Install closure
@@ -97,6 +96,7 @@ http_archive(
 load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
 
 rules_proto_dependencies()
+
 rules_proto_toolchains()
 
 # http_archive(
@@ -175,6 +175,7 @@ npm_bazel_labs_dependencies()
 # rbe_autoconfig(name = "rbe_default")
 
 load("@build_bazel_rules_nodejs//toolchains/esbuild:esbuild_repositories.bzl", "esbuild_repositories")
+
 esbuild_repositories(npm_repository = "npm")
 
 http_archive(
@@ -208,7 +209,7 @@ load("@io_bazel_rules_docker//container:pull.bzl", "container_pull")
 # https://console.cloud.google.com/gcr/images/cloud-builders/global/bazel
 container_pull(
     name = "bazel_image",
+    digest = "sha256:ffae30fa83005dcdba4359f4aba4dfdd26c43f572665657ad1fccf1d30de48f4",
     registry = "gcr.io",
     repository = "cloud-builders/bazel",
-    digest = "sha256:ffae30fa83005dcdba4359f4aba4dfdd26c43f572665657ad1fccf1d30de48f4"
 )
