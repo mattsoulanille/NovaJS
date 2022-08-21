@@ -74,5 +74,7 @@ export class MutableImmutableMapHandle<K, V> implements Map<K, V> {
         }
     }
 
+    // TODO: Fix
+    // @ts-ignore
     [Symbol.toStringTag]: string;
 }
