@@ -132,7 +132,10 @@ function getRandomInCone(angle: number, count: number) {
 }
 
 export const SourceComponent = new Component<string>('Source');
-export const OwnerComponent = new Component<string>('Owner');
+// TODO: Fix delta system to allow stuff that isn't an object.
+const OwnerComponentType = t.type({owner: t.string});
+type OwnerComponentType = t.TypeOf<typeof OwnerComponentType>;
+export const OwnerComponent = new Component<OwnerComponentType>('Owner');
 
 const FireFromEntityQuery = new Query([Optional(WeaponsComponent),
     Entities, MovementStateComponent, AnimationComponent, UUID,
@@ -180,7 +183,7 @@ export abstract class WeaponEntry {
         }
         let [weapons, entities, movement, animation, uuid, owner, targetVal, entity] = results[0];
         if (!owner) {
-            owner = uuid;
+            owner = {owner: uuid};
         }
         let target = targetVal?.target;
         if (!weapons) {
@@ -235,12 +238,12 @@ export abstract class WeaponEntry {
                 let distance2 = Infinity;
                 for (let [movement, targetOwner, uuid, otherTarget] of targets) {
                     if (!targetOwner) {
-                        targetOwner = uuid;
+                        targetOwner = {owner: uuid};
                     }
                     if (targetOwner === owner) {
                         continue;
                     }
-                    if (!(otherTarget?.target === owner
+                    if (!(otherTarget?.target === owner.owner
                         || otherTarget?.target === source)) {
                         continue;
                     }
@@ -266,7 +269,7 @@ export abstract class WeaponEntry {
             angle = angle.add(sampleInaccuracy(this.data.accuracy));
         }
 
-        return this.fire(exitPoint, angle, owner ?? source, target,
+        return this.fire(exitPoint, angle, owner.owner ?? source, target,
             source, movement.velocity, exitPointData);
     }
 
@@ -277,7 +280,7 @@ export abstract class WeaponEntry {
             return [];
         }
         if (!owner) {
-            owner = source;
+            owner = {owner: source};
             // Does this really need to be set?
             sourceEntity.components.set(OwnerComponent, owner);
         }
@@ -308,7 +311,7 @@ export abstract class WeaponEntry {
             for (let i = 0; i < sub.count; i++) {
                 const angle = angles[i] || new Angle(0);
                 const subEntity = subWeapon.fire(position ?? movement.position,
-                    movement.rotation.add(angle), owner,
+                    movement.rotation.add(angle), owner.owner,
                     target?.target, source);
                 if (subEntity) {
                     subs.push(subEntity);
@@ -341,6 +344,10 @@ export const FireWeaponPlugin: Plugin = {
         }
         deltaMaker.addComponent(VulnerableToPD, {
             componentType: t.undefined,
+        });
+
+        deltaMaker.addComponent(OwnerComponent, {
+            componentType: OwnerComponentType,
         });
 
         world.addSystem(WeaponsComponentProvider);

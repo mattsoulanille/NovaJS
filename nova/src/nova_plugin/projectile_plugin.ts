@@ -156,7 +156,7 @@ class ProjectileWeaponEntry extends WeaponEntry {
         }
 
         if (owner) {
-            projectile.components.set(OwnerComponent, owner);
+            projectile.components.set(OwnerComponent, {owner: owner});
         } else {
             projectile.components.delete(OwnerComponent);
         }
@@ -244,7 +244,7 @@ const ProjectileCollisionSystem = new System({
             return;
         }
         const otherOwner = other.components.get(OwnerComponent);
-        if (collision.other === owner || otherOwner === owner) {
+        if (collision.other === owner?.owner || otherOwner?.owner === owner?.owner) {
             return;
         }
 
@@ -301,7 +301,7 @@ const ProjectileBlastSystem = new System({
         // TODO: Tag ship that was hit as immune to explosion, since it's already hit.
         if (!projectileData.blastHurtsFiringShip && owner) {
             // TODO: Compute this accounting for subs, escorts, etc.
-            blastIgnore.add(owner);
+            blastIgnore.add(owner.owner);
             // const projectile
             // blast.components.set(BlastIgnoreComponent,
             //                      new Set([projectile.]));

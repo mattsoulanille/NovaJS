@@ -70,7 +70,7 @@ const ChooseTargetSystem = new System({
                 const [targetUuid, _targetMovement, targetOwner] = ships[index.index];
                 // Don't target yourself
                 // Don't target escorts
-                if (targetUuid !== uuid && targetOwner !== uuid) {
+                if (targetUuid !== uuid && targetOwner?.owner !== uuid) {
                     break;
                 }
                 index.index = (index.index + 2) % (ships.length + 1) - 1;
