@@ -91,7 +91,7 @@ class BeamWeaponEntry extends WeaponEntry {
         }
 
         if (owner) {
-            beam.addComponent(OwnerComponent, owner);
+            beam.addComponent(OwnerComponent, {owner});
         }
         if (source) {
             beam.addComponent(SourceComponent, source);
@@ -173,7 +173,7 @@ const BeamCollisionSystem = new System({
             return;
         }
         const otherOwner = other.components.get(OwnerComponent);
-        if (collision.other === owner || otherOwner === owner) {
+        if (collision.other === owner?.owner || otherOwner?.owner === owner?.owner) {
             return;
         }
 
