@@ -335,7 +335,7 @@ export class World {
             if (this.state.resources.has(arg)) {
                 return right(this.state.resources.get(arg) as ArgData<T>);
             } else {
-                throw new Error(`Missing resource ${arg}`);
+                throw new Error(`Missing resource ${String(arg)}`);
             }
         } else if (arg instanceof Component) {
             if (entity.components.has(arg)) {
@@ -376,7 +376,7 @@ export class World {
             return modifier.transform(...modifierQueryResults.right) as
                 Either<undefined, ArgData<T>>;
         } else {
-            throw new Error(`Internal error: unrecognized arg ${arg}`);
+            throw new Error(`Internal error: unrecognized arg ${String(arg)}`);
         }
     }
 

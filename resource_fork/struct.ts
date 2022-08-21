@@ -92,9 +92,6 @@ type StructCode<T extends string> = T extends `${'<' | '>'}${infer Code}` ?
 // https://stackoverflow.com/questions/67184269/truly-recursive-template-literal-for-comma-separated-strings-in-typescript
 export function unpack<T extends string>(code: T extends StructCode<T> ? T : never,
                                          data: DataView, position = 0): [StructCodeToArray<T>, number] {
-    if (code === '') {
-        throw new Error('Empty code');
-    }
 
     const littleEndian = code[0] === '<';
     const result: Array<CodeMap[keyof CodeMap]> = [];
