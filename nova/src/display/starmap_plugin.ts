@@ -23,9 +23,11 @@ const MapSystem = new AsyncSystem({
         ScreenSize, PlayerShipSelector] as const,
     async step(controlEvent, starmap, jumpRoute, { x, y }) {
         starmap.container.position.set(x / 2, y / 2);
-        if (controlEvent.action === 'map' && controlEvent.state === 'start' &&
-            !starmap.container.visible) {
-            jumpRoute.route = await starmap.show(jumpRoute.route);
+        for (const {action, state} of controlEvent) {
+            if (action === 'map' && state === 'start' &&
+                !starmap.container.visible) {
+                jumpRoute.route = await starmap.show(jumpRoute.route);
+            }
         }
     }
 });

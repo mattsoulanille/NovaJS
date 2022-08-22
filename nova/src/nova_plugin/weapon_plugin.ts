@@ -123,16 +123,15 @@ const ControlPlayerWeapons = new System({
         }
 
         let changedSecondary = false;
-        if (controlState.get('nextSecondary') === 'start') {
-            secondaryIndex++;
-            changedSecondary = true;
-        }
-        if (controlState.get('previousSecondary') === 'start') {
-            secondaryIndex--;
-            changedSecondary = true;
-        }
+
         if (controlState.get('resetSecondary') === 'start') {
             secondaryIndex = 0;
+            changedSecondary = true;
+        } else if (controlState.get('previousSecondary') === 'start') {
+            secondaryIndex--;
+            changedSecondary = true;
+        } else if (controlState.get('nextSecondary') === 'start') {
+            secondaryIndex++;
             changedSecondary = true;
         }
 

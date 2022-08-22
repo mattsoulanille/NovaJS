@@ -29,7 +29,9 @@ const UpdateControlState = new System({
             }
         }
 
-        controlState.set(event.action, event.state);
+        for (let {action, state} of event) {
+            controlState.set(action, state);
+        }
         emit(ControlStateEvent, controlState);
     }
 });
