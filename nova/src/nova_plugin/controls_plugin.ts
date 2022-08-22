@@ -19,7 +19,7 @@ export interface ControlEvent {
 }
 
 export const ControlsResource = new Resource<Controls>('ControlsResource');
-export const EcsControlEvent = new EcsEvent<ControlEvent>('ControlEvent');
+export const EcsControlEvent = new EcsEvent<ControlEvent[]>('ControlEvent');
 export const ControlsSubject = new Resource<Subject<ControlEvent>>('ControlsObservable');
 
 const ControlEventSystem = new System({
@@ -30,6 +30,7 @@ const ControlEventSystem = new System({
     step(keyboardEvent, controlsSubject, controls, emit) {
         const actions = getActions(controls, keyboardEvent);
 
+        const controlEvents: ControlEvent[] = [];
         for (const action of actions) {
             const controlEvent: ControlEvent = {
                 action,
@@ -37,8 +38,11 @@ const ControlEventSystem = new System({
                     : keyboardEvent.repeat ? 'repeat' : 'start',
             }
 
-            emit(EcsControlEvent, controlEvent);
-            controlsSubject.next(controlEvent);
+            controlEvents.push(controlEvent);
+        }
+        emit(EcsControlEvent, controlEvents);
+        for (const event of controlEvents) {
+            controlsSubject.next(event);
         }
     }
 });

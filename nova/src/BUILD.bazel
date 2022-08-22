@@ -1,8 +1,7 @@
 package(default_visibility = ["//visibility:public"])
 
 load("@build_bazel_rules_nodejs//:index.bzl", "nodejs_binary")
-load("//:defaults.bzl", "ts_library", "esbuild")
-
+load("//:defaults.bzl", "esbuild", "ts_library")
 
 filegroup(
     name = "static_files",
@@ -15,9 +14,9 @@ ts_library(
     name = "debug_settings_lib",
     srcs = ["debug_settings.ts"],
     deps = [
-        "//nova_ecs:ecs",
         "//nova/src/display",
-    ]
+        "//nova_ecs:ecs",
+    ],
 )
 
 ts_library(
@@ -44,7 +43,7 @@ ts_library(
         "@npm//@types/node",
         "@npm//pixi.js",
         "@npm//rxjs",
-    ]
+    ],
 )
 
 # rollup_bundle(
@@ -69,9 +68,9 @@ esbuild(
         "keepNames": True,
     },
     entry_point = "browser.ts",
-    target = "es2015",
     minify = False,
     sources_content = True,
+    target = "es2015",
     deps = [
         ":browser_lib",
     ],
