@@ -74,7 +74,7 @@
     "dependencies": {
         "@types/uuid": "^8.3.4",
         "express": "^4.17.2",
-        "fp-ts": "^2.12.1",
+        "fp-ts": "^2.12.3",
         "hull.js": "^1.0.2",
         "io-ts": "^2.2.16",
         "pixi-layers": "^0.3.1",
