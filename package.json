@@ -19,7 +19,7 @@
         "@bazel/labs": "^4.6.1",
         "@bazel/typescript": "5.5.3",
         "@pixi/filter-color-matrix": "^6.4.2",
-        "@pixi/particle-emitter": "^5.0.5",
+        "@pixi/particle-emitter": "^5.0.7",
         "@pixi/sound": "^4.2.0",
         "@types/argparse": "^2.0.10",
         "@types/express": "^4.17.13",

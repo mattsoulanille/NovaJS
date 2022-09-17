@@ -196,10 +196,10 @@
   resolved "https://registry.yarnpkg.com/@pixi/particle-container/-/particle-container-6.2.1.tgz#ae227fb6f7de9b9275b78a17d634887c37724e48"
   integrity sha512-uk8erald8eGiucE0336YTIOS4e1HkSYc8ZYkJnCfxEPcOSMyPEmInI+kWtq0IHa1icX9G4zZRh9rj3vCfCLY+A==
 
-"@pixi/particle-emitter@^5.0.5":
-  version "5.0.5"
-  resolved "https://registry.yarnpkg.com/@pixi/particle-emitter/-/particle-emitter-5.0.5.tgz#b38ab952db41865af11ca56b1b2f1be08ab8957c"
-  integrity sha512-eBHkKVnYKxFgCMR9v+42RoeWOhENo8UNIV0nbakkKRI3MJCFgBO73UjmdlSd22niGrkd4bTynwJ9jOZTIjJSAQ==
+"@pixi/particle-emitter@^5.0.7":
+  version "5.0.7"
+  resolved "https://registry.yarnpkg.com/@pixi/particle-emitter/-/particle-emitter-5.0.7.tgz#408319f3f4160ffa727f4d4d1062da7c96b20fd2"
+  integrity sha512-g0vf+z2pFr+znJEzAii6T7CfMAKsCZuRc8bVY2znJDYxEKoAuU+XuqzHtOkGeR/VuiNCuJhMFLh+BDfXN4Fubw==
 
 "@pixi/polyfill@6.2.1":
   version "6.2.1"
