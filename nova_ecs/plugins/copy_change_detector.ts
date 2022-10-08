@@ -47,6 +47,7 @@ export const Change = t.union([
 ]);
 export type Change = t.TypeOf<typeof Change>;
 export const ChangesEvent = new EcsEvent<Change[]>('ChangesEvent');
+export const ChangesResource = new Resource<Change[]>('ChangesResource');
 
 type IncludeChange = (e: Entity) => boolean;
 const IncludeChangeResource =
@@ -61,6 +62,7 @@ export const DetectChanges = new System({
         const changes = getChanges(world, worldCopy, includeChange);
         if (changes.length) {
             emit(ChangesEvent, changes);
+            world.resources.set(ChangesResource, changes);
         }
         applyChanges(worldCopy, changes, true /* structured clone */);
     }
@@ -152,7 +154,7 @@ function getChanges(world: World, worldCopy: World,
     return changes;
 }
 
-function applyChanges(world: World, changes: Change[], clone = false) {
+export function applyChanges(world: World, changes: Change[], clone = false) {
     const serializer = world.resources.get(SerializerResource);
     if (!serializer) {
         console.warn('Missing serializer resource for change detector');
@@ -230,6 +232,9 @@ export const CopyChangeDetector: Plugin = {
             throw new Error('Expected SerializerResource to exist');
         }
 
+        const worldCopy = new World(`{world.name} copy`);
+        worldCopy.resources.set(SerializerResource, serializer);
+        world.resources.set(WorldCopy, worldCopy);
         world.resources.set(IncludeChangeResource, () => true);
         world.resources.set(AllowedSystems, new Set([]));
         world.resources.set(AddingSystems, false);
@@ -240,15 +245,13 @@ export const CopyChangeDetector: Plugin = {
             world.resources.set(AddingSystems, orig ?? false);
         });
 
-        const worldCopy = new World(`{world.name} copy`);
-        worldCopy.resources.set(SerializerResource, serializer);
-        world.resources.set(WorldCopy, worldCopy);
 
         world.addSystem(DetectChanges);
         world.addSystem(ChangeDetectorRemoveSystem);
         world.addSystem(ChangeDetectorAddSystem);
     },
     remove(world) {
+        // TODO
         world.removeSystem(DetectChanges);
     }
 }

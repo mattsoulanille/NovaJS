@@ -3,7 +3,7 @@ import { Component } from "nova_ecs/component";
 import { Entity } from "nova_ecs/entity";
 import { System } from "nova_ecs/system";
 import { World } from "nova_ecs/world";
-import { Change, ChangesEvent, CopyChangeDetector, create, DetectChanges, RecordSystems, remove, update } from "./copy_change_detector";
+import { applyChanges, Change, ChangesEvent, ChangesResource, CopyChangeDetector, create, DetectChanges, RecordSystems, remove, update } from "./copy_change_detector";
 import { Serializer, SerializerPlugin, SerializerResource } from "./serializer_plugin";
 
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
@@ -18,23 +18,29 @@ const IncrementFoo = new System({
 });
 
 describe('copy change detector', () => {
-    let world: World;
+    let world1: World;
+    let world2: World;
     let changes: Change[][];
     let fooEntity: Entity;
     let serializer: Serializer;
     let recordSystems: (add: () => void) => void;
 
     beforeEach(() => {
-        world = new World();
-        world.addPlugin(SerializerPlugin);
-        world.addPlugin(CopyChangeDetector);
+        world1 = new World('world1');
+        world2 = new World('world2');
+
+        for (const world of [world1, world2]) {
+            world.addPlugin(SerializerPlugin);
+            world.addPlugin(CopyChangeDetector);
         
-        serializer = world.resources.get(SerializerResource)!;
-        serializer.addComponent(FOO_COMPONENT, t.type({x: t.number}))
-        recordSystems = world.resources.get(RecordSystems)!;
+            serializer = world.resources.get(SerializerResource)!;
+            serializer.addComponent(FOO_COMPONENT, t.type({x: t.number}))
+        }
+        
+        recordSystems = world1.resources.get(RecordSystems)!;
 
         changes = []
-        world.events.get(ChangesEvent).subscribe((c) => {
+        world1.events.get(ChangesEvent).subscribe((c) => {
             changes.push(c);
         });
 
@@ -43,28 +49,28 @@ describe('copy change detector', () => {
     });
 
     it('reports nothing when nothing changes', () => {
-        world.step();
-        world.step();
+        world1.step();
+        world1.step();
         expect(changes).toEqual([]);
 
     });
 
     it('reports when an entity is added', () => {
-        world.entities.set('fooEntity', fooEntity);
-        world.step();
-        world.step();
-        world.step();
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
+        world1.step();
+        world1.step();
         expect(changes).toEqual([
             [create(fooEntity, serializer)]
         ]);
     });
 
     it('reports when an entity is removed', () => {
-        world.entities.set('fooEntity', fooEntity);
-        world.step();
-        world.entities.delete('fooEntity');
-        world.step();
-        world.step();
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
+        world1.entities.delete('fooEntity');
+        world1.step();
+        world1.step();
         expect(changes).toEqual([
             [create(fooEntity, serializer)],
             [remove(fooEntity.uuid)],
@@ -72,11 +78,11 @@ describe('copy change detector', () => {
     });
 
     it('reports when an entity is updated', () => {
-        world.entities.set('fooEntity', fooEntity);
-        world.step();
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
         fooEntity.components.get(FOO_COMPONENT)!.x = 456;
-        world.step();
-        world.step();
+        world1.step();
+        world1.step();
         expect(changes).toEqual([
             [create(fooEntity, serializer)],
             [update(fooEntity, serializer)],
@@ -84,17 +90,60 @@ describe('copy change detector', () => {
     });
 
     it('does not report predictable changes', () => {
-        world.entities.set('fooEntity', fooEntity);
-        world.step();
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
 
         recordSystems(() => {
-            world.addSystem(IncrementFoo);
+            world1.addSystem(IncrementFoo);
         });
-        world.step();
+        world1.step();
 
         expect(changes).toEqual([
             [create(fooEntity, serializer)],
         ]);
     });
 
+    it('does not add systems outside of recordSystems', () => {
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
+        world1.addSystem(IncrementFoo);
+        world1.step();
+
+        // There is an update here because the change detection system did not
+        // detect when foo was incremented (because it does not have the
+        // IncrementFoo system).
+
+        // Note that it's okay that create includes a reference to the component
+        // (i.e. create(fooEntity...) has x === 124 here instead of 123) because
+        // the objective is to share the current state, not make an accurate
+        // history of changes.
+        expect(changes).toEqual([
+            [create(fooEntity, serializer)],
+            [update(fooEntity, serializer)],
+        ]);
+    });
+
+    it('adds changes to ChangesResource', () => {
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
+
+        expect(world1.resources.get(ChangesResource)).toEqual([
+            create(fooEntity, serializer)
+        ]);
+    });
+
+    it('applies changes to another world', () => {
+        world1.entities.set('fooEntity', fooEntity);
+        world1.step();
+
+        expect(world2.entities.size).toEqual(1); // singleton entity.
+
+        applyChanges(world2, world1.resources.get(ChangesResource)!);
+        const foo2 = world2.entities.get('fooEntity');
+
+        expect(world2.entities.size).toEqual(2);
+        expect(foo2).toBeDefined();
+        expect(foo2?.components.size).toEqual(1);
+        expect(foo2?.components.get(FOO_COMPONENT)).toEqual({x: 123});
+    });
 });
