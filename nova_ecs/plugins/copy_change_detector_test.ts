@@ -3,7 +3,7 @@ import { Component } from "nova_ecs/component";
 import { Entity } from "nova_ecs/entity";
 import { System } from "nova_ecs/system";
 import { World } from "nova_ecs/world";
-import { Change, ChangesEvent, CopyChangeDetector, create, DetectChanges, remove, update } from "./copy_change_detector";
+import { Change, ChangesEvent, CopyChangeDetector, create, DetectChanges, RecordSystems, remove, update } from "./copy_change_detector";
 import { Serializer, SerializerPlugin, SerializerResource } from "./serializer_plugin";
 
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
@@ -22,14 +22,16 @@ describe('copy change detector', () => {
     let changes: Change[][];
     let fooEntity: Entity;
     let serializer: Serializer;
+    let recordSystems: (add: () => void) => void;
 
     beforeEach(() => {
         world = new World();
         world.addPlugin(SerializerPlugin);
         world.addPlugin(CopyChangeDetector);
-
+        
         serializer = world.resources.get(SerializerResource)!;
         serializer.addComponent(FOO_COMPONENT, t.type({x: t.number}))
+        recordSystems = world.resources.get(RecordSystems)!;
 
         changes = []
         world.events.get(ChangesEvent).subscribe((c) => {
@@ -85,11 +87,14 @@ describe('copy change detector', () => {
         world.entities.set('fooEntity', fooEntity);
         world.step();
 
-        world.addSystem(IncrementFoo);
+        recordSystems(() => {
+            world.addSystem(IncrementFoo);
+        });
         world.step();
 
         expect(changes).toEqual([
             [create(fooEntity, serializer)],
         ]);
     });
+
 });

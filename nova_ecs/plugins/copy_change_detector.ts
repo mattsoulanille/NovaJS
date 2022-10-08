@@ -66,12 +66,12 @@ export const DetectChanges = new System({
     }
 });
 
-type ComponentType<Data> = t.Type<Data, unknown, unknown>;
-interface ComponentTypeMap<K extends Component<any>>
-    extends Map<K, ComponentType<unknown>> {
-    get<Data>(key: Component<Data>): ComponentType<Data> | undefined;
-    set<Data>(key: Component<Data>, val: ComponentType<Data>): this;
-}
+// type ComponentType<Data> = t.Type<Data, unknown, unknown>;
+// interface ComponentTypeMap<K extends Component<any>>
+//     extends Map<K, ComponentType<unknown>> {
+//     get<Data>(key: Component<Data>): ComponentType<Data> | undefined;
+//     set<Data>(key: Component<Data>, val: ComponentType<Data>): this;
+// }
 
 export function create(entity: Entity, serializer: Serializer): Change {
     return {
@@ -178,23 +178,40 @@ function applyChanges(world: World, changes: Change[], clone = false) {
     }
 }
 
-// TODO
-// const ChangeDetectorIgnoreSystems = 
+export const RecordSystems = new Resource<(add: () => void) => void>(
+    'RecordSystems');
+
+// Adding new systems to the allowlist. Not just adding in general.
+// When false, systems in the allowlist can still be added / removed.
+const AddingSystems = new Resource<boolean>('AddingSystems');
+
+// Systems that can be added / removed from the world copy.
+const AllowedSystems =
+    new Resource<Set<System>>('AllowedSystems');
 
 const ChangeDetectorAddSystem = new System({
     name: 'ChangeDetectorAddSystem',
     events: [AddSystemEvent],
-    args: [AddSystemEvent, WorldCopy, SingletonComponent] as const,
-    step(system, worldCopy) {
+    args: [AddSystemEvent, WorldCopy, AllowedSystems, AddingSystems,
+           SingletonComponent] as const,
+    step(system, worldCopy, allow, addingSystems) {
+        if (addingSystems) {
+            allow.add(system);
+        }
+
+        if (!allow.has(system)) {
+            return;
+        }
+
         try {
             worldCopy.addSystem(system);
         } catch (e) {
             console.warn(`Tried to add system ${system.name} for change`
-                + ' detection. Should it be added to ChangeDetectorIgnore?\n',
+                + ' detection. Should it be removed from AllowedSystems?\n',
                          e);
         }
     }
-});    
+});
 
 const ChangeDetectorRemoveSystem = new System({
     name: 'ChangeDetectorRemoveSystem',
@@ -214,6 +231,14 @@ export const CopyChangeDetector: Plugin = {
         }
 
         world.resources.set(IncludeChangeResource, () => true);
+        world.resources.set(AllowedSystems, new Set([]));
+        world.resources.set(AddingSystems, false);
+        world.resources.set(RecordSystems, (add: () => void) => {
+            const orig = world.resources.get(AddingSystems);
+            world.resources.set(AddingSystems, true);
+            add();
+            world.resources.set(AddingSystems, orig ?? false);
+        });
 
         const worldCopy = new World(`{world.name} copy`);
         worldCopy.resources.set(SerializerResource, serializer);

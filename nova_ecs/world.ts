@@ -295,7 +295,7 @@ export class World {
         for (const component of system.query.components) {
             this.addComponent(component);
         }
-        this.emit(AddSystemEvent, system);
+        this.emitNow(AddSystemEvent, system);
         return this;
     }
 
@@ -312,7 +312,7 @@ export class World {
         if (index >= 0) {
             this.systems.splice(index, 1);
         }
-        this.emit(RemoveSystemEvent, system);
+        this.emitNow(RemoveSystemEvent, system);
 
         return this;
     }
