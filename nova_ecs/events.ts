@@ -1,5 +1,6 @@
 import * as t from 'io-ts';
 import { Entity } from './entity';
+import { System } from './system';
 
 
 const eventSymbol = Symbol('Event');
@@ -18,6 +19,9 @@ export class EcsEvent<Data, DataSerialized = Data> {
 export const StepEvent = new EcsEvent<true>('step');
 export const DeleteEvent = new EcsEvent<Set<[string /* uuid */, Entity]>>('delete');
 export const AddEvent = new EcsEvent<[string /* uuid */, Entity]>('add');
+
+export const RemoveSystemEvent = new EcsEvent<System>('RemoveSystem');
+export const AddSystemEvent = new EcsEvent<System>('AddSystem');
 
 export type EventData<E> = E extends EcsEvent<infer Data, any> ? Data : never;
 

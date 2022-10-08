@@ -15,7 +15,7 @@ interface ComponentTypeMap<K extends Component<any>>
 
 export const EntityState = t.intersection([
     t.type({
-        components: map(t.string /* Component Name */, t.unknown /* State */),
+        components: t.array(t.tuple([t.string /* Component Name */, t.unknown /* State */])),
     }),
     t.partial({
         name: t.string
@@ -70,7 +70,7 @@ export class Serializer {
         // Encode / serialize entities
         (entity) => {
             const entityState: EntityState = {
-                components: new Map(),
+                components: [],
                 name: entity.name,
             };
 
@@ -78,7 +78,7 @@ export class Serializer {
                 const componentType = this.componentTypes.get(component);
                 if (componentType) {
                     const encodedData = componentType.encode(data);
-                    entityState.components.set(component.name, encodedData)
+                    entityState.components.push([component.name, encodedData])
                 }
             }
 

@@ -3,7 +3,7 @@ import { v4 } from 'uuid';
 import { Emit, EmitNow, Entities, GetEntity, GetWorld, QueryResults, RunQuery, UUID } from './arg_types';
 import { Component } from './component';
 import { Entity } from './entity';
-import { AddEvent, DeleteEvent, EcsEvent } from './events';
+import { AddEvent, AddSystemEvent, DeleteEvent, EcsEvent, RemoveSystemEvent } from './events';
 import { Optional } from './optional';
 import { Plugin } from './plugin';
 import { Query } from './query';
@@ -1562,5 +1562,37 @@ describe('world', () => {
     it('marks entities with their uuid', () => {
         world.entities.set('foo', new Entity());
         expect(world.entities.get('foo')?.uuid).toEqual('foo');
+    });
+
+    it('emits an event when a system is added', () => {
+        const TestSystem = new System({
+            name: 'TestSystem',
+            args: [] as const,
+            step() {},
+        });
+        const spy = jasmine.createSpy();
+        world.events.get(AddSystemEvent).subscribe(spy);
+
+        world.addSystem(TestSystem);
+
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy).toHaveBeenCalledWith(TestSystem);
+    });
+
+    it('emits an event when a system is removed', () => {
+        const TestSystem = new System({
+            name: 'TestSystem',
+            args: [] as const,
+            step() {},
+        });
+        const spy = jasmine.createSpy();
+        world.events.get(RemoveSystemEvent).subscribe(spy);
+
+        world.addSystem(TestSystem);
+        expect(spy).toHaveBeenCalledTimes(0);
+        world.removeSystem(TestSystem);
+
+        expect(spy).toHaveBeenCalledTimes(1);
+        expect(spy).toHaveBeenCalledWith(TestSystem);
     });
 });

@@ -6,7 +6,6 @@ load("@build_bazel_rules_nodejs//:index.bzl", "pkg_npm")
 
 ts_library(
     name = "plugins",
-    module_name = "nova_ecs/plugins",
     srcs = [
         "time_plugin.ts",
         "multiplayer_plugin.ts",
@@ -17,15 +16,18 @@ ts_library(
         "delta.ts",
         "delta_plugin.ts",
         "keyboard_plugin.ts",
+        "copy_change_detector.ts",
     ],
+    module_name = "nova_ecs/plugins",
     deps = [
         "//nova_ecs:ecs",
         "//nova_ecs/datatypes",
-        "@npm//io-ts",
+        "@npm//fast-deep-equal",
         "@npm//fp-ts",
         "@npm//immer",
+        "@npm//io-ts",
         "@npm//rxjs",
-    ]
+    ],
 )
 
 ts_library(
@@ -37,27 +39,28 @@ ts_library(
         "serializer_plugin_test.ts",
         #"modifier_plugin_test.ts",
         "delta_plugin_test.ts",
+        "copy_change_detector_test.ts",
     ],
     deps = [
         ":plugins",
         "//nova_ecs:ecs",
         "//nova_ecs/datatypes",
         "@npm//@types/jasmine",
-        "@npm//io-ts",
-        "@npm//io-ts-types",
+        "@npm//@types/uuid",
         "@npm//fp-ts",
         "@npm//immer",
-        "@npm//uuid",
-        "@npm//@types/uuid",
+        "@npm//io-ts",
+        "@npm//io-ts-types",
         "@npm//rxjs",
-    ]
+        "@npm//uuid",
+    ],
 )
 
 jasmine_node_test(
     name = "plugins_test",
     srcs = [
         ":plugins_test_lib",
-    ]
+    ],
 )
 
 filegroup(

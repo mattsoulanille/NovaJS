@@ -6,7 +6,7 @@ import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMapWithEvents } from "./entity_map";
-import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
+import { AddEvent, AddSystemEvent, DeleteEvent, EcsEvent, RemoveSystemEvent, StepEvent, UnknownEvent } from "./events";
 import { SyncSubject } from "./event_map";
 import { Plugin } from './plugin';
 import { ProvidePlugin } from "./provide";
@@ -295,6 +295,7 @@ export class World {
         for (const component of system.query.components) {
             this.addComponent(component);
         }
+        this.emit(AddSystemEvent, system);
         return this;
     }
 
@@ -311,6 +312,7 @@ export class World {
         if (index >= 0) {
             this.systems.splice(index, 1);
         }
+        this.emit(RemoveSystemEvent, system);
 
         return this;
     }
