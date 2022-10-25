@@ -163,7 +163,7 @@ describe('Multiplayer Plugin', () => {
                     entities.delete(uuid);
                 }
             },
-            before: ['Multiplayer'],
+            before: ['Multiplayer', 'DetectChanges'],
         });
 
         world1.addSystem(removeBarSystem);
@@ -190,56 +190,5 @@ describe('Multiplayer Plugin', () => {
         world2.step();
 
         expect(world2.entities.get(testUuid)).toBeUndefined();
-    });
-
-
-    it('drafts components of entities it owns', () => {
-        const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new Entity()
-            .addComponent(MultiplayerData, {
-                owner: 'world1 uuid',
-            }).addComponent(BarComponent, {
-                y: 'a test component',
-            }));
-
-        world1.step();
-
-        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
-        expect(isDraft(bar)).toBeTrue();
-    });
-
-    it('does not draft components of entities it does not own', () => {
-        const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new Entity()
-            .addComponent(MultiplayerData, {
-                owner: 'not me',
-            }).addComponent(BarComponent, {
-                y: 'a test component',
-            }));
-
-        world1.step();
-
-        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
-        expect(isDraft(bar)).toBeFalse();
-    });
-
-    it('does not draft non-multiplayer components', () => {
-        const testUuid = 'test entity uuid';
-        world1.entities.set(testUuid, new Entity()
-            .addComponent(MultiplayerData, {
-                owner: 'world1 uuid',
-            }).addComponent(BarComponent, {
-                y: 'a test component',
-            }).addComponent(NonMultiplayer, {
-                z: 'not multiplayer'
-            }));
-
-        world1.step();
-
-        const bar = world1.entities.get(testUuid)?.components.get(BarComponent);
-        expect(isDraft(bar)).toBeTrue();
-
-        const nonMultiplaer = world1.entities.get(testUuid)?.components.get(NonMultiplayer);
-        expect(isDraft(nonMultiplaer)).toBeFalse();
     });
 });

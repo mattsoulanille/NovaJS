@@ -1,9 +1,11 @@
+import { isLeft } from "fp-ts/lib/Either";
 import * as t from "io-ts";
 import { Component } from "nova_ecs/component";
 import { Entity } from "nova_ecs/entity";
 import { System } from "nova_ecs/system";
 import { World } from "nova_ecs/world";
 import { applyChanges, Change, ChangesEvent, ChangesResource, CopyChangeDetector, create, DetectChanges, RecordSystems, remove, update } from "./copy_change_detector";
+import { DeltaMaker, DeltaResource } from "./delta_plugin";
 import { Serializer, SerializerPlugin, SerializerResource } from "./serializer_plugin";
 
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
@@ -23,18 +25,36 @@ describe('copy change detector', () => {
     let changes: Change[][];
     let fooEntity: Entity;
     let serializer: Serializer;
+    let deltaMaker: DeltaMaker;
     let recordSystems: (add: () => void) => void;
+
+    function sendEntity(entity: Entity): Entity {
+        const encoded = structuredClone(serializer.encode(entity)) as unknown;
+        const decoded = serializer.decode(encoded);
+        if (isLeft(decoded)) {
+            throw new Error(decoded.left.join(', '));
+        }
+        return decoded.right;
+    }
 
     beforeEach(() => {
         world1 = new World('world1');
         world2 = new World('world2');
 
         for (const world of [world1, world2]) {
-            world.addPlugin(SerializerPlugin);
             world.addPlugin(CopyChangeDetector);
         
             serializer = world.resources.get(SerializerResource)!;
-            serializer.addComponent(FOO_COMPONENT, t.type({x: t.number}))
+
+            deltaMaker = world.resources.get(DeltaResource)!;
+
+            deltaMaker.addComponent(FOO_COMPONENT, {
+                componentType: t.type({x: t.number}),
+            });
+
+            deltaMaker.addComponent(BAR_COMPONENT, {
+                componentType: t.type({y: t.string}),
+            });
         }
         
         recordSystems = world1.resources.get(RecordSystems)!;
@@ -80,12 +100,13 @@ describe('copy change detector', () => {
     it('reports when an entity is updated', () => {
         world1.entities.set('fooEntity', fooEntity);
         world1.step();
+        const before = sendEntity(fooEntity);
         fooEntity.components.get(FOO_COMPONENT)!.x = 456;
         world1.step();
         world1.step();
         expect(changes).toEqual([
             [create(fooEntity, serializer)],
-            [update(fooEntity, serializer)],
+            [update(before, fooEntity, deltaMaker)!],
         ]);
     });
 
@@ -106,20 +127,13 @@ describe('copy change detector', () => {
     it('does not add systems outside of recordSystems', () => {
         world1.entities.set('fooEntity', fooEntity);
         world1.step();
+        const before = sendEntity(fooEntity);
         world1.addSystem(IncrementFoo);
         world1.step();
 
-        // There is an update here because the change detection system did not
-        // detect when foo was incremented (because it does not have the
-        // IncrementFoo system).
-
-        // Note that it's okay that create includes a reference to the component
-        // (i.e. create(fooEntity...) has x === 124 here instead of 123) because
-        // the objective is to share the current state, not make an accurate
-        // history of changes.
         expect(changes).toEqual([
             [create(fooEntity, serializer)],
-            [update(fooEntity, serializer)],
+            [update(before, fooEntity, deltaMaker)!],
         ]);
     });
 
@@ -145,5 +159,58 @@ describe('copy change detector', () => {
         expect(foo2).toBeDefined();
         expect(foo2?.components.size).toEqual(1);
         expect(foo2?.components.get(FOO_COMPONENT)).toEqual({x: 123});
+    });
+
+    it('does not leak references to the clone world', () => {
+        const barSystem = new System({
+            name: 'BarSystem',
+            args: [BAR_COMPONENT] as const,
+            step: (bar) => {
+                bar.y = bar.y + ' stepped';
+            },
+        });
+        world1.addSystem(barSystem);
+
+        const barEntity = new Entity()
+            .addComponent(BAR_COMPONENT, {
+                y: 'a test component',
+            });
+        world1.entities.set('test uuid', barEntity);
+
+        world1.step();
+        expect(world1.resources.get(ChangesResource)).toEqual([
+            create(new Entity(undefined, undefined, 'test uuid')
+                .addComponent(BAR_COMPONENT, {
+                    y: 'a test component stepped'
+                }), serializer),
+        ]);
+     
+        world1.step();
+        expect(world1.resources.get(ChangesResource)).toEqual([
+            update(
+                new Entity(undefined, undefined, 'test uuid')
+                    .addComponent(BAR_COMPONENT, {
+                        y: 'a test component stepped'
+                    }),
+                new Entity(undefined, undefined, 'test uuid')
+                    .addComponent(BAR_COMPONENT, {
+                        y: 'a test component stepped stepped'
+                    }),
+                deltaMaker)!,
+        ]);
+
+        world1.step();
+        expect(world1.resources.get(ChangesResource)).toEqual([
+            update(
+                new Entity(undefined, undefined, 'test uuid')
+                    .addComponent(BAR_COMPONENT, {
+                        y: 'a test component stepped stepped'
+                    }),
+                new Entity(undefined, undefined, 'test uuid')
+                    .addComponent(BAR_COMPONENT, {
+                        y: 'a test component stepped stepped stepped'
+                    }),
+                deltaMaker)!,
+        ]);
     });
 });

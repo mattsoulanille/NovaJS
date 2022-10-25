@@ -10,6 +10,8 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { Plugin } from '../plugin';
+import { DeltaMaker, DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
+import { iterMaps } from './iter_maps';
 import { MultiplayerData } from './multiplayer_plugin';
 import { EntityState, Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
 
@@ -34,17 +36,27 @@ const EntityQuery = new Query([MultiplayerData, GetEntity] as const);
 //     }
 // });
 
-export const Change = t.union([
-    t.type({
-        action: t.union([t.literal('create'), t.literal('update')]),
-        uuid: t.string,
-        entity: EntityState,
-    }),
-    t.type({
-        action: t.literal('remove'),
-        uuid: t.string,
-    }),
-]);
+const Create = t.type({
+    action: t.literal('create'),
+    uuid: t.string,
+    entity: EntityState,
+});
+type Create = t.TypeOf<typeof Create>;
+
+const Update = t.type({
+    action: t.literal('update'),
+    uuid: t.string,
+    delta: EntityDelta,
+});
+type Update = t.TypeOf<typeof Update>;
+
+const Remove = t.type({
+    action: t.literal('remove'),
+    uuid: t.string,
+});
+type Remove = t.TypeOf<typeof Remove>;
+
+export const Change = t.union([Create, Update, Remove]);
 export type Change = t.TypeOf<typeof Change>;
 export const ChangesEvent = new EcsEvent<Change[]>('ChangesEvent');
 export const ChangesResource = new Resource<Change[]>('ChangesResource');
@@ -56,13 +68,15 @@ const IncludeChangeResource =
 export const DetectChanges = new System({
     name: 'DetectChanges',
     args: [WorldCopy, GetWorld, IncludeChangeResource, Emit,
-           SingletonComponent] as const,
+        SingletonComponent] as const,
     step(worldCopy, world, includeChange, emit) {
         worldCopy.step();
         const changes = getChanges(world, worldCopy, includeChange);
         if (changes.length) {
             emit(ChangesEvent, changes);
             world.resources.set(ChangesResource, changes);
+        } else {
+            world.resources.set(ChangesResource, []);
         }
         applyChanges(worldCopy, changes, true /* structured clone */);
     }
@@ -83,11 +97,22 @@ export function create(entity: Entity, serializer: Serializer): Change {
     }
 }
 
-export function update(entity: Entity, serializer: Serializer): Change {
+export function update(before: Entity, after: Entity,
+                       deltaMaker: DeltaMaker): Change | undefined {
+    // if (before.uuid !== after.uuid) {
+    //     throw new Error(`before uuid '${before.uuid}' must equal after uuid '${after.uuid}'`);
+    // }
+
+    const delta = deltaMaker.getDelta(before, after);
+
+    if (!delta) {
+        return;
+    }
+
     return {
         action: 'update',
-        uuid: entity.uuid,
-        entity: serializer.encode(entity),
+        uuid: after.uuid,
+        delta
     }
 }
 export function remove(uuid: string): Change {
@@ -97,26 +122,17 @@ export function remove(uuid: string): Change {
     }
 }
 
-function* iterMaps<K, V>(a: Map<K, V>, b: Map<K, V>) {
-    const visited = new Set<K>();
-    for (const [k, va] of a) {
-        visited.add(k);
-        yield [k, va, b.get(k)] as const;
-    }
-    for (const [k, vb] of b) {
-        if (visited.has(k)) {
-            continue;
-        }
-        // a does not have k or it would be in `visited`
-        yield [k, undefined, vb] as const;
-    }
-}
-
 function getChanges(world: World, worldCopy: World,
                     include: IncludeChange): Change[] {
     const serializer = world.resources.get(SerializerResource);
     if (!serializer) {
         console.warn('Missing serializer resource for change detector');
+        return [];
+    }
+
+    const deltaMaker = world.resources.get(DeltaResource);
+    if (!deltaMaker) {
+        console.warn('Missing deltaMaker resource for change detector');
         return [];
     }
 
@@ -142,27 +158,45 @@ function getChanges(world: World, worldCopy: World,
         }
 
         // Compare components
-        for (const [key, component, componentCopy] of
-             iterMaps(entity.components, entityCopy.components)) {
-            // TODO: Make serializer have a separate component thing. Right now, it just sends the whole entity.
-            if (!equal(component, componentCopy)) {
-                changes.push(update(entity, serializer));
-                continue;
-            }
+        const maybeUpdate = update(entityCopy, entity, deltaMaker);
+        if (maybeUpdate) {
+            changes.push(maybeUpdate);
         }
+
+        // for (const [key, component, componentCopy] of
+        //      iterMaps(entity.components, entityCopy.components)) {
+        //     // TODO: Make serializer have a separate component thing. Right now, it just sends the whole entity.
+        //     if (!equal(component, componentCopy)) {
+        //         changes.push(update(entity, serializer));
+        //         continue;
+        //     }
+        // }
     }
     return changes;
 }
 
-export function applyChanges(world: World, changes: Change[], clone = false) {
+/**
+ * Apply changes to the world. Returns the set of entities that were updated but
+ * not present in the world. The full state of these should be requested.
+ */
+export function applyChanges(world: World, changes: Change[], clone = false): Set<string> {
+    const missingEntities = new Set<string>();
+
     const serializer = world.resources.get(SerializerResource);
     if (!serializer) {
         console.warn('Missing serializer resource for change detector');
-        return;
+        return missingEntities;
+    }
+
+    const deltaMaker = world.resources.get(DeltaResource);
+    if (!deltaMaker) {
+        console.warn('Missing deltaMaker resource for change detector');
+        console.log([...world.resources.keys()].map(r => r.name));
+        return missingEntities;
     }
 
     for (const change of changes) {
-        if (change.action === 'create' || change.action === 'update') {
+        if (change.action === 'create') {
             // TODO: Make update not send the whole entity?
             let encoded = change.entity;
             if (clone) {
@@ -174,10 +208,24 @@ export function applyChanges(world: World, changes: Change[], clone = false) {
                 continue;
             }
             world.entities.set(change.uuid, entity.right);
+        } else if (change.action === 'update') {
+            let entity = world.entities.get(change.uuid);
+            if (!entity) {
+                missingEntities.add(change.uuid);
+                entity = new Entity();
+                world.entities.set(change.uuid, entity);
+            }
+
+            let delta = change.delta;
+            if (clone) {
+                delta = structuredClone(delta);
+            }
+            deltaMaker.applyDelta(entity, delta);
         } else {
             world.entities.delete(change.uuid);
         }
     }
+    return missingEntities;
 }
 
 export const RecordSystems = new Resource<(add: () => void) => void>(
@@ -227,13 +275,27 @@ const ChangeDetectorRemoveSystem = new System({
 export const CopyChangeDetector: Plugin = {
     name: 'CopyChangeDetector',
     build(world) {
+        if (!world.resources.has(DeltaResource)) {
+            world.addPlugin(DeltaPlugin);
+        }
+
+        if (!world.resources.has(SerializerResource)) {
+            world.addPlugin(SerializerPlugin);
+        }
         const serializer = world.resources.get(SerializerResource);
         if (!serializer) {
             throw new Error('Expected SerializerResource to exist');
         }
 
+        const deltaMaker = world.resources.get(DeltaResource);
+        if (!deltaMaker) {
+            throw new Error('Expected DeltaResource to exist');
+        }
+
         const worldCopy = new World(`{world.name} copy`);
         worldCopy.resources.set(SerializerResource, serializer);
+        worldCopy.resources.set(DeltaResource, deltaMaker);
+        world.resources.set(ChangesResource, []);
         world.resources.set(WorldCopy, worldCopy);
         world.resources.set(IncludeChangeResource, () => true);
         world.resources.set(AllowedSystems, new Set([]));

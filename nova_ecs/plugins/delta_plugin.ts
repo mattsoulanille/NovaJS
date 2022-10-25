@@ -1,5 +1,3 @@
-import { applyPatches, createDraft, Draft, enablePatches, finishDraft, isDraft, original, setAutoFreeze } from 'immer';
-import { Objectish, Patch } from 'immer/dist/internal';
 import * as t from 'io-ts';
 import { set } from '../datatypes/set';
 import { Component, UnknownComponent } from '../component';
@@ -11,24 +9,25 @@ import { isLeft } from 'fp-ts/Either';
 import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
 import { setDifference } from '../utils';
 import { EventMap } from '../event_map';
+import { iterMaps } from './iter_maps';
+import equal from 'fast-deep-equal';
 
-
-export interface OptionalComponentDelta<Data, Delta> {
+export interface OptionalComponentDelta<Data> {//, Delta> {
     componentType: t.Type<Data, unknown, unknown>;
-    deltaType?: t.Type<Delta, unknown, unknown>;
-    getDelta?: (a: Data, b: Data, patches: Patch[]) => Delta | undefined;
-    applyDelta?: (componentData: Data, delta: Delta) => Data | void;
+    // deltaType?: t.Type<Delta, unknown, unknown>;
+    // getDelta?: (a: Data, b: Data) => Delta | undefined;
+    // applyDelta?: (componentData: Data, delta: Delta) => Data | void;
 }
 
-export type ComponentDelta<Data, Delta> = {
-    [K in keyof OptionalComponentDelta<Data, Delta>]-?:
-    OptionalComponentDelta<Data, Delta>[K];
+export type ComponentDelta<Data> = {
+    [K in keyof OptionalComponentDelta<Data>]-?:
+    OptionalComponentDelta<Data>[K];
 }
 
 interface ComponentDeltaMap<K extends Component<any>>
-    extends Map<K, ComponentDelta<unknown, unknown>> {
-    get<Data>(key: Component<Data>): ComponentDelta<Data, unknown> | undefined;
-    set<Data>(key: Component<Data>, val: ComponentDelta<Data, any>): this;
+    extends Map<K, ComponentDelta<unknown>> {
+    get<Data>(key: Component<Data>): ComponentDelta<Data> | undefined;
+    set<Data>(key: Component<Data>, val: ComponentDelta<Data>): this;
 }
 
 export const EntityDelta = t.partial({
@@ -39,9 +38,6 @@ export const EntityDelta = t.partial({
 
 export type EntityDelta = t.TypeOf<typeof EntityDelta>;
 
-enablePatches();
-setAutoFreeze(false);
-
 const DeltaComponent = new Component<{
     components: Map<UnknownComponent, unknown>,
 }>('DeltaComponent');
@@ -51,111 +47,78 @@ export class DeltaMaker {
 
     constructor(private serializer: Serializer) { }
 
-    addComponent<Data, Delta>(component: Component<Data>,
-        componentDelta: OptionalComponentDelta<Data, Delta>) {
+    addComponent<Data>(component: Component<Data>,
+        componentDelta: OptionalComponentDelta<Data>) {
         this.serializer.addComponent(component, componentDelta.componentType);
         this.componentDeltas.set(component, {
             componentType: componentDelta.componentType,
-            deltaType: componentDelta.deltaType ?? immerDeltaType,
-            getDelta: componentDelta.getDelta ?? immerGetDelta,
-            applyDelta: componentDelta.applyDelta ?? immerApplyDelta,
+            // deltaType: componentDelta.deltaType ?? immerDeltaType,
+            // getDelta: componentDelta.getDelta ?? immerGetDelta,
+            // applyDelta: componentDelta.applyDelta ?? immerApplyDelta,
         });
     }
 
-    /**
-     * Removes the immer draftedness of an entity's components.
-     */
-    untrack(entity: Entity) {
-        for (const [component, data] of entity.components) {
-            if (isDraft(data)) {
-                entity.components.set(component, finishDraft(data))
-            }
-        }
-        entity.components.delete(DeltaComponent);
-    }
+    // /**
+    //  * Removes the immer draftedness of an entity's components.
+    //  */
+    // untrack(entity: Entity) {
+    //     for (const [component, data] of entity.components) {
+    //         if (isDraft(data)) {
+    //             entity.components.set(component, finishDraft(data))
+    //         }
+    //     }
+    //     entity.components.delete(DeltaComponent);
+    // }
 
     /**
-     * Gets the changes that have been made to an entity since the last
-     * call to `getDelta`. Uses Immer to track changes on components.
+     * Compute the delta between `entity1` and `entity2` such that applying it
+     * to `entity1` would make `entity1` have the same state as `entity2`.
+     *
+     * Current implementation sends each full component that has changed (and
+     * add / remove commands). It does not send partials of components.
      */
-    getDelta(entity: Entity): EntityDelta | undefined {
+    getDelta(entity1: Entity, entity2: Entity): EntityDelta | undefined {
         const componentStates = new Map<string, unknown>();
-        const componentDeltas = new Map<string, unknown>();
+        //const componentDeltas = new Map<string, unknown>();
+        const removedComponents = new Set<string>();
+        for (const [component, data1, data2] of
+             iterMaps(entity1.components, entity2.components)) {
 
-        if (!entity.components.has(DeltaComponent)) {
-            entity.components.set(DeltaComponent, { components: new Map() });
-        }
-        const deltaComponent = entity.components.get(DeltaComponent)!;
-
-        for (const [component, data] of entity.components) {
             // Ignore unsupported components
             const componentDeltaFuncs = this.componentDeltas.get(component);
             if (!componentDeltaFuncs) {
                 continue;
             }
 
-            // An immer draft to be used in place of the component's data
-            // for tracking changes between calls to getDelta.
-            let newDraft: Draft<unknown>;
-
-            if (deltaComponent.components.get(component) === data) {
-                // Use deltas for components we've already seen.
-                const { getDelta, deltaType } = componentDeltaFuncs;
-
-                if (isDraft(data)) {
-                    // If it's not a draft, there's no delta.
-                    const originalData = original(data);
-
-                    let patches: Patch[] | undefined;
-                    const currentData = finishDraft(data, (forwardPatches) => {
-                        patches = forwardPatches
-                    });
-                    if (!patches) {
-                        throw new Error('Got no patches when calling delta');
-                    }
-
-                    newDraft = createDraft(currentData as Objectish);
-                    const delta = getDelta(originalData, currentData, patches);
-                    if (delta) {
-                        componentDeltas.set(component.name,
-                            deltaType.encode(delta));
-                    }
-                } else {
-                    newDraft = createDraft(data as Objectish);
-                }
-            } else {
-                // Use the full state for components we haven't seen before or which
-                // have been replaced.
-                const componentType = this.serializer.componentTypes.get(component);
-                if (!componentType) {
-                    throw new Error(`Expected to have component type for ${component.name}`);
-                }
-                componentStates.set(component.name, componentType.encode(data));
-                newDraft = createDraft(data as Objectish);
+            if (!entity2.components.has(component)) {
+                // TODO: Change io-ts encoding to do component.name for you?
+                removedComponents.add(component.name);
+                continue;
             }
 
-            // Use setSilent instead of set to avoid triggering a 'set' event.
-            (entity.components as EventMap<UnknownComponent, unknown>)
-                .set(component, newDraft, true /* Silent */);
+            if (!equal(data1, data2)) {
+                // TODO: Change io-ts encoding to do component.name for you?
+                componentStates.set(component.name, data2);
+            }
         }
+        
+        // const entityComponents = new Set(entity.components.keys());
 
-        const entityComponents = new Set(entity.components.keys());
-
-        // Mark removed components as removed
-        const deltaComponentSet = new Set([...deltaComponent.components.keys()])
-        const removedComponents = new Set(
-            [...setDifference(deltaComponentSet, entityComponents)]
-                .map(component => component.name));
-        // Update the components list
-        deltaComponent.components = new Map(entity.components);
+        // // Mark removed components as removed
+        // const deltaComponentSet = new Set([...deltaComponent.components.keys()])
+        // const removedComponents = new Set(
+        //     [...setDifference(deltaComponentSet, entityComponents)]
+        //         .map(component => component.name));
+        // // Update the components list
+        // deltaComponent.components = new Map(entity.components);
 
         const entityDelta: EntityDelta = {};
         if (componentStates.size > 0) {
             entityDelta.componentStates = componentStates;
         }
-        if (componentDeltas.size > 0) {
-            entityDelta.componentDeltas = componentDeltas;
-        }
+        // if (componentDeltas.size > 0) {
+        //     entityDelta.componentDeltas = componentDeltas;
+        // }
         if (removedComponents.size > 0) {
             entityDelta.removeComponents = removedComponents;
         }
@@ -196,40 +159,40 @@ export class DeltaMaker {
         }
 
         // Apply component deltas
-        for (const [componentName, encodedDelta] of delta.componentDeltas ?? []) {
-            const component = this.serializer.componentsByName.get(componentName);
-            if (!component) {
-                console.warn(`Missing component ${componentName}`);
-                continue;
-            }
-            const componentDeltaFuncs = this.componentDeltas.get(component);
-            if (!componentDeltaFuncs) {
-                console.warn(`Missing component delta type for ${componentName}`);
-                continue;
-            }
+        // for (const [componentName, encodedDelta] of delta.componentDeltas ?? []) {
+        //     const component = this.serializer.componentsByName.get(componentName);
+        //     if (!component) {
+        //         console.warn(`Missing component ${componentName}`);
+        //         continue;
+        //     }
+        //     const componentDeltaFuncs = this.componentDeltas.get(component);
+        //     if (!componentDeltaFuncs) {
+        //         console.warn(`Missing component delta type for ${componentName}`);
+        //         continue;
+        //     }
 
-            const { deltaType, applyDelta } = componentDeltaFuncs;
+        //     const { deltaType, applyDelta } = componentDeltaFuncs;
 
-            const currentData = entity.components.get(component);
-            if (!currentData) {
-                // Cannot apply delta if the entity is missing the component.
-                // Signal that the full state should be requested.
-                missingComponents.add(component);
-                continue;
-            }
+        //     const currentData = entity.components.get(component);
+        //     if (!currentData) {
+        //         // Cannot apply delta if the entity is missing the component.
+        //         // Signal that the full state should be requested.
+        //         missingComponents.add(component);
+        //         continue;
+        //     }
 
-            const componentDelta = deltaType.decode(encodedDelta);
-            if (isLeft(componentDelta)) {
-                console.warn(`Failed to decode delta for component ${componentName}`);
-                continue;
-            }
-            const newData = applyDelta(currentData, componentDelta.right);
-            if (newData !== undefined) {
-                // Use setSilent because this is an existing component.
-                (entity.components as EventMap<UnknownComponent, unknown>)
-                    .set(component, newData, true /* Silent */);
-            }
-        }
+        //     const componentDelta = deltaType.decode(encodedDelta);
+        //     if (isLeft(componentDelta)) {
+        //         console.warn(`Failed to decode delta for component ${componentName}`);
+        //         continue;
+        //     }
+        //     const newData = applyDelta(currentData, componentDelta.right);
+        //     if (newData !== undefined) {
+        //         // Use setSilent because this is an existing component.
+        //         (entity.components as EventMap<UnknownComponent, unknown>)
+        //             .set(component, newData, true /* Silent */);
+        //     }
+        // }
 
         // Remove components
         for (const componentName of delta.removeComponents ?? []) {
@@ -251,7 +214,9 @@ export const DeltaResource =
 export const DeltaPlugin: Plugin = {
     name: 'Delta',
     build(world) {
-        world.addPlugin(SerializerPlugin);
+        if (!world.resources.has(SerializerResource)) {
+            world.addPlugin(SerializerPlugin);
+        }
         const serializer = world.resources.get(SerializerResource);
         if (!serializer) {
             throw new Error('Expected serializer resource to be present');
@@ -262,23 +227,22 @@ export const DeltaPlugin: Plugin = {
     }
 }
 
-const Patch = t.intersection([t.type({
-    op: t.union([t.literal('replace'), t.literal('remove'), t.literal('add')]),
-    path: t.array(t.union([t.string, t.number]))
-}), t.partial({
-    value: t.unknown,
-})]);
+// const Patch = t.intersection([t.type({
+//     op: t.union([t.literal('replace'), t.literal('remove'), t.literal('add')]),
+//     path: t.array(t.union([t.string, t.number]))
+// }), t.partial({
+//     value: t.unknown,
+// })]);
 
-export const immerDeltaType = t.array(Patch);
+// export const immerDeltaType = t.array(Patch);
 
-export function immerGetDelta<T>(_a: T, _b: T, patches: Patch[]) {
-    if (patches.length > 0) {
-        return patches;
-    }
-    return;
-}
+// export function immerGetDelta<T>(_a: T, _b: T, patches: Patch[]) {
+//     if (patches.length > 0) {
+//         return patches;
+//     }
+//     return;
+// }
 
-export function immerApplyDelta<T>(componentData: T, delta: Patch[]) {
-    // TODO: Fix this type
-    return applyPatches(componentData as Objectish, delta) as T;
-}
+// export function immerApplyDelta<T>(componentData: T, delta: Patch[]) {
+//     return applyPatches(componentData, delta) as T;
+// }

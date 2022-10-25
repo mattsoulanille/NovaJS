@@ -2,7 +2,7 @@ import { isLeft } from 'fp-ts/Either';
 import produce from 'immer';
 import * as t from 'io-ts';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
-import { Emit, Entities, GetEntity, UUID } from '../arg_types';
+import { Emit, Entities, GetEntity, GetWorld, UUID } from '../arg_types';
 import { Component } from '../component';
 import { map } from '../datatypes/map';
 import { set } from '../datatypes/set';
@@ -13,6 +13,7 @@ import { Resource } from '../resource';
 import { System } from '../system';
 import { DefaultMap, setDifference } from '../utils';
 import { World } from '../world';
+import { applyChanges, Change, ChangesResource, CopyChangeDetector, create, DetectChanges } from './copy_change_detector';
 import { DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
 import { EncodedEntity, SerializerResource } from './serializer_plugin';
 
@@ -73,13 +74,14 @@ export interface Communicator {
 }
 
 export const Message = t.partial({
-    delta: map(t.string /* Entity UUID */, EntityDelta),
-    state: map(t.string /* Entity UUID */, EncodedEntity),
+    //delta: map(t.string /* Entity UUID */, EntityDelta),
+    //state: map(t.string /* Entity UUID */, EncodedEntity),
+    changes: t.array(Change),
     requestState: t.type({
         uuids: set(t.string),
         invert: t.boolean,
     }),
-    remove: t.array(t.string),
+    // remove: t.array(t.string),
     ownedUuids: t.array(t.string),
     admins: set(t.string),
     peers: set(t.string),
@@ -131,8 +133,9 @@ export function multiplayer(communicator: Communicator,
     const multiplayerSystem = new System({
         name: 'Multiplayer',
         args: [MultiplayerQuery, Entities, Comms,
-            DeltaResource, SerializerResource, Emit] as const,
-        step: (query, entities, comms, deltaMaker, serializer, emit) => {
+               DeltaResource, SerializerResource, Emit, ChangesResource, GetWorld] as const,
+        after: [DetectChanges],
+        step: (query, entities, comms, deltaMaker, serializer, emit, changes, world) => {
             if (comms.uuid && communicator.uuid && comms.uuid !== communicator.uuid) {
                 // Change the owner of all entities owned by our previous uuid
                 // to our current uuid.
@@ -148,7 +151,9 @@ export function multiplayer(communicator: Communicator,
                 // Can't do anything if we don't have a uuid.
                 return;
             }
-
+            // if (comms.uuid === 'world1 uuid') {
+            //     console.log(changes);
+            // }
             const isAdmin = comms.admins.has(comms.uuid);
 
             function randomAdmin() {
@@ -195,6 +200,7 @@ export function multiplayer(communicator: Communicator,
                 }
 
                 // Send requested states
+                // TODO: Implement this in copy_change_detector instead?
                 if (message.requestState) {
                     let uuidsToSend: string[];
                     if (message.requestState.invert) {
@@ -204,7 +210,7 @@ export function multiplayer(communicator: Communicator,
                             uuid => entityUuids.has(uuid));
                     }
 
-                    const state = new Map(uuidsToSend.map(entityUuid => {
+                    const changes = uuidsToSend.map(entityUuid => {
                         const entry = entityMap.get(entityUuid);
                         if (!entry) {
                             // They have already been filtered above, so this would
@@ -212,61 +218,62 @@ export function multiplayer(communicator: Communicator,
                             throw new Error(`Expected entity ${entityUuid} to exist`);
                         }
                         const { entity } = entry;
-                        return [entityUuid, serializer.encode(entity)]
-                    }));
+                        return create(entity, serializer);
+                    });
 
-                    sendMessage({ state }, source);
+                    sendMessage({ changes }, source);
                 }
 
                 // Remove entities
-                for (const uuid of message.remove ?? []) {
-                    // if (entityMap.has(uuid) &&
-                    //     (entityMap.get(uuid)?.data.owner === source || peerIsAdmin)) {
-                        entities.delete(uuid);
-                        fullStateRequests.delete(uuid);
-                        added.delete(uuid);
-                        removed.add(uuid);
-                        entityMap.delete(uuid);
-                    //} else {
-                        //warn(`'${source}' tried to remove ${uuid}`);
-                    //}
-                }
+                // for (const uuid of message.remove ?? []) {
+                //     // if (entityMap.has(uuid) &&
+                //     //     (entityMap.get(uuid)?.data.owner === source || peerIsAdmin)) {
+                //         entities.delete(uuid);
+                //         fullStateRequests.delete(uuid);
+                //         added.delete(uuid);
+                //         removed.add(uuid);
+                //         entityMap.delete(uuid);
+                //     //} else {
+                //         //warn(`'${source}' tried to remove ${uuid}`);
+                //     //}
+                // }
 
                 // Add new entities
-                for (const [uuid, encodedEntity] of message.state ?? []) {
-                    const maybeEntity = serializer.decode(encodedEntity);
-                    if (isLeft(maybeEntity)) {
-                        warn(`Failed to decode entity: ${maybeEntity.left}`);
-                        continue;
-                    }
-                    const entity = maybeEntity.right;
+                // for (const [uuid, encodedEntity] of message.state ?? []) {
+                //     const maybeEntity = serializer.decode(encodedEntity);
+                //     if (isLeft(maybeEntity)) {
+                //         warn(`Failed to decode entity: ${maybeEntity.left}`);
+                //         continue;
+                //     }
+                //     const entity = maybeEntity.right;
 
-                    const multiplayerData = entity.components.get(MultiplayerData);
-                    if (!multiplayerData) {
-                        warn(`New entity '${uuid}' missing MultiplayerData`);
-                        continue;
-                    }
-                    // if (entityMap.has(uuid)
-                    //     && entityMap.get(uuid)?.data.owner !== source
-                    //     && !peerIsAdmin) {
-                    //     warn(`'${source}' tried to replace existing entity '${uuid}'`);
-                    //     continue;
-                    // }
+                //     const multiplayerData = entity.components.get(MultiplayerData);
+                //     if (!multiplayerData) {
+                //         warn(`New entity '${uuid}' missing MultiplayerData`);
+                //         continue;
+                //     }
+                //     // if (entityMap.has(uuid)
+                //     //     && entityMap.get(uuid)?.data.owner !== source
+                //     //     && !peerIsAdmin) {
+                //     //     warn(`'${source}' tried to replace existing entity '${uuid}'`);
+                //     //     continue;
+                //     // }
 
-                    entities.set(uuid, entity);
-                    added.set(uuid, multiplayerData.owner);
-                    removed.delete(uuid);
+                //     entities.set(uuid, entity);
+                //     added.set(uuid, multiplayerData.owner);
+                //     removed.delete(uuid);
 
-                    // Add the newly added entity to the entityMap so we don't
-                    // accidentally request its state in `apply deltas`.
-                    const handle = entities.get(uuid)!;
-                    entityMap.set(uuid, { entity: handle, data: multiplayerData });
+                //     // Add the newly added entity to the entityMap so we don't
+                //     // accidentally request its state in `apply deltas`.
+                //     const handle = entities.get(uuid)!;
+                //     entityMap.set(uuid, { entity: handle, data: multiplayerData });
 
-                    // If the new entity is owned by us, emit that fact.
-                    if (multiplayerData.owner === comms.uuid) {
-                        emit(NewOwnedEntityEvent, uuid);
-                    }
-                }
+                // TODO: Put this back for player ship detection.
+                //     // If the new entity is owned by us, emit that fact.
+                //     if (multiplayerData.owner === comms.uuid) {
+                //         emit(NewOwnedEntityEvent, uuid);
+                //     }
+                // }
 
                 // Set UUIDs
                 if (message.ownedUuids) {
@@ -274,24 +281,40 @@ export function multiplayer(communicator: Communicator,
                 }
 
                 // Apply deltas
-                for (const [uuid, entityDelta] of message.delta ?? []) {
-                    if (!entityMap.has(uuid)) {
-                        fullStateRequests.get(source).add(uuid);
-                        continue;
-                    }
-                    const { entity, data } = entityMap.get(uuid)!;
+                // for (const [uuid, entityDelta] of message.delta ?? []) {
+                //     if (!entityMap.has(uuid)) {
+                //         fullStateRequests.get(source).add(uuid);
+                //         continue;
+                //     }
+                //     const { entity, data } = entityMap.get(uuid)!;
 
-                    // if (source !== data.owner && !comms.admins.has(source)) {
-                    //     warn(`'${source}' tried to modify entity '${uuid}'`);
-                    //     continue;
-                    // }
-                    try {
-                        deltaMaker.applyDelta(entity, entityDelta);
-                    } catch (e) {
-                        console.warn(`Failed to apply delta to ${uuid}`);
-                        console.warn(e);
+                //     // if (source !== data.owner && !comms.admins.has(source)) {
+                //     //     warn(`'${source}' tried to modify entity '${uuid}'`);
+                //     //     continue;
+                //     // }
+                //     try {
+                //         deltaMaker.applyDelta(entity, entityDelta);
+                //     } catch (e) {
+                //         console.warn(`Failed to apply delta to ${uuid}`);
+                //         console.warn(e);
+                //     }
+                // }
+
+                // Peers can create new entities.
+                // Peers can change entities they own.
+                // Admins can do anything.
+                const filteredChanges = message.changes?.filter(c => {
+                    if (peerIsAdmin || !entityMap.has(c.uuid)) {
+                        return true;
                     }
+                    return entityMap.get(c.uuid)?.data.owner === source;
+                });
+                                                               
+                if (filteredChanges) {
+                    //console.log('Applying', filteredChanges);
+                    applyChanges(world, filteredChanges);
                 }
+
             }
             // Reset messages since they've been processed.
             comms.messages = [];
@@ -306,83 +329,83 @@ export function multiplayer(communicator: Communicator,
                     }, source);
                 }
             }
-            const currentOwners = new Map([...entityMap].map(([uuid, val]) =>
-                [uuid, val.data.owner]));
-            const entityOwners = new Map([
-                ...currentOwners,
-                ...comms.lastEntities,
-            ]);
+            // // Entities added by us in the current step
+            // const addedEntities = setDifference(entityUuids,
+            //     new Set([...comms.lastEntities.keys(), ...added.keys()]));
+            // // Entities removed by us in the current step
+            // const removedEntities = setDifference(
+            //     new Set([...comms.lastEntities.keys()]),
+            //     new Set([...entityUuids, ...removed]));
+            // // Update the set of last seen entities.
+            // comms.lastEntities = new Map([
+            //     ...currentOwners,
+            //     ...added,
+            // ]);
 
-            // Entities added by us in the current step
-            const addedEntities = setDifference(entityUuids,
-                new Set([...comms.lastEntities.keys(), ...added.keys()]));
-            // Entities removed by us in the current step
-            const removedEntities = setDifference(
-                new Set([...comms.lastEntities.keys()]),
-                new Set([...entityUuids, ...removed]));
-            // Update the set of last seen entities.
-            comms.lastEntities = new Map([
-                ...currentOwners,
-                ...added,
-            ]);
-
-            const delta = new Map<string, EntityDelta>();
-            const state = new Map<string, EncodedEntity>();
-            let ownedUuids: string[] = [];
-            const remove = [...removedEntities].filter(entityUuid =>
-                entityOwners.get(entityUuid) === comms.uuid || isAdmin);
+            // const delta = new Map<string, EntityDelta>();
+            // const state = new Map<string, EncodedEntity>();
+            // let ownedUuids: string[] = [];
+            // const remove = [...removedEntities].filter(entityUuid =>
+            //     entityOwners.get(entityUuid) === comms.uuid || isAdmin);
 
             // Send states for new entities
-            for (const uuid of addedEntities) {
-                const val = entityMap.get(uuid);
-                if (!val) {
-                    throw new Error(`Expected to have entity ${uuid}`);
-                }
-                const { entity } = val;
+            // for (const uuid of addedEntities) {
+            //     const val = entityMap.get(uuid);
+            //     if (!val) {
+            //         throw new Error(`Expected to have entity ${uuid}`);
+            //     }
+            //     const { entity } = val;
 
-                state.set(uuid, serializer.encode(entity));
-            }
+            //     state.set(uuid, serializer.encode(entity));
+            // }
 
             // Get deltas and create drafts 
-            for (const [uuid, entity, multiplayerData] of query) {
-                if (multiplayerData.owner !== comms.uuid) {
-                    continue;
-                }
-                const entityDelta = deltaMaker.getDelta(entity);
-                if (entityDelta) {
-                    delta.set(uuid, entityDelta);
-                }
-            }
+            // for (const [uuid, entity, multiplayerData] of query) {
+            //     if (multiplayerData.owner !== comms.uuid) {
+            //         continue;
+            //     }
+            //     //const entityDelta = deltaMaker.getDelta(entity);
+            //     // TODO: Fix delta stuff
+            //     // if (entityDelta) {
+            //     //     delta.set(uuid, entityDelta);
+            //     // }
+            // }
 
-            const changes: Message = {};
+            const message: Message = {};
 
             let send = false;
-            if (delta.size > 0) {
-                changes.delta = delta;
+            if (changes.length) {
+                message.changes = changes;
                 send = true;
             }
-            if (state.size > 0) {
-                changes.state = state;
-                send = true;
-            }
-            if (remove.length > 0) {
-                changes.remove = remove;
-                send = true;
-            }
-            if (ownedUuids.length > 0) {
-                changes.ownedUuids = ownedUuids;
-                send = true;
-            }
+            // if (delta.size > 0) {
+            //     message.delta = delta;
+            //     send = true;
+            // }
+            // if (state.size > 0) {
+            //     message.state = state;
+            //     send = true;
+            // }
+            // if (remove.length > 0) {
+            //     message.remove = remove;
+            //     send = true;
+            // }
+            // if (ownedUuids.length > 0) {
+            //     message.ownedUuids = ownedUuids;
+            //     send = true;
+            // }
 
             if (send) {
                 // Only send if there's something to send.
-                sendMessage(changes);
+                //console.log(message);
+                sendMessage(message);
             }
         }
     });
 
     function build(world: World) {
         world.addPlugin(DeltaPlugin);
+        world.addPlugin(CopyChangeDetector);
         world.resources.set(CommunicatorResource, communicator);
         const deltaMaker = world.resources.get(DeltaResource);
         if (!deltaMaker) {

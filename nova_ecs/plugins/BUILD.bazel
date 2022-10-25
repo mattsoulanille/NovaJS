@@ -17,6 +17,7 @@ ts_library(
         "delta_plugin.ts",
         "keyboard_plugin.ts",
         "copy_change_detector.ts",
+        "iter_maps.ts",
     ],
     module_name = "nova_ecs/plugins",
     deps = [

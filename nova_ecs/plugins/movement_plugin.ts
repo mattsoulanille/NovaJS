@@ -174,20 +174,6 @@ export const MovementPlugin: Plugin = {
 
         deltaMaker.addComponent(MovementStateComponent, {
             componentType: MovementState,
-            deltaType: MovementState,
-            getDelta(a, b) {
-                // Omit position.
-                // Send everything if a delta is detected.
-                const same = a.turning === b.turning &&
-                    a.accelerating === b.accelerating &&
-                    a.turnTo === b.turnTo;
-
-                if (same) {
-                    return;
-                }
-                return b;
-            },
-            applyDelta: applyObjectDelta
         });
 
         deltaMaker.addComponent(MovementPhysicsComponent, {

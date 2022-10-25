@@ -17,23 +17,22 @@ const BarType = t.type({ y: t.string });
 const SetComponent = new Component<{ s: Set<string> }>('Set');
 const SetType = t.type({ s: set(t.string) });
 
-const FooDelta: OptionalComponentDelta<{ x: number }, number> = {
+const FooDelta: OptionalComponentDelta<{ x: number }> = {
     componentType: FooType,
-    deltaType: t.number,
-    getDelta(a, b) {
-        if (a.x !== b.x) {
-            return b.x;
-        }
-        return;
-    },
-    applyDelta(foo, delta) {
-        foo.x = delta
-    },
+    // deltaType: t.number,
+    // getDelta(a, b) {
+    //     if (a.x !== b.x) {
+    //         return b.x;
+    //     }
+    //     return;
+    // },
+    // applyDelta(foo, delta) {
+    //     foo.x = delta
+    // },
 }
 
-const BarDelta: OptionalComponentDelta<{ y: string }, Patch[]> = { componentType: BarType };
-const SetDelta: OptionalComponentDelta<{ s: Set<string> }, Patch[]> = { componentType: SetType };
-
+const BarDelta: OptionalComponentDelta<{ y: string }> = { componentType: BarType };
+const SetDelta: OptionalComponentDelta<{ s: Set<string> }> = { componentType: SetType };
 
 describe('Delta Plugin', () => {
     let world1: World;
@@ -59,171 +58,138 @@ describe('Delta Plugin', () => {
         }
         deltaMaker2 = maybeDelta2;
 
-        deltaMaker1.addComponent(FooComponent, FooDelta);
-        deltaMaker1.addComponent(BarComponent, BarDelta);
-        deltaMaker1.addComponent(SetComponent, SetDelta);
+        for (const deltaMaker of [deltaMaker1, deltaMaker2]) {
+            deltaMaker.addComponent(FooComponent, FooDelta);
+            deltaMaker.addComponent(BarComponent, BarDelta);
+            deltaMaker.addComponent(SetComponent, SetDelta);
+        }
+    });
 
-        deltaMaker2.addComponent(FooComponent, FooDelta);
-        deltaMaker2.addComponent(BarComponent, BarDelta);
-        deltaMaker2.addComponent(SetComponent, SetDelta);
+    it('returns no delta for identical entities', () => {
+        const entity1 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+
+        const entity2 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+
+        const delta = deltaMaker1.getDelta(entity1, entity2);
+
+        expect(delta).toBeUndefined();
     });
 
     it('sends the state of new components', () => {
-        const entity = new Entity()
+        const entity1 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+
+        const entity2 = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
             .addComponent(BarComponent, { y: 'Hello' });
 
-        const firstDelta = deltaMaker1.getDelta(entity);
-        if (!firstDelta?.componentStates) {
-            fail('Expected firstDelta to have component states');
-            return;
-        }
+        const delta = deltaMaker1.getDelta(entity1, entity2);
 
-        expect([...firstDelta.componentStates?.keys()])
-            .toEqual(['Foo', 'Bar']);
-
-        expect(firstDelta.componentDeltas).toBeUndefined();
-        expect(firstDelta.removeComponents).toBeUndefined();
-
-        const secondDelta = deltaMaker1.getDelta(entity);
-        expect(secondDelta).toBeUndefined();
-    });
-
-    it('sends the state of replaced components', () => {
-        const entity = new Entity()
-            .setName('Test Entity')
-            .addComponent(FooComponent, { x: 123 })
-            .addComponent(BarComponent, { y: 'Hello' });
-
-        const firstDelta = deltaMaker1.getDelta(entity);
-        if (!firstDelta?.componentStates) {
-            fail('Expected firstDelta to have component states');
-            return;
-        }
-
-        expect([...firstDelta.componentStates?.keys()])
-            .toEqual(['Foo', 'Bar']);
-
-        expect(firstDelta.componentDeltas).toBeUndefined();
-        expect(firstDelta.removeComponents).toBeUndefined();
-
-        entity.components.set(FooComponent, { x: 456 });
-
-        const secondDelta = deltaMaker1.getDelta(entity);
-        if (!secondDelta?.componentStates) {
-            fail('Expected secondDelta to have component states');
-            return;
-        }
-        expect([...secondDelta.componentStates.keys()])
-            .toEqual(['Foo']);
-
-        expect(secondDelta.componentDeltas).toBeUndefined();
-        expect(secondDelta.removeComponents).toBeUndefined();
+        expect(delta?.componentStates).toBeDefined();
+        expect([...delta!.componentStates!.keys()]).toEqual(['Bar']);
+        expect(delta?.componentDeltas).toBeUndefined();
+        expect(delta?.removeComponents).toBeUndefined();
     });
 
     it('creates new components that were sent', () => {
-        const entity = new Entity()
+        const entity1 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+
+        const entity2 = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
             .addComponent(BarComponent, { y: 'Hello' });
 
-        const delta = deltaMaker1.getDelta(entity);
+        const delta = deltaMaker1.getDelta(entity1, entity2);
         if (!delta) {
             fail('Expected delta to be defined');
             return;
         }
 
-        const entity2 = new Entity();
-        deltaMaker2.applyDelta(entity2, delta);
+        deltaMaker2.applyDelta(entity1, delta);
 
-        expect(entity2.components.get(FooComponent))
-            .toEqual(entity.components.get(FooComponent));
-
-        expect(entity2.components.get(BarComponent))
-            .toEqual(entity.components.get(BarComponent));
+        expect([...entity1.components]).toEqual([...entity2.components]);
     });
 
-    it('updates components with deltas', () => {
-        const entity = new Entity()
-            .setName('Test Entity')
-            .addComponent(FooComponent, { x: 123 })
-            .addComponent(BarComponent, { y: 'Hello' })
-            .addComponent(SetComponent, { s: new Set(['asdf']) });
-
-        const entity2 = new Entity(entity.name, entity.components);
-
-        const fooBarSystem = new System({
-            name: 'FooBarSystem',
-            args: [FooComponent, BarComponent] as const,
-            step: (foo, bar) => {
-                foo.x += 1;
-                bar.y = String(foo.x);
-            }
-        });
-
-        world1.addSystem(fooBarSystem);
-        world1.entities.set('test entity uuid', entity);
-
-        // Skip the first delta since it will send the state
-        // of each new component.
-        deltaMaker1.getDelta(entity);
-        world1.step();
-        const delta2 = deltaMaker1.getDelta(entity);
-        if (!delta2) {
-            fail('Expected delta2 to be defined');
-            return;
-        }
-
-        deltaMaker2.applyDelta(entity2, delta2);
-
-        expect(delta2.componentDeltas).toBeDefined();
-        expect(delta2.componentStates).toBeUndefined();
-        expect(delta2.removeComponents).toBeUndefined();
-        expect([...delta2.componentDeltas!.keys()]).toEqual(['Foo', 'Bar']);
-
-        expect(entity.components.get(FooComponent)).toEqual({ x: 124 });
-        expect(entity2.components.get(FooComponent)).toEqual({ x: 124 });
-
-        expect(entity.components.get(BarComponent)).toEqual({ y: '124' });
-        expect(entity2.components.get(BarComponent)).toEqual({ y: '124' });
-    });
-
-    it('removes deleted components', () => {
-        const entity = new Entity()
+    it('sends an update for changed components', () => {
+        const entity1 = new Entity()
             .setName('Test Entity')
             .addComponent(FooComponent, { x: 123 })
             .addComponent(BarComponent, { y: 'Hello' });
 
-        const entity2 = new Entity(entity.name, entity.components);
+        const entity2 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 456 })
+            .addComponent(BarComponent, { y: 'Hello' });
 
-        const removeFooSystem = new System({
-            name: 'FooBarSystem',
-            args: [GetEntity, FooComponent] as const,
-            step: (entity) => {
-                entity.components.delete(FooComponent);
-            }
-        });
+        const delta = deltaMaker1.getDelta(entity1, entity2);
 
-        world1.addSystem(removeFooSystem);
-        world1.entities.set('test entity uuid', entity);
+        expect(delta?.componentStates).toBeDefined();
+        expect([...delta!.componentStates!.keys()]).toEqual(['Foo']);
+        expect(delta?.componentDeltas).toBeUndefined();
+        expect(delta?.removeComponents).toBeUndefined();
+    });
 
-        // Skip the first delta since it will send the state
-        // of each new component.
-        deltaMaker1.getDelta(entity);
-        world1.step();
-        const delta2 = deltaMaker1.getDelta(entity);
-        if (!delta2) {
-            fail('Expected delta2 to be defined');
+    it('updates components with deltas', () => {
+        const entity1 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+            .addComponent(BarComponent, { y: 'Hello' });
+
+        const entity2 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 456 })
+            .addComponent(BarComponent, { y: 'Hello' });
+
+        const delta = deltaMaker1.getDelta(entity1, entity2);
+        expect(delta).toBeDefined();
+
+        deltaMaker2.applyDelta(entity1, delta!);
+
+        expect([...entity1.components]).toEqual([...entity2.components]);  
+    });
+
+    it('sends an update for deleted components', () => {
+        const entity1 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+            .addComponent(BarComponent, { y: 'Hello' });
+
+        const entity2 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 });
+
+        const delta = deltaMaker1.getDelta(entity1, entity2);
+
+        expect(delta?.removeComponents).toBeDefined();
+        expect(delta?.removeComponents).toContain(BarComponent.name);
+    });
+
+    it('removes deleted components', () => {
+        const entity1 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 })
+            .addComponent(BarComponent, { y: 'Hello' });
+
+        const entity2 = new Entity()
+            .setName('Test Entity')
+            .addComponent(FooComponent, { x: 123 });
+
+        const delta = deltaMaker1.getDelta(entity1, entity2);
+        if (!delta) {
+            fail('Expected delta to be defined');
             return;
         }
 
-        expect(entity2.components.get(FooComponent)).toEqual({ x: 123 });
-        deltaMaker2.applyDelta(entity2, delta2);
-        expect(entity2.components.get(FooComponent)).toBeUndefined();
+        deltaMaker2.applyDelta(entity1, delta);
 
-        expect(delta2.componentDeltas).toBeUndefined();
-        expect(delta2.componentStates).toBeUndefined();
-        expect(delta2.removeComponents).toEqual(new Set(['Foo']));
+        expect([...entity1.components]).toEqual([...entity2.components]);  
     });
 });
