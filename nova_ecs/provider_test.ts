@@ -1,7 +1,5 @@
 import { createDraft, finishDraft } from 'immer';
 import 'jasmine';
-import { Defaults } from 'novadatainterface/Defaults';
-import { PlanetData } from 'novadatainterface/PlanetData';
 import { AsyncSystemResource } from './async_system';
 import { Component } from './component';
 import { Entity } from './entity';
@@ -464,33 +462,6 @@ describe('ProvideAsync', () => {
 
         expect(testEntity.components.get(FOO_COMPONENT))
             .toEqual({ x: 123 });
-    });
-
-    it('works with larger objects', async () => {
-        const PlanetDataComponent = new Component<PlanetData>('PlanetData');
-        const PlanetDataProvider = ProvideAsync({
-            name: 'PlanetDataProvider',
-            provided: PlanetDataComponent,
-            args: [BAR_COMPONENT] as const,
-            async factory(_bar) {
-                await sleep(10);
-                return Defaults.Planet;
-            }
-        });
-
-        world.addSystem(PlanetDataProvider);
-
-        const testEntity = new Entity()
-            .addComponent(BAR_COMPONENT, { y: 'hello' });
-        world.entities.set('testEntity', testEntity);
-
-        world.step();
-        clock.tick(11);
-        await world.resources.get(AsyncSystemResource)?.done;
-        world.step();
-
-        expect(testEntity.components.get(PlanetDataComponent))
-            .toEqual(Defaults.Planet);
     });
 
     it('can provide data that is already drafted', async () => {
