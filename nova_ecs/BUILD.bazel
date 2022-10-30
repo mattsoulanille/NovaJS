@@ -10,6 +10,7 @@ ts_library(
         "arg_modifier.ts",
         "arg_types.ts",
         "async_system.ts",
+        "bin_set.ts",
         "component.ts",
         "component_map.ts",
         "entity.ts",
@@ -30,16 +31,15 @@ ts_library(
         "utils.ts",
         "without.ts",
         "world.ts",
-        "bin_set.ts",
     ],
     module_name = "nova_ecs",
     deps = [
-        "@npm//uuid",
         "@npm//@types/uuid",
         "@npm//fp-ts",
         "@npm//immer",
         "@npm//io-ts",
         "@npm//rxjs",
+        "@npm//uuid",
     ],
 )
 
@@ -48,6 +48,7 @@ ts_library(
     testonly = True,
     srcs = [
         "async_system_test.ts",
+        "bin_set_test.ts",
         "entity_map_test.ts",
         "first_available_test.ts",
         "provider_test.ts",
@@ -56,12 +57,10 @@ ts_library(
         "system_test.ts",
         "utils_test.ts",
         "world_test.ts",
-        "bin_set_test.ts",
     ],
     deps = [
         ":ecs",
         "//nova_ecs/datatypes",
-        "//novadatainterface",
         "@npm//@types/jasmine",
         "@npm//@types/uuid",
         "@npm//fp-ts",
