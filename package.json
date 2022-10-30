@@ -66,7 +66,7 @@
         "test-watch": "ibazel test //...",
         "test-only": "ibazel test",
         "test-brk": "ibazel test --test_arg=--node_options=--inspect-brk --test_output=streamed --test_timeout=9999 --nocache_test_results",
-        "start": "bazelisk build nova && ./dist/bin/nova/nova.sh",
+        "start": "bazelisk run nova",
         "watch": "ibazel run nova",
         "watch-brk": "ibazel run nova --config=debug",
         "debug-bazel": "bazelisk run nova --verbose_failures --sandbox_debug"
