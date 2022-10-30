@@ -1,7 +1,7 @@
 import { Resource } from '../resource';
 import { System } from '../system';
 import { Plugin } from '../plugin';
-import { SingletonComponent } from 'nova_ecs/world';
+import { SingletonComponent } from '../world';
 
 
 export interface Time {

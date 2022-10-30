@@ -1,7 +1,7 @@
 import { isLeft } from 'fp-ts/Either';
 import * as t from 'io-ts';
 import 'jasmine';
-import { Entity } from 'nova_ecs/entity';
+import { Entity } from '../entity';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
 import { World } from '../world';
