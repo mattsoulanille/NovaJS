@@ -279,5 +279,6 @@ export function immerGetDelta<T>(_a: T, _b: T, patches: Patch[]) {
 }
 
 export function immerApplyDelta<T>(componentData: T, delta: Patch[]) {
-    return applyPatches(componentData, delta) as T;
+    // TODO: Fix this type
+    return applyPatches(componentData as Objectish, delta) as T;
 }
