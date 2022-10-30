@@ -1,4 +1,4 @@
-import { isLeft } from 'fp-ts/lib/Either';
+import { isLeft } from 'fp-ts/Either';
 import produce, { applyPatches, enablePatches, produceWithPatches } from 'immer';
 import 'jasmine';
 import { Vector, VectorType } from './vector';

@@ -5,7 +5,7 @@ import "mocha";
 import { Keybindings } from "../../src/client/KeyboardController";
 import { ControlEvent } from "../../src/common/Controller";
 import { PathReporter } from "io-ts/lib/PathReporter";
-import { isRight } from "fp-ts/lib/Either";
+import { isRight } from "fp-ts/Either";
 
 before(function() {
     chai.should();

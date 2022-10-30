@@ -1,4 +1,4 @@
-import { right } from "fp-ts/lib/Either";
+import { right } from "fp-ts/Either";
 import { ArgModifier } from "./arg_modifier";
 import { ArgData, ArgsToData, ArgTypes, GetEntity } from "./arg_types";
 import { Component, ComponentData } from "./component";

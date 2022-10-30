@@ -1,4 +1,4 @@
-import { isLeft } from 'fp-ts/lib/Either';
+import { isLeft } from 'fp-ts/Either';
 import * as t from 'io-ts';
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';

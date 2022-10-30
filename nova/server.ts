@@ -2,7 +2,7 @@ import * as Comlink from 'comlink';
 //import nodeEndpoint from "comlink/dist/esm/node-adapter";
 import nodeEndpoint from "comlink/dist/umd/node-adapter";
 import express from "express";
-import { isLeft } from "fp-ts/lib/Either";
+import { isLeft } from "fp-ts/Either";
 import fs from "fs";
 import http from "http";
 import * as t from 'io-ts';

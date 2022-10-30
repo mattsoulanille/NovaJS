@@ -1,4 +1,4 @@
-import { Either } from "fp-ts/lib/Either";
+import { Either } from "fp-ts/Either";
 import { ArgData, ArgsToData, ArgTypes } from "./arg_types";
 import { Query } from "./query";
 

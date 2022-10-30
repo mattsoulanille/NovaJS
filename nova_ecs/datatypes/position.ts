@@ -1,4 +1,4 @@
-import { isLeft, right } from 'fp-ts/lib/Either';
+import { isLeft, right } from 'fp-ts/Either';
 import { immerable } from 'immer';
 import * as t from 'io-ts';
 import { mod } from './mod';
