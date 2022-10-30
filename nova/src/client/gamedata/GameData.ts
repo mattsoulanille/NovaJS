@@ -24,7 +24,7 @@ import { dataPath, idsPath } from '../../common/GameDataPaths';
 import PQueue from 'p-queue';
 
 class WeaponGettable extends Gettable<WeaponData> {
-    async get(id: string, priority = 0) {
+    override async get(id: string, priority = 0) {
         if (id in this.data) {
             return await super.get(id);
         }

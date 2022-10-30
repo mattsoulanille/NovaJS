@@ -25,7 +25,7 @@ export const PositionType = new t.Type<Position, VectorLike>(
 
 export class Position extends Vector {
     [immerable] = true;
-    static fromVectorLike(v: VectorLike) {
+    static override fromVectorLike(v: VectorLike) {
         return new Position(v.x, v.y);
     }
 
@@ -33,7 +33,7 @@ export class Position extends Vector {
         super(wrap(x), wrap(y));
     }
 
-    protected factory(x: number, y: number): Position {
+    protected override factory(x: number, y: number): Position {
         return new Position(x, y);
     }
 

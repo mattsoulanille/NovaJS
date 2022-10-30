@@ -283,20 +283,20 @@ export class QueryCache extends DefaultMap<Query, QueryCacheEntry> {
         super((query: Query) => new CachedQueryCacheEntry(this, query, getArg, entities, resources));
     }
 
-    get<Args extends QueryArgsList>(query: Query<Args>): QueryCacheEntry<Args> {
+    override get<Args extends QueryArgsList>(query: Query<Args>): QueryCacheEntry<Args> {
         return super.get(query) as QueryCacheEntry<Args>;
     };
 
-    set<Args extends QueryArgsList>(query: Query<Args>, entry: QueryCacheEntry<Args>): this {
+    override set<Args extends QueryArgsList>(query: Query<Args>, entry: QueryCacheEntry<Args>): this {
         super.set(query, entry);
         return this;
     };
 
-    has<Args extends QueryArgsList>(query: Query<Args>): boolean {
+    override has<Args extends QueryArgsList>(query: Query<Args>): boolean {
         return super.has(query);
     };
 
-    delete<Args extends QueryArgsList>(query: Query<Args>): boolean {
+    override delete<Args extends QueryArgsList>(query: Query<Args>): boolean {
         return super.delete(query);
     };
 }

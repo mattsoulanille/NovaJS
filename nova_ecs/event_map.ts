@@ -49,12 +49,12 @@ export class EventMap<K, V> extends Map<K, V> {
         add: new SyncSubject<[K, V]>(),
     }
 
-    clear(): void {
+    override clear(): void {
         const toDelete = new Set([...this.entries()]);
         super.clear();
         this.events.delete.next(toDelete);
     }
-    set(key: K, value: V, silent = false): this {
+    override set(key: K, value: V, silent = false): this {
         let hadKeyAlready = this.has(key);
         super.set(key, value);
         this.events?.setAlways.next([key, value]);
@@ -72,7 +72,7 @@ export class EventMap<K, V> extends Map<K, V> {
         }
         return this;
     }
-    delete(key: K) {
+    override delete(key: K) {
         let toDelete: Set<[K, V]> | undefined;
         if (this.has(key)) {
             const val = this.get(key)!;

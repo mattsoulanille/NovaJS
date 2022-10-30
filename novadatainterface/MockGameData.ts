@@ -26,7 +26,7 @@ class MockGettable<T> extends Gettable<T> {
         super((_id: string) => null as any as Promise<T>);
     }
 
-    async get(id: string): Promise<T> {
+    override async get(id: string): Promise<T> {
         const val = this.map.get(id);
         if (val !== undefined) {
             return val;

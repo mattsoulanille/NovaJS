@@ -97,7 +97,7 @@ export class Spaceport extends Menu<Entity> {
         });
     }
 
-    async build() {
+    override async build() {
         await super.build();
         const data = await this.gameData.data.Planet.get(this.id);
         this.data = data;
@@ -119,7 +119,7 @@ export class Spaceport extends Menu<Entity> {
         this.container.addChild(this.shipyard.container);
     }
 
-    protected done() {
+    protected override done() {
         if (this.data) {
             const movement = this.input.components.get(MovementStateComponent);
             if (movement) {

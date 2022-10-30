@@ -18,18 +18,18 @@ export class ResourceMapWrapped extends EventMap<UnknownResource, unknown> imple
         super();
     }
 
-    get<Data>(resource: Resource<Data>): Data | undefined {
+    override get<Data>(resource: Resource<Data>): Data | undefined {
         return super.get(resource as UnknownResource) as Data | undefined;
     };
-    set<Data>(resource: Resource<Data>, data: Data): this {
+    override set<Data>(resource: Resource<Data>, data: Data): this {
         this.addResource(resource);
         super.set(resource as UnknownResource, data);
         return this;
     };
-    has<Data>(resource: Resource<Data>): boolean {
+    override has<Data>(resource: Resource<Data>): boolean {
         return super.has(resource as UnknownResource);
     }
-    delete(resource: Resource<any>): boolean {
+    override delete(resource: Resource<any>): boolean {
         return this.removeResource(resource) &&
             super.delete(resource as UnknownResource);
     };

@@ -41,7 +41,7 @@ export class Shipyard extends Menu<Entity> {
         this.build();
     }
 
-    protected async build() {
+    protected override async build() {
         await super.build();
         const itemGrid = await this.makeShipsGrid();
         this.itemGrid = itemGrid;
