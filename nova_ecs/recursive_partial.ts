@@ -1,4 +1,4 @@
-import { Either, isRight } from 'fp-ts/lib/Either';
+import { Either, isRight } from 'fp-ts/Either';
 import * as t from 'io-ts';
 
 // Copied from https://github.com/gcanti/io-ts/blob/master/src/index.ts

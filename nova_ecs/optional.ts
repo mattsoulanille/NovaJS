@@ -1,4 +1,4 @@
-import { isRight, Right, right } from "fp-ts/lib/Either";
+import { isRight, Right, right } from "fp-ts/Either";
 import { ArgModifier } from "./arg_modifier";
 import { ArgData, ArgTypes, GetArg } from "./arg_types";
 import { Query } from "./query";

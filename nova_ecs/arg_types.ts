@@ -1,4 +1,4 @@
-import { Either } from "fp-ts/lib/Either";
+import { Either } from "fp-ts/Either";
 import { Component, ComponentData, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { EntityMap } from "./entity_map";

@@ -1,4 +1,4 @@
-import { isLeft } from 'fp-ts/lib/Either';
+import { isLeft } from 'fp-ts/Either';
 import 'jasmine';
 import { Position, PositionType } from './position';
 

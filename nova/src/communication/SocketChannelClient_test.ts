@@ -1,4 +1,4 @@
-import { isLeft } from "fp-ts/lib/Either";
+import { isLeft } from "fp-ts/Either";
 import { SocketChannelClient } from "./SocketChannelClient";
 import { SocketMessage } from "./SocketMessage";
 import { take } from "rxjs/operators";

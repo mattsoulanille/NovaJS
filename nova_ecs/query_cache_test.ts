@@ -1,4 +1,4 @@
-import { right } from 'fp-ts/lib/Either';
+import { right } from 'fp-ts/Either';
 import 'jasmine';
 import { Component } from './component';
 import { Entity } from './entity';

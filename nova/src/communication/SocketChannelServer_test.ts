@@ -1,4 +1,4 @@
-import { isLeft } from "fp-ts/lib/Either";
+import { isLeft } from "fp-ts/Either";
 import * as https from "https";
 import * as http from "http";
 import "jasmine";

@@ -1,4 +1,4 @@
-import { Either, isLeft, isRight, left, Right, right } from "fp-ts/lib/Either";
+import { Either, isLeft, isRight, left, Right, right } from "fp-ts/Either";
 import { ArgsToData, ArgTypes, QueryResults } from "./arg_types";
 import { Entity } from "./entity";
 import { EntityMapWithEvents } from "./entity_map";
