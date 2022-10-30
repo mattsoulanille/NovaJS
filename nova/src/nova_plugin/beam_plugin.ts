@@ -53,7 +53,7 @@ class BeamWeaponEntry extends WeaponEntry {
         }
     }
 
-    protected guidance(exitPoint: Position, _movement: MovementState,
+    protected override guidance(exitPoint: Position, _movement: MovementState,
         targetMovement: MovementState) {
         return zeroOrderGuidance(exitPoint, targetMovement.position);
     }
@@ -107,7 +107,7 @@ class BeamWeaponEntry extends WeaponEntry {
         return beam;
     }
 
-    fireSubs(source: string, sourceExpired = false) {
+    override fireSubs(source: string, sourceExpired = false) {
         const [{ position, rotation }] = this.runQuery(BeamSubsQuery, source)[0];
         const endOfBeam = position.add(rotation.getUnitVector()
             .scale(this.data.beamAnimation.length)) as Position;

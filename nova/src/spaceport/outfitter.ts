@@ -97,7 +97,7 @@ export class Outfitter extends Menu<OutfitsState> {
         }
     }
 
-    protected async build() {
+    protected override async build() {
         const itemGrid = await this.makeOutfitsGrid();
         this.itemGrid = itemGrid;
         this.container.addChild(this.itemGrid.container);
@@ -200,14 +200,14 @@ export class Outfitter extends Menu<OutfitsState> {
         //this.text.freeMass.text = formatMass(global.myShip.properties.physics.freeMass);
     }
 
-    protected setInput(input: OutfitsState) {
+    protected override setInput(input: OutfitsState) {
         this.outfits = new DefaultMap(() => 0, [...input].map(
             ([k, v]) => [k, v.count]));
         super.setInput(input);
         this.itemGrid?.setCounts(this.outfits);
     }
 
-    protected done() {
+    protected override done() {
         this.input = new Map([...this.outfits]
             .map(([id, count]) => [id, { count }]));
         super.done();

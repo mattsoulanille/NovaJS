@@ -6,7 +6,7 @@ class CachelessGettable<T> extends Gettable<T> {
         super(getFunction);
     }
 
-    async get(id: string) {
+    override async get(id: string) {
         return await this.getFunction(id, 0);
     }
 }

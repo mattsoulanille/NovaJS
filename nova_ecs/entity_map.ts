@@ -26,7 +26,7 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
         this.events.changeComponentAlways = new SyncSubject();
     }
 
-    set(uuid: string, entity: Entity) {
+    override set(uuid: string, entity: Entity) {
         // This is the only place where the entity's uuid should be set.
         // 'uuid' is marked as readonly to avoid accidentally setting it elsewhere.
         (entity as { uuid: string }).uuid = uuid;
@@ -68,7 +68,7 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
         return super.set(uuid, entity);
     }
 
-    delete(key: string) {
+    override delete(key: string) {
         if (key === 'singleton') {
             throw new Error('Can not delete the singleton entity');
         }
@@ -77,7 +77,7 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
         return super.delete(key);
     }
 
-    clear() {
+    override clear() {
         for (const { unsubscribe } of this.entityChangeUnsubscribe.values()) {
             unsubscribe();
         }

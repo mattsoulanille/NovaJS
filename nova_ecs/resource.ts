@@ -8,7 +8,7 @@ export type UnknownResource = Resource<unknown>;
  * of each Resource in a world.
  */
 export class Resource<Data> extends Component<Data> {
-    toString() {
+    override toString() {
         return `Resource(${this.name})`;
     }
 }

@@ -288,7 +288,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         });
 
     }
-    async build() {
+    override async build() {
         await super.build();
         const systemIds = (await this.gameData.ids).System;
         const systems = await Promise.all(
@@ -298,7 +298,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         this.container.addChild(this.systemGraph.container);
     }
 
-    async show(route: string[]) {
+    override async show(route: string[]) {
         await this.buildPromise
         if (!this.systemGraph) {
             throw new Error('Expected system graph to be built')
@@ -308,7 +308,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         return super.show(route);
     }
 
-    done() {
+    override done() {
         if (this.systemGraph) {
             this.input = this.systemGraph.route;
         }
