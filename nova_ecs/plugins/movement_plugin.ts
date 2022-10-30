@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
-import { Entities } from 'nova_ecs/arg_types';
-import { EntityMap } from 'nova_ecs/entity_map';
+import { Entities } from '../arg_types';
+import { EntityMap } from '../entity_map';
 import { Component } from '../component';
 import { Angle, AngleType } from '../datatypes/angle';
 import { Position, PositionType } from '../datatypes/position';

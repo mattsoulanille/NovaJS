@@ -10,8 +10,7 @@ import { Resource } from '../resource';
 import { isLeft } from 'fp-ts/Either';
 import { Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
 import { setDifference } from '../utils';
-import { EventMap } from 'nova_ecs/event_map';
-import { ComponentMap } from 'nova_ecs/component_map';
+import { EventMap } from '../event_map';
 
 
 export interface OptionalComponentDelta<Data, Delta> {

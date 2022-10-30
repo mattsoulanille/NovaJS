@@ -1,7 +1,7 @@
 import { Patch } from 'immer';
 import * as t from 'io-ts';
 import 'jasmine';
-import { GetEntity } from 'nova_ecs/arg_types';
+import { GetEntity } from '../arg_types';
 import { Component } from '../component';
 import { set } from '../datatypes/set';
 import { Entity } from '../entity';
