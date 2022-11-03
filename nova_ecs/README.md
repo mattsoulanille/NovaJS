@@ -105,7 +105,7 @@ console.log(testEntity.components.get(PositionComponent));
 // {x: 1, y: 2}
 ```
 
-Install the `nova_ecs` node module and copy-paste this into an `index.ts` file to see it in action.
+Install the [`nova_ecs` node module](https://www.npmjs.com/package/nova_ecs) and copy-paste this into an `index.ts` file to see it in action.
 
 ### Resource
 This documentation is TODO, but a resource is essentially a globally available component that's added to the world instead of to an entity. Similar to Bevy's [Resource](https://bevyengine.org/learn/book/getting-started/resources/).
