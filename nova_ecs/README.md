@@ -67,8 +67,10 @@ class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> {
 A system is run when the world (`world.ts`) is stepped. The world runs the system on the components of each entity that the system supports. In most cases, a system supports an entity if and only if the entity has all the components in the system's `args` parameter. As an example, here's a system that moves entities that have the `PositionComponent` component (from above) according to a `VelocityComponent`.
 
 ```ts
-import {System} from 'nova_ecs/system';
 import {World} from 'nova_ecs/world';
+import {Entity} from 'nova_ecs/entity';
+import {Component} from 'nova_ecs/component';
+import {System} from 'nova_ecs/system';
 
 interface Position {x: number, y: number};
 interface Velocity {dx: number, dy: number};
@@ -93,8 +95,8 @@ const world = new World();
 world.addSystem(MoveSystem);
 
 const testEntity = new Entity()
-    .addComponent(Position, {x: 0, y: 0})    // Chaining API, because writing 'testEntity.components.set(...)'
-    .addComponent(Velocity, {dx: 1, dy: 2}); // every time is a bit tiring.
+    .addComponent(PositionComponent, {x: 0, y: 0})    // Chaining API, because writing 'testEntity.components.set(...)'
+    .addComponent(VelocityComponent, {dx: 1, dy: 2}); // every time is a bit tiring.
 world.entities.set('test entity uuid', testEntity);
 
 // Step the world and run MoveSystem on testEntity once.
@@ -102,6 +104,8 @@ world.step();
 console.log(testEntity.components.get(PositionComponent));
 // {x: 1, y: 2}
 ```
+
+Install the `nova_ecs` node module and copy-paste this into an `index.ts` file to see it in action.
 
 ### Resource
 This documentation is TODO, but a resource is essentially a globally available component that's added to the world instead of to an entity. Similar to Bevy's [Resource](https://bevyengine.org/learn/book/getting-started/resources/).
