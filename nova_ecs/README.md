@@ -73,6 +73,8 @@ import {World} from 'nova_ecs/world';
 
 interface Position {x: number, y: number};
 interface Velocity {dx: number, dy: number};
+
+const PositionComponent = new Component<Position>('position');
 const VelocityComponent = new Component<Velocity>('velocity');
 
 const MoveSystem = new System({
