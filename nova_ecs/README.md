@@ -10,9 +10,10 @@ An Entity is a general purpose object that has a unique id and a number of compo
 
 ```ts
 // entity.ts
-interface Entity {
+export class Entity {
     components: ComponentMap,
     name?: string;
+    ...
 }
 ```
 
@@ -37,9 +38,7 @@ As an example, this is how a `Position` component could be defined and added to 
 import {Entity} from 'nova_ecs/entity'
 import {Component} from 'nova_ecs/component'
 
-const testEntity: Entity = {
-    components: new Map(),
-};
+const testEntity = new Entity();
 
 interface Position {
     x: number,
@@ -92,9 +91,16 @@ const MoveSystem = new System({
 
 const world = new World();
 world.addSystem(MoveSystem);
-testEntity.components.set(Velocity, {x: 1, y: 2});
+
+const testEntity = new Entity();
+testEntity.components.set(Position, {x: 0, y: 0});
+testEntity.components.set(Velocity, {dx: 1, dy: 2});
 world.entities.set('test entity uuid', testEntity);
+
+// Step the world and run MoveSystem on testEntity once.
 world.step();
+console.log(testEntity.components.get(PositionComponent));
+// {x: 1, y: 2}
 ```
 
 ### Resource
