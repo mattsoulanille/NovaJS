@@ -86,7 +86,10 @@ filegroup(
 pkg_npm(
     name = "ecs_pkg",
     package_name = "nova_ecs",
-    srcs = ["package.json"],
+    srcs = [
+        "README.md",
+        "package.json",
+    ],
     nested_packages = [
         "//nova_ecs/datatypes:datatypes_pkg",
         "//nova_ecs/plugins:plugins_pkg",
