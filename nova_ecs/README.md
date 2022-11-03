@@ -65,13 +65,14 @@ class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> {
 }
 ```
 
-In the most common case, a system is run when the world (`world.ts`) is stepped. The world runs the system on the components of each entity the system supports. For most cases, a system supports an entity if and only if the entity has all the components in the system's `args` parameter. As an example, here's a system that moves entities that have the `PositionComponent` component (from above) according to a `VelocityComponent`.
+A system is run when the world (`world.ts`) is stepped. The world runs the system on the components of each entity that the system supports. In most cases, a system supports an entity if and only if the entity has all the components in the system's `args` parameter. As an example, here's a system that moves entities that have the `PositionComponent` component (from above) according to a `VelocityComponent`.
 
 ```ts
 import {System} from 'nova_ecs/system';
 import {World} from 'nova_ecs/world';
 
-interface Velocity = Position // {x: number, y: number}
+interface Position {x: number, y: number};
+interface Velocity {dx: number, dy: number};
 const VelocityComponent = new Component<Velocity>('velocity');
 
 const MoveSystem = new System({
@@ -82,8 +83,8 @@ const MoveSystem = new System({
     step(position, velocity) {
         // Types for `position` and `velocity` are automatically inferred from
         // the `args` list.
-        position.x += velocity.x;
-        position.y += velocity.y;
+        position.x += velocity.dx;
+        position.y += velocity.dy;
     }
 });
 
