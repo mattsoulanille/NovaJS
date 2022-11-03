@@ -92,9 +92,9 @@ const MoveSystem = new System({
 const world = new World();
 world.addSystem(MoveSystem);
 
-const testEntity = new Entity();
-testEntity.components.set(Position, {x: 0, y: 0});
-testEntity.components.set(Velocity, {dx: 1, dy: 2});
+const testEntity = new Entity()
+    .addComponent(Position, {x: 0, y: 0})    // Chaining API, because writing 'testEntity.components.set(...)'
+    .addComponent(Velocity, {dx: 1, dy: 2}); // every time is a bit tiring.
 world.entities.set('test entity uuid', testEntity);
 
 // Step the world and run MoveSystem on testEntity once.
