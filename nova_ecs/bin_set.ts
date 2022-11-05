@@ -1,4 +1,3 @@
-import { v4 } from "uuid";
 import { DefaultMap } from "./utils";
 
 export class BinSet<T> {
@@ -29,9 +28,6 @@ const BITS_PER_NUMBER = 32;
 export class BinSetCollection<T> {
     private bitMap: DefaultMap<T, number>;
     private currentBit = 0;
-
-    // Prevents comparing across different instances of BinSet
-    private uuid = v4();
 
     constructor() {
         this.bitMap = new DefaultMap(() => this.currentBit++);
