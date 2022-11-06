@@ -5,7 +5,7 @@ import { Entity } from "nova_ecs/entity";
 import { DeleteEvent, EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { TimePlugin, TimeResource } from "nova_ecs/plugins/time_plugin";
-import { Provide } from "nova_ecs/provider";
+import { Provide } from "nova_ecs/provide";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";

@@ -1,5 +1,5 @@
 import { AsyncSystemResource } from './async_system';
-import { ProvideAsync } from "./async_provider";
+import { ProvideAsync } from "./provide_async";
 import { createDraft, finishDraft } from 'immer';
 import { World } from './world';
 import { Component } from './component';

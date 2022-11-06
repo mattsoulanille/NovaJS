@@ -9,7 +9,7 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { ProvideAsync } from "nova_ecs/async_provider";
+import { ProvideAsync } from "nova_ecs/provide_async";
 import { System } from 'nova_ecs/system';
 import * as SAT from "sat";
 import { v4 } from 'uuid';

@@ -3,7 +3,7 @@ import { Component } from "nova_ecs/component";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
-import { Provide } from "nova_ecs/provider";
+import { Provide } from "nova_ecs/provide";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import * as SAT from "sat";

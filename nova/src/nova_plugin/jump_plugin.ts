@@ -3,7 +3,7 @@ import { Component } from "nova_ecs/component";
 import { Entity } from "nova_ecs/entity";
 import { EcsEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
-import { Provide } from "nova_ecs/provider";
+import { Provide } from "nova_ecs/provide";
 import { System } from "nova_ecs/system";
 import { deImmerify } from "../util/deimmerify";
 import { ControlStateEvent } from "./control_state_event";
