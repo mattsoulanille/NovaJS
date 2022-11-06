@@ -1,6 +1,7 @@
 import { Either, isLeft, left, Right, right } from "fp-ts/Either";
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
+import { ProvideAsyncPlugin } from "./async_provider";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -93,7 +94,7 @@ export class World {
     readonly plugins = new Set<Plugin>();
 
     constructor(readonly name?: string, readonly basePlugins =
-        new Set([AsyncSystemPlugin, ProvidePlugin])) {
+        new Set([AsyncSystemPlugin, ProvidePlugin, ProvideAsyncPlugin])) {
         for (const plugin of basePlugins) {
             this.addPlugin(plugin);
         }
@@ -151,7 +152,8 @@ export class World {
         // TODO: Namespace component and system names? Perhaps use ':' or '/' to
         // denote namespace vs name. Use a proxy like NovaData uses.
         if (this.plugins.has(plugin)) {
-            console.warn(`Not adding plugin ${plugin.name} since it is already added`);
+            // TODO: Should this warning be re-enabled?
+            // console.warn(`Not adding plugin ${plugin.name} since it is already added`);
             return;
         }
 

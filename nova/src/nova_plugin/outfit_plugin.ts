@@ -8,7 +8,7 @@ import { map } from 'nova_ecs/datatypes/map';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { MovementPhysics, MovementType } from 'nova_ecs/plugins/movement_plugin';
-import { ProvideAsync } from 'nova_ecs/provider';
+import { ProvideAsync } from "nova_ecs/async_provider";
 import { DefaultMap } from '../common/DefaultMap';
 import { GameDataResource } from './game_data_resource';
 import { Stat } from './stat';
