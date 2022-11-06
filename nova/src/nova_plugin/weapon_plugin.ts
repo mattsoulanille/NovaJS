@@ -6,7 +6,7 @@ import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { Time, TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { Provide } from 'nova_ecs/provider';
+import { Provide } from 'nova_ecs/provide';
 import { System } from 'nova_ecs/system';
 import { mod } from '../util/mod';
 import { ControlStateEvent } from './control_state_event';

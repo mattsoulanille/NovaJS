@@ -4,7 +4,7 @@ import { AsyncSystem } from "./async_system";
 import { Component } from "./component";
 import { DeleteEvent, StepEvent } from "./events";
 import { Optional } from "./optional";
-import { ChangeEvents, ProvidePlugin, Without } from "./provider";
+import { ChangeEvents, ProvidePlugin, Without } from "./provide";
 import { Resource } from "./resource";
 import { System, SystemArgs } from "./system";
 import { Plugin } from "./plugin";

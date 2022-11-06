@@ -3,7 +3,7 @@ import { Component } from 'nova_ecs/component';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { CommunicatorResource, MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { Provide } from 'nova_ecs/provider';
+import { Provide } from 'nova_ecs/provide';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { GameData } from '../client/gamedata/GameData';

@@ -1,7 +1,7 @@
 import { Component } from 'nova_ecs/component';
 import { Plugin } from 'nova_ecs/plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
-import { Provide } from 'nova_ecs/provider';
+import { Provide } from 'nova_ecs/provide';
 import { ProvideArg } from 'nova_ecs/provide_arg';
 
 

@@ -2,7 +2,7 @@ import 'jasmine';
 import { Component } from './component';
 import { Entity } from './entity';
 import { EventMap } from './event_map';
-import { Provide } from './provider';
+import { Provide } from './provide';
 import { System } from './system';
 import { World } from './world';
 

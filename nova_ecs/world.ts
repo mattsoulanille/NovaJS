@@ -1,7 +1,7 @@
 import { Either, isLeft, left, Right, right } from "fp-ts/Either";
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types";
-import { ProvideAsyncPlugin } from "./async_provider";
+import { ProvideAsyncPlugin } from "./provide_async";
 import { AsyncSystemPlugin } from "./async_system";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
@@ -9,7 +9,7 @@ import { EntityMapWithEvents } from "./entity_map";
 import { AddEvent, DeleteEvent, EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { SyncSubject } from "./event_map";
 import { Plugin } from './plugin';
-import { ProvidePlugin } from "./provider";
+import { ProvidePlugin } from "./provide";
 import { Query } from "./query";
 import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
