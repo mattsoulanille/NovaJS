@@ -9,6 +9,7 @@ ts_library(
     srcs = [
         "arg_modifier.ts",
         "arg_types.ts",
+        "async_provider.ts",
         "async_system.ts",
         "bin_set.ts",
         "component.ts",
@@ -47,6 +48,7 @@ ts_library(
     name = "ecs_test_lib",
     testonly = True,
     srcs = [
+        "async_provider_test.ts",
         "async_system_test.ts",
         "bin_set_test.ts",
         "entity_map_test.ts",
