@@ -1,17 +1,60 @@
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier";
 import { ArgTypes } from "./arg_types";
-import { BinSetC, BinSet } from "./bin_set";
+import { BinSet, BinSetC } from "./bin_set";
 import { Component, UnknownComponent } from "./component";
 import { Entity } from "./entity";
 import { Resource, UnknownResource } from "./resource";
-import { subset } from "./utils";
-
 
 const querySymbol = Symbol('Query');
 
 /**
  * A query provides a way of iterating over all the Entities that have
- * a specified set of components.
+ * a given set of components. It also allows access to other kinds of data such
+ * as Resources.
+ * 
+ * nova_ecs provides several convenience resources by default:
+ * - Entities: A map of all the entities in the world.
+ * - Emit: A function that emits an event to the world.
+ * - EmitNow: A function that emits an event to the world to be immediately run.
+ * - RunQuery: A function to run a query in the world.
+ * - GetWorld: The world itself.
+ *
+ * There are also other values, which are not resources, that queries can get:
+ * - GetEntity: The current entity.
+ * - Components: A map of the entity's components.
+ * - UUID: The entity's uuid.
+ * - GetArg: A function that gets a given arg type from the current entity.
+ * - Any EcsEvent: Queries are also used for getting the value of an event. If a
+ *                 system responds to an event, then putting that event in the 
+ *                 query will cause it to return that event's value
+ *                 (if present). See `events.ts` for details and a list of
+ *                 events available by default.
+ *
+ * Sometimes, it's necessary to express a more complicated requirement than
+ * "entities with these components". ArgModifiers can help with this, but they
+ * can have a small performance penalty. It's still unclear whether this
+ * approach is a good solution, though. See `arg_modifier.ts` for details.
+ * - Optional(arg): Makes an arg type in a query optional.
+ * - FirstAvailable(arg, ...): Returns the first available arg.
+ * - Without(arg): Prevents the query from returning values if `arg` resolves 
+ *                 to a value. `arg` is usually a component in this case.
+ *
+ * Sometimes, it's necessary to run a system only once per step. A common
+ * pattern here is to make the system depend on the `SingletonComponent` and
+ * store any shared data it modifies in Resources. The world always has a single
+ * entity with this component, so the system will run once on that entity. Other
+ * systems that run on different entities can access the results of the first
+ * system by checking the Resources it modified.
+ *
+ * Queries can also be nested, and a nested query will run on _all_ the entities
+ * in the world. This provides a way to compare entities against each other. For
+ * an example of this, see the CollisionSystem in NovaJS.
+ *
+ * For a full list of what a query can resolve, take a look at the `getArg`
+ * function in `world.ts`, the default resources set in the `World`'s
+ * constructor, and the default events in `events.ts`.
+ * 
+ * https://github.com/mattsoulanille/NovaJS/blob/jsdocs/nova/src/nova_plugin/collisions_plugin.ts#L261-L264
  */
 export class Query<QueryArgs extends readonly ArgTypes[]
     = readonly ArgTypes[]> {

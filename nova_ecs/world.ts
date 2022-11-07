@@ -17,37 +17,6 @@ import { ResourceMapWrapped } from "./resource_map";
 import { System } from "./system";
 import { DefaultMap, isPromise, topologicalSort } from './utils';
 
-// How do you serialize components and make sure the receiver
-// knows which is which?
-
-// How do you use immer and make patches when you step the state?
-
-// How do you keep entities mostly like data while also allowing to
-// add and remove components from them efficiently?
-
-// How do you create new entities that need to asynchronously load data for their
-// components from gameData?
-// - Serialize ship to id + outfits. Deserialize takes long time and requires reconstruction
-//   of properties from outfits. Just send the whole thing? How big is it?
-
-// How does ecs draw stuff?
-// - Can't store PIXI stuff as components since they're not immerable. Store references instead?
-
-// Have each system that wants to be multiplayer use the Multiplayer component. Then,
-// have a Multiplayer system that runs after other systems and queries for all systems
-// that have multiplayer components. Then, that system sends and
-// receives multiplayer messages. Solves Projectiles by not adding the Delta component
-// to them (Wait, this doesn't actually work. If they don't have the Delta component,
-// then the systems that add to Delta won't run). Add the ability to make
-// components optional for a system to fix this? Seems good to me.
-// It also solves the display systems since they simply don't add anything to the
-// Delta component.
-// To notify when an entity is added, it just sends that new Entity's delta.
-// To notify when an entity is removed, we need some kind of teardown system?
-// This loses the ease of use of immer patches, though.
-// What about resources? Use an entity to update their deltas and put them onto the
-// multiplayer component.
-
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
 
@@ -67,6 +36,10 @@ interface WorldEventsMap extends ReadonlyMap<UnknownEvent, SyncSubject<unknown>>
     has<Data>(event: EcsEvent<Data>): true;
 }
 
+/**
+ * The root container of an ECS that holds the entities and systems. Every time
+ * it is stepped, it calls each system on its supported entities.
+ */
 export class World {
     private readonly state = {
         entities: new EntityMapWithEvents(),
@@ -120,6 +93,11 @@ export class World {
         });
     }
 
+    /**
+     * Emit an event to systems that listen for it. This event resolves
+     * immediately, interrupting the current event, and does not sit in the
+     * event queue.
+     */
     emitNow<Data>(event: EcsEvent<Data, any>, data: Data,
         entities?: (string | Entity)[]) {
         this.runEvent({
@@ -129,7 +107,10 @@ export class World {
         });
         this.events.get(event).next(data);
     }
-
+    /**
+     * Emit an event to systems that listen for it. This event enters the event
+     * queue and is resolved after all prior events in the queue.
+     */
     emit<Data>(event: EcsEvent<Data, any>, data: Data,
         entities?: (string | Entity)[]) {
         this.eventQueue.push({
@@ -141,6 +122,13 @@ export class World {
         this.events.get(event).next(data);
     }
 
+    
+    /**
+     * Remove all plugins in reverse order as they were added to the `World` by
+     * calling their corresponding `removePlugin` functions (if present). This
+     * does not remove plugins passed to World as `basePlugins` when it was
+     * constructed.
+     */
     async removeAllPlugins() {
         const plugins = [...this.plugins].reverse().filter(p => !this.basePlugins.has(p));
         for (const plugin of plugins) {
@@ -148,6 +136,10 @@ export class World {
         }
     }
 
+    /**
+     * Add a plugin to the `World` if it is not already added by calling its
+     * `build` function with `this` instance of the `World`.
+     */
     async addPlugin(plugin: Plugin) {
         // TODO: Namespace component and system names? Perhaps use ':' or '/' to
         // denote namespace vs name. Use a proxy like NovaData uses.
@@ -165,15 +157,37 @@ export class World {
         }
     }
 
-    async removePlugin(plugin: Plugin) {
+    /**
+     * Remove a plugin from the world by calling its `remove` function. If a
+     * plugin does not implement a `remove` function, this does nothing.
+     */
+    async removePlugin(plugin: Plugin): Promise<boolean> {
+        // TODO: Track what systems and resources a plugin adds and remove them
+        // automatically (if a plugin does not implement `removePlugin`) as long
+        // as no other plugins use them?
+
+        // Wait for the plugin to finish building before removing it since this
+        // can not be interrupted.
         if (this.pluginPromises.has(plugin)) {
             await this.pluginPromises.get(plugin)!;
         }
-        plugin.remove?.(this);
-        this.plugins.delete(plugin);
-        this.pluginPromises.delete(plugin);
+        if (plugin.remove != null) {
+            plugin.remove(this); 
+            this.plugins.delete(plugin);
+            this.pluginPromises.delete(plugin);
+            return true;
+        }
+        return false;
     }
 
+    /**
+     * Add a resource to the set of known resources. If you want to set the
+     * value of a new resource, you should use `this.resources.set` instead
+     * (and you don't need to call this function).
+     *
+     * This function exists only so a resource type can be declared in the world
+     * without assigning it a value (including `undefined`) in the resource map.
+     */
     addResource(resource: Resource<any>): this {
         if (this.nameResourceMap.has(resource.name)
             && this.nameResourceMap.get(resource.name) !== resource) {
@@ -183,6 +197,10 @@ export class World {
         return this;
     }
 
+    /**
+     * Remove a resource from the known resources map. This does not delete the
+     * resource from `this.resources`. Use `this.resources.delete` instead.
+     */
     private removeResource(resource: Resource<any>): boolean {
         // Removes the resource from the nameResourceMap if possible.
         // Called by ResourceMap when deleting a resource.
@@ -200,6 +218,31 @@ export class World {
         return this.nameResourceMap.delete(resource.name);
     }
 
+    /**
+     * Add a `Component` type to the map of known components. This does not add
+     * an instance of the component to an entity. Call `entity.components.set` 
+     * instead (and you don't need to call this function).
+     *
+     * This function exists only so a component type can be declared in the
+     * world before any entities with it are added.
+     */
+    addComponent(component: Component<any>) {
+        // Adds a component to the map of known components. Does not add to an entity.
+        // Necessary for multiplayer to create entities with components that haven't
+        // been used yet.
+        if (this.nameComponentMap.has(component.name)
+            && this.nameComponentMap.get(component.name) !== component) {
+            throw new Error(`A component with name ${component.name} already exists`);
+        }
+
+        this.nameComponentMap.set(component.name, component);
+    }
+
+    /**
+     * Add a `System` to the `World` to be called on supported entities whenever a
+     * supported event fires. Unless configured differently, a system will run
+     * whenever the `step` event is fired when `this.step` is called.
+     */
     addSystem(system: System): this {
         for (const resource of system.query.resources) {
             if (!this.state.resources.has(resource)) {
@@ -255,6 +298,9 @@ export class World {
         return this;
     }
 
+    /**
+     * Remove a `System` from the `World`.
+     */
     removeSystem(system: System): this {
         if (this.nameSystemMap.get(system.name) !== system) {
             return this;
@@ -267,18 +313,6 @@ export class World {
         }
 
         return this;
-    }
-
-    addComponent(component: Component<any>) {
-        // Adds a component to the map of known components. Does not add to an entity.
-        // Necessary for multiplayer to create entities with components that haven't
-        // been used yet.
-        if (this.nameComponentMap.has(component.name)
-            && this.nameComponentMap.get(component.name) !== component) {
-            throw new Error(`A component with name ${component.name} already exists`);
-        }
-
-        this.nameComponentMap.set(component.name, component);
     }
 
     /**
@@ -320,6 +354,10 @@ export class World {
         }
     }
 
+    /**
+     * Step the world forward. Add the `step` event to the event queue and then
+     * flush the queue by calling Systems on the entities they support.
+     */
     step() {
         this.eventQueue.push({
             event: StepEvent as UnknownEvent,
@@ -329,6 +367,15 @@ export class World {
         this.flush();
     }
 
+    /**
+     * Get the value for an `ArgType` from a given entity and event. This
+     * function is usually mapped over a `Query`'s arg list, but it can also be
+     * called separately.
+     * 
+     * This can be accessed within a system via the `GetArg` arg type, but its
+     * use is discouraged. Prefer using a `Query` in the systems arguments or,
+     * if necessary, the `RunQuery` arg type.
+     */
     private getArg<T extends ArgTypes = ArgTypes>(arg: T,
         entity: Entity,
         event?: readonly [EcsEvent<unknown>, unknown]):
@@ -382,7 +429,14 @@ export class World {
         }
     }
 
-    private runQuery: RunQueryFunction =
+    /**
+     * Run a query on all entities or a given entity.
+     * 
+     * This can be accessed in a system via the `RunQuery` arg type, but often,
+     * a query can be added to a system's args list instead of calling this
+     * function in the system.
+     */
+     private runQuery: RunQueryFunction =
         <T extends readonly ArgTypes[] = ArgTypes[]>(query: Query<T>, uuid?: string | undefined) => {
             const queryCached = this.queries.get(query);
             if (uuid !== undefined) {
