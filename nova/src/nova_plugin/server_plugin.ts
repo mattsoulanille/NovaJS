@@ -3,14 +3,18 @@ import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Entity } from "nova_ecs/entity";
 import { EcsEvent } from 'nova_ecs/events';
 import { Plugin } from "nova_ecs/plugin";
+import { WorldCopy } from 'nova_ecs/plugins/copy_change_detector';
+import { MovementPlugin } from 'nova_ecs/plugins/movement_plugin';
 import { CommunicatorResource, multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
 import { GameDataResource } from "./game_data_resource";
+import { HealthPlugin } from './health_plugin';
 import { makeSystem } from './make_system';
 import { MultiRoomResource, SystemComponent } from "./nova_plugin";
 
@@ -93,13 +97,22 @@ export const ServerPlugin: Plugin = {
                 } else {
                     // Create the system if it doesn't exist yet.
                     if (!world.entities.has(systemId)) {
-                        const system = makeSystem(systemId, gameData);
+                        const system = await makeSystem(systemId, gameData);
+
                         world.entities.set(systemId, new Entity()
                             .addComponent(SystemComponent, system));
 
                         console.log(`Created system ${systemId}`);
                         await system.addPlugin(multiplayer(systemRoom,
                             message => `System ${systemId}: ${message}`));
+
+                        // TODO: Refactor
+                        const worldCopy = system.resources.get(WorldCopy)!;
+                        worldCopy.resources.set(TimeResource, system.resources.get(TimeResource)!);
+                        await worldCopy.addPlugin(MovementPlugin);
+                        await worldCopy.addPlugin(HealthPlugin);
+                        // end refactor area
+
                         await system.addPlugin(ServerSystemPlugin);
                     }
                 }

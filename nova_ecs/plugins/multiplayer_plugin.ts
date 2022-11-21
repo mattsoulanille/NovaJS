@@ -4,7 +4,6 @@ import * as t from 'io-ts';
 import { BehaviorSubject, Observable, Subject } from 'rxjs';
 import { Emit, Entities, GetEntity, GetWorld, UUID } from '../arg_types';
 import { Component } from '../component';
-import { map } from '../datatypes/map';
 import { set } from '../datatypes/set';
 import { EcsEvent } from '../events';
 import { Plugin } from '../plugin';
@@ -13,9 +12,9 @@ import { Resource } from '../resource';
 import { System } from '../system';
 import { DefaultMap, setDifference } from '../utils';
 import { World } from '../world';
-import { applyChanges, Change, ChangesResource, CopyChangeDetector, create, DetectChanges } from './copy_change_detector';
-import { DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
-import { EncodedEntity, SerializerResource } from './serializer_plugin';
+import { applyChanges, Change, ChangesResource, CopyChangeDetector, create, DetectChanges, IncludeChangeResource } from './copy_change_detector';
+import { DeltaPlugin, DeltaResource } from './delta_plugin';
+import { SerializerResource } from './serializer_plugin';
 
 export class Peers {
     readonly current: BehaviorSubject<Set<string>>;
@@ -126,6 +125,7 @@ const MessageSystem = new System({
 
 export const CommunicatorResource = new Resource<Communicator>('CommunicatorResource');
 
+// TODO: Make this not a function and use a communicator resource.
 export function multiplayer(communicator: Communicator,
     warn: (message: string) => void = console.warn): Plugin {
     const MultiplayerQuery = new Query([UUID, GetEntity, MultiplayerData] as const);
@@ -136,7 +136,7 @@ export function multiplayer(communicator: Communicator,
                DeltaResource, SerializerResource, Emit, ChangesResource, GetWorld] as const,
         after: [DetectChanges],
         step: (query, entities, comms, deltaMaker, serializer, emit, changes, world) => {
-            if (comms.uuid && communicator.uuid && comms.uuid !== communicator.uuid) {
+            if (communicator.uuid && comms.uuid !== communicator.uuid) {
                 // Change the owner of all entities owned by our previous uuid
                 // to our current uuid.
                 for (const [, , multiplayerData] of query) {
@@ -151,6 +151,7 @@ export function multiplayer(communicator: Communicator,
                 // Can't do anything if we don't have a uuid.
                 return;
             }
+
             // if (comms.uuid === 'world1 uuid') {
             //     console.log(changes);
             // }
@@ -304,10 +305,12 @@ export function multiplayer(communicator: Communicator,
                 // Peers can change entities they own.
                 // Admins can do anything.
                 const filteredChanges = message.changes?.filter(c => {
-                    if (peerIsAdmin || !entityMap.has(c.uuid)) {
+                    if (peerIsAdmin || !entities.has(c.uuid)) {
                         return true;
                     }
-                    return entityMap.get(c.uuid)?.data.owner === source;
+                    
+                    let res =  entityMap.get(c.uuid)?.data.owner === source;
+                    return res;
                 });
                                                                
                 if (filteredChanges) {
@@ -407,6 +410,18 @@ export function multiplayer(communicator: Communicator,
         world.addPlugin(DeltaPlugin);
         world.addPlugin(CopyChangeDetector);
         world.resources.set(CommunicatorResource, communicator);
+
+        // Set the include change function
+        world.resources.set(IncludeChangeResource, (entity) => {
+            const multiplayerData = entity.components
+                .get(MultiplayerData);
+            if (!multiplayerData) {
+                return false;
+            }
+            // TODO: This doesn't update if communicator resource is changed.
+            return multiplayerData.owner === communicator.uuid;
+        });
+
         const deltaMaker = world.resources.get(DeltaResource);
         if (!deltaMaker) {
             throw new Error('Expected delta maker resource to exist');

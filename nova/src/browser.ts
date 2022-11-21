@@ -1,10 +1,12 @@
 import { Entity } from "nova_ecs/entity";
-import { AddEvent } from "nova_ecs/events";
+import { WorldCopy } from "nova_ecs/plugins/copy_change_detector";
+import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
+//import { WorldCopy } from "nova_ecs/plugins/copy_change_detector";
 import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { System } from "nova_ecs/system";
+import { TimePlugin, TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
-import { firstValueFrom, take, filter } from "rxjs";
+import { filter, firstValueFrom } from "rxjs";
 import Stats from 'stats.js';
 import { v4 } from "uuid";
 import { GameData } from "./client/gamedata/GameData";
@@ -17,12 +19,14 @@ import { PixiAppResource } from "./display/pixi_app_resource";
 import { ResizeEvent } from "./display/screen_size_plugin";
 import { Stage } from "./display/stage_resource";
 import { GameDataResource } from "./nova_plugin/game_data_resource";
+import { HealthPlugin } from "./nova_plugin/health_plugin";
 import { FinishJumpEvent } from "./nova_plugin/jump_plugin";
 import { makeShip } from "./nova_plugin/make_ship";
 import { makeSystem } from "./nova_plugin/make_system";
 import { MultiRoomResource, NovaPlugin, SystemComponent } from "./nova_plugin/nova_plugin";
 import { PlayerShipSelector } from "./nova_plugin/player_ship_plugin";
 import { SystemIdResource } from "./nova_plugin/system_id_resource";
+import { SystemPlugin } from "./nova_plugin/system_plugin";
 
 
 const gameData = new GameData();
@@ -70,7 +74,7 @@ async function jumpTo({ entity, to, uuid }: { entity: Entity, to: string, uuid: 
         await system.removePlugin(Display);
     }
 
-    const newSystem = makeSystem(to, gameData);
+    const newSystem = await makeSystem(to, gameData);
     (window as any).novaDebug = new DebugSettings(newSystem, (window as any).novaDebug);
 
     (window as any).system = newSystem;
@@ -86,6 +90,18 @@ async function jumpTo({ entity, to, uuid }: { entity: Entity, to: string, uuid: 
 
     const room = multiRoom.join(to);
     await newSystem.addPlugin(multiplayer(room));
+
+    // TODO: Refactor this
+    const worldCopy = newSystem.resources.get(WorldCopy)!;
+    worldCopy.resources.set(TimeResource, newSystem.resources.get(TimeResource)!);
+    await worldCopy.addPlugin(MovementPlugin);
+    await worldCopy.addPlugin(HealthPlugin);
+    //await world.addPlugin(SystemPlugin);
+    // TODO: is this the right set of resources?
+    // for (const [resource, value] of newSystem.resources) {
+    //     worldCopy?.resources.set(resource, value);
+    // }
+    // end refactor area
 
     newSystem.events.get(FinishJumpEvent).subscribe(jumpTo);
 

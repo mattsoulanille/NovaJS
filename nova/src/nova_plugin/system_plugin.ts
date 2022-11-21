@@ -1,4 +1,5 @@
 import { Plugin } from "nova_ecs/plugin";
+import { WorldCopy } from "nova_ecs/plugins/copy_change_detector";
 import { DeltaPlugin } from "nova_ecs/plugins/delta_plugin";
 import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
 import { TimePlugin } from "nova_ecs/plugins/time_plugin";
@@ -11,6 +12,7 @@ import { ControlsPlugin } from "./controls_plugin";
 import { CreateTimePlugin } from "./create_time";
 import { DeathPlugin } from "./death_plugin";
 import { FireWeaponPlugin } from "./fire_weapon_plugin";
+import { GameDataResource } from "./game_data_resource";
 import { HealthPlugin } from "./health_plugin";
 import { IonizedPlugin } from "./ionization_plugin";
 import { JumpPlugin } from "./jump_plugin";
@@ -29,32 +31,36 @@ import { WeaponPlugin } from "./weapon_plugin";
 // Users must also add the NovaData resource.
 export const SystemPlugin: Plugin = {
     name: 'SystemPlugin',
-    build(world) {
-        world.addPlugin(TimePlugin);
-        world.addPlugin(CreateTimePlugin);
-        world.addPlugin(ReturnToQueuePlugin);
-        world.addPlugin(PlatformPlugin);
-        world.addPlugin(DeltaPlugin);
-        world.addPlugin(ShipPlugin);
-        world.addPlugin(AnimationPlugin);
-        world.addPlugin(ControlsPlugin);
-        world.addPlugin(ShipController);
-        world.addPlugin(PlanetPlugin);
-        world.addPlugin(MovementPlugin);
-        world.addPlugin(DeathPlugin);
-        world.addPlugin(FireWeaponPlugin);
-        world.addPlugin(ProjectilePlugin);
-        world.addPlugin(WeaponPlugin);
-        world.addPlugin(OutfitPlugin);
-        world.addPlugin(CollisionsPlugin);
-        world.addPlugin(HealthPlugin);
-        world.addPlugin(TargetPlugin);
-        world.addPlugin(BeamPlugin);
-        world.addPlugin(BayPlugin);
-        world.addPlugin(JumpPlugin);
-        world.addPlugin(NpcPlugin);
-        world.addPlugin(IonizedPlugin);
-        world.addPlugin(BlastPlugin);
+    async build(world) {
+        const plugins = [
+            TimePlugin,
+            CreateTimePlugin,
+            ReturnToQueuePlugin,
+            PlatformPlugin,
+            DeltaPlugin,
+            ShipPlugin,
+            AnimationPlugin,
+            ControlsPlugin,
+            ShipController,
+            PlanetPlugin,
+            MovementPlugin,
+            DeathPlugin,
+            FireWeaponPlugin,
+            ProjectilePlugin,
+            WeaponPlugin,
+            OutfitPlugin,
+            CollisionsPlugin,
+            HealthPlugin,
+            TargetPlugin,
+            BeamPlugin,
+            BayPlugin,
+            JumpPlugin,
+            NpcPlugin,
+            IonizedPlugin,
+            BlastPlugin,
+        ];
+        
+        await world.addPlugins(plugins);
     }
 };
 

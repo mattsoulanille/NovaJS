@@ -3,7 +3,7 @@ import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from "nova_ecs/plugins/delta_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { System } from "nova_ecs/system";
-import { applyStatDelta, getStatDelta, PartialStat, stat, Stat } from "./stat";
+import { stat, Stat } from "./stat";
 
 
 export const ShieldComponent = new Component<Stat>('Shield');
@@ -33,9 +33,6 @@ export const HealthPlugin: Plugin = {
         for (const [healthComponent, healthRecharge] of healthStats) {
             deltaMaker.addComponent(healthComponent, {
                 componentType: stat,
-                deltaType: PartialStat,
-                getDelta: getStatDelta,
-                applyDelta: applyStatDelta,
             });
 
             world.addSystem(healthRecharge);

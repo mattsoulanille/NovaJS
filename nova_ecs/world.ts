@@ -157,6 +157,12 @@ export class World {
         }
     }
 
+    async addPlugins(plugins: Plugin[]) {
+        for (const plugin of plugins) {
+            await this.addPlugin(plugin);
+        }
+    }
+
     /**
      * Remove a plugin from the world by calling its `remove` function. If a
      * plugin does not implement a `remove` function, this does nothing.

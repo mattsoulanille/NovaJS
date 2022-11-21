@@ -50,6 +50,7 @@ export class DeltaMaker {
     addComponent<Data>(component: Component<Data>,
         componentDelta: OptionalComponentDelta<Data>) {
         this.serializer.addComponent(component, componentDelta.componentType);
+        // TODO: Get rid of this and just use `serialiser` to track them?
         this.componentDeltas.set(component, {
             componentType: componentDelta.componentType,
             // deltaType: componentDelta.deltaType ?? immerDeltaType,
@@ -95,10 +96,18 @@ export class DeltaMaker {
                 removedComponents.add(component.name);
                 continue;
             }
+            // TODO: This is probably expensive! It encodes the entire state
+            // every frame!
+            const encoded2 = componentDeltaFuncs.componentType.encode(data2);
+            if (!entity1.components.has(component)) {
+                componentStates.set(component.name, encoded2);
+                continue;
+            }
 
-            if (!equal(data1, data2)) {
+            const encoded1 = componentDeltaFuncs.componentType.encode(data1);
+            if (!equal(encoded1, encoded2)) {
                 // TODO: Change io-ts encoding to do component.name for you?
-                componentStates.set(component.name, data2);
+                componentStates.set(component.name, encoded2);
             }
         }
         

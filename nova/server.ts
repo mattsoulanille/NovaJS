@@ -16,7 +16,7 @@ import { MultiRoom } from './src/communication/multi_room_communicator';
 import { SocketChannelServer } from "./src/communication/SocketChannelServer";
 import { GameDataResource } from './src/nova_plugin/game_data_resource';
 import { makeShip } from "./src/nova_plugin/make_ship";
-import { MultiRoomResource, NovaPlugin } from './src/nova_plugin/nova_plugin';
+import { MultiRoomResource, NovaPlugin, SystemComponent } from './src/nova_plugin/nova_plugin';
 import { ServerPlugin } from "./src/nova_plugin/server_plugin";
 import { NovaRepl } from "./src/server/nova_repl";
 import { FilesystemData } from "./src/server/parsing/FilesystemData";
@@ -64,7 +64,6 @@ const novaParseWorkerPath = runfiles.resolve(
     "novajs/nova/src/server/parsing/nova_parse_worker_bundle.js");
 
 let world: World;
-let systemWorld: World;
 const repl = new NovaRepl();
 
 let communicator: CommunicatorServer;
@@ -111,7 +110,9 @@ async function startGame() {
         ship.components.set(MultiplayerData, {
             owner: 'server',
         });
-        systemWorld.entities.set(v4(), ship);
+        world.entities.get('nova:131')
+            ?.components.get(SystemComponent)
+            ?.entities.set(v4(), ship);
     }
 
     stepper();

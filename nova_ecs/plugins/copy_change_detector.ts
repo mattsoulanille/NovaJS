@@ -1,26 +1,23 @@
-import equal from 'fast-deep-equal';
 import { isLeft } from 'fp-ts/lib/Either';
 import * as t from 'io-ts';
-import { Emit, GetEntity, GetWorld } from 'nova_ecs/arg_types';
-import { Component } from 'nova_ecs/component';
+import { Emit, GetWorld } from 'nova_ecs/arg_types';
 import { Entity } from 'nova_ecs/entity';
-import { AddSystemEvent, EcsEvent, RemoveSystemEvent } from 'nova_ecs/events';
-import { Query } from 'nova_ecs/query';
+import { EcsEvent } from 'nova_ecs/events';
+import { Optional } from 'nova_ecs/optional';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { Plugin } from '../plugin';
 import { DeltaMaker, DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
 import { iterMaps } from './iter_maps';
-import { MultiplayerData } from './multiplayer_plugin';
 import { EntityState, Serializer, SerializerPlugin, SerializerResource } from './serializer_plugin';
 
 // Detects changes by running a copy of the world and comparing it
 // to the real world.
 
-const WorldCopy = new Resource<World>('WorldCopy');
+export const WorldCopy = new Resource<World>('WorldCopy');
 
-const EntityQuery = new Query([MultiplayerData, GetEntity] as const);
+// const EntityQuery = new Query([MultiplayerData, GetEntity] as const);
 
 // const MessageSystem = new System({
 //     name: 'MessageSystem',
@@ -62,14 +59,17 @@ export const ChangesEvent = new EcsEvent<Change[]>('ChangesEvent');
 export const ChangesResource = new Resource<Change[]>('ChangesResource');
 
 type IncludeChange = (e: Entity) => boolean;
-const IncludeChangeResource =
+export const IncludeChangeResource =
     new Resource<IncludeChange>('IncludeChange');
 
 export const DetectChanges = new System({
     name: 'DetectChanges',
-    args: [WorldCopy, GetWorld, IncludeChangeResource, Emit,
+    args: [WorldCopy, GetWorld, Optional(IncludeChangeResource), Emit,
         SingletonComponent] as const,
     step(worldCopy, world, includeChange, emit) {
+        if (!includeChange) {
+            return;
+        }
         worldCopy.step();
         const changes = getChanges(world, worldCopy, includeChange);
         if (changes.length) {
@@ -228,49 +228,49 @@ export function applyChanges(world: World, changes: Change[], clone = false): Se
     return missingEntities;
 }
 
-export const RecordSystems = new Resource<(add: () => void) => void>(
-    'RecordSystems');
+// export const RecordSystems = new Resource<(add: () => void) => void>(
+//     'RecordSystems');
 
 // Adding new systems to the allowlist. Not just adding in general.
 // When false, systems in the allowlist can still be added / removed.
-const AddingSystems = new Resource<boolean>('AddingSystems');
+// const AddingSystems = new Resource<boolean>('AddingSystems');
 
 // Systems that can be added / removed from the world copy.
-const AllowedSystems =
-    new Resource<Set<System>>('AllowedSystems');
+// const AllowedSystems =
+//     new Resource<Set<System>>('AllowedSystems');
 
-const ChangeDetectorAddSystem = new System({
-    name: 'ChangeDetectorAddSystem',
-    events: [AddSystemEvent],
-    args: [AddSystemEvent, WorldCopy, AllowedSystems, AddingSystems,
-           SingletonComponent] as const,
-    step(system, worldCopy, allow, addingSystems) {
-        if (addingSystems) {
-            allow.add(system);
-        }
+// const ChangeDetectorAddSystem = new System({
+//     name: 'ChangeDetectorAddSystem',
+//     events: [AddSystemEvent],
+//     args: [AddSystemEvent, WorldCopy, AllowedSystems, AddingSystems,
+//            SingletonComponent] as const,
+//     step(system, worldCopy, allow, addingSystems) {
+//         if (addingSystems) {
+//             allow.add(system);
+//         }
 
-        if (!allow.has(system)) {
-            return;
-        }
+//         if (!allow.has(system)) {
+//             return;
+//         }
 
-        try {
-            worldCopy.addSystem(system);
-        } catch (e) {
-            console.warn(`Tried to add system ${system.name} for change`
-                + ' detection. Should it be removed from AllowedSystems?\n',
-                         e);
-        }
-    }
-});
+//         try {
+//             worldCopy.addSystem(system);
+//         } catch (e) {
+//             console.warn(`Tried to add system ${system.name} for change`
+//                 + ' detection. Should it be removed from AllowedSystems?\n',
+//                          e);
+//         }
+//     }
+// });
 
-const ChangeDetectorRemoveSystem = new System({
-    name: 'ChangeDetectorRemoveSystem',
-    events: [RemoveSystemEvent],
-    args: [RemoveSystemEvent, WorldCopy, SingletonComponent] as const,
-    step(system, worldCopy) {
-        worldCopy.removeSystem(system);
-    }
-});    
+// const ChangeDetectorRemoveSystem = new System({
+//     name: 'ChangeDetectorRemoveSystem',
+//     events: [RemoveSystemEvent],
+//     args: [RemoveSystemEvent, WorldCopy, SingletonComponent] as const,
+//     step(system, worldCopy) {
+//         worldCopy.removeSystem(system);
+//     }
+// });    
 
 export const CopyChangeDetector: Plugin = {
     name: 'CopyChangeDetector',
@@ -292,25 +292,28 @@ export const CopyChangeDetector: Plugin = {
             throw new Error('Expected DeltaResource to exist');
         }
 
-        const worldCopy = new World(`{world.name} copy`);
+        const worldCopy = new World(`${world.name} copy`);
         worldCopy.resources.set(SerializerResource, serializer);
         worldCopy.resources.set(DeltaResource, deltaMaker);
         world.resources.set(ChangesResource, []);
         world.resources.set(WorldCopy, worldCopy);
-        world.resources.set(IncludeChangeResource, () => true);
-        world.resources.set(AllowedSystems, new Set([]));
-        world.resources.set(AddingSystems, false);
-        world.resources.set(RecordSystems, (add: () => void) => {
-            const orig = world.resources.get(AddingSystems);
-            world.resources.set(AddingSystems, true);
-            add();
-            world.resources.set(AddingSystems, orig ?? false);
-        });
+        // TODO: Set this to check if the entity has the multitplayer component.
+        //world.resources.set(IncludeChangeResource, () => true);
+        //world.resources.set(IncludeChangeResource, () => false);
+
+        // world.resources.set(AllowedSystems, new Set([]));
+        // world.resources.set(AddingSystems, false);
+        // world.resources.set(RecordSystems, (add: () => void) => {
+        //     const orig = world.resources.get(AddingSystems);
+        //     world.resources.set(AddingSystems, true);
+        //     add();
+        //     world.resources.set(AddingSystems, orig ?? false);
+        // });
 
 
         world.addSystem(DetectChanges);
-        world.addSystem(ChangeDetectorRemoveSystem);
-        world.addSystem(ChangeDetectorAddSystem);
+        // world.addSystem(ChangeDetectorRemoveSystem);
+        // world.addSystem(ChangeDetectorAddSystem);
     },
     remove(world) {
         // TODO
