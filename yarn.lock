@@ -12,10 +12,10 @@
   resolved "https://registry.yarnpkg.com/@bazel/buildifier/-/buildifier-5.1.0.tgz#ae0b93c5d14b2b080d5a492a8bfee231101b5385"
   integrity sha512-gO0+//hkH+iE3AQ02mYttJAcWiE+rapP8IxmstDhwSqs+CmZJJI8Q1vAaIvMyJUT3NIf7lGljRNpzclkCPk89w==
 
-"@bazel/concatjs@5.5.3":
-  version "5.5.3"
-  resolved "https://registry.yarnpkg.com/@bazel/concatjs/-/concatjs-5.5.3.tgz#5d5704db97d0014f700dbbd77ef4a4b3666ce865"
-  integrity sha512-YR8agkKikd/1pzFM9re5AFeFY6o8QA/C22RzVAYnZaKd7YMf19L7NchKKYwPTiDTy6lLhPqWMliYijR8RZ9ECA==
+"@bazel/concatjs@5.7.2":
+  version "5.7.2"
+  resolved "https://registry.yarnpkg.com/@bazel/concatjs/-/concatjs-5.7.2.tgz#24298c5607cd670a390743c962d5f3e6dbeea5b5"
+  integrity sha512-ynU3CvbdaNcYEyw6GylHkhBe21ZXUVIGbmTD/Lmz8iMpnr0YfZWDbg6pVcP6yv08TUMf1sc/BSiZf4ALKF4wOQ==
   dependencies:
     protobufjs "6.8.8"
     source-map-support "0.5.9"
