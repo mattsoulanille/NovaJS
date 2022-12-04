@@ -14,7 +14,7 @@ import { Query } from "./query";
 import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
-import { Sortable, System } from "./system";
+import { Divider, Phase, Sortable, System, SystemSet } from "./system";
 import { DefaultMap, isPromise, topologicalSort, topologicalSortList } from './utils';
 
 // Idea: Run other nova systems in webworkers and pass the state to the main
@@ -268,6 +268,54 @@ export class World {
         for (const component of system.query.components) {
             this.addComponent(component);
         }
+        return this;
+    }
+
+    private addAnyDivider(divider: Divider): this {
+        this.sortables = topologicalSortList([...this.sortables, divider]);
+        this.systems = filterSystems(this.sortables);
+        return this;
+    }
+
+    /**
+     * Add a `Divider` to the world.
+     *
+     * `Divider`s can be placed in the `before` and `after` fields of Systems
+     * (and other dividers) to provide a reference for determining order. They
+     * are topologically sorted along with `System`s (which themselves inherit
+     * from `Divider`).
+     */
+    addDivider(...args: Divider[]): this {
+        for (const divider of args) {
+            if (divider instanceof System) {
+                this.addSystem(divider);
+            } else {
+                this.addAnyDivider(divider);
+            }
+        }
+        return this;
+    }
+    
+    /**
+     * Add a `SystemSet` to the world, including all the systems it contains.
+     *
+     * A `SystemSet` provides a convenient way to organize systems. Any system
+     * in a `SystemSet` will be added to the world when the `SystemSet` is added.
+     */
+    addSystemSet(systemSet: SystemSet): this {
+        this.addPhase(systemSet.phase);
+
+        // TODO? This is not as efficient as it could be (it sorts every time),
+        // but that probably doesn't matter since it's very rarely called.
+        for (const system of systemSet.systems) {
+            this.addSystem(system);
+        }
+
+        return this;
+    }
+
+    addPhase(phase: Phase): this {
+        this.addDivider(phase.start, phase.end);
         return this;
     }
 

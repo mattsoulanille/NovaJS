@@ -1,13 +1,8 @@
 import { ArgsToData, ArgTypes } from "./arg_types";
 import { EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { Query } from "./query";
+import { setIntersection } from "./utils";
 
-
-interface SortableArgs {
-    name: string,
-    before?: Iterable<Sortable | string>,
-    after?: Iterable<Sortable | string>,
-}
 
 export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     readonly name: string;
@@ -20,46 +15,45 @@ export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends Ba
     step: (...args: ArgsToData<StepArgTypes>) => void;
 }
 
-export interface Sortable {
-  name: string;
-  before: ReadonlySet<Sortable | string>;
-  after: ReadonlySet<Sortable | string>;
+// interface SortableRepresentative {
+//     readonly sortableRepresentative: {start: Sortable, end: Sortable};
+// }
+
+interface SortableArgs {
+    name: string,
+    before?: Iterable<Sortable | string>,
+    after?: Iterable<Sortable | string>,
 }
 
+export interface Sortable {
+    readonly name: string;
+    readonly before: ReadonlySet<Sortable | string>;
+    readonly after: ReadonlySet<Sortable | string>;
+}
+
+/**
+ * A `Divider` is a `Sortable` element that can be referenced by `System`s (and
+ * other sortables) in their `before` and `after` fields to order them.
+ */
 export class Divider implements Sortable {
     readonly name: string;
     readonly before: ReadonlySet<Sortable | string>;
     readonly after: ReadonlySet<Sortable | string>;
+    //readonly sortableRepresentative: SortableRepresentative['sortableRepresentative'] = {start: this, end: this};
 
-    constructor({name, before, after}: SortableArgs) {
+    constructor({name, before = [], after = []}: SortableArgs) {
         this.name = name;
-        this.before = new Set([...before ?? []]);
-        this.after = new Set([...after ?? []]);
+        this.before = new Set([...before]);
+        this.after = new Set([...after]);
+        const intersection = setIntersection(this.before, this.after);
+        if (intersection.size > 0) {
+            const names = [...intersection].map(
+                x => typeof x === 'string' ? x : x.name);
+            throw new Error(`[${names}] are listed in both 'before'`
+                + ` and 'after' fields of ${this.name}`);
+        }
     }
 }
-
-export class Phase {
-    readonly name: string;
-    readonly start: Divider;
-    readonly end: Divider;
-
-    constructor({name, before, after}: SortableArgs) {
-        this.name = name;
-        this.start = new Divider({name: `${name}_start`, before, after});
-        this.end = new Divider({name: `${name}_end`, before, after});
-    }
-}
-
-export class SystemSet {
-    readonly phase: Phase;
-
-    constructor({name, before, after}: SortableArgs & {
-        systems: Iterable<System>,
-    }) {
-        this.phase = new Phase({name, before, after})
-    }
-}
-
 
 /**
  * A `System` is a function and a list of arg types (in a Query) that the
@@ -76,26 +70,55 @@ export class SystemSet {
  *               system responds to the `StepEvent`.
  *
  */
-export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> implements Sortable {
-    readonly name: string;
+export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> extends Divider {
     readonly args: StepArgTypes;
     readonly step: SystemArgs<StepArgTypes>['step'];
-    readonly before: ReadonlySet<Sortable | string>;
-    readonly after: ReadonlySet<Sortable | string>;
     readonly events: Set<UnknownEvent>;
     readonly query: Query<StepArgTypes>;
 
     constructor({ name, args, step, before, after, events }: SystemArgs<StepArgTypes>) {
-        this.name = name;
+        super({name, before, after});
         this.args = args;
         this.step = step;
-        this.before = new Set([...before ?? []]);
-        this.after = new Set([...after ?? []]);
         this.events = new Set([...events ?? [StepEvent]]) as Set<UnknownEvent>;
         this.query = new Query(args, name);
     }
 
-    toString() {
+    override toString() {
         return `System(${this.name ?? this.args.map(a => a.toString())})`;
+    }
+}
+
+export class Phase {
+    readonly name: string;
+    readonly start: Divider;
+    readonly end: Divider;
+
+    constructor({name, before = [], contains = [], after = []}: SortableArgs & {
+        contains?: Iterable<Sortable>,
+    }) {
+        this.name = name;
+        this.start = new Divider({
+            name: `${name}_start`,
+            before: [...before, ...contains],
+            after,
+        });
+        this.end = new Divider({
+            name: `${name}_end`,
+            before,
+            after: [this.start, ...contains],
+        });
+    }
+}
+
+export class SystemSet {
+    readonly phase: Phase;
+    readonly systems: Iterable<System>;
+
+    constructor({name, before, systems, after}: SortableArgs & {
+        systems: Iterable<System>,
+    }) {
+        this.phase = new Phase({name, before, contains: systems, after})
+        this.systems = systems;
     }
 }
