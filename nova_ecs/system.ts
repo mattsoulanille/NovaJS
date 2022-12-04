@@ -3,6 +3,12 @@ import { EcsEvent, StepEvent, UnknownEvent } from "./events";
 import { Query } from "./query";
 
 
+interface SortableArgs {
+    name: string,
+    before?: Iterable<Sortable | string>,
+    after?: Iterable<Sortable | string>,
+}
+
 export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
     readonly name: string;
     readonly args: StepArgTypes;
@@ -12,6 +18,46 @@ export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
 }
 export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends BaseSystemArgs<StepArgTypes> {
     step: (...args: ArgsToData<StepArgTypes>) => void;
+}
+
+export interface Sortable {
+  name: string;
+  before: ReadonlySet<Sortable | string>;
+  after: ReadonlySet<Sortable | string>;
+}
+
+export class Divider implements Sortable {
+    readonly name: string;
+    readonly before: ReadonlySet<Sortable | string>;
+    readonly after: ReadonlySet<Sortable | string>;
+
+    constructor({name, before, after}: SortableArgs) {
+        this.name = name;
+        this.before = new Set([...before ?? []]);
+        this.after = new Set([...after ?? []]);
+    }
+}
+
+export class Phase {
+    readonly name: string;
+    readonly start: Divider;
+    readonly end: Divider;
+
+    constructor({name, before, after}: SortableArgs) {
+        this.name = name;
+        this.start = new Divider({name: `${name}_start`, before, after});
+        this.end = new Divider({name: `${name}_end`, before, after});
+    }
+}
+
+export class SystemSet {
+    readonly phase: Phase;
+
+    constructor({name, before, after}: SortableArgs & {
+        systems: Iterable<System>,
+    }) {
+        this.phase = new Phase({name, before, after})
+    }
 }
 
 
@@ -30,12 +76,12 @@ export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends Ba
  *               system responds to the `StepEvent`.
  *
  */
-export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> {
+export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> implements Sortable {
     readonly name: string;
     readonly args: StepArgTypes;
     readonly step: SystemArgs<StepArgTypes>['step'];
-    readonly before: ReadonlySet<System | string>;
-    readonly after: ReadonlySet<System | string>;
+    readonly before: ReadonlySet<Sortable | string>;
+    readonly after: ReadonlySet<Sortable | string>;
     readonly events: Set<UnknownEvent>;
     readonly query: Query<StepArgTypes>;
 
