@@ -315,7 +315,7 @@ export class World {
     }
 
     addPhase(phase: Phase): this {
-        this.addDivider(phase.start, phase.end);
+        this.addDivider(phase.startMarker, phase.endMarker);
         return this;
     }
 

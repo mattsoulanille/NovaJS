@@ -8,7 +8,7 @@ import { System } from '../system';
 import { World } from '../world';
 import { DeltaResource } from './delta_plugin';
 import { MockCommunicator } from './mock_communicator';
-import { multiplayer, MultiplayerData } from './multiplayer_plugin';
+import { multiplayer, MultiplayerData, MultiplayerPhase } from './multiplayer_plugin';
 
 const BarComponent = new Component<{ y: string }>("Bar");
 const NonMultiplayer = new Component<{ z: string }>('NonMultiplayer');
@@ -66,7 +66,7 @@ describe('Multiplayer Plugin', () => {
             name: 'BarSystem',
             args: [BarComponent] as const,
             step: () => { },
-            after: ['Multiplayer'],
+            after: [MultiplayerPhase],
         });
         world1.addSystem(barSystem);
 
@@ -76,7 +76,7 @@ describe('Multiplayer Plugin', () => {
             step: (bar, uuid) => {
                 reports.push([bar.y, uuid]);
             },
-            after: ['Multiplayer'],
+            after: [MultiplayerPhase],
         });
         world2.addSystem(reportSystem);
 
@@ -103,14 +103,14 @@ describe('Multiplayer Plugin', () => {
             step: (bar) => {
                 bar.y = bar.y + ' stepped';
             },
-            after: ['Multiplayer'],
+            after: [MultiplayerPhase],
         });
         world1.addSystem(barSystem);
 
         const reportSystem = new System({
             name: 'ReportSystem',
             args: [BarComponent] as const,
-            after: ['Multiplayer'],
+            after: [MultiplayerPhase],
             step: (bar) => {
                 reports.push(bar.y);
             }
@@ -163,7 +163,7 @@ describe('Multiplayer Plugin', () => {
                     entities.delete(uuid);
                 }
             },
-            before: ['Multiplayer'],
+            before: [MultiplayerPhase],
         });
 
         world1.addSystem(removeBarSystem);

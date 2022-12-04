@@ -13,17 +13,20 @@ export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends Ba
     step: (...args: ArgsToData<StepArgTypes>) => void;
 }
 
-// interface SortableRepresentative {
-//     readonly sortableRepresentative: {start: Sortable, end: Sortable};
-// }
+interface SortableMarkers {
+    readonly startMarker: Sortable,
+    readonly endMarker: Sortable,
+}
 
 interface SortableArgs {
     readonly name?: string,
-    readonly before?: Iterable<Sortable>,
-    readonly after?: Iterable<Sortable>,
+    readonly before?: Iterable<SortableMarkers>,
+    readonly after?: Iterable<SortableMarkers>,
+    readonly during?: Iterable<SortableMarkers>,
+    
 }
 
-export interface Sortable {
+export interface Sortable extends SortableMarkers {
     readonly name?: string;
     readonly before: ReadonlySet<Sortable>;
     readonly after: ReadonlySet<Sortable>;
@@ -37,18 +40,30 @@ export class Divider implements Sortable {
     readonly name: string | undefined;
     readonly before: ReadonlySet<Sortable>;
     readonly after: ReadonlySet<Sortable>;
-    //readonly sortableRepresentative: SortableRepresentative['sortableRepresentative'] = {start: this, end: this};
+    readonly startMarker = this;
+    readonly endMarker = this;
 
-    constructor({name, before = [], after = []}: SortableArgs) {
+    constructor({name, before = [], after = [], during = []}: SortableArgs = {}) {
         if (name) {
             this.name = name;
         }
-        this.before = new Set([...before]);
-        this.after = new Set([...after]);
+
+        this.before = new Set([
+            // Run before the startMarkers of things in 'before'
+            ...[...before].map(b => b.startMarker),
+            // Run before the endMarkers of things in 'during'
+            ...[...during].map(d => d.endMarker),
+        ]);
+        this.after = new Set([
+            // Run after the endMarkers of things in 'after'
+            ...[...after].map(a => a.endMarker),
+            // Run after the startMarkers of things in 'during'
+            ...[...during].map(d => d.startMarker),
+        ]);
+
         const intersection = setIntersection(this.before, this.after);
         if (intersection.size > 0) {
-            const names = [...intersection].map(x => x.name);
-            throw new Error(`[${names}] are listed in both 'before'`
+            throw new Error(`[${[...intersection]}] are listed in both 'before'`
                 + ` and 'after' fields of ${this}`);
         }
     }
@@ -80,8 +95,8 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     readonly events: Set<UnknownEvent>;
     readonly query: Query<StepArgTypes>;
 
-    constructor({ name, args, step, before, after, events }: SystemArgs<StepArgTypes>) {
-        super({name, before, after});
+    constructor({ name, args, step, before, during, after, events }: SystemArgs<StepArgTypes>) {
+        super({name, before, during, after});
         this.name = name;
         this.args = args;
         this.step = step;
@@ -94,38 +109,62 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
     }
 }
 
-export class Phase {
+/**
+ * A `Phase` wraps a set of `System`s (or `Sortable`s) in between two dividers.
+ *
+ * To wrap Systems in a Phase, add them to the `contains` argument when
+ * constructing the Phase. If the Phase is already constructed, add it to the
+ * `during` argument of the System when constructing it. You can also manually
+ * do this by setting a system to occur `after` a phase's `startMarker` and
+ * `before` a phase's `endMarker`.
+ *
+ * Phases can overlap unless explicitly disallowed (by adding one Phase to the
+ * `after` or `before` set of another. If Phase `A` is set to run before Phase
+ * `B`, then all of the systems wrapped by Phase `A` will run before the systems
+ * in phase `B`.
+ */
+export class Phase implements SortableMarkers {
     readonly name: string | undefined;
-    readonly start: Divider;
-    readonly end: Divider;
+    readonly startMarker: Divider;
+    readonly endMarker: Divider;
 
-    constructor({name, before = [], contains = [], after = []}: SortableArgs & {
-        contains?: Iterable<Sortable>,
-    }) {
+    constructor({name, before = [], contains = [], after = [], during = []}: SortableArgs & {
+        contains?: Iterable<SortableMarkers>,
+    } = {}) {
         if (name) {
             this.name = name;
         }
-        this.start = new Divider({
+        this.startMarker = new Divider({
             name: name ? `${name}_start` : undefined,
             before: [...before, ...contains],
+            during,
             after,
         });
-        this.end = new Divider({
+        this.endMarker = new Divider({
             name: name ? `${name}_end` : undefined,
             before,
-            after: [this.start, ...contains],
+            during,
+            after: [this.startMarker, ...contains],
         });
     }
 }
 
-export class SystemSet {
+/**
+ * A `SystemSet` wraps `System`s in a new `Phase` and makes it easy to add them
+ * all to the `World` with `world.addSystemSet`.
+ */
+export class SystemSet implements SortableMarkers {
     readonly phase: Phase;
     readonly systems: Iterable<System>;
+    readonly startMarker: Divider;
+    readonly endMarker: Divider;
 
     constructor({name, before, systems, after}: SortableArgs & {
         systems: Iterable<System>,
     }) {
         this.phase = new Phase({name, before, contains: systems, after})
         this.systems = systems;
+        this.startMarker = this.phase.startMarker;
+        this.endMarker = this.phase.endMarker;
     }
 }
