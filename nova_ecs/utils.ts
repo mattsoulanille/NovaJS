@@ -16,13 +16,6 @@ export function topologicalSortList(list: Sortable[]): Sortable[] {
     const entries = new Map<Sortable | string, Sortable>(
         [...[...graph.keys()].map(key => [key, key] as const)]);
 
-    for (const key of graph.keys()) {
-        if (entries.has(key.name)) {
-            throw new DuplicateNameError(`Duplicate name '${key.name}'`);
-        }
-        entries.set(key.name, key);
-    }
-
     // Add all edges to the graph. Store directed edges from node A to B on node B.
     // Include the sortable itself and its name as mapping to the sortable
     for (const [sortable, incomingEdges] of graph) {

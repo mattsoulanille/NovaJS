@@ -4,11 +4,9 @@ import { Query } from "./query";
 import { setIntersection } from "./utils";
 
 
-export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> {
+export interface BaseSystemArgs<StepArgTypes extends readonly ArgTypes[]> extends SortableArgs {
     readonly name: string;
     readonly args: StepArgTypes;
-    readonly before?: Iterable<System | string>; // Systems that this system runs before
-    readonly after?: Iterable<System | string>; // Systems that this system runs after
     readonly events?: Iterable<EcsEvent<any, any>>; // Events that can trigger this system
 }
 export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends BaseSystemArgs<StepArgTypes> {
@@ -20,15 +18,15 @@ export interface SystemArgs<StepArgTypes extends readonly ArgTypes[]> extends Ba
 // }
 
 interface SortableArgs {
-    name: string,
-    before?: Iterable<Sortable | string>,
-    after?: Iterable<Sortable | string>,
+    readonly name?: string,
+    readonly before?: Iterable<Sortable>,
+    readonly after?: Iterable<Sortable>,
 }
 
 export interface Sortable {
-    readonly name: string;
-    readonly before: ReadonlySet<Sortable | string>;
-    readonly after: ReadonlySet<Sortable | string>;
+    readonly name?: string;
+    readonly before: ReadonlySet<Sortable>;
+    readonly after: ReadonlySet<Sortable>;
 }
 
 /**
@@ -36,22 +34,27 @@ export interface Sortable {
  * other sortables) in their `before` and `after` fields to order them.
  */
 export class Divider implements Sortable {
-    readonly name: string;
-    readonly before: ReadonlySet<Sortable | string>;
-    readonly after: ReadonlySet<Sortable | string>;
+    readonly name: string | undefined;
+    readonly before: ReadonlySet<Sortable>;
+    readonly after: ReadonlySet<Sortable>;
     //readonly sortableRepresentative: SortableRepresentative['sortableRepresentative'] = {start: this, end: this};
 
     constructor({name, before = [], after = []}: SortableArgs) {
-        this.name = name;
+        if (name) {
+            this.name = name;
+        }
         this.before = new Set([...before]);
         this.after = new Set([...after]);
         const intersection = setIntersection(this.before, this.after);
         if (intersection.size > 0) {
-            const names = [...intersection].map(
-                x => typeof x === 'string' ? x : x.name);
+            const names = [...intersection].map(x => x.name);
             throw new Error(`[${names}] are listed in both 'before'`
-                + ` and 'after' fields of ${this.name}`);
+                + ` and 'after' fields of ${this}`);
         }
+    }
+
+    toString() {
+        return `Divider(${this.name ?? '<unnamed>'})`;
     }
 }
 
@@ -71,6 +74,7 @@ export class Divider implements Sortable {
  *
  */
 export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> extends Divider {
+    override readonly name: string;
     readonly args: StepArgTypes;
     readonly step: SystemArgs<StepArgTypes>['step'];
     readonly events: Set<UnknownEvent>;
@@ -78,6 +82,7 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
 
     constructor({ name, args, step, before, after, events }: SystemArgs<StepArgTypes>) {
         super({name, before, after});
+        this.name = name;
         this.args = args;
         this.step = step;
         this.events = new Set([...events ?? [StepEvent]]) as Set<UnknownEvent>;
@@ -90,21 +95,23 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
 }
 
 export class Phase {
-    readonly name: string;
+    readonly name: string | undefined;
     readonly start: Divider;
     readonly end: Divider;
 
     constructor({name, before = [], contains = [], after = []}: SortableArgs & {
         contains?: Iterable<Sortable>,
     }) {
-        this.name = name;
+        if (name) {
+            this.name = name;
+        }
         this.start = new Divider({
-            name: `${name}_start`,
+            name: name ? `${name}_start` : undefined,
             before: [...before, ...contains],
             after,
         });
         this.end = new Divider({
-            name: `${name}_end`,
+            name: name ? `${name}_end` : undefined,
             before,
             after: [this.start, ...contains],
         });

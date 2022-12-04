@@ -78,10 +78,10 @@ describe('utils', () => {
         it('topologically sorts a list of sortables', () => {
             const root: Sortable =
                 {name: 'root', before: new Set(), after: new Set()};
-            const a1: Sortable =
-                {name: 'a1', before: new Set(['b1']), after: new Set([root])};
             const b1: Sortable =
                 {name: 'b1', before: new Set(), after: new Set()};
+            const a1: Sortable =
+                {name: 'a1', before: new Set([b1]), after: new Set([root])};
             const a2: Sortable =
                 {name: 'a2', before: new Set(), after: new Set([root])};
             const c1: Sortable =
