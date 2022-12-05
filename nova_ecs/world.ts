@@ -14,7 +14,7 @@ import { Query } from "./query";
 import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
-import { Divider, Phase, Sortable, System, SystemSet } from "./system";
+import { Marker, Phase, Sortable, System, SystemSet } from "./system";
 import { DefaultMap, isPromise, topologicalSort, topologicalSortList } from './utils';
 
 // Idea: Run other nova systems in webworkers and pass the state to the main
@@ -59,7 +59,7 @@ export class World {
     private nameSystemMap = new Map<string, System>();
     private nameResourceMap = new Map<string, UnknownResource>();
 
-    private sortables: Array<Sortable> = []; // This includes systems and dividers
+    private sortables: Array<Sortable> = []; // This includes systems and markers
     private systems: Array<System> = []; // Not a map because order matters.
     singletonEntity: Entity;
 
@@ -271,26 +271,26 @@ export class World {
         return this;
     }
 
-    private addAnyDivider(divider: Divider): this {
-        this.sortables = topologicalSortList([...this.sortables, divider]);
+    private addAnyMarker(marker: Marker): this {
+        this.sortables = topologicalSortList([...this.sortables, marker]);
         this.systems = filterSystems(this.sortables);
         return this;
     }
 
     /**
-     * Add a `Divider` to the world.
+     * Add a `Marker` to the world.
      *
-     * `Divider`s can be placed in the `before` and `after` fields of Systems
-     * (and other dividers) to provide a reference for determining order. They
+     * `Marker`s can be placed in the `before` and `after` fields of Systems
+     * (and other markers) to provide a reference for determining order. They
      * are topologically sorted along with `System`s (which themselves inherit
-     * from `Divider`).
+     * from `Marker`).
      */
-    addDivider(...args: Divider[]): this {
-        for (const divider of args) {
-            if (divider instanceof System) {
-                this.addSystem(divider);
+    addMarker(...args: Marker[]): this {
+        for (const marker of args) {
+            if (marker instanceof System) {
+                this.addSystem(marker);
             } else {
-                this.addAnyDivider(divider);
+                this.addAnyMarker(marker);
             }
         }
         return this;
@@ -315,7 +315,7 @@ export class World {
     }
 
     addPhase(phase: Phase): this {
-        this.addDivider(phase.startMarker, phase.endMarker);
+        this.addMarker(phase.startMarker, phase.endMarker);
         return this;
     }
 

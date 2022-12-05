@@ -1,5 +1,5 @@
 import 'jasmine';
-import { Divider, Sortable } from './system';
+import { Marker, Sortable } from './system';
 import { DuplicateNameError, setEqual, subset, topologicalSort, topologicalSortList } from './utils';
 
 describe('utils', () => {
@@ -76,15 +76,15 @@ describe('utils', () => {
     });
     describe('topologicalSortList', () => {
         it('topologically sorts a list of sortables', () => {
-            const root: Sortable = new Divider(
+            const root: Sortable = new Marker(
                 {name: 'root', before: new Set(), after: new Set()});
-            const b1: Sortable = new Divider(
+            const b1: Sortable = new Marker(
                 {name: 'b1', before: new Set(), after: new Set()});
-            const a1: Sortable = new Divider(
+            const a1: Sortable = new Marker(
                 {name: 'a1', before: new Set([b1]), after: new Set([root])});
-            const a2: Sortable = new Divider(
+            const a2: Sortable = new Marker(
                 {name: 'a2', before: new Set(), after: new Set([root])});
-            const c1: Sortable = new Divider(
+            const c1: Sortable = new Marker(
                 {name: 'c1', before: new Set(), after: new Set([root, b1])});
 
             const list: Sortable[] = [c1, root, b1, a1, a2];

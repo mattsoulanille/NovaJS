@@ -33,10 +33,10 @@ export interface Sortable extends SortableMarkers {
 }
 
 /**
- * A `Divider` is a `Sortable` element that can be referenced by `System`s (and
+ * A `Marker` is a `Sortable` element that can be referenced by `System`s (and
  * other sortables) in their `before` and `after` fields to order them.
  */
-export class Divider implements Sortable {
+export class Marker implements Sortable {
     readonly name: string | undefined;
     readonly before: ReadonlySet<Sortable>;
     readonly after: ReadonlySet<Sortable>;
@@ -69,7 +69,7 @@ export class Divider implements Sortable {
     }
 
     toString() {
-        return `Divider(${this.name ?? '<unnamed>'})`;
+        return `Marker(${this.name ?? '<unnamed>'})`;
     }
 }
 
@@ -88,7 +88,7 @@ export class Divider implements Sortable {
  *               system responds to the `StepEvent`.
  *
  */
-export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> extends Divider {
+export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes[]> extends Marker {
     override readonly name: string;
     readonly args: StepArgTypes;
     readonly step: SystemArgs<StepArgTypes>['step'];
@@ -110,7 +110,7 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
 }
 
 /**
- * A `Phase` wraps a set of `System`s (or `Sortable`s) in between two dividers.
+ * A `Phase` wraps a set of `System`s (or `Sortable`s) in between two markers.
  *
  * To wrap Systems in a Phase, add them to the `contains` argument when
  * constructing the Phase. If the Phase is already constructed, add it to the
@@ -125,8 +125,8 @@ export class System<StepArgTypes extends readonly ArgTypes[] = readonly ArgTypes
  */
 export class Phase implements SortableMarkers {
     readonly name: string | undefined;
-    readonly startMarker: Divider;
-    readonly endMarker: Divider;
+    readonly startMarker: Marker;
+    readonly endMarker: Marker;
 
     constructor({name, before = [], contains = [], after = [], during = []}: SortableArgs & {
         contains?: Iterable<SortableMarkers>,
@@ -134,13 +134,13 @@ export class Phase implements SortableMarkers {
         if (name) {
             this.name = name;
         }
-        this.startMarker = new Divider({
+        this.startMarker = new Marker({
             name: name ? `${name}_start` : undefined,
             before: [...before, ...contains],
             during,
             after,
         });
-        this.endMarker = new Divider({
+        this.endMarker = new Marker({
             name: name ? `${name}_end` : undefined,
             before,
             during,
@@ -156,8 +156,8 @@ export class Phase implements SortableMarkers {
 export class SystemSet implements SortableMarkers {
     readonly phase: Phase;
     readonly systems: Iterable<System>;
-    readonly startMarker: Divider;
-    readonly endMarker: Divider;
+    readonly startMarker: Marker;
+    readonly endMarker: Marker;
 
     constructor({name, before, systems, after}: SortableArgs & {
         systems: Iterable<System>,

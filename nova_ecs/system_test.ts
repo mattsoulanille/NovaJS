@@ -2,7 +2,7 @@ import 'jasmine';
 import { Component } from './component';
 import { Query } from './query';
 import { Resource } from './resource';
-import { Divider, Phase, System, SystemSet } from './system';
+import { Marker, Phase, System, SystemSet } from './system';
 
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
 const BAR_COMPONENT = new Component<{ y: string }>('bar');
@@ -10,18 +10,18 @@ const XYZZY_COMPONENT = new Component<{ z: string }>('xyzzy');
 const BAZ_RESOURCE = new Resource<{ z: string[] }>('baz');
 const FOO_XYZZY_QUERY = new Query([FOO_COMPONENT, XYZZY_COMPONENT] as const);
 
-describe('divider', () => {
+describe('marker', () => {
     it('throws if something is listed in both the before and after sets', () => {
-        const d1 = new Divider({name: 'd1'});
+        const d1 = new Marker({name: 'd1'});
         expect(() => {
-            const d2 = new Divider({name: 'd2', before: [d1], after: [d1]});
+            const d2 = new Marker({name: 'd2', before: [d1], after: [d1]});
         }).toThrowError(/.*d1.*are listed in both.*before.*after.*d2/);
     });
 
     it('throws if something incompatible is listed in the during set', () => {
-        const d1 = new Divider({name: 'd1'});
+        const d1 = new Marker({name: 'd1'});
         expect(() => {
-            const d2 = new Divider({name: 'd2', during: [d1]});
+            const d2 = new Marker({name: 'd2', during: [d1]});
         }).toThrowError(/.*d1.*are listed in both.*before.*after.*d2/);
     });
 });
@@ -46,27 +46,27 @@ describe('system', () => {
     });
 
     it('sets up the \'before\' set', () => {
-        const divider = new Divider();
+        const marker = new Marker();
         const system = new System({
             name: 'test',
             args: [] as const,
             step: () => {},
-            before: [divider],
+            before: [marker],
         });
 
-        expect(system.before).toContain(divider);
+        expect(system.before).toContain(marker);
     });
 
     it('sets up the \'after\' set', () => {
-        const divider = new Divider();
+        const marker = new Marker();
         const system = new System({
             name: 'test',
             args: [] as const,
             step: () => {},
-            after: [divider],
+            after: [marker],
         });
 
-        expect(system.after).toContain(divider);
+        expect(system.after).toContain(marker);
     });
 
     it('sets up the \'before\' and \'after\' sets from \'during\'', () => {
@@ -84,7 +84,7 @@ describe('system', () => {
 });
 
 describe('phase', () => {
-    it('the start divider occurs before the end divider', () => {
+    it('the start marker occurs before the end marker', () => {
         const phase = new Phase({name: 'testPhase'});
 
         expect(phase.endMarker.after).toContain(phase.startMarker);
@@ -92,7 +92,7 @@ describe('phase', () => {
 
     it('encapsulates sortables passed in \'contains\'', () => {
         const s1 = new System({name: 's1', args: [] as const, step: () => {}});
-        const s2 = new Divider({name: 's2'});
+        const s2 = new Marker({name: 's2'});
         const contains = [s1, s2];
 
         const phase = new Phase({name: 'testPhase', contains});
@@ -105,12 +105,12 @@ describe('phase', () => {
         }
     });
 
-    it('can be used in the \'during\' field of a divider', () => {
+    it('can be used in the \'during\' field of a marker', () => {
         const phase = new Phase({name: 'testPhase'});
-        const divider = new Divider({name: 'testDivider', during: [phase]});
+        const marker = new Marker({name: 'testMarker', during: [phase]});
 
-        expect(divider.before).toContain(phase.endMarker);
-        expect(divider.after).toContain(phase.startMarker);
+        expect(marker.before).toContain(phase.endMarker);
+        expect(marker.after).toContain(phase.startMarker);
     });
 
     it('can be used in the \'during\' field of another phase', () => {
