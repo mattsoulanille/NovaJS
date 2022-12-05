@@ -61,8 +61,7 @@ export const MovementSystem = new System({
             inertialessControls(state, physics, time, entities);
         }
     },
-    after: ['ApplyChanges', TimeSystem],
-    before: ['SendChanges'],
+    after: [TimeSystem],
 });
 
 function inertialControls(state: MovementState, physics: MovementPhysics,

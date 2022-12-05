@@ -237,62 +237,62 @@ describe('world', () => {
         expect(stepData).toEqual(['first', 'second', 'third', 'fourth']);
     });
 
-    it('supports referencing systems by name for ordering', () => {
-        const stepData: string[] = [];
+    // it('supports referencing systems by name for ordering', () => {
+    //     const stepData: string[] = [];
 
-        const secondSystem = new System({
-            name: 'SecondSystem',
-            args: [BAR_COMPONENT] as const,
-            step: (bar) => {
-                bar.y = 'second';
-                stepData.push(bar.y);
-            }
-        });
-        const firstSystem = new System({
-            name: 'FirstSystem',
-            args: [BAR_COMPONENT] as const,
-            step: (bar) => {
-                bar.y = 'first';
-                stepData.push(bar.y);
-            },
-            before: ['SecondSystem'],
-        });
-        const fourthSystem = new System({
-            name: 'FourthSystem',
-            args: [BAR_COMPONENT] as const,
-            step: (bar) => {
-                bar.y = 'fourth';
-                stepData.push(bar.y);
-            },
-        });
-        const thirdSystem = new System({
-            name: 'ThirdSystem',
-            args: [BAR_COMPONENT] as const,
-            step: (bar) => {
-                bar.y = 'third';
-                stepData.push(bar.y);
-            },
-            after: ['SecondSystem'],
-            before: ['FourthSystem'],
-        });
+    //     const secondSystem = new System({
+    //         name: 'SecondSystem',
+    //         args: [BAR_COMPONENT] as const,
+    //         step: (bar) => {
+    //             bar.y = 'second';
+    //             stepData.push(bar.y);
+    //         }
+    //     });
+    //     const firstSystem = new System({
+    //         name: 'FirstSystem',
+    //         args: [BAR_COMPONENT] as const,
+    //         step: (bar) => {
+    //             bar.y = 'first';
+    //             stepData.push(bar.y);
+    //         },
+    //         before: ['SecondSystem'],
+    //     });
+    //     const fourthSystem = new System({
+    //         name: 'FourthSystem',
+    //         args: [BAR_COMPONENT] as const,
+    //         step: (bar) => {
+    //             bar.y = 'fourth';
+    //             stepData.push(bar.y);
+    //         },
+    //     });
+    //     const thirdSystem = new System({
+    //         name: 'ThirdSystem',
+    //         args: [BAR_COMPONENT] as const,
+    //         step: (bar) => {
+    //             bar.y = 'third';
+    //             stepData.push(bar.y);
+    //         },
+    //         after: ['SecondSystem'],
+    //         before: ['FourthSystem'],
+    //     });
 
-        const world = new World();
+    //     const world = new World();
 
-        // Add systems in a random order
-        let systems = [firstSystem, secondSystem, thirdSystem, fourthSystem];
-        while (systems.length > 0) {
-            const index = Math.floor(Math.random() * systems.length);
-            world.addSystem(systems[index]);
-            systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
-        }
+    //     // Add systems in a random order
+    //     let systems = [firstSystem, secondSystem, thirdSystem, fourthSystem];
+    //     while (systems.length > 0) {
+    //         const index = Math.floor(Math.random() * systems.length);
+    //         world.addSystem(systems[index]);
+    //         systems = [...systems.slice(0, index), ...systems.slice(index + 1)];
+    //     }
 
-        world.entities.set(v4(), new Entity()
-            .addComponent(BAR_COMPONENT, { y: 'unset' }));
+    //     world.entities.set(v4(), new Entity()
+    //         .addComponent(BAR_COMPONENT, { y: 'unset' }));
 
-        world.step();
+    //     world.step();
 
-        expect(stepData).toEqual(['first', 'second', 'third', 'fourth']);
-    });
+    //     expect(stepData).toEqual(['first', 'second', 'third', 'fourth']);
+    // });
 
     it('supports optional arguments in systems', () => {
         const stepData: [number, string | undefined][] = [];

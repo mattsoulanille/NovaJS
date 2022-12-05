@@ -14,8 +14,8 @@ import { Query } from "./query";
 import { QueryCache } from "./query_cache";
 import { Resource, UnknownResource } from "./resource";
 import { ResourceMapWrapped } from "./resource_map";
-import { System } from "./system";
-import { DefaultMap, isPromise, topologicalSort } from './utils';
+import { Marker, Phase, Sortable, System, SystemSet } from "./system";
+import { DefaultMap, isPromise, topologicalSort, topologicalSortList } from './utils';
 
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
@@ -34,6 +34,10 @@ interface EcsEventWithEntities<Data> {
 interface WorldEventsMap extends ReadonlyMap<UnknownEvent, SyncSubject<unknown>> {
     get<Data>(event: EcsEvent<Data>): SyncSubject<Data>
     has<Data>(event: EcsEvent<Data>): true;
+}
+
+function filterSystems(sortables: Sortable[]): System[] {
+    return sortables.filter((s): s is System => s instanceof System);
 }
 
 /**
@@ -55,6 +59,7 @@ export class World {
     private nameSystemMap = new Map<string, System>();
     private nameResourceMap = new Map<string, UnknownResource>();
 
+    private sortables: Array<Sortable> = []; // This includes systems and markers
     private systems: Array<System> = []; // Not a map because order matters.
     singletonEntity: Entity;
 
@@ -256,45 +261,61 @@ export class World {
             throw new Error(`A system with name ${system.name} already exists`)
         }
 
-        // ---- Topologically insert the new system ----
-        // Construct a graph with no edges. 
-        const graph = new Map<System, Set<System>>(
-            this.systems.map(val => [val, new Set()]));
-        graph.set(system, new Set());
-
-        // Add all edges to the graph. Store directed edges from node A to B on node B.
-        // Include the system itself and its name as mapping to the system
-        const systemMap = new Map<System | string, System>(
-            [...[...graph.keys()].map(key => [key, key] as const),
-            ...[...graph.keys()].map(key => [key.name, key] as const)]);
-
-        for (const [system, incomingEdges] of graph) {
-            // Systems that this system runs before have incoming edges from this
-            // system in the graph.
-            for (const before of system.before) {
-                const beforeSystem = systemMap.get(before);
-                if (beforeSystem) {
-                    const incomingBeforeEdges = graph.get(beforeSystem);
-                    incomingBeforeEdges?.add(system)
-                }
-            }
-
-            // This system has incoming edges from the systems that it runs after.
-            for (const after of system.after) {
-                const afterSystem = systemMap.get(after);
-                if (afterSystem) {
-                    incomingEdges.add(afterSystem);
-                }
-            }
-        }
-
-        // Topologically sort the graph
-        this.systems = topologicalSort(graph);
-
+        this.sortables = topologicalSortList([...this.sortables, system]);
+        this.systems = filterSystems(this.sortables);
         this.nameSystemMap.set(system.name, system);
+
         for (const component of system.query.components) {
             this.addComponent(component);
         }
+        return this;
+    }
+
+    private addAnyMarker(marker: Marker): this {
+        this.sortables = topologicalSortList([...this.sortables, marker]);
+        this.systems = filterSystems(this.sortables);
+        return this;
+    }
+
+    /**
+     * Add a `Marker` to the world.
+     *
+     * `Marker`s can be placed in the `before` and `after` fields of Systems
+     * (and other markers) to provide a reference for determining order. They
+     * are topologically sorted along with `System`s (which themselves inherit
+     * from `Marker`).
+     */
+    addMarker(...args: Marker[]): this {
+        for (const marker of args) {
+            if (marker instanceof System) {
+                this.addSystem(marker);
+            } else {
+                this.addAnyMarker(marker);
+            }
+        }
+        return this;
+    }
+    
+    /**
+     * Add a `SystemSet` to the world, including all the systems it contains.
+     *
+     * A `SystemSet` provides a convenient way to organize systems. Any system
+     * in a `SystemSet` will be added to the world when the `SystemSet` is added.
+     */
+    addSystemSet(systemSet: SystemSet): this {
+        this.addPhase(systemSet.phase);
+
+        // TODO? This is not as efficient as it could be (it sorts every time),
+        // but that probably doesn't matter since it's very rarely called.
+        for (const system of systemSet.systems) {
+            this.addSystem(system);
+        }
+
+        return this;
+    }
+
+    addPhase(phase: Phase): this {
+        this.addMarker(phase.startMarker, phase.endMarker);
         return this;
     }
 
@@ -307,10 +328,11 @@ export class World {
         }
 
         this.nameSystemMap.delete(system.name);
-        const index = this.systems.indexOf(system);
+        const index = this.sortables.indexOf(system);
         if (index >= 0) {
-            this.systems.splice(index, 1);
+            this.sortables.splice(index, 1);
         }
+        this.systems = filterSystems(this.sortables);
 
         return this;
     }

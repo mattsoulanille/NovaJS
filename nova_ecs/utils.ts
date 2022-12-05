@@ -1,7 +1,46 @@
 import { UnknownComponent } from "./component";
+import { Sortable } from "./system";
 
 export interface WithComponents {
     components: ReadonlyMap<UnknownComponent, unknown>;
+}
+
+export class DuplicateNameError extends Error {}
+
+export function topologicalSortList(list: Sortable[]): Sortable[] {
+    // Construct a graph with no edges.
+    const graph = new Map<Sortable, Set<Sortable>>(
+        list.map(val => [val, new Set()]));
+
+    // Create a map to look up edges by reference or by name.
+    const entries = new Map<Sortable | string, Sortable>(
+        [...[...graph.keys()].map(key => [key, key] as const)]);
+
+    // Add all edges to the graph. Store directed edges from node A to B on node B.
+    // Include the sortable itself and its name as mapping to the sortable
+    for (const [sortable, incomingEdges] of graph) {
+        // Add incoming edges to sortables that this sortable runs before.
+        for (const before of sortable.before) {
+            const beforeSortable = entries.get(before);
+            if (beforeSortable) {
+                const incomingBeforeEdges = graph.get(beforeSortable);
+                // Ignore if the referenced node is not present in the graph.
+                // This is fine because if it's not in the graph, then we can't
+                // accidentally violate one of its order requirements.
+                incomingBeforeEdges?.add(sortable)
+            }
+        }
+
+        // Add incoming edges to this sortable from the sortables that it runs after.
+        for (const after of sortable.after) {
+            const afterSortable = entries.get(after);
+            if (afterSortable) {
+                incomingEdges.add(afterSortable);
+            }
+        }
+    }
+
+    return topologicalSort(graph);
 }
 
 /**

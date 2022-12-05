@@ -10,7 +10,7 @@ import { EcsEvent } from '../events';
 import { Plugin } from '../plugin';
 import { Query } from '../query';
 import { Resource } from '../resource';
-import { System } from '../system';
+import { Phase, System } from '../system';
 import { DefaultMap, setDifference } from '../utils';
 import { World } from '../world';
 import { DeltaPlugin, DeltaResource, EntityDelta } from './delta_plugin';
@@ -124,6 +124,8 @@ const MessageSystem = new System({
 
 export const CommunicatorResource = new Resource<Communicator>('CommunicatorResource');
 
+export const MultiplayerPhase = new Phase({name: 'MultiplayerPhase'});
+
 export function multiplayer(communicator: Communicator,
     warn: (message: string) => void = console.warn): Plugin {
     const MultiplayerQuery = new Query([UUID, GetEntity, MultiplayerData] as const);
@@ -131,7 +133,8 @@ export function multiplayer(communicator: Communicator,
     const multiplayerSystem = new System({
         name: 'Multiplayer',
         args: [MultiplayerQuery, Entities, Comms,
-            DeltaResource, SerializerResource, Emit] as const,
+               DeltaResource, SerializerResource, Emit] as const,
+        during: [MultiplayerPhase],
         step: (query, entities, comms, deltaMaker, serializer, emit) => {
             if (comms.uuid && communicator.uuid && comms.uuid !== communicator.uuid) {
                 // Change the owner of all entities owned by our previous uuid
@@ -383,6 +386,7 @@ export function multiplayer(communicator: Communicator,
 
     function build(world: World) {
         world.addPlugin(DeltaPlugin);
+        world.addPhase(MultiplayerPhase);
         world.resources.set(CommunicatorResource, communicator);
         const deltaMaker = world.resources.get(DeltaResource);
         if (!deltaMaker) {
