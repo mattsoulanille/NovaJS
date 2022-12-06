@@ -81,7 +81,7 @@
         "pixi.js": "^6.2.1",
         "pngjs": "^6.0.0",
         "protobufjs": "^6.11.3",
-        "rxjs": "^7.5.6",
+        "rxjs": "^7.6.0",
         "supports-color": "^9.2.2",
         "ts-enum-util": "^4.0.2",
         "uuid": "^8.3.2",
