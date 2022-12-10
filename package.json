@@ -38,7 +38,7 @@
         "esbuild-visualizer": "^0.3.1",
         "http-server": "^14.1.0",
         "immer": "^9.0.12",
-        "io-ts-types": "^0.5.16",
+        "io-ts-types": "^0.5.19",
         "jasmine": "^4.1.0",
         "jasmine-core": "^4.1.1",
         "karma": "6.4.1",

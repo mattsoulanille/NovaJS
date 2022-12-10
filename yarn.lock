@@ -1180,10 +1180,10 @@ inherits@2, inherits@2.0.4:
   resolved "https://registry.yarnpkg.com/inherits/-/inherits-2.0.4.tgz#0fa2c64f932917c3433a0ded55363aae37416b7c"
   integrity sha512-k/vGaX4/Yla3WzyMCvTQOXYeIHvqOKtnqBduzTHpzpQZzAskKMhZ2K+EnBiSM9zGSoIFeMpXKxa4dYeZIQqewQ==
 
-io-ts-types@^0.5.16:
-  version "0.5.16"
-  resolved "https://registry.yarnpkg.com/io-ts-types/-/io-ts-types-0.5.16.tgz#e9eed75371e217c97050cc507915e8eedc250946"
-  integrity sha512-h9noYVfY9rlbmKI902SJdnV/06jgiT2chxG6lYDxaYNp88HscPi+SBCtmcU+m0E7WT5QSwt7sIMj93+qu0FEwQ==
+io-ts-types@^0.5.19:
+  version "0.5.19"
+  resolved "https://registry.yarnpkg.com/io-ts-types/-/io-ts-types-0.5.19.tgz#9c04fa73f15992436605218a5686b610efa7a5d3"
+  integrity sha512-kQOYYDZG5vKre+INIDZbLeDJe+oM+4zLpUkjXyTMyUfoCpjJNyi29ZLkuEAwcPufaYo3yu/BsemZtbdD+NtRfQ==
 
 io-ts@^2.2.20:
   version "2.2.20"
