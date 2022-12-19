@@ -127,7 +127,7 @@ load("@io_bazel_rules_docker//container:pull.bzl", "container_pull")
 # https://console.cloud.google.com/gcr/images/cloud-builders/global/bazel
 container_pull(
     name = "bazel_image",
-    digest = "sha256:ffae30fa83005dcdba4359f4aba4dfdd26c43f572665657ad1fccf1d30de48f4",
+    digest = "sha256:771cbcd1d990c1f268bd1a54013252ade4cf6af4ae2bfe1d37fd7e8710e50b08",
     registry = "gcr.io",
     repository = "cloud-builders/bazel",
 )
