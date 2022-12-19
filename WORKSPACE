@@ -55,82 +55,6 @@ yarn_install(
     yarn_lock = "//:yarn.lock",
 )
 
-# Install closure
-# http_archive(
-#     name = "io_bazel_rules_closure",
-#     sha256 = "7d206c2383811f378a5ef03f4aacbcf5f47fd8650f6abbc3fa89f3a27dd8b176",
-#     strip_prefix = "rules_closure-0.10.0",
-#     urls = [
-#         "https://mirror.bazel.build/github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
-#         "https://github.com/bazelbuild/rules_closure/archive/0.10.0.tar.gz",
-#     ],
-# )
-
-# load("@io_bazel_rules_closure//closure:repositories.bzl", "rules_closure_dependencies", "rules_closure_toolchains")
-
-# rules_closure_dependencies()
-# rules_closure_toolchains()
-
-# load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
-# git_repository(
-#     name = "com_google_protobuf",
-#     remote = "https://github.com/protocolbuffers/protobuf",
-#     #    tag = "v3.11.4",
-#     commit = "d0bfd5221182da1a7cc280f3337b5e41a89539cf",
-#     shallow_since = "1581711200 -0800",
-# )
-
-# load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
-# protobuf_deps()
-
-http_archive(
-    name = "rules_proto",
-    sha256 = "602e7161d9195e50246177e7c55b2f39950a9cf7366f74ed5f22fd45750cd208",
-    strip_prefix = "rules_proto-97d8af4dc474595af3900dd85cb3a29ad28cc313",
-    urls = [
-        "https://mirror.bazel.build/github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
-        "https://github.com/bazelbuild/rules_proto/archive/97d8af4dc474595af3900dd85cb3a29ad28cc313.tar.gz",
-    ],
-)
-
-load("@rules_proto//proto:repositories.bzl", "rules_proto_dependencies", "rules_proto_toolchains")
-
-rules_proto_dependencies()
-
-rules_proto_toolchains()
-
-# http_archive(
-#     name = "rules_typescript_proto",
-#     sha256 = "56dce48f816ae5ad239b0ca5a55e7f774ca6866d3bd2306b26874445bc247eb7",
-#     strip_prefix = "rules_typescript_proto-0.0.4",
-#     urls = [
-#         "https://github.com/Dig-Doug/rules_typescript_proto/archive/0.0.4.tar.gz",
-#     ],
-# )
-
-# load("@rules_typescript_proto//:index.bzl", "rules_typescript_proto_dependencies")
-
-# rules_typescript_proto_dependencies()
-
-# http_archive(
-#     name = "com_derivita_rules_ts_closure",
-#     sha256 = "f4f53beace2e8ccace417ce851af2b7f09d2dca6dc5d8a047fc198e496ae020a",
-#     strip_prefix = "rules_ts_closure-master",
-#     urls = [
-#         "https://github.com/derivita/rules_ts_closure/archive/master.zip",
-#     ],
-# )
-
-# load("@com_derivita_rules_ts_closure//:deps.bzl", "install_rules_ts_closure_dependencies")
-
-# install_rules_ts_closure_dependencies()
-
-# load("@com_derivita_rules_ts_closure//:closure.bzl", "setup_rules_ts_closure_workspace")
-
-#setup_rules_ts_closure_workspace()
-
-# Install any Bazel rules which were extracted earlier by the yarn_install rule.
-
 http_archive(
     name = "io_bazel_rules_webtesting",
     sha256 = "9bb461d5ef08e850025480bab185fd269242d4e533bca75bfb748001ceb343c3",
@@ -149,40 +73,34 @@ browser_repositories(
     firefox = True,
 )
 
-# Bazel labs. Contains the ts proto generator
-load("@npm//@bazel/labs:package.bzl", "npm_bazel_labs_dependencies")
-
-npm_bazel_labs_dependencies()
-
-# Remote build execution
-# load("@bazel_tools//tools/build_defs/repo:http.bzl", "http_archive")
-
-# http_archive(
-#     name = "bazel_toolchains",
-#     sha256 = "179ec02f809e86abf56356d8898c8bd74069f1bd7c56044050c2cd3d79d0e024",
-#     strip_prefix = "bazel-toolchains-4.1.0",
-#     urls = [
-#         "https://mirror.bazel.build/github.com/bazelbuild/bazel-toolchains/releases/download/4.1.0/bazel-toolchains-4.1.0.tar.gz",
-#         "https://github.com/bazelbuild/bazel-toolchains/releases/download/4.1.0/bazel-toolchains-4.1.0.tar.gz",
-#     ],
-# )
-
-# load("@bazel_toolchains//rules:rbe_repo.bzl", "rbe_autoconfig")
-
-# # Creates a default toolchain config for RBE.
-# # Use this as is if you are using the rbe_ubuntu16_04 container,
-# # otherwise refer to RBE docs.
-# rbe_autoconfig(name = "rbe_default")
-
 load("@build_bazel_rules_nodejs//toolchains/esbuild:esbuild_repositories.bzl", "esbuild_repositories")
 
 esbuild_repositories(npm_repository = "npm")
 
+# Pin rules_go to a version that doesn't break the nodejs toolchain.
+# rules_docker uses rules_go.
 http_archive(
+    name = "io_bazel_rules_go",
+    sha256 = "685052b498b6ddfe562ca7a97736741d87916fe536623afb7da2824c0211c369",
+    urls = [
+        "https://mirror.bazel.build/github.com/bazelbuild/rules_go/releases/download/v0.33.0/rules_go-v0.33.0.zip",
+        "https://github.com/bazelbuild/rules_go/releases/download/v0.33.0/rules_go-v0.33.0.zip",
+    ],
+)
+
+load("@io_bazel_rules_go//go:deps.bzl", "go_register_toolchains", "go_rules_dependencies")
+
+go_rules_dependencies()
+
+go_register_toolchains(version = "1.18.3")
+
+load("@bazel_tools//tools/build_defs/repo:git.bzl", "git_repository")
+
+git_repository(
     name = "io_bazel_rules_docker",
-    sha256 = "27d53c1d646fc9537a70427ad7b034734d08a9c38924cc6357cc973fed300820",
-    strip_prefix = "rules_docker-0.24.0",
-    urls = ["https://github.com/bazelbuild/rules_docker/releases/download/v0.24.0/rules_docker-v0.24.0.tar.gz"],
+    commit = "48ad6d6df43d1e4b9feeec961995aef01dd72080",
+    remote = "https://github.com/bazelbuild/rules_docker.git",
+    shallow_since = "1671227479 +0000",
 )
 
 load(
