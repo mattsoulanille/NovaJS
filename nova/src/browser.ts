@@ -43,7 +43,7 @@ const app = new PIXI.Application({
 });
 
 (window as any).app = app;
-document.body.appendChild(app.view);
+document.body.appendChild(app.view as any);
 
 const channel = new SocketChannelClient({});
 const communicator = new CommunicatorClient(channel);

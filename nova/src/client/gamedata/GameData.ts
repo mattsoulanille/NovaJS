@@ -67,7 +67,7 @@ export class GameData implements GameDataInterface {
             TargetCorners: this.addGettable<TargetCornersData>(NovaDataType.TargetCorners),
             SpriteSheet: this.addGettable<SpriteSheetData>(NovaDataType.SpriteSheet),
             SpriteSheetImage: this.addPictGettable<SpriteSheetImageData>(NovaDataType.SpriteSheetImage),
-            SpriteSheetFrames: this.addGettable<SpriteSheetFramesData>(NovaDataType.SpriteSheetFrames),
+            SpriteSheetFrames: this.addTextureGettable<SpriteSheetFramesData>(NovaDataType.SpriteSheetFrames),
             StatusBar: this.addGettable<StatusBarData>(NovaDataType.StatusBar),
             Explosion: this.addGettable<ExplosionData>(NovaDataType.Explosion),
             SoundFile: this.addSoundFileGettable(),
@@ -93,32 +93,9 @@ export class GameData implements GameDataInterface {
         return data;
     }
 
-    private async getUrl(url: string, priority = 0): Promise<Buffer> {
+    private async getUrl(url: string, priority = 0): Promise<unknown> {
         await this.preloadData;
-        const loadPromise = this.loadQueue.add(() =>
-            new Promise<Buffer>(function(fulfill, reject) {
-                const loader = new PIXI.Loader();
-                loader.add(url, url)
-                    .load(function(_loader: any, resources: Partial<Record<string, PIXI.ILoaderResource>>) {
-                        const resource = resources[url];
-                        if (resource == undefined) {
-                            reject(`Resource ${url} not present on loaded url`)
-                            return;
-                        }
-                        if (resource.error) {
-                            reject(resource.error);
-                        }
-                        else {
-                            fulfill(resource.data);
-                        }
-                    });
-            }), { priority: -priority });
-
-        this.loaded = (async () => {
-            await this.loaded;
-            await loadPromise;
-        })();
-        return loadPromise;
+        return PIXI.Assets.load(url);
     }
 
     private getDataPrefix(dataType: NovaDataType): string {
@@ -129,6 +106,13 @@ export class GameData implements GameDataInterface {
         const dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string, priority: number): Promise<T> => {
             return (await this.getUrl(urlJoin(dataPrefix, id + ".json"), priority)) as any;
+        });
+    }
+
+    private addTextureGettable<T extends BaseData | SpriteSheetFramesData>(dataType: NovaDataType): Gettable<T> {
+        const dataPrefix = this.getDataPrefix(dataType);
+        return new Gettable<T>(async (id: string, priority: number): Promise<T> => {
+            return (await this.getUrl(urlJoin(dataPrefix, id + ".json"), priority) as {data: any}).data as any;
         });
     }
 
@@ -143,7 +127,7 @@ export class GameData implements GameDataInterface {
     private addPictGettable<T extends PictImageData | SpriteSheetImageData>(dataType: NovaDataType): Gettable<T> {
         var dataPrefix = this.getDataPrefix(dataType);
         return new Gettable<T>(async (id: string, priority: number): Promise<T> => {
-            return <T>(await this.getUrl(urlJoin(dataPrefix, id) + ".png", priority)).buffer;
+            return <T>((await this.getUrl(urlJoin(dataPrefix, id) + ".png", priority)) as Buffer).buffer;
         });
     }
 
@@ -151,7 +135,7 @@ export class GameData implements GameDataInterface {
         const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
         return new Gettable<SoundFile>(async (id: string, priority: number) => {
             //return await (await fetch(urlJoin(dataPrefix, id))).arrayBuffer();
-            return (await this.getUrl(urlJoin(dataPrefix, id) + '.mp3', priority));
+            return ((await this.getUrl(urlJoin(dataPrefix, id) + '.mp3', priority)) as Buffer);
         });
     }
 
@@ -206,7 +190,10 @@ export class GameData implements GameDataInterface {
     }
 
     private async getIds(): Promise<NovaIDs> {
-        return ((await this.getUrl(idsPath + ".json")) as unknown) as NovaIDs;
+        return (await fetch(idsPath + ".json")).json() as unknown as NovaIDs;
+        //const res = await ((await this.getUrl(idsPath + ".json")) as unknown) as NovaIDs;
+
+        //return res;
         //return JSON.parse(idsBuffer.toString('utf8'));
     }
 }
