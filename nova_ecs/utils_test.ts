@@ -2,6 +2,7 @@ import 'jasmine';
 import { Marker, Sortable } from './system';
 import { DuplicateNameError, GraphCycleError, setEqual, subset, topologicalSort, topologicalSortList } from './utils';
 
+
 describe('utils', () => {
     describe('topologicalSort', () => {
         it('topologically sorts a graph', () => {

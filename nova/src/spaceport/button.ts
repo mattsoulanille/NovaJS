@@ -67,7 +67,7 @@ export class Button {
         this.state = this.wrappedState;
 
         this.container.interactive = true;
-        this.container.buttonMode = true;
+        this.container.cursor = 'pointer';
         this.container.on('pointerdown', () => {
             this.state = 'clicked';
         });

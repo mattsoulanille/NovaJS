@@ -7,16 +7,15 @@
   "license": "MIT",
   "type": "commonjs",
   "dependencies": {
-    "@types/uuid": "^8.3.4",
+    "@types/uuid": "^9.0.0",
     "fp-ts": "^2.12.3",
-    "immer": "^9.0.12",
+    "immer": "^9.0.16",
     "io-ts": "^2.2.16",
     "rxjs": "^7.5.6",
-    "uuid": "^8.3.2"
+    "uuid": "^9.0.0"
   },
   "devDependencies": {
-    "@types/jasmine": "^3.6.4",
-    "@types/uuid": "^8.3.0",
+    "@types/jasmine": "^4.3.1",
     "uuid": "^8.3.2"
   }
 }
