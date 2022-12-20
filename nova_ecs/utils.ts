@@ -78,12 +78,7 @@ export function topologicalSort<T>(graph: Map<T, Set<T>>): T[] {
         return result;
     }
     //find start set for depth-first-search 
-    const leafs = new Set<T>();
-    for (let n of remaining){
-        if (!nonleafs.has(n)){
-            leafs.add(n);
-        }
-    }
+    const leafs = setDifference(remaining, nonleafs);
     if (leafs.size == 0){
         const cyclicPart = trimToCyclic(graph);
         throw new GraphCycleError("Graph has no leaves (contains cycles)\n"+graphListString(cyclicPart));
