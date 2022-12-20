@@ -38,7 +38,7 @@ class SystemGraph {
     private readonly systems: Map<string, SystemData>;
     private scale = 2;
     private dragData?: {
-        data: PIXI.InteractionData,
+        data: PIXI.FederatedPointerEvent,
         offset: PIXI.Point,
     }
     private wrappedRoute: string[] = [];
@@ -138,24 +138,24 @@ class SystemGraph {
         this.mapContainer.cacheAsBitmap = true;
     }
 
-    private onDragStart(event: PIXI.InteractionEvent) {
-        const dragPos = event.data.getLocalPosition(this.container);
+    private onDragStart(event: PIXI.FederatedPointerEvent) {
+        //const dragPos = event.data.getLocalPosition(this.container);
+
         const offset = new PIXI.Point(
-            this.mapContainer.position.x - dragPos.x,
-            this.mapContainer.position.y - dragPos.y,
+            this.mapContainer.position.x - event.x,
+            this.mapContainer.position.y - event.y,
         );
         this.dragData = {
-            data: event.data,
-            offset
+            data: event,
+            offset,
         }
     }
 
     private onDragMove() {
         if (this.dragData) {
-            const dragPos = this.dragData.data.getLocalPosition(this.container);
             this.mapContainer.position.set(
-                dragPos.x + this.dragData.offset.x,
-                dragPos.y + this.dragData.offset.y,
+                this.dragData.data.x + this.dragData.offset.x,
+                this.dragData.data.y + this.dragData.offset.y,
             );
         }
     }

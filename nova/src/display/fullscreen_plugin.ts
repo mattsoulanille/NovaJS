@@ -11,7 +11,7 @@ const FullscreenSystem = new System({
     args: [ControlStateEvent, PixiAppResource, SingletonComponent] as const,
     step(event, app) {
         if (event.get("fullscreen") === "start") {
-            app.view.requestFullscreen();
+            (app.view as unknown as HTMLElement).requestFullscreen();
         }
     }
 });

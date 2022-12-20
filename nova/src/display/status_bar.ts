@@ -53,7 +53,7 @@ class StatusBar {
     readonly addEnemy: Subject<undefined>;
 
     constructor(private statusBarData: StatusBarData, private gameData: GameData,
-        private renderer: PIXI.Renderer | PIXI.AbstractRenderer) {
+                private renderer: PIXI.Renderer | PIXI.IRenderer) {
         this.buildPromise = this.build();
         this.container.name = 'StatusBar';
         this.addEnemyButton = new Button(gameData, 'Add Enemy', 60);
