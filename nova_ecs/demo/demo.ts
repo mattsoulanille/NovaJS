@@ -245,7 +245,7 @@ function main() {
         autoDensity: true
     });
 
-    document.body.appendChild(app.view);
+    document.body.appendChild(app.view as unknown as HTMLElement);
     const stats = new Stats();
     document.body.appendChild(stats.dom);
 
