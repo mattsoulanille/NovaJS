@@ -86,7 +86,7 @@ export function topologicalSort<T>(graph: Map<T, Set<T>>): T[] {
     }
     if (leafs.size == 0){
         const cyclicPart = trimToCyclic(graph);
-        throw new GraphCycleError("Graph has no antiroots (contains cycles)\n"+graphListString(cyclicPart));
+        throw new GraphCycleError("Graph has no leaves (contains cycles)\n"+graphListString(cyclicPart));
     }
     function dfs(c:Set<T>,ancestors:Set<T>){
         for (let n of c) {
