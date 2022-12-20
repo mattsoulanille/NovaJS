@@ -1,4 +1,3 @@
-
 import { UnknownComponent } from "./component";
 import { Sortable } from "./system";
 
