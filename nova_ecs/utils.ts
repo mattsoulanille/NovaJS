@@ -248,8 +248,6 @@ export function subset(a: ReadonlySet<unknown>, b: ReadonlySet<unknown>) {
     return true;
 }
 
-
-
 export function setEqual(a: ReadonlySet<unknown>, b: ReadonlySet<unknown>) {
     return a === b || a.size === b.size && subset(a, b) && subset(b, a);
 }
