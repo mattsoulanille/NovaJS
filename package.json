@@ -56,7 +56,7 @@
         "sat": "^0.9.0",
         "seedrandom": "^3.0.5",
         "stats.js": "^0.17.0",
-        "typescript": "~4.8.4",
+        "typescript": "~4.9.5",
         "url-join": "^5.0.0"
     },
     "scripts": {
