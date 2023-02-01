@@ -152,10 +152,10 @@
   resolved "https://registry.yarnpkg.com/@pixi/filter-color-matrix/-/filter-color-matrix-7.0.5.tgz#35fa660b5e3f468c9cb312c4e835991889a1f266"
   integrity sha512-sQX0PSsS6o3MgU/Oxr+S9zPMBk+Dxr9H5zgUVSkVcdZh++WQ1LYCPEBwKQFaSDkQ2M8Dxl/lzJgtA5bqpk6MCw==
 
-"@pixi/filter-color-matrix@^6.4.2":
-  version "6.4.2"
-  resolved "https://registry.yarnpkg.com/@pixi/filter-color-matrix/-/filter-color-matrix-6.4.2.tgz#313aa6df18dfe8d91049ee8aff4eafd22ef54e63"
-  integrity sha512-IsR2piAxGmyesqZ4OlIyv5OvUkHx3K5iL+js6vricbcbBZA9fQUjTXdZmb7RloO6Po3Amze3f9ZkuLe4CNpUDQ==
+"@pixi/filter-color-matrix@^7.1.2":
+  version "7.1.2"
+  resolved "https://registry.yarnpkg.com/@pixi/filter-color-matrix/-/filter-color-matrix-7.1.2.tgz#5317a689f0a76f755e26502779ccf27c20ac8e3c"
+  integrity sha512-o9+Sb6r7WmJ7bJkxQsdbehTjWZtSlgCfLaIOglDlN39nsNIR2rHguiRimKfEKmKA5e6QsNiTi4qNMgRYEuPiYg==
 
 "@pixi/filter-displacement@7.0.5":
   version "7.0.5"
