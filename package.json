@@ -80,7 +80,7 @@
         "pixi-layers": "^0.3.1",
         "pixi.js": "^7.0.5",
         "pngjs": "^6.0.0",
-        "protobufjs": "^6.11.3",
+        "protobufjs": "^7.2.2",
         "rxjs": "^7.8.0",
         "supports-color": "^9.3.1",
         "ts-enum-util": "^4.0.2",
