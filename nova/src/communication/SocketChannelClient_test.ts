@@ -16,10 +16,10 @@ describe("SocketChannelClient", function() {
 
         webSocket = jasmine.createSpyObj<WebSocket>("webSocketSpy",
             ["addEventListener", "send", "close", "removeEventListener"], {
+            CONNECTING: 0,
             OPEN: 1,
-            CLOSED: 2,
-            CLOSING: 3,
-            CONNECTING: 4,
+            CLOSING: 2,
+            CLOSED: 3,
             readyState: 1, // OPEN
         });
         warn = jasmine.createSpy<(m: string) => void>("mockWarn");
