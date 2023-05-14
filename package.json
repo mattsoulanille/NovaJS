@@ -50,7 +50,7 @@
         "lamejs": "1.2.0",
         "p-queue": "^7.3.4",
         "path-browserify": "^1.0.1",
-        "peer-lite": "^1.1.0",
+        "peer-lite": "^2.0.2",
         "rbush": "^3.0.1",
         "requirejs": "^2.3.6",
         "sat": "^0.9.0",
@@ -72,7 +72,7 @@
         "debug-bazel": "bazelisk run nova --verbose_failures --sandbox_debug"
     },
     "dependencies": {
-        "@types/uuid": "^9.0.0",
+        "@types/uuid": "^9.0.1",
         "express": "^4.18.2",
         "fp-ts": "^2.15.0",
         "hull.js": "^1.0.3",
@@ -80,7 +80,6 @@
         "pixi-layers": "^0.3.1",
         "pixi.js": "^7.0.5",
         "pngjs": "^7.0.0",
-        "protobufjs": "^6.11.3",
         "rxjs": "^7.8.1",
         "supports-color": "^9.3.1",
         "ts-enum-util": "^4.0.2",
