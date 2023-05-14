@@ -116,7 +116,7 @@ async function startGame() {
         owner: communicator.uuid!
     });
     shipEntity.components.set(PlayerShipSelector, undefined);
-    const systemId = 'nova:131';
+    const systemId = 'nova:130';
 
     await jumpTo({
         entity: shipEntity,
