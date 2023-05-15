@@ -12,7 +12,9 @@ import { System } from 'nova_ecs/system';
 import { BlastDamageComponent } from './blast_plugin';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent } from './projectile_data';
-import { ShipPhysicsComponent } from './ship_plugin';
+import { ShipComponent, ShipPhysicsComponent } from './ship_plugin';
+import { PlayerShipSelector } from './player_ship_plugin';
+import { Position } from 'nova_ecs/datatypes/position';
 
 // const DamageQuery = new Query([Optional(ShieldComponent), Optional(ArmorComponent),
 // Optional(IonizationComponent), Optional(IonizationColorComponent),
@@ -90,6 +92,28 @@ const KnockbackSystem = new System({
     }
 });
 
+// TODO: Put statuses of ship all in the same variable and make it
+// easy to reset?
+const PlayerDeathSystem = new System({
+    name: 'PlayerDeathSystem',
+    args: [Optional(ShieldComponent), Optional(ArmorComponent),
+           Optional(IonizationComponent), MovementStateComponent,
+           PlayerShipSelector] as const,
+    events: [DeathEvent],
+    step(shield, armor, ionization, movement) {
+        if (shield) {
+            shield.current = shield.max;
+        }
+        if (armor) {
+            armor.current = armor.max;
+        }
+        if (ionization) {
+            ionization.current = 0;
+        }
+        movement.position = new Position(0, 0);
+    }
+});
+
 export const DeathPlugin: Plugin = {
     name: 'DeathPlugin',
     build(world) {
@@ -97,9 +121,11 @@ export const DeathPlugin: Plugin = {
         //const emit = world.resources.get(Emit)!;
         world.addSystem(DamageSystem);
         world.addSystem(KnockbackSystem);
+        world.addSystem(PlayerDeathSystem);
     },
     remove(world) {
         world.removeSystem(DamageSystem);
         world.removeSystem(KnockbackSystem);
+        world.removeSystem(PlayerDeathSystem);
     }
 }
