@@ -26,7 +26,6 @@ const TargetIndexProvider = Provide({
 
 export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
 
-
 const TargetsQuery = new Query([UUID, MovementStateComponent, Optional(OwnerComponent), ShipComponent] as const);
 const ChooseTargetSystem = new System({
     name: 'ChooseTarget',
@@ -36,9 +35,14 @@ const ChooseTargetSystem = new System({
     step(controlState, target, index, uuid, ships, emit, movementState) {
         if (controlState.get('nearestTarget') === 'start') {
             const [closestUuid, _distance, newIndex] = ships
-                .map(([a, b], index) => [a, b, index] as const)
-                .filter(([otherUuid]) => otherUuid !== uuid)
-                .map(([uuid, { position }, index]) => [
+                .map(([a, b, c], index) => [a, b, c, index] as const)
+                .filter(([otherUuid, _, owner]) => {
+                    if (owner?.owner === uuid) {
+                        return false;
+                    }
+                    return otherUuid !== uuid;
+                })
+                .map(([uuid, { position }, _, index]) => [
                     uuid,
                     position.subtract(movementState.position).lengthSquared,
                     index
