@@ -1,5 +1,5 @@
 import { ExplosionData } from "novadatainterface/ExplosionData";
-import { Emit, Entities, UUID } from "nova_ecs/arg_types";
+import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
@@ -16,6 +16,9 @@ import { ProjectileDataComponent } from "../nova_plugin/projectile_data";
 import { ProjectileExplodeEvent } from "../nova_plugin/projectile_plugin";
 import { SoundEvent } from "../nova_plugin/sound_event";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin";
+import { DeathEvent, PlayerDeathSystem, ZeroArmorEvent } from "../nova_plugin/death_plugin";
+import { ShipComponent, ShipDataComponent } from "../nova_plugin/ship_plugin";
+import { DeathAISystem } from "../nova_plugin/npc_plugin";
 
 
 const ExplosionState = new Component<{
@@ -53,9 +56,8 @@ const SecondaryExplosionComponent = new Component<{
     explosion: ExplosionData,
     lastTime?: number,
     period: number,
+    radius?: number,
 }>('SecondaryExplosion');
-
-
 
 function randomPointInCircle(r: number): Vector {
     const r2 = r ** 2;
@@ -85,7 +87,8 @@ const SecondaryExplosionSystem = new System({
         explosion.lastTime = time.time;
 
         // TODO: Fix these types in position.ts
-        const pos = position.add(randomPointInCircle(80)) as Position;
+        const pos = position.add(
+            randomPointInCircle(explosion.radius ?? 80)) as Position;
         entities.set(v4(), makeExplosion({
             ...explosion.explosion,
             sound: null,
@@ -121,6 +124,65 @@ const ProjectileExplosionSystem = new System({
     }
 });
 
+const ShipFinalExplosionSystem = new System({
+    name: 'ShipFinalExplosionSystem',
+    events: [DeathEvent],
+    before: [PlayerDeathSystem, DeathAISystem],
+    args: [ShipDataComponent, GameDataResource, MovementStateComponent, Entities] as const,
+    step(ship, gameData, movement, entities) {
+        if (!ship.finalExplosion) {
+            return;
+        }
+        const explosionData =
+            gameData.data.Explosion.getCached(ship.finalExplosion);
+
+        if (!explosionData) {
+            return;
+        }
+        let largeExplosion: ExplosionData | undefined;
+        if (ship.largeExplosion) {
+            largeExplosion = explosionData;
+        }
+        entities.set(v4(), makeExplosion(
+            explosionData,
+            Position.fromVectorLike(movement.position),
+            largeExplosion));
+
+    }
+});
+
+// TODO: Sample collisions in the convex hull of the ship
+const ShipSecondaryExposionSystem = new System({
+    name: 'ShipSecondaryExplosionSystem',
+    events: [ZeroArmorEvent],
+    args: [ShipDataComponent, GetEntity, GameDataResource] as const,
+    step(ship, {components}, gameData) {
+        if (ship.initialExplosion == null) {
+            return;
+        }
+
+        const explosion =
+            gameData.data.Explosion.getCached(ship.initialExplosion);
+        if (!explosion) {
+            return;
+        }
+
+        components.set(SecondaryExplosionComponent, {
+            explosion,
+            period: 90,
+        });
+    }
+});
+
+const ShipSecondaryExplosionDoneSystem = new System({
+    name: 'ShipSecondaryExplosionDoneSystem',
+    args: [GetEntity] as const,
+    events: [DeathEvent],
+    step(entity) {
+        entity.components.delete(SecondaryExplosionComponent);
+    }
+});
+
 export function makeExplosion(explosionData: ExplosionData, position: Position,
     secondaryExplosionData?: ExplosionData) {
     const explosion = new Entity()
@@ -149,10 +211,16 @@ export const ExplosionPlugin: Plugin = {
         world.addSystem(ExplosionSystem);
         world.addSystem(ProjectileExplosionSystem);
         world.addSystem(SecondaryExplosionSystem);
+        world.addSystem(ShipFinalExplosionSystem);
+        world.addSystem(ShipSecondaryExposionSystem);
+        world.addSystem(ShipSecondaryExplosionDoneSystem);
     },
     remove(world) {
         world.removeSystem(ExplosionSystem);
         world.removeSystem(ProjectileExplosionSystem);
         world.removeSystem(SecondaryExplosionSystem);
+        world.removeSystem(ShipFinalExplosionSystem);
+        world.removeSystem(ShipSecondaryExposionSystem);
+        world.removeSystem(ShipSecondaryExplosionDoneSystem);
     }
 }

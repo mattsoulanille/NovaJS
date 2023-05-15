@@ -1,5 +1,5 @@
 import { WeaponDamage } from 'novadatainterface/WeaponData';
-import { Emit, RunQuery, UUID } from 'nova_ecs/arg_types';
+import { Components, Emit, RunQuery, UUID } from 'nova_ecs/arg_types';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
@@ -12,15 +12,18 @@ import { System } from 'nova_ecs/system';
 import { BlastDamageComponent } from './blast_plugin';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin';
 import { ProjectileComponent } from './projectile_data';
-import { ShipComponent, ShipPhysicsComponent } from './ship_plugin';
+import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin';
 import { PlayerShipSelector } from './player_ship_plugin';
 import { Position } from 'nova_ecs/datatypes/position';
+import { Component } from 'nova_ecs/component';
+import { GetEntity } from 'nova_ecs/arg_types';
 
 // const DamageQuery = new Query([Optional(ShieldComponent), Optional(ArmorComponent),
 // Optional(IonizationComponent), Optional(IonizationColorComponent),
 // Optional(ProjectileComponent), TimeResource] as const);
 
 export const DeathEvent = new EcsEvent<Time>('DeathEvent');
+export const ZeroArmorEvent = new EcsEvent<Time>('ZeroArmorEvent');
 
 export const DamagedEvent = new EcsEvent<{ damage: WeaponDamage, damager: string, scale?: number }>('DamagedEvent');
 
@@ -57,8 +60,34 @@ const DamageSystem = new System({
         if (armor) {
             armor.current = Math.max(0, armor.current - damage.armor * scale)
             if (armor.current === 0) {
-                emit(DeathEvent, time, [uuid]);
+                emit(ZeroArmorEvent, time, [uuid]);
             }
+        }
+    }
+});
+
+const ExplodingComponent = new Component<number>('ShipExplodingComponent');
+const ShipZeroArmorSystem = new System({
+    name: 'ShipZeroArmorSystem',
+    args: [ShipDataComponent, ZeroArmorEvent, GetEntity] as const,
+    events: [ZeroArmorEvent],
+    step(ship, zeroArmorTime, {components}) {
+        if (components.has(ExplodingComponent)) {
+            return;
+        }
+        // TODO: Normalize all times to ms
+        const deathTime = ship.deathDelay * 1000 + zeroArmorTime.time;
+        components.set(ExplodingComponent, deathTime);
+    }
+});
+
+const ExplodingFinishedSystem = new System({
+    name: 'ExplodingFinishedSystem',
+    args: [TimeResource, ExplodingComponent, GetEntity, UUID, Emit] as const,
+    step(time, endExplosionTime, entity, uuid, emit) {
+        if (endExplosionTime < time.time) {
+            entity.components.delete(ExplodingComponent);
+            emit(DeathEvent, time, [uuid]);
         }
     }
 });
@@ -94,7 +123,7 @@ const KnockbackSystem = new System({
 
 // TODO: Put statuses of ship all in the same variable and make it
 // easy to reset?
-const PlayerDeathSystem = new System({
+export const PlayerDeathSystem = new System({
     name: 'PlayerDeathSystem',
     args: [Optional(ShieldComponent), Optional(ArmorComponent),
            Optional(IonizationComponent), MovementStateComponent,
@@ -122,10 +151,14 @@ export const DeathPlugin: Plugin = {
         world.addSystem(DamageSystem);
         world.addSystem(KnockbackSystem);
         world.addSystem(PlayerDeathSystem);
+        world.addSystem(ShipZeroArmorSystem);
+        world.addSystem(ExplodingFinishedSystem);
     },
     remove(world) {
         world.removeSystem(DamageSystem);
         world.removeSystem(KnockbackSystem);
         world.removeSystem(PlayerDeathSystem);
+        world.removeSystem(ShipZeroArmorSystem);
+        world.removeSystem(ExplodingFinishedSystem);
     }
 }

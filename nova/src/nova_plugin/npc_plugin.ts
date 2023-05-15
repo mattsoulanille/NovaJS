@@ -76,8 +76,8 @@ const ShootAllWeaponsAI = new System({
 
 
 export const DeathAIComponent = new Component<undefined>('DeathAIComponent');
-const DeathAI = new System({
-    name: 'DeathAI',
+export const DeathAISystem = new System({
+    name: 'DeathAISystem',
     events: [DeathEvent],
     args: [Entities, UUID, DeathAIComponent] as const,
     step(entities, uuid) {
@@ -102,7 +102,7 @@ export const NpcPlugin: Plugin = {
         world.addSystem(ChooseRandomTargetAI);
         world.addSystem(FollowAI);
         world.addSystem(ShootAllWeaponsAI);
-        world.addSystem(DeathAI);
+        world.addSystem(DeathAISystem);
     },
     remove(world) {
         world.removeSystem(ChooseRandomTargetAI);
