@@ -11,6 +11,7 @@ import { makeShip } from "./make_ship";
 import { ShipComponent } from "./ship_plugin";
 import { TargetComponent } from "./target_component";
 import { WeaponsStateComponent } from "./weapons_state";
+import { GameDataResource } from "./game_data_resource";
 
 const TargetsQuery = new Query([UUID, ShipComponent] as const);
 function getValidTargets(targets: Array<readonly [string, any]>, selfUuid: string): string[] {
@@ -59,9 +60,14 @@ const FollowAI = new System({
 export const ShootAllWeaponsComponent = new Component<undefined>('ShootAllWeaponsComponent');
 const ShootAllWeaponsAI = new System({
     name: 'ShootAllWeaponsAI',
-    args: [WeaponsStateComponent, TargetComponent, ShootAllWeaponsComponent] as const,
-    step(weapons, { target }) {
-        for (const [, weapon] of weapons) {
+    args: [WeaponsStateComponent, GameDataResource, TargetComponent, ShootAllWeaponsComponent] as const,
+    step(weapons, gameData, { target }) {
+        for (const [id, weapon] of weapons) {
+            const weaponType = gameData.data.Weapon.getCached(id)?.type;
+            if (weaponType == null || weaponType === 'BayWeaponData') {
+                // do not use bay weapons yet since there is no ammo limit.
+                continue;
+            };
             weapon.target = target;
             weapon.firing = true;
         }
