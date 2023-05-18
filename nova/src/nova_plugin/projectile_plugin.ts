@@ -19,7 +19,7 @@ import { BlastDamageComponent, BlastIgnoreComponent } from './blast_plugin';
 import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from './collisions_plugin';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from './collision_interaction';
 import { CreateTime } from './create_time';
-import { DamagedEvent, DeathEvent } from './death_plugin';
+import { DamagedEvent, ZeroArmorEvent } from './death_plugin';
 import { FireSubs, OwnerComponent, SourceComponent, SubCounts, VulnerableToPD, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin';
 import { GameDataResource } from './game_data_resource';
 import { firstOrderWithFallback, Guidance, GuidanceComponent } from './guidance';
@@ -333,8 +333,8 @@ const ProjectileBlastSystem = new System({
 
 const ProjectileDeathSystem = new System({
     name: 'ProjectileDeathSystem',
-    events: [DeathEvent],
-    args: [Entities, UUID, DeathEvent, ProjectileComponent] as const,
+    events: [ZeroArmorEvent],
+    args: [Entities, UUID, ZeroArmorEvent, ProjectileComponent] as const,
     step(entities, uuid) {
         entities.delete(uuid);
     }
