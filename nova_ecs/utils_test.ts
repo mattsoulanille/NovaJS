@@ -1,6 +1,7 @@
 import 'jasmine';
 import { Marker, Sortable } from './system';
-import { setEqual, subset, topologicalSort, topologicalSortList } from './utils';
+import { DuplicateNameError, GraphCycleError, setEqual, subset, topologicalSort, topologicalSortList } from './utils';
+
 
 describe('utils', () => {
     describe('topologicalSort', () => {
@@ -27,6 +28,43 @@ describe('utils', () => {
                 }
             }
         });
+
+            
+        const elems:[string,Set<string>][] = [['a',new Set()],
+                                              ['b',new Set(['a'])],
+                                              ['c',new Set(['b'])],
+                                              ['d',new Set(['c'])]];
+        function* permutations(n:number):IterableIterator<number[]>{
+            if (n == 1){
+                yield [0];
+                return;
+            }
+            for (let i = 0; i < n; i++){
+                for (let p of permutations(n-1)){
+                    yield [i,... p.map(v => (v>=i?v+1:v))];
+                }
+            }
+        }
+        
+        
+        for (let p of permutations(4)){
+            it('topologically sorts a 4-line in the order '+p, () => {
+                const graph = new Map<string,Set<string>>();
+                for (let i of p){
+                    graph.set(elems[i][0],elems[i][1]);
+                }
+                const sorted = topologicalSort(graph);
+                for (let i = 0; i < 4; i++){
+                    if (sorted[i] != ['a','b','c','d'][i]){
+                        debugger;
+                        topologicalSort(graph);
+                        break;
+                    }
+                }
+                expect(sorted).toEqual(['a','b','c','d']);
+            });
+        }
+
 
         it('topologically sorts a large graph', () => {
             // Create a random DAG
@@ -70,8 +108,7 @@ describe('utils', () => {
                 ['a', new Set(['b'])],
                 ['b', new Set(['a'])],
             ]);
-
-            expect(() => topologicalSort(graph)).toThrowError('Graph contains a cycle');
+            expect(() => topologicalSort(graph)).toThrowError(/.*cycle.*/);
         });
     });
     describe('topologicalSortList', () => {
