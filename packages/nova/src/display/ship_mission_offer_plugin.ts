@@ -238,8 +238,12 @@ export async function presentShipOffer(world: World, targetUuid: string,
         return false;
     }
     const universe = MissionUniverse.shared(gameData);
+    // The system both the player and the offering ship are in: the
+    // mission context borrows a stellar from it, and the mission's own
+    // ships are then spawned into it (see buildShipMissionOffer).
+    const systemId = world.resources.get(SystemIdResource);
     const offer = await buildShipMissionOffer(player.entity, pers, trigger,
-        gameData, universe);
+        gameData, universe, { systemId });
     if (!offer) {
         return false;
     }
@@ -267,7 +271,7 @@ export async function presentShipOffer(world: World, targetUuid: string,
         return true;
     }
     await acceptShipOffer(world, player, target, targetUuid, pers, offer,
-        gameData, universe, popup);
+        gameData, universe, popup, systemId);
     return true;
 }
 
@@ -276,11 +280,11 @@ async function acceptShipOffer(world: World,
     player: { uuid: string, entity: Entity }, target: Entity,
     targetUuid: string, pers: PersData, offer: MissionOffer,
     gameData: SimulationGameDataInterface, universe: MissionUniverse,
-    popup: OfferPopup): Promise<void> {
+    popup: OfferPopup, systemId: string | undefined): Promise<void> {
     const consequence = shipOfferConsequence(pers);
     const accept = await buildShipMissionAccept(player.entity, offer,
         gameData, universe, {
-        offeredBy: targetUuid,
+        offeredBy: targetUuid, systemId,
         // 'stay' is the absence of the field, so only the two verbs the
         // sim knows how to carry out are sent.
         ...(consequence === 'stay' ? {} : { offeredByFate: consequence }),
@@ -299,7 +303,6 @@ async function acceptShipOffer(world: World,
     // AcceptedMissionType.ships). This is where the Derelict Decoy's
     // four pirates come from, and where the Refuel Trader's rescue hulk
     // takes the trader's place.
-    const systemId = world.resources.get(SystemIdResource);
     let ships: Entity[] = [];
     if (systemId) {
         const movement = target.components.get(MovementStateComponent);
@@ -443,7 +446,10 @@ async function considerHailQuote(world: World, state: HailQuoteState,
             try {
                 const offer = await buildShipMissionOffer(player.entity,
                     pers, trigger, gameData,
-                    MissionUniverse.shared(gameData), () => 0);
+                    MissionUniverse.shared(gameData), {
+                    systemId: world.resources.get(SystemIdResource),
+                    random: () => 0,
+                });
                 missionAvailable = offer !== null;
                 state.missionAvailable.set(persId, missionAvailable);
             } catch {

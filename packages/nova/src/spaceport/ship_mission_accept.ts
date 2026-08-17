@@ -121,6 +121,18 @@ function diffSet<T>(before: ReadonlySet<T>, after: ReadonlySet<T>):
 }
 
 /**
+ * The stellar an in-flight mission context stands on: one in the system
+ * the player is flying in, or MissionSession's neutral '<in-flight>'
+ * sentinel when there is none to borrow. See buildShipMissionOffer's
+ * note for why the machinery wants one at all.
+ */
+export function inFlightStellar(universe: MissionUniverse,
+    systemId: string | undefined): string {
+    return (systemId ? universe.stellarInSystem(systemId) : undefined)
+        ?? '<in-flight>';
+}
+
+/**
  * ============================================================================
  * Resolving what a përs ship is offering, right now, in flight
  * ============================================================================
@@ -132,14 +144,21 @@ function diffSet<T>(before: ReadonlySet<T>, after: ReadonlySet<T>):
  * LOCATION_SHIP), the AvailRandom percentage roll, and makeMissionOffer
  * to freeze the destination / cargo / ship-objective choices.
  *
- * THE OFFER CONTEXT HAS NO STELLAR, and cannot: the offer happens in
- * open space. MissionSession's '<in-flight>' sentinel — already the
- * established answer for in-flight mission work (processInFlightMissions
- * uses it) — supplies a neutral, inhabited, government-less stellar, so
- * AvailStel -1 ("any inhabited stellar") matches and a mission pinned to
- * a specific stellar or government does not. Every stock AvailLoc 2
- * mission is authored AvailStel -1, which is what makes that safe: a
- * ship-offered mission has nowhere else to be judged.
+ * THE OFFER CONTEXT HAS NO LANDING, so it borrows a stellar from the
+ * system the player is flying in (MissionUniverse.stellarInSystem). The
+ * machinery is written around "where is this being offered" in three
+ * places and all three want the system, not a specific rock: AvailStel is
+ * judged against it (every stock AvailLoc 2 mission is AvailStel -1, "any
+ * inhabited stellar"), ShipSyst -1 — "the system the mission was offered
+ * in", which mïsn 133's four pirates use — is resolved THROUGH it, and
+ * the ActiveMission records it as `acceptedAt`.
+ *
+ * Without a system (or in one with no stellars at all) it falls back to
+ * MissionSession's '<in-flight>' sentinel, the established answer for
+ * in-flight mission work (processInFlightMissions uses it), which
+ * supplies a neutral inhabited government-less stellar. Missions whose
+ * ships spawn relative to the offering system then become unofferable
+ * rather than spawning them somewhere arbitrary.
  *
  * SESSION SAFETY. MissionSession copies every map/set it works with out
  * of the entity and only writes back on commit(), which is never called
@@ -153,8 +172,12 @@ function diffSet<T>(before: ReadonlySet<T>, after: ReadonlySet<T>):
 export async function buildShipMissionOffer(player: Entity, pers: PersData,
     trigger: ShipOfferTrigger,
     gameData: SimulationGameDataInterface, universe: MissionUniverse,
-    random: () => number = Math.random,
-): Promise<MissionOffer | null> {
+    options: {
+        /** The system the player (and the offering ship) is in. */
+        systemId?: string,
+        random?: () => number,
+    } = {}): Promise<MissionOffer | null> {
+    const random = options.random ?? Math.random;
     if (!pers.linkMission || shipOfferTrigger(pers) !== trigger) {
         return null;
     }
@@ -163,8 +186,8 @@ export async function buildShipMissionOffer(player: Entity, pers: PersData,
     if (!mission) {
         return null;
     }
-    const session = await MissionSession.create(
-        player, gameData, universe, '<in-flight>');
+    const session = await MissionSession.create(player, gameData, universe,
+        inFlightStellar(universe, options.systemId));
     const ctx = session.machinery.offerContext();
     if (!missionMatchesLocation(mission, LOCATION_SHIP, ctx)) {
         return null;
@@ -251,15 +274,16 @@ export async function buildShipMissionAccept(player: Entity,
         /** What accepting does to that hull (shipOfferConsequence). */
         offeredByFate?: 'replace' | 'leave',
         ships?: { uuid: string, entity: unknown }[],
+        /** The system the offer was made in; MUST be the one the offer
+         * was resolved against, or the accept re-rolls a different
+         * destination and ship system than the player was shown. */
+        systemId?: string,
     } = {}): Promise<ShipMissionAccept | null> {
     const { offeredBy, offeredByFate } = options;
     const ships = options.ships ?? [];
     const copy = detachPlayerState(player);
-    // '<in-flight>' is the sentinel the existing in-flight mission upkeep
-    // already uses (mission_session's processInFlightMissions); it makes
-    // offerContext fall back to a neutral stellar.
-    const session = await MissionSession.create(
-        copy, gameData, universe, '<in-flight>');
+    const session = await MissionSession.create(copy, gameData, universe,
+        inFlightStellar(universe, options.systemId));
     const before = detachPlayerState(copy);
     const result = acceptOffer(session.machinery, offer, session.outfits);
     if (!result.accepted) {
