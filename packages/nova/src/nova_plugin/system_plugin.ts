@@ -42,6 +42,7 @@ import { ProjectilePlugin } from "./projectile_plugin.js";
 import { ReputationPlugin } from "./reputation_plugin.js";
 import { ReturnToQueuePlugin } from "./return_to_queue_plugin.js";
 import { ShipController } from "./ship_controller_plugin.js";
+import { ShipExplosionPlugin } from "./ship_explosion_plugin.js";
 import { ShipPlugin } from "./ship_plugin.js";
 import { SoundEventPlugin } from "./sound_plugin.js";
 import { TargetPlugin } from "./target_plugin.js";
@@ -111,6 +112,10 @@ export const SystemPlugin: Plugin = {
         // movement writes each tick while a ship is disabled.
         world.addPlugin(DisabledPlugin);
         world.addPlugin(BlastPlugin);
+        // After BlastPlugin: a ship's final explosion spawns one of its
+        // blasts (and orders against DeathPlugin's and NpcPlugin's death
+        // handlers, both already added).
+        world.addPlugin(ShipExplosionPlugin);
         world.addPlugin(CargoPlugin);
         // After Cargo/Disabled/Reputation/EscortCommand: boarding reads
         // cargo, requires the disabled gate, charges legal-record crimes,

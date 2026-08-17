@@ -15,6 +15,7 @@ import { BlastDamageComponent } from './blast_data.js';
 import { ArmorComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin.js';
 import { ProjectileComponent } from './projectile_data.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
+import { nonLethalArmor, nonLethalArmorFloor } from './ship_explosion.js';
 import { ControlledByComponent } from './ship_control.js';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Component } from 'nova_ecs/component';
@@ -28,7 +29,22 @@ import { Stat } from './stat.js';
 export const DeathEvent = new EcsEvent<Time>('DeathEvent');
 export const ZeroArmorEvent = new EcsEvent<Time>('ZeroArmorEvent');
 
-export const DamagedEvent = new EcsEvent<{ damage: WeaponDamage, damager: string, scale?: number }>('DamagedEvent');
+/**
+ * A hit landing on an entity.
+ *
+ * `nonLethal` marks damage that must never take a SHIP out of the fight:
+ * armor stops just above the victim's disable threshold (see
+ * nonLethalArmorFloor) and no ZeroArmorEvent is emitted, so the death
+ * sequence is never started by it. It is set by a ship's own final
+ * explosion (ship_explosion_plugin.ts) — Matthew's rule that an
+ * exploding hull can hurt anyone nearby but can neither disable nor
+ * destroy them. Entities that are not ships (missiles caught in the
+ * blast) are unaffected by the flag and die normally.
+ */
+export const DamagedEvent = new EcsEvent<{
+    damage: WeaponDamage, damager: string, scale?: number,
+    nonLethal?: boolean,
+}>('DamagedEvent');
 
 registerSimulationBridgeEvent({ event: DeathEvent });
 registerSimulationBridgeEvent({ event: ZeroArmorEvent });
@@ -38,8 +54,10 @@ const DamageSystem = new System({
     events: [DamagedEvent],
     args: [Emit, DamagedEvent, Optional(ShieldComponent), Optional(ArmorComponent),
         Optional(IonizationComponent), Optional(IonizationColorComponent),
-        Optional(ProjectileComponent), TimeResource, UUID] as const,
-    step(emit, { damage, scale = 1 }, shield, armor, ionization, ionizationColor, isProjectile, time, uuid) {
+        Optional(ProjectileComponent), TimeResource, UUID,
+        Optional(ShipDataComponent)] as const,
+    step(emit, { damage, scale = 1, nonLethal }, shield, armor, ionization,
+        ionizationColor, isProjectile, time, uuid, shipData) {
 
         const hasShield = shield && shield.max > 0;
         if (isProjectile && !hasShield) {
@@ -64,6 +82,21 @@ const DamageSystem = new System({
             }
         }
         if (armor) {
+            // A ship's own final explosion (nonLethal) can hurt but
+            // never take a SHIP out of the fight: armor stops just above
+            // the victim's disable threshold, and no ZeroArmorEvent is
+            // emitted even if it was already at zero, so an explosion
+            // can neither disable nor destroy. Gated on ShipDataComponent
+            // because the threshold is a ship property (shïp Flags
+            // 0x0010) — a missile swept up in the blast has none and
+            // dies as usual.
+            if (nonLethal && shipData) {
+                armor.current = nonLethalArmor(armor.current,
+                    damage.armor * scale,
+                    nonLethalArmorFloor(armor.max,
+                        shipData.disableArmorFraction));
+                return;
+            }
             // weap Flags2 0x1000 "can disable but not destroy": armor
             // damage from such a weapon clamps just above zero, so an
             // ion barrage can pound a ship far below its disable
