@@ -16,6 +16,9 @@ import { DisabledComponent } from './disabled_component.js';
 import { CargoComponent, cargoUsed } from './cargo_plugin.js';
 import { FuelComponent } from './health_plugin.js';
 import { missionCargoKey } from './mission_logic.js';
+import {
+    ShipOfferSpentComponent, ShipOfferSpentType,
+} from './mission_accept.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
 import {
     ActiveMission, CreditsComponent, Missions, MissionsComponent,
@@ -415,6 +418,12 @@ export const MissionShipPlugin: Plugin = {
     build(world) {
         const serializer = world.resources.get(SerializerResource);
         serializer?.addComponent(MissionShipComponent, MissionShipType);
+        // Registered here rather than in a plugin of its own: it is
+        // written by applyAcceptMission and READ BY THE DISPLAY (the
+        // hail / boarding offer plugins refuse to re-offer from a hull
+        // whose offer is spent), and only a registered component crosses
+        // the bridge into the display world at all.
+        serializer?.addComponent(ShipOfferSpentComponent, ShipOfferSpentType);
         world.addSystem(MissionShipTrackSystem);
         world.addSystem(MissionShipDeathSystem);
         world.addSystem(MissionShipDepartureSystem);

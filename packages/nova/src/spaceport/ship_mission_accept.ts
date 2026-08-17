@@ -1,8 +1,14 @@
 import { Entity } from 'nova_ecs/entity';
+import { PersData } from 'novadatainterface/pers_data';
+import { ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { AcceptedMission } from '../nova_plugin/mission_accept.js';
-import { acceptOffer, MissionOffer } from '../nova_plugin/mission_logic.js';
+import {
+    acceptOffer, LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
+    missionMatchesLocation,
+} from '../nova_plugin/mission_logic.js';
+import { ShipObjective } from '../nova_plugin/mission_ship_state.js';
 import {
     ActiveMissionType, CreditsComponent,
     GameDateComponent, MissionsComponent,
@@ -17,6 +23,9 @@ import {
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
+import {
+    shipOffers, ShipOfferTrigger, shipOfferTrigger,
+} from './ship_mission_offer.js';
 
 /**
  * ============================================================================
@@ -111,11 +120,108 @@ function diffSet<T>(before: ReadonlySet<T>, after: ReadonlySet<T>):
     };
 }
 
+/**
+ * ============================================================================
+ * Resolving what a përs ship is offering, right now, in flight
+ * ============================================================================
+ *
+ * The docked boards roll a whole LOCATION's worth of missions
+ * (mission_offers' rollOffers); a përs offers exactly one — its
+ * LinkMission — so this resolves that one mission through the SAME
+ * pipeline: the availability sweep (missionMatchesLocation at
+ * LOCATION_SHIP), the AvailRandom percentage roll, and makeMissionOffer
+ * to freeze the destination / cargo / ship-objective choices.
+ *
+ * THE OFFER CONTEXT HAS NO STELLAR, and cannot: the offer happens in
+ * open space. MissionSession's '<in-flight>' sentinel — already the
+ * established answer for in-flight mission work (processInFlightMissions
+ * uses it) — supplies a neutral, inhabited, government-less stellar, so
+ * AvailStel -1 ("any inhabited stellar") matches and a mission pinned to
+ * a specific stellar or government does not. Every stock AvailLoc 2
+ * mission is authored AvailStel -1, which is what makes that safe: a
+ * ship-offered mission has nowhere else to be judged.
+ *
+ * SESSION SAFETY. MissionSession copies every map/set it works with out
+ * of the entity and only writes back on commit(), which is never called
+ * here — so building an offer against the display's one-way mirror of
+ * the player leaves the mirror a mirror.
+ *
+ * DETERMINISM: none of this is in the simulation. The rolls are the
+ * owning client's, and only the RESULT (buildShipMissionAccept's record)
+ * ever crosses the wire.
+ */
+export async function buildShipMissionOffer(player: Entity, pers: PersData,
+    trigger: ShipOfferTrigger,
+    gameData: SimulationGameDataInterface, universe: MissionUniverse,
+    random: () => number = Math.random,
+): Promise<MissionOffer | null> {
+    if (!pers.linkMission || shipOfferTrigger(pers) !== trigger) {
+        return null;
+    }
+    await universe.load();
+    const mission = universe.getMission(pers.linkMission);
+    if (!mission) {
+        return null;
+    }
+    const session = await MissionSession.create(
+        player, gameData, universe, '<in-flight>');
+    const ctx = session.machinery.offerContext();
+    if (!missionMatchesLocation(mission, LOCATION_SHIP, ctx)) {
+        return null;
+    }
+    // AvailRandom, rolled per encounter exactly as the boards roll it
+    // per opening. The original re-offers a refused mission on the next
+    // hail, so a fresh roll per hail is the faithful behaviour.
+    if (mission.availRandom < 100
+        && random() * 100 >= mission.availRandom) {
+        return null;
+    }
+    const offer = makeMissionOffer(mission, ctx);
+    if (!offer || !offer.acceptable) {
+        return null;
+    }
+    // The three "not for a ship like yours" bits need the PLAYER's hull
+    // (shipOffers' note); resolved last, since it is the only gate that
+    // cannot be answered from the përs and the mission alone.
+    let playerShip: ShipData | undefined;
+    try {
+        const shipId = player.components.get(ShipComponent)?.id;
+        playerShip = shipId
+            ? await gameData.data.Ship.get(shipId) : undefined;
+    } catch {
+        // Unknown hull: the hull-shaped gates simply don't fire.
+    }
+    if (!shipOffers(pers, { trigger, missionAvailable: true, playerShip })) {
+        return null;
+    }
+    return offer;
+}
+
 /** The record, plus the texts the popup shows after accepting. */
 export interface ShipMissionAccept {
     record: AcceptedMission;
-    /** The mission as it ended up, for the briefing's substitutions. */
+    /**
+     * The mission as it ended up, for the briefing's substitutions and
+     * for building its special ships. UNDEFINED for an immediate
+     * auto-abort (mïsn 133 "Derelict Decoy"), which never becomes
+     * active — its ships come from the offer's own frozen objective
+     * instead (see `shipObjective` below).
+     */
     active: ReturnType<typeof missionsAfter>;
+    /**
+     * The mission-ship source to hand to buildAcceptedMissionShips: the
+     * accepted mission, or — for an immediate auto-abort — a stand-in
+     * built from the offer, so the trap still springs.
+     */
+    shipSource: {
+        shipObjective?: ShipObjective,
+        shipName?: string,
+        travelPlanet: string | null,
+        returnPlanet: string | null,
+    };
+    /** What the accept produced for the player to read (the briefing,
+     * or the auto-abort's own notice). */
+    events: MissionEvent[];
 }
 
 function missionsAfter(copy: Entity, missionId: string) {
@@ -129,12 +235,25 @@ function missionsAfter(copy: Entity, missionId: string) {
  *
  * `player` is the DISPLAY world's mirror of the player's ship; it is read
  * and never written, so the mirror stays a mirror.
+ *
+ * `ships` is left to the caller rather than built here because the ships
+ * are built FROM the mission this call resolves (buildAcceptedMissionShips
+ * takes the returned `active`): the caller runs the two in order and
+ * attaches the batch to `record.ships` before dispatching. That keeps the
+ * whole acceptance on one input record — see AcceptedMissionType's note on
+ * why the ambush cannot ride a second one.
  */
 export async function buildShipMissionAccept(player: Entity,
     offer: MissionOffer, gameData: SimulationGameDataInterface,
-    universe: MissionUniverse, offeredBy: string | undefined,
-    ships: { uuid: string, entity: unknown }[] = [],
-): Promise<ShipMissionAccept | null> {
+    universe: MissionUniverse, options: {
+        /** Entity uuid of the përs ship that made the offer. */
+        offeredBy?: string,
+        /** What accepting does to that hull (shipOfferConsequence). */
+        offeredByFate?: 'replace' | 'leave',
+        ships?: { uuid: string, entity: unknown }[],
+    } = {}): Promise<ShipMissionAccept | null> {
+    const { offeredBy, offeredByFate } = options;
+    const ships = options.ships ?? [];
     const copy = detachPlayerState(player);
     // '<in-flight>' is the sentinel the existing in-flight mission upkeep
     // already uses (mission_session's processInFlightMissions); it makes
@@ -146,7 +265,7 @@ export async function buildShipMissionAccept(player: Entity,
     if (!result.accepted) {
         return null;
     }
-    session.commit();
+    const events = session.commit();
 
     const creditsBefore = before.components.get(CreditsComponent)!.credits;
     const creditsAfter = copy.components.get(CreditsComponent)!.credits;
@@ -162,22 +281,43 @@ export async function buildShipMissionAccept(player: Entity,
     const outfits = diffCounts(outfitCounts(before), outfitCounts(copy));
 
     const active = missionsAfter(copy, offer.data.id);
-    // An auto-abort mission never becomes active (mission_logic), so
-    // there is no ActiveMission to carry — but its EFFECTS still are.
-    // The sim's idempotence check keys on the mission id, so an
-    // auto-abort record with no mission would apply its deltas every
-    // time it replayed. Guard it out here rather than teaching the sim
-    // about a mission shape it never sees.
-    if (!active) {
+    // An IMMEDIATE auto-abort mission never becomes active
+    // (mission_logic's acceptOffer) — but its effects are real, and for
+    // a ship-offered one they are the entire mission: mïsn 133's four
+    // pirates. The record says so with `autoAborted`, the sim skips the
+    // mission list, and the offering hull carries the idempotence key
+    // that the missing mission would otherwise have been
+    // (ShipOfferSpentComponent). The ships come from the OFFER's frozen
+    // objective, which is where they lived before acceptOffer discarded
+    // the mission around them.
+    const autoAborted = !active;
+    if (autoAborted && !offeredBy) {
+        // No hull to key on. The only producer of one of these is a
+        // përs offer, so this cannot happen in practice; refusing is
+        // still cheaper than shipping a record the sim will drop.
         return null;
     }
 
     return {
         active,
+        events,
+        shipSource: active ?? {
+            shipObjective: offer.shipObjective,
+            travelPlanet: offer.travelPlanet,
+            returnPlanet: offer.returnPlanet,
+            // An auto-aborted mission's <SN> lives only as long as its
+            // notice (acceptOffer's comment), so the ships take the
+            // per-spawn random pick, as they did before <SN> existed.
+        },
         record: {
             missionId: offer.data.id,
-            mission: ActiveMissionType.encode(active),
+            mission: active ? ActiveMissionType.encode(active) : null,
+            ...(autoAborted ? { autoAborted: true } : {}),
             ...(offeredBy ? { offeredBy } : {}),
+            // Only meaningful beside an offeredBy, and only when the
+            // përs flags actually said to do something ('stay' is the
+            // absence of the field).
+            ...(offeredBy && offeredByFate ? { offeredByFate } : {}),
             ...(creditsAfter !== creditsBefore
                 ? { creditsDelta: creditsAfter - creditsBefore } : {}),
             ...(bits.added.length ? { bitsSet: bits.added } : {}),
