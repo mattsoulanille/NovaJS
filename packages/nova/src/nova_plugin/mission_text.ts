@@ -45,6 +45,19 @@ export interface MissionTextSubstitutions {
     /** <SRK> / <PSR> the same rank's ShortName. */
     rankShortName?: string;
     /**
+     * <OSN> "The offering ship name (only works when offering a mission
+     * from a ship)" (EVN Bible). The name of the përs whose LinkMission
+     * is on the table — "Drifting Derelict", "Terrapin" — which is also
+     * the name the target display shows in place of the ship class.
+     *
+     * The only wildcard that is meaningless anywhere but here: a mission
+     * taken off a spaceport board has no offering ship. Every one of the
+     * 26 stock hail quotes (STR# 7101) opens with it, and it is the one
+     * that makes "<OSN>: I need assistance, can you help?" read as a
+     * radio call from a named captain rather than from nobody.
+     */
+    offeringShipName?: string;
+    /**
      * <SN> the mission's special ship name, drawn from the mïsn's
      * ShipNameID STR# list when the mission was ACCEPTED and frozen on
      * the ActiveMission (mission_logic.ts). Absent for a mission that
@@ -108,6 +121,11 @@ export function expandMissionText(text: string,
         // reads as English): an unaccepted mission has no name yet, and
         // the Bible's documented broken case should degrade to a
         // generic phrase rather than leave a raw "<SN>" on screen.
+        // Only a ship-offered mission has an offering ship; anywhere
+        // else the Bible says the tag "only works when offering a
+        // mission from a ship", so it degrades to the same words the
+        // comm dialog uses for a ship it cannot name.
+        ['<OSN>', subs.offeringShipName ?? 'Unidentified ship'],
         ['<SN>', subs.specialShipName ?? 'unknown ship'],
     ];
     let expanded = conditional;

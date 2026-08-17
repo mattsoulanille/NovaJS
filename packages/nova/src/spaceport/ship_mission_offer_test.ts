@@ -2,8 +2,10 @@ import 'jasmine';
 import { getDefaultPersData, PersData } from 'novadatainterface/pers_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { deferredAutoAbort } from '../nova_plugin/mission_logic.js';
 import {
-    shipOfferConsequence, ShipOfferContext, shipOffers, shipOfferTrigger,
+    shipOfferConsequence, ShipOfferContext, ShipOfferGates, shipOffers,
+    shipOfferTrigger, showsHailQuote,
 } from './ship_mission_offer.js';
 
 /**
@@ -28,9 +30,15 @@ function pers(overrides: Partial<PersData> = {},
 
 function ctx(overrides: Partial<ShipOfferContext> = {}): ShipOfferContext {
     return {
-        trigger: 'hail', disabled: false, attackingPlayer: false,
-        holdsGrudge: false, likesPlayer: false, missionAvailable: true,
+        trigger: 'hail', missionAvailable: true,
         playerShip: undefined, ...overrides,
+    };
+}
+
+function gates(overrides: Partial<ShipOfferGates> = {}): ShipOfferGates {
+    return {
+        disabled: false, attackingPlayer: false,
+        holdsGrudge: false, likesPlayer: false, ...overrides,
     };
 }
 
@@ -67,28 +75,20 @@ describe('shipOffers', () => {
             .toBeFalse();
     });
 
-    it('honours the disabled gate (0x0020) on BOTH triggers', () => {
-        // The derelicts that offer on boarding are hulks, so a gate that
-        // only ran on hails would let them be skipped entirely.
-        const derelict = pers({},
-            { offerMissionOnBoarding: true, hailOnlyWhenDisabled: true });
-        expect(shipOffers(derelict, ctx({ trigger: 'board', disabled: true })))
-            .toBeTrue();
-        expect(shipOffers(derelict, ctx({ trigger: 'board', disabled: false })))
-            .toBeFalse();
-    });
-
-    it('honours the grudge, likes-you and attacking gates', () => {
-        expect(shipOffers(pers({}, { hailOnlyWithGrudge: true }), ctx()))
-            .toBeFalse();
-        expect(shipOffers(pers({}, { hailOnlyWithGrudge: true }),
-            ctx({ holdsGrudge: true }))).toBeTrue();
-        expect(shipOffers(pers({}, { hailOnlyWhenLikesPlayer: true }), ctx()))
-            .toBeFalse();
-        expect(shipOffers(pers({}, { hailOnlyWhenAttacking: true }), ctx()))
-            .toBeFalse();
-        expect(shipOffers(pers({}, { hailOnlyWhenAttacking: true }),
-            ctx({ attackingPlayer: true }))).toBeTrue();
+    it('leaves the four QUOTE bits entirely alone', () => {
+        // Bible, përs Flags: 0x0004/0x0008/0x0010/0x0020 are each worded
+        // "HailQuote only shown when ...". None of them is an offer gate,
+        // and reading them as one made the 141 stock missions whose përs
+        // set 0x0008 unobtainable (see ShipOfferGates' note).
+        for (const flag of ['hailOnlyWithGrudge', 'hailOnlyWhenLikesPlayer',
+            'hailOnlyWhenAttacking', 'hailOnlyWhenDisabled'] as const) {
+            expect(shipOffers(pers({}, { [flag]: true }), ctx()))
+                .withContext(flag).toBeTrue();
+        }
+        // ...including on the boarding trigger, where the derelicts live.
+        expect(shipOffers(
+            pers({}, { offerMissionOnBoarding: true, hailOnlyWhenDisabled: true }),
+            ctx({ trigger: 'board' }))).toBeTrue();
     });
 
     it('keeps a job away from the wrong kind of PLAYER ship', () => {
@@ -105,6 +105,62 @@ describe('shipOffers', () => {
             ctx({ playerShip: playerShip(2) }))).toBeFalse();
         expect(shipOffers(pers({}, { noMissionIfBeefyTrader: true }),
             ctx({ playerShip: playerShip(1) }))).toBeTrue();
+    });
+});
+
+describe('showsHailQuote (përs HailQuote, STR# 7101)', () => {
+    const quoter = (flags: Partial<PersData['flags']> = {},
+        hailQuote = '<OSN>: I need assistance, can you help?') =>
+        pers({ hailQuote }, flags);
+    const quoteCtx = (overrides: Partial<ShipOfferGates & {
+        missionAvailable: boolean, alreadyShown: boolean,
+    }> = {}) => ({
+        ...gates(), missionAvailable: true, alreadyShown: false, ...overrides,
+    });
+
+    it('says nothing when there is no quote', () => {
+        expect(showsHailQuote(quoter({}, ''), quoteCtx())).toBeFalse();
+        expect(showsHailQuote(quoter({}, '   '), quoteCtx())).toBeFalse();
+        expect(showsHailQuote(quoter(), quoteCtx())).toBeTrue();
+    });
+
+    it('honours 0x0080, "only show quote once"', () => {
+        expect(showsHailQuote(quoter({ hailOnlyOnce: true }),
+            quoteCtx({ alreadyShown: true }))).toBeFalse();
+        expect(showsHailQuote(quoter({ hailOnlyOnce: true }),
+            quoteCtx({ alreadyShown: false }))).toBeTrue();
+        // Without the bit, an already-shown quote may be said again.
+        expect(showsHailQuote(quoter(),
+            quoteCtx({ alreadyShown: true }))).toBeTrue();
+    });
+
+    it('honours 0x0400, "don\'t show quote when LinkMission is not '
+        + 'available"', () => {
+            expect(showsHailQuote(
+                quoter({ hailOnlyWhenMissionAvailable: true }),
+                quoteCtx({ missionAvailable: false }))).toBeFalse();
+            expect(showsHailQuote(
+                quoter({ hailOnlyWhenMissionAvailable: true }),
+                quoteCtx({ missionAvailable: true }))).toBeTrue();
+        });
+
+    it('honours the four encounter conditions', () => {
+        expect(showsHailQuote(quoter({ hailOnlyWhenDisabled: true }),
+            quoteCtx())).toBeFalse();
+        expect(showsHailQuote(quoter({ hailOnlyWhenDisabled: true }),
+            quoteCtx({ disabled: true }))).toBeTrue();
+        expect(showsHailQuote(quoter({ hailOnlyWhenAttacking: true }),
+            quoteCtx())).toBeFalse();
+        expect(showsHailQuote(quoter({ hailOnlyWhenAttacking: true }),
+            quoteCtx({ attackingPlayer: true }))).toBeTrue();
+        expect(showsHailQuote(quoter({ hailOnlyWithGrudge: true }),
+            quoteCtx())).toBeFalse();
+        expect(showsHailQuote(quoter({ hailOnlyWithGrudge: true }),
+            quoteCtx({ holdsGrudge: true }))).toBeTrue();
+        expect(showsHailQuote(quoter({ hailOnlyWhenLikesPlayer: true }),
+            quoteCtx())).toBeFalse();
+        expect(showsHailQuote(quoter({ hailOnlyWhenLikesPlayer: true }),
+            quoteCtx({ likesPlayer: true }))).toBeTrue();
     });
 });
 
@@ -190,5 +246,94 @@ describe('the stock ship-offered missions', () => {
             // No special ships of its own: the derelict you boarded IS
             // the mission, and the job is to carry its people home.
             expect(mission.shipCount).toBeLessThan(0);
+        });
+
+    it('offers the Refuel Traders on HAILING, replacing the trader with '
+        + 'the rescue hulk (mïsn 141/650/651/652)', async () => {
+            const gameData = await getIntegrationGameData();
+            // All 63 Refuel Trader përs carry the same mask; përs 225 is
+            // one of the 26 that link mïsn 141.
+            const trader = await gameData.data.Pers.get('nova:225');
+            expect(trader.linkMission).toEqual('nova:141');
+            expect(shipOfferTrigger(trader)).toEqual('hail');
+            expect(trader.flags.replaceWithSpecialShip).toBeTrue();
+            expect(shipOfferConsequence(trader)).toEqual('replace');
+            // The advertisement: STR# 7101 index 15.
+            expect(trader.hailQuote)
+                .toEqual('<OSN>: I need assistance, can you help?');
+            // 0x0008 is set on every one of them, and their govt is
+            // Civvies — so it MUST NOT gate the offer (ShipOfferGates).
+            expect(trader.flags.hailOnlyWhenLikesPlayer).toBeTrue();
+            expect(shipOffers(trader, ctx())).toBeTrue();
+            // ...but it does gate the quote, which is the point of the bit.
+            expect(showsHailQuote(trader, {
+                ...gates(), missionAvailable: true, alreadyShown: false,
+            })).toBeFalse();
+            expect(showsHailQuote(trader, {
+                ...gates({ likesPlayer: true }), missionAvailable: true,
+                alreadyShown: false,
+            })).toBeTrue();
+
+            for (const id of ['nova:141', 'nova:650', 'nova:651', 'nova:652']) {
+                const mission = await gameData.data.Mission.get(id);
+                expect(mission.availLoc).withContext(id).toEqual(2);
+                // ShipGoal 5 "rescue", one ship, in the player's own
+                // system (ShipSyst -6), placed where the përs was.
+                expect(mission.shipGoal).withContext(id).toEqual(5);
+                expect(mission.shipCount).withContext(id).toEqual(1);
+                expect(mission.shipSyst).withContext(id).toEqual(-6);
+                // The deferred auto-abort and its two numeric effects.
+                expect(mission.flags.autoAbort).withContext(id).toBeTrue();
+                expect(mission.flags.applyPayOnAutoAbort)
+                    .withContext(id).toBeTrue();
+                expect(mission.flags.remove100FuelOnAutoAbort)
+                    .withContext(id).toBeTrue();
+                expect(mission.payVal).withContext(id).toEqual(2000);
+                // Invisible, but it still has offer text to show.
+                expect(mission.flags.invisible).withContext(id).toBeTrue();
+                expect(mission.offerText.length).withContext(id)
+                    .toBeGreaterThan(0);
+                // NOT cantRefuse: you may decline to give up your fuel.
+                expect(mission.flags.cantRefuse).withContext(id).toBeFalse();
+            }
+        });
+
+    it('keeps the whole AvailLoc 2 set offerable in open space '
+        + '(AvailStel -1)', async () => {
+            // The in-flight offer context has no stellar and substitutes a
+            // neutral one (ship_mission_accept's buildShipMissionOffer).
+            // That is only safe because every stock ship-offered mission is
+            // authored AvailStel -1, "any inhabited stellar" — pinned here
+            // so a data change surfaces as this spec rather than as a
+            // mission that silently stops being offered in flight.
+            const gameData = await getIntegrationGameData();
+            for (const id of ['nova:132', 'nova:133', 'nova:134', 'nova:135',
+                'nova:136', 'nova:137', 'nova:138', 'nova:139', 'nova:140',
+                'nova:141', 'nova:650', 'nova:651', 'nova:652']) {
+                const mission = await gameData.data.Mission.get(id);
+                expect(mission.availLoc).withContext(id).toEqual(2);
+                expect(mission.availStel).withContext(id).toEqual(-1);
+                // Every one of them has offer text; an offer with none
+                // would open an empty popup (presentShipOffer skips it).
+                expect(mission.offerText.trim().length).withContext(id)
+                    .toBeGreaterThan(0);
+            }
+        });
+
+    it('makes the Derelict Decoy an IMMEDIATE auto-abort, so its only '
+        + 'content is the ambush', async () => {
+            const gameData = await getIntegrationGameData();
+            const mission = await gameData.data.Mission.get('nova:133');
+            expect(mission.flags.autoAbort).toBeTrue();
+            expect(mission.flags.cantRefuse).toBeTrue();
+            expect(mission.flags.invisible).toBeTrue();
+            // Not a board/rescue goal, so it is NOT the deferred kind:
+            // it aborts the instant it is accepted and never becomes an
+            // active mission (mission_logic's deferredAutoAbort).
+            expect(mission.shipGoal).toEqual(-1);
+            expect(deferredAutoAbort(mission)).toBeFalse();
+            // Nothing but the pirates: no pay, no OnAccept set string.
+            expect(mission.payVal).toEqual(0);
+            expect(mission.onAccept).toEqual('');
         });
 });
