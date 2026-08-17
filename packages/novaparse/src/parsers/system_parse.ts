@@ -4,8 +4,21 @@ import { BaseParse } from "./base_parse.js";
 import { BaseData } from "novadatainterface/base_data";
 
 
+/**
+ * Which systems name each system in their own Con1-Con16, by global id.
+ * See SystemLinkMap in nova_parse.ts for how it is built and why.
+ */
+export type SystemBacklinkMap = Promise<{ [index: string]: string[] }>;
+
+export function SystemParseClosure(backlinks: SystemBacklinkMap) {
+    return (syst: SystResource, notFoundFunction: (m: string) => void) =>
+        SystemParse(syst, notFoundFunction, backlinks);
+}
+
 // TODO: Refactor redundant code
-export async function SystemParse(syst: SystResource, notFoundFunction: (m: string) => void): Promise<SystemData> {
+export async function SystemParse(syst: SystResource,
+    notFoundFunction: (m: string) => void,
+    backlinks?: SystemBacklinkMap): Promise<SystemData> {
     var base: BaseData = await BaseParse(syst, notFoundFunction);
 
     var links: Array<string> = [];
@@ -18,6 +31,26 @@ export async function SystemParse(syst: SystResource, notFoundFunction: (m: stri
         }
         else {
             notFoundFunction("No corresponding system " + linkLocal + " for link from " + base.id);
+        }
+    }
+
+    // A hyperspace link is undirected — "the player can make hyperspace
+    // jumps back and forth between them" (EVN Bible, the sÿst resource) —
+    // so a system another one links TO is one jump away whether or not it
+    // says so itself. Plug-ins lean on this: the Singularity plug-in
+    // reaches AP Fringe IX by declaring the link only from AP Fringe IX's
+    // end, and stock Nova's swapped duplicate systems (the Glimmers, the
+    // Procyons) are entered the same way. Closing the edge here rather
+    // than in each consumer is what makes the destination routable,
+    // stageable and jumpable, not merely drawn on the map.
+    //
+    // Appended in id order after the system's own declarations, so the
+    // list is byte-identical on every peer.
+    const declared = new Set(links);
+    for (const other of (await backlinks)?.[base.id] ?? []) {
+        if (!declared.has(other)) {
+            declared.add(other);
+            links.push(other);
         }
     }
 

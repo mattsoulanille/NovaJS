@@ -57,7 +57,9 @@ import { SpriteSheetMulti, SpriteSheetMultiParse } from "./parsers/sprite_sheet_
 import { StatusBarParse } from "./parsers/status_bar_parse.js";
 import { StringTableParse } from "./parsers/string_table_parse.js";
 import { DescriptionParse } from "./parsers/description_parse.js";
-import { SystemParse } from "./parsers/system_parse.js";
+import {
+    SystemBacklinkMap, SystemParseClosure,
+} from "./parsers/system_parse.js";
 import { TargetCornersParse } from "./parsers/target_corners_parse.js";
 import { WeaponParse } from "./parsers/weapon_parse.js";
 import { BoomResource } from "./resource_parsers/boom_resource.js";
@@ -119,6 +121,7 @@ export class NovaParse implements GameDataInterface {
     private shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
 
     private shipPICTMap: ShipPictMap;
+    private systemBacklinkMap: SystemBacklinkMap;
     private weaponOutfitMap: WeaponOutfitMap;
     private ammoOutfitMap: AmmoOutfitMap;
     resourceNotFoundFunction: (message: string) => void;
@@ -177,6 +180,7 @@ export class NovaParse implements GameDataInterface {
         this.flagMap.catch((_e: Error) => { });
 
         this.shipPICTMap = this.makeShipPictMap();
+        this.systemBacklinkMap = this.makeSystemBacklinkMap();
         this.weaponOutfitMap = this.makeWeaponOutfitMap();
         this.ammoOutfitMap = this.makeAmmoOutfitMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap,
@@ -288,7 +292,9 @@ export class NovaParse implements GameDataInterface {
             Rank: this.makeGettable<RankResource, RankData>(NovaResourceType.ränk,
                 async (rank, notFound) => RankParse(rank, notFound, await this.flagMap)),
             Planet: this.makeGettable<SpobResource, PlanetData>(NovaResourceType.spöb, PlanetParse),
-            System: this.makeGettable<SystResource, SystemData>(NovaResourceType.sÿst, SystemParse),
+            System: this.makeGettable<SystResource, SystemData>(
+                NovaResourceType.sÿst,
+                SystemParseClosure(this.systemBacklinkMap)),
             Govt: this.makeGettable<GovtResource, GovtData>(NovaResourceType.gövt, GovtParse),
             Dude: this.makeGettable<DudeResource, DudeData>(NovaResourceType.düde, DudeParse),
             Fleet: this.makeGettable<FletResource, FleetData>(NovaResourceType.flët, FleetParse),
@@ -426,6 +432,44 @@ export class NovaParse implements GameDataInterface {
                 ? makeBuiltInWeaponOutfit(weapon)
                 : makeBuiltInAmmoOutfit(weapon);
         });
+    }
+
+    /**
+     * For each system, the OTHER systems that name it in their own
+     * Con1-Con16 — the half of its adjacency it does not declare itself.
+     *
+     * A hyperspace link is undirected: "Each system can be linked to up
+     * to 16 other systems, and the player can make hyperspace jumps back
+     * and forth between them" (EVN Bible, the sÿst resource). Data in
+     * the wild leans on that. Stock Nova has 49 links declared from one
+     * end only — every swapped duplicate system (the five Glimmers, the
+     * Procyons, SPC-1421) is entered through one — and the Singularity
+     * plug-in's AP Fringe IX declares its links to Fer'I'Jus from its own
+     * end alone, which is exactly why the system was unreachable.
+     *
+     * Built from the raw resources (no full parse) and sorted, so a
+     * system's completed link list is identical on every peer.
+     */
+    private async makeSystemBacklinkMap(): SystemBacklinkMap {
+        const idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return {};
+        }
+
+        const backlinks: { [index: string]: Set<string> } = {};
+        for (const systemID in idSpace.sÿst) {
+            const system = idSpace.sÿst[systemID];
+            for (const localLink of system.links) {
+                const target = system.idSpace.sÿst[localLink];
+                if (!target || target.globalID === system.globalID) {
+                    continue;
+                }
+                (backlinks[target.globalID] ??= new Set())
+                    .add(system.globalID);
+            }
+        }
+        return Object.fromEntries(Object.entries(backlinks)
+            .map(([id, sources]) => [id, [...sources].sort()]));
     }
 
     private async makeWeaponOutfitMap(): WeaponOutfitMap {
