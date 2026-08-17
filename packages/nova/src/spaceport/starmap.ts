@@ -429,6 +429,26 @@ export class SystemGraph {
         this.centerOn(this.currentSystem);
     }
 
+    /**
+     * Re-targets the "current system" (the dashed ring, and the origin the
+     * route overlay is expanded from) without rebuilding the graph. For
+     * viewers that step through many locations over one galaxy — the
+     * title screen's rollback view walks a pilot's checkpoints this way.
+     * Ignored for a system not on this map (NCB-hidden). Route mode only.
+     */
+    setCurrentSystem(systemId: string) {
+        if (!this.systems.has(systemId) || systemId === this.currentSystem) {
+            return;
+        }
+        this.currentSystem = systemId;
+        this.drawRoute();
+    }
+
+    /** Whether `systemId` is drawn on this map (visible under its bits). */
+    hasSystem(systemId: string): boolean {
+        return this.systems.has(systemId);
+    }
+
     /** Centers any system in the viewport at the current zoom. */
     centerOn(systemId: string) {
         const system = this.systems.get(systemId);

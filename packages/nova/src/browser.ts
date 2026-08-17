@@ -43,7 +43,7 @@ import { AcceptShipMissionEvent } from "./display/ship_mission_offer_plugin.js";
 import { AcceptedMission } from "./nova_plugin/mission_accept.js";
 import { daysPerJump } from "./nova_plugin/calendar.js";
 import { ControlEvent, ControlsSubject, EcsControlEvent } from "./nova_plugin/controls_plugin.js";
-import { Controls, getActions, SavedControls } from "./nova_plugin/controls.js";
+import { ControlAction, Controls, getActions, SavedControls } from "./nova_plugin/controls.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "./nova_plugin/game_data_resource.js";
 import { FinishJumpEvent, JumpComponent, JumpRouteComponent, reconcileRouteOnArrival } from "./nova_plugin/jump_plugin.js";
 import { GateArrivalComponent, GateTransitEvent } from "./nova_plugin/gate_transit_plugin.js";
@@ -110,17 +110,21 @@ import {
 } from "./title/client_prefs.js";
 // clearPilotProfile is wired into the ?reset path below.
 import {
-    applyActivePilot, createPilot, deletePilot, exportFileName, exportPilot,
-    getActivePilot, importPilot, listPilots, loadPilotControls, selectPilot,
+    applyActivePilot, createPilot, deletePilot, exportCheckpointFile,
+    exportFileName, exportPilot, getActivePilot, importPilot, listPilots,
+    loadPilotControls, selectPilot,
 } from "./title/pilot_registry.js";
 import {
-    latestState, loadHistory, recordCheckpoint,
+    checkpointCount, latestState, loadHistory, recordCheckpoint,
+    rewindPilotSave,
 } from "./title/pilot_history.js";
+import { RollbackScreen, ROLLBACK_PANEL } from "./title/rollback_screen.js";
 import { JsonValue } from "./title/json_patch.js";
 import {
     CheckpointRequest, checkpointRequests, describeFlightChanges,
 } from "./spaceport/checkpoint_requests.js";
 import { combatRatingName } from "./nova_plugin/reputation.js";
+import { displayName } from "./nova_plugin/display_name.js";
 import { formatDate } from "./nova_plugin/calendar.js";
 import { isTextEntryActive } from "./input_focus.js";
 import { MenuControls } from "./spaceport/menu_controls.js";
@@ -1037,7 +1041,10 @@ function noticeFlightChanges(data: SaveData) {
     const changes = describeFlightChanges(lastCheckpointData, data, {
         shipName: id => simulationGameData.data.Ship.getCached(id)?.name
             ?.split(';')[0].trim(),
-        missionName: id => universe.getMission(id)?.name,
+        missionName: id => {
+            const name = universe.getMission(id)?.name;
+            return name === undefined ? undefined : displayName(name);
+        },
     });
     if (changes.length === 0) {
         return;
@@ -2652,6 +2659,83 @@ async function runTitle() {
         }
     };
 
+    // ── Pilot history / rollback ───────────────────────────────────────
+    // The rollback view (title/rollback_screen.ts) is a PIXI panel over the
+    // title art, like the About popup. The title has no game controls
+    // pipeline, so a keydown adaptor feeds it arrow/page/Escape presses as
+    // ControlEvents on its own subject while it is up. Built lazily: it
+    // loads every system for its map on first use.
+    const rollbackControls = new Subject<ControlEvent>();
+    let rollbackScreen: RollbackScreen | undefined;
+    const rollbackKeyActions: Record<string, ControlAction> = {
+        ArrowUp: 'up', ArrowDown: 'down', PageUp: 'left', PageDown: 'right',
+        Escape: 'depart',
+    };
+    const onRollbackKey = (event: KeyboardEvent) => {
+        const action = rollbackKeyActions[event.key];
+        if (!action) {
+            return;
+        }
+        event.preventDefault();
+        rollbackControls.next({
+            action, state: event.repeat ? 'repeat' : 'start',
+        });
+    };
+    const centreRollback = () => rollbackScreen?.container.position.set(
+        Math.max(0, (app.screen.width - ROLLBACK_PANEL.width) / 2),
+        Math.max(0, (app.screen.height - ROLLBACK_PANEL.height) / 2));
+    window.addEventListener('resize', centreRollback);
+    /**
+     * Opens the rollback view for a pilot; resolves a status line for the
+     * Open Pilot dialog. A rewind installs the chosen checkpoint's save as
+     * the pilot's current save (title/pilot_history.ts rewindPilotSave).
+     */
+    const openRollback = async (id: string): Promise<string> => {
+        const pilot = listPilots().find(p => p.id === id);
+        if (!pilot) {
+            return 'That pilot no longer exists.';
+        }
+        const history = loadHistory(pilot.saveKey);
+        if (!history || history.checkpoints.length === 0) {
+            return `${pilot.name} has no checkpoints yet (they are recorded `
+                + 'on every departure).';
+        }
+        rollbackScreen ??= new RollbackScreen(displayAssetData,
+            simulationGameData, rollbackControls);
+        app.stage.addChild(rollbackScreen.container);
+        centreRollback();
+        document.addEventListener('keydown', onRollbackKey);
+        try {
+            const result = await rollbackScreen.show({
+                pilotName: pilot.name,
+                history,
+                onExport: (index) => {
+                    const copy = exportCheckpointFile(id, index);
+                    if (copy) {
+                        downloadText(copy.text, exportFileName(copy.name));
+                    }
+                },
+            });
+            if (result.action === 'rewind') {
+                const label = history.checkpoints[result.index]?.label
+                    ?? 'checkpoint';
+                if (rewindPilotSave(pilot.saveKey, result.index)) {
+                    // The in-flight change baseline moves with the save.
+                    if (getActivePilot()?.id === id) {
+                        loadCheckpointBaseline();
+                    }
+                    void refreshStatus();
+                    return `Rewound ${pilot.name} to "${label}".`;
+                }
+                return 'The rewind could not be written.';
+            }
+            return '';
+        } finally {
+            document.removeEventListener('keydown', onRollbackKey);
+            app.stage.removeChild(rollbackScreen.container);
+        }
+    };
+
     let entering = false;
     let inGame = false;
     let teardownGame: (() => Promise<void>) | undefined;
@@ -2786,6 +2870,11 @@ async function runTitle() {
                     if (isActive) {
                         parts.push('(current)');
                     }
+                    const checkpoints = checkpointCount(loadHistory(p.saveKey));
+                    if (checkpoints > 0) {
+                        parts.push(`· ${checkpoints} checkpoint`
+                            + `${checkpoints === 1 ? '' : 's'}`);
+                    }
                     return {
                         id: p.id, name: p.name,
                         detail: parts.join(' ') || undefined,
@@ -2815,6 +2904,7 @@ async function runTitle() {
                         };
                     },
                     onDelete: (id) => { deletePilot(id); },
+                    onRollback: openRollback,
                 };
                 const chosen = await showOpenPilotDialog(listEntries(), actions);
                 if (chosen) {

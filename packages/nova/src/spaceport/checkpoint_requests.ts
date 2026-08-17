@@ -18,6 +18,7 @@ import { Entity } from 'nova_ecs/entity';
 import { Subject } from 'rxjs';
 import type { CheckpointKind } from '../title/pilot_history.js';
 import type { MissionEvent } from '../nova_plugin/mission_logic.js';
+import { displayName } from '../nova_plugin/display_name.js';
 
 export interface CheckpointRequest {
     /** Human-readable, e.g. "Accepted: Delivery to Sirius". */
@@ -56,7 +57,8 @@ export function truncateLabel(label: string,
  */
 export function missionEventLabel(
     event: Pick<MissionEvent, 'type' | 'missionName'>): string | undefined {
-    const name = event.missionName || 'mission';
+    // Mission names carry a "; note" author suffix the player never sees.
+    const name = event.missionName ? displayName(event.missionName) : 'mission';
     switch (event.type) {
         case 'accepted': return truncateLabel(`Accepted: ${name}`);
         case 'completed': return truncateLabel(`Completed: ${name}`);

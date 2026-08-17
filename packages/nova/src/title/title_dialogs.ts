@@ -269,6 +269,14 @@ export interface PilotDialogActions {
     onImport(text: string): { ok: boolean, message: string };
     /** Deletes a pilot and its save. */
     onDelete(id: string): void;
+    /**
+     * Opens the pilot's checkpoint history (the rollback view, drawn on
+     * the game canvas under this dialog). The dialog hides itself and
+     * stands down from the keyboard until the promise settles, then
+     * refreshes with the returned status message. Optional: without it
+     * the History button is not shown.
+     */
+    onRollback?(id: string): Promise<string>;
 }
 
 /**
@@ -319,6 +327,10 @@ export function showOpenPilotDialog(entries: PilotEntry[],
         const exportBtn = button('Export', 'open-pilot-export', false);
         const importBtn = button('Import…', 'open-pilot-import', false);
         const deleteBtn = button('Delete', 'open-pilot-delete', false);
+        const historyBtn = button('History…', 'open-pilot-history', false);
+        // While the rollback view owns the screen, this dialog is hidden
+        // and its Enter/Escape handling stands down.
+        let suspended = false;
 
         const setEnabled = (btn: HTMLButtonElement, on: boolean) => {
             btn.disabled = !on;
@@ -331,7 +343,7 @@ export function showOpenPilotDialog(entries: PilotEntry[],
                 row.style.background = rid === id ? '#2b6cff' : 'transparent';
                 row.style.color = rid === id ? '#fff' : '#111';
             }
-            for (const btn of [open, exportBtn, deleteBtn]) {
+            for (const btn of [open, exportBtn, deleteBtn, historyBtn]) {
                 setEnabled(btn, id !== undefined);
             }
         };
@@ -425,6 +437,24 @@ export function showOpenPilotDialog(entries: PilotEntry[],
                 selectedId = undefined;
                 refresh(`Deleted ${label}.`);
             });
+            if (actions.onRollback) {
+                const onRollback = actions.onRollback.bind(actions);
+                historyBtn.addEventListener('click', () => {
+                    if (!selectedId || suspended) { return; }
+                    suspended = true;
+                    modal.backdrop.style.display = 'none';
+                    onRollback(selectedId).then(
+                        message => refresh(message),
+                        e => {
+                            console.warn('Rollback view failed:', e);
+                            refresh('Could not open the pilot history.');
+                        },
+                    ).finally(() => {
+                        modal.backdrop.style.display = 'flex';
+                        suspended = false;
+                    });
+                });
+            }
         }
 
         // File operations only exist when the caller wired them up.
@@ -433,7 +463,9 @@ export function showOpenPilotDialog(entries: PilotEntry[],
             display: 'flex', justifyContent: 'flex-start', marginTop: '12px',
         } as Partial<CSSStyleDeclaration>);
         if (actions) {
-            for (const b of [importBtn, exportBtn, deleteBtn]) {
+            const fileButtons = [importBtn, exportBtn, deleteBtn,
+                ...(actions.onRollback ? [historyBtn] : [])];
+            for (const b of fileButtons) {
                 b.style.marginLeft = '0';
                 b.style.marginRight = '8px';
                 leftRow.appendChild(b);
@@ -453,6 +485,7 @@ export function showOpenPilotDialog(entries: PilotEntry[],
         };
         const abort = () => { cleanup(); resolve(null); };
         const onKey = (e: KeyboardEvent) => {
+            if (suspended) { return; }
             if (e.key === 'Enter') { e.preventDefault(); confirm(); }
             else if (e.key === 'Escape') { e.preventDefault(); abort(); }
         };

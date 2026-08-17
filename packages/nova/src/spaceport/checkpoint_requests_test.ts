@@ -12,6 +12,7 @@ import {
 } from './checkpoint_requests.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
+import { displayName } from '../nova_plugin/display_name.js';
 
 describe('checkpoint labels', () => {
     it('names mission events, and skips progress notices', () => {
@@ -113,7 +114,7 @@ describe('MissionSession checkpoint announcements (real Nova data)', () => {
         async () => {
             const { universe, entity, session } = await dockedPilot('nova:128');
             const id = await startableMission(universe, session);
-            const name = universe.getMission(id)!.name;
+            const name = displayName(universe.getMission(id)!.name);
 
             session.commit();
             expect(received.length).toBe(1);
