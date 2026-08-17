@@ -36,6 +36,15 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
             GetEntity, Optional(StepEvent), ...args] as const,
         skipIfApplyingPatches: true,
         exclusive: true,
+        // The common case — the component is already provided (or a run
+        // is in flight) and this is a plain step — used to enter `step`,
+        // draft every argument, allocate a promise and finish the drafts
+        // just to return. Same condition as the guard inside `step`,
+        // checked on the raw arguments first.
+        shouldRun(providedValue, asyncProviderData, uuid, _entity, step, ..._args) {
+            const running = asyncProviderData.get(name)?.get(uuid);
+            return !((running || providedValue !== undefined) && step);
+        },
         async step(providedValue, asyncProviderData, uuid, entity, step, ...args) {
             const originalProvidedValue = entity.components.get(provided);
 

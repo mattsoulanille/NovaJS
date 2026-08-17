@@ -185,5 +185,19 @@ export const SpaceportPlugin: Plugin = {
         world.removeSystem(SpaceportResizeSystem);
         world.removeSystem(SpaceportAmbientSystem);
         world.resources.delete(SpaceportAmbientState);
+        // Every dockable stellar got a full Spaceport (outfitter, shipyard,
+        // trade center, bar, mission board: a couple of thousand PIXI.Text
+        // objects each). Text owns a canvas texture registered in PIXI's
+        // global TextureCache, so dropping the container is not enough:
+        // without destroy() every system the player passes through leaks
+        // its planets' UI canvases (and, once rendered, their GPU
+        // textures) for the rest of the session.
+        for (const [, entity] of world.entities) {
+            const spaceport = entity.components.get(SpaceportComponent);
+            if (spaceport) {
+                spaceport.container.destroy({ children: true });
+                entity.components.delete(SpaceportComponent);
+            }
+        }
     }
 }

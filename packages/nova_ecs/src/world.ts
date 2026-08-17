@@ -61,6 +61,15 @@ export class World {
 
     private sortables: Array<Sortable> = []; // This includes systems and markers
     private systems: Array<System> = []; // Not a map because order matters.
+    /**
+     * Systems that respond to each event, in `systems` order. Cleared
+     * whenever `systems` changes; a system's event set is fixed at
+     * construction, so this is a pure function of `systems`. Component
+     * change events fire thousands of times per step and mostly match
+     * no system at all, which made the per-event filter over every
+     * system a measurable cost.
+     */
+    private systemsByEvent = new Map<UnknownEvent, System[]>();
     singletonEntity: Entity;
 
     private eventQueue: EcsEventWithEntities<unknown>[] = [];
@@ -395,7 +404,7 @@ export class World {
         }
 
         this.sortables = topologicalSortList([...this.sortables, system]);
-        this.systems = filterSystems(this.sortables);
+        this.setSystems(filterSystems(this.sortables));
         this.nameSystemMap.set(system.name, system);
 
         for (const component of system.query.components) {
@@ -406,7 +415,7 @@ export class World {
 
     private addAnyMarker(marker: Marker): this {
         this.sortables = topologicalSortList([...this.sortables, marker]);
-        this.systems = filterSystems(this.sortables);
+        this.setSystems(filterSystems(this.sortables));
         return this;
     }
 
@@ -465,7 +474,7 @@ export class World {
         if (index >= 0) {
             this.sortables.splice(index, 1);
         }
-        this.systems = filterSystems(this.sortables);
+        this.setSystems(filterSystems(this.sortables));
 
         return this;
     }
@@ -494,8 +503,25 @@ export class World {
         }
     }
 
+    private setSystems(systems: Array<System>) {
+        this.systems = systems;
+        this.systemsByEvent.clear();
+    }
+
+    private systemsFor(event: UnknownEvent): System[] {
+        let systems = this.systemsByEvent.get(event);
+        if (!systems) {
+            systems = this.systems.filter(s => s.events.has(event));
+            this.systemsByEvent.set(event, systems);
+        }
+        return systems;
+    }
+
     private runEvent(eventWithEntities: EcsEventWithEntities<unknown>) {
-        const systems = this.systems.filter(s => s.events.has(eventWithEntities.event));
+        const systems = this.systemsFor(eventWithEntities.event);
+        if (systems.length === 0) {
+            return;
+        }
 
         // Default to all entities if none are specified. When defaulting to all,
         // this includes entities added in the same step.

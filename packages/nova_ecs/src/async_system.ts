@@ -34,6 +34,14 @@ export interface AsyncSystemArgs<StepArgTypes extends readonly ArgTypes[]>
     exclusive?: boolean; // Run this system only once at a time (per entity)
     skipIfApplyingPatches?: boolean; // Don't run the system if there are patches to apply from previous runs. Just apply the patches.
     alwaysRunOnEvents?: boolean; // Always run the system on events other than the step event.
+    /**
+     * Cheap pre-check on the undrafted args, evaluated after pending
+     * patches are applied and before anything is drafted. Returning
+     * false skips this run entirely — equivalent to `step` returning
+     * immediately without touching its drafts, minus the drafts, the
+     * promise and the empty patch set. Must be a pure read.
+     */
+    shouldRun?: (...args: ArgsToData<StepArgTypes>) => boolean;
 }
 
 enablePatches();
@@ -77,6 +85,10 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                 (stepArgs as any)[Symbol.for('immer-state')] = false;
                 entityStatus.patches = [];
                 if (willSkip) {
+                    entityStatus.running = false;
+                    return;
+                }
+                if (systemArgs.shouldRun && !systemArgs.shouldRun(...stepArgs)) {
                     entityStatus.running = false;
                     return;
                 }
