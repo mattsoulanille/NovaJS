@@ -5,6 +5,7 @@ import {
     evaluateNCBTest,
 } from './ncb.js';
 import { CronState, CronStates } from './player_state_plugin.js';
+import { sameNumberedResource } from './mission_logic.js';
 
 /**
  * Per-player crön evaluation, run for each day the player's calendar
@@ -21,10 +22,29 @@ import { CronState, CronStates } from './player_state_plugin.js';
  * loop flags re-run OnStart / OnEnd each day while their conditions
  * still hold.
  *
+ * EnableOn sees the player's outfits (`Oxxx`, resolved in the cron's own
+ * plug-in namespace like every other numeric reference in it) when the
+ * caller supplies them: Extra Outfits' crön 604 "Take Away Officers" is
+ * `EnableOn !O533` / `OnStart !b9010`, and without the outfits `!O533`
+ * read as always-true, so the cron fired every day and cleared the
+ * Officer Quarters bit the moment the player left the planet.
+ *
  * Remaining simplifications (documented gaps): the news strings are not
- * shown. Cron set strings run with bit hooks only, so exotic operators
- * (Gxxx, Sxxx, ...) are ignored with a console warning.
+ * shown. Cron set strings run with bit and rank hooks only, so the
+ * outfit/mission/ship operators (Gxxx, Sxxx, ...) are ignored with a
+ * console warning.
  */
+
+/** What the crons may consult besides the bits. */
+export interface CronEvaluationOptions {
+    /** Kxxx / Lxxx: the player's active ranks (see ncb.ts). */
+    ranks?: RankHookOptions;
+    /**
+     * Oxxx: the player's owned outfits, global id -> count (the
+     * OutfitsStateComponent). Absent means "owns nothing".
+     */
+    ownedOutfits?: ReadonlyMap<string, number>;
+}
 
 function inDateRange(cron: CronData, day: number): boolean {
     const date = dateFromDayNumber(day);
@@ -64,10 +84,14 @@ function runCronSetString(expression: string, bits: Set<number>,
     }
 }
 
-function enableOnPasses(cron: CronData, bits: Set<number>): boolean {
+function enableOnPasses(cron: CronData, bits: Set<number>,
+    ownedOutfits?: ReadonlyMap<string, number>): boolean {
     try {
         return evaluateNCBTest(cron.enableOn, {
             getBit: bit => bits.has(bit),
+            // A cron's Oxxx names the stock outfit xxx if there is one,
+            // else the cron's own plug-in's; never a third plug-in's.
+            hasOutfit: id => ownsOutfit(ownedOutfits, id, cronPrefix(cron)),
         });
     } catch (e) {
         if (e instanceof NCBParseError) {
@@ -97,13 +121,27 @@ function requireMet(cron: CronData, contribute: bigint): boolean {
     return (require & contribute) === require;
 }
 
+function ownsOutfit(owned: ReadonlyMap<string, number> | undefined,
+    id: number, prefix: string): boolean {
+    if (!owned) {
+        return false;
+    }
+    for (const [globalId, count] of owned) {
+        if (count > 0 && sameNumberedResource(globalId, id, prefix)) {
+            return true;
+        }
+    }
+    return false;
+}
+
 /**
  * Whether the cron may run / keep looping this day: EnableOn passes and
  * its Require mask is covered.
  */
 function conditionsHold(cron: CronData, bits: Set<number>,
-    contribute: bigint): boolean {
-    return enableOnPasses(cron, bits) && requireMet(cron, contribute);
+    contribute: bigint, ownedOutfits?: ReadonlyMap<string, number>): boolean {
+    return enableOnPasses(cron, bits, ownedOutfits)
+        && requireMet(cron, contribute);
 }
 
 /**
@@ -114,12 +152,13 @@ function conditionsHold(cron: CronData, bits: Set<number>,
  */
 function stepCron(cron: CronData, state: CronState, day: number,
     bits: Set<number>, contribute: bigint, random: () => number,
-    ranks?: RankHookOptions): void {
+    ranks?: RankHookOptions,
+    ownedOutfits?: ReadonlyMap<string, number>): void {
     if (state.phase === 'idle') {
         // loopOnEnd: while inside the postHoldoff window after ending,
         // keep re-running OnEnd each day its conditions still hold.
         if (day < state.nextEligible) {
-            if (cron.loopOnEnd && conditionsHold(cron, bits, contribute)) {
+            if (cron.loopOnEnd && conditionsHold(cron, bits, contribute, ownedOutfits)) {
                 runCronSetString(cron.onEnd, bits, random, ranks);
             }
             return;
@@ -127,7 +166,7 @@ function stepCron(cron: CronData, state: CronState, day: number,
         if (!inDateRange(cron, day)) {
             return;
         }
-        if (!conditionsHold(cron, bits, contribute)) {
+        if (!conditionsHold(cron, bits, contribute, ownedOutfits)) {
             return;
         }
         const chance = cron.random >= 100 ? 100 : Math.max(0, cron.random);
@@ -148,7 +187,7 @@ function stepCron(cron: CronData, state: CronState, day: number,
         // Fall through so duration 0 ends today.
     } else if (state.phase === 'active' && cron.loopOnStart
         && day > state.phaseStart
-        && conditionsHold(cron, bits, contribute)) {
+        && conditionsHold(cron, bits, contribute, ownedOutfits)) {
         // loopOnStart: re-run OnStart each subsequent active day while
         // its conditions still hold (the entry day already ran it above).
         runCronSetString(cron.onStart, bits, random, ranks);
@@ -196,7 +235,11 @@ function cronPrefix(cron: CronData): string {
 export function runCronsForDays(crons: CronData[], states: CronStates,
     bits: Set<number>, fromDay: number, toDay: number,
     random: () => number = Math.random, baseContribute: bigint = 0n,
-    ranks?: RankHookOptions): void {
+    options: CronEvaluationOptions | RankHookOptions = {}): void {
+    // Older callers passed the rank hooks bare; tell the two apart by the
+    // rank options' required `active` set.
+    const { ranks, ownedOutfits }: CronEvaluationOptions =
+        'active' in options ? { ranks: options } : options;
     for (let day = fromDay + 1; day <= toDay; day++) {
         for (const cron of crons) {
             let state = states.get(cron.id);
@@ -209,7 +252,8 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
             // A cron's Kxxx/Lxxx numeric ids are scoped to the plug-in
             // that wrote the cron, exactly as a mission's are.
             stepCron(cron, state, day, bits, contribute, random,
-                ranks && { ...ranks, resolveId: id => `${cronPrefix(cron)}:${id}` });
+                ranks && { ...ranks, resolveId: id => `${cronPrefix(cron)}:${id}` },
+                ownedOutfits);
         }
     }
 }

@@ -287,9 +287,9 @@ describe('save_game schema', () => {
         it('prefers the pairs on load and parks what is not loaded', () => {
             const save: SaveData = {
                 ...SAMPLE,
-                // Stale legacy numbers, deliberately different from the
-                // pairs: the pairs win.
-                novaControlBits: [['1', 1]],
+                // The legacy list as this build writes it: the same bits,
+                // as physical numbers.
+                novaControlBits: [['342', 1], [String(P0), 1]],
                 controlBits: [
                     ['nova', 342], ['arpia', 2050], ['Planet Rico', 4601],
                     ['arpia', 7777],
@@ -318,6 +318,48 @@ describe('save_game schema', () => {
                 .toEqual(new Set([342, P0]));
             expect(second.parkedControlBits).toEqual(parkedControlBits);
         });
+
+        it('never loses a legacy bit the pairs lack (an older build wrote '
+            + 'the legacy list in between)', () => {
+                const save: SaveData = {
+                    ...SAMPLE,
+                    // Stale pairs: written before an older build set stock
+                    // b13 and (raw, shared) b1300 and re-saved the legacy
+                    // list only. Both are kept, and P0 (arpia b2050) is
+                    // NOT counted as missing: the pairs cover it.
+                    novaControlBits: [['342', 1], ['13', 1], ['1300', 1], [String(P0), 1]],
+                    controlBits: [['nova', 342], ['arpia', 2050]],
+                };
+                const entity = new Entity('restored');
+                entity.components.set(ShipComponent, { id: 'nova:164' });
+                const warn = spyOn(console, 'warn');
+                restorePlayerState(entity, decodeSave(encodeSave(save))!, resolver);
+                expect(entity.components.get(ControlBitsComponent))
+                    .toEqual(new Set([342, 13, P0 + 1, P0]));
+                expect(warn).toHaveBeenCalledTimes(1);
+                expect(warn.calls.mostRecent().args[0]).toContain('b13, b1300');
+            });
+
+        it('keeps a physical bit the mapping cannot name, and reads it back',
+            () => {
+                // The bits and the mapping came from different plug-in
+                // sets (or the mapping never arrived): a private-range
+                // number with no pair is written under the "physical"
+                // pseudo-namespace, never dropped.
+                const bare = new ControlBitResolver(undefined);
+                spyOn(console, 'warn');
+                const saved = extractSaveData(playerWithBits([13, P0 + 7]),
+                    'nova:130', { resolver: bare })!;
+                expect(saved.controlBits).toEqual([['nova', 13], ['physical', P0 + 7]]);
+                expect(console.warn).toHaveBeenCalledTimes(1);
+                const entity = new Entity('restored');
+                entity.components.set(ShipComponent, { id: 'nova:164' });
+                const { parkedControlBits } = restorePlayerState(entity,
+                    decodeSave(encodeSave(saved))!, resolver);
+                expect(entity.components.get(ControlBitsComponent))
+                    .toEqual(new Set([13, P0 + 7]));
+                expect(parkedControlBits).toEqual([]);
+            });
 
         it('migrates a legacy save\'s bare numbers', () => {
             // A pre-namespacing save: 342 is stock, 2050 was the shared bit
