@@ -128,6 +128,15 @@ export const ActiveMissionType = t.intersection([t.type({
      * <SN> existed, which decode unchanged.
      */
     shipName: t.string,
+    /**
+     * The special ships' subtitle, drawn from the mïsn's ShipSubtitle
+     * STR# list at accept — the sibling of shipName ("Tells Nova which
+     * subtitle, if any, to use for the special ships"), shown under the
+     * name in the target pane the way a përs subtitle is. Absent when
+     * the mission has no subtitle list (ShipSubtitle -1), and absent in
+     * older saves, which decode unchanged.
+     */
+    shipSubtitle: t.string,
 })]);
 export type ActiveMission = t.TypeOf<typeof ActiveMissionType>;
 

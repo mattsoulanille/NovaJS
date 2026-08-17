@@ -73,7 +73,8 @@ function makeObjective(overrides: Partial<ShipObjective>): ShipObjective {
 }
 
 function makePlayer(objective?: ShipObjective,
-    mission?: MissionData, shipName?: string): Entity {
+    mission?: MissionData, shipName?: string,
+    shipSubtitle?: string): Entity {
     const active: ActiveMission = {
         id: mission?.id ?? MISSION_ID,
         acceptedDay: 0,
@@ -87,6 +88,7 @@ function makePlayer(objective?: ShipObjective,
         deadlineDay: null,
         ...(objective ? { shipObjective: objective } : {}),
         ...(shipName ? { shipName } : {}),
+        ...(shipSubtitle ? { shipSubtitle } : {}),
     };
     const player = new Entity('player');
     player.components.set(MissionsComponent,
@@ -272,6 +274,91 @@ describe('buildMissionShipSpawns', () => {
             expect(ships.map(s => s.name))
                 .toEqual(['Blood Honor', 'Blood Honor', 'Blood Honor']);
         });
+
+    /**
+     * The regression this file exists to guard: the name used to live
+     * ONLY on Entity.name, which the EVN Bible would call a debugging
+     * label — it is not serializer-registered, so it never crossed into
+     * the display world and the target pane / hail dialog kept showing
+     * the bare ship class. The displayed name must ride the
+     * serializer-registered MissionShipComponent.
+     */
+    it('carries the accepted name on the synced MissionShipComponent',
+        async () => {
+            const mission: MissionData = {
+                ...getDefaultMissionData(),
+                id: MISSION_ID,
+                shipNames: ['Dechanik', 'Blood Honor', 'Doomblade'],
+                shipSubtitles: ['Bounty Target'],
+            };
+            const player = makePlayer(makeObjective({ total: 2 }), mission,
+                'Blood Honor', 'Bounty Target');
+            const ships = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', makeGameData(), makeUniverse(mission));
+            expect(ships.length).toBe(2);
+            for (const ship of ships) {
+                expect(ship.components.get(MissionShipComponent)).toEqual({
+                    mission: MISSION_ID,
+                    owner: OWNER,
+                    name: 'Blood Honor',
+                    subtitle: 'Bounty Target',
+                });
+            }
+        });
+
+    /**
+     * Re-entering the system respawns the mission's ships from the same
+     * frozen ActiveMission, so the bounty target you chased into the
+     * next system and back is still the same named ship — the multi-hop
+     * case. Nothing is re-rolled per spawn (or per client).
+     */
+    it('respawns the same name on every system entry', async () => {
+        const mission: MissionData = {
+            ...getDefaultMissionData(),
+            id: MISSION_ID,
+            shipNames: ['Dechanik', 'Blood Honor', 'Doomblade'],
+        };
+        const player = makePlayer(makeObjective({ total: 1 }), mission,
+            'Blood Honor');
+        const names = new Set<string | undefined>();
+        for (let i = 0; i < 5; i++) {
+            const [ship] = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', makeGameData(), makeUniverse(mission));
+            names.add(ship.components.get(MissionShipComponent)?.name);
+        }
+        expect([...names]).toEqual(['Blood Honor']);
+    });
+
+    /**
+     * The Bible on aux ships: they "cannot be given specific
+     * instructions, and no goals can be set for them", and ShipNameID /
+     * ShipSubtitle are documented against "the special ships". So the
+     * mission's escort of atmosphere ships stays anonymous even while
+     * its special ship is named.
+     */
+    it('does not name aux ships', async () => {
+        const mission: MissionData = {
+            ...getDefaultMissionData(),
+            id: MISSION_ID,
+            shipNames: ['Blood Honor'],
+            shipSubtitles: ['Bounty Target'],
+            auxShipCount: 2,
+            auxShipDude: 240,
+            auxShipDudeId: DUDE,
+            auxShipSyst: -1,
+        };
+        const player = makePlayer(undefined, mission, 'Blood Honor',
+            'Bounty Target');
+        const ships = await buildMissionShipSpawns(player, OWNER,
+            'nova:128', makeGameData(), makeUniverse(mission));
+        expect(ships.length).toBe(2);
+        for (const ship of ships) {
+            const missionShip = ship.components.get(MissionShipComponent)!;
+            expect(missionShip.aux).toBeTrue();
+            expect(missionShip.name).toBeUndefined();
+            expect(missionShip.subtitle).toBeUndefined();
+        }
+    });
 
     it('leaves ships unnamed when the mission has no ShipNameID list',
         async () => {

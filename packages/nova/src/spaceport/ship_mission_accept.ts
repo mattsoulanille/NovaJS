@@ -239,6 +239,7 @@ export interface ShipMissionAccept {
     shipSource: {
         shipObjective?: ShipObjective,
         shipName?: string,
+        shipSubtitle?: string,
         travelPlanet: string | null,
         returnPlanet: string | null,
     };

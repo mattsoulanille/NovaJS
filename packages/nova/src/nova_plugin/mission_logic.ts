@@ -950,11 +950,34 @@ export function runMissionSetString(machinery: MissionMachineryContext,
  */
 function pickSpecialShipName(mission: MissionData,
     random: () => number): string | undefined {
-    const names = mission.shipNames;
-    if (names.length === 0) {
+    return pickFromStrList(mission.shipNames, random);
+}
+
+/**
+ * The ShipSubtitle sibling of pickSpecialShipName: "Tells Nova which
+ * subtitle, if any, to use for the special ships ... Pick a subtitle
+ * from this STR# resource". Picked at accept and frozen for the same
+ * reason, and — like the name — ONE subtitle covers all of the
+ * mission's special ships. The original's own pilot file settles that:
+ * an in-progress mission records a single specialShipNameIndex /
+ * specialShipSubtitleIndex (and a single resolved specialShipName /
+ * specialShipSubtitle string) per mission, not one per ship.
+ *
+ * Unlike the name there is no wildcard for it — it exists only to be
+ * shown on the ships themselves (mïsn nova:685, "Assassinate Krane",
+ * names no ships at all and subtitles them "Krane").
+ */
+function pickSpecialShipSubtitle(mission: MissionData,
+    random: () => number): string | undefined {
+    return pickFromStrList(mission.shipSubtitles, random);
+}
+
+function pickFromStrList(entries: readonly string[],
+    random: () => number): string | undefined {
+    if (entries.length === 0) {
         return undefined;
     }
-    return names[Math.floor(random() * names.length)];
+    return entries[Math.floor(random() * entries.length)];
 }
 
 /**
@@ -1074,6 +1097,8 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // <SN>: the special ships' name, picked now (see
         // pickSpecialShipName) and frozen for the mission's life.
         shipName: pickSpecialShipName(mission, machinery.random),
+        // ...and the subtitle shown beneath it on those same ships.
+        shipSubtitle: pickSpecialShipSubtitle(mission, machinery.random),
         // mïsn PickupMode 2, "Pick up when boarding special ship" —
         // frozen here for the same reason failIfPlayerDisabledOrDestroyed
         // is: the pickup happens in the SHARED SIMULATION, the tick the

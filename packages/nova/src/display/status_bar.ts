@@ -24,6 +24,8 @@ import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ArmorComponent, FuelComponent, FUEL_PER_JUMP, ShieldComponent } from "../nova_plugin/health_plugin.js";
 import { OutfitsStateComponent, sumOutfitField } from "../nova_plugin/outfit_plugin.js";
 import { PersComponent } from "../nova_plugin/pers_plugin.js";
+import { MissionShipComponent } from "../nova_plugin/mission_ship_plugin.js";
+import { targetIdentity } from "./target_identity.js";
 import { DisabledComponent } from "../nova_plugin/disabled_component.js";
 import { ActiveRanksComponent } from "../nova_plugin/ncb_plugin.js";
 import { PlanetComponent, PlanetDataComponent, PlanetTargetComponent, stellarClearanceFor, StellarBribesComponent } from "../nova_plugin/planet_plugin.js";
@@ -1123,7 +1125,8 @@ const DrawStatusBarSecondaryWeapon = new System({
 const TargetQuery = new Query([ShipDataComponent, Optional(ShieldComponent),
     Optional(ArmorComponent), Optional(AnimationGraphicComponent),
     Optional(PersComponent), Optional(DisabledComponent),
-    Optional(GovtComponent), Optional(PlayerEscortComponent)] as const);
+    Optional(GovtComponent), Optional(PlayerEscortComponent),
+    Optional(MissionShipComponent)] as const);
 const DrawStatusBarTarget = new System({
     name: 'DrawStatusBarTarget',
     args: [StatusBarResource, TargetComponent, RunQuery,
@@ -1136,7 +1139,7 @@ const DrawStatusBarTarget = new System({
         const result = runQuery(TargetQuery, target)[0];
         if (result) {
             const [shipData, shield, armor, shipGraphic, pers, disabled, govt,
-                playerEscort] = result;
+                playerEscort, missionShip] = result;
             // The government shown lower-right of the target pane. The original
             // shows the gövt's short Target Code (gövt TMPL offset 68) — "Pyro"
             // for "Pyrogenesis Skymining", " Fed." for "Federation" — rather
@@ -1154,14 +1157,22 @@ const DrawStatusBarTarget = new System({
             const government = targetGovtLabel(
                 govtData ? govtTargetName(govtData) : "",
                 playerEscort?.player, playerUuid);
-            // A përs person's name and subtitle replace the ship class name
-            // and subtitle on the target display (EVN Bible, përs section).
-            const subtitle = (pers?.subtitle || shipData.subtitle);
+            // Përs name/subtitle, then a mission special ship's, then the
+            // ship class's own — see target_identity.ts for the Bible
+            // citations behind that order.
+            const identity = targetIdentity({
+                persName: pers?.name,
+                persSubtitle: pers?.subtitle,
+                missionName: missionShip?.name,
+                missionSubtitle: missionShip?.subtitle,
+                shipClass: shipData.name,
+                shipSubtitle: shipData.subtitle,
+            });
             // Hide the "; developer note" suffix authors append to ship
             // (and përs) names — the original never shows it in the target box.
-            statusBar.drawTarget(displayName(pers?.name ?? shipData.name),
+            statusBar.drawTarget(displayName(identity.name),
                 shield?.percent, armor?.percent, shipGraphic,
-                disabled !== undefined, subtitle, government);
+                disabled !== undefined, identity.subtitle, government);
         } else {
             // The target exists but the query missed — e.g. a just-replicated
             // ship whose ShipDataComponent isn't in the display world yet. Clear

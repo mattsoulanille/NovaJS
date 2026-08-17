@@ -98,6 +98,7 @@ function scatter(random: () => number): Position {
 type MissionShipSource = {
     shipObjective?: ShipObjective,
     shipName?: string,
+    shipSubtitle?: string,
     travelPlanet: string | null,
     returnPlanet: string | null,
 };
@@ -143,6 +144,7 @@ async function buildShip(ctx: SpawnContext, missionId: string,
         behavior: number,
         goal: number,
         name?: string,
+        subtitle?: string,
         replace?: ReplacementPlacement,
     }): Promise<Entity | null> {
     let dude, shipData;
@@ -180,12 +182,17 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     const ship = makeNpcShip(shipData, dude.aiType, dude.govt,
         state.position, state.rotation, state.velocity);
     if (options.name) {
+        // Entity.name is a debugging label; the DISPLAYED name rides the
+        // serializer-registered MissionShipComponent below, which is what
+        // reaches the target pane and the hail dialog on every client.
         ship.name = options.name;
     }
     ship.components.set(MissionShipComponent, {
         mission: missionId,
         owner: ctx.ownerUuid,
         ...(options.aux ? { aux: true } : {}),
+        ...(options.name ? { name: options.name } : {}),
+        ...(options.subtitle ? { subtitle: options.subtitle } : {}),
     });
     // Derelict-govt (gövt Flags1 0x0800) mission ships spawn disabled
     // like every other spawn path — e.g. the Kontik probe's derelict
@@ -320,6 +327,8 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
             ?? (names.length > 0
                 ? names[Math.floor(random() * names.length)]
                 : undefined);
+        // The ShipSubtitle sibling, frozen at accept the same way.
+        const subtitle = active.shipSubtitle;
         const count = shipsToSpawn(objective);
         for (let i = count; i > 0; i--) {
             const ship = await buildShip(ctx, missionId, objective.dudeId, {
@@ -328,6 +337,7 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
                 behavior: objective.behavior,
                 goal: objective.goal,
                 name,
+                subtitle,
                 // A përs replacement is by the Bible's own wording a
                 // SINGLE special ship ("with a single special ship");
                 // only the first gets the përs's berth, and a
