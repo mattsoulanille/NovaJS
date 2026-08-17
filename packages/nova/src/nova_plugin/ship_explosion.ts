@@ -44,6 +44,12 @@ import { Component } from 'nova_ecs/component';
  * anyway (of the 288 stock ships, the 86 with DeathDelay >= 60 range
  * from 90 to 10000 tons, while the rest bottom out at 1 ton).
  *
+ * The 60-frame threshold IS a gate on the fireball GRAPHIC, which is
+ * the thing the Bible attaches it to — see
+ * {@link finalExplosionScale} and ShipData.largeExplosion. Do not
+ * confuse either with ShipData.finalExplosionSparks, the unrelated
+ * Explode2 + 1000 scatter (~:2445 -> wëap ExplodType ~:3159).
+ *
  * WHAT A SHIP EXPLOSION IS NOT. It is not an attack. It carries no
  * damager identity (the blast entity gets no FiringGroupComponent,
  * OwnerComponent or SourceComponent), so nobody is credited with the
@@ -195,6 +201,53 @@ export function nonLethalArmorFloor(maxArmor: number,
 export function nonLethalArmor(current: number, damage: number,
     floor: number): number {
     return Math.min(current, Math.max(floor, current - damage));
+}
+
+// --- The final explosion's fireball GRAPHIC (display) ---
+
+/**
+ * The radius, in pixels, that the final-explosion sprite already covers
+ * at its natural size — half a frame's width.
+ *
+ * Measured from the stock data: every one of the 288 stock ships uses
+ * bööm 133 "ship exploding" for Explode2, whose sprite sheet (nova:4004)
+ * is 20 frames of 64x64 px, so the drawn fireball is 64 px across and
+ * reaches 32 px from the ship. (bööm 128 "FAE Small", the sparks, is
+ * 32x32 over 16 frames.)
+ *
+ * A CONSTANT rather than a read of the loaded sheet because the scale has
+ * to be a pure function of mass — computed the same way on every peer,
+ * before any texture has loaded, and testable without PIXI. A plug-in
+ * with a differently-sized bööm 133 therefore gets a fireball off this
+ * reference by the ratio of the two sheets; the alternative (waiting for
+ * the sheet) would make the size depend on load timing.
+ */
+export const FINAL_EXPLOSION_NATURAL_RADIUS = 32;
+
+/**
+ * The sprite scale for a ship's final fireball: shïp DeathDelay >= 60,
+ * "a huge explosion. The exact size of the resulting fireball is
+ * proportional to the ship's mass" (EVN Bible ~:2427). Callers apply
+ * this only when ShipData.largeExplosion is set; a DeathDelay < 60 ship
+ * gets "a single fireball" at scale 1.
+ *
+ * DERIVED, NOT TUNED. The fireball is drawn to cover exactly the blast
+ * that damages: its radius IS {@link shipExplosionRadius}, so the mass
+ * proportionality, the floor and the 200 px ceiling are the simulation's
+ * and the picture cannot drift from the hitbox. A Leviathan's 10000 tons
+ * reach the 200 px cap and so draw at 200/32 = 6.25x — a 400 px fireball
+ * over a 400 px blast diameter; a 6000-ton Cambrian 3.75x; a 2000-ton
+ * Fed Carrier 1.25x.
+ *
+ * Clamped at 1 from below: below ~1600 tons the mass-proportional radius
+ * is smaller than the art, and the Bible's branch is a fireball that is
+ * huge or ordinary, never shrunken. That floor covers most of the 86
+ * qualifying stock ships (they start at 90 tons), which is the intended
+ * reading — the threshold admits them, mass decides whether it shows.
+ */
+export function finalExplosionScale(mass: number): number {
+    return Math.max(1,
+        shipExplosionRadius(mass) / FINAL_EXPLOSION_NATURAL_RADIUS);
 }
 
 // --- The death sequence's secondary explosions (display) ---

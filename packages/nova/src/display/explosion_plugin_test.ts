@@ -18,13 +18,16 @@ import { DisplayAssetDataResource } from '../nova_plugin/game_data_resource.js';
 import { ArmorComponent } from '../nova_plugin/health_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import {
-    MAX_SECONDARY_EXPLOSIONS_PER_STEP, secondaryExplosionTotal,
+    finalExplosionScale, MAX_SECONDARY_EXPLOSIONS_PER_STEP,
+    secondaryExplosionTotal,
 } from '../nova_plugin/ship_explosion.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { SoundEvent, SoundEventData } from '../nova_plugin/sound_plugin.js';
 import { Stat } from '../nova_plugin/stat.js';
 import {
-    ExplosionPlugin, makeExplosion, SecondaryExplosionComponent,
+    ExplosionPlugin, makeExplosion, MAX_EXPLOSION_SPARKS,
+    MIN_EXPLOSION_SPARKS, randomSparkCount, SecondaryExplosionComponent,
+    SPARK_PERIOD_MS, SPARK_RADIUS,
 } from './explosion_plugin.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from './ui_sound.js';
@@ -37,6 +40,20 @@ const BREAKUP_SOUND = 'nova:302';
 const FINAL_EXPLOSION_ID = 'nova:final explosion';
 /** bööm 133 "ship exploding" plays snd 303. */
 const FINAL_SOUND = 'nova:303';
+/**
+ * Explosion type 0 — bööm 128, "FAE Small" — which is what the Explode2
+ * "+1000" sparks must be, NOT another copy of Explode2's own graphic.
+ * ship_parse resolves the flag to exactly this id in the ship's id space.
+ */
+const SPARKS_EXPLOSION_ID = 'nova:128';
+
+/** Just enough of PIXI's ObservablePoint for `container.scale.set(n)`. */
+function stubScale(): { x: number, y: number, set(s: number): void } {
+    return {
+        x: 1, y: 1,
+        set(s: number) { this.x = s; this.y = s; },
+    };
+}
 
 function makeAssets(): DisplayAssetDataInterface {
     const explosions: { [id: string]: ExplosionData } = {
@@ -47,6 +64,10 @@ function makeAssets(): DisplayAssetDataInterface {
         [FINAL_EXPLOSION_ID]: {
             ...getDefaultExplosionData(), id: FINAL_EXPLOSION_ID,
             sound: FINAL_SOUND,
+        },
+        [SPARKS_EXPLOSION_ID]: {
+            ...getDefaultExplosionData(), id: SPARKS_EXPLOSION_ID,
+            sound: BREAKUP_SOUND,
         },
     };
     return {
@@ -74,6 +95,8 @@ function makeAssets(): DisplayAssetDataInterface {
 async function displayWorld(armorCurrent: number,
     options: {
         deathDelay?: number, finalExplosion?: string | null,
+        finalExplosionSparks?: string | null,
+        largeExplosion?: boolean, mass?: number,
         graphics?: boolean,
     } = {}) {
     const world = new World('explosion display test');
@@ -98,6 +121,10 @@ async function displayWorld(armorCurrent: number,
                     components.set(AnimationGraphicComponent, {
                         sprites: new Map([['baseImage', { frames: 16 }]]),
                         progress: 0,
+                        // Enough of a PIXI container for the fireball
+                        // scale (ExplosionSystem writes it every step,
+                        // as pooled graphics come back reset to 1).
+                        container: { scale: stubScale() },
                     } as never);
                 }
             },
@@ -109,6 +136,14 @@ async function displayWorld(armorCurrent: number,
         ...getDefaultShipData(),
         initialExplosion: EXPLOSION_ID,
         finalExplosion: options.finalExplosion ?? null,
+        // shïp Explode2 + 1000 and shïp DeathDelay >= 60: two separate
+        // rules, so two separate fields (see ShipFinalExplosionSystem).
+        finalExplosionSparks: options.finalExplosionSparks ?? null,
+        largeExplosion: options.largeExplosion ?? false,
+        physics: {
+            ...getDefaultShipData().physics,
+            mass: options.mass ?? 100,
+        },
         // Seconds, as ship_parse produces (shïp DeathDelay / 30).
         deathDelay: options.deathDelay ?? 1,
     } as never);
@@ -141,17 +176,29 @@ async function displayWorld(armorCurrent: number,
      * ones that came and went.
      */
     const seenExplosions = new Set<string>();
-    const newExplosions = () => {
-        let spawned = 0;
+    /** The bööm id of each explosion that has appeared since the last call. */
+    const newExplosionIds = () => {
+        const spawned: string[] = [];
         for (const [uuid, entity] of world.entities) {
-            if (entity.components.has(ExplosionDataComponent)
-                && !seenExplosions.has(uuid)) {
+            const data = entity.components.get(ExplosionDataComponent);
+            if (data && !seenExplosions.has(uuid)) {
                 seenExplosions.add(uuid);
-                spawned++;
+                spawned.push(data.id);
             }
         }
         return spawned;
     };
+    const newExplosions = () => newExplosionIds().length;
+    /**
+     * The sprite scale ExplosionSystem has written onto the graphic of
+     * each explosion entity showing `explosionId`.
+     */
+    const scalesOf = (explosionId: string) => [...world.entities]
+        .filter(([, entity]) => entity.components
+            .get(ExplosionDataComponent)?.id === explosionId)
+        .map(([, entity]) => (entity.components
+            .get(AnimationGraphicComponent) as unknown as
+            { container: { scale: { x: number } } }).container.scale.x);
 
     /** Every SoundEvent id played, in order. */
     const sounds: string[] = [];
@@ -168,7 +215,8 @@ async function displayWorld(armorCurrent: number,
         { time: simTime.time, delta_ms: 0, delta_s: 0, frame: 0 }, [SHIP]);
 
     return {
-        world, ship, stepTime, explosionCount, newExplosions, time, simTime,
+        world, ship, stepTime, explosionCount, newExplosions,
+        newExplosionIds, scalesOf, time, simTime,
         sounds, uiSounds, zeroArmor, die,
     };
 }
@@ -446,4 +494,216 @@ describe('death sequence explosion sounds', () => {
                 expect(sounds).toEqual([FINAL_SOUND]);
             }
         });
+});
+
+/**
+ * The two INDEPENDENT shïp rules for the final explosion, which were
+ * collapsed into one `largeExplosion` field until finalExplosionSparks
+ * was added — with the result that DeathDelay >= 60 ships nested extra
+ * copies of Explode2's OWN graphic around themselves (the sparks
+ * behaviour, on the wrong trigger and the wrong bööm) and no ship's
+ * fireball ever grew.
+ *
+ *  - Explode2 + 1000 (EVN Bible ~:2445 -> wëap ExplodType ~:3159):
+ *    "Explosion type 0-63, plus a random number of type-0 explosions
+ *    around it" — sparks, always bööm 128.
+ *  - DeathDelay >= 60 (~:2427): "a huge explosion. The exact size of the
+ *    resulting fireball is proportional to the ship's mass."
+ */
+describe('final explosion sparks and fireball size', () => {
+    /** Kills a ship and steps far enough for every spark to land. */
+    async function explode(options: Parameters<typeof displayWorld>[1]) {
+        const world = await displayWorld(0, {
+            deathDelay: 1, finalExplosion: FINAL_EXPLOSION_ID,
+            graphics: true, ...options,
+        });
+        world.die();
+        const ids: string[] = [];
+        // Long enough to outlast SPARK_PERIOD_MS * MAX_EXPLOSION_SPARKS.
+        for (let i = 0; i < 20; i++) {
+            world.stepTime(SPARK_PERIOD_MS);
+            ids.push(...world.newExplosionIds());
+        }
+        return { ...world, ids };
+    }
+
+    it('spawns sparks of bööm 128 — NOT a second copy of Explode2 — when '
+        + 'the flag is set', async () => {
+            const { ids } = await explode({
+                finalExplosionSparks: SPARKS_EXPLOSION_ID,
+            });
+            // Exactly one fireball...
+            expect(ids.filter(id => id === FINAL_EXPLOSION_ID).length)
+                .toEqual(1);
+            // ...surrounded by sparks of explosion type 0.
+            const sparks = ids.filter(id => id === SPARKS_EXPLOSION_ID);
+            expect(sparks.length).toBeGreaterThanOrEqual(
+                MIN_EXPLOSION_SPARKS);
+            expect(sparks.length).toBeLessThanOrEqual(MAX_EXPLOSION_SPARKS);
+            // Nothing else showed up: no extra Explode2 graphics.
+            expect(new Set(ids))
+                .toEqual(new Set([FINAL_EXPLOSION_ID, SPARKS_EXPLOSION_ID]));
+        });
+
+    it('spawns NO sparks when Explode2 is under 1000', async () => {
+        // 109 of the 288 stock ships (Shuttle, Starbridge) are here, and
+        // so are the 86 that used to get sparks purely for having
+        // DeathDelay >= 60.
+        for (const largeExplosion of [false, true]) {
+            const { ids } = await explode({
+                finalExplosionSparks: null, largeExplosion, mass: 10000,
+            });
+            expect(ids).withContext(`large: ${largeExplosion}`)
+                .toEqual([FINAL_EXPLOSION_ID]);
+        }
+    });
+
+    /**
+     * Kills a ship and reads the scale off its fireball while it is still
+     * alive — two steps, since the stubbed graphic lands on the first and
+     * ExplosionSystem writes the scale on the second.
+     */
+    async function fireballScale(largeExplosion: boolean, mass: number) {
+        const { stepTime, scalesOf, die } = await displayWorld(0, {
+            deathDelay: 1, finalExplosion: FINAL_EXPLOSION_ID,
+            graphics: true, largeExplosion, mass,
+        });
+        die();
+        stepTime();
+        stepTime();
+        return scalesOf(FINAL_EXPLOSION_ID);
+    }
+
+    it('scales the fireball with mass only when DeathDelay >= 60',
+        async () => {
+            // A Leviathan (10000 tons, DeathDelay 250) reaches the blast
+            // radius cap, so its fireball draws at 200/32 = 6.25x.
+            expect(await fireballScale(true, 10000))
+                .toEqual([finalExplosionScale(10000)]);
+            expect(finalExplosionScale(10000)).toEqual(6.25);
+
+            // The same hull with DeathDelay < 60 gets "a single fireball"
+            // at natural size, however heavy it is.
+            expect(await fireballScale(false, 10000)).toEqual([1]);
+
+            // And a qualifying but light hull (Terrapin, 175 tons) is
+            // clamped to natural size too.
+            expect(await fireballScale(true, 175)).toEqual([1]);
+        });
+
+    it('spreads the sparks across the fireball, whatever size it is',
+        async () => {
+            // Sparks are placed within SPARK_RADIUS * scale of the
+            // centre, so a 6.25x fireball does not get them clustered in
+            // the middle of it.
+            for (const [large, mass] of [[true, 10000], [false, 10000]] as
+                const) {
+                const { world, stepTime, die } = await displayWorld(0, {
+                    deathDelay: 1, finalExplosion: FINAL_EXPLOSION_ID,
+                    finalExplosionSparks: SPARKS_EXPLOSION_ID,
+                    graphics: true, largeExplosion: large, mass,
+                });
+                die();
+                stepTime();
+                const fireball = [...world.entities].find(([, entity]) =>
+                    entity.components.get(ExplosionDataComponent)?.id
+                    === FINAL_EXPLOSION_ID)!;
+                expect(fireball).withContext(`large: ${large}`).toBeDefined();
+                const scale = large ? finalExplosionScale(mass) : 1;
+                expect(fireball[1].components
+                    .get(SecondaryExplosionComponent)?.radius)
+                    .withContext(`large: ${large}`)
+                    .toEqual(SPARK_RADIUS * scale);
+            }
+        });
+
+    it('keeps an ordinary explosion at natural size', async () => {
+        // makeExplosion's default: a projectile hit, an asteroid breaking
+        // up, a breakup secondary — none of them scale.
+        const { world, stepTime, scalesOf } = await displayWorld(100,
+            { graphics: true });
+        world.entities.set('projectile explosion', makeExplosion(
+            { ...getDefaultExplosionData(), id: EXPLOSION_ID },
+            new Position(0, 0)));
+        stepTime();
+        stepTime();
+        expect(scalesOf(EXPLOSION_ID)).toEqual([1]);
+    });
+});
+
+/**
+ * The wëap half of the same "+1000" rule (ExplodType 1000-1063, ~:3159).
+ * weapon_parse resolves it to bööm 128 in the weapon's id space, so this
+ * path was already using the right graphic; what it lacked was the
+ * Bible's "random NUMBER" bound, which it now shares with the ship path.
+ */
+describe('weapon explosion sparks', () => {
+    it('spawns a bounded random number of sparks around the hit',
+        async () => {
+            const counts = new Set<number>();
+            for (let attempt = 0; attempt < 25; attempt++) {
+                const { world, stepTime, newExplosionIds } =
+                    await displayWorld(100, { graphics: true });
+                world.entities.set('projectile explosion', makeExplosion(
+                    { ...getDefaultExplosionData(), id: EXPLOSION_ID },
+                    new Position(0, 0),
+                    {
+                        ...getDefaultExplosionData(),
+                        id: SPARKS_EXPLOSION_ID,
+                    }));
+                const ids: string[] = [];
+                for (let i = 0; i < 20; i++) {
+                    stepTime(SPARK_PERIOD_MS);
+                    ids.push(...newExplosionIds());
+                }
+                const sparks = ids.filter(id => id === SPARKS_EXPLOSION_ID);
+                expect(sparks.length)
+                    .toBeGreaterThanOrEqual(MIN_EXPLOSION_SPARKS);
+                expect(sparks.length)
+                    .toBeLessThanOrEqual(MAX_EXPLOSION_SPARKS);
+                counts.add(sparks.length);
+            }
+            // "A RANDOM number": over 25 hits the count actually varies
+            // rather than being a fixed constant.
+            expect(counts.size).toBeGreaterThan(1);
+        });
+
+    it('stops sparking instead of spraying for the animation\'s whole '
+        + 'life', async () => {
+            // The old fixed-period cadence was unbounded, so a long
+            // primary animation kept emitting one spark every 30 ms.
+            const { world, stepTime, newExplosionIds } =
+                await displayWorld(100, { graphics: true });
+            const explosion = makeExplosion(
+                { ...getDefaultExplosionData(), id: EXPLOSION_ID },
+                new Position(0, 0),
+                { ...getDefaultExplosionData(), id: SPARKS_EXPLOSION_ID });
+            world.entities.set('projectile explosion', explosion);
+            let sparks = 0;
+            for (let i = 0; i < 60; i++) {
+                stepTime(SPARK_PERIOD_MS);
+                sparks += newExplosionIds()
+                    .filter(id => id === SPARKS_EXPLOSION_ID).length;
+            }
+            expect(sparks).toBeLessThanOrEqual(MAX_EXPLOSION_SPARKS);
+            // The component removes itself once the draw is spent.
+            expect(explosion.components.has(SecondaryExplosionComponent))
+                .toBeFalse();
+        });
+
+    it('draws its count uniformly over the documented bounds', () => {
+        // Pure function, so this is a cheap sanity check on the Bible's
+        // "random number": every value in [MIN, MAX] is reachable and
+        // nothing outside it is.
+        const seen = new Set<number>();
+        for (let i = 0; i < 5000; i++) {
+            const count = randomSparkCount();
+            expect(Number.isInteger(count)).toBeTrue();
+            expect(count).toBeGreaterThanOrEqual(MIN_EXPLOSION_SPARKS);
+            expect(count).toBeLessThanOrEqual(MAX_EXPLOSION_SPARKS);
+            seen.add(count);
+        }
+        expect(seen.size)
+            .toEqual(MAX_EXPLOSION_SPARKS - MIN_EXPLOSION_SPARKS + 1);
+    });
 });

@@ -123,6 +123,21 @@ export async function ShipParse(ship: ShipResource,
         }
     }
 
+    // shïp Explode2 + 1000 (EVN Bible ~:2445, deferring to wëap ExplodType
+    // ~:3159): "Explosion type 0-63, plus a random number of type-0
+    // explosions around it". Explosion type 0 is bööm 128, resolved
+    // through the ship's own id space so a plug-in that overrides bööm 128
+    // gets ITS sparks — the same lookup weapon_parse does for the wëap
+    // half of the same rule (its `explosion128sparks`).
+    //
+    // Absence is NOT reported to notFoundFunction, unlike the Explode1 /
+    // Explode2 lookups above: the sparks are a garnish on a fireball the
+    // ship shows anyway, so a scenario with no bööm 128 at all should
+    // lose the garnish rather than fail to parse every ship that sets the
+    // +1000 bit (the same call the optional `infoPict` above makes).
+    const finalExplosionSparksID = ship.finalExplosionSparks
+        ? (ship.idSpace.bööm[128]?.globalID ?? null) : null;
+
 
     var shanResource = ship.idSpace.shän[ship.id];
     var animation: Animation;
@@ -296,7 +311,13 @@ export async function ShipParse(ship: ShipResource,
         outfits,
         initialExplosion: initialExplosionID,
         finalExplosion: finalExplosionID,
+        finalExplosionSparks: finalExplosionSparksID,
         deathDelay: ship.deathDelay / FPS,
+        // shïp DeathDelay >= 60 FRAMES (EVN Bible ~:2427) — compared on the
+        // raw field, not the seconds `deathDelay` above. This is the "huge
+        // explosion ... proportional to the ship's mass" branch, and it is
+        // NOT the Explode2 +1000 sparks flag above; the two were conflated
+        // into one field until finalExplosionSparks was added.
         largeExplosion: ship.deathDelay >= 60,
         displayWeight: ship.displayOrder,
         animation,

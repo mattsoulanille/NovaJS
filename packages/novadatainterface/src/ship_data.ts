@@ -71,6 +71,37 @@ export interface ShipData extends SpaceObjectData {
     outfits: { [index: string]: number }
     initialExplosion: string | null;
     finalExplosion: string | null;
+    /**
+     * shïp Explode2 + 1000 (EVN Bible ~:2445): "You can also add 1000 to
+     * the value of this field in the same manner as the ExplodeType field
+     * in the wëap resource" — and wëap ExplodType 1000-1063 (~:3159) is
+     * "Explosion type 0-63, plus a random number of type-0 explosions
+     * around it".
+     *
+     * So this is the id of the SPARKS explosion scattered around the final
+     * fireball: explosion type 0, which is bööm 128 ("FAE Small" in the
+     * stock data), resolved in the ship's own id space rather than assumed
+     * to be `nova:128`. Null when Explode2 < 1000 (no sparks). 179 of the
+     * 288 stock ships set the +1000 bit.
+     *
+     * This is the field the display's nested-explosion path wants;
+     * `largeExplosion` below is a DIFFERENT mechanic that used to be
+     * miswired into it.
+     */
+    finalExplosionSparks: string | null;
+    /**
+     * shïp DeathDelay >= 60 frames (EVN Bible ~:2427): "The ship
+     * disintegrates for this number of frames and then disappears in a
+     * huge explosion. The exact size of the resulting fireball is
+     * proportional to the ship's mass," as against 0-59 which "disappears
+     * in a single fireball".
+     *
+     * So this flag means ONE fireball, drawn big — nothing to do with the
+     * `finalExplosionSparks` scatter above. 86 of the 288 stock ships
+     * qualify (masses 90 to 10000 tons). See finalExplosionScale in
+     * nova_plugin/ship_explosion.ts for the size, which is derived from
+     * the same mass-proportional radius as the blast that damages.
+     */
     largeExplosion: boolean;
     deathDelay: number;
     displayWeight: number;
@@ -227,6 +258,7 @@ export function getDefaultShipData(): ShipData {
         outfits: {},
         initialExplosion: null,
         finalExplosion: null,
+        finalExplosionSparks: null,
         largeExplosion: false,
         deathDelay: 1,
         displayWeight: 1,
