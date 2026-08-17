@@ -20,6 +20,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 if [[ -n "${1:-}" ]]; then
+    # ROOT comes from the script's own location, so running the MAIN
+    # checkout's copy from inside a worktree would reset main. Only linked
+    # worktrees may be reset (their git dir lives under main's .git/worktrees).
+    if [[ "$(git rev-parse --git-dir)" == "$(git rev-parse --git-common-dir)" ]]; then
+        echo "refusing to reset: $ROOT is the main checkout, not a linked worktree." >&2
+        echo "Run the copy of this script inside your worktree (cd there first)." >&2
+        exit 1
+    fi
     echo "== resetting worktree to $1"
     git fetch --quiet origin 2>/dev/null || true
     git reset --hard "$1"
