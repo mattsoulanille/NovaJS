@@ -394,7 +394,14 @@ export function restorePlayerState(entity: Entity, save: SaveData,
         const missing = legacy.filter(bit => !covered.has(bit)
             && (bit < FIRST_PRIVATE_PHYSICAL_CONTROL_BIT || samePluginSet));
         if (missing.length > 0) {
-            const extra = resolver.migrateLegacy(missing);
+            // Stock-range extras are attributed to local plug-ins only
+            // when the save's plug-in set is this one — or unknown (a save
+            // from before manifests, whose numbering was the shared one
+            // the migration was written for). Under a DIFFERENT set the
+            // number meant the writer's, not ours (review r12 H-2).
+            const extra = resolver.migrateLegacy(missing, {
+                attributeToPlugins: save.plugins === undefined || samePluginSet,
+            });
             for (const bit of extra.physical) {
                 physical.add(bit);
             }

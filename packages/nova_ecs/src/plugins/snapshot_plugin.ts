@@ -99,12 +99,23 @@ const objectProto = Object.prototype;
  * to structuredClone itself, so the result — or the thrown
  * DataCloneError — is the same as before.
  */
-export function cloneEncoded<T>(value: T): T {
+export function cloneEncoded<T>(value: T,
+    /**
+     * Objects already copied in this clone, so a reference shared between
+     * two places in the input is shared between the same two places in
+     * the copy (and a cycle terminates) — exactly structuredClone's graph
+     * semantics, which the fast path must not weaken (review r12 M-1).
+     */
+    seen: Map<object, unknown> = new Map()): T {
     if (typeof value !== 'object' || value === null) {
         if (typeof value === 'function' || typeof value === 'symbol') {
             return structuredClone(value);
         }
         return value;
+    }
+    const already = seen.get(value);
+    if (already !== undefined) {
+        return already as T;
     }
     if (Array.isArray(value)) {
         const length = value.length;
@@ -113,8 +124,9 @@ export function cloneEncoded<T>(value: T): T {
             return structuredClone(value);
         }
         const copy = new Array(length);
+        seen.set(value, copy);
         for (let i = 0; i < length; i++) {
-            copy[i] = cloneEncoded(value[i]);
+            copy[i] = cloneEncoded(value[i], seen);
         }
         return copy as T;
     }
@@ -123,9 +135,10 @@ export function cloneEncoded<T>(value: T): T {
         return structuredClone(value);
     }
     const copy: Record<string, unknown> = {};
+    seen.set(value, copy);
     for (const key in value) {
         if (Object.prototype.hasOwnProperty.call(value, key)) {
-            copy[key] = cloneEncoded((value as Record<string, unknown>)[key]);
+            copy[key] = cloneEncoded((value as Record<string, unknown>)[key], seen);
         }
     }
     return copy as T;

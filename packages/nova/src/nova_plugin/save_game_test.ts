@@ -340,6 +340,28 @@ describe('save_game schema', () => {
                 expect(warn.calls.mostRecent().args[0]).toContain('b13, b1300');
             });
 
+        it('does NOT hand a legacy stock-range extra to a local plug-in when '
+            + 'the save came from a DIFFERENT plug-in set (review r12 H-2)', () => {
+                // Same shape as above, but the manifest names another set:
+                // b1300 meant whatever the writer's base said, so it stays a
+                // stock bit here (inert) instead of becoming arpia's private
+                // bit and switching on unrelated mission state.
+                const save: SaveData = {
+                    ...SAMPLE,
+                    novaControlBits: [['342', 1], ['1300', 1]],
+                    controlBits: [['nova', 342]],
+                    plugins: ['some-other-plugin'],
+                };
+                const entity = new Entity('restored');
+                entity.components.set(ShipComponent, { id: 'nova:164' });
+                spyOn(console, 'warn');
+                spyOn(console, 'info');
+                restorePlayerState(entity, decodeSave(encodeSave(save))!, resolver);
+                const bits = entity.components.get(ControlBitsComponent)!;
+                expect(bits.has(1300)).toBeTrue();
+                expect(bits.has(P0 + 1)).toBeFalse();
+            });
+
         it('keeps a physical bit the mapping cannot name, and reads it back',
             () => {
                 // The bits and the mapping came from different plug-in

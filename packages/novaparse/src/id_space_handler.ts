@@ -34,6 +34,30 @@ export const DEFAULT_SUB_PATHS: NovaSubPaths = {
 // a PICT available, will instead use the pict of the last ship to
 // have the same baseImage, are not linked to the correct PICT at this stage.
 // All interactions are handled by NovaParse.ts
+/**
+ * Names a plug-in's id/flag/control-bit namespace may not use: "nova" is
+ * the stock namespace and "physical" is the save format's marker for a
+ * bare physical control bit (nova/save_game). A plug-in file or directory
+ * literally called one of these would collide (mis-homing or dropping its
+ * bits on restore — review r12 M-2), so its prefix is suffixed and the
+ * collision logged.
+ */
+export const RESERVED_PLUGIN_PREFIXES: ReadonlySet<string> =
+    new Set(["nova", "physical"]);
+
+/** The namespace prefix for a Plug-ins entry: its name minus extensions,
+ * re-keyed away from the reserved names. */
+export function pluginPrefixFor(fileName: string): string {
+    const prefix = fileName.split(".")[0]; // Cut off extensions
+    if (RESERVED_PLUGIN_PREFIXES.has(prefix)) {
+        const rekeyed = prefix + "-plugin";
+        console.warn(`Plug-in "${fileName}" uses the reserved namespace `
+            + `"${prefix}"; it is loaded as "${rekeyed}".`);
+        return rekeyed;
+    }
+    return prefix;
+}
+
 class IDSpaceHandler {
     private globalResources: Promise<NovaResources | Error>;
     private tmpBuildingResources: NovaResources;
@@ -251,7 +275,7 @@ class IDSpaceHandler {
         for (let i in fileNames) {
             var name = fileNames[i];
             var currentPath = path.join(pluginsPath, name);
-            var prefix = name.split(".")[0]; // Cut off extensions
+            var prefix = pluginPrefixFor(name);
             if (!this.pluginPrefixOrder.includes(prefix)) {
                 this.pluginPrefixOrder.push(prefix);
             }

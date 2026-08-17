@@ -35,8 +35,10 @@ import {
 } from './client_prefs.js';
 import {
     appendCheckpoint, checkpointState, decodeHistoryValue, loadHistory,
-    PilotHistoryCodec, removeHistory, saveHistory, truncateAfter,
+    PilotHistory, PilotHistoryCodec, removeHistory, saveHistory,
+    truncateAfter,
 } from './pilot_history.js';
+import { cloneJson, JsonValue } from './json_patch.js';
 import {
     convertOriginalPilotBytes, OriginalPilotContext,
 } from './original_pilot_import.js';
@@ -572,7 +574,11 @@ export function exportCheckpointFile(id: string, checkpointIndex: number,
     }
     const checkpoint = history.checkpoints[checkpointIndex];
     const save = checkpointState(history, checkpointIndex);
-    const truncated = truncateAfter(history, checkpointIndex);
+    // A detached copy: truncateAfter shares the live history's base and
+    // checkpoint objects, and the export must not alias them.
+    const truncated = cloneJson(
+        truncateAfter(history, checkpointIndex) as unknown as JsonValue,
+    ) as unknown as PilotHistory;
     const name = `${record.name} (${checkpoint.label})`;
     const file: PilotFile = {
         format: PILOT_FILE_FORMAT,

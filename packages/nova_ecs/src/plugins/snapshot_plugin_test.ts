@@ -153,6 +153,28 @@ describe('cloneEncoded', () => {
         expect(extra.tag).toBe('t');
     });
 
+    it('preserves shared references and cycles like structuredClone', () => {
+        const shared = { n: 1 };
+        const source: { a: typeof shared, b: typeof shared, self?: unknown } =
+            { a: shared, b: shared };
+        source.self = source;
+        const copy = cloneEncoded(source);
+        // One shared object in, one shared object out.
+        expect(copy.a).toBe(copy.b);
+        expect(copy.a).not.toBe(shared);
+        expect(copy.self).toBe(copy);
+        // Same as the reference implementation.
+        const ref = structuredClone(source);
+        expect(ref.a).toBe(ref.b);
+        expect(ref.self).toBe(ref);
+        // Deep nesting stays linear (no exponential re-cloning of shared
+        // subtrees).
+        const leaf = { v: [1, 2, 3] };
+        const wide = Array.from({ length: 200 }, () => leaf);
+        const wideCopy = cloneEncoded(wide);
+        expect(new Set(wideCopy).size).toBe(1);
+    });
+
     it('rejects what structuredClone rejects', () => {
         expect(() => cloneEncoded(() => 1)).toThrowError(/could not be cloned|DataCloneError/i);
         expect(() => cloneEncoded({ f: () => 1 })).toThrowError(/could not be cloned|DataCloneError/i);
