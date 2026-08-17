@@ -18,6 +18,7 @@ import { JumpFadePlugin } from "./jump_fade_plugin.js";
 import { ParticlesPlugin } from "./particles_plugin.js";
 import { PlanetCornersPlugin } from "./planet_corners_plugin.js";
 import { ProjectileFadePlugin } from "./projectile_fade_plugin.js";
+import { ProjectileSpinPlugin } from "./projectile_spin_plugin.js";
 import { MissionInfoPlugin } from "./mission_info_plugin.js";
 import { HailDialogPlugin } from "./hail_dialog_plugin.js";
 import { PlayerInfoPlugin } from "./player_info_plugin.js";
@@ -96,6 +97,12 @@ export const Display: Plugin = {
         // fade; needs AnimationGraphicPlugin (added above) for the
         // graphic component and ObjectDrawSystem.
         await world.addPlugin(ProjectileFadePlugin);
+        // Cycles a spinning shot's sprite frames on the sim clock instead
+        // of picking one from its heading (wëap Flags 0x0001, rate from
+        // BeamWidth). Same requirements as the fade above: the mirrored
+        // SimulationTimeResource, and AnimationGraphicPlugin for the
+        // graphic component and ObjectDrawSystem, which it overrides.
+        await world.addPlugin(ProjectileSpinPlugin);
         // The starmap, player info, and mission info must precede the
         // spaceport: SpaceportProvider consumes their OpenStarmapResource
         // / OpenPlayerInfoResource / OpenMissionInfoResource (the docked
@@ -144,6 +151,7 @@ export const Display: Plugin = {
         await world.removePlugin(PlanetCornersPlugin);
         await world.removePlugin(BeamDisplayPlugin);
         await world.removePlugin(ProjectileFadePlugin);
+        await world.removePlugin(ProjectileSpinPlugin);
         await world.removePlugin(AsteroidDisplayPlugin);
         await world.removePlugin(ExplosionPlugin);
         await world.removePlugin(FullscreenPlugin);

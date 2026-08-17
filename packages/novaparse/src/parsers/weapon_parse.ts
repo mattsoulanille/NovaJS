@@ -260,6 +260,14 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
         // sprite out over the final 32/falloff frames of its life. 0/negative
         // means no fade; clamp negatives so 0 is the "no fade" sentinel.
         falloff: Math.max(weap.coronaFalloff, 0),
+        // wëap Flags 0x0001 ("Spin the weapon's graphic continuously")
+        // plus the BeamWidth/SpinRate byte, which for a spinning sprite
+        // weapon is "the time between frames, in 30ths of a second".
+        // Collapsed into one number whose 0 means "does not spin"; clamp
+        // a spinning weapon's period up to 1 frame so the display never
+        // divides by a zero-length period (BeamWidth 0 is legal in the
+        // template — it means "no center beam" for actual beams).
+        spinFrameInterval: weap.spinShots ? Math.max(1, weap.spinRate) : 0,
         physics: {
             acceleration: 0,
             armorRecharge: 0,

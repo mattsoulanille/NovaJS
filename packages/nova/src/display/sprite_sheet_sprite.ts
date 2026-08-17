@@ -76,6 +76,18 @@ export class SpriteSheetSprite {
         this.rotation = this.wrappedRotation;
     }
 
+    /**
+     * The active texture set's absolute frame range, i.e. which slice of
+     * the sheet `rotation` currently spreads the headings over. Callers
+     * that drive the frame themselves (a spinning shot's animation cycle,
+     * ProjectileSpinSystem) need it to stay inside the active set rather
+     * than assuming the set is the whole sheet. A copy, since the backing
+     * object is shared game data.
+     */
+    get frameRange(): { start: number, length: number } {
+        return { start: this.textureSet.start, length: this.textureSet.length };
+    }
+
     get frame() {
         return this.wrappedFrame;
     }

@@ -345,6 +345,49 @@ export interface ProjectileWeaponData extends SpaceObjectData, NotBayWeaponData 
      * The parser clamps negatives to 0, so 0 means "no fade".
      */
     falloff: number,
+    /**
+     * How many 1/30-second frames elapse between sprite-frame advances
+     * for a shot that spins continuously in flight, or 0 if this shot
+     * does not spin.
+     *
+     * Decoded from wëap Flags 0x0001 plus the BeamWidth field. EVN Bible
+     * (wëap Flags): "Spin the weapon's graphic continuously (rate of
+     * frame advance is controlled by the BeamWidth field as detailed
+     * below)", and (wëap BeamWidth): "For sprite-based weapons that spin
+     * continuously, this field controls the time between frames, in
+     * 30ths of a second."
+     *
+     * So the flag is the on/off switch and BeamWidth is the period. The
+     * two are collapsed into one number because they are only ever
+     * meaningful together: 0 means "does not spin" and any value >= 1 is
+     * the frame period of a spinning shot. The parser only ever emits a
+     * positive value when Flags 0x0001 is set, and clamps that value up
+     * to 1 (a BeamWidth of 0 on a spinning weapon would otherwise mean a
+     * zero-length frame period), so 0 is an unambiguous "no spin"
+     * sentinel — the same 0-as-sentinel convention `falloff` and `decay`
+     * use above.
+     *
+     * This changes what the shot's sprite FRAMES mean. Normally a
+     * projectile's frames are ROTATION frames: the display picks one from
+     * the shot's heading (see SpriteSheetSprite.rotation). For a spinning
+     * shot they are instead an ANIMATION cycle played on a timer, and the
+     * graphic carries no heading information at all — the original draws
+     * the tumbling sprite unrotated regardless of which way the shot
+     * flies. Stock nova:143 Fusion Pulse Cannon is the canonical example:
+     * spinFrameInterval 1 over a 36-frame sheet, so a full tumble every
+     * 36/30 = 1.2 seconds.
+     *
+     * DISPLAY-ONLY (see ProjectileSpinSystem). The simulation's
+     * MovementState rotation is untouched, so aim, guidance, collision
+     * and state hashes are unaffected.
+     *
+     * Not plumbed (no stock weapon exercises them, though
+     * WeapResource already decodes all three): Flags 0x0004 "always start
+     * on the first frame", Flags2 0x0001 "keep the graphic on the first
+     * frame until ProxSafety expires", and Flags2 0x0002 "stop the
+     * graphic on the last frame".
+     */
+    spinFrameInterval: number,
 }
 
 // This extends SpaceObjectData since projectiles use sprites
@@ -364,6 +407,7 @@ export function getDefaultProjectileWeaponData(): ProjectileWeaponData {
         seeker: getDefaultSeekerFlags(),
         decay: 0,
         falloff: 0,
+        spinFrameInterval: 0,
     };
 }
 
