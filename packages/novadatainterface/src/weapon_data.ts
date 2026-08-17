@@ -179,7 +179,16 @@ export interface NotBayWeaponData extends BaseWeaponData {
     submunitions: Array<SubmunitionType>,
     oneAmmoPerBurst: boolean;
     shotDuration: number;
+    /** The bööm named by wëap ExplodType (EVN Bible ~:3159). */
     primaryExplosion: string | null;
+    /**
+     * The SPARKS of wëap ExplodType 1000-1063: "Explosion type 0-63, plus
+     * a random number of type-0 explosions around it" (~:3159). Always
+     * explosion type 0 — bööm 128, "FAE Small" in the stock data — looked
+     * up in the weapon's own id space, and null when the +1000 bit is
+     * clear. ShipData.finalExplosionSparks is the shïp Explode2 + 1000
+     * half of the same rule.
+     */
     secondaryExplosion: string | null;
     blastRadius: number;
     blastHurtsFiringShip: boolean,

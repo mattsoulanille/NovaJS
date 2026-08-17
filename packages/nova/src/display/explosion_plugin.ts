@@ -23,8 +23,8 @@ import { ShipComponent, ShipDataComponent } from "../nova_plugin/ship_plugin.js"
 import { DeathAISystem } from "../nova_plugin/npc_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import {
-    MAX_SECONDARY_EXPLOSIONS_PER_STEP, secondaryExplosionsDue,
-    secondaryExplosionTotal,
+    finalExplosionScale, MAX_SECONDARY_EXPLOSIONS_PER_STEP,
+    secondaryExplosionsDue, secondaryExplosionTotal,
 } from "../nova_plugin/ship_explosion.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
@@ -33,6 +33,12 @@ import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
 const ExplosionState = new Component<{
     startTime?: number,
     lifetime?: number,
+    /**
+     * Sprite scale for this explosion's graphic, 1 for an ordinary one.
+     * Set from finalExplosionScale for the mass-proportional fireball of
+     * a shïp DeathDelay >= 60 hull (ShipData.largeExplosion).
+     */
+    scale?: number,
 }>('ExplosionState');
 
 const ExplosionSystem = new System({
@@ -40,6 +46,13 @@ const ExplosionSystem = new System({
     args: [AnimationGraphicComponent, ExplosionDataComponent,
         ExplosionState, TimeResource, Entities, UUID, Emit] as const,
     step(graphic, explosionData, explosionState, time, entities, uuid, emit) {
+        // Written every step, like DebrisDrawSystem's: graphics come out
+        // of AnimationGraphicPool with their scale reset to 1, and the
+        // graphic is provided asynchronously, so there is no single
+        // moment at creation time at which this could be set once.
+        if (explosionState.scale !== undefined) {
+            graphic.container.scale.set(explosionState.scale);
+        }
         if (!explosionState.startTime || !explosionState.lifetime) {
             explosionState.startTime = time.time;
             const frameTime = 30 / explosionData.rate;
@@ -67,11 +80,13 @@ const ExplosionSystem = new System({
  *
  * It drives two different cadences, and `schedule` is the discriminator:
  *
- *  - FIXED PERIOD (`schedule` absent): the nested secondaries a
- *    projectile's primary explosion carries (makeExplosion's second
- *    argument). They ride on a standalone explosion entity that lives
- *    only as long as its animation, tick on the display's own clock, and
- *    are silent — the primary explosion already played the sound.
+ *  - FIXED PERIOD (`schedule` absent): the "+1000" SPARKS — "Explosion
+ *    type 0-63, plus a random number of type-0 explosions around it"
+ *    (EVN Bible, wëap ExplodType ~:3159, which shïp Explode2 ~:2445
+ *    defers to). They ride on a standalone explosion entity that lives
+ *    only as long as its animation, tick on the display's own clock, are
+ *    silent — the primary explosion already played the sound — and stop
+ *    after `remaining` of them, which is the Bible's random number.
  *  - DEATH SEQUENCE (`schedule` present): a ship breaking up. The
  *    explosions ACCELERATE toward the final one and each plays the
  *    bööm's sound, and the spawn times come from the SIMULATION clock
@@ -83,6 +98,17 @@ export const SecondaryExplosionComponent = new Component<{
     lastTime?: number,
     period: number,
     radius?: number,
+    /**
+     * FIXED-PERIOD mode only: how many sparks are still owed. Drawn once
+     * per explosion from {@link randomSparkCount} — the "random number of
+     * type-0 explosions" of the Bible's +1000 rule. The component removes
+     * itself when this reaches 0, so a long-lived primary explosion does
+     * not keep spraying sparks for its whole animation.
+     *
+     * Undefined means unbounded (the old behaviour), which is what the
+     * death-sequence mode uses; it is bounded by `schedule.total` instead.
+     */
+    remaining?: number,
     /**
      * The death sequence this ship is in, in SIM-clock milliseconds:
      * `startTime` is when its armor hit zero, `endTime` when its final
@@ -97,6 +123,40 @@ export const SecondaryExplosionComponent = new Component<{
         spawned: number,
     },
 }>('SecondaryExplosion');
+
+/**
+ * Bounds on the Bible's "random number of type-0 explosions around it"
+ * (wëap ExplodType 1000-1063, ~:3159; shïp Explode2 + 1000, ~:2445).
+ * The Bible gives no range, so these are TUNABLE — few enough that a
+ * single blaster hit reads as a hit with sparks rather than a barrage,
+ * and at SPARK_PERIOD_MS apart the whole scatter lands inside the
+ * primary explosion's own animation (bööm 133 runs 20 frames ~= 600 ms).
+ */
+export const MIN_EXPLOSION_SPARKS = 2;
+export const MAX_EXPLOSION_SPARKS = 6;
+/** Milliseconds between consecutive sparks. */
+export const SPARK_PERIOD_MS = 30;
+/**
+ * How far from the explosion's centre sparks are scattered, in pixels,
+ * at fireball scale 1. Multiplied by the fireball's scale so a
+ * Leviathan's 6.25x fireball gets its sparks spread across the whole of
+ * it instead of clustered in the middle of it.
+ */
+export const SPARK_RADIUS = 80;
+
+/**
+ * The Bible's "random number" of sparks, uniform over
+ * [MIN_EXPLOSION_SPARKS, MAX_EXPLOSION_SPARKS].
+ *
+ * Math.random is CORRECT here and only here: explosions live in the
+ * per-peer DISPLAY world, so two peers may legitimately draw different
+ * spark counts for the same death (randomPointInCircle below already
+ * scatters them differently). Nothing in the simulation reads this.
+ */
+export function randomSparkCount(): number {
+    return MIN_EXPLOSION_SPARKS + Math.floor(
+        Math.random() * (MAX_EXPLOSION_SPARKS - MIN_EXPLOSION_SPARKS + 1));
+}
 
 function randomPointInCircle(r: number): Vector {
     const r2 = r ** 2;
@@ -140,7 +200,7 @@ const SecondaryExplosionSystem = new System({
         const spawn = (silent: boolean) => {
             // TODO: Fix these types in position.ts
             const pos = position.add(
-                randomPointInCircle(explosion.radius ?? 80)) as Position;
+                randomPointInCircle(explosion.radius ?? SPARK_RADIUS)) as Position;
             entities.set(v4(), makeExplosion({
                 ...explosion.explosion,
                 sound: silent ? null : explosion.explosion.sound,
@@ -167,6 +227,12 @@ const SecondaryExplosionSystem = new System({
             return;
         }
 
+        if (explosion.remaining !== undefined && explosion.remaining <= 0) {
+            // The Bible's random number of sparks is spent.
+            components.delete(SecondaryExplosionComponent);
+            return;
+        }
+
         if (!explosion.lastTime) {
             explosion.lastTime = 0;
         }
@@ -176,6 +242,9 @@ const SecondaryExplosionSystem = new System({
 
         explosion.lastTime = time.time;
         spawn(true);
+        if (explosion.remaining !== undefined) {
+            explosion.remaining--;
+        }
     }
 });
 
@@ -194,18 +263,43 @@ const ProjectileExplosionSystem = new System({
             return;
         }
 
-        const secondary = explosion.projectileData.secondaryExplosion;
-        let secondaryExplosionData: ExplosionData | undefined;
-        if (secondary) {
-            secondaryExplosionData =
-                gameData.data.Explosion.getCached(secondary);
+        // wëap ExplodType 1000-1063 (EVN Bible ~:3159). weapon_parse
+        // resolves this to bööm 128 — explosion type 0 — in the weapon's
+        // own id space, which is the correct graphic for the sparks; the
+        // ship half of the same rule (shïp Explode2 + 1000) is
+        // ShipData.finalExplosionSparks, resolved the same way.
+        const sparks = explosion.projectileData.secondaryExplosion;
+        let sparksExplosionData: ExplosionData | undefined;
+        if (sparks) {
+            sparksExplosionData =
+                gameData.data.Explosion.getCached(sparks);
         }
 
         entities.set(v4(), makeExplosion(primaryExplosionData,
-            explosion.position, secondaryExplosionData));
+            explosion.position, sparksExplosionData));
     }
 });
 
+/**
+ * Draws the fireball a ship "disappears in" when its death sequence
+ * ends, from the TWO separate shïp fields the Bible gives for it:
+ *
+ *  - Explode2 (~:2445) names the bööm, and Explode2 + 1000 adds "a
+ *    random number of type-0 explosions around it" — ShipData
+ *    .finalExplosionSparks, which is bööm 128 ("FAE Small"), NOT a
+ *    second copy of Explode2's own graphic. 179 of the 288 stock ships
+ *    set it.
+ *  - DeathDelay >= 60 (~:2427) makes it "a huge explosion. The exact
+ *    size of the resulting fireball is proportional to the ship's mass"
+ *    — ShipData.largeExplosion, which scales the graphic and nothing
+ *    else. 86 of the 288 stock ships qualify.
+ *
+ * These are independent: of the stock ships, all 86 large-explosion
+ * hulls also spark, 93 spark without the huge fireball, and 109 do
+ * neither. They were previously collapsed into one `largeExplosion`
+ * field, which meant every DeathDelay >= 60 ship nested extra copies of
+ * bööm 133 around itself and no ship's fireball ever grew.
+ */
 const ShipFinalExplosionSystem = new System({
     name: 'ShipFinalExplosionSystem',
     events: [DeathEvent],
@@ -221,14 +315,19 @@ const ShipFinalExplosionSystem = new System({
         if (!explosionData) {
             return;
         }
-        let largeExplosion: ExplosionData | undefined;
-        if (ship.largeExplosion) {
-            largeExplosion = explosionData;
+        let sparks: ExplosionData | undefined;
+        if (ship.finalExplosionSparks) {
+            // Not yet loaded just means no sparks this time; the fireball
+            // itself still shows.
+            sparks = gameData.data.Explosion
+                .getCached(ship.finalExplosionSparks) ?? undefined;
         }
+        const scale = ship.largeExplosion
+            ? finalExplosionScale(ship.physics.mass) : 1;
         entities.set(v4(), makeExplosion(
             explosionData,
             Position.fromVectorLike(movement.position),
-            largeExplosion));
+            sparks, scale));
 
     }
 });
@@ -362,11 +461,22 @@ const PlayerExplosionSoundStopSystem = new System({
     }
 });
 
+/**
+ * Builds a standalone explosion entity.
+ *
+ * @param sparksExplosionData Explosion type 0 (bööm 128), when the
+ * source set the "+1000" bit on its explosion field — wëap ExplodType
+ * 1000-1063 or shïp Explode2 + 1000. A random number of these is
+ * scattered around the primary (see SecondaryExplosionComponent).
+ * @param scale Sprite scale for the primary explosion's graphic; 1 for
+ * an ordinary explosion, {@link finalExplosionScale} for the
+ * mass-proportional fireball of a shïp DeathDelay >= 60 hull.
+ */
 export function makeExplosion(explosionData: ExplosionData, position: Position,
-    secondaryExplosionData?: ExplosionData) {
+    sparksExplosionData?: ExplosionData, scale = 1) {
     const explosion = new Entity()
         .addComponent(ExplosionDataComponent, explosionData)
-        .addComponent(ExplosionState, {})
+        .addComponent(ExplosionState, { scale })
         .addComponent(MovementStateComponent, {
             position,
             accelerating: 0,
@@ -375,10 +485,13 @@ export function makeExplosion(explosionData: ExplosionData, position: Position,
             turning: 0,
             velocity: new Vector(0, 0),
         });
-    if (secondaryExplosionData) {
+    if (sparksExplosionData) {
         explosion.addComponent(SecondaryExplosionComponent, {
-            explosion: secondaryExplosionData,
-            period: 30,
+            explosion: sparksExplosionData,
+            period: SPARK_PERIOD_MS,
+            remaining: randomSparkCount(),
+            // Spread over the primary fireball, whatever size it is.
+            radius: SPARK_RADIUS * scale,
         });
     }
     return explosion;

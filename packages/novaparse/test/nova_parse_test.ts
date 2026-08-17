@@ -103,7 +103,12 @@ describe("NovaParse", () => {
         expect(s128.hideIfRequireUnmet).toEqual(true);
         expect(s128.excludeEqualDisplayWeight).toEqual(false);
         expect(s128.deathDelay).toEqual(67 / 30);
+        // largeExplosion is DeathDelay >= 60 FRAMES (67 here), the Bible's
+        // "huge explosion ... proportional to the ship's mass" branch —
+        // not the Explode2 + 1000 sparks flag, which is
+        // finalExplosionSparks (see the spec further down).
         expect(s128.largeExplosion).toEqual(true);
+        expect(s129.largeExplosion).toEqual(false);
     });
 
     it("Converts ship speed and acceleration to pixels per second", async () => {
@@ -170,6 +175,19 @@ describe("NovaParse", () => {
         expect(s128.finalExplosion!).toEqual("nova:169");
         expect(s129.initialExplosion!).toEqual("nova:132");
         expect(s129.finalExplosion!).toEqual("nova:133");
+    });
+
+    it("drops Explode2 sparks when the id space has no bööm 128", async () => {
+        // The fixture's shïp 128 sets Explode2 = 1041, so its raw
+        // finalExplosionSparks is true (ship_resource_test) — but this
+        // fixture filesystem defines no bööm 128, and the sparks are a
+        // garnish on a fireball the ship shows anyway. So they resolve to
+        // null WITHOUT the strict notFoundFunction firing: parsing the
+        // ship must still succeed, and its own final explosion is intact.
+        expect(s128.finalExplosionSparks).toBeNull();
+        expect(s128.finalExplosion!).toEqual("nova:169");
+        // shïp 129's Explode2 is a plain 5, so no sparks either way.
+        expect(s129.finalExplosionSparks).toBeNull();
     });
 
     it("Should parse explosions", async () => {

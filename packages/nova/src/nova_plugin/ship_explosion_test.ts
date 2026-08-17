@@ -1,4 +1,5 @@
 import 'jasmine';
+import { ShipData } from 'novadatainterface/ship_data';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -21,6 +22,7 @@ import { ControlledByComponent } from './ship_control.js';
 import { ShipDataComponent } from './ship_plugin.js';
 import { Stat } from './stat.js';
 import {
+    FINAL_EXPLOSION_NATURAL_RADIUS, finalExplosionScale,
     MAX_SECONDARY_EXPLOSIONS, MIN_SECONDARY_EXPLOSIONS,
     nonLethalArmor, nonLethalArmorFloor, secondaryExplosionsDue,
     secondaryExplosionTotal, SHIP_EXPLOSION_DAMAGE_PER_TON,
@@ -73,6 +75,152 @@ describe('ship explosion scaling', () => {
         // desync the sim).
         expect(shipExplosionDamage(NaN).armor).toEqual(0);
     });
+});
+
+/**
+ * shïp DeathDelay >= 60 (EVN Bible ~:2427): "The ship disintegrates for
+ * this number of frames and then disappears in a huge explosion. The
+ * exact size of the resulting fireball is proportional to the ship's
+ * mass," versus 0-59's "single fireball".
+ */
+describe('final explosion fireball scale', () => {
+    it('draws the fireball at exactly the blast radius', () => {
+        // This is the whole contract: the picture covers the hitbox, so
+        // the two can never drift. Checked across the full stock mass
+        // range, including the ends where the radius clamps.
+        for (const mass of [1, 15, 90, 175, 650, 1600, 2000, 6000, 10000,
+            1e9]) {
+            const drawnRadius = finalExplosionScale(mass)
+                * FINAL_EXPLOSION_NATURAL_RADIUS;
+            expect(drawnRadius).withContext(`${mass} tons`)
+                .toEqual(Math.max(FINAL_EXPLOSION_NATURAL_RADIUS,
+                    shipExplosionRadius(mass)));
+        }
+    });
+
+    it('scales the heaviest hulls up and never draws one smaller than '
+        + 'its art', () => {
+            // A Leviathan hits the 200 px radius cap: 200 / 32 = 6.25, a
+            // 400 px fireball over a 400 px blast diameter.
+            expect(finalExplosionScale(10000)).toEqual(6.25);
+            expect(finalExplosionScale(6000)).toEqual(3.75);   // Cambrian
+            expect(finalExplosionScale(2000)).toEqual(1.25);   // Fed Carrier
+            // Below ~1600 tons the mass-proportional radius is smaller
+            // than the sprite, and the Bible's branch is a fireball that
+            // is huge or ordinary, never shrunken. A Terrapin (175 t) and
+            // a Star Liner (150 t) both qualify by DeathDelay yet draw at
+            // natural size.
+            expect(finalExplosionScale(1600)).toEqual(1);
+            expect(finalExplosionScale(175)).toEqual(1);
+            expect(finalExplosionScale(90)).toEqual(1);
+            // Degenerate plug-in data must not produce a NaN scale, which
+            // would blank the sprite.
+            expect(finalExplosionScale(0)).toEqual(1);
+            expect(finalExplosionScale(NaN)).toEqual(1);
+        });
+
+    it('is monotonic in mass', () => {
+        let previous = 0;
+        for (let mass = 0; mass <= 12000; mass += 25) {
+            const scale = finalExplosionScale(mass);
+            expect(scale).withContext(`${mass} tons`)
+                .toBeGreaterThanOrEqual(previous);
+            previous = scale;
+        }
+    });
+});
+
+/**
+ * The two shïp fields the final explosion reads, pinned against the real
+ * stock "Nova Files" data — the counts the Bible's two rules produce.
+ * They are INDEPENDENT mechanics, and were collapsed into one
+ * `largeExplosion` field until finalExplosionSparks was added.
+ */
+describe('final explosion ship fields against real Nova data', () => {
+    let ships: ShipData[];
+    beforeAll(async () => {
+        const gameData = await getIntegrationGameData();
+        const ids = await gameData.ids;
+        ships = await Promise.all(
+            ids.Ship.map(id => gameData.data.Ship.get(id)));
+    });
+
+    it('counts the two rules separately over the 288 stock ships', () => {
+        expect(ships.length).toEqual(288);
+        // shïp Explode2 >= 1000 — the sparks.
+        expect(ships.filter(s => s.finalExplosionSparks !== null).length)
+            .toEqual(179);
+        // shïp DeathDelay >= 60 frames — the mass-scaled fireball.
+        expect(ships.filter(s => s.largeExplosion).length).toEqual(86);
+        // The two overlap but are not the same set: every heavy-fireball
+        // hull also sparks, 93 spark WITHOUT the heavy fireball, and 109
+        // do neither. If these were one field, 93 ships would silently
+        // lose their sparks and 0 would ever get a big fireball.
+        expect(ships.filter(s => s.largeExplosion
+            && s.finalExplosionSparks === null).length).toEqual(0);
+        expect(ships.filter(s => !s.largeExplosion
+            && s.finalExplosionSparks !== null).length).toEqual(93);
+        expect(ships.filter(s => !s.largeExplosion
+            && s.finalExplosionSparks === null).length).toEqual(109);
+    });
+
+    it('resolves sparks to bööm 128, explosion type 0', () => {
+        // Explosion type 0 is bööm 128 ("FAE Small"); Explode2 itself is
+        // bööm 133 ("ship exploding") for every stock ship. The sparks
+        // must NOT be a second copy of Explode2's own graphic.
+        for (const ship of ships.filter(s => s.finalExplosionSparks)) {
+            expect(ship.finalExplosionSparks)
+                .withContext(ship.id).toEqual('nova:128');
+            expect(ship.finalExplosion).withContext(ship.id)
+                .not.toEqual(ship.finalExplosionSparks);
+        }
+    });
+
+    it('pins named ships across all three combinations', () => {
+        // [id, name, mass, DeathDelay frames, largeExplosion, sparks]
+        const expected = [
+            // Both: the heaviest stock hull, at the radius cap.
+            ['nova:131', 'Leviathan', 10000, 250, true, true],
+            ['nova:143', 'Fed Carrier', 2000, 150, true, true],
+            // Heavy enough to qualify, too light for the scale to show.
+            ['nova:136', 'Terrapin', 175, 65, true, true],
+            // Sparks only: DeathDelay 40 frames is under the threshold.
+            ['nova:140', 'IDA Frigate', 650, 40, false, true],
+            ['nova:138', 'Argosy', 150, 50, false, true],
+            // Neither.
+            ['nova:128', 'Shuttle', 15, 25, false, false],
+            ['nova:133', 'Starbridge', 98, 40, false, false],
+        ] as const;
+        const byId = new Map(ships.map(s => [s.id, s]));
+        for (const [id, name, mass, frames, large, sparks] of expected) {
+            const ship = byId.get(id)!;
+            expect(ship).withContext(id).toBeDefined();
+            expect(ship.name).withContext(id).toEqual(name);
+            expect(ship.physics.mass).withContext(id).toEqual(mass);
+            // deathDelay is parsed to SECONDS; largeExplosion is the
+            // >= 60 FRAMES test on the raw field.
+            expect(Math.round(ship.deathDelay * 30)).withContext(id)
+                .toEqual(frames);
+            expect(ship.largeExplosion).withContext(id).toEqual(large);
+            expect(ship.finalExplosionSparks !== null).withContext(id)
+                .toEqual(sparks);
+        }
+    });
+
+    it('gives the qualifying hulls a fireball no smaller than the art, '
+        + 'and the heaviest a much bigger one', () => {
+            const large = ships.filter(s => s.largeExplosion);
+            for (const ship of large) {
+                expect(finalExplosionScale(ship.physics.mass))
+                    .withContext(ship.id).toBeGreaterThanOrEqual(1);
+            }
+            // The 86 qualifying hulls run 90 to 10000 tons, so the
+            // threshold admits them and mass decides whether it shows.
+            const masses = large.map(s => s.physics.mass);
+            expect(Math.min(...masses)).toEqual(90);
+            expect(Math.max(...masses)).toEqual(10000);
+            expect(finalExplosionScale(Math.max(...masses))).toEqual(6.25);
+        });
 });
 
 describe('non-lethal armor clamp', () => {
