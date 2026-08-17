@@ -19,8 +19,8 @@ import { CompositeHull, HitboxHullComponent } from './collisions_plugin.js';
 import { CreateTime } from './create_time.js';
 import { DamagedEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
-import { FireSubs, OwnerComponent } from './fire_weapon_plugin.js';
-import { FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
+import { FireSubs, OwnerComponent, SourceComponent } from './fire_weapon_plugin.js';
+import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
 import { ProjectileDataComponent } from './projectile_data.js';
 import { ProjectileCollisionSystem } from './projectile_plugin.js';
@@ -66,6 +66,21 @@ describe('firingImmune (pair-immunity predicate)', () => {
             .toBeFalse();
         expect(firingImmune(undefined, 'ship-1', 'nova:200', 'nova:200'))
             .toBeFalse();
+    });
+});
+
+describe('disabledCancelsImmunity', () => {
+    it('cancels immunity for a disabled victim that is not the firer', () => {
+        expect(disabledCancelsImmunity('mate', true, 'firer')).toBeTrue();
+        expect(disabledCancelsImmunity('mate', true, undefined)).toBeTrue();
+    });
+
+    it('never cancels immunity for the shot\'s own firer', () => {
+        expect(disabledCancelsImmunity('firer', true, 'firer')).toBeFalse();
+    });
+
+    it('leaves an undisabled victim alone', () => {
+        expect(disabledCancelsImmunity('mate', false, 'firer')).toBeFalse();
     });
 });
 
@@ -195,6 +210,38 @@ describe('ProjectileCollisionSystem filtering', () => {
                 .set(FiringGroupComponent, { group: 'leader' });
             collide('shot', 'leader');
             expect(hits('leader').length).toBe(1);
+        });
+
+        it('never hits the DISABLED ship that fired it', () => {
+            // The carve-out is for finishing off someone ELSE's hulk. A
+            // ship's own shot passing back through itself is a different
+            // thing, and it is exactly what a wëap with AmmoType -999
+            // produces: the firer is destroyed as the shot leaves, is
+            // marked disabled on the same tick, and the shot is still
+            // sitting on top of it inside its proximity fuse.
+            const firer = addShip('firer');
+            firer.components.set(FiringGroupComponent, { group: 'firer' });
+            firer.components.set(DisabledComponent, { repairAt: null });
+            const shot = addProjectile('shot', {});
+            shot.components.set(FiringGroupComponent, { group: 'firer' });
+            shot.components.set(SourceComponent, 'firer');
+            collide('shot', 'firer');
+            expect(hits('firer')).toEqual([]);
+            expect(world.entities.get('shot'))
+                .withContext('the shot keeps flying').toBeDefined();
+        });
+
+        it('still hits a DISABLED fleetmate that did not fire it', () => {
+            // The carve-out itself is untouched: only the firer is
+            // exempt, not the rest of its group.
+            const mate = addShip('mate');
+            mate.components.set(FiringGroupComponent, { group: 'firer' });
+            mate.components.set(DisabledComponent, { repairAt: null });
+            const shot = addProjectile('shot', {});
+            shot.components.set(FiringGroupComponent, { group: 'firer' });
+            shot.components.set(SourceComponent, 'firer');
+            collide('shot', 'mate');
+            expect(hits('mate').length).toBe(1);
         });
 
         it('re-immunizes a same-group victim once repaired (not disabled)',

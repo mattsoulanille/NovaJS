@@ -27,7 +27,7 @@ import { DamagedEvent, ZeroArmorEvent } from './death_plugin.js';
 import { ExitPointData } from './exit_point.js';
 import { FireSubs, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { OwnerComponent, SourceComponent, VulnerableToPD } from './weapon_components.js';
-import { FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
+import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { isHostileTarget } from './hostility.js';
@@ -383,7 +383,8 @@ export const ProjectileCollisionSystem = new System({
             collision.other);
         if (firingImmune(firingGroup?.group ?? owner?.owner, victimGroup,
             firingGroup?.govt, other.components.get(GovtComponent)?.id,
-            other.components.has(DisabledComponent))) {
+            disabledCancelsImmunity(collision.other,
+                other.components.has(DisabledComponent), source))) {
             return;
         }
 

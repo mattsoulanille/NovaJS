@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { AmmoType, WeaponData } from 'novadatainterface/weapon_data';
-import { Emit, UUID } from 'nova_ecs/arg_types';
+import { Emit, EmitFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { EcsEvent } from 'nova_ecs/events';
@@ -15,11 +15,12 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { registerSimulationBridgeEvent } from '../communication/simulation_bridge_events.js';
 import { mod } from '../util/mod.js';
 import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from './ship_control.js';
+import { ExplodingComponent, ZeroArmorEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { FoldStateComponent, foldBlocksFiring } from './fold_state.js';
 import { WeaponEntries, WeaponLocalState, WeaponsComponent } from './fire_weapon_plugin.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
-import { FuelComponent } from './health_plugin.js';
+import { ArmorComponent, FuelComponent } from './health_plugin.js';
 import { OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { PlatformResource } from './platform_plugin.js';
 import { PlayerShipSelector } from './player_ship_plugin.js';
@@ -105,14 +106,52 @@ function consumeAmmo(ammoType: AmmoType, outfits: OutfitsState | undefined,
     }
 }
 
+/**
+ * Kills the ship that just fired a wëap with AmmoType -999 ("Ship is
+ * destroyed when weapon is fired", EVN Bible ~:3124).
+ *
+ * It gets the NORMAL death, not a quiet deletion: armor is driven to its
+ * floor and a ZeroArmorEvent is emitted, which is exactly what a killing
+ * hit does. ShipZeroArmorSystem then starts the shïp's own death
+ * sequence (DeathDelay, the Explode1/Explode2 booms on the display), and
+ * the DeathEvent at the end of it runs every consumer that a death
+ * normally runs: ShipExplosionBlastSystem drops the hull's blast,
+ * DeathAISystem removes an NPC (a bay fighter is one), PlayerDeathSystem
+ * respawns a player. The Bible says only "destroyed", and destroyed is
+ * what every other destroyed ship does.
+ *
+ * ARMOR IS ZEROED RATHER THAN ONLY SIGNALLED, and that is load-bearing:
+ * ShipZeroArmorSystem ignores a ZeroArmorEvent whose subject is back at
+ * full armor (armorFullyRestored — the stale-event guard that stops a
+ * respawned player re-entering a death sequence). A ship destroyed by
+ * its own trigger is at full armor by definition, so signalling alone
+ * would be swallowed by that guard and nothing would happen at all.
+ *
+ * Emitting rather than attaching ExplodingComponent directly keeps this
+ * on the one path deaths already take, so nothing here has to know about
+ * DeathDelay, the exploding-already case, or the display.
+ *
+ * DETERMINISM: a component write and a targeted emit off already-synced
+ * state; no PRNG, no clock beyond the shared Time the event carries.
+ */
+export function destroyFiringShip(emit: EmitFunction, uuid: string,
+    time: Time, armor?: Stat) {
+    if (armor) {
+        armor.current = armor.min;
+    }
+    emit(ZeroArmorEvent, time, [uuid]);
+}
+
 export const WeaponsSystem = new System({
     name: 'WeaponsSystem',
     args: [WeaponsStateComponent, WeaponsComponent, TimeResource, UUID,
         WeaponEntries, Optional(OutfitsStateComponent), Optional(FuelComponent),
         SimulationGameDataResource, Optional(DisabledComponent),
-        Optional(FoldStateComponent)] as const,
+        Optional(FoldStateComponent), Emit, Optional(ArmorComponent),
+        Optional(ExplodingComponent)] as const,
     step(weaponsState, weaponsLocalState, time, uuid, weaponEntries,
-        outfits, fuel, gameData, disabled, foldState) {
+        outfits, fuel, gameData, disabled, foldState, emit, armor,
+        exploding) {
         // A disabled ship cannot fire anything — held triggers, NPC fire
         // control, and even automatic point defense are all suspended.
         // (Safe to gate before the localState touch: DisabledComponent
@@ -150,6 +189,16 @@ export const WeaponsSystem = new System({
             if (!(state.firing
                 || weapon.data.guidance === 'pointDefense'
                 || weapon.data.guidance === 'pointDefenseBeam')) {
+                continue;
+            }
+
+            // A hull that is already coming apart does not throw itself
+            // away a second time. The death a self-destruct weapon starts
+            // lasts the shïp's DeathDelay, and the trigger that started it
+            // is usually still held (a player's key, an AI's latched
+            // `firing` flag), so without this the same ship would fire
+            // once per reload all the way through its own explosion.
+            if (weapon.data.destroyShipWhenFiring && exploding !== undefined) {
                 continue;
             }
 
@@ -194,6 +243,16 @@ export const WeaponsSystem = new System({
                 // overlay reads it; the reload clock above stays the
                 // local copy. See WeaponState.lastFired.
                 state.lastFired = time.time;
+
+                // wëap AmmoType -999: the shot left, and it took the ship
+                // with it. Returning (rather than continuing the loop)
+                // means no LATER weapon of a destroyed ship fires on the
+                // same tick; the shot itself is already away, which is
+                // the whole point of the field.
+                if (weapon.data.destroyShipWhenFiring) {
+                    destroyFiringShip(emit, uuid, time, armor);
+                    return;
+                }
             }
         }
     },

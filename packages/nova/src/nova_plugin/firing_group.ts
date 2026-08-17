@@ -104,6 +104,35 @@ export function firingImmune(
 }
 
 /**
+ * Whether the "a disabled victim loses friendly-fire immunity" carve-out
+ * applies to this pair — i.e. what to pass as `victimDisabled` above.
+ *
+ * It never applies to the shot's OWN FIRER. The carve-out exists so a
+ * fleetmate (or the player) can finish off, or keep soft, a hulk that is
+ * dead in space; a ship's own weapon passing back through itself is a
+ * different thing entirely, and no version of the original game does it.
+ *
+ * The case that makes this visible is a wëap with AmmoType -999, which
+ * destroys the firer AS THE SHOT LEAVES: the ship drops to zero armor,
+ * ShipDisableSystem marks it disabled on the same tick, and its own shot
+ * — still sitting on top of it, with a proximity fuse wide enough to
+ * cover it — would detonate on the corpse instead of flying on to the
+ * target. That is the entire Intelligent EMP Torpedo plug-in failing at
+ * the last inch. The same hole is reachable without -999 at all: any
+ * ship disabled while its own shots are still in flight used to be hit
+ * by them.
+ *
+ * `weaponSource` is the SourceComponent of the shot — the entity that
+ * actually fired it, which for a bay fighter's gun is the fighter and
+ * not the carrier. Undefined (no source recorded) leaves the carve-out
+ * exactly as it was.
+ */
+export function disabledCancelsImmunity(victimUuid: string,
+    victimDisabled: boolean, weaponSource: string | undefined): boolean {
+    return victimDisabled && victimUuid !== weaponSource;
+}
+
+/**
  * A potential victim's effective firing group: its explicit group if it
  * has one (fleet members, bay fighters), else its owner-chain root
  * (weapon entities and legacy owned entities), else its own uuid (a

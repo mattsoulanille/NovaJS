@@ -47,6 +47,7 @@ import { ranksSuppressAggression } from './rank_logic.js';
 import { SourceComponent } from './weapon_components.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
 import { TargetComponent } from './target_component.js';
+import { suicideWeaponInReach } from './weapon_range.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
 /**
@@ -1634,20 +1635,29 @@ const NpcFireControlSystem = new System({
             ? entities.get(target.target)?.components
                 .get(MovementStateComponent)
             : undefined;
-        const inRange = other !== undefined
-            && other.position.subtract(movement.position).lengthSquared
-            <= NPC_FIRE_RANGE * NPC_FIRE_RANGE;
+        const distanceSquared = other === undefined ? Infinity
+            : other.position.subtract(movement.position).lengthSquared;
+        const inRange = distanceSquared <= NPC_FIRE_RANGE * NPC_FIRE_RANGE;
         for (const [id, weapon] of weapons) {
             if (!inRange) {
                 weapon.firing = false;
                 continue;
             }
-            const weaponType = gameData.data.Weapon.getCached(id)?.type;
-            if (weaponType == null) {
+            const weaponData = gameData.data.Weapon.getCached(id);
+            if (weaponData == null) {
                 continue;
             }
             weapon.target = target.target;
-            weapon.firing = true;
+            // NPC_FIRE_RANGE is a flat 1200px for every weapon, which is
+            // the wrong price for a SUICIDE weapon (wëap AmmoType -999):
+            // firing one out of range does not waste a round, it wastes
+            // the ship. Held until the shot can connect — see
+            // weapon_range.ts. (The matching "close all the way in"
+            // steering lives in escort_command_plugin, because in
+            // practice a suicide weapon reaches the field on a bay
+            // fighter, and every bay fighter is an escort.)
+            weapon.firing =
+                suicideWeaponInReach(weaponData, distanceSquared);
         }
     },
     after: [NpcDecisionSystem],

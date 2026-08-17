@@ -26,7 +26,7 @@ import { DamagedEvent } from './death_plugin.js';
 import { applyExitPoint, ExitPointData } from './exit_point.js';
 import { FireSubs, liveTargetMovement, sampleInaccuracy, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { OwnerComponent, SourceComponent } from './weapon_components.js';
-import { FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
+import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
 import { DisabledComponent } from './disabled_component.js';
 import { zeroOrderGuidance } from './guidance.js';
@@ -356,7 +356,8 @@ export const BeamCollisionSystem = new System({
                 collision.other),
             firingGroup?.govt,
             other.components.get(GovtComponent)?.id,
-            other.components.has(DisabledComponent))) {
+            disabledCancelsImmunity(collision.other,
+                other.components.has(DisabledComponent), source))) {
             return;
         }
 
