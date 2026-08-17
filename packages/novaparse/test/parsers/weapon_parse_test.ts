@@ -32,6 +32,7 @@ function fakeBayWeap({ shipId = 128, maxAmmo = 4, id = "nova:150" }: {
         loopSound: false,
         useFiringAnimation: false,
         firesFromClosestToTarget: false,
+        turretBlindSpots: { front: false, side: false, back: false },
         pictID: 0,
         descID: 0,
         idSpace: {

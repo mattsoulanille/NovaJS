@@ -32,6 +32,7 @@ import {
     OwnerComponent, OwnerComponentType, SourceComponent, VulnerableToPD,
 } from './weapon_components.js';
 import { AnimationComponent } from './animation_plugin.js';
+import { blindSpotBlocksQuadrant, getQuadrant } from './blind_spots.js';
 import { CloakActiveComponent, CloakScannerComponent, isTargetable } from './cloak_plugin.js';
 import { ExplodingComponent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
@@ -186,19 +187,6 @@ export function liveTargetMovement(entities: EntityMap,
     return entity.components.get(MovementStateComponent);
 }
 
-type Quadrant = 'frontQuadrant' | 'sidesQuadrant' | 'rearQuadrant';
-function getQuadrant(source: Position, angle: Angle, target: Position): Quadrant {
-    const angleToOther = target.subtract(source).angle;
-    const relativeAngle = angle.subtract(angleToOther);
-    const absAngle = Math.abs(relativeAngle.angle);
-    if (absAngle < Math.PI / 4) {
-        return 'frontQuadrant';
-    } else if (absAngle > 3 * Math.PI / 4) {
-        return 'rearQuadrant';
-    }
-    return 'sidesQuadrant';
-}
-
 export function sampleInaccuracy(accuracy: number, random: Random) {
     return 2 * (random.next() - 0.5) * accuracy * (2 * Math.PI / 360);
 }
@@ -236,7 +224,12 @@ function getRandomInCone(angle: number, count: number, random: Random) {
 
 const FireFromEntityQuery = new Query([Optional(WeaponsComponent),
     Entities, MovementStateComponent, AnimationComponent, UUID,
-Optional(OwnerComponent), Optional(TargetComponent), GetEntity] as const, 'FireFromEntityQuery');
+Optional(OwnerComponent), Optional(TargetComponent),
+// The firer's ship class, for its shïp-level turret blind spots. Optional
+// because plenty of things fire without being ships (projectiles that
+// submunition, bay fighters before ShipDataProvider has run); those simply
+// have no ship-level blind spots.
+Optional(ShipDataComponent), GetEntity] as const, 'FireFromEntityQuery');
 
 const SubsQuery = new Query([WeaponEntries, MovementStateComponent, Optional(SubCounts),
     Optional(OwnerComponent), Optional(TargetComponent), GetEntity] as const);
@@ -443,7 +436,8 @@ export abstract class WeaponEntry {
         if (!results[0]) {
             return undefined;
         }
-        let [weapons, entities, movement, animation, uuid, owner, targetVal, entity] = results[0];
+        let [weapons, entities, movement, animation, uuid, owner, targetVal,
+            shipData, entity] = results[0];
         if (!owner) {
             owner = {owner: uuid};
         }
@@ -492,6 +486,30 @@ export abstract class WeaponEntry {
                     targetMovement.position)
                 : undefined;
 
+            // Blind spots (wëap Flags 0x1000/0x2000/0x4000 OR'ed with
+            // the firing ship's shïp Flags 0x1000/0x2000/0x4000).
+            //
+            // Deliberately gated on WHERE THE TARGET IS and nothing
+            // else — see blind_spots.ts. The check sits BEFORE the
+            // aiming below rather than after it because the aimed angle
+            // is not what the original game tests: a rear-blind turret
+            // leading a target off its bow fires happily even when the
+            // lead angle swings behind the beam, and a rear-blind
+            // turret with a target astern stays silent even though it
+            // could point forward. Returning here rather than clearing
+            // `firing` also means the weapon burns no ammo and its
+            // reload clock does not restart (WeaponsSystem only stamps
+            // those when a shot comes back), so the turret is ready the
+            // instant the target crosses back into a live sector.
+            if (blindSpotBlocksQuadrant({
+                guidance: this.data.guidance,
+                weaponBlindSpots: this.data.turretBlindSpots,
+                shipBlindSpots: shipData?.turretBlindSpots,
+                targetQuadrant: quadrant,
+            })) {
+                return undefined;
+            }
+
             if ((this.data.guidance === quadrant
                 || this.data.guidance === 'turret'
                 || this.data.guidance === 'beamTurret')
@@ -509,7 +527,6 @@ export abstract class WeaponEntry {
                 angle = this.guidance(exitPoint, movement, chosen.movement);
                 target = chosen.uuid;
             }
-            // TODO: Blindspots
         }
 
         if (inaccuracy) {

@@ -1646,6 +1646,18 @@ const NpcFireControlSystem = new System({
             if (weaponType == null) {
                 continue;
             }
+            // Turret blind spots are NOT filtered here, on purpose. This
+            // system holds a trigger; it does not decide what leaves the
+            // barrel. A turret whose target is in a blind sector is
+            // refused by fireFromEntity (blind_spots.ts), which returns
+            // without spawning a shot, without consuming ammo and
+            // without restarting the reload clock — so latching `firing`
+            // costs nothing and the turret opens up the instant the
+            // target crosses into a live sector, with no per-weapon
+            // geometry recomputed here every tick. The one AI site that
+            // does need the predicate is the escort formation rule,
+            // which CHOOSES a victim rather than just aiming at the
+            // ship's existing target (escort_command_plugin).
             weapon.target = target.target;
             weapon.firing = true;
         }

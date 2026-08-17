@@ -1,4 +1,5 @@
 import { BaseData, getDefaultBaseData } from "./base_data.js";
+import { getDefaultTurretBlindSpots, TurretBlindSpots } from "./blind_spots.js";
 import { getDefaultShipData } from "./ship_data.js";
 import { getDefaultSpaceObjectData, SpaceObjectData } from "./space_object_data.js";
 
@@ -150,6 +151,16 @@ export interface BaseWeaponData extends BaseData {
      * spawns, so the selection must be deterministic on every peer.
      */
     firesFromClosestToTarget: boolean;
+    /**
+     * wëap Flags 0x1000/0x2000/0x4000: "Turreted weapon has a blind
+     * spot to the front/sides/rear". Only meaningful for turreted
+     * guidance types (see isTurretedGuidance); the stock data does set
+     * these bits on a handful of non-turrets (nova:128 Light Blaster,
+     * nova:146 Pulse Laser), where the original game ignores them.
+     *
+     * OR'ed with the firing ship's own ShipData.turretBlindSpots.
+     */
+    turretBlindSpots: TurretBlindSpots;
     sound?: string;
     loopSound: boolean;
 }
@@ -170,6 +181,7 @@ export function getDefaultBaseWeaponData(): BaseWeaponData {
         fireSimultaneously: false,
         destroyShipWhenFiring: false,
         firesFromClosestToTarget: false,
+        turretBlindSpots: getDefaultTurretBlindSpots(),
         loopSound: false,
     };
 }

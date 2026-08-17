@@ -374,6 +374,13 @@ export async function ShipParse(ship: ShipResource,
         length: ship.length,
         crew: ship.crew,
         freeSpace: ship.freeSpace,
+        // EVN Bible shïp Flags 0x1000/0x2000/0x4000: "Ship's turrets
+        // have a blind spot to the front/sides/rear".
+        turretBlindSpots: {
+            front: Boolean(ship.flagsN & 0x1000),
+            sides: Boolean(ship.flagsN & 0x2000),
+            rear: Boolean(ship.flagsN & 0x4000),
+        },
         ...base
     }
 }
