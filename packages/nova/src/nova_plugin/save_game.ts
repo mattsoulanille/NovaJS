@@ -22,6 +22,7 @@ import {
 import { PlayerEscortComponent } from './player_escort.js';
 import { CombatRatingComponent, LegalRecordsComponent } from './reputation_plugin.js';
 import { ShipComponent } from './ship_plugin.js';
+import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bit_namespaces';
 
 /**
  * Persistent save game for the local player.
@@ -372,13 +373,40 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     }
     if (save.controlBits) {
         const { physical, parked } = resolver.fromPairs(save.controlBits);
+        // Belt and braces: a save written by this build has the same bit
+        // set in both fields, but the legacy list may have been updated
+        // by an OLDER build in between (which does not know the pairs),
+        // and a bit is only ever lost by mistake — so any legacy number
+        // the pairs do not account for is unioned in through the legacy
+        // migration rather than dropped.
+        const legacy = legacyNumbers(save);
+        const covered = new Set(physical);
+        // A stock-range number that a loaded plug-in claims privately is
+        // represented by the plug-in's physical bit, not by itself.
+        for (const bit of physical) {
+            const [, raw] = resolver.pair(bit);
+            covered.add(raw);
+        }
+        // A private-range physical number is only meaningful under the
+        // plug-in set that wrote it, so those are unioned only when the
+        // save's manifest matches the current set.
+        const samePluginSet = samePlugins(save.plugins ?? [], resolver.pluginOrder);
+        const missing = legacy.filter(bit => !covered.has(bit)
+            && (bit < FIRST_PRIVATE_PHYSICAL_CONTROL_BIT || samePluginSet));
+        if (missing.length > 0) {
+            const extra = resolver.migrateLegacy(missing);
+            for (const bit of extra.physical) {
+                physical.add(bit);
+            }
+            parked.push(...extra.parked);
+            console.warn('The save\'s legacy control bit list has bits its '
+                + 'namespaced list lacks; keeping them: '
+                + missing.map(bit => `b${bit}`).join(', '));
+        }
         entity.components.set(ControlBitsComponent, physical);
-        restored.parkedControlBits = parked;
+        restored.parkedControlBits = sortControlBitPairs(parked);
     } else if (save.novaControlBits) {
-        const { physical, parked } = resolver.migrateLegacy(
-            save.novaControlBits
-                .map(([bit]) => parseInt(bit, 10))
-                .filter(bit => !Number.isNaN(bit)));
+        const { physical, parked } = resolver.migrateLegacy(legacyNumbers(save));
         entity.components.set(ControlBitsComponent, physical);
         restored.parkedControlBits = parked;
     }
@@ -410,6 +438,13 @@ export function restorePlayerState(entity: Entity, save: SaveData,
         }
     }
     return restored;
+}
+
+/** The legacy `novaControlBits` field as numbers (garbage skipped). */
+function legacyNumbers(save: SaveData): number[] {
+    return (save.novaControlBits ?? [])
+        .map(([bit]) => parseInt(bit, 10))
+        .filter(bit => !Number.isNaN(bit));
 }
 
 function samePlugins(a: readonly string[], b: readonly string[]): boolean {

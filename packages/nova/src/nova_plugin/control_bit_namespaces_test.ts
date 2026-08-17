@@ -64,7 +64,8 @@ describe('ControlBitResolver', () => {
         ]);
         // A private-range number the mapping does not know keeps
         // round-tripping as itself rather than vanishing.
-        expect(resolver.pair(P0 + 50)).toEqual(['nova', P0 + 50]);
+        expect(resolver.pair(P0 + 50)).toEqual(['physical', P0 + 50]);
+        expect(resolver.physicalBit(['physical', P0 + 50])).toBe(P0 + 50);
     });
 
     it('resolves saved pairs and parks the rest', () => {
