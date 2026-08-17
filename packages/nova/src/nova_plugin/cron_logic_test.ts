@@ -35,6 +35,34 @@ describe('runCronsForDays', () => {
             expect([...active]).toEqual(['arpia:147']);
         });
 
+    it('reads Oxxx in EnableOn against the owned outfits, in the cron\'s '
+        + 'own plug-in namespace', () => {
+            // Extra Outfits crön 604 "Take Away Officers": EnableOn !O533,
+            // OnStart !b9010. Owning the plug-in's oütf 533 must keep it
+            // from firing; without the outfits, `!O533` read as true and
+            // the officer bit was cleared the day the player left.
+            const cron = makeCron({
+                id: 'extra-outfits:604', enableOn: '!O533', onStart: '!b10',
+            });
+            const run = (owned: [string, number][]) => {
+                const bits = new Set([10]);
+                runCronsForDays([cron], new Map(), bits, DAY, DAY + 1,
+                    () => 0, 0n, { ownedOutfits: new Map(owned) });
+                return bits.has(10);
+            };
+            expect(run([['extra-outfits:533', 1]])).toBe(true);
+            // A stock outfit of the same number counts too (id-space rule)...
+            expect(run([['nova:533', 1]])).toBe(true);
+            // ...but a third plug-in's 533, a zero count, or nothing don't.
+            expect(run([['arpia:533', 1]])).toBe(false);
+            expect(run([['extra-outfits:533', 0]])).toBe(false);
+            expect(run([])).toBe(false);
+            // No outfits supplied at all: owns nothing.
+            const bits = new Set([10]);
+            runCronsForDays([cron], new Map(), bits, DAY, DAY + 1, () => 0);
+            expect(bits.has(10)).toBe(false);
+        });
+
     it('runs OnStart and OnEnd together for duration 0', () => {
         const cron = makeCron({ onStart: 'b10', onEnd: 'b11' });
         const bits = new Set<number>();

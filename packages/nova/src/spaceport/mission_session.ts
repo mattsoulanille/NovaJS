@@ -403,13 +403,19 @@ export async function advanceEntityDate(entity: Entity, days: number,
         // A cron's set string may grant a rank (Kxxx), so the crons run
         // against a working copy of the active ranks too and it is committed
         // beside the bits.
+        // Crön EnableOn may test the player's outfits (Oxxx).
+        const ownedOutfits = new Map([...entity.components.get(OutfitsStateComponent)
+            ?? []].map(([id, { count }]) => [id, count]));
         runCronsForDays(universe.crons, cronStates, bits,
             fromDay, fromDay + days, Math.random, contribute, {
-            active: ranks,
-            // Fallback only: runCronsForDays rescopes ids to each cron's
-            // own plug-in prefix as it steps it.
-            resolveId: id => `nova:${id}`,
-            getRank: id => universe.getRank(id),
+            ranks: {
+                active: ranks,
+                // Fallback only: runCronsForDays rescopes ids to each
+                // cron's own plug-in prefix as it steps it.
+                resolveId: id => `nova:${id}`,
+                getRank: id => universe.getRank(id),
+            },
+            ownedOutfits,
         });
         entity.components.set(ControlBitsComponent, bits);
         entity.components.set(ActiveRanksComponent, ranks);
