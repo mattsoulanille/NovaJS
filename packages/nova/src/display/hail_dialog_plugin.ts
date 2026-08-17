@@ -50,7 +50,7 @@ import { HailAction } from '../nova_plugin/hail_plugin.js';
 import { SoundEvent } from '../nova_plugin/sound_plugin.js';
 import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import { planetDisposition, shipDisposition } from '../nova_plugin/iff_plugin.js';
-import { landable } from '../nova_plugin/landable.js';
+import { isPort, landable } from '../nova_plugin/landable.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { SimulationTimeResource } from './simulation_time.js';
 import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
@@ -90,9 +90,9 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  * The dialog itself never touches the sim, keeping every effect on the
  * input-record path that all peers replay identically.
  *
- * NOT EVERY HAIL OPENS A CHANNEL: with an UNINHABITED stellar selected
- * (Jupiter, a dead hypergate — landable.ts) there is nobody to answer, so no
- * dialog appears at all. The press gets the original's "No response." on the
+ * NOT EVERY HAIL OPENS A CHANNEL: with a stellar that is not a PORT selected
+ * (Jupiter, a dead hypergate, a wormhole — landable.ts isPort) there is
+ * nobody to answer, so no dialog appears at all. The press gets the original's "No response." on the
  * bottom-left status line and the can't-do beep, the same feedback a blocked
  * landing gets. See hailIsUnanswerable / refuseHail.
  *
@@ -123,9 +123,15 @@ function getPlayerShip(world: World) {
 }
 
 /**
- * Whether the player's hail would go to an UNINHABITED stellar — Jupiter, a
- * scenery world, a wrecked hypergate: anything the spöb can-land bit rules
- * out (landable.ts).
+ * Whether the player's hail would go somewhere with no traffic control —
+ * anything that is not a PORT (landable.ts isPort). Two ways to fail it,
+ * both from the spöb Flags:
+ *
+ *  - NOT LANDABLE (0x0001 clear): Jupiter, a scenery world, a wrecked
+ *    hypergate.
+ *  - UNINHABITED (0x0020 set): the Bible's own gloss on that bit is "no
+ *    traffic control or refuelling", so Pan, Spica and the wormholes have
+ *    nobody listening even though the player may land on them.
  *
  * There is nobody down there to answer, so the original opens NO channel at
  * all: it prints "No response." (STR# 2002 index 52) on the bottom-left
@@ -152,7 +158,7 @@ export function hailIsUnanswerable(world: World): boolean {
         ? world.entities.get(planetTargetUuid)
             ?.components.get(PlanetDataComponent)
         : undefined;
-    return !!planetData && !landable(planetData);
+    return !!planetData && !isPort(planetData.flags);
 }
 
 /** Whether the player ship is disabled or low on fuel (assist gate). */
@@ -554,16 +560,21 @@ export async function computeContext(world: World,
         const image = planetData?.landingPict
             ? planetData.landingPict : null;
         const isStation = planetData?.flags.isStation ?? false;
-        // An uninhabited stellar (Jupiter, a wrecked gate) has no traffic
-        // control at all: nobody is listening, so the original never opens a
-        // channel to one. Refuse here — the plugin turns this undefined into
-        // the status line's "No response." and a can't-do beep (see
-        // hailIsUnanswerable) — rather than opening a comm dialog just to
-        // deny a landing that was never on offer.
-        const isLandable = planetData ? landable(planetData) : true;
-        if (!isLandable) {
+        // A stellar that is not a PORT — unlandable (Jupiter, a wrecked
+        // gate) or flagged uninhabited, which the Bible glosses as "no
+        // traffic control or refuelling" — has nobody listening, so the
+        // original never opens a channel to one. Refuse here — the plugin
+        // turns this undefined into the status line's "No response." and a
+        // can't-do beep (see hailIsUnanswerable) — rather than opening a
+        // comm dialog just to deny a landing that was never on offer.
+        if (planetData && !isPort(planetData.flags)) {
             return undefined;
         }
+        // Always true past that gate (a port is landable by definition), but
+        // still read off the SAME landable() predicate the radar blip and the
+        // landing gate use, so planetDisposition below can never drift from
+        // them.
+        const isLandable = planetData ? landable(planetData) : true;
 
         // THE SAME clearance verdict the landing gate and the radar blip use
         // (stellar_clearance.ts), read off the same delta-synced components
@@ -629,7 +640,7 @@ export async function computeContext(world: World,
         // index 172) for a shut port or a missing travel permit, "Hostile"
         // (173) for a legal record below its MinStatus. identityRuns paints a
         // "Status:" line red, exactly as it does for a hostile ship.
-        // `isLandable` is always true here (the unlandable case returned
+        // `isLandable` is always true here (the non-port case returned
         // above); it is still threaded through the SAME planetDisposition the
         // radar blip reads so the two can never drift apart.
         const status = planetDisposition(clearance, isLandable);

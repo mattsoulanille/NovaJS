@@ -24,6 +24,7 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { displayName } from '../nova_plugin/display_name.js';
+import { systemIsInhabited } from '../nova_plugin/landable.js';
 import { Button } from '../spaceport/button.js';
 import { wrapIndex } from '../spaceport/list_selection.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
@@ -481,6 +482,8 @@ export class RollbackScreen {
             this.graph = new SystemGraph(this.allSystems, system, {
                 playerBits: bits,
                 size: { x: MAP.width, y: MAP.height },
+                isSystemInhabited: s => systemIsInhabited(s.planets,
+                    id => this.universe.getPlanet(id)),
             });
             this.graphBitsKey = key;
             this.mapHolder.addChild(this.graph.container);

@@ -4,7 +4,7 @@ import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
-import { landable } from "../nova_plugin/landable.js";
+import { isPort, landable } from "../nova_plugin/landable.js";
 import { MissionMapMark } from "../nova_plugin/mission_logic.js";
 import { Button } from "./button.js";
 import {
@@ -91,11 +91,20 @@ export function computeGateMapSelection(
  */
 export function gateMapGraphOptions(gateLinks: [string, string][],
     selectable: Set<string>, missionMarks: MissionMapMark[] = [],
-    missionMarkTexture?: PIXI.Texture): SystemGraphOptions {
+    missionMarkTexture?: PIXI.Texture,
+    /** Spöb global ids that are PORTS (landable.ts isPort), for the blue
+     * system dots. Omitted in tests, where the galaxy then draws grey. */
+    portSpobs?: ReadonlySet<string>): SystemGraphOptions {
     return {
         gateLinks,
         selectable,
         missionMarks,
+        ...(portSpobs
+            ? {
+                isSystemInhabited: (system: SystemData) =>
+                    system.planets.some(p => portSpobs.has(p)),
+            }
+            : {}),
         // The map draws active marks only; the green BBS-viewed marks
         // belong to the mission computer's map. Both slots take the one
         // texture because SystemGraph asks for the pair, and with no
@@ -140,6 +149,9 @@ export class GateMap extends Menu<GateMapResult> {
     /** Spöbs that cannot be landed on — the destroyed gates. Neither a
      * destination nor a hop in the network walk. */
     private unlandableSpobs = new Set<string>();
+    /** Spöbs that are PORTS (landable.ts isPort) — what makes a system's
+     * dot blue on this map, exactly as on the star map. */
+    private portSpobs = new Set<string>();
     /** The server's hypergateTransitivity setting, read in build(). */
     private transitivity = DEFAULT_HYPERGATE_TRANSITIVITY;
     private gateLinks: [string, string][] = [];
@@ -204,6 +216,9 @@ export class GateMap extends Menu<GateMapResult> {
             if (!landable(planet)) {
                 this.unlandableSpobs.add(spob);
             }
+            if (isPort(planet.flags)) {
+                this.portSpobs.add(spob);
+            }
             if (planet.gate?.kind === 'hypergate') {
                 this.gateDestinations.set(spob, planet.gate.destinations);
             }
@@ -249,7 +264,7 @@ export class GateMap extends Menu<GateMapResult> {
         this.systemGraph = new SystemGraph(this.systems, input.systemId,
             gateMapGraphOptions(this.gateLinks,
                 new Set(this.selectableSpobs.keys()), input.missionMarks,
-                this.missionMarkTexture));
+                this.missionMarkTexture, this.portSpobs));
         this.systemGraph.container.position.set(-290, -248);
         this.container.addChild(this.systemGraph.container);
         this.systemGraph.center();

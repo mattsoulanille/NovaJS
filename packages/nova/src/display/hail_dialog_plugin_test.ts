@@ -467,6 +467,8 @@ describe('computeContext: hailing a STELLAR', () => {
         credits?: number,
         isStation?: boolean,
         canLand?: boolean,
+        /** spöb Flags 0x0020 "Stellar is uninhabited". */
+        uninhabited?: boolean,
         /** Sim-clock ms until which this port has been bribed. */
         bribedUntil?: number,
     } = {}) {
@@ -484,6 +486,7 @@ describe('computeContext: hailing a STELLAR', () => {
                 ...getDefaultPlanetData().flags,
                 isStation: opts.isStation ?? false,
                 canLand: opts.canLand ?? true,
+                uninhabited: opts.uninhabited ?? false,
             },
         };
 
@@ -670,10 +673,19 @@ describe('computeContext: hailing a STELLAR', () => {
             expect(hailIsUnanswerable(world)).toBeTrue();
         });
 
-        it('lets a landable stellar answer', () => {
+        it('lets a landable, INHABITED stellar answer', () => {
             const { world } = planetWorld({ canLand: true });
             expect(hailIsUnanswerable(world)).toBeFalse();
         });
+
+        it('refuses a LANDABLE stellar that is flagged uninhabited — the '
+            + 'Bible\'s 0x0020 is "no traffic control or refuelling", so '
+            + 'Pan, Spica and the wormholes have nobody to answer', () => {
+                const { world } = planetWorld({
+                    canLand: true, uninhabited: true,
+                });
+                expect(hailIsUnanswerable(world)).toBeTrue();
+            });
 
         it('is silent (not a refusal) when nothing is targeted', () => {
             // computeContext also returns undefined here, but a hail into
