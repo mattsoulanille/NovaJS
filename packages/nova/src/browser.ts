@@ -66,9 +66,9 @@ import { initialRecordsFromGovtStatuses } from "./nova_plugin/reputation.js";
 import { CombatRatingComponent, LegalRecordsComponent } from "./nova_plugin/reputation_plugin.js";
 import { resetExplored } from "./nova_plugin/explored_store.js";
 import {
-    EscortToSave, SavedEscort, collectEscortsToSave, extractSaveData,
-    extractSavedEscorts, loadSave, resetSave, restorePlayerState,
-    restoreSavedEscorts, writeSave,
+    EscortToSave, SavedEscort, collectEscortsToSave, decodeSave, encodeSave,
+    extractSaveData, extractSavedEscorts, getActiveSaveKey, loadSave,
+    resetSave, restorePlayerState, restoreSavedEscorts, SaveData, writeSave,
 } from "./nova_plugin/save_game.js";
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
@@ -113,6 +113,13 @@ import {
     applyActivePilot, createPilot, deletePilot, exportFileName, exportPilot,
     getActivePilot, importPilot, listPilots, loadPilotControls, selectPilot,
 } from "./title/pilot_registry.js";
+import {
+    latestState, loadHistory, recordCheckpoint,
+} from "./title/pilot_history.js";
+import { JsonValue } from "./title/json_patch.js";
+import {
+    CheckpointRequest, checkpointRequests, describeFlightChanges,
+} from "./spaceport/checkpoint_requests.js";
 import { combatRatingName } from "./nova_plugin/reputation.js";
 import { formatDate } from "./nova_plugin/calendar.js";
 import { isTextEntryActive } from "./input_focus.js";
@@ -885,28 +892,31 @@ function escortsToSave(player: string): EscortToSave[] {
 }
 
 /**
- * Serializes the local player's current state to localStorage. A pure
- * read of the display world's player entity (which mirrors the simulation),
- * so it's a safe observer that never mutates sim state. No-op if there's no
+ * The save payload for the local player right now: `entity` when given
+ * (a venue's just-committed docked ship, see checkpoint_requests.ts),
+ * else the player entity this client currently holds. A pure read of the
+ * display world's player entity (which mirrors the simulation), so it's a
+ * safe observer that never mutates sim state. Undefined if there's no
  * player ship yet (e.g. mid-jump) or nothing meaningful to persist.
  */
-function saveNow() {
+function buildSaveData(entity?: Entity): SaveData | undefined {
     if (!displayWorld || !activeSystemId) {
-        return;
+        return undefined;
     }
     // While docked the player entity is out of the display world; the
     // docked/relaunching entity carries the freshest state (mission
     // acceptances, payments, the advanced date).
-    const playerShip = pendingLaunchedShip
+    const playerShip = entity
+        ?? pendingLaunchedShip
         ?? dockedShip?.entity
         ?? pendingDockedShip?.entity
         ?? getPlayerShipEntity(displayWorld);
     if (!playerShip) {
-        return;
+        return undefined;
     }
     const data = extractSaveData(playerShip, activeSystemId);
     if (!data) {
-        return;
+        return undefined;
     }
     // Escorts, as whole serialized entities. Needs the simulation's
     // serializer, which exists for as long as there is a system; if it
@@ -930,7 +940,130 @@ function saveNow() {
             data.playerUuid = player;
         }
     }
+    return data;
+}
+
+/**
+ * Serializes the local player's current state to localStorage (see
+ * buildSaveData). No-op with nothing to persist. In flight, also notices
+ * state changes the SIMULATION made since the last checkpoint — a capture,
+ * a mission accepted from a ship — and records a checkpoint for them.
+ */
+function saveNow() {
+    const data = buildSaveData();
+    if (!data) {
+        return;
+    }
     writeSave(data);
+    noticeFlightChanges(data);
+}
+
+// ---------------------------------------------------------------------------
+// Pilot-history checkpoints (title/pilot_history.ts).
+// ---------------------------------------------------------------------------
+
+/**
+ * The save at the ACTIVE pilot's newest checkpoint, as this session last
+ * saw it: the baseline the in-flight change detector compares against.
+ * Loaded from the stored history on game entry, then tracked in memory
+ * as checkpoints are recorded (so no history fold per periodic save).
+ */
+let lastCheckpointData: SaveData | undefined;
+
+/** Seeds the in-flight change baseline from the stored history. */
+function loadCheckpointBaseline() {
+    const newest = latestState(loadHistory(getActiveSaveKey()));
+    lastCheckpointData = newest === undefined
+        ? undefined : decodeSave(JSON.stringify(newest));
+}
+
+/**
+ * Records a checkpoint of the player's state for the active pilot: writes
+ * the save from the requested entity (so save and checkpoint agree) and
+ * appends the checkpoint to the pilot's history. Skipped when there is
+ * nothing to snapshot (mid-jump, no player yet). Client-local; the sim is
+ * never involved.
+ */
+function recordCheckpointNow(request: CheckpointRequest) {
+    // Mid-jump the player is in no world and its escorts are on the jump
+    // roster under no known player uuid; a snapshot then would silently
+    // drop them, so wait for the next depart / periodic detection instead.
+    if (!localPlayerUuid()) {
+        return;
+    }
+    const data = buildSaveData(request.entity);
+    if (!data) {
+        return;
+    }
+    writeSave(data);
+    let envelope: JsonValue;
+    try {
+        envelope = JSON.parse(encodeSave(data)) as JsonValue;
+    } catch (e) {
+        console.warn('Failed to encode the save for a checkpoint:', e);
+        return;
+    }
+    const stellar = request.stellar
+        ?? dockedShip?.planetId ?? pendingDockedShip?.planetId;
+    try {
+        recordCheckpoint(getActiveSaveKey(), envelope, {
+            label: request.label,
+            kind: request.kind,
+            ...(data.date ? { date: { ...data.date } } : {}),
+            ...(activeSystemId ? { system: activeSystemId } : {}),
+            ...(stellar ? { stellar } : {}),
+            at: Date.now(),
+        });
+        lastCheckpointData = data;
+    } catch (e) {
+        console.warn('Failed to record a checkpoint:', e);
+    }
+}
+
+/**
+ * The in-flight half of checkpoint recording: nothing landed announces a
+ * boarding capture or a mission accepted from a ship in flight, so the
+ * periodic save compares the ship type and mission set against the last
+ * checkpoint and records one for whatever changed. Only IN FLIGHT: while
+ * docked, the venues announce their own changes (and a just-bought ship
+ * lives on a new entity the docked handle does not yet point at).
+ */
+function noticeFlightChanges(data: SaveData) {
+    if (dockedShip || pendingDockedShip || pendingLaunchedShip
+        || gateDockedShip || pendingGateShip || !lastCheckpointData) {
+        return;
+    }
+    const universe = MissionUniverse.shared(simulationGameData);
+    const changes = describeFlightChanges(lastCheckpointData, data, {
+        shipName: id => simulationGameData.data.Ship.getCached(id)?.name
+            ?.split(';')[0].trim(),
+        missionName: id => universe.getMission(id)?.name,
+    });
+    if (changes.length === 0) {
+        return;
+    }
+    // One checkpoint for the batch; the first change names its kind.
+    recordCheckpointNow({
+        label: changes.map(c => c.label).join('; '),
+        kind: changes[0].kind,
+    });
+}
+
+let checkpointRecorderInstalled = false;
+
+/** Subscribes the recorder to the landed UI's checkpoint requests. */
+function installCheckpointRecorder() {
+    if (checkpointRecorderInstalled) {
+        return;
+    }
+    checkpointRecorderInstalled = true;
+    checkpointRequests.subscribe(request => {
+        try {
+            recordCheckpointNow(request);
+        } catch (e) {
+            console.warn('Checkpoint request failed:', e);
+        }
+    });
 }
 
 let saveTriggersInstalled = false;
@@ -1216,6 +1349,19 @@ async function enterSystem({ entity, to, uuid }:
     newDisplayWorld.events.get(LeaveSpaceportEvent).subscribe(({ data }) => {
         pendingLaunchedShip = data;
         document.body.classList.remove('nova-docked');
+        // Departure is THE checkpoint (the original saved the pilot file
+        // on every depart). The relaunching entity carries everything the
+        // venues committed, including a ship bought at the shipyard.
+        const planetId = dockedShip?.planetId;
+        const planetName = planetId
+            ? simulationGameData.data.Planet.getCached(planetId)?.name
+            : undefined;
+        recordCheckpointNow({
+            label: `Departed ${planetName ?? 'the spaceport'}`,
+            kind: 'depart',
+            entity: data,
+            ...(planetId ? { stellar: planetId } : {}),
+        });
     });
     newDisplayWorld.events.get(AddEnemyEvent).subscribe(async ({ data }) => {
         const { shipId } = data;
@@ -1584,6 +1730,10 @@ async function startGame() {
     // override it. A corrupt or old-version save is quarantined by
     // loadSave and we fall back to defaults.
     const save = loadSave();
+    // The pilot's checkpoint history: baseline for the in-flight change
+    // detector, and the recorder for the landed venues' requests.
+    loadCheckpointBaseline();
+    installCheckpointRecorder();
     // Hand the saved escorts to the first system entry, which is the only
     // place with a serializer to decode them (see restoredSaveEscorts).
     // Deliberately NOT gated on `usingSavedShip`: escorts are ships of

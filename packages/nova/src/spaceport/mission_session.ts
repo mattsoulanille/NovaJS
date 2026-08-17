@@ -32,6 +32,7 @@ import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
 import { MissionUniverse } from './mission_universe.js';
 import { rankSalaryPerDay } from '../nova_plugin/rank_logic.js';
+import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
 
 /**
  * A player-local editing session over the mission-related components
@@ -45,6 +46,13 @@ export class MissionSession {
     readonly outfits: Map<string, number>;
     readonly machinery: MissionMachineryContext;
     readonly currentDay: number;
+    /**
+     * How many of `state.events` have already been announced as
+     * checkpoint requests. `events` accumulates across commits (a second
+     * commit() returns the same array again), so only the tail beyond
+     * this mark is new.
+     */
+    private eventsAnnounced = 0;
 
     private constructor(private entity: Entity,
         private universe: MissionUniverse,
@@ -52,7 +60,15 @@ export class MissionSession {
         cargoCapacity: number,
         public shipId: string,
         private shipGovt: string | null,
-        private playerContribute: bigint) {
+        private playerContribute: bigint,
+        /**
+         * Whether commit() announces mission accept/abort/complete/fail
+         * events as pilot-history checkpoint requests. Off for a session
+         * over a DETACHED copy of the player (ship_mission_accept.ts):
+         * such a copy carries only the mission-related components, so a
+         * checkpoint snapshotted from it would be missing the rest.
+         */
+        private readonly announceCheckpoints: boolean) {
         this.currentDay = dayNumber(
             entity.components.get(GameDateComponent) ?? getDefaultGameDate());
 
@@ -127,7 +143,8 @@ export class MissionSession {
 
     static async create(entity: Entity,
         gameData: SimulationGameDataInterface,
-        universe: MissionUniverse, planetId: string):
+        universe: MissionUniverse, planetId: string,
+        options: { announceCheckpoints?: boolean } = {}):
         Promise<MissionSession> {
         await universe.load();
         const shipId = entity.components.get(ShipComponent)?.id ?? 'default';
@@ -144,11 +161,40 @@ export class MissionSession {
         const playerContribute =
             await computePlayerContribute(entity, gameData);
         return new MissionSession(entity, universe, planetId,
-            cargoCapacity, shipId, shipGovt, playerContribute);
+            cargoCapacity, shipId, shipGovt, playerContribute,
+            options.announceCheckpoints ?? true);
     }
 
-    /** Writes the working copies back onto the entity. */
+    /**
+     * Writes the working copies back onto the entity, then announces the
+     * NEW mission events (accepted / completed / failed / aborted) as
+     * pilot-history checkpoint requests, so a rewind can land right
+     * before or after each (checkpoint_requests.ts). Announced AFTER the
+     * write so a recorder snapshotting `entity` sees the committed state.
+     */
     commit(): MissionEvent[] {
+        const events = this.commitState();
+        if (this.announceCheckpoints) {
+            const fresh = events.slice(this.eventsAnnounced);
+            this.eventsAnnounced = events.length;
+            // Only a real stellar id rides along; sessions built with a
+            // placeholder ('<outfitter>', '<in-flight>') leave it out.
+            const stellar = this.universe.getPlanet(this.planetId)
+                ? this.planetId : undefined;
+            for (const event of fresh) {
+                const label = missionEventLabel(event);
+                if (label) {
+                    requestCheckpoint({
+                        label, kind: 'mission', entity: this.entity,
+                        ...(stellar ? { stellar } : {}),
+                    });
+                }
+            }
+        }
+        return events;
+    }
+
+    private commitState(): MissionEvent[] {
         const entity = this.entity;
         entity.components.set(MissionsComponent, this.state.missions);
         entity.components.set(CargoComponent, this.state.cargo);
