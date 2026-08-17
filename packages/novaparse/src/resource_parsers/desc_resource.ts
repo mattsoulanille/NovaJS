@@ -69,6 +69,15 @@ class DescResource extends BaseResource {
         return this._text;
     }
 
+    /**
+     * Settable so IDSpaceHandler can rewrite the control-bit references
+     * inside "{bXXX ...}" conditionals to their namespaced physical numbers
+     * (see ncb_namespace.ts); nothing else writes it.
+     */
+    set text(text: string) {
+        this._text = text;
+    }
+
 }
 
 export { DescResource };

@@ -93,7 +93,11 @@ describe("NovaParse", () => {
         // Availability NCB, BuyRandom, and the Flags3 0x0100/0x0200/
         // 0x4000 bits (see shipyard_stock_rules.ts). The fixture's
         // flags3 is 0x361: 0x0100 + 0x0200 set, 0x4000 clear.
-        expect(s128.availability).toEqual("b13");
+        // The fixture's nova:128 is WRITTEN by the "ship" plug-in and b13
+        // is not in the (empty) stock base set, so it is that plug-in's
+        // private bit, renumbered into the private range (ncb_namespace.ts:
+        // ship's bits 1,2,3,4 from OnPurchase come first, then 13).
+        expect(s128.availability).toEqual("b20004");
         expect(s128.buyRandom).toEqual(4);
         expect(s128.hideIfAvailabilityFalse).toEqual(true);
         expect(s128.hideIfRequireUnmet).toEqual(true);
