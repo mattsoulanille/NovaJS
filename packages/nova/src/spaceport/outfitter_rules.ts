@@ -651,25 +651,38 @@ export function buysBackOutfit(outfit: OutfitData,
  * owned ammo outfit via its BayFighterComponent.bayWeaponId). A bay is
  * just the case of this where the rounds are fighters.
  *
- * The room left after the sale mirrors ammoCapacity's two branches:
+ * There are TWO room-left figures because a round aboard and a round in
+ * flight are not in the same danger, and only one of them is governed by
+ * the ammunition ceiling:
  *
- *  - MaxAmmo > 0: capacity is MaxAmmo per mounted instance, so selling one
- *    unit of an outfit granting n of them frees MaxAmmo x n. What remains
- *    is MaxAmmo x (mounted - n).
- *  - MaxAmmo <= 0: there is no per-launcher capacity at all; the oütf Max
- *    governs and it does not shrink. So the room left is unbounded while
- *    ANY instance survives, and nothing at all once the last one goes —
- *    ammunition for a weapon the ship no longer carries has nowhere to be.
+ *  - `roomLeft`, for the capacity refusal, is ammoCapacity's own: MaxAmmo
+ *    per mounted instance when the supply weapon carries a positive
+ *    MaxAmmo, so selling one unit of an outfit granting n of them frees
+ *    MaxAmmo x n and leaves MaxAmmo x (mounted - n). When MaxAmmo <= 0
+ *    there is no launcher-derived ceiling at all — the ammo outfit's own
+ *    oütf Max governs and no weapon coming or going can move it — so the
+ *    room left is UNBOUNDED and no sale can ever put those rounds over
+ *    their limit. That is Matthew's ruling: an IR Missile Launcher sells
+ *    with a full hold of IR Missiles.
+ *  - `roomLeftForDeployed` adds the one thing that is not about capacity:
+ *    a fighter still in flight is dropped outright if it has no bay to
+ *    come home to (bay_plugin's refundFighterToBay), so the last instance
+ *    of a weapon deployed rounds belong to holds them even when MaxAmmo
+ *    says nothing. Rounds already ABOARD need no such protection — they
+ *    stay in the hold as ammunition the ship cannot currently fire, which
+ *    is exactly the IR Missile case.
  *
  * Yields nothing for an ordinary outfit (it grants no weapons), for the
  * FIGHTER or ammo outfit itself (ammunition grants no weapon), and for a
- * weapon no owned ammo outfit feeds. That last one is why selling the
- * Nuke plug-in's firing tube (oütf 445, granting wëap 236) is free while
- * selling a rack (oütf 446, granting the supply wëap 238) is checked: no
- * ammo oütf names 236, so the tube is not a magazine.
+ * weapon no owned ammo outfit feeds. That last one is why selling the Nuke
+ * plug-in's firing tube (oütf 445, granting wëap 236) is free while selling
+ * a rack (oütf 446, granting the supply wëap 238) is checked: no ammo oütf
+ * names 236, so the tube is not a magazine.
  */
-function shrunkenMagazines(outfit: OutfitData, context: OutfitterContext):
-    { aboard: number, deployed: number, roomLeft: number }[] {
+function shrunkenMagazines(outfit: OutfitData, context: OutfitterContext): {
+    aboard: number, deployed: number,
+    roomLeft: number, roomLeftForDeployed: number,
+}[] {
     const magazines = [];
     for (const [weaponId, mounted] of Object.entries(outfit.weapons)) {
         if (mounted <= 0) {
@@ -680,12 +693,17 @@ function shrunkenMagazines(outfit: OutfitData, context: OutfitterContext):
             continue;
         }
         const supply = context.getWeapon(weaponId);
-        const remaining =
-            mountedWeaponCount(weaponId, context) - mounted;
-        const roomLeft = !supply || supply.maxAmmo <= 0
-            ? (remaining > 0 ? Infinity : 0)
-            : supply.maxAmmo * remaining;
-        magazines.push({ ...held, roomLeft });
+        const remaining = mountedWeaponCount(weaponId, context) - mounted;
+        if (!supply || supply.maxAmmo <= 0) {
+            magazines.push({
+                ...held,
+                roomLeft: Infinity,
+                roomLeftForDeployed: remaining > 0 ? Infinity : 0,
+            });
+            continue;
+        }
+        const roomLeft = supply.maxAmmo * remaining;
+        magazines.push({ ...held, roomLeft, roomLeftForDeployed: roomLeft });
     }
     return magazines;
 }
@@ -705,7 +723,7 @@ export function canSellOutfit(outfit: OutfitData,
     if (outfit.cantSell) {
         return denied('cantSell', 'This can\'t be sold.');
     }
-    for (const { aboard, deployed, roomLeft } of
+    for (const { aboard, deployed, roomLeft, roomLeftForDeployed } of
         shrunkenMagazines(outfit, context)) {
         // Deployed rounds first: they cannot be sold to make room (they
         // are not aboard, so canSellOutfit denies them as notOwned), so
@@ -717,8 +735,10 @@ export function canSellOutfit(outfit: OutfitData,
         // them; without this they were converted to credits and left
         // pointing at a hangar that no longer exists, and
         // refundFighterToBay silently dropped each one on docking because
-        // the carrier mounted zero bays (bay_plugin.ts).
-        if (deployed > roomLeft) {
+        // the carrier mounted zero bays (bay_plugin.ts). That last
+        // sentence is why this one test is not the pure capacity one:
+        // see roomLeftForDeployed in shrunkenMagazines.
+        if (deployed > roomLeftForDeployed) {
             return denied('fightersDeployed',
                 'You can\'t sell this while its fighters are deployed.');
         }
@@ -744,44 +764,61 @@ export function canSellOutfit(outfit: OutfitData,
 /*
  * THE LAUNCHER SELL RULE.
  *
- * A launcher cannot be sold while ammunition for it is still aboard —
- * stock behaviour, and stock STR# 2002 carries a sentence composed for
- * this denial and nothing else, at indices 207-211 (see AmmoSellStrings):
- * "You need to sell 4 units of ammunition before you can sell your Viper
- * Bay." Its sibling at 206 is the other sell refusal, which is why sell
- * denials are captioned in the outfitter at all.
+ * Stock STR# 2002 carries a sentence composed for one denial and nothing
+ * else, at indices 207-211 (see AmmoSellStrings): "You need to sell 4 units
+ * of ammunition before you can sell your Viper Bay." Its sibling at 206 is
+ * the other sell refusal, which is why sell denials are captioned in the
+ * outfitter at all.
  *
- * WHAT COUNTS AS A LAUNCHER is not a flag but a relation: an outfit is a
- * launcher for some ammunition when it grants the wëap that ammunition's
- * ModVal names (its `ammoFor`). Ordinary equipment grants no weapons; a
- * gun whose ammo nobody owns has an empty magazine; and a weapon that
- * merely DRAWS on someone else's supply is not that supply's magazine (the
- * Nuke plug-in's tube versus its racks — see shrunkenMagazines).
+ * THE RULE IS PURELY ABOUT CAPACITY. RULING (Matthew, 2026-08-17): "You
+ * should be able to sell an IR missile launcher even if you have IR
+ * missiles (and this rule generalizes and should change our interpretation
+ * of ammo limits)." So the sale is refused if and only if it would leave
+ * the rounds held OVER the capacity that remains — never merely because a
+ * launcher for them is going away. The capacity is ammoCapacity's, and it
+ * has exactly two shapes (Bible ~:3375):
  *
- * SELLING ONE OF N LAUNCHERS is allowed exactly when the launchers left
- * still hold the rounds held. RULING (Bible-consistent, ~:3375): MaxAmmo
- * is "the maximum amount of ammo per each instance of this weapon", so N
- * launchers hold N x MaxAmmo and N-1 hold one MaxAmmo less; the sale is
- * refused only by the shortfall, and the count in the sentence is that
- * shortfall — two Viper Bays (4 each) with 8 fighters aboard says "You
- * need to sell 4 units", not 8. For a MaxAmmo <= 0 supply there is no
- * per-launcher capacity to shrink (the oütf Max governs), so selling down
- * to one launcher is always fine and selling the LAST one is what the
- * rounds cannot survive. That is the asymmetry visible in stock data: 200
- * IR Missiles may be BOUGHT with no launcher at all (canBuyOutfit, oütf
- * Max 200, wëap MaxAmmo 0), yet the launcher may not be sold out from
- * under them — buying ammo you cannot fire is the player's business,
- * stranding ammo the ship can no longer mount is the engine's.
+ *  - MaxAmmo <= 0 on the supply weapon: the ceiling is the ammo outfit's
+ *    own oütf Max, times its ModType 27 multipliers. Launchers do not enter
+ *    into it, so selling one — INCLUDING THE LAST ONE — cannot create a
+ *    shortfall. This is every ordinary missile in stock data: 200 IR
+ *    Missiles may be bought with no launcher (oütf Max 200, wëap MaxAmmo
+ *    0), and symmetrically the launcher may be sold with all 200 aboard.
+ *    Ammunition the ship cannot currently fire is the player's business.
+ *  - MaxAmmo > 0: capacity is MaxAmmo per mounted instance of the supply
+ *    weapon, so N launchers hold N x MaxAmmo and N-1 hold one MaxAmmo less.
+ *    This is where the STR# sentence lives — bays, and the Nuke plug-in's
+ *    storage racks. The count in it is the SHORTFALL, not the whole
+ *    magazine: two Viper Bays (4 each) with 8 fighters aboard says "You
+ *    need to sell 4 units", and the last Viper Bay with 4 aboard says 4.
  *
- * THE DEPLOYED-FIGHTER INTERACTION. A bay is a launcher whose rounds are
+ * WHAT COUNTS AS A LAUNCHER is therefore not a flag but a relation, and a
+ * narrow one: an outfit is a magazine for some ammunition when it grants
+ * the wëap that ammunition's ModVal names (its `ammoFor`) AND that wëap
+ * carries a positive MaxAmmo. Ordinary equipment grants no weapons; a gun
+ * whose ammo nobody owns has an empty magazine; a weapon that merely DRAWS
+ * on someone else's supply is not that supply's magazine (the Nuke
+ * plug-in's tube versus its racks); and an ordinary missile launcher has no
+ * magazine of its own at all. See shrunkenMagazines.
+ *
+ * THE DEPLOYED-FIGHTER INTERACTION. A bay is a magazine whose rounds are
  * fighters, so both refusals live on the same shortfall: rounds ABOARD can
- * be sold to make room and get the stock sentence, deployed ones cannot
- * and get 'fightersDeployed' ("recall them"). Selling one of two full
- * Viper Bays with 4 fighters out and 4 aboard therefore asks for the 4
- * aboard to go; with 5 out and none aboard it asks for a recall; with 3
- * out and none aboard it just succeeds, because the surviving bay holds
- * all three. That last case used to be refused outright, deliberately,
- * as the conservative choice available before this rule existed.
+ * be sold to make room and get the stock sentence, deployed ones cannot and
+ * get 'fightersDeployed' ("recall them"). Selling one of two full Viper
+ * Bays with 4 fighters out and 4 aboard therefore asks for the 4 aboard to
+ * go; with 5 out and none aboard it asks for a recall; with 3 out and none
+ * aboard it just succeeds, because the surviving bay holds all three. That
+ * last case used to be refused outright, deliberately, as the conservative
+ * choice available before this rule existed.
+ *
+ * The ONE place the deployed half parts company with the capacity rule is
+ * the last instance of a MaxAmmo <= 0 bay — stock has four of those (wëap
+ * 177-180, the variant Viper and Anaconda bays). Ammunition aboard survives
+ * such a sale untouched, so the capacity rule rightly says nothing; a
+ * fighter in FLIGHT does not, because refundFighterToBay drops it when the
+ * carrier mounts no bay. Losing a fighter outright is not the same event as
+ * holding a round you cannot fire, so the anti-strand refusal stands on its
+ * own there. bay_plugin_test pins it on real stock resources.
  *
  * NOT COVERED: the other way an ammunition ceiling can shrink is selling an
  * increase-maximum item (ModType 27) that was multiplying the ammo's oütf

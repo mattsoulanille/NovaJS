@@ -888,10 +888,11 @@ describe('canSellOutfit', () => {
 
     describe('the launcher sell rule', () => {
         // A stock-shaped missile launcher: MaxAmmo 0, so its ammo is
-        // constrained by the oütf Max field alone and is freely buyable
-        // with no launcher at all (the IR Missile / IR Missile Launcher
-        // pair). Selling the launcher out from under the rounds is still
-        // refused -- see THE LAUNCHER SELL RULE beside canSellOutfit.
+        // constrained by the oütf Max field alone -- freely buyable with
+        // no launcher at all, and (Matthew's ruling) freely sellable out
+        // from under the rounds, because no launcher coming or going can
+        // move that ceiling. See THE LAUNCHER SELL RULE beside
+        // canSellOutfit.
         const missileWeapon = makeWeapon('nova:134', {
             ammoType: ['weapon', 'nova:134'],
             maxAmmo: 0,
@@ -909,50 +910,31 @@ describe('canSellOutfit', () => {
             owned,
         });
 
-        it('refuses the last launcher while its magazine is loaded', () => {
+        it('sells the last launcher with its magazine still loaded', () => {
+            // RULING (Matthew, 2026-08-17): "You should be able to sell an
+            // IR missile launcher even if you have IR missiles." The 50
+            // rounds are within their oütf Max of 200 before the sale and
+            // still within it after, so there is no shortfall to report --
+            // they stay in the hold as ammunition the ship cannot fire.
             const context = missileContext(
                 [['nova:133', 1], ['nova:135', 50]]);
-            expect(canSellOutfit(missileLauncher, context)).toEqual({
-                allowed: false,
-                reason: 'ammoAboard',
-                message: 'You need to sell 50 units of ammunition before'
-                    + ' you can sell your IR Missile Launcher.',
-            });
-            // The greyed Sell button and the bulk-sell dialog both read
-            // through maxSellCount, so they agree for free.
-            expect(maxSellCount(missileLauncher, context)).toBe(0);
-        });
-
-        it('uses the singular unit word for one round (STR# 208)', () => {
-            const context = missileContext(
-                [['nova:133', 1], ['nova:135', 1]]);
-            expect(canSellOutfit(missileLauncher, context)).toEqual(
-                jasmine.objectContaining({
-                    message: 'You need to sell 1 unit of ammunition before'
-                        + ' you can sell your IR Missile Launcher.',
-                }));
-        });
-
-        it('sells the launcher once the magazine is empty', () => {
-            expect(canSellOutfit(missileLauncher,
-                missileContext([['nova:133', 1], ['nova:135', 0]])))
-                .toEqual({ allowed: true });
-        });
-
-        it('sells one of two launchers with rounds still aboard', () => {
-            // MaxAmmo 0: there is no per-launcher capacity to shrink, so
-            // any surviving launcher keeps the rounds mountable. Only the
-            // LAST one is refused.
-            const context = missileContext(
-                [['nova:133', 2], ['nova:135', 50]]);
             expect(canSellOutfit(missileLauncher, context))
                 .toEqual({ allowed: true });
+            // The greyed Sell button and the bulk-sell dialog both read
+            // through maxSellCount, so they agree for free.
             expect(maxSellCount(missileLauncher, context)).toBe(1);
         });
 
+        it('sells every launcher, however many rounds are aboard', () => {
+            // Nothing about the count of launchers enters the ceiling when
+            // MaxAmmo <= 0, so there is no n at which the sale turns.
+            const context = missileContext(
+                [['nova:133', 3], ['nova:135', 200]]);
+            expect(maxSellCount(missileLauncher, context)).toBe(3);
+        });
+
         it('leaves the ammunition itself sellable', () => {
-            // Ammo grants no weapon, so it is nobody's launcher. Selling
-            // the rounds is exactly how the player clears the refusal.
+            // Ammo grants no weapon, so it is nobody's magazine.
             const context = missileContext(
                 [['nova:133', 1], ['nova:135', 50]]);
             expect(canSellOutfit(missile, context)).toEqual({ allowed: true });
@@ -998,6 +980,34 @@ describe('canSellOutfit', () => {
                         + ' you can sell your Nuke Storage Rack.',
                 });
             });
+
+            it('uses the singular unit word for one round (STR# 208)', () => {
+                // 1 rack with 1 aboard: the last rack holds nothing, so
+                // exactly one round is over.
+                expect(canSellOutfit(rack, rackContext(1, 1))).toEqual(
+                    jasmine.objectContaining({
+                        message: 'You need to sell 1 unit of ammunition'
+                            + ' before you can sell your Nuke Storage Rack.',
+                    }));
+            });
+
+            it('composes the sentence from the data set\'s own strings',
+                () => {
+                    // A localised or modified STR# 2002 replaces the
+                    // wording; the count and the item name stay where the
+                    // original puts them.
+                    expect(canSellOutfit(rack, {
+                        ...rackContext(1, 3),
+                        ammoSellStrings: {
+                            needToSell: 'Dump', unit: 'round',
+                            units: 'rounds', ofAmmunition: 'of ordnance',
+                            beforeYouCanSell: 'to shed',
+                        },
+                    })).toEqual(jasmine.objectContaining({
+                        message: 'Dump 3 rounds of ordnance to shed'
+                            + ' Nuke Storage Rack.',
+                    }));
+                });
 
             it('lets maxSellCount stop at the last sellable rack', () => {
                 // 4 racks (32) with 17 aboard: 3 racks hold 24 and 2 hold
@@ -1056,24 +1066,43 @@ describe('canSellOutfit', () => {
                 });
         });
 
-        it('composes the sentence from the data set\'s own strings', () => {
-            // A localised or modified STR# 2002 replaces the wording; the
-            // count and the item name stay where the original puts them.
-            const context = makeContext({
-                outfits: [missileLauncher, missile],
-                weapons: [missileWeapon],
-                owned: [['nova:133', 1], ['nova:135', 3]],
+        it('strands no fighter when the last uncapped bay goes', () => {
+            // The one place the deployed half parts company with the
+            // capacity rule: stock wëap 177-180 are bays with MaxAmmo 0,
+            // so nothing above would report a shortfall -- but a fighter
+            // in FLIGHT is dropped outright when the carrier mounts no bay
+            // (refundFighterToBay), which is not the same event as holding
+            // a round you cannot fire.
+            const uncappedBay = makeWeapon('nova:177', {
+                ammoType: ['weapon', 'nova:177'], maxAmmo: 0,
             });
-            expect(canSellOutfit(missileLauncher, {
-                ...context,
-                ammoSellStrings: {
-                    needToSell: 'Dump', unit: 'round', units: 'rounds',
-                    ofAmmunition: 'of ordnance', beforeYouCanSell: 'to shed',
-                },
-            })).toEqual(jasmine.objectContaining({
-                message: 'Dump 3 rounds of ordnance to shed'
-                    + ' IR Missile Launcher.',
-            }));
+            const bay = makeOutfit('nova:306', {
+                name: 'Viper Bay', weapons: { 'nova:177': 1 },
+            });
+            const viper = makeOutfit('nova:307', {
+                name: 'Viper', max: 9999, ammoFor: 'nova:177',
+            });
+            const bays = (count: number, aboard: number, out: number) =>
+                makeContext({
+                    outfits: [bay, viper],
+                    weapons: [uncappedBay],
+                    owned: [['nova:306', count], ['nova:307', aboard]],
+                    deployed: [['nova:307', out]],
+                });
+
+            // Last bay, one fighter out: refused, and it is the recall
+            // wording because the fighter cannot be sold to fix it.
+            expect(canSellOutfit(bay, bays(1, 0, 1))).toEqual(
+                jasmine.objectContaining({
+                    allowed: false, reason: 'fightersDeployed',
+                }));
+            // A second bay survives the sale, so nothing is stranded.
+            expect(canSellOutfit(bay, bays(2, 0, 1)))
+                .toEqual({ allowed: true });
+            // Fighters merely ABOARD an uncapped bay do not block it:
+            // they stay in the hold, exactly like IR Missiles.
+            expect(canSellOutfit(bay, bays(1, 4, 0)))
+                .toEqual({ allowed: true });
         });
     });
 

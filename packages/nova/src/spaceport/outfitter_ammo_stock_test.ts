@@ -152,27 +152,56 @@ describe('the ammunition limit against real Nova data', () => {
                 context([['nova:157', 3]], undefined, [78]))).toBe(12);
         });
 
-        it('refuses the last IR Missile Launcher with rounds aboard',
+        it('sells the last IR Missile Launcher with rounds aboard',
             async () => {
+                // RULING (Matthew, 2026-08-17): "You should be able to sell
+                // an IR missile launcher even if you have IR missiles."
+                // Nothing about the launchers mounted enters this
+                // ammunition's ceiling -- wëap 134 leaves MaxAmmo at 0, so
+                // the oütf Max of 200 governs alone -- and 12 rounds are
+                // within it before and after the sale.
                 const { outfits, context } = await load(
                     await getIntegrationGameData());
                 const launcher = outfits.get('nova:134')!;
                 expect(launcher.name).toBe('IR Missile Launcher');
                 const loaded = context([['nova:134', 1], ['nova:135', 12]]);
-                expect(canSellOutfit(launcher, loaded)).toEqual({
-                    allowed: false,
-                    reason: 'ammoAboard',
-                    message: 'You need to sell 12 units of ammunition before'
-                        + ' you can sell your IR Missile Launcher.',
-                });
-                expect(maxSellCount(launcher, loaded)).toBe(0);
+                expect(canSellOutfit(launcher, loaded))
+                    .toEqual({ allowed: true });
+                expect(maxSellCount(launcher, loaded)).toBe(1);
 
-                // One of two goes: MaxAmmo 0 means no capacity shrinks.
+                // And there is no count of launchers at which that turns:
+                // all four go with a full 200-round hold aboard.
                 expect(maxSellCount(launcher,
-                    context([['nova:134', 2], ['nova:135', 12]]))).toBe(1);
-                // Empty magazine, both go.
-                expect(maxSellCount(launcher,
-                    context([['nova:134', 2]]))).toBe(2);
+                    context([['nova:134', 4], ['nova:135', 200]]))).toBe(4);
+            });
+
+        it('refuses no ordinary stock launcher, whatever it is holding',
+            async () => {
+                // Not a lucky sample. Every stock outfit that grants a
+                // supply weapon with MaxAmmo <= 0 must sell with that
+                // weapon's ammunition aboard, since no such ceiling moves.
+                const { outfits, weapons, context } = await load(
+                    await getIntegrationGameData());
+                let checked = 0;
+                for (const outfit of outfits.values()) {
+                    for (const weaponId of Object.keys(outfit.weapons)) {
+                        if ((weapons.get(weaponId)?.maxAmmo ?? 0) > 0) {
+                            continue;
+                        }
+                        const ammo = [...outfits.values()].find(
+                            o => o.ammoFor === weaponId);
+                        if (!ammo || outfit.cantSell) {
+                            continue;
+                        }
+                        checked++;
+                        expect(canSellOutfit(outfit, context(
+                            [[outfit.id, 1], [ammo.id, 25]])))
+                            .withContext(`${outfit.id} "${outfit.name}"`
+                                + ` holding ${ammo.id} "${ammo.name}"`)
+                            .toEqual({ allowed: true });
+                    }
+                }
+                expect(checked).toBeGreaterThan(15);
             });
 
         it('refuses a Viper Bay by the shortfall in the bays left',
