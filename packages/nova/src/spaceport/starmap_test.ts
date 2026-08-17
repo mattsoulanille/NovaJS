@@ -1,6 +1,6 @@
 import "jasmine";
 import * as PIXI from "pixi.js";
-import { computeHypergateSystemLinks } from "./starmap.js";
+import { computeHypergateSystemLinks, representativeSystems } from "./starmap.js";
 import {
     clickRadiusWorld, DragTracker, nearestTargetIndex, screenToWorld,
 } from "./starmap_hit.js";
@@ -34,6 +34,37 @@ describe('computeHypergateSystemLinks', () => {
         const gateDestinations = new Map<string, string[]>();
         expect(computeHypergateSystemLinks(systemOfSpob, gateDestinations))
             .toEqual([]);
+    });
+});
+
+describe('representativeSystems (one clickable system per map spot)', () => {
+    // Two copies of Sol stacked at (0,0), as the stock data has them
+    // (nova:130 and nova:531), plus a neighbour.
+    const sol = { id: 'nova:130', position: [0, 0] as [number, number] };
+    const otherSol = { id: 'nova:531', position: [0, 0] as [number, number] };
+    const tichel = { id: 'nova:129', position: [110, 40] as [number, number] };
+
+    it('represents a spot with the system the player is IN', () => {
+        // Bits can make the player's own copy the hidden one, but clicking
+        // the spot you are standing in must never pin a DIFFERENT id: the
+        // route would then lead out and back into the same place.
+        const picked = representativeSystems([otherSol, sol, tichel],
+            'nova:130', id => id !== 'nova:130');
+        expect(picked.map(s => s.id)).toContain('nova:130');
+        expect(picked.map(s => s.id)).not.toContain('nova:531');
+    });
+
+    it('otherwise prefers a system reachable from the current one', () => {
+        const picked = representativeSystems([otherSol, sol, tichel],
+            'nova:129', id => id === 'nova:130');
+        expect(picked.map(s => s.id)).toContain('nova:130');
+        expect(picked.map(s => s.id)).not.toContain('nova:531');
+    });
+
+    it('keeps one system per distinct spot', () => {
+        const picked = representativeSystems([sol, otherSol, tichel],
+            'nova:129', () => false);
+        expect(picked.length).toEqual(2);
     });
 });
 

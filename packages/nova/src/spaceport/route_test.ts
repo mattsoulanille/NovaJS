@@ -193,6 +193,58 @@ describe('reconcileRouteState', () => {
         });
 });
 
+/**
+ * Nova stacks several copies of one system at the same map position and
+ * swaps between them with control bits (the two Sols at (0,0), nova:130
+ * under !(b147|b305) and nova:531 under (b147|b305)). The copies have
+ * different ids but are the SAME PLACE to the player, so a route that ends
+ * — or resumes — at a copy of the system the player is standing in would
+ * fly them out and straight back in again.
+ *
+ * The galaxy here adds a2, a duplicate of a, linked from b exactly as both
+ * Sols are linked from Tichel.
+ */
+describe('stacked duplicate systems (same place, different ids)', () => {
+    const DUP_SYSTEMS = [
+        { id: 'a', links: ['b'] },
+        { id: 'a2', links: ['b'] },
+        { id: 'b', links: ['a', 'a2', 'c', 'e'] },
+        { id: 'c', links: ['b', 'd'] },
+        { id: 'd', links: ['c'] },
+        { id: 'e', links: ['b', 'f'] },
+        { id: 'f', links: ['e'] },
+    ];
+    const dupAdj = buildAdjacency(DUP_SYSTEMS);
+    const place = new Map([['a', 'A'], ['a2', 'A'], ['b', 'B'], ['c', 'C'],
+    ['d', 'D'], ['e', 'E'], ['f', 'F']]);
+    const samePlace = (x: string, y: string) =>
+        x === y || place.get(x) === place.get(y);
+
+    it('expandRoute skips a pin that is a duplicate of the anchor', () => {
+        // Without this the route is ['b', 'a2']: out to b and back into
+        // the system the player never left.
+        expect(expandRoute(dupAdj, 'a', ['a2'], samePlace)).toEqual([]);
+    });
+    it('expandRoute still routes to a genuinely different system', () => {
+        expect(expandRoute(dupAdj, 'a', ['a2', 'c'], samePlace))
+            .toEqual(['b', 'c']);
+    });
+    it('effectiveRoute ignores a single-jump pick that is a duplicate of '
+        + 'the current system', () => {
+            expect(effectiveRoute(dupAdj, 'a', { pinned: [], single: 'a2' },
+                samePlace)).toEqual([]);
+        });
+    it('reconcileRouteState drops leading pins the player has arrived at '
+        + 'under a different copy of the same system', () => {
+            const state = reconcileRouteState({ pinned: ['a2', 'c'] }, 'a',
+                dupAdj, [], samePlace);
+            expect(state.pinned).toEqual(['c']);
+        });
+    it('defaults to plain id equality when no place test is given', () => {
+        expect(expandRoute(dupAdj, 'a', ['a2'])).toEqual(['b', 'a2']);
+    });
+});
+
 describe('formatMapDate', () => {
     it('formats like the original map date readout', () => {
         expect(formatMapDate({ day: 18, month: 11, year: 1177 }))

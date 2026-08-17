@@ -109,9 +109,19 @@ export const JumpRouteComponent = new Component<JumpRoute>('JumpRouteComponent')
  * Two arrival kinds, two rules:
  *
  *  - 'jump' (hyperspace): beginJump already shifted the destination off
- *    the route at jump START, so on arrival route[0] is the NEXT hop of a
- *    multi-jump chain (or the route is empty). Nothing to do — the
- *    remaining hops are exactly the player's onward plan.
+ *    the route at jump START, so on arrival route[0] is normally the NEXT
+ *    hop of a multi-jump chain (or the route is empty) and the remaining
+ *    hops are exactly the player's onward plan. The one repair is a head
+ *    naming THIS system: the starmap, opened during the jump sequence and
+ *    closed before the ship departs, re-derives the route from the ORIGIN
+ *    and writes back the hop the ship was already committed to. Left
+ *    there, the next jump would go straight back out and in again
+ *    (Matthew's playtest, 2026-08-17: "you jump out of system B and
+ *    arrive in system B"). Later hops are kept — only the reached head
+ *    goes. The simulation repairs this too, and by the stronger
+ *    stacked-duplicate rule (see JumpRouteReconcileSystem); this keeps the
+ *    carried entity right from the very first tick it is re-inserted, so
+ *    no peer ever sees the stale destination.
  *  - 'gate' (hypergate / wormhole): the transit never touched the route,
  *    so whatever the player had pinned before is now stale relative to
  *    where they are. If this system heads the route, drop it (a route
@@ -126,11 +136,15 @@ export const JumpRouteComponent = new Component<JumpRoute>('JumpRouteComponent')
  */
 export function reconcileRouteOnArrival(entity: Entity, arrivedSystem: string,
     arrival: 'jump' | 'gate'): void {
-    if (arrival === 'jump') {
-        return;
-    }
     const jumpRoute = entity.components.get(JumpRouteComponent);
     if (!jumpRoute || jumpRoute.route.length === 0) {
+        return;
+    }
+    if (arrival === 'jump') {
+        while (jumpRoute.route.length > 0
+            && jumpRoute.route[0] === arrivedSystem) {
+            jumpRoute.route.shift();
+        }
         return;
     }
     if (jumpRoute.route[0] !== arrivedSystem) {
@@ -591,6 +605,100 @@ const MultiJumpContinueSystem = new System({
     before: [PlayerJumpControl],
 });
 
+/**
+ * Drops route hops naming the system the ship is ALREADY IN, before anything
+ * can fly one. A hop like that is not a jump: it takes the ship out of a
+ * system and puts it straight back into the same one, so the pilot enters it
+ * twice along a single route (Matthew's playtest, 2026-08-17).
+ *
+ * Three ways such a head gets onto a route, none of which the consumer can
+ * tell apart — hence one rule here rather than a guard in each:
+ *
+ *  - the starmap is opened DURING a jump sequence and closed before the ship
+ *    departs. It re-derives the route from the ORIGIN (a correct answer to
+ *    "where do I still have to go from here") and writes it back, which puts
+ *    the hop the ship is already committed to back at the head.
+ *  - a jump cancelled at stage 'arriving' gives its destination back to the
+ *    route — the ship is IN that destination (also fixed at the source, in
+ *    disabled_plugin's JumpDisableCancelSystem).
+ *  - the hop is a stacked duplicate of this system: a different id for the
+ *    same place (see hopIsCurrentSystem).
+ *
+ * THE FIX BELONGS IN THE SIMULATION, not in the client that wrote the route.
+ * A route arrives here from three separate paths (carried on the entity at
+ * insertion, a setJumpRoute input from any peer, and the sim's own cancel
+ * unshift), every peer simulates every ship, and the jump destination has to
+ * derive from server-visible state alone. This reads only the route
+ * component and the world's own SystemIdResource, and it is idempotent
+ * within a tick, so a rollback that re-executes it reaches the same state.
+ *
+ * The whole leading run goes, not one hop: a stack can hold several copies
+ * of this system, and the route is then resumed at the first hop that is
+ * genuinely somewhere else. Later hops are never touched — they are still
+ * the pilot's plan.
+ */
+export const JumpRouteReconcileSystem = new System({
+    name: 'JumpRouteReconcileSystem',
+    args: [JumpRouteComponent, SystemIdResource, SimulationGameDataResource,
+        Optional(JumpComponent)] as const,
+    step(jumpRoute, systemId, gameData, jump) {
+        // NOT WHILE A JUMP IS IN PROGRESS. The head is then the hop after
+        // the one being flown — measured from the DESTINATION, not from
+        // here — and a route that comes back through this system is a
+        // perfectly good plan (Procyon -> Kerella -> Procyon). The check
+        // resumes the moment the sequence ends, which for an arriving ship
+        // is the first tick in the new system: JumpSequenceSystem drops the
+        // component there, and nothing can start another jump before then
+        // (PlayerJumpControl refuses while one is in progress, and the
+        // multi-jump marker is only read on the following tick).
+        if (jump) {
+            return;
+        }
+        while (jumpRoute.route.length > 0
+            && hopIsCurrentSystem(jumpRoute.route[0]!, systemId, gameData)) {
+            jumpRoute.route.shift();
+        }
+    },
+    // Before both consumers, so neither can begin a jump to a hop this
+    // would have dropped — including the auto-continue that runs on the
+    // tick after an arrival without any key press.
+    before: [MultiJumpContinueSystem, PlayerJumpControl],
+});
+
+/**
+ * Whether a route hop names the system a ship in `systemId` is ALREADY IN.
+ *
+ * Not just the same id. Nova stacks several copies of one system at the same
+ * map position and swaps between them with control bits — Sol is nova:130
+ * under `!(b147|b305)` and nova:531 under `(b147|b305)`, and both are linked
+ * from Tichel (nova:129) — so a route pinned under one set of bits can name
+ * a DIFFERENT id for the very place the player is standing in. Flying it
+ * would leave the system and arrive in a system with the same name at the
+ * same coordinates: the pilot sees themselves enter one system twice. Same
+ * name and same map position is the same "same system" rule the mission
+ * layer uses (mission_universe.ts sameSystem).
+ *
+ * DETERMINISTIC. Both reads go through getCached, under the same staging
+ * contract beginJump relies on: `systemId` is this world's own system, and a
+ * hop that is not staged is not one this world could jump to anyway
+ * (beginJump would refuse it for the same missing data), so an unstaged hop
+ * answers "not here" identically on every peer. makeSystem stages the system
+ * and its links before any world steps, on every peer, so the answer is the
+ * same everywhere.
+ */
+export function hopIsCurrentSystem(hop: string, systemId: string,
+    gameData: SimulationGameDataInterface): boolean {
+    if (hop === systemId) {
+        return true;
+    }
+    const here = gameData.data.System.getCached(systemId);
+    const there = gameData.data.System.getCached(hop);
+    return here !== undefined && there !== undefined
+        && here.name === there.name
+        && here.position[0] === there.position[0]
+        && here.position[1] === there.position[1];
+}
+
 /** Overrides whatever the player's held controls just wrote: control
  * of the ship is taken away for the duration of the jump. */
 function overrideControls(movement: MovementState) {
@@ -856,6 +964,7 @@ export const JumpPlugin: Plugin = {
             serializer.addEvent(FinishJumpEvent, FinishJumpEventType(serializer));
         }
         world.addSystem(JumpFromSystem);
+        world.addSystem(JumpRouteReconcileSystem);
         world.addSystem(MultiJumpContinueSystem);
         world.addSystem(PlayerJumpControl);
         world.addSystem(JumpSequenceSystem);

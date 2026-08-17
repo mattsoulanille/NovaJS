@@ -18,7 +18,7 @@ import { MissionUniverse } from "./mission_universe.js";
 import {
     Adjacency, adjacentSystems, buildAdjacency, cycleSingle, effectiveRoute,
     expandRoute, formatMapDate, hazardDescription, reconcileRouteState,
-    RouteState,
+    RouteState, SamePlace,
 } from "./route.js";
 import {
     clickRadiusWorld, DragTracker, nearestTargetIndex, screenToWorld,
@@ -147,6 +147,54 @@ export function computeHypergateSystemLinks(
     return links;
 }
 
+/** The map spot a system occupies: its exact map coordinates. */
+function placeKey(position: readonly number[]): string {
+    return `${position[0]},${position[1]}`;
+}
+
+/**
+ * Picks the ONE system each map spot should draw, label and answer clicks
+ * for. Nova stacks copies of a system at the same coordinates and swaps
+ * between them with control bits, so several can share a spot; NCB
+ * visibility filtering usually collapses a stack to one already, and this
+ * handles what is left (a plugin system with blank visibility stacked on a
+ * stock one, or the player standing in a copy their bits say is hidden —
+ * that one is kept on the map deliberately).
+ *
+ * THE CURRENT SYSTEM ALWAYS REPRESENTS ITS OWN SPOT. Clicking the spot you
+ * are standing in must pin the system you are standing IN: pinning a
+ * different id for the same place asks the router for a path from a system
+ * to itself, which it answers by flying out to a neighbour and back — the
+ * pilot enters the same system twice (Matthew's playtest, 2026-08-17).
+ * Otherwise a system reachable from the current one is preferred over an
+ * unreachable one, breaking ties by data order.
+ *
+ * Pure (no PIXI) so it is unit-testable.
+ */
+export function representativeSystems<
+    T extends { id: string, position: readonly number[] }>(
+        systems: readonly T[], currentSystem: string,
+        reachable: (id: string) => boolean): T[] {
+    const byPosition = new Map<string, T>();
+    for (const system of systems) {
+        const key = placeKey(system.position);
+        const existing = byPosition.get(key);
+        if (!existing || system.id === currentSystem) {
+            byPosition.set(key, system);
+            continue;
+        }
+        if (existing.id === currentSystem) {
+            continue;
+        }
+        // Keep the existing pick unless this one is reachable and the
+        // existing one isn't.
+        if (!reachable(existing.id) && reachable(system.id)) {
+            byPosition.set(key, system);
+        }
+    }
+    return [...byPosition.values()];
+}
+
 function drawSystem(system: SystemData, graphics: PIXI.Graphics,
     x: number, y: number) {
     // Use blue if the system has a planet. Otherwise, grey.
@@ -245,6 +293,9 @@ export class SystemGraph {
     private single?: string;
     private infoSelected?: string;
     private routes: Map<string, string[]>;
+    /** Every system's "place" (name + map coordinates), for {@link
+     * samePlace}: stacked duplicates of one system share it. */
+    private placeById: Map<string, string>;
     // One representative system per map position, used for drawing circles and
     // labels and for resolving clicks. Nova swaps between multiple copies of a
     // system (at the same coordinates) with NCBs, so several systems can be
@@ -288,6 +339,12 @@ export class SystemGraph {
         const visibleSystems = systems.filter(
             s => s.id === currentSystem || systemVisible(s, playerBits));
         this.systems = new Map(visibleSystems.map(s => [s.id, s]));
+        // Built from EVERY system, not just the visible ones: a pin made
+        // under different control bits can name a copy that is hidden now,
+        // and "is that pin the place I'm standing in?" still has to answer
+        // yes (see SamePlace in route.ts).
+        this.placeById = new Map(systems.map(
+            s => [s.id, `${s.name}@${placeKey(s.position)}`]));
         this.adj = buildAdjacency(visibleSystems);
         this.routes = this.computeShortestPaths();
         this.clickTargets = this.pickRepresentativeSystems(visibleSystems);
@@ -395,33 +452,14 @@ export class SystemGraph {
         this.applyZoom();
     }
 
-    /**
-     * Groups systems by map position and picks the one the map should show
-     * and select for each spot. NCB visibility filtering usually collapses a
-     * stack of swapped duplicates to a single system already; this handles
-     * spots where several systems remain (e.g. plugin systems with blank
-     * visibility stacked on stock ones) by preferring a system reachable from
-     * the current system, breaking ties by data order.
-     */
+    /** The map spot each system is drawn on and clicked at: see
+     * {@link representativeSystems}. */
     private pickRepresentativeSystems(systems: SystemData[]) {
-        const byPosition = new Map<string, SystemData>();
-        for (const system of systems) {
-            const key = `${system.position[0]},${system.position[1]}`;
-            const existing = byPosition.get(key);
-            if (!existing) {
-                byPosition.set(key, system);
-                continue;
-            }
-            // Keep the existing pick unless this one is reachable and the
-            // existing one isn't.
-            if (!this.routes.has(existing.id) && this.routes.has(system.id)) {
-                byPosition.set(key, system);
-            }
-        }
-        return [...byPosition.values()].map(system => {
-            const [x, y] = this.scalePos(system.position);
-            return { system, x, y };
-        });
+        return representativeSystems(systems, this.currentSystem,
+            id => this.routes.has(id)).map(system => {
+                const [x, y] = this.scalePos(system.position);
+                return { system, x, y };
+            });
     }
 
     /** Centers the current system in the viewport at the current zoom. */
@@ -478,12 +516,25 @@ export class SystemGraph {
     /** The route hyperspace jumps follow (multi-jump takes precedence). */
     getEffectiveRoute(): string[] {
         return effectiveRoute(this.adj, this.currentSystem,
-            this.getRouteState());
+            this.getRouteState(), this.samePlace);
     }
 
     get adjacency(): Adjacency {
         return this.adj;
     }
+
+    /**
+     * Whether two system ids are the same PLACE — stacked duplicates of one
+     * system (see SamePlace in route.ts). An arrow function so it can be
+     * handed to the route helpers as a plain predicate.
+     */
+    readonly samePlace: SamePlace = (a, b) => {
+        if (a === b) {
+            return true;
+        }
+        const place = this.placeById.get(a);
+        return place !== undefined && place === this.placeById.get(b);
+    };
 
     get hasRoute(): boolean {
         return this.pinned.length > 0 || this.single !== undefined;
@@ -876,7 +927,8 @@ export class SystemGraph {
         }
 
         // Multi-jump route: the stronger green line, over the single one.
-        const multi = expandRoute(this.adj, this.currentSystem, this.pinned);
+        const multi = expandRoute(this.adj, this.currentSystem, this.pinned,
+            this.samePlace);
         let prev = this.systems.get(this.currentSystem);
         for (const system of multi.map(id => this.systems.get(id))) {
             if (system) {
@@ -1384,7 +1436,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         // Bring the persisted pins/single up to date with where the player
         // is now, adopting the sim's route if the client state was lost.
         this.routeStore.state = reconcileRouteState(this.routeStore.state,
-            this.systemId, this.systemGraph.adjacency, route);
+            this.systemId, this.systemGraph.adjacency, route,
+            this.systemGraph.samePlace);
         this.systemGraph.setRouteState(this.routeStore.state);
         this.systemGraph.center();
         this.refreshClearButton();
