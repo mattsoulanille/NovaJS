@@ -12,7 +12,8 @@ import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_
 import { DisabledComponent } from "../nova_plugin/disabled_component.js";
 import { DeathEvent, ZeroArmorEvent } from "../nova_plugin/death_plugin.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { FuelComponent } from "../nova_plugin/health_plugin.js";
+import { ArmorComponent, FuelComponent } from "../nova_plugin/health_plugin.js";
+import { Stat } from "../nova_plugin/stat.js";
 import { JumpComponent, JumpRouteComponent } from "../nova_plugin/jump_plugin.js";
 import { PlanetTargetComponent } from "../nova_plugin/planet_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
@@ -248,6 +249,24 @@ describe('UI sound triggers (audio-layer spy)', () => {
         world.step();
         expect(stopped).toContain('nova:371');
     });
+
+    it('does not restart 371 from a zero-armor event replayed after the '
+        + 'respawn', async () => {
+            // The bridge forwards simulation events in emit order, and a
+            // hit landing in the tick a death sequence finishes emits its
+            // ZeroArmorEvent behind the DeathEvent. Restarting the loop
+            // after its own stop would leave the death sound howling for
+            // the rest of the flight (see armorFullyRestored).
+            const { world, played, player } = await makeWorld();
+            player.components.set(ArmorComponent,
+                new Stat({ current: 100, recharge: 0, max: 100 }));
+            world.emit(DeathEvent,
+                { time: 0, delta_ms: 0, delta_s: 0 } as never, [PLAYER]);
+            world.emit(ZeroArmorEvent,
+                { time: 0, delta_ms: 0, delta_s: 0 } as never, [PLAYER]);
+            world.step();
+            expect(played).not.toContain('nova:371');
+        });
 
     it('beeps 153 when switching secondaries with none available', async () => {
         const { world, played, controls, player } = await makeWorld();
