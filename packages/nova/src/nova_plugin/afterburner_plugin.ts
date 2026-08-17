@@ -21,6 +21,47 @@ import { getShipMovementPhysics, ShipPhysicsComponent } from './ship_plugin.js';
 export const AFTERBURNER_FACTOR = 2;
 
 /**
+ * How fast a ship sheds speed its cap no longer covers, as a multiple of
+ * the ship's own (unboosted, un-ion-slowed) acceleration.
+ *
+ * Releasing the afterburner used to halve a ship's speed inside a single
+ * tick, because the cap dropped to normal at once and MovementSystem
+ * truncates velocity to the cap ("too aggressive" — Matthew's playtest).
+ * The original coasts down instead. There is no drag term anywhere in the
+ * movement integration to coast on, and the Bible documents only the
+ * afterburner's fuel burn (oütf ModType 15), never its physics, so the
+ * decay rate is a choice: the ship's own acceleration, the one number in
+ * the data that says how quickly these engines change this hull's speed.
+ *
+ * At 1.0 the coast-down takes twice as long as the spin-up did, since the
+ * burn accelerated at AFTERBURNER_FACTOR times acceleration — fast in,
+ * slower out, which is how the slingshot reads in the original.
+ */
+export const OVERSPEED_DECAY_FACTOR = 1;
+
+/**
+ * The speed cap to enforce this tick for a ship whose real cap is
+ * `ceiling` but which is currently travelling at `speed`.
+ *
+ * Speed the cap covers is capped outright, exactly as before. Speed
+ * ABOVE it — an afterburner just released, an ionization slowdown just
+ * landed — bleeds off at `decay` units per second instead of vanishing,
+ * so the ship decelerates across ticks rather than snapping.
+ *
+ * A ship thrusting at its top speed still settles at exactly that speed:
+ * it is not over the cap, so nothing decays, and the cap is its own
+ * ceiling.
+ */
+export function decayedSpeedCap(ceiling: number, speed: number,
+    decay: number, delta_s: number): number {
+    const overspeed = speed - ceiling;
+    if (overspeed <= 0) {
+        return ceiling;
+    }
+    return ceiling + Math.max(0, overspeed - decay * delta_s);
+}
+
+/**
  * The single per-tick writer of a ship's effective movement physics:
  * recomputes it from ShipPhysicsComponent and applies the transient
  * modifiers (ionization slowness, afterburner boost, hyperspace jump
@@ -64,7 +105,15 @@ export const EffectiveMovementPhysicsSystem = new System({
         const base = getShipMovementPhysics(shipPhysics);
         const slowness = isIonized ? ION_FACTOR : 1;
         const boost = afterburning ? AFTERBURNER_FACTOR : 1;
-        movementPhysics.maxVelocity = base.maxVelocity * slowness * boost;
+        // While the burner is on this IS the boosted cap: a ship at or
+        // below it has no overspeed to bleed. Once it is released the cap
+        // drops, and the leftover speed comes off over the following
+        // ticks rather than all at once. Same for the ionization
+        // slowdown, and for the burner cutting out on a dry tank.
+        movementPhysics.maxVelocity = decayedSpeedCap(
+            base.maxVelocity * slowness * boost,
+            movementState.velocity.length,
+            base.acceleration * OVERSPEED_DECAY_FACTOR, time.delta_s);
         movementPhysics.acceleration = base.acceleration * slowness * boost;
         movementPhysics.turnRate = base.turnRate * slowness;
         movementPhysics.movementType = base.movementType;
