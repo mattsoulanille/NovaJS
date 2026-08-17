@@ -12,6 +12,7 @@ import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { BayFighterComponent, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
+import { blindSpotBlocksFiring } from './blind_spots.js';
 import { DisabledComponent } from './disabled_component.js';
 import { EscortCommandComponent, EscortCommandState, EscortOrders, EscortOrdersComponent } from './escort_command.js';
 import { OwnerComponent } from './weapon_components.js';
@@ -24,7 +25,7 @@ import { chooseNearest, FormationComponent, NpcComponent, NpcSteeringSystem, RCS
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
 import { LegalRecordsComponent, LegalRecordsState } from './reputation_plugin.js';
 import { EscortLandingComponent, PlayerEscortComponent } from './player_escort.js';
-import { ShipComponent, ShipPhysicsComponent } from './ship_plugin.js';
+import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
 import { ShipControlEvent, ShipControlStateComponent } from './ship_control.js';
 import { TargetComponent } from './target_component.js';
 import { WeaponsStateComponent } from './weapons_state.js';
@@ -579,6 +580,9 @@ export const EscortCommandBehaviorSystem = new System({
         // inFrontQuadrant). The player's restrictTurretsToTarget order
         // narrows candidates to their current target.
         const orders = rootEntity?.components.get(EscortOrdersComponent);
+        // This escort's OWN ship class, for its shïp-level turret blind
+        // spots (the root's are irrelevant — the turrets are here).
+        const shipData = entity.components.get(ShipDataComponent);
         const restrictTo = orders?.restrictTurretsToTarget
             ? rootEntity?.components.get(TargetComponent)?.target
             : undefined;
@@ -607,6 +611,24 @@ export const EscortCommandBehaviorSystem = new System({
                     continue;
                 }
                 if (!inFrontQuadrant(movement, otherMovement.position)) {
+                    continue;
+                }
+                // Turret blind spots. A candidate this turret would be
+                // refused permission to shoot at (fire_weapon_plugin
+                // would return undefined) must not be CHOSEN here
+                // either, or the escort latches `firing` on a target it
+                // cannot engage and ignores one it could. Vacuous on
+                // the stock data — nothing gives a front-quadrant
+                // weapon or a ship a front blind spot — but it keeps
+                // the two halves reading the same rule.
+                if (blindSpotBlocksFiring({
+                    guidance: weaponData.guidance,
+                    weaponBlindSpots: weaponData.turretBlindSpots,
+                    shipBlindSpots: shipData?.turretBlindSpots,
+                    sourcePosition: movement.position,
+                    sourceRotation: movement.rotation,
+                    targetPosition: otherMovement.position,
+                })) {
                     continue;
                 }
                 if (isHostileTo(other, root ?? uuid, uuid, rootGovt,

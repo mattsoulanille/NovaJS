@@ -73,6 +73,14 @@ async function BaseWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
         // wëap Flags3 0x0010 (the Ion Cannons): fire from the exit point
         // closest to the target instead of cycling round-robin.
         firesFromClosestToTarget: weap.firesFromClosestToTarget,
+        // wëap Flags 0x1000/0x2000/0x4000. The resource parser names the
+        // rear sector `back`; everything downstream calls it `rear`, to
+        // match the shïp-level set and the Bible's wording.
+        turretBlindSpots: {
+            front: weap.turretBlindSpots.front,
+            sides: weap.turretBlindSpots.side,
+            rear: weap.turretBlindSpots.back,
+        },
     }
 }
 

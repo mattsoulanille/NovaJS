@@ -1,3 +1,4 @@
+import { getDefaultTurretBlindSpots, TurretBlindSpots } from "./blind_spots.js";
 import { getDefaultSpaceObjectData, getDefaultSpaceObjectPhysics, SpaceObjectData, SpaceObjectPhysics } from "./space_object_data.js";
 
 
@@ -246,6 +247,16 @@ export interface ShipData extends SpaceObjectData {
      * stock outfits' mass back in to give the empty-hull capacity.
      */
     freeSpace: number;
+    /**
+     * shïp Flags 0x1000/0x2000/0x4000 (EVN Bible ~:2527): "Ship's
+     * turrets have a blind spot to the front/sides/rear". Applies to
+     * every turret this ship mounts, on top of each weapon's own
+     * wëap-level set (WeaponData.turretBlindSpots). 69 of the 411
+     * ships across the stock data and the installed plug-ins set at
+     * least one bit — the Fed Destroyer/Carrier and Aurora Cruiser
+     * families are all rear-blind.
+     */
+    turretBlindSpots: TurretBlindSpots;
 };
 
 export function getDefaultShipData(): ShipData {
@@ -285,5 +296,6 @@ export function getDefaultShipData(): ShipData {
         length: 0,
         crew: 0,
         freeSpace: 0,
+        turretBlindSpots: getDefaultTurretBlindSpots(),
     }
 }
