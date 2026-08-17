@@ -10,6 +10,8 @@
  *   novajs:save                    the legacy single slot — still the
  *                                  save key of the migrated first pilot
  *   novajs:save:pilot-<id>         every pilot created after migration
+ *   <saveKey>:history              that pilot's rewindable checkpoint
+ *                                  history (title/pilot_history.ts)
  *
  * Migration is deliberately non-destructive: the pre-existing single
  * save is NOT copied or moved, it is simply adopted as the first pilot's
@@ -31,6 +33,10 @@ import {
     loadGameSettings, loadPilotProfile, PilotProfile, PrefsStorage,
     saveControlsOverride, saveGameSettings,
 } from './client_prefs.js';
+import {
+    checkpointState, decodeHistoryValue, loadHistory, PilotHistoryCodec,
+    removeHistory, saveHistory, truncateAfter,
+} from './pilot_history.js';
 
 /** localStorage key: the pilot registry. */
 export const PILOT_REGISTRY_KEY = 'novajs:pilots';
@@ -130,6 +136,14 @@ export const PilotFile = t.intersection([
         settings: t.record(t.string, t.union([t.boolean, t.string])),
         /** The pilot's SaveEnvelope, or null for a pilot that never played. */
         save: t.union([SaveEnvelope, t.null]),
+        /**
+         * The pilot's checkpoint history (pilot_history.ts), added in a
+         * later build. ADDITIVE and unvalidated at this level: an older
+         * build ignores it, and this build decodes it separately on import
+         * (an unreadable history is dropped, never a reason to refuse the
+         * pilot).
+         */
+        history: t.unknown,
     }),
 ]);
 export type PilotFile = t.TypeOf<typeof PilotFile>;
@@ -411,6 +425,7 @@ export function deletePilot(id: string, storage?: PrefsStorage): void {
         } catch {
             // Best effort.
         }
+        removeHistory(found.saveKey, store);
     }
     applyActivePilot(storage);
 }
@@ -515,6 +530,9 @@ export function exportPilot(id: string, storage?: PrefsStorage):
             }
         }
     }
+    // The history rides along verbatim (as parsed JSON) so a round trip
+    // preserves every checkpoint; a pilot with none simply has no field.
+    const history = store ? loadHistory(record.saveKey, store) : undefined;
     const file: PilotFile = {
         format: PILOT_FILE_FORMAT,
         version: PILOT_FILE_VERSION,
@@ -523,8 +541,47 @@ export function exportPilot(id: string, storage?: PrefsStorage):
         ...(record.controls ? { controls: record.controls } : {}),
         ...(record.settings ? { settings: record.settings } : {}),
         ...(save ? { save: save as PilotFile['save'] } : {}),
+        ...(history ? { history: PilotHistoryCodec.encode(history) } : {}),
     };
     return JSON.stringify(file, null, 2);
+}
+
+/**
+ * Serializes ONE CHECKPOINT of a pilot as its own export file: the same
+ * shape as exportPilot, with the checkpoint's state as the save and the
+ * history truncated at that checkpoint (so the copy can itself be
+ * rewound within its own past). Undefined for an unknown pilot or
+ * checkpoint. The name gets the checkpoint's label appended so an
+ * import lands beside, not on top of, the live pilot.
+ */
+export function exportCheckpointFile(id: string, checkpointIndex: number,
+    storage?: PrefsStorage): { text: string, name: string } | undefined {
+    const store = getStorage(storage);
+    const registry = loadRegistry(storage);
+    const record = registry.pilots.find(p => p.id === id);
+    if (!record || !store) {
+        return undefined;
+    }
+    const history = loadHistory(record.saveKey, store);
+    if (!history || checkpointIndex < 0
+        || checkpointIndex >= history.checkpoints.length) {
+        return undefined;
+    }
+    const checkpoint = history.checkpoints[checkpointIndex];
+    const save = checkpointState(history, checkpointIndex);
+    const truncated = truncateAfter(history, checkpointIndex);
+    const name = `${record.name} (${checkpoint.label})`;
+    const file: PilotFile = {
+        format: PILOT_FILE_FORMAT,
+        version: PILOT_FILE_VERSION,
+        name,
+        ...(record.profile ? { profile: record.profile } : {}),
+        ...(record.controls ? { controls: record.controls } : {}),
+        ...(record.settings ? { settings: record.settings } : {}),
+        save: save as PilotFile['save'],
+        history: PilotHistoryCodec.encode(truncated),
+    };
+    return { text: JSON.stringify(file, null, 2), name };
 }
 
 /** A filesystem-safe filename for an exported pilot. */
@@ -609,6 +666,20 @@ export function importPilot(text: string, storage?: PrefsStorage):
             store.setItem(record.saveKey, saveText);
         } catch (e) {
             return { ok: false, reason: 'Could not write the imported save.' };
+        }
+    }
+    // The history is optional and decoded on its own terms: an
+    // unreadable one is dropped (the pilot still imports), a readable one
+    // is written beside the save. Taken from the RAW parsed JSON for the
+    // same Map/Set reason as the save above.
+    const rawHistory = (parsed as { history?: unknown }).history;
+    if (rawHistory !== undefined && store) {
+        const history = decodeHistoryValue(rawHistory);
+        if (history) {
+            saveHistory(record.saveKey, history, store);
+        } else {
+            console.warn('Imported pilot had an unreadable history; '
+                + 'importing without it.');
         }
     }
     registry.pilots.push(record);

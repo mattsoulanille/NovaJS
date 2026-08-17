@@ -7,10 +7,14 @@ import {
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, PilotProfile, PrefsStorage,
 } from './client_prefs.js';
 import {
-    applyActivePilot, createPilot, deletePilot, exportFileName, exportPilot,
-    getActivePilot, importPilot, listPilots, loadPilotControls, loadRegistry,
-    PILOT_REGISTRY_KEY, PILOT_REGISTRY_QUARANTINE_KEY, PILOT_SAVE_KEY_PREFIX,
-    savePilotControls, selectPilot, uniquePilotName,
+    checkpointState, historyKeyFor, loadHistory, recordCheckpoint,
+} from './pilot_history.js';
+import {
+    applyActivePilot, createPilot, deletePilot, exportCheckpointFile,
+    exportFileName, exportPilot, getActivePilot, importPilot, listPilots,
+    loadPilotControls, loadRegistry, PILOT_REGISTRY_KEY,
+    PILOT_REGISTRY_QUARANTINE_KEY, PILOT_SAVE_KEY_PREFIX, savePilotControls,
+    selectPilot, uniquePilotName,
 } from './pilot_registry.js';
 
 /** An in-memory PrefsStorage for testing without a browser. */
@@ -138,9 +142,12 @@ describe('pilot registry', () => {
             const a = createPilot(profile('Alpha'), store);
             const b = createPilot(profile('Beta'), store);
             store.setItem(a.saveKey, encodeSave(SAMPLE_SAVE));
+            recordCheckpoint(a.saveKey, JSON.parse(encodeSave(SAMPLE_SAVE)),
+                { label: 'x' }, store);
             deletePilot(a.id, store);
             expect(listPilots(store).map(p => p.name)).toEqual(['Beta']);
             expect(store.has(a.saveKey)).toBeFalse();
+            expect(store.has(historyKeyFor(a.saveKey))).toBeFalse();
             // Deleting the active pilot falls back to a remaining one.
             expect(getActivePilot(store)?.id).toBe(b.id);
         });
@@ -349,6 +356,71 @@ describe('pilot registry', () => {
             expect(fresh.raw(result.pilot.saveKey))
                 .toBe(JSON.stringify(JSON.parse(encodeSave(SAMPLE_SAVE))));
         });
+
+        it('carries the checkpoint history through export and import', () => {
+            const store = new MemoryStorage();
+            const a = createPilot(profile('Historian'), store);
+            store.setItem(a.saveKey, encodeSave(SAMPLE_SAVE));
+            recordCheckpoint(a.saveKey, JSON.parse(encodeSave(SAMPLE_SAVE)),
+                { label: 'Departed Earth', kind: 'depart' }, store);
+            store.setItem(a.saveKey, encodeSave(OTHER_SAVE));
+            recordCheckpoint(a.saveKey, JSON.parse(encodeSave(OTHER_SAVE)),
+                { label: 'Bought Blaster ×1', kind: 'purchase' }, store);
+
+            const text = exportPilot(a.id, store)!;
+            expect(JSON.parse(text).history.checkpoints.length).toBe(2);
+
+            const fresh = new MemoryStorage();
+            const result = importPilot(text, fresh);
+            expect(result.ok).toBeTrue();
+            if (!result.ok) { return; }
+            const history = loadHistory(result.pilot.saveKey, fresh)!;
+            expect(history.checkpoints.map(c => c.label))
+                .toEqual(['Departed Earth', 'Bought Blaster ×1']);
+            expect(JSON.stringify(checkpointState(history, 0)))
+                .toBe(JSON.stringify(JSON.parse(encodeSave(SAMPLE_SAVE))));
+        });
+
+        it('imports a pilot whose history is unreadable, without it', () => {
+            const store = new MemoryStorage();
+            const a = createPilot(profile('Amnesiac'), store);
+            store.setItem(a.saveKey, encodeSave(SAMPLE_SAVE));
+            const file = JSON.parse(exportPilot(a.id, store)!);
+            file.history = { version: 99, nonsense: true };
+            const fresh = new MemoryStorage();
+            const result = importPilot(JSON.stringify(file), fresh);
+            expect(result.ok).toBeTrue();
+            if (!result.ok) { return; }
+            expect(fresh.has(historyKeyFor(result.pilot.saveKey))).toBeFalse();
+            expect(fresh.has(result.pilot.saveKey)).toBeTrue();
+        });
+
+        it('exports one checkpoint as its own pilot file, history truncated '
+            + 'at that point', () => {
+                const store = new MemoryStorage();
+                const a = createPilot(profile('Forker'), store);
+                for (const [save, label] of [[SAMPLE_SAVE, 'one'],
+                [OTHER_SAVE, 'two'], [SAMPLE_SAVE, 'three']] as const) {
+                    store.setItem(a.saveKey, encodeSave(save));
+                    recordCheckpoint(a.saveKey, JSON.parse(encodeSave(save)),
+                        { label }, store);
+                }
+                const copy = exportCheckpointFile(a.id, 1, store)!;
+                expect(copy.name).toBe('Forker (two)');
+                const parsed = JSON.parse(copy.text);
+                expect(parsed.name).toBe('Forker (two)');
+                expect(parsed.save.data.credits).toBe(OTHER_SAVE.credits);
+                expect(parsed.history.checkpoints.map((c: { label: string }) =>
+                    c.label)).toEqual(['one', 'two']);
+                // And it imports as a separate pilot.
+                const result = importPilot(copy.text, store);
+                expect(result.ok).toBeTrue();
+                if (!result.ok) { return; }
+                expect(result.pilot.name).toBe('Forker (two)');
+                expect(loadHistory(result.pilot.saveKey, store)!.checkpoints
+                    .length).toBe(2);
+                expect(exportCheckpointFile(a.id, 7, store)).toBeUndefined();
+            });
 
         it('exports a pilot that has never played (no save)', () => {
             const store = new MemoryStorage();
