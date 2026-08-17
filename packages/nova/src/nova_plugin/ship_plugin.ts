@@ -1,7 +1,9 @@
 import * as t from 'io-ts';
 import { OutfitData } from "novadatainterface/outfit_data";
 import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
+import { GetEntity } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
+import { System } from 'nova_ecs/system';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
@@ -93,6 +95,16 @@ export function getShipMovementPhysics(physics: ShipPhysics): MovementPhysics {
     };
 }
 
+/**
+ * MovementPhysicsComponent is only ATTACHED here. Its values are
+ * rewritten from ShipPhysicsComponent every tick by
+ * EffectiveMovementPhysicsSystem (afterburner_plugin.ts), which layers
+ * the afterburner boost, the ionization slowdown and the hyperspace
+ * departure burn on top of the base numbers — so it, not this provider,
+ * is what keeps a ship's speed and turn rate following its outfits.
+ * Re-deriving here as well would clobber that system's work on whichever
+ * ticks it ran second.
+ */
 export const ShipMovementPhysicsProvider = Provide({
     name: "ShipMovementPhysicsProvider",
     provided: MovementPhysicsComponent,
@@ -100,6 +112,90 @@ export const ShipMovementPhysicsProvider = Provide({
     args: [ShipPhysicsComponent] as const,
     factory: getShipMovementPhysics,
 });
+
+/**
+ * WHY THE STATS BELOW ARE RECONCILED EVERY STEP INSTEAD OF `Provide`d
+ * ONCE.
+ *
+ * `Provide` re-derives on a ChangeEvent for the component it watches,
+ * and a ChangeEvent only fires for a component set on an entity that is
+ * ALREADY IN A WORLD (ProvidePlugin subscribes to the entity map's
+ * changeComponent event). Every path that recomputes a ship's physics
+ * does it OFF-WORLD, on a detached entity:
+ *
+ *   - the spaceport's outfitter deletes ShipPhysicsComponent from the
+ *     DETACHED docked entity so it is rebuilt with the new outfits
+ *     (spaceport.ts showOutfitter), and the relaunch rebuilds it in
+ *     deriveEntityComponents *before* world.entities.set (see
+ *     simulation_input.ts, 'addEntity');
+ *   - snapshots skip ShipPhysicsComponent (snapshot_policies.ts) and a
+ *     restore re-derives it the same detached way.
+ *
+ * The stats, by contrast, are serializer-registered, so they ride
+ * through the landing (and through a snapshot restore) carrying the
+ * values they already had. Nothing fired, so a ship kept the capacity
+ * of its PREVIOUS outfit set indefinitely: buy the third Battery Pack
+ * for a 400-energy hull whose two Organic Armors eat 400, and
+ * FuelComponent.max stayed at 200 (two jumps) instead of 300 — and
+ * because Stat.step clamps `current` into [min, max] every tick, the
+ * fuel really was gone, not just mis-drawn. Only a page reload (which
+ * rebuilds the ship from the save, with no stat to carry over) cleared
+ * it. Shield and armor capacity went stale by the same route.
+ *
+ * Reconciling is idempotent — the derived fields are written only when
+ * they actually differ — so resimulation stays deterministic and the
+ * stat delta channel is not flooded with unchanged values.
+ */
+
+/** A ship stat's bounds and recharge, as its physics dictates them. */
+interface StatBounds {
+    max: number;
+    min: number;
+    recharge: number;
+}
+
+/**
+ * A system that attaches `component` when the ship has no such stat yet,
+ * and otherwise keeps the stat's derived fields (max, min, recharge) in
+ * step with the ship's physics. `current` is simulation state and is
+ * never re-derived — buying a bigger tank does not fill it — but it is
+ * clamped back into range when the capacity it lives in shrinks.
+ */
+function shipStatSystem(name: string, component: Component<Stat>,
+    bounds: (physics: ShipPhysics) => StatBounds,
+    initialCurrent: (physics: ShipPhysics) => number) {
+    return new System({
+        name,
+        args: [ShipPhysicsComponent, Optional(component), GetEntity] as const,
+        step(physics, stat, entity) {
+            const { max, min, recharge } = bounds(physics);
+            if (!stat) {
+                entity.components.set(component, new Stat({
+                    current: initialCurrent(physics), max, min, recharge,
+                }));
+                return;
+            }
+            if (stat.max === max && stat.min === min
+                && stat.recharge === recharge) {
+                return;
+            }
+            // Through the setters, which flag the change for the stat
+            // delta channel (getStatDelta) — a brand new Stat would
+            // report no change at all and leave other peers on the old
+            // capacity.
+            stat.max = max;
+            stat.min = min;
+            stat.recharge = recharge;
+            // Selling the tank spills what no longer fits. The recharge
+            // systems clamp too, but only after this tick's readers
+            // (the jump check, the status bar) have looked.
+            const clamped = Math.max(min, Math.min(max, stat.current));
+            if (stat.current !== clamped) {
+                stat.current = clamped;
+            }
+        }
+    });
+}
 
 const ShipAnimationProvider = Provide({
     name: "ShipAnimationProvider",
@@ -146,69 +242,44 @@ const ShipCollisionInteractionProvider = Provide({
     factory: (_ship, shipData) => deriveShipVulnerability(shipData),
 });
 
-const ShipShieldProvider = Provide({
-    name: "ShipShieldProvider",
-    provided: ShieldComponent,
-    update: [ShipPhysicsComponent],
-    args: [ShipPhysicsComponent, Optional(ShieldComponent)] as const,
-    factory(physics, shield) {
-        return new Stat({
-            current: shield?.current ?? physics.shield,
-            max: physics.shield,
-            min: -physics.shield * 0.05,
-            recharge: physics.shieldRecharge,
-        });
-    }
-});
+const ShipShieldProvider = shipStatSystem(
+    "ShipShieldProvider", ShieldComponent,
+    physics => ({
+        max: physics.shield,
+        min: -physics.shield * 0.05,
+        recharge: physics.shieldRecharge,
+    }),
+    physics => physics.shield);
 
-const ShipArmorProvider = Provide({
-    name: "ShipArmorProvider",
-    provided: ArmorComponent,
-    update: [ShipPhysicsComponent],
-    args: [ShipPhysicsComponent, Optional(ArmorComponent)] as const,
-    factory(physics, armor) {
-        return new Stat({
-            current: armor?.current ?? physics.armor,
-            max: physics.armor,
-            min: 0,
-            recharge: physics.armorRecharge,
-        });
-    }
-});
+const ShipArmorProvider = shipStatSystem(
+    "ShipArmorProvider", ArmorComponent,
+    physics => ({
+        max: physics.armor,
+        min: 0,
+        recharge: physics.armorRecharge,
+    }),
+    physics => physics.armor);
 
-const ShipFuelProvider = Provide({
-    name: "ShipFuelProvider",
-    provided: FuelComponent,
-    update: [ShipPhysicsComponent],
-    args: [ShipPhysicsComponent, Optional(FuelComponent)] as const,
-    factory(physics, fuel) {
-        // Base recharge is the fuel scoop (ModType 18); an auto-refueller
-        // (ModType 19) adds a slow constant trickle on top.
-        const recharge = physics.energyRecharge
-            + (physics.autoRefuel ? AUTO_REFUEL_PER_SECOND : 0);
-        return new Stat({
-            current: fuel?.current ?? physics.energy,
-            max: physics.energy,
-            min: 0,
-            recharge,
-        });
-    }
-});
+const ShipFuelProvider = shipStatSystem(
+    "ShipFuelProvider", FuelComponent,
+    // Base recharge is the fuel scoop (ModType 18); an auto-refueller
+    // (ModType 19) adds a slow constant trickle on top.
+    physics => ({
+        max: physics.energy,
+        min: 0,
+        recharge: physics.energyRecharge
+            + (physics.autoRefuel ? AUTO_REFUEL_PER_SECOND : 0),
+    }),
+    physics => physics.energy);
 
-const ShipIonizationProvider = Provide({
-    name: "ShipIonizationProvider",
-    provided: IonizationComponent,
-    update: [ShipPhysicsComponent],
-    args: [ShipPhysicsComponent, Optional(IonizationComponent)] as const,
-    factory(physics, ionization) {
-        return new Stat({
-            current: ionization?.current ?? 0,
-            max: physics.ionization,
-            min: 0,
-            recharge: -physics.deionize,
-        });
-    }
-});
+const ShipIonizationProvider = shipStatSystem(
+    "ShipIonizationProvider", IonizationComponent,
+    physics => ({
+        max: physics.ionization,
+        min: 0,
+        recharge: -physics.deionize,
+    }),
+    () => 0);
 
 const ShipIonizationColorProvider = Provide({
     name: "ShipIonizationColorProvider",
