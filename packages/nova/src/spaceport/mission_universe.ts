@@ -226,6 +226,51 @@ export class MissionUniverse {
         return this.planetsById.get(id);
     }
 
+    /**
+     * A stellar to stand for `systemId` in a mission context that has no
+     * landing of its own — the IN-FLIGHT offer a përs ship makes (mïsn
+     * AvailLoc 2). The offer happens in open space, but the mission
+     * machinery is written around "where is this being offered": AvailStel
+     * is judged against it, ShipSyst -1 ("the system the mission was
+     * offered in") is resolved through it, and the ActiveMission records
+     * it as `acceptedAt`. Answering "somewhere in this system" is both
+     * true and enough for all three.
+     *
+     * INHABITED FIRST, because AvailStel -1 — which every stock AvailLoc 2
+     * mission uses — means "any inhabited stellar", and a system whose
+     * first spöb happens to be a gas giant would silence the lot. Falls
+     * back to any stellar, then to undefined for a system with none (the
+     * caller then uses the neutral '<in-flight>' sentinel).
+     *
+     * IT MUST ROUND-TRIP, which is the subtle part: ShipSyst -1 is
+     * resolved as systemIdOfStellar(the borrowed stellar), and spöbs are
+     * shared between systems (the same rock listed by several sÿsts under
+     * mutually-exclusive Visibility bits), so `planetSystem` — a
+     * many-to-one map that keeps the LAST system to claim a spöb — can
+     * map one straight back out to a different system. A stellar that
+     * does not lead home is no use for standing in for home, so those are
+     * skipped. The stock case that caught this: sÿst 1124's spöb 173,
+     * which planetSystem attributes to sÿst 1126.
+     *
+     * Deterministic: the first match in the system's own spöb order, not
+     * a random pick, so two evaluations of the same offer agree.
+     */
+    stellarInSystem(systemId: string): string | undefined {
+        const planets = this.systemsById.get(systemId)?.planets ?? [];
+        let fallback: string | undefined;
+        for (const planetId of planets) {
+            const planet = this.planetsById.get(planetId);
+            if (!planet || this.planetSystem.get(planetId) !== systemId) {
+                continue;
+            }
+            fallback ??= planetId;
+            if (!stellarInfoOf(planet).uninhabited) {
+                return planetId;
+            }
+        }
+        return fallback;
+    }
+
     getGovt(id: string): GovtData | undefined {
         return this.govtsById.get(id);
     }

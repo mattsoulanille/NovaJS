@@ -350,9 +350,21 @@ export function missionMatchesLocation(mission: MissionData,
     if (ctx.activeMissions.has(mission.id)) {
         return false;
     }
-    if (!matchesStellarRef(mission.availStel, mission.availStelId,
-        ctx.stellar, idPrefix(mission.id), ctx.getGovt,
-        stellarAdjacencyOf(ctx))) {
+    // AvailStel is "Which stellar objects (i.e. planets) the mission is
+    // available at" (EVN Bible) — a question with no answer for a
+    // mission offered BY A SHIP, which happens in open space at no
+    // stellar at all. The in-flight offer context borrows a stellar from
+    // the player's system so ShipSyst -1 and `acceptedAt` have something
+    // to resolve through (ship_mission_accept's inFlightStellar), and
+    // judging AvailStel against that borrowed rock would be an accident:
+    // a system whose only spöbs are gas giants would silence every
+    // AvailStel -1 ("any inhabited stellar") mission in it, the Refuel
+    // Traders included. All 13 stock AvailLoc 2 missions are AvailStel
+    // -1, so nothing is lost by not asking.
+    if (location !== LOCATION_SHIP
+        && !matchesStellarRef(mission.availStel, mission.availStelId,
+            ctx.stellar, idPrefix(mission.id), ctx.getGovt,
+            stellarAdjacencyOf(ctx))) {
         return false;
     }
     // Domination is not implemented; missions gated on it never show.

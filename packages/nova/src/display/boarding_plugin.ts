@@ -27,6 +27,7 @@ import {
 } from '../spaceport/hail_layout.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { ScreenSize } from './screen_size_plugin.js';
+import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { Stage } from './stage_resource.js';
 
 /**
@@ -219,6 +220,33 @@ export function plunderDialogContent(boarding: BoardingState,
             plunderDone: true,
         },
     };
+}
+
+/**
+ * Which of the three boarding dialogs owns the screen.
+ *
+ *  'none'     no session — nothing is up.
+ *  'offer'    a board-triggered mission offer is being answered (përs
+ *             Flags 0x0200); it comes FIRST and holds the others back,
+ *             because the stock offer texts ARE the boarding narration.
+ *  'capture'  the ship was taken; the assignment dialog is up.
+ *  'plunder'  the ordinary case.
+ *
+ * Pure, so the ordering is pinned without a PIXI stage — the same split
+ * plunderDialogContent uses for the dialog's rules.
+ */
+export type BoardingDialogPhase = 'none' | 'offer' | 'capture' | 'plunder';
+
+export function boardingDialogPhase(boarding: BoardingState | undefined,
+    /** A mission offer for THIS boarding is on screen. */
+    offering: boolean): BoardingDialogPhase {
+    if (!boarding) {
+        return 'none';
+    }
+    if (offering) {
+        return 'offer';
+    }
+    return boarding.capture === 'succeeded' ? 'capture' : 'plunder';
 }
 
 /** One selectable action row. */
@@ -514,15 +542,52 @@ class CaptureAssignmentDialog {
     }
 }
 
-/** Owns both dialogs and switches between them from the synced state. */
+/**
+ * Owns both dialogs and switches between them from the synced state.
+ *
+ * ============================================================================
+ * THE BOARD-OFFERED MISSION COMES FIRST (përs Flags 0x0200)
+ * ============================================================================
+ *
+ * A përs whose Flags 0x0200 is set offers "the ship's LinkMission when
+ * boarding it instead of when hailing it" (EVN Bible). When the player
+ * boards such a hull, the mission offer is shown BEFORE the plunder
+ * dialog, and the plunder dialog is held closed until the player has
+ * answered — which is both what the original does and what the stock text
+ * requires. mïsn 134's offer opens "You match velocities with the derelict
+ * ship and dock with it. Passing through the airlock you are surprised to
+ * encounter the surviving crew of the vessel, who are overjoyed at their
+ * rescue" — it is the boarding itself, and would read as nonsense after a
+ * plunder screen. mïsn 133's does the same for the trap.
+ *
+ * ONE ATTEMPT PER SESSION. The presentation is async and the update system
+ * is not, so the attempt is kicked off once per boarded target (`offered`)
+ * and `holding` suppresses the plunder dialog meanwhile. If the offer turns
+ * out not to apply — no përs, no mission, already taken — the promise
+ * resolves false and the plunder dialog opens on the very next frame, so
+ * an ordinary boarding is unaffected but for one frame of nothing.
+ *
+ * The plunder session itself is SIM state and keeps running throughout:
+ * this only decides which dialog is on screen. A session that ends while
+ * the offer is up (the target is destroyed, say) simply finds no plunder
+ * dialog to close.
+ */
 class BoardingUi {
     readonly plunder: PlunderDialog;
     readonly assignment: CaptureAssignmentDialog;
+    /** Targets a board-trigger offer has already been attempted for. */
+    private offered = new Set<string>();
+    /** The target whose offer popup is currently up, if any. */
+    private holding?: string;
 
     constructor(displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
         send: (action: ControlAction) => void,
-        private screen: { x: number, y: number }) {
+        private screen: { x: number, y: number },
+        /** Presents a boarding-triggered offer; the plugin wires this to
+         * presentShipOffer. Omitted in specs that only drive the dialogs. */
+        private offerMission?:
+            (targetUuid: string) => Promise<boolean>) {
         this.plunder = new PlunderDialog(displayAssets, controlEvents, send);
         this.assignment =
             new CaptureAssignmentDialog(displayAssets, controlEvents, send);
@@ -538,18 +603,47 @@ class BoardingUi {
     update(boarding: BoardingState | undefined, target: Entity | undefined,
         playerCrew: number) {
         this.reposition();
-        if (!boarding) {
-            this.plunder.close();
-            this.assignment.close();
-            return;
+        if (boarding && this.offerMission
+            && !this.offered.has(boarding.target)) {
+            this.offered.add(boarding.target);
+            this.holding = boarding.target;
+            const uuid = boarding.target;
+            void this.offerMission(uuid).catch(e => {
+                console.warn('Board-offered mission failed:', e);
+            }).finally(() => {
+                if (this.holding === uuid) {
+                    this.holding = undefined;
+                }
+            });
         }
-        if (boarding.capture === 'succeeded') {
-            this.plunder.close();
-            this.assignment.open();
-        } else {
-            this.assignment.close();
-            this.plunder.open();
-            this.plunder.refresh(boarding, target, playerCrew);
+        const phase = boardingDialogPhase(boarding,
+            !!boarding && this.holding === boarding.target);
+        switch (phase) {
+            case 'none':
+                this.plunder.close();
+                this.assignment.close();
+                // A new session against the same hull can never happen
+                // (one plunder per life segment), but the set is
+                // per-display-world state and there is no reason to grow
+                // it across systems.
+                this.offered.clear();
+                this.holding = undefined;
+                return;
+            case 'offer':
+                // The offer popup owns the screen (and the keyboard,
+                // through its own MenuControls) until it is answered.
+                this.plunder.close();
+                this.assignment.close();
+                return;
+            case 'capture':
+                this.plunder.close();
+                this.assignment.open();
+                return;
+            case 'plunder':
+                this.assignment.close();
+                this.plunder.open();
+                this.plunder.refresh(boarding!, target, playerCrew);
+                return;
         }
     }
 }
@@ -587,7 +681,10 @@ export const BoardingDisplayPlugin: Plugin = {
         }
         const send = (action: ControlAction) =>
             world.emit(PlunderActionEvent, { action });
-        const ui = new BoardingUi(displayAssets, controls, send, screen);
+        const ui = new BoardingUi(displayAssets, controls, send, screen,
+            // përs Flags 0x0200: the boarding trigger for a ship-offered
+            // mission. A no-op for every hull that isn't such a përs.
+            targetUuid => presentShipOffer(world, targetUuid, 'board'));
         stage.addChild(ui.plunder.container);
         stage.addChild(ui.assignment.container);
         world.resources.set(BoardingUiResource, ui);

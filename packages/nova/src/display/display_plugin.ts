@@ -26,6 +26,7 @@ import { ShipAnimationPlugin } from "./ship_animation_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
 import { SpaceportPlugin } from "./spaceport_plugin.js";
 import { BoardingDisplayPlugin } from "./boarding_plugin.js";
+import { ShipMissionOfferPlugin } from "./ship_mission_offer_plugin.js";
 import { CameraFocus, Space } from "./space_resource.js";
 import { Stage } from "./stage_resource.js";
 import { starfield } from "./starfield_plugin.js";
@@ -98,6 +99,10 @@ export const Display: Plugin = {
         await world.addPlugin(StarmapPlugin);
         await world.addPlugin(PlayerInfoPlugin);
         await world.addPlugin(MissionInfoPlugin);
+        // Before both of its triggers (the hail key and the boarding
+        // dialogs): each of them calls presentShipOffer, which needs the
+        // shared offer popup this plugin owns.
+        await world.addPlugin(ShipMissionOfferPlugin);
         await world.addPlugin(HailDialogPlugin);
         await world.addPlugin(SpaceportPlugin);
         // After the spaceport so the plunder/capture dialogs render over
@@ -128,6 +133,7 @@ export const Display: Plugin = {
         await world.removePlugin(BoardingDisplayPlugin);
         await world.removePlugin(SpaceportPlugin);
         await world.removePlugin(HailDialogPlugin);
+        await world.removePlugin(ShipMissionOfferPlugin);
         await world.removePlugin(MissionInfoPlugin);
         await world.removePlugin(PlayerInfoPlugin);
         await world.removePlugin(StarmapPlugin);

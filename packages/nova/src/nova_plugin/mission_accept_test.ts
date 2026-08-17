@@ -8,6 +8,8 @@ import { ActiveMission, ActiveMissionType, CreditsComponent, MissionsComponent, 
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { ControlledByComponent } from './ship_control.js';
+import { NpcComponent } from './npc_ai_plugin.js';
+import { ShipOfferSpentComponent } from './mission_accept.js';
 
 /**
  * ============================================================================
@@ -63,6 +65,12 @@ function accepted(overrides: Partial<AcceptedMission> = {}): AcceptedMission {
 
 const missionsOf = (player: Entity) =>
     player.components.get(MissionsComponent)!;
+
+/** A minimal encoded entity for the record's `ships` batch. */
+function encodedShip(world: World) {
+    const serializer = world.resources.get(SerializerResource)!;
+    return serializer.encode(new Entity('pirate'));
+}
 
 describe('applyAcceptMission', () => {
     it('registers the resolved mission on the acting peer\'s ship', () => {
@@ -192,12 +200,6 @@ describe('applyAcceptMission', () => {
     describe('the special ships that ride the record', () => {
         /** A bare serializable ship entity, encoded as the record carries
          * it. */
-        function encodedShip(world: World) {
-            const serializer = world.resources.get(SerializerResource)!;
-            const ship = new Entity('pirate');
-            return serializer.encode(ship);
-        }
-
         it('inserts them, so the mission and its ambush land together',
             () => {
                 // The Derelict Decoy's four pirates jump in the moment you
@@ -234,6 +236,161 @@ describe('applyAcceptMission', () => {
         });
     });
 
+    describe('the offering përs hull', () => {
+        /** A world plus a përs hull for the player to have hailed. */
+        function withOffering(npc: Partial<{ mode: string }> = {}) {
+            const made = makeWorld();
+            const offering = new Entity('the përs');
+            offering.components.set(NpcComponent, {
+                mode: 'wander', departAt: 1e15, ...npc,
+            } as never);
+            made.world.entities.set('npc:pers', offering);
+            return { ...made, offering };
+        }
+
+        it('marks the hull spent, so one offer is taken at most once', () => {
+            // The second key (the first is the mission list): a
+            // double-clicked Accept produces two records naming the same
+            // hull, and only the first may land.
+            const { world, player, offering } = withOffering();
+            applyAcceptMission(world, PEER,
+                accepted({ offeredBy: 'npc:pers', creditsDelta: 500 }));
+            expect(offering.components.has(ShipOfferSpentComponent)).toBeTrue();
+            expect(player.components.get(CreditsComponent)!.credits)
+                .toEqual(1500);
+
+            // A second record for a DIFFERENT mission off the same hull is
+            // refused outright — the hull has nothing left to offer.
+            applyAcceptMission(world, PEER, accepted({
+                missionId: 'nova:133', offeredBy: 'npc:pers',
+                mission: ActiveMissionType.encode(
+                    activeMission({ id: 'nova:133' })),
+                creditsDelta: 500,
+            }));
+            expect(missionsOf(player).has('nova:133')).toBeFalse();
+            expect(player.components.get(CreditsComponent)!.credits)
+                .toEqual(1500);
+        });
+
+        it('replaces the hull with the mission ship in ONE apply '
+            + '(përs Flags 0x0040)', () => {
+                // Bible: "replace it with this ship while removing this
+                // one from play". Matthew's ruling is that the përs is
+                // never pulled out of the world and put back — so the
+                // replacement is inserted and the hull deleted on the
+                // same tick, and the ship visibly becomes the new one.
+                const { world, offering } = withOffering();
+                applyAcceptMission(world, PEER, accepted({
+                    offeredBy: 'npc:pers', offeredByFate: 'replace',
+                    ships: [{
+                        uuid: 'rescue:1',
+                        entity: encodedShip(world) as never,
+                    }],
+                }));
+                expect(world.entities.has('npc:pers')).toBeFalse();
+                expect(world.entities.has('rescue:1')).toBeTrue();
+                // The marker went on the hull before it was deleted; what
+                // matters is that the hull is gone with it.
+                expect(offering.components.has(ShipOfferSpentComponent))
+                    .toBeTrue();
+            });
+
+        it('sends the hull on its way instead of deleting it '
+            + '(përs Flags 0x0800)', () => {
+                // "Make ship leave after accepting its LinkMission": the
+                // person departs under their own power, so the hull stays
+                // and its NPC AI is told the departure time has passed.
+                const { world, offering } = withOffering();
+                applyAcceptMission(world, PEER, accepted({
+                    offeredBy: 'npc:pers', offeredByFate: 'leave',
+                }));
+                expect(world.entities.has('npc:pers')).toBeTrue();
+                expect(offering.components.get(NpcComponent)!.departAt)
+                    .toEqual(0);
+            });
+
+        it('leaves a hull with no fate alone', () => {
+            // The derelicts you board keep floating there.
+            const { world, offering } = withOffering();
+            applyAcceptMission(world, PEER,
+                accepted({ offeredBy: 'npc:pers' }));
+            expect(world.entities.has('npc:pers')).toBeTrue();
+            expect(offering.components.get(NpcComponent)!.departAt)
+                .toEqual(1e15);
+        });
+
+        it('is tolerant of a hull that is already gone', () => {
+            // It could have been destroyed between the client resolving
+            // the accept and the record being applied (or replayed).
+            const { world, player } = makeWorld();
+            applyAcceptMission(world, PEER, accepted({
+                offeredBy: 'npc:vanished', offeredByFate: 'replace',
+            }));
+            expect(missionsOf(player).has(MISSION)).toBeTrue();
+        });
+    });
+
+    describe('an IMMEDIATE auto-abort accept (mïsn 133 "Derelict Decoy")', () => {
+        function decoyRecord(overrides: Partial<AcceptedMission> = {}) {
+            return accepted({
+                missionId: 'nova:133', mission: null,
+                autoAborted: true, offeredBy: 'npc:pers', ...overrides,
+            });
+        }
+
+        it('spawns the ambush without adding any mission', () => {
+            // The mission never becomes active (mission_logic's
+            // acceptOffer), so the player's list must stay untouched —
+            // but the four pirates are the whole point and must arrive.
+            const { world, player } = makeWorld();
+            const offering = new Entity('the derelict');
+            world.entities.set('npc:pers', offering);
+            applyAcceptMission(world, PEER, decoyRecord({
+                ships: [
+                    { uuid: 'pirate:1', entity: encodedShip(world) as never },
+                    { uuid: 'pirate:2', entity: encodedShip(world) as never },
+                    { uuid: 'pirate:3', entity: encodedShip(world) as never },
+                    { uuid: 'pirate:4', entity: encodedShip(world) as never },
+                ],
+            }));
+            expect(missionsOf(player).size).toEqual(0);
+            for (const uuid of ['pirate:1', 'pirate:2', 'pirate:3',
+                'pirate:4']) {
+                expect(world.entities.has(uuid)).withContext(uuid).toBeTrue();
+            }
+        });
+
+        it('cannot spring the trap twice', () => {
+            // Its idempotence key is the hull, since there is no mission
+            // to find in the player's list.
+            const { world } = makeWorld();
+            world.entities.set('npc:pers', new Entity('the derelict'));
+            applyAcceptMission(world, PEER, decoyRecord({
+                ships: [
+                    { uuid: 'pirate:1', entity: encodedShip(world) as never },
+                ],
+            }));
+            applyAcceptMission(world, PEER, decoyRecord({
+                ships: [
+                    { uuid: 'pirate:5', entity: encodedShip(world) as never },
+                ],
+            }));
+            expect(world.entities.has('pirate:1')).toBeTrue();
+            expect(world.entities.has('pirate:5')).toBeFalse();
+        });
+
+        it('is dropped when it names no hull to key on', () => {
+            const { world } = makeWorld();
+            applyAcceptMission(world, PEER, accepted({
+                missionId: 'nova:133', mission: null, autoAborted: true,
+                ships: [
+                    { uuid: 'pirate:1', entity: encodedShip(world) as never },
+                ],
+            }));
+            expect(world.entities.has('pirate:1')).toBeFalse();
+        });
+    });
+
     it('round-trips through its codec unchanged', () => {
         // The record reaches other peers through JSON.stringify, so every
         // field has to be JSON-safe: no Map, no Set, no Position.
@@ -241,6 +398,7 @@ describe('applyAcceptMission', () => {
             offeredBy: 'npc:derelict', creditsDelta: -100,
             bitsSet: [3], ranksGranted: ['nova:200'],
             cargoDelta: [['Food', 2]], outfitsDelta: [['nova:300', 1]],
+            offeredByFate: 'replace', autoAborted: true,
         });
         const wire = JSON.parse(JSON.stringify(
             AcceptedMissionType.encode(record)));
@@ -250,6 +408,8 @@ describe('applyAcceptMission', () => {
             expect(decoded.right.missionId).toEqual(MISSION);
             expect(decoded.right.offeredBy).toEqual('npc:derelict');
             expect(decoded.right.cargoDelta).toEqual([['Food', 2]]);
+            expect(decoded.right.offeredByFate).toEqual('replace');
+            expect(decoded.right.autoAborted).toBeTrue();
         }
     });
 });

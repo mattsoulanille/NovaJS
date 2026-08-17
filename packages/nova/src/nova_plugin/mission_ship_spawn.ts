@@ -9,7 +9,7 @@ import { FiringGroupComponent } from './firing_group.js';
 import { auxShipsMatchSystem, SystemInfo } from './mission_ship_logic.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import {
-    GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, shipsToSpawn,
+    GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, ShipObjective, shipsToSpawn,
 } from './mission_ship_state.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
 import {
@@ -90,6 +90,18 @@ function scatter(random: () => number): Position {
         (random() * 2 - 1) * INITIAL_SPAWN_HALF_SIZE);
 }
 
+/**
+ * The parts of an ActiveMission the spawn builders read. Structural
+ * rather than the io-ts type so the in-flight accept path can hand over
+ * the mission it JUST resolved, before it is on any entity.
+ */
+type MissionShipSource = {
+    shipObjective?: ShipObjective,
+    shipName?: string,
+    travelPlanet: string | null,
+    returnPlanet: string | null,
+};
+
 interface SpawnContext {
     gameData: SimulationGameDataInterface;
     universe: MissionShipUniverse;
@@ -97,6 +109,30 @@ interface SpawnContext {
     random(): number;
     /** Next free formation slot on the owner. */
     nextSlot: number;
+    /** The owner's control bits, for resolving stellars to the VISIBLE
+     * copy of a stacked duplicate system (mission_universe.ts). */
+    bits?: ReadonlySet<number>;
+}
+
+/**
+ * Where a replacement ship is put: the përs hull's own place in the
+ * world (përs Flags 0x0040). Passed instead of a ShipStart roll, so the
+ * special ship appears exactly where the ship you were talking to was.
+ */
+export interface ReplacementPlacement {
+    position: Position;
+    rotation: Angle;
+    velocity: Vector;
+    /**
+     * The përs's own shïp class. The Bible's replacement is a swap of
+     * one hull for another, and the stock data is authored so the
+     * mission's ShipDude can produce the same class the përs flies — so
+     * when it CAN, it does, and the trader you hailed keeps its
+     * silhouette instead of turning into a different ship mid-sentence.
+     * A dude table that cannot produce it falls back to a normal
+     * weighted draw.
+     */
+    preferShipId?: string;
 }
 
 /** Builds one mission ship from a dude draw; null if data is missing. */
@@ -107,11 +143,18 @@ async function buildShip(ctx: SpawnContext, missionId: string,
         behavior: number,
         goal: number,
         name?: string,
+        replace?: ReplacementPlacement,
     }): Promise<Entity | null> {
     let dude, shipData;
     try {
         dude = await ctx.gameData.data.Dude.get(dudeId);
-        const choice = pickWeighted(dude.ships, { next: ctx.random });
+        // A replacement keeps the përs's own class when the düde can
+        // produce it (see ReplacementPlacement.preferShipId).
+        const prefer = options.replace?.preferShipId;
+        const choice = (prefer !== undefined
+            && dude.ships.some(s => s.id === prefer))
+            ? { id: prefer }
+            : pickWeighted(dude.ships, { next: ctx.random });
         if (!choice) {
             return null;
         }
@@ -121,13 +164,19 @@ async function buildShip(ctx: SpawnContext, missionId: string,
         return null;
     }
 
-    const state = options.shipStart === 1
-        ? jumpInState(shipData, { next: ctx.random })
-        : {
-            position: scatter(ctx.random),
-            rotation: new Angle(ctx.random() * 2 * Math.PI),
-            velocity: new Vector(0, 0),
-        };
+    const state = options.replace
+        ? {
+            position: options.replace.position,
+            rotation: options.replace.rotation,
+            velocity: options.replace.velocity,
+        }
+        : options.shipStart === 1
+            ? jumpInState(shipData, { next: ctx.random })
+            : {
+                position: scatter(ctx.random),
+                rotation: new Angle(ctx.random() * 2 * Math.PI),
+                velocity: new Vector(0, 0),
+            };
     const ship = makeNpcShip(shipData, dude.aiType, dude.govt,
         state.position, state.rotation, state.velocity);
     if (options.name) {
@@ -216,69 +265,131 @@ export async function buildMissionShipSpawns(playerEntity: Entity,
     }
     const ctx: SpawnContext = {
         gameData, universe, ownerUuid, random, nextSlot: firstSlot,
+        bits: playerEntity.components.get(ControlBitsComponent),
     };
-    const playerBits = playerEntity.components.get(ControlBitsComponent);
     const system = universe.getSystemInfo(systemId);
     const ships: Entity[] = [];
 
     for (const [missionId, active] of missions) {
-        const mission = universe.getMission(missionId);
         const objective = active.shipObjective;
         if (objective) {
             // The previous system's ships are gone (the owner-absence
             // cleanup deleted them); forget their uuids so they are
             // not misread as departures.
             objective.live = new Map();
-            if (objective.systemId === null
-                || objective.systemId === systemId
-                || (universe.sameSystem?.(objective.systemId, systemId)
-                    ?? false)) {
-                // The mission's special ships all wear the name picked
-                // from its ShipNameID STR# list when the mission was
-                // accepted (mission_logic.ts), which is also what <SN>
-                // expands to — so the target pane and the briefing
-                // agree, and re-entering the system respawns the same
-                // name. Missions accepted before <SN> existed carry no
-                // shipName; they keep the old per-spawn random pick.
-                const names = mission?.shipNames ?? [];
-                const name = active.shipName
-                    ?? (names.length > 0
-                        ? names[Math.floor(random() * names.length)]
-                        : undefined);
-                for (let i = shipsToSpawn(objective); i > 0; i--) {
-                    const ship = await buildShip(ctx, missionId,
-                        objective.dudeId, {
-                        aux: false,
-                        shipStart: objective.shipStart,
-                        behavior: objective.behavior,
-                        goal: objective.goal,
-                        name,
-                    });
-                    if (ship) {
-                        ships.push(ship);
-                    }
-                }
+        }
+        ships.push(...await buildShipsForMission(ctx, missionId, active,
+            systemId, system));
+    }
+    return ships;
+}
+
+/**
+ * One mission's ships for `systemId`: its special ships (when their
+ * resolved spawn system matches) and its aux ships (when their
+ * membership rule matches). Shared by the per-system-entry sweep above
+ * and the IN-FLIGHT accept path (a mission taken from a ship spawns its
+ * ships immediately, into the system the player is already flying in),
+ * so both produce identical ships from identical state.
+ *
+ * Does NOT clear the objective's `live` roster — the sweep above owns
+ * that, because it also has to clear rosters for missions whose ships
+ * do not spawn here.
+ */
+async function buildShipsForMission(ctx: SpawnContext, missionId: string,
+    active: MissionShipSource,
+    systemId: string, system: SystemInfo | undefined,
+    replace?: ReplacementPlacement): Promise<Entity[]> {
+    const { universe, random } = ctx;
+    const mission = universe.getMission(missionId);
+    const objective = active.shipObjective;
+    const ships: Entity[] = [];
+    if (objective
+        && (objective.systemId === null || objective.systemId === systemId
+            || (universe.sameSystem?.(objective.systemId, systemId)
+                ?? false))) {
+        // The mission's special ships all wear the name picked
+        // from its ShipNameID STR# list when the mission was
+        // accepted (mission_logic.ts), which is also what <SN>
+        // expands to — so the target pane and the briefing
+        // agree, and re-entering the system respawns the same
+        // name. Missions accepted before <SN> existed carry no
+        // shipName; they keep the old per-spawn random pick.
+        const names = mission?.shipNames ?? [];
+        const name = active.shipName
+            ?? (names.length > 0
+                ? names[Math.floor(random() * names.length)]
+                : undefined);
+        const count = shipsToSpawn(objective);
+        for (let i = count; i > 0; i--) {
+            const ship = await buildShip(ctx, missionId, objective.dudeId, {
+                aux: false,
+                shipStart: objective.shipStart,
+                behavior: objective.behavior,
+                goal: objective.goal,
+                name,
+                // A përs replacement is by the Bible's own wording a
+                // SINGLE special ship ("with a single special ship");
+                // only the first gets the përs's berth, and a
+                // (non-stock) multi-ship mission scatters the rest.
+                ...(replace && i === count ? { replace } : {}),
+            });
+            if (ship) {
+                ships.push(ship);
             }
         }
-        // Aux ships: pure atmosphere, membership-matched per system.
-        // Flag 0x0010 (infinite aux ships) is not modeled beyond the
-        // once-per-system-entry respawn that naturally happens here.
-        if (mission && system && auxShipsMatchSystem(mission, active,
-            system, id => universe.systemIdOfPlanet(id, playerBits),
-            id => universe.getGovt(id))) {
-            for (let i = 0; i < mission.auxShipCount; i++) {
-                const ship = await buildShip(ctx, missionId,
-                    mission.auxShipDudeId!, {
-                    aux: true,
-                    shipStart: 1,
-                    behavior: -1,
-                    goal: -1,
-                });
-                if (ship) {
-                    ships.push(ship);
-                }
+    }
+    // Aux ships: pure atmosphere, membership-matched per system.
+    // Flag 0x0010 (infinite aux ships) is not modeled beyond the
+    // once-per-system-entry respawn that naturally happens here.
+    if (mission && system && auxShipsMatchSystem(mission, active,
+        system, id => universe.systemIdOfPlanet(id, ctx.bits),
+        id => universe.getGovt(id))) {
+        for (let i = 0; i < mission.auxShipCount; i++) {
+            const ship = await buildShip(ctx, missionId,
+                mission.auxShipDudeId!, {
+                aux: true, shipStart: 1, behavior: -1, goal: -1,
+            });
+            if (ship) {
+                ships.push(ship);
             }
         }
     }
     return ships;
+}
+
+/**
+ * The ships a mission accepted IN FLIGHT (from a përs ship — see
+ * mission_accept.ts) must spawn right now, in the system the player is
+ * already in. The sibling of buildMissionShipSpawns, which handles the
+ * ships a mission spawns when its owner ENTERS a system; this is the
+ * case where the mission arrives instead of the player.
+ *
+ * `replace` (përs Flags 0x0040) puts the mission's single special ship
+ * at the offering hull's own position; the sim then deletes that hull in
+ * the same apply, so it "becomes" the special ship in place.
+ *
+ * `active` is the ActiveMission the accept resolved, NOT yet on the
+ * player entity — the whole batch rides the acceptMission input record
+ * with it, so the mission and its ships land on the same tick.
+ */
+export async function buildAcceptedMissionShips(missionId: string,
+    active: MissionShipSource,
+    ownerUuid: string, systemId: string,
+    gameData: SimulationGameDataInterface, universe: MissionShipUniverse,
+    options: {
+        replace?: ReplacementPlacement,
+        firstSlot?: number,
+        random?: () => number,
+        /** The player's control bits (visible-copy stellar resolution). */
+        bits?: ReadonlySet<number>,
+    } = {}): Promise<Entity[]> {
+    const ctx: SpawnContext = {
+        gameData, universe, ownerUuid,
+        random: options.random ?? Math.random,
+        nextSlot: options.firstSlot ?? 0,
+        bits: options.bits,
+    };
+    return buildShipsForMission(ctx, missionId, active, systemId,
+        universe.getSystemInfo(systemId), options.replace);
 }
