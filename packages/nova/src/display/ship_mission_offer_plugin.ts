@@ -398,6 +398,14 @@ const HailQuoteStateResource =
  * Evaluates one përs's quote against the CURRENT world and says it if it
  * is due. Returns nothing; every side effect is the status line or the
  * caches. Split out of the system so a spec can drive it directly.
+ *
+ * ONE EVALUATION IN FLIGHT PER PERSON, held by `resolving` across the
+ * WHOLE body rather than around each lookup. The system re-checks every
+ * unsaid person every frame — it has to, because 0x0010 ("only show
+ * HailQuote when ship BEGINS to attack the player") is a transition and
+ * not a spawn-time fact — and without the guard a person whose gates
+ * never come true would stack up a fresh chain of awaits every frame for
+ * as long as they are in the system.
  */
 async function considerHailQuote(world: World, state: HailQuoteState,
     gameData: SimulationGameDataInterface, target: Entity,
@@ -405,9 +413,19 @@ async function considerHailQuote(world: World, state: HailQuoteState,
     if (state.said.has(persId) || state.resolving.has(persId)) {
         return;
     }
+    state.resolving.add(persId);
+    try {
+        await sayHailQuote(world, state, gameData, target, persId, persName);
+    } finally {
+        state.resolving.delete(persId);
+    }
+}
+
+async function sayHailQuote(world: World, state: HailQuoteState,
+    gameData: SimulationGameDataInterface, target: Entity,
+    persId: string, persName: string): Promise<void> {
     let pers = state.pers.get(persId);
     if (pers === undefined) {
-        state.resolving.add(persId);
         try {
             pers = await gameData.data.Pers.get(persId);
             state.pers.set(persId, pers);
@@ -415,8 +433,6 @@ async function considerHailQuote(world: World, state: HailQuoteState,
             state.pers.set(persId, null);
             state.said.add(persId);
             return;
-        } finally {
-            state.resolving.delete(persId);
         }
     }
     if (!pers || !pers.hailQuote.trim()) {
@@ -442,7 +458,6 @@ async function considerHailQuote(world: World, state: HailQuoteState,
                 state.said.add(persId);
                 return;
             }
-            state.resolving.add(persId);
             try {
                 const offer = await buildShipMissionOffer(player.entity,
                     pers, trigger, gameData,
@@ -455,8 +470,6 @@ async function considerHailQuote(world: World, state: HailQuoteState,
             } catch {
                 state.missionAvailable.set(persId, false);
                 missionAvailable = false;
-            } finally {
-                state.resolving.delete(persId);
             }
         } else {
             missionAvailable = cached;
