@@ -235,4 +235,108 @@ describe('runCronsForDays', () => {
             expect(bits.has(11)).toBe(false);
         });
     });
+
+    describe('Gxxx / Dxxx outfit operators', () => {
+        // Extra Outfits' Weapon Construction Bay in miniature: OnStart
+        // consumes the building materials, OnEnd hands back the ammunition
+        // Duration days later. Without these operators wired the bay
+        // consumed nothing and produced nothing (the reported bug).
+        const bay = (partial: Partial<CronData> = {}) => makeCron({
+            id: 'extra-outfits:500', duration: 2,
+            enableOn: 'O535 & O536',
+            onStart: 'D535 D536', onEnd: 'G135 G135 G135',
+            ...partial,
+        });
+
+        it('consumes on OnStart and grants on OnEnd, in day order', () => {
+            const outfits = new Map([
+                ['extra-outfits:535', 1], ['extra-outfits:536', 1],
+            ]);
+            const states: CronStates = new Map();
+            const run = (from: number, to: number) =>
+                runCronsForDays([bay()], states, new Set(), from, to,
+                    () => 0, 0n, {
+                        ownedOutfits: outfits,
+                        outfitExists: id => id === 'nova:135',
+                    });
+
+            run(DAY, DAY + 1);
+            // Dxxx removed the last of each material rather than leaving a
+            // zero count behind.
+            expect([...outfits.keys()]).toEqual([]);
+            run(DAY + 1, DAY + 2);
+            expect([...outfits.keys()]).toEqual([]);
+            // Duration 2: OnEnd lands on the third day.
+            run(DAY + 2, DAY + 3);
+            expect([...outfits]).toEqual([['nova:135', 3]]);
+        });
+
+        it('resolves a bare number stock-first, then to the cron\'s own '
+            + 'plug-in', () => {
+                const grant = (n: number, exists: string[]) => {
+                    const outfits = new Map<string, number>();
+                    runCronsForDays(
+                        [bay({ enableOn: '', onStart: '', onEnd: `G${n}` })],
+                        new Map(), new Set(), DAY, DAY + 3, () => 0, 0n,
+                        {
+                            ownedOutfits: outfits,
+                            outfitExists: id => exists.includes(id),
+                        });
+                    return [...outfits.keys()];
+                };
+                // crön 500's G135: stock has a 135, so it is the stock one.
+                expect(grant(135, ['nova:135', 'extra-outfits:464']))
+                    .toEqual(['nova:135']);
+                // crön 504's G464: stock has none, so it is the plug-in's.
+                expect(grant(464, ['nova:135', 'extra-outfits:464']))
+                    .toEqual(['extra-outfits:464']);
+                // With no id space to consult, a cron's number is its own
+                // plug-in's — the behaviour before outfitExists existed.
+                const outfits = new Map<string, number>();
+                runCronsForDays(
+                    [bay({ enableOn: '', onStart: '', onEnd: 'G135' })],
+                    new Map(), new Set(), DAY, DAY + 3, () => 0, 0n,
+                    { ownedOutfits: outfits });
+                expect([...outfits.keys()]).toEqual(['extra-outfits:135']);
+            });
+
+        it('shows a later day\'s EnableOn what an earlier day granted', () => {
+            // The consumer only fires once the producer has handed over its
+            // outfit, which is the whole point of running against one map.
+            const producer = makeCron({
+                id: 'nova:200', onEnd: 'G300',
+            });
+            const consumer = makeCron({
+                id: 'nova:201', enableOn: 'O300', onStart: 'b10',
+            });
+            const outfits = new Map<string, number>();
+            const bits = new Set<number>();
+            const states: CronStates = new Map();
+            const options = {
+                ownedOutfits: outfits,
+                outfitExists: (id: string) => id === 'nova:300',
+            };
+            // Day 1: the producer grants; the consumer already ran for the
+            // day, so it only sees the outfit on day 2.
+            runCronsForDays([consumer, producer], states, bits,
+                DAY, DAY + 1, () => 0, 0n, options);
+            expect(outfits.get('nova:300')).toBe(1);
+            expect(bits.has(10)).toBe(false);
+            runCronsForDays([consumer, producer], states, bits,
+                DAY + 1, DAY + 2, () => 0, 0n, options);
+            expect(bits.has(10)).toBe(true);
+        });
+
+        it('leaves Gxxx / Dxxx unimplemented when given no outfits map',
+            () => {
+                // No map to mutate: the operators stay unwired and ncb.ts
+                // warns, exactly as it does for every hook a caller omits.
+                // The bits in the same string still run.
+                const bits = new Set<number>();
+                expect(() => runCronsForDays(
+                    [bay({ enableOn: '', onStart: 'b10 D535', onEnd: '' })],
+                    new Map(), bits, DAY, DAY + 1, () => 0)).not.toThrow();
+                expect(bits.has(10)).toBe(true);
+            });
+    });
 });

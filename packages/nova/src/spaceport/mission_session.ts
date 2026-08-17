@@ -99,6 +99,7 @@ export class MissionSession {
             allGovts: () => universe.govts(),
             sameStellar: (a, b) => universe.sameStellar(a, b),
             getRank: id => universe.getRank(id),
+            outfitExists: id => universe.hasOutfit(id),
         };
     }
 
@@ -449,7 +450,10 @@ export async function advanceEntityDate(entity: Entity, days: number,
         // A cron's set string may grant a rank (Kxxx), so the crons run
         // against a working copy of the active ranks too and it is committed
         // beside the bits.
-        // Crön EnableOn may test the player's outfits (Oxxx).
+        // Crön EnableOn tests the player's outfits (Oxxx) and its set
+        // strings grant and consume them (Gxxx/Dxxx) — Extra Outfits'
+        // Weapon Construction Bay is exactly that — so this working copy is
+        // committed back below when the crons changed it.
         const ownedOutfits = new Map([...entity.components.get(OutfitsStateComponent)
             ?? []].map(([id, { count }]) => [id, count]));
         runCronsForDays(universe.crons, cronStates, bits,
@@ -462,10 +466,12 @@ export async function advanceEntityDate(entity: Entity, days: number,
                 getRank: id => universe.getRank(id),
             },
             ownedOutfits,
+            outfitExists: id => universe.hasOutfit(id),
         });
         entity.components.set(ControlBitsComponent, bits);
         entity.components.set(ActiveRanksComponent, ranks);
         entity.components.set(CronStatesComponent, cronStates);
+        commitCronOutfits(entity, ownedOutfits);
         payRankSalaries(entity, ranks, universe, days);
     } catch (e) {
         console.warn('Cron evaluation failed:', e);
@@ -482,6 +488,37 @@ export async function advanceEntityDate(entity: Entity, days: number,
             console.warn('In-flight mission evaluation failed:', e);
         }
     }
+}
+
+/**
+ * Writes back the outfits the crons just granted or consumed (Gxxx/Dxxx in
+ * a crön set string), and only then: an untouched map leaves the component
+ * — and the caches derived from it — exactly as they were, so an ordinary
+ * date advance stays free.
+ *
+ * The derived caches go the same way MissionSession.commitState sends
+ * them, for the same reason: the ammunition a Weapon Construction Bay just
+ * built has to reach the launcher's magazine, and the outfit's mass has to
+ * reach the ship's physics.
+ */
+function commitCronOutfits(entity: Entity,
+    outfits: ReadonlyMap<string, number>): void {
+    const previous = entity.components.get(OutfitsStateComponent);
+    const live = [...outfits].filter(([, count]) => count > 0);
+    const unchanged = previous
+        ? previous.size === live.length
+        && live.every(([id, count]) => previous.get(id)?.count === count)
+        // An entity with no outfits at all keeps none: the crons must not
+        // be what gives it the component.
+        : live.length === 0;
+    if (unchanged) {
+        return;
+    }
+    entity.components.set(OutfitsStateComponent,
+        new Map(live.map(([id, count]) => [id, { count }])));
+    // Re-derived from the new outfits (see spaceport.ts).
+    entity.components.delete(WeaponsStateComponent);
+    entity.components.delete(ShipPhysicsComponent);
 }
 
 /**

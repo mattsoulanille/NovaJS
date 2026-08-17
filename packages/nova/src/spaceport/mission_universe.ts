@@ -63,6 +63,13 @@ export class MissionUniverse {
     private govtsById = new Map<string, GovtData>();
     private ranksById = new Map<string, RankData>();
     private systemsById = new Map<string, SystemData>();
+    /**
+     * Every oütf id (ids only, not the data), so a set string's bare
+     * number can be resolved stock-first — `G135` in an Extra Outfits crön
+     * is the stock IR Missile, `G464` in the next one is the plug-in's own
+     * Siege Mine. See mission_logic's resolveNumberedResource.
+     */
+    private outfitIds = new Set<string>();
     /** The FIRST (id-sorted) system listing each placed planet. */
     private planetSystem = new Map<string, string>();
     /** EVERY system listing each placed planet, id-sorted, with its
@@ -123,6 +130,7 @@ export class MissionUniverse {
         this.govtsById = new Map(govts);
         this.ranksById = new Map(ranks);
         this.crons = crons;
+        this.outfitIds = new Set(ids.Outfit);
 
         this.missions = [...this.missionsById.values()];
 
@@ -213,6 +221,11 @@ export class MissionUniverse {
 
     getMission(id: string): MissionData | undefined {
         return this.missionsById.get(id);
+    }
+
+    /** Whether an oütf with this global id exists (see outfitIds). */
+    hasOutfit(id: string): boolean {
+        return this.outfitIds.has(id);
     }
 
     /**

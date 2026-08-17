@@ -474,6 +474,31 @@ export function sameNumberedResource(globalId: string | null | undefined,
 }
 
 /**
+ * The WRITE-side twin of {@link sameNumberedResource}: which single global
+ * id a resource from `prefix` means by the bare number `n`. Same id-space
+ * rule, applied in the one direction a set string needs it — `Gxxx` has to
+ * name exactly one outfit to grant.
+ *
+ * `existingId` reports whether a global id exists in the relevant id space
+ * (the outfits, for Gxxx/Dxxx). Stock wins when it has an `n`, including a
+ * plug-in's override of a stock resource, which keeps its "nova:" id;
+ * otherwise the resource means its own plug-in's `n`. Extra Outfits' crön
+ * 500 `G135 G135 G135` is the stock IR Missile (nova:135), while its crön
+ * 504 `G464 G464 G464` is the plug-in's own Siege Mine — the same number
+ * range, told apart only by what stock happens to define.
+ *
+ * With no id space to consult the plug-in's own is assumed, which is the
+ * behaviour every call site had before this existed.
+ */
+export function resolveNumberedResource(n: number, prefix: string,
+    existingId?: (globalId: string) => boolean): string {
+    if (existingId?.(`nova:${n}`)) {
+        return `nova:${n}`;
+    }
+    return `${prefix}:${n}`;
+}
+
+/**
  * Resolves a travel/return stellar reference to a concrete planet id.
  * Returns undefined when the reference cannot be satisfied (which
  * makes the mission unofferable), null for "no destination".
@@ -808,6 +833,13 @@ export interface MissionMachineryContext {
      * records unresolvable ranks rather than dropping player state).
      */
     getRank?(id: string): RankData | undefined;
+    /**
+     * Whether an oütf with this global id exists, so `Gxxx` / `Dxxx` can
+     * resolve their bare numbers stock-first like every other numeric
+     * reference (resolveNumberedResource). Optional; without it a plug-in's
+     * number always means that plug-in's own outfit.
+     */
+    outfitExists?(globalId: string): boolean;
 }
 
 /**
@@ -869,7 +901,8 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
     const { state } = machinery;
     const hooks = makeControlBitHooks(state.bits, outfits ? {
         outfits,
-        resolveId: id => `${runningMissionPrefix}:${id}`,
+        resolveId: id => resolveNumberedResource(
+            id, runningMissionPrefix, machinery.outfitExists),
     } : undefined, state.ranks ? {
         active: state.ranks,
         resolveId: id => `${runningMissionPrefix}:${id}`,
