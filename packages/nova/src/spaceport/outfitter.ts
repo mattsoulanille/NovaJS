@@ -666,9 +666,30 @@ export class Outfitter extends Menu<Entity> {
         const sellCheck = canSellOutfit(outfit, context);
         this.buttons.buy.state = buyCheck.allowed ? 'normal' : 'grey';
         this.buttons.sell.state = sellCheck.allowed ? 'normal' : 'grey';
-        this.text.status.text = buyCheck.allowed ? ''
+        this.text.status.text = buyCheck.allowed
+            ? this.sellDenialCaption(sellCheck)
             : this.denialCaption(buyCheck.reason,
                 context.outfits.get(outfit.id) ?? 0, buyCheck.message);
+    }
+
+    /**
+     * The caption for a selection that may be BOUGHT but not sold. The
+     * original does caption sell-side refusals — stock STR# 2002 index 206
+     * ("Can't sell that item, because your ship would have negative free
+     * mass afterwards.") and the launcher sentence at 207-211 are both
+     * sell captions — so a greyed Sell button is allowed to explain itself.
+     *
+     * Only 'fightersDeployed' does. The other three reasons would be noise
+     * on the line the buy captions own: 'notOwned' is true of every item on
+     * the shelf the player hasn't bought yet, and 'cantSell' / 'notStocked'
+     * are permanent properties the player cannot act on. A recallable
+     * fighter is the one sell refusal that is both surprising and fixable,
+     * and saying nothing leaves the player prodding a dead button.
+     */
+    private sellDenialCaption(
+        sellCheck: ReturnType<typeof canSellOutfit>): string {
+        return !sellCheck.allowed && sellCheck.reason === 'fightersDeployed'
+            ? sellCheck.message : '';
     }
 
     private buyOutfit(click?: ButtonClick) {

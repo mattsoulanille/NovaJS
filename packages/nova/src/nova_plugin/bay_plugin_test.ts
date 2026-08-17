@@ -1,6 +1,6 @@
 import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
-import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
+import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData, getDefaultShipPhysics, ShipData } from 'novadatainterface/ship_data';
 import { BayWeaponData, getDefaultBayWeaponData } from 'novadatainterface/weapon_data';
 import { Angle } from 'nova_ecs/datatypes/angle';
@@ -22,6 +22,7 @@ import { OwnerComponent, SourceComponent } from './fire_weapon_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
+import { canSellOutfit } from '../spaceport/outfitter_rules.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
 const CARRIER_ID = 'test:carrier';
@@ -219,6 +220,69 @@ describe('bay launch sound', () => {
         expect(bays.find(bay => bay.id === 'nova:175')?.sound)
             .toBeUndefined();
     }, 60_000);
+
+    it('the stock bay -> fighter link canSellOutfit keys on really exists '
+        + '(real Nova data)', async () => {
+            // The "can't sell a bay while its fighters are out" rule
+            // (outfitter_rules canSellOutfit) walks outfit.weapons to find
+            // the bay an outfit grants, then matches it against the
+            // deployed fighters' ammoFor. Both halves are data, so if a
+            // stock bay were granted some other way the rule would be a
+            // silent no-op. Pin it on real resources.
+            const gameData = await getIntegrationGameData();
+            const ids = await gameData.ids;
+            const bayIds = new Set<string>();
+            for (const id of ids.Weapon) {
+                if ((await gameData.data.Weapon.get(id)).type
+                    === 'BayWeaponData') {
+                    bayIds.add(id);
+                }
+            }
+            const outfits = await Promise.all(
+                [...ids.Outfit].sort().map(id => gameData.data.Outfit.get(id)));
+
+            // bay weapon id -> the outfit that mounts it / its fighter ammo.
+            const granting = new Map<string, OutfitData>();
+            const ammo = new Map<string, OutfitData>();
+            for (const outfit of outfits) {
+                for (const weaponId of Object.keys(outfit.weapons)) {
+                    if (bayIds.has(weaponId) && !granting.has(weaponId)) {
+                        granting.set(weaponId, outfit);
+                    }
+                }
+                if (outfit.ammoFor && bayIds.has(outfit.ammoFor)
+                    && !ammo.has(outfit.ammoFor)) {
+                    ammo.set(outfit.ammoFor, outfit);
+                }
+            }
+            // Measured against stock data: all 23 bay weapons are granted
+            // by an outfit, and each has a fighter outfit as its ammo. So
+            // the rule has a link to follow for every bay in the game, not
+            // just the common ones.
+            expect(bayIds.size).toBe(23);
+            expect(granting.size).toBe(bayIds.size);
+            expect(ammo.size).toBe(bayIds.size);
+            // The Viper Bay, the archetypal stock carrier bay.
+            const bayOutfit = granting.get('nova:149');
+            const fighter = ammo.get('nova:149');
+            expect(bayOutfit?.name).toBe('Viper Bay');
+            expect(fighter?.name).toBe('Viper');
+
+            // ...and the rule fires on that real pair: one Viper out, and
+            // the Viper Bay outfit is no longer sellable.
+            const byId = new Map(outfits.map(o => [o.id, o]));
+            const check = canSellOutfit(bayOutfit!, {
+                shipData: getDefaultShipData(),
+                outfits: new Map([[bayOutfit!.id, 1], [fighter!.id, 0]]),
+                getOutfit: id => byId.get(id),
+                getWeapon: () => undefined,
+                bits: new Set(),
+                credits: 0,
+                deployedCounts: new Map([[fighter!.id, 1]]),
+            });
+            expect(check.allowed).toBeFalse();
+            expect(check.allowed ? '' : check.reason).toBe('fightersDeployed');
+        }, 60_000);
 
     it('makes no sound when an empty bay launches nothing', async () => {
         const { world, carrier } = await makeTestWorld({

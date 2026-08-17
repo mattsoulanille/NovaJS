@@ -511,14 +511,19 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
-     * Tells the outfitter which owned outfits are NOT aboard for this
-     * landing — bay fighters still in flight (see
-     * spaceport/deployed_outfits.ts). Set per-landing, like
+     * Tells the outfit-trading venues which owned outfits are NOT aboard
+     * for this landing — bay fighters still in flight or landed as escorts
+     * (see spaceport/deployed_outfits.ts). Set per-landing, like
      * setDockedShip, because it closes over the docked ship's uuid.
-     * Left unset, the outfitter assumes everything owned is aboard.
+     * Left unset, both venues assume everything owned is aboard.
+     *
+     * The SHIPYARD needs it too: a trade-in hands over the hull with its
+     * bays, so it refuses to sell while a fighter is out (shipyard_rules
+     * judgment call 8) exactly as the outfitter refuses to sell the bay.
      */
     setDeployedOutfitCounts(counts?: DeployedOutfitCounts) {
         this.outfitter.setDeployedOutfitCounts(counts);
+        this.shipyard.setDeployedOutfitCounts(counts);
     }
 
     /**

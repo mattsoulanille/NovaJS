@@ -40,6 +40,7 @@ import {
 } from '../nova_plugin/reputation_plugin.js';
 import { ControlledByComponent } from '../nova_plugin/ship_control.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
+import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
 
 /**
@@ -62,6 +63,17 @@ export interface ShipPurchaseContext {
     getOutfit(id: string): OutfitData | undefined;
     /** The player's credits (the working copy while docked). */
     credits: number;
+    /**
+     * Outfit id -> units the player owns that are NOT aboard the docked
+     * ship: bay fighters still flying, or landed as escorts (see
+     * spaceport/deployed_outfits.ts, the same provider the outfitter
+     * uses). Absent or empty means everything owned is aboard.
+     *
+     * A trade-in hands the whole hull over, bays included, so any deployed
+     * fighter would be left with no hangar to come home to — canBuyShip
+     * refuses the purchase while one is out. See judgment call 8.
+     */
+    deployedCounts?: ReadonlyMap<string, number>;
 }
 
 /*
@@ -116,6 +128,35 @@ export interface ShipPurchaseContext {
  * 7. An UNKNOWN outfit id (game data not loaded) is valued at 0 and
  *    treated as non-persistent. Valuing it would invent credits, and
  *    the menu preloads owned outfits before enabling Buy.
+ *
+ * 8. DEPLOYED FIGHTERS BLOCK THE TRADE. A player who lands with bay
+ *    fighters out and trades hulls hands over the bay with the old ship,
+ *    so those fighters have no hangar left. The two available answers
+ *    were "let them be lost" (what falls out of doing nothing) and
+ *    "refuse the trade"; the trade is refused.
+ *
+ *    Doing nothing is not merely lossy, it is inconsistent: the fighters
+ *    are not in `outfits`, so they are never valued in the trade-in, yet
+ *    the player is charged nothing for destroying them either. Worse, a
+ *    new hull whose STANDARD LOADOUT happens to mount the same bay weapon
+ *    would collect the returning fighters into ITS magazine
+ *    (refundFighterToBay keys on the bay weapon id, not on the ship), so
+ *    "trade into a carrier while your fighters are out" quietly moved a
+ *    free complement onto the new ship. Refusing closes both.
+ *
+ *    It also matches how this file already treats player property that a
+ *    trade would otherwise eat: mission cargo is never jettisoned
+ *    (cargoForNewShip) and hired-but-unspawned escorts are carried across
+ *    (CARRIED_COMPONENTS), both on the principle that shopping must not
+ *    silently destroy something the player paid for.
+ *
+ *    Nothing DOWNSTREAM crashes if a fighter is stranded anyway (an older
+ *    save, or a mission Dxxx that removes the bay — see the seam at the
+ *    bottom of this file): bay_plugin's ReturnAI only needs the carrier
+ *    entity, which still exists, and refundFighterToBay finds zero bays
+ *    mounted, so the magazine capacity is zero and the fighter is absorbed
+ *    on docking without a refund. The graceful-loss path is the fallback,
+ *    not the plan.
  */
 
 /** Whether this outfit survives a ship trade (oütf flag 0x0004). */
@@ -169,20 +210,47 @@ export function shipPurchasePrice(newShip: ShipData,
     return Math.max(0, newShip.price - tradeInValue(context));
 }
 
-export type ShipDenialReason = 'credits';
+export type ShipDenialReason = 'fightersDeployed' | 'credits';
 
 export type ShipyardCheck =
     | { allowed: true }
     | { allowed: false, reason: ShipDenialReason, message: string };
 
 /**
- * Whether the player can buy `newShip` right now. The only rule that
- * can refuse a purchase today is affordability: the charge must not
- * exceed the player's credits, so a trade can never drive the balance
- * negative.
+ * Units the player owns that are not aboard the ship being traded in —
+ * bay fighters still flying or landed as escorts. Every such unit would
+ * lose its hangar with the hull, so the total is all canBuyShip needs;
+ * WHICH bay each fighter came from does not change the answer.
+ */
+export function deployedUnitCount(context: ShipPurchaseContext): number {
+    let deployed = 0;
+    for (const count of context.deployedCounts?.values() ?? []) {
+        if (count > 0) {
+            deployed += count;
+        }
+    }
+    return deployed;
+}
+
+/**
+ * Whether the player can buy `newShip` right now: no bay fighters may be
+ * deployed (judgment call 8 — the trade would hand over their hangar),
+ * and the charge must not exceed the player's credits, so a trade can
+ * never drive the balance negative.
+ *
+ * The fighter check comes first because it is structural: coming back with
+ * more money does not make the trade safe, whereas recalling the fighters
+ * does.
  */
 export function canBuyShip(newShip: ShipData,
     context: ShipPurchaseContext): ShipyardCheck {
+    if (deployedUnitCount(context) > 0) {
+        return {
+            allowed: false, reason: 'fightersDeployed',
+            message: "You must recall your fighters before trading in "
+                + "your ship!",
+        };
+    }
     const price = shipPurchasePrice(newShip, context);
     if (price > context.credits) {
         return {
@@ -290,16 +358,25 @@ export const CARRIED_COMPONENTS: readonly Component<any>[] = [
  * -- after a purchase that is the ship just bought, not the one traded
  * in, which is what makes a second trade in the same visit price
  * correctly.
+ *
+ * `deployedCounts` is the provider the spaceport hands every venue
+ * (spaceport/deployed_outfits.ts). It is resolved against the ids this
+ * entity owns, because a flying fighter names only its bay weapon and has
+ * to be attributed back to one of the player's ammo outfits -- the same
+ * resolution the Outfitter's makeContext does.
  */
 export function purchaseContextFrom(entity: Entity, currentShip: ShipData,
-    getOutfit: (id: string) => OutfitData | undefined): ShipPurchaseContext {
+    getOutfit: (id: string) => OutfitData | undefined,
+    deployedCounts?: DeployedOutfitCounts): ShipPurchaseContext {
     const outfitsState = entity.components.get(OutfitsStateComponent);
+    const outfits = new Map([...outfitsState ?? []].map(
+        ([id, { count }]) => [id, count]));
     return {
         currentShip,
-        outfits: new Map([...outfitsState ?? []].map(
-            ([id, { count }]) => [id, count])),
+        outfits,
         getOutfit,
         credits: entity.components.get(CreditsComponent)?.credits ?? 0,
+        deployedCounts: deployedCounts?.(outfits.keys()),
     };
 }
 
