@@ -87,6 +87,14 @@ export const MissionShipType = t.intersection([t.type({
 }), t.partial({
     /** An AuxShip: mission atmosphere, not part of the goal. */
     aux: t.boolean,
+    /**
+     * Spawned by a mission that auto-aborted at accept (the Derelict
+     * Decoy's ambush, mïsn 133): the mission never joins the owner's
+     * MissionsComponent, so the ship is tethered to the OWNER's presence
+     * only — never to the mission being active. Without this the cleanup
+     * below deleted the ambush a few ticks after it jumped in.
+     */
+    untethered: t.boolean,
 })]);
 export type MissionShip = t.TypeOf<typeof MissionShipType>;
 export const MissionShipComponent =
@@ -347,7 +355,14 @@ const MissionShipCleanupSystem = new System({
     args: [MissionShipComponent, UUID, Entities] as const,
     step(missionShip, uuid, entities) {
         const owner = entities.get(missionShip.owner);
-        const missions = owner?.components.get(MissionsComponent);
+        if (!owner) {
+            entities.delete(uuid);
+            return;
+        }
+        if (missionShip.untethered) {
+            return;
+        }
+        const missions = owner.components.get(MissionsComponent);
         if (!missions || !missions.has(missionShip.mission)) {
             entities.delete(uuid);
         }

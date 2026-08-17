@@ -133,6 +133,28 @@ describe('matchesStellarRef', () => {
             .toBe(false);
     });
 
+    it('resolves a plug-in mission\'s govt number to STOCK or ITS OWN govt, '
+        + 'never a third plug-in\'s (ARPIA 196 is not Planet Rico 196)', () => {
+            const arpia = makeGovt('arpia:196', { classes: [4] });
+            const rico = makeGovt('Planet Rico:196', { classes: [5] });
+            const all = new Map([...govts, [arpia.id, arpia], [rico.id, rico]]);
+            const get = (id: string) => all.get(id);
+            // AvailStel 10068 = "any stellar of govt 196", from an ARPIA
+            // mission: Gravit Station (Planet Rico:196) must not match.
+            expect(matchesStellarRef(10068, null,
+                makeStellar({ govt: 'Planet Rico:196' }), 'arpia', get))
+                .toBe(false);
+            expect(matchesStellarRef(10068, null,
+                makeStellar({ govt: 'arpia:196' }), 'arpia', get)).toBe(true);
+            // A plug-in mission naming a STOCK govt matches stock stellars.
+            expect(matchesStellarRef(10000, null,
+                makeStellar({ govt: 'nova:128' }), 'arpia', get)).toBe(true);
+            // And the "not this govt" range is the exact complement.
+            expect(matchesStellarRef(20068, null,
+                makeStellar({ govt: 'Planet Rico:196' }), 'arpia', get))
+                .toBe(true);
+        });
+
     it('matches allies for the 15000 range', () => {
         // govt 128's allies are class 2; nova:129 is class 2.
         expect(matchesStellarRef(15000, null,

@@ -7,6 +7,7 @@ import { CargoComponent } from './cargo_plugin.js';
 import { deriveEntityComponents } from './entity_factory.js';
 import { ActiveMissionType, CreditsComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
+import { MissionShipComponent } from './mission_ship_plugin.js';
 import { NpcComponent } from './npc_ai_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
@@ -347,6 +348,16 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
             continue;
         }
         deriveEntityComponents(world, decodedShip.right);
+        if (accepted.autoAborted) {
+            // The mission is already over: tether the ship to the owner's
+            // presence, not to a mission the owner will never hold (else
+            // MissionShipCleanupSystem deletes the ambush on arrival).
+            const missionShip = decodedShip.right.components
+                .get(MissionShipComponent);
+            if (missionShip) {
+                missionShip.untethered = true;
+            }
+        }
         world.entities.set(ship.uuid, decodedShip.right);
     }
 
@@ -384,7 +395,13 @@ function applyOfferingShipFate(world: World,
     }
     if (accepted.offeredByFate === 'replace') {
         // The replacement is already in `ships` above, spawned at this
-        // hull's own position: deleting it here completes the swap.
+        // hull's own position: deleting it here completes the swap. A
+        // record whose replacement batch is EMPTY (the client failed to
+        // build the ship) must not delete the hull into nothing — the
+        // person simply stays.
+        if ((accepted.ships?.length ?? 0) === 0) {
+            return;
+        }
         world.entities.delete(uuid);
         return;
     }

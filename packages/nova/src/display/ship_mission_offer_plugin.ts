@@ -23,8 +23,7 @@ import {
 import { MissionOffer } from '../nova_plugin/mission_logic.js';
 import { buildAcceptedMissionShips } from '../nova_plugin/mission_ship_spawn.js';
 import { expandMissionText } from '../nova_plugin/mission_text.js';
-import { ActiveRanksComponent } from '../nova_plugin/ncb_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { PersComponent } from '../nova_plugin/pers_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
@@ -322,7 +321,14 @@ async function acceptShipOffer(world: World,
         try {
             ships = await buildAcceptedMissionShips(offer.data.id,
                 accept.shipSource, player.uuid, systemId, gameData,
-                universe, { replace });
+                universe, {
+                    replace,
+                    // Stellar refs resolve to the VISIBLE copy of a
+                    // stacked duplicate system, as on the per-system
+                    // sweep (mission_universe.ts systemIdOfPlanet).
+                    bits: player.entity.components
+                        .get(ControlBitsComponent),
+                });
         } catch (e) {
             console.warn('Failed to build ship-offered mission ships:', e);
         }

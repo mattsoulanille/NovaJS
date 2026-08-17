@@ -223,15 +223,18 @@ export function matchesStellarRef(ref: number, refId: string | null,
     if (ref === 9999) {
         return stellar.govt === null;
     }
-    const stellarGovtId = numericId(stellar.govt);
     const stellarGovt = stellar.govt ? getGovt(stellar.govt) : undefined;
 
     /** The govt the range is relative to. */
     function rangeGovt(base: number): GovtData | undefined {
-        return getGovt(`${missionPrefix}:${ref - base + 128}`);
+        // A plug-in's own new govt lives under its prefix; a stock (or
+        // stock-overridden) one under nova:.
+        return getGovt(`${missionPrefix}:${ref - base + 128}`)
+            ?? getGovt(`nova:${ref - base + 128}`);
     }
     function isGovt(base: number): boolean {
-        return stellarGovtId === ref - base + 128;
+        return sameNumberedResource(stellar.govt, ref - base + 128,
+            missionPrefix);
     }
     function classmate(x: GovtData | undefined): boolean {
         if (!x || !stellarGovt) {
@@ -394,7 +397,8 @@ export function missionMatchesLocation(mission: MissionData,
     if (!shipGoalOfferable(mission)) {
         return false;
     }
-    if (!shipTypeMatches(mission.availShipType, ctx.shipId, ctx.shipGovt)) {
+    if (!shipTypeMatches(mission.availShipType, ctx.shipId, ctx.shipGovt,
+        idPrefix(mission.id))) {
         return false;
     }
     if (!testBits(mission.availBits, ctx.bits)) {
@@ -423,25 +427,50 @@ export function stellarRecord(stellar: StellarInfo, records: LegalRecords,
  * inherent gövt (null when it has none).
  */
 function shipTypeMatches(availShipType: number, shipId: string,
-    shipGovt: string | null | undefined): boolean {
+    shipGovt: string | null | undefined, missionPrefix: string): boolean {
     if (availShipType <= 0) {
         return true;
     }
-    const shipNumber = numericId(shipId);
     if (availShipType >= 128 && availShipType <= 895) {
-        return shipNumber === availShipType;
+        return sameNumberedResource(shipId, availShipType, missionPrefix);
     }
     if (availShipType >= 1128 && availShipType <= 1895) {
-        return shipNumber !== availShipType - 1000;
+        return !sameNumberedResource(shipId, availShipType - 1000,
+            missionPrefix);
     }
     // Ship-govt ranges: the govt id is the range offset (2000 / 3000).
     if (availShipType >= 2128 && availShipType <= 2383) {
-        return numericId(shipGovt ?? null) === availShipType - 2000;
+        return sameNumberedResource(shipGovt ?? null,
+            availShipType - 2000, missionPrefix);
     }
     if (availShipType >= 3128 && availShipType <= 3383) {
-        return numericId(shipGovt ?? null) !== availShipType - 3000;
+        return !sameNumberedResource(shipGovt ?? null,
+            availShipType - 3000, missionPrefix);
     }
     return true;
+}
+
+/**
+ * Whether the resource with global id `globalId` is the one a mission
+ * from `missionPrefix` means by the bare number `n`. Under the id-space
+ * rules a plug-in's number resolves to the STOCK resource (`nova:n`) when
+ * stock has one — including plug-in overrides of it — and to the plug-in's
+ * OWN (`<prefix>:n`) otherwise; two plug-ins that each add a new resource
+ * n get separate ids. So the number must match AND the prefix must be
+ * either nova or the mission's own — never a third plug-in's. Comparing
+ * numbers alone made ARPIA's "any stellar of govt 196" (arpia:196) match
+ * Planet Rico's Gravit Station (govt "Planet Rico:196").
+ */
+export function sameNumberedResource(globalId: string | null | undefined,
+    n: number, missionPrefix: string): boolean {
+    if (!globalId) {
+        return false;
+    }
+    if (numericId(globalId) !== n) {
+        return false;
+    }
+    const prefix = idPrefix(globalId);
+    return prefix === 'nova' || prefix === missionPrefix;
 }
 
 /**

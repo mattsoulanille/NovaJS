@@ -295,6 +295,17 @@ describe('applyAcceptMission', () => {
                     .toBeTrue();
             });
 
+        it('keeps the hull when a "replace" record carries NO replacement '
+            + '(the client failed to build the ship)', () => {
+                const { world } = withOffering();
+                applyAcceptMission(world, PEER, accepted({
+                    offeredBy: 'npc:pers', offeredByFate: 'replace',
+                    ships: [],
+                }));
+                // The person stays rather than becoming nothing.
+                expect(world.entities.has('npc:pers')).toBeTrue();
+            });
+
         it('sends the hull on its way instead of deleting it '
             + '(përs Flags 0x0800)', () => {
                 // "Make ship leave after accepting its LinkMission": the

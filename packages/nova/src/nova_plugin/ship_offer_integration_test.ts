@@ -362,5 +362,17 @@ describe('the Derelict Decoy trap, boarded (mïsn 133)', () => {
             // And the trap cannot be sprung twice off the same wreck.
             expect(world.entities.get(derelictUuid)!
                 .components.has(ShipOfferSpentComponent)).toBeTrue();
+
+            // THE TRAP MUST SURVIVE: the mission auto-aborted at accept and
+            // never joins the player's missions, so the ambush must not be
+            // swept away by MissionShipCleanupSystem on the next ticks
+            // (review r11 HIGH — 4 present after apply, 0 after 10 steps).
+            for (let i = 0; i < 20; i++) {
+                world.step();
+            }
+            for (const uuid of pirateUuids) {
+                expect(world.entities.get(uuid))
+                    .withContext(`${uuid} after 20 steps`).toBeDefined();
+            }
         }, 30_000);
 });
