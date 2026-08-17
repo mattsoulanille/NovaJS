@@ -10,6 +10,7 @@ import { OwnerComponent, SourceComponent } from '../nova_plugin/fire_weapon_plug
 import { GovtComponent } from '../nova_plugin/govt_component.js';
 import { FormationComponent, NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { PersComponent } from '../nova_plugin/pers_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
@@ -137,6 +138,58 @@ describe('computeContext: bay fighters vs hired escorts (SourceComponent)',
                 // No escort-management seam buttons for a bay fighter.
                 expect(result?.context.escort).toBeFalsy();
             });
+    });
+
+/**
+ * mïsn ShipNameID: "Tells Nova how to name the special ships". The name
+ * is picked from the STR# list when the mission is ACCEPTED and every
+ * one of that mission's special ships wears it — so hailing the bounty
+ * target the briefing called "Doomblade" must not answer "Class:
+ * Target Class". The name reaches the display world on the
+ * serializer-registered MissionShipComponent; it used to live only on
+ * Entity.name, a debugging label that never crosses the bridge.
+ */
+describe('computeContext: a mission special ship is named, not classed',
+    () => {
+        it('titles the ship with its mission-given name', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(MissionShipComponent, {
+                    mission: 'nova:258', owner: PLAYER, name: 'Doomblade',
+                });
+            });
+            const result = await computeContext(world, gameData);
+            expect(result?.context.heading.split('\n')[0])
+                .toBe('Doomblade');
+        });
+
+        it('still classes a mission ship whose mïsn set no ShipNameID',
+            async () => {
+                const { world, gameData } = makeWorld(target => {
+                    target.components.set(MissionShipComponent,
+                        { mission: 'nova:258', owner: PLAYER });
+                });
+                const result = await computeContext(world, gameData);
+                expect(result?.context.heading.split('\n')[0])
+                    .toBe('Class: Target Class');
+            });
+
+        it('lets a përs the mission replaced keep its own name', async () => {
+            // përs Flags 0x0040 puts the mission's special ship where the
+            // offering përs hull was, so one entity can carry both tags.
+            const pers = getDefaultPersData();
+            pers.id = 'nova:131';
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(PersComponent,
+                    { id: 'nova:131', name: 'Captain Nemo', subtitle: '' });
+                target.components.set(MissionShipComponent, {
+                    mission: 'nova:258', owner: PLAYER, name: 'Doomblade',
+                });
+            });
+            gameData.data.Pers.map.set('nova:131', pers);
+            const result = await computeContext(world, gameData);
+            expect(result?.context.heading.split('\n')[0])
+                .toBe('Captain Nemo');
+        });
     });
 
 describe('computeContext: behavioral hostility (attacking neutral)', () => {

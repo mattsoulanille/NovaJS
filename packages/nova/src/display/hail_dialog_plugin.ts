@@ -56,6 +56,8 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { ShootAllWeaponsComponent } from '../nova_plugin/npc_plugin.js';
 import { PersComponent } from '../nova_plugin/pers_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { targetIdentity } from './target_identity.js';
 import { ActiveRanksComponent } from '../nova_plugin/ncb_plugin.js';
 import {
     ranksAllowAssistance, ranksGiveFreeRepair,
@@ -388,8 +390,21 @@ export async function computeContext(world: World,
         // "nova:4001"), so it must NOT be re-prefixed. Fall back to the ship's
         // own pict when the pers has no custom portrait.
         const image = pers?.hailPict ?? shipData?.pict ?? null;
-        const heading = shipIdentityBlock({
+        // A mission's special ship answers under the name its mïsn gave
+        // it (ShipNameID), the same way a përs answers under its own —
+        // hailing the bounty target you were sent after should not say
+        // "Class: Thunderhead" when the briefing named it. Resolved
+        // through the SAME rule as the target pane (target_identity.ts),
+        // so the two panels can never disagree; a përs the mission
+        // replaced keeps its përs identity, the more specific of the two.
+        const missionShip = shipTarget.components.get(MissionShipComponent);
+        const identity = targetIdentity({
             persName: persComponent?.name,
+            missionName: missionShip?.name,
+            shipClass: shipData?.name ?? '',
+        });
+        const heading = shipIdentityBlock({
+            persName: identity.named ? identity.name : undefined,
             shipClass: shipData?.name,
             govtName: govt?.commName,
             hostile: disposition === 'hostile' || attackingPlayer,

@@ -95,6 +95,23 @@ export const MissionShipType = t.intersection([t.type({
      * below deleted the ambush a few ticks after it jumped in.
      */
     untethered: t.boolean,
+    /**
+     * The name this special ship wears, copied from the owner's
+     * ActiveMission.shipName at spawn (mïsn ShipNameID; see
+     * mission_ship_spawn.ts). Carried on the COMPONENT rather than on
+     * Entity.name — Entity.name is a debugging label that never crosses
+     * the serializer into the display world, so the target pane and the
+     * hail dialog could not see it. Read by status_bar's target pane and
+     * hail_dialog_plugin, exactly as PersComponent.name is: a named
+     * special ship shows its name in place of its ship class.
+     *
+     * Absent for aux ships (the Bible gives them no names) and for
+     * missions whose ShipNameID is -1.
+     */
+    name: t.string,
+    /** The ShipSubtitle sibling of `name`, shown in place of the ship
+     * class's own subtitle. Absent when the mission sets none. */
+    subtitle: t.string,
 })]);
 export type MissionShip = t.TypeOf<typeof MissionShipType>;
 export const MissionShipComponent =
