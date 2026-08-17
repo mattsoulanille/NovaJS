@@ -606,14 +606,16 @@ const BoardingGateSystem = new System({
             return;
         }
 
-        // SEAM: boarding-mission offers are not implemented. Several përs
-        // ships — the Drifting Derelicts among them — are authored to
-        // offer a mission when boarded (mïsn AvailLoc "boarding ship"),
-        // and nothing here consults the mission universe, so that offer
-        // never appears. Capture is deliberately independent of it: a
-        // derelict that fails to offer its mission (or whose mission the
-        // player already holds) must still be capturable, which is what
-        // the session bookkeeping below guarantees.
+        // BOARD-OFFERED MISSIONS (përs Flags 0x0200) ride this same
+        // session. The sim cannot see them — përs/mïsn data is display-
+        // side game data — so the session opens exactly as it does for
+        // any other hulk, and the DISPLAY decides what the player sees:
+        // it shows the offer in place of the plunder dialog and then
+        // sends 'plunderOfferOnly', which ends the session and gives the
+        // hulk its one plunder back (see endBoardingForOffer). Capture is
+        // deliberately independent of the offer: a derelict whose mission
+        // is already taken must still be plunderable and capturable,
+        // which is what that hand-back guarantees.
         //
         // The session is seeded from whatever the hulk has already given
         // up. With the one-plunder rule above there is nothing left to
@@ -683,6 +685,54 @@ function markBootyTaken(target: Entity, boarderUuid: string,
     }
     target.components.set(BoardedComponent,
         { boarder: boarderUuid, active: true, [flag]: true });
+}
+
+/**
+ * ============================================================================
+ * A BOARDING THAT ONLY OFFERED A MISSION DOES NOT SPEND THE HULK'S PLUNDER
+ * ============================================================================
+ * (Matthew's ruling, authoritative)
+ *
+ * A përs with Flags 0x0200 offers "the ship's LinkMission when boarding it
+ * instead of when hailing it" (EVN Bible), and the original shows the
+ * mission text and NOTHING ELSE for that boarding — no plunder dialog, no
+ * capture dialog. The display enforces the screen half (see
+ * boardingDialogPhase) and then sends this action, which is the SIM half:
+ *
+ *  1. the session ends, exactly as 'plunderDone' would; and
+ *  2. the hulk's durable `plundered` record is put BACK the way it was.
+ *
+ * WHY (2). BoardingGateSystem stamps `plundered: true` the instant a
+ * session opens, so that a boarder who merely looks around has still spent
+ * the hulk's one boarding (see BoardedState). But a boarding that only
+ * produced an offer is not a plunder at all — the player never saw a
+ * plunder screen — so charging it the one-per-life-segment plunder would
+ * mean a mission derelict could NEVER be robbed. Restoring the flag leaves
+ * the derelict plunderable by a later boarding, once its offer is spent
+ * (accepted) and there is no mission left to show. That is the "leave the
+ * plundered flag untouched" half of the ruling: the gate refuses to open a
+ * session at all while `plunderSpent`, so the value being restored is
+ * provably `false`.
+ *
+ * The rest of the record is left alone: `boarder` and the four booty flags
+ * are untouched (nothing was taken — the plunder dialog never opened), and
+ * `active` is cleared by endBoardingSession like any other session end.
+ *
+ * NOT A MISSION-GOAL HAZARD. mïsn ShipGoal 2/5 credit a boarding by
+ * reading this same `plundered` record (MissionShipTrackSystem), so
+ * clearing it would un-credit a goal — except that this action can only
+ * ever be sent for a hull carrying a PersComponent (presentShipOffer
+ * refuses without one) and mission special ships never carry one
+ * (mission_ship_spawn stamps MissionShipComponent, never PersComponent).
+ * The two populations are disjoint.
+ */
+function endBoardingForOffer(entity: Entity,
+    target: Entity | undefined): void {
+    const boarded = target?.components.get(BoardedComponent);
+    if (boarded) {
+        boarded.plundered = false;
+    }
+    endBoardingSession(entity, target);
 }
 
 /**
@@ -1121,6 +1171,15 @@ const BoardingActionSystem = new System({
             applyBoardCrime(records,
                 target?.components.get(GovtComponent)?.id, gameData, govts);
         };
+
+        // The boarding produced a MISSION OFFER and nothing else (përs
+        // Flags 0x0200): end the session and hand the hulk's one plunder
+        // back. Checked before 'plunderDone' so the two can never be read
+        // in the wrong order if both edges land on one tick.
+        if (controls.get('plunderOfferOnly') === 'start') {
+            endBoardingForOffer(entity, target);
+            return;
+        }
 
         // Done, or the target vanished: end the session.
         if (controls.get('plunderDone') === 'start' || !target) {

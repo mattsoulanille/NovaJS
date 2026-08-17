@@ -9,6 +9,8 @@ import { PersComponent } from './pers_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { ArmorComponent, ShieldComponent } from './health_plugin.js';
 import { ShipDataComponent } from './ship_plugin.js';
+import { GOAL_RESCUE } from './mission_ship_state.js';
+import { SystemHoldComponent } from './system_hold.js';
 import {
     buildPersSpawnTable,
     PersSpawnEntry,
@@ -252,6 +254,54 @@ describe('përs spawning against real Nova data', () => {
             probe.setState(before);
             probe.next();
             expect(random.getState()).toEqual(probe.getState());
+        }
+    }, 120_000);
+
+    it('spawns a Refuel Trader HELD in the system', async () => {
+        // Matthew's ruling: "a ship shouldn't leave before being refuelled
+        // if it offers a 'refuel me' mission". Sol's authored cast
+        // includes përs nova:227 (Valkyrie), whose LinkMission is mïsn
+        // nova:141 "Refuel Trader" — ShipGoal 5, "Rescue them" — so she is
+        // stranded and must still be there when the player arrives.
+        const harness = await makeSimulationBridgeHarness();
+        const gameData = await getIntegrationGameData();
+        const systemData = await gameData.data.System.get('nova:130');
+
+        const valkyrie = await gameData.data.Pers.get('nova:227');
+        expect(valkyrie.linkMission).toBe('nova:141');
+        const refuel = await gameData.data.Mission.get('nova:141');
+        expect(refuel.name).toBe('Refuel Trader');
+        expect(refuel.shipGoal).toBe(GOAL_RESCUE);
+
+        // The flag is resolved at GENESIS, where the mïsn can be awaited
+        // — the spawner itself never touches mission data.
+        const table = await buildPersSpawnTable(
+            harness.world, 'nova:130', systemData);
+        expect(table.find(entry => entry.id === 'nova:227')?.holdsForOffer)
+            .toBeTrue();
+        // ...and nobody else in Sol's cast is held: the Drifting Derelict
+        // offers mïsn 134 (ShipGoal 1, "disable"), not a rescue.
+        for (const entry of table) {
+            if (entry.id !== 'nova:227') {
+                expect(entry.holdsForOffer).withContext(entry.id).toBeFalsy();
+            }
+        }
+
+        // Force her slice of the 5% window and spawn until she appears.
+        const certain = table.map(entry => ({
+            ...entry, chance: entry.id === 'nova:227' ? 100 : 0,
+        }));
+        const random = new Random(1234);
+        const ids = new IdFactory();
+        for (let i = 0; i < 2_000; i++) {
+            spawnNpc(harness.world, gameData, ids, random, [], true, certain);
+        }
+        const spawned = [...harness.world.entities.values()].filter(
+            entity => entity.components.get(PersComponent)?.id === 'nova:227');
+        expect(spawned.length).toBeGreaterThan(0);
+        for (const trader of spawned) {
+            expect(trader.components.get(SystemHoldComponent))
+                .toEqual({ reason: 'shipOffer' });
         }
     }, 120_000);
 

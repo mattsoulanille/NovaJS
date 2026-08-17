@@ -35,6 +35,7 @@ import {
 } from './player_state_plugin.js';
 import { CombatRatingComponent } from './reputation_plugin.js';
 import { ShipComponent } from './ship_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
 
 /**
@@ -187,6 +188,11 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
             expect(where.position.y).toEqual(berth.y);
             expect(rescue.components.get(MissionShipComponent)?.mission)
                 .toEqual('nova:141');
+            // ...and it is HELD here until it has been refuelled
+            // (Matthew: the ship you must rescue must not leave before
+            // you rescue it). See system_hold.ts.
+            expect(rescue.components.get(SystemHoldComponent))
+                .toEqual({ reason: 'rescue' });
 
             // ShipGoal 5: adrift, and it stays adrift. Stepping the world
             // must not repair it, however healthy its armor is.
@@ -242,9 +248,13 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
                 .get('nova:141')!;
             expect(after.autoAbortPending).toBeTrue();
             expect(after.shipObjective!.complete).toBeTrue();
-            // Rescued: refuelled and on its way, no longer a hulk.
+            // Rescued: refuelled and on its way, no longer a hulk — and
+            // free to leave the system now that it has its fuel, so the
+            // in-system hold goes with the disable.
             expect(world.entities.get(shipUuids[0])!
                 .components.has(DisabledComponent)).toBeFalse();
+            expect(world.entities.get(shipUuids[0])!
+                .components.has(SystemHoldComponent)).toBeFalse();
         }, 30_000);
 
     it('will not offer again from a hull whose offer is spent',
@@ -257,10 +267,17 @@ describe('the Refuel Trader, hail to undock (mïsn 141)', () => {
             // to be asked twice.
             const { offeredByFate, ...stays } = record;
             void offeredByFate;
+            // Stranded until somebody takes the job off her hands — the
+            // spawner stamps this on every rescue-offering përs.
+            trader.components.set(SystemHoldComponent,
+                { reason: 'shipOffer' });
             applyAcceptMission(world, undefined, stays);
             expect(world.entities.has(traderUuid)).toBeTrue();
             expect(trader.components.get(ShipOfferSpentComponent)?.missionId)
                 .toEqual('nova:141');
+            // The offer is off the table, so the hold is released and the
+            // person may go about her business again.
+            expect(trader.components.has(SystemHoldComponent)).toBeFalse();
             void gameData;
         }, 30_000);
 });

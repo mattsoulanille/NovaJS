@@ -46,6 +46,7 @@ import { ActiveRanksComponent } from './ncb_plugin.js';
 import { ranksSuppressAggression } from './rank_logic.js';
 import { SourceComponent } from './weapon_components.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
+import { heldInSystem, SystemHoldComponent, SystemHoldType } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
@@ -722,6 +723,27 @@ function nearestPlanet(planets: PlanetEntry[],
 }
 
 /**
+ * What a trader that has just picked (or failed to pick) a destination
+ * does next: fly there, or — with nowhere to go — leave the system.
+ *
+ * A HELD ship (system_hold.ts) never takes the second branch. With no
+ * landable stellar to head for it is left with NO mode at all, so it
+ * simply drifts where it is and re-plans on each think until a
+ * destination appears or the hold is released. That is the honest
+ * outcome: every other trader mode is "go somewhere", and there is
+ * nowhere to go. It costs no extra PRNG draw, because pickPlanet only
+ * draws when it has candidates — and if it had candidates the ship would
+ * be travelling.
+ */
+function travelOrDepart(destination: string | undefined,
+    held: boolean): 'travel' | 'depart' | undefined {
+    if (destination) {
+        return 'travel';
+    }
+    return held ? undefined : 'depart';
+}
+
+/**
  * The per-NPC think step. Runs at NPC_DECISION_INTERVAL_MS (scaled by
  * the govt's SkillMult) and owns all mode transitions; the steering
  * system below only executes the current mode.
@@ -732,12 +754,18 @@ const NpcDecisionSystem = new System({
         Optional(GovtComponent), Optional(ShieldComponent),
         ShipDataComponent, Optional(FormationComponent),
         Optional(EscortCommandComponent), Optional(AssistingComponent),
-        Optional(JumpComponent), NpcTargetsQuery,
+        Optional(JumpComponent), Optional(SystemHoldComponent),
+        NpcTargetsQuery,
         PlanetsQuery, TimeResource, RandomResource, Entities, UUID,
         SimulationGameDataResource, GetEntity] as const,
     step(npc, movement, target, govt, shield, shipData, formation,
-        escortCommand, assisting, jump, ships, planets, time, random, entities,
-        uuid, gameData, entity) {
+        escortCommand, assisting, jump, hold, ships, planets, time, random,
+        entities, uuid, gameData, entity) {
+        // Unfinished business here (a refuel offer on the table, a rescue
+        // target waiting to be boarded): this ship never DECIDES to leave.
+        // See system_hold.ts; the jump exits themselves are gated in
+        // NpcSteeringSystem, so a hold added mid-departure still stops it.
+        const held = hold !== undefined;
         if (escortCommand) {
             // A player-commanded escort: its brain is the escort
             // command framework (escort_command_plugin), not NPC AI.
@@ -928,20 +956,20 @@ const NpcDecisionSystem = new System({
                         // jump_plugin, player_escort_plugin and
                         // boarding_plugin's landing reset.
                         clearPlunderRecord(entity);
-                        if (time.time >= npc.departAt) {
+                        if (!held && time.time >= npc.departAt) {
                             npc.mode = 'depart';
                             return;
                         }
                         npc.destination = pickPlanet(
                             landingDestinations(planets), random,
                             npc.destination);
-                        npc.mode = npc.destination ? 'travel' : 'depart';
+                        npc.mode = travelOrDepart(npc.destination, held);
                     }
                 }
                 if (npc.mode === undefined) {
                     npc.destination = pickPlanet(
                         landingDestinations(planets), random);
-                    npc.mode = npc.destination ? 'travel' : 'depart';
+                    npc.mode = travelOrDepart(npc.destination, held);
                 }
                 break;
             }
@@ -1005,7 +1033,7 @@ const NpcDecisionSystem = new System({
                     npc.mode = undefined;
                     npc.boardTarget = undefined;
                 }
-                if (time.time >= npc.departAt) {
+                if (!held && time.time >= npc.departAt) {
                     npc.mode = 'depart';
                     return;
                 }
@@ -1069,7 +1097,7 @@ const NpcDecisionSystem = new System({
                     npc.mode = undefined;
                     target.target = undefined;
                 }
-                if (time.time >= npc.departAt) {
+                if (!held && time.time >= npc.departAt) {
                     npc.mode = 'depart';
                     return;
                 }
@@ -1167,15 +1195,23 @@ export function steerArrive(movement: MovementState, physics: {
  * which owns it from here (NpcSteeringSystem bails while a
  * JumpComponent is present) until it warps out of the world.
  *
- * Returns false only when the ship CANNOT jump, which is the one case
- * the old delete-at-the-radius exit still has to cover. That is
- * exactly: the ship is disabled — dead in space, unable to turn onto a
- * jump heading or run its hyperdrive, the same reason PlayerJumpControl
- * refuses a disabled player. Nothing else can refuse: unlike a player's
- * jump this needs no route, no destination system data, and no fuel.
- * A ship disabled on its way out therefore keeps drifting and is
- * deleted at NPC_DEPART_RADIUS as before; if it is repaired first, it
- * jumps normally.
+ * Returns false in the two cases the ship CANNOT jump:
+ *
+ *  - it is DISABLED — dead in space, unable to turn onto a jump heading
+ *    or run its hyperdrive, the same reason PlayerJumpControl refuses a
+ *    disabled player. Nothing else about a player's jump applies: this
+ *    needs no route, no destination system data, and no fuel. A ship
+ *    disabled on its way out keeps drifting and is deleted at
+ *    NPC_DEPART_RADIUS as before; if it is repaired first, it jumps
+ *    normally.
+ *  - it is HELD in the system (system_hold.ts): a person whose refuel
+ *    offer is still on the table, or a rescue target waiting to be
+ *    boarded. Gated HERE rather than only in the decision system so that
+ *    a 'flee' — which is not a departure decision at all, and which
+ *    reaches the jump exit on its own — cannot carry the ship out of the
+ *    system either. Held ships are exempted from the delete-at-the-edge
+ *    fallback below for the same reason: refusing the jump must not
+ *    despawn them through the back door.
  *
  * This is the only disabled check the NPC jump path needs. A ship
  * disabled AFTER the sequence starts is handled by the general
@@ -1187,7 +1223,7 @@ export function steerArrive(movement: MovementState, physics: {
  */
 function departByJump(entity: Entity, movement: MovementState,
     physics: ShipPhysics, disabled: DisabledState | undefined): boolean {
-    if (disabled) {
+    if (disabled || heldInSystem(entity)) {
         return false;
     }
     beginDepartureJump(entity, movement, physics);
@@ -1360,7 +1396,8 @@ export const NpcSteeringSystem = new System({
                 // here: it jumps anyway, and is deleted outright only if
                 // it cannot (disabled). See departByJump.
                 if (steerOutward(movement, away)
-                    && !departByJump(entity, movement, physics, disabled)) {
+                    && !departByJump(entity, movement, physics, disabled)
+                    && !heldInSystem(entity)) {
                     entities.delete(uuid);
                 }
                 break;
@@ -1378,8 +1415,13 @@ export const NpcSteeringSystem = new System({
                 // depart radius (it is well outside the no-jump zone, so
                 // the branch above already tried and was refused): the
                 // old delete-at-the-edge exit, now the disabled-ship
-                // fallback. See departByJump.
-                if (steerOutward(movement, away)) {
+                // fallback. A HELD ship is exempt: it is not allowed to
+                // leave the system, and despawning it here would be
+                // leaving by another name (see departByJump). It cannot
+                // normally be in 'depart' at all — the decision system
+                // refuses to put it there — but a hold applied to a ship
+                // already on its way out must still stop it.
+                if (steerOutward(movement, away) && !heldInSystem(entity)) {
                     entities.delete(uuid);
                 }
                 break;
@@ -1831,6 +1873,10 @@ export const NpcAiPlugin: Plugin = {
         serializer?.addComponent(NpcComponent, NpcState);
         serializer?.addEvent(PlayerPlunderedEvent, PlayerPlunderedEventType);
         serializer?.addComponent(FormationComponent, Formation);
+        // Registered with the AI that enforces it (the AI is the only
+        // reader): a held ship never decides to leave and never begins a
+        // departure jump. See system_hold.ts.
+        serializer?.addComponent(SystemHoldComponent, SystemHoldType);
         world.addSystem(NpcAggressionSystem);
         world.addSystem(NpcDecisionSystem);
         world.addSystem(NpcSteeringSystem);

@@ -22,6 +22,7 @@ import {
 } from './npc_spawn_plugin.js';
 import { MissionsComponent } from './player_state_plugin.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
 
 /**
@@ -227,6 +228,14 @@ async function buildShip(ctx: SpawnContext, missionId: string,
             shield: shipData.physics.shield,
             shieldRecharge: shipData.physics.shieldRecharge,
         });
+        // ...and it STAYS here until it has been rescued (Matthew's
+        // ruling: a ship that needs refuelling must not leave before it
+        // is refuelled). Belt and braces over the hulk state and the
+        // suppressed departure timer below — see system_hold.ts for why
+        // the invariant is stated outright rather than inferred from
+        // them. Released by MissionShipTrackSystem's rescueBoarded, with
+        // the disable it lifts, so the refuelled ship really does fly off.
+        ship.components.set(SystemHoldComponent, { reason: 'rescue' });
     }
     if (options.aux) {
         return ship;

@@ -41,12 +41,16 @@ describe('which dialog a boarding shows', () => {
         expect(boardingDialogPhase(undefined, true)).toEqual('none');
     });
 
-    it('shows the mission offer BEFORE the plunder dialog', () => {
+    it('shows the mission offer INSTEAD OF the plunder dialog', () => {
         // përs Flags 0x0200's whole point, and what the stock text needs:
         // mïsn 134's offer opens "You match velocities with the derelict
-        // ship and dock with it..." — it IS the boarding, so it cannot
-        // come after a plunder screen.
+        // ship and dock with it..." — it IS the boarding, so nothing
+        // comes before it and nothing comes after it.
         expect(boardingDialogPhase(boardingState(), true)).toEqual('offer');
+        // Answered: the boarding is over. This is Matthew's nit — the
+        // plunder dialog used to slide up behind the mission text.
+        expect(boardingDialogPhase(boardingState(), false, true))
+            .toEqual('offerOnly');
         expect(boardingDialogPhase(boardingState(), false))
             .toEqual('plunder');
     });
@@ -60,11 +64,26 @@ describe('which dialog a boarding shows', () => {
             .toEqual('capture');
     });
 
+    it('suppresses the capture dialog too once an offer was made', () => {
+        // Unreachable in practice (no capture attempt can happen while
+        // the offer owns the keyboard), but the rule is "the offer is the
+        // whole boarding", not "the offer beats the plunder table".
+        expect(boardingDialogPhase(
+            boardingState({ capture: 'succeeded' }), false, true))
+            .toEqual('offerOnly');
+    });
+
     it('falls through to the plunder dialog for an ordinary hulk', () => {
         // The overwhelmingly common case: no përs, no mission, so the
-        // offer attempt resolves false and nothing changes.
+        // offer attempt resolves false, `offerMade` stays false, and
+        // nothing changes.
         expect(boardingDialogPhase(boardingState({ capture: 'failed' }),
             false)).toEqual('plunder');
+        // ...including the SECOND boarding of a derelict whose offer has
+        // been spent: presentShipOffer refuses (ShipOfferSpentComponent),
+        // so the hulk it handed the plunder back to is robbable now.
+        expect(boardingDialogPhase(boardingState(), false, false))
+            .toEqual('plunder');
     });
 });
 

@@ -52,6 +52,11 @@ const SavedControlsPartialObject = t.partial({
     'plunderCapture': ControlInputs,
     'plunderCaptureEscort': ControlInputs,
     'plunderDone': ControlInputs,
+    // "This boarding produced a MISSION OFFER and nothing else" — sent by
+    // the display when a përs Flags 0x0200 offer took the plunder
+    // dialog's place, so the sim ends the session AND gives the hulk its
+    // one plunder back (see BoardingActionSystem).
+    'plunderOfferOnly': ControlInputs,
     // Debug cheat actions (status_bar.ts debug buttons). Like the
     // plunder actions, these have NO default keybind in controls.json:
     // the debug buttons drive them programmatically through the
