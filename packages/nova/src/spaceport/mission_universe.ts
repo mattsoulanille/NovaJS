@@ -202,6 +202,16 @@ export class MissionUniverse {
      * back to any stellar, then to undefined for a system with none (the
      * caller then uses the neutral '<in-flight>' sentinel).
      *
+     * IT MUST ROUND-TRIP, which is the subtle part: ShipSyst -1 is
+     * resolved as systemIdOfStellar(the borrowed stellar), and spöbs are
+     * shared between systems (the same rock listed by several sÿsts under
+     * mutually-exclusive Visibility bits), so `planetSystem` — a
+     * many-to-one map that keeps the LAST system to claim a spöb — can
+     * map one straight back out to a different system. A stellar that
+     * does not lead home is no use for standing in for home, so those are
+     * skipped. The stock case that caught this: sÿst 1124's spöb 173,
+     * which planetSystem attributes to sÿst 1126.
+     *
      * Deterministic: the first match in the system's own spöb order, not
      * a random pick, so two evaluations of the same offer agree.
      */
@@ -210,7 +220,7 @@ export class MissionUniverse {
         let fallback: string | undefined;
         for (const planetId of planets) {
             const planet = this.planetsById.get(planetId);
-            if (!planet) {
+            if (!planet || this.planetSystem.get(planetId) !== systemId) {
                 continue;
             }
             fallback ??= planetId;
