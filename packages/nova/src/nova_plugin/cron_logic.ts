@@ -5,7 +5,7 @@ import {
     evaluateNCBTest,
 } from './ncb.js';
 import { CronState, CronStates } from './player_state_plugin.js';
-import { sameNumberedResource } from './mission_logic.js';
+import { resolveNumberedResource, sameNumberedResource } from './mission_logic.js';
 
 /**
  * Per-player crön evaluation, run for each day the player's calendar
@@ -29,21 +29,42 @@ import { sameNumberedResource } from './mission_logic.js';
  * read as always-true, so the cron fired every day and cleared the
  * Officer Quarters bit the moment the player left the planet.
  *
+ * The set strings GRANT and REMOVE outfits too (`Gxxx` / `Dxxx`), against
+ * that same map, so a cron sees on one day what an earlier day's cron did.
+ * That is a whole game feature and not a detail: Extra Outfits' Weapon
+ * Construction Bay is nothing but five crons that consume building
+ * materials on OnStart and hand back missiles Duration days later on
+ * OnEnd, and stock Nova's "knock-off" crons (nova:288-292) turn a bought
+ * knock-off part into the real outfit the same way.
+ *
  * Remaining simplifications (documented gaps): the news strings are not
- * shown. Cron set strings run with bit and rank hooks only, so the
- * outfit/mission/ship operators (Gxxx, Sxxx, ...) are ignored with a
- * console warning.
+ * shown, and the mission/ship/stellar operators (Sxxx, Cxxx, Yxxx, ...)
+ * are still ignored with a console warning. The player's Contribute mask
+ * is the caller's snapshot from the start of the run, so an outfit a cron
+ * grants does not contribute to another cron's Require until the next
+ * date advance.
  */
 
-/** What the crons may consult besides the bits. */
+/** What the crons may consult (and change) besides the bits. */
 export interface CronEvaluationOptions {
     /** Kxxx / Lxxx: the player's active ranks (see ncb.ts). */
     ranks?: RankHookOptions;
     /**
-     * Oxxx: the player's owned outfits, global id -> count (the
-     * OutfitsStateComponent). Absent means "owns nothing".
+     * The player's owned outfits, global id -> count (the
+     * OutfitsStateComponent, flattened). Absent means "owns nothing".
+     *
+     * Read by `Oxxx` in EnableOn and MUTATED IN PLACE by `Gxxx` / `Dxxx`
+     * in the set strings, so the caller must pass a working copy and write
+     * it back afterwards (see mission_session's advanceEntityDate).
      */
-    ownedOutfits?: ReadonlyMap<string, number>;
+    ownedOutfits?: Map<string, number>;
+    /**
+     * Whether a global outfit id exists, for resolving the bare numbers in
+     * `Gxxx` / `Dxxx` (see mission_logic's resolveNumberedResource).
+     * Without it a cron's number always means its own plug-in's outfit,
+     * which is wrong whenever stock defines that number.
+     */
+    outfitExists?(globalId: string): boolean;
 }
 
 function inDateRange(cron: CronData, day: number): boolean {
@@ -67,14 +88,23 @@ function inDateRange(cron: CronData, day: number): boolean {
     return value(date) >= value(fromParts) && value(date) <= value(toParts);
 }
 
+/**
+ * One cron's resolved hook wiring, rebuilt per cron because every numeric
+ * id in a set string is scoped to the plug-in that wrote that cron.
+ */
+interface CronSetContext {
+    ranks?: RankHookOptions;
+    outfits?: { outfits: Map<string, number>, resolveId(id: number): string };
+}
+
 function runCronSetString(expression: string, bits: Set<number>,
-    random: () => number, ranks?: RankHookOptions): void {
+    random: () => number, context: CronSetContext): void {
     if (!expression) {
         return;
     }
     try {
         runNCBSet(expression,
-            makeControlBitHooks(bits, undefined, ranks), random);
+            makeControlBitHooks(bits, context.outfits, context.ranks), random);
     } catch (e) {
         if (e instanceof NCBParseError) {
             console.warn('Bad crön set string:', e.message);
@@ -152,14 +182,14 @@ function conditionsHold(cron: CronData, bits: Set<number>,
  */
 function stepCron(cron: CronData, state: CronState, day: number,
     bits: Set<number>, contribute: bigint, random: () => number,
-    ranks?: RankHookOptions,
+    setContext: CronSetContext,
     ownedOutfits?: ReadonlyMap<string, number>): void {
     if (state.phase === 'idle') {
         // loopOnEnd: while inside the postHoldoff window after ending,
         // keep re-running OnEnd each day its conditions still hold.
         if (day < state.nextEligible) {
             if (cron.loopOnEnd && conditionsHold(cron, bits, contribute, ownedOutfits)) {
-                runCronSetString(cron.onEnd, bits, random, ranks);
+                runCronSetString(cron.onEnd, bits, random, setContext);
             }
             return;
         }
@@ -181,7 +211,7 @@ function stepCron(cron: CronData, state: CronState, day: number,
         if (day < state.phaseStart + Math.max(0, cron.preHoldoff)) {
             return;
         }
-        runCronSetString(cron.onStart, bits, random, ranks);
+        runCronSetString(cron.onStart, bits, random, setContext);
         state.phase = 'active';
         state.phaseStart = day;
         // Fall through so duration 0 ends today.
@@ -190,13 +220,13 @@ function stepCron(cron: CronData, state: CronState, day: number,
         && conditionsHold(cron, bits, contribute, ownedOutfits)) {
         // loopOnStart: re-run OnStart each subsequent active day while
         // its conditions still hold (the entry day already ran it above).
-        runCronSetString(cron.onStart, bits, random, ranks);
+        runCronSetString(cron.onStart, bits, random, setContext);
     }
     if (state.phase === 'active') {
         if (day < state.phaseStart + Math.max(0, cron.duration)) {
             return;
         }
-        runCronSetString(cron.onEnd, bits, random, ranks);
+        runCronSetString(cron.onEnd, bits, random, setContext);
         state.phase = 'idle';
         state.phaseStart = day;
         state.nextEligible = day + Math.max(0, cron.postHoldoff) + 1;
@@ -220,26 +250,46 @@ function activeCronContribute(crons: CronData[], states: CronStates,
     return contribute;
 }
 
-/**
- * Advances the cron state machines from `fromDay` (exclusive) to
- * `toDay` (inclusive), mutating `states` and `bits`. `baseContribute`
- * is the player's ship + outfit Contribute mask (the active crons' own
- * Contribute is folded in per day); default 0n means no contributions.
- */
 /** The plug-in prefix of a cron's global id ("nova:512" -> "nova"). */
 function cronPrefix(cron: CronData): string {
     const colon = cron.id.lastIndexOf(':');
     return colon === -1 ? 'nova' : cron.id.slice(0, colon);
 }
 
+/**
+ * Advances the cron state machines from `fromDay` (exclusive) to
+ * `toDay` (inclusive), mutating `states`, `bits`, and — when the caller
+ * supplies them in `options` — the active ranks and the owned outfits.
+ * `baseContribute` is the player's ship + outfit Contribute mask (the
+ * active crons' own Contribute is folded in per day); default 0n means no
+ * contributions.
+ */
 export function runCronsForDays(crons: CronData[], states: CronStates,
     bits: Set<number>, fromDay: number, toDay: number,
     random: () => number = Math.random, baseContribute: bigint = 0n,
     options: CronEvaluationOptions | RankHookOptions = {}): void {
     // Older callers passed the rank hooks bare; tell the two apart by the
     // rank options' required `active` set.
-    const { ranks, ownedOutfits }: CronEvaluationOptions =
+    const { ranks, ownedOutfits, outfitExists }: CronEvaluationOptions =
         'active' in options ? { ranks: options } : options;
+    // Every numeric id in a cron's set string is scoped to the plug-in that
+    // wrote that cron, exactly as a mission's are, so the hook wiring is
+    // per-cron. Built once each rather than once per day.
+    const setContexts = new Map<CronData, CronSetContext>(
+        crons.map(cron => {
+            const prefix = cronPrefix(cron);
+            return [cron, {
+                ranks: ranks && { ...ranks, resolveId: id => `${prefix}:${id}` },
+                // Gxxx/Dxxx are wired only when the caller handed over an
+                // outfits map to mutate; without one they stay unimplemented
+                // and ncb.ts warns, as every other missing hook does.
+                outfits: ownedOutfits && {
+                    outfits: ownedOutfits,
+                    resolveId: id =>
+                        resolveNumberedResource(id, prefix, outfitExists),
+                },
+            }];
+        }));
     for (let day = fromDay + 1; day <= toDay; day++) {
         for (const cron of crons) {
             let state = states.get(cron.id);
@@ -249,11 +299,8 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
             }
             const contribute =
                 activeCronContribute(crons, states, baseContribute);
-            // A cron's Kxxx/Lxxx numeric ids are scoped to the plug-in
-            // that wrote the cron, exactly as a mission's are.
             stepCron(cron, state, day, bits, contribute, random,
-                ranks && { ...ranks, resolveId: id => `${cronPrefix(cron)}:${id}` },
-                ownedOutfits);
+                setContexts.get(cron) ?? {}, ownedOutfits);
         }
     }
 }
