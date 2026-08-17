@@ -89,10 +89,12 @@ type AmmoCeiling =
  * ammoCapacity/effectiveMax pair (outfitter_rules.ts) so a restocked
  * escort ends up exactly where a player buying to the cap would:
  *
- *  - Ammo whose weapon has MaxAmmo > 0 is capped at MaxAmmo per owned
- *    launcher instance (summed over every launcher outfit that fires it,
- *    weighted by how many of each the ship carries), SHARED across every
- *    outfit that supplies that weapon.
+ *  - Ammo whose weapon has MaxAmmo > 0 is capped at MaxAmmo per mounted
+ *    instance of that SUPPLY weapon (summed over the ship's outfits,
+ *    weighted by how many of each it carries), SHARED across every outfit
+ *    that supplies that weapon. Instances of weapons that merely DRAW on
+ *    the supply do not count — see ammoCapacity in outfitter_rules.ts for
+ *    why (the Nuke plug-in's racks versus its tubes).
  *  - Ammo whose weapon has MaxAmmo <= 0 defers to the outfit's own Max
  *    field, multiplied by any owned "increases max" items pointing at it.
  *  - A Max of <= 0 there means UNLIMITED, which has no ceiling to fill to,
@@ -127,28 +129,14 @@ async function ammoCeiling(outfit: OutfitData, owned: OutfitsState,
         return byOutfitMax();
     }
 
-    let capacity = 0;
+    let mounted = 0;
     for (const [id, data] of ownedData) {
         const outfitCount = owned.get(id)?.count ?? 0;
-        if (outfitCount <= 0) {
-            continue;
-        }
-        for (const [weaponId, weaponCount] of Object.entries(data.weapons)) {
-            const launcher = await gameData.getWeapon(weaponId);
-            if (!launcher || launcher.ammoType === 'unlimited'
-                || launcher.ammoType[0] !== 'weapon'
-                || launcher.ammoType[1] !== outfit.ammoFor) {
-                continue;
-            }
-            if (launcher.maxAmmo <= 0) {
-                // This launcher defers to the outfit's Max field, exactly
-                // as the outfitter's ammoCapacity bails out here.
-                return byOutfitMax();
-            }
-            capacity += launcher.maxAmmo * weaponCount * outfitCount;
+        if (outfitCount > 0) {
+            mounted += (data.weapons[outfit.ammoFor] ?? 0) * outfitCount;
         }
     }
-    return { kind: 'shared', capacity };
+    return { kind: 'shared', capacity: suppliedWeapon.maxAmmo * mounted };
 }
 
 /**

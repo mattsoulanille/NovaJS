@@ -27,7 +27,7 @@ import { MissionSession } from "./mission_session.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { rankContribute } from "../nova_plugin/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
-import { BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, maxBuyCount, maxSellCount, sellRefund, OutfitterContext, OutfitterStellar, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, maxBuyCount, maxSellCount, sellRefund, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 
@@ -219,6 +219,13 @@ export class Outfitter extends Menu<Entity> {
      * test and for a landing with no fighters out.
      */
     private deployedOutfitCounts?: DeployedOutfitCounts;
+    /**
+     * The five STR# 2002 fragments the launcher sell refusal is composed
+     * from, read from the loaded data in build(). The stock wording is the
+     * fallback for a data set whose table is missing or too short (see
+     * outfitter_rules' AMMO_SELL_STRINGS).
+     */
+    private ammoSellStrings: AmmoSellStrings = AMMO_SELL_STRINGS;
 
     private text = {
         description: new PIXI.Text("", FONT.normal),
@@ -348,6 +355,7 @@ export class Outfitter extends Menu<Entity> {
         const govtIds = [...(await this.simulationData.ids).Govt].sort();
         this.govts = await Promise.all(govtIds.map(async id =>
             [id, await this.simulationData.data.Govt.get(id)] as const));
+        this.ammoSellStrings = await this.loadAmmoSellStrings();
         const itemGrid = await this.makeOutfitsGrid();
         this.itemGrid = itemGrid;
         this.container.addChild(this.itemGrid.container);
@@ -383,6 +391,31 @@ export class Outfitter extends Menu<Entity> {
         // per press. Nav keys already repeat via the default set.
         this.controls.repeatableActions.add('buy');
         this.controls.repeatableActions.add('sell');
+    }
+
+    /**
+     * Reads the launcher sell refusal's five fragments out of STR# 2002,
+     * per-index so a table that only carries some of them keeps the stock
+     * wording for the rest. Falls back wholesale when the table is absent.
+     */
+    private async loadAmmoSellStrings(): Promise<AmmoSellStrings> {
+        try {
+            const table = await this.displayAssets.data.StringTable.get(
+                SELL_REFUSAL_TABLE);
+            const read = (key: keyof AmmoSellStrings) => {
+                const text = table.strings[AMMO_SELL_INDICES[key]];
+                return text?.trim() ? text : AMMO_SELL_STRINGS[key];
+            };
+            return {
+                needToSell: read('needToSell'),
+                unit: read('unit'),
+                units: read('units'),
+                ofAmmunition: read('ofAmmunition'),
+                beforeYouCanSell: read('beforeYouCanSell'),
+            };
+        } catch {
+            return AMMO_SELL_STRINGS;
+        }
     }
 
     /**
@@ -482,6 +515,7 @@ export class Outfitter extends Menu<Entity> {
             // attributed back to one of the player's ammo outfits.
             deployedCounts: this.deployedOutfitCounts?.(this.outfits.keys()),
             planet: this.stellar(),
+            ammoSellStrings: this.ammoSellStrings,
         };
     }
 
@@ -679,17 +713,29 @@ export class Outfitter extends Menu<Entity> {
      * mass afterwards.") and the launcher sentence at 207-211 are both
      * sell captions — so a greyed Sell button is allowed to explain itself.
      *
-     * Only 'fightersDeployed' does. The other three reasons would be noise
-     * on the line the buy captions own: 'notOwned' is true of every item on
-     * the shelf the player hasn't bought yet, and 'cantSell' / 'notStocked'
-     * are permanent properties the player cannot act on. A recallable
-     * fighter is the one sell refusal that is both surprising and fixable,
-     * and saying nothing leaves the player prodding a dead button.
+     * Three of the six reasons do. 'ammoAboard' and 'negativeFreeMass' are
+     * the two the original itself has strings for, and 'fightersDeployed'
+     * is the same shortfall reached by rounds that cannot be sold to clear
+     * it (see canSellOutfit). The rest would be noise on the line the buy
+     * captions own: 'notOwned' is true of every item on the shelf the
+     * player hasn't bought yet, and 'cantSell' / 'notStocked' are permanent
+     * properties the player cannot act on. The captioned three are all
+     * both surprising and fixable, and saying nothing leaves the player
+     * prodding a dead button.
      */
     private sellDenialCaption(
         sellCheck: ReturnType<typeof canSellOutfit>): string {
-        return !sellCheck.allowed && sellCheck.reason === 'fightersDeployed'
-            ? sellCheck.message : '';
+        if (sellCheck.allowed) {
+            return '';
+        }
+        switch (sellCheck.reason) {
+            case 'ammoAboard':
+            case 'negativeFreeMass':
+            case 'fightersDeployed':
+                return sellCheck.message;
+            default:
+                return '';
+        }
     }
 
     private buyOutfit(click?: ButtonClick) {

@@ -12,6 +12,7 @@ import {
     freeMass,
     maxBuyCount,
     maxSellCount,
+    NEGATIVE_FREE_MASS_REFUSAL,
     OUTFIT_RESALE_FRACTION,
     outfitResaleValue,
     OutfitterContext,
@@ -340,9 +341,11 @@ describe('canBuyOutfit', () => {
                 maxAmmo: 4,
             });
             const bayOutfit = makeOutfit('nova:157', {
+                name: 'Viper Bay',
                 weapons: { 'nova:149': 1 },
             });
             const fighter = makeOutfit('nova:158', {
+                name: 'Viper',
                 max: 9999,
                 ammoFor: 'nova:149',
             });
@@ -483,15 +486,34 @@ describe('canBuyOutfit', () => {
                         expect(maxSellCount(bayOutfit, context)).toBe(0);
                     });
 
-                it('sells the bay once the fighters are home again', () => {
+                it('asks for the fighters once they are home again', () => {
+                    // Recalling them changes the refusal, it does not lift
+                    // it: four fighters aboard a bay about to be sold have
+                    // nowhere to go either. Now they CAN be sold, so this
+                    // is the stock sentence rather than "recall them".
                     const returned = makeContext({
                         outfits: [bayOutfit, fighter],
                         weapons: [bayWeapon],
                         owned: [['nova:157', 1], ['nova:158', 4]],
                     });
-                    expect(canSellOutfit(bayOutfit, returned))
+                    expect(canSellOutfit(bayOutfit, returned)).toEqual({
+                        allowed: false,
+                        reason: 'ammoAboard',
+                        message: 'You need to sell 4 units of ammunition'
+                            + ' before you can sell your Viper Bay.',
+                    });
+                    expect(maxSellCount(bayOutfit, returned)).toBe(0);
+                });
+
+                it('sells the bay once the fighters have been sold', () => {
+                    const empty = makeContext({
+                        outfits: [bayOutfit, fighter],
+                        weapons: [bayWeapon],
+                        owned: [['nova:157', 1], ['nova:158', 0]],
+                    });
+                    expect(canSellOutfit(bayOutfit, empty))
                         .toEqual({ allowed: true });
-                    expect(maxSellCount(bayOutfit, returned)).toBe(1);
+                    expect(maxSellCount(bayOutfit, empty)).toBe(1);
                 });
 
                 it('sells the bay once the fighters have been destroyed',
@@ -541,12 +563,16 @@ describe('canBuyOutfit', () => {
                             max: 9999,
                             ammoFor: 'nova:150',
                         });
+                        // TWO of the second bay, so its own two fighters
+                        // still fit after one is sold: the point under test
+                        // is that the FIRST bay's deployed complement does
+                        // not reach across to lock it.
                         const context = makeContext({
                             outfits: [bayOutfit, fighter, otherBay,
                                 otherFighter],
                             weapons: [bayWeapon, otherWeapon],
                             owned: [['nova:157', 1], ['nova:158', 0],
-                                ['nova:159', 1], ['nova:160', 2]],
+                                ['nova:159', 2], ['nova:160', 2]],
                             deployed: [['nova:158', 4]],
                         });
                         expect(canSellOutfit(bayOutfit, context)).toEqual(
@@ -578,24 +604,64 @@ describe('canBuyOutfit', () => {
                         .toEqual({ allowed: true });
                 });
 
-                it('is conservative when a second bay could take them',
+                it('sells one of two bays when the survivor can take them',
                     () => {
-                        // Two units of the SAME bay outfit, one fighter
-                        // out: the surviving bay could take it home, but
-                        // selling either unit is refused anyway. A
-                        // deliberate call, documented beside
-                        // canSellOutfit — the player recalls and sells.
+                        // Two units of the SAME bay outfit (capacity 8),
+                        // one fighter out: the surviving bay takes it home,
+                        // so the sale is fine. This case used to be refused
+                        // outright as the conservative choice available
+                        // before the launcher sell rule existed.
                         const context = makeContext({
                             outfits: [bayOutfit, fighter],
                             weapons: [bayWeapon],
                             owned: [['nova:157', 2], ['nova:158', 0]],
                             deployed: [['nova:158', 1]],
                         });
+                        expect(canSellOutfit(bayOutfit, context))
+                            .toEqual({ allowed: true });
+                        // But only ONE of them: dropping to zero bays
+                        // would strand the fighter.
+                        expect(maxSellCount(bayOutfit, context)).toBe(1);
+                    });
+
+                it('refuses when the deployed complement alone overflows',
+                    () => {
+                        // Two bays (8), five fighters all out, none aboard:
+                        // one bay holds 4, so the fifth has nowhere to go
+                        // and there is nothing aboard to sell instead. The
+                        // only move is a recall, so it is that wording and
+                        // not the stock ammunition sentence.
+                        const context = makeContext({
+                            outfits: [bayOutfit, fighter],
+                            weapons: [bayWeapon],
+                            owned: [['nova:157', 2], ['nova:158', 0]],
+                            deployed: [['nova:158', 5]],
+                        });
                         expect(canSellOutfit(bayOutfit, context)).toEqual(
                             jasmine.objectContaining({
                                 allowed: false,
                                 reason: 'fightersDeployed',
                             }));
+                    });
+
+                it('asks for the aboard fighters when those can clear it',
+                    () => {
+                        // Two bays (8), 4 out and 4 aboard. Selling one bay
+                        // leaves room for 4: the 4 deployed fit, so the 4
+                        // aboard are what has to go, and the count in the
+                        // sentence is that shortfall.
+                        const context = makeContext({
+                            outfits: [bayOutfit, fighter],
+                            weapons: [bayWeapon],
+                            owned: [['nova:157', 2], ['nova:158', 4]],
+                            deployed: [['nova:158', 4]],
+                        });
+                        expect(canSellOutfit(bayOutfit, context)).toEqual({
+                            allowed: false,
+                            reason: 'ammoAboard',
+                            message: 'You need to sell 4 units of ammunition'
+                                + ' before you can sell your Viper Bay.',
+                        });
                     });
             });
 
@@ -629,6 +695,94 @@ describe('canBuyOutfit', () => {
             });
             expect(ammoCapacity(ammo, context)).toBeUndefined();
             expect(canBuyOutfit(ammo, context)).toEqual({ allowed: true });
+        });
+
+        /*
+         * The capacity comes from the SUPPLY weapon the ammo's ModVal
+         * names, per the Bible's MaxAmmo ("per each instance of this
+         * weapon", ~:3375) -- not from the weapons that draw on that
+         * supply. Every stock launcher is its own supply and points its
+         * AmmoType at itself, so only plug-in data tells the two apart.
+         */
+        describe('capacity comes from the supply weapon', () => {
+            it('counts instances of the supply weapon, not of its drawers',
+                () => {
+                    // The Nuke plug-in's shape: oütf 446 "Nuke Storage
+                    // Rack" grants the SUPPLY wëap 238 (MaxAmmo 8), while
+                    // oütf 445 "Missile Launcer" grants wëap 236, whose
+                    // AmmoType draws on 238 and whose own MaxAmmo is 0.
+                    const rackWeapon = makeWeapon('nova:238', { maxAmmo: 8 });
+                    const tubeWeapon = makeWeapon('nova:236', {
+                        ammoType: ['weapon', 'nova:238'], maxAmmo: 0,
+                    });
+                    const rack = makeOutfit('nova:446',
+                        { max: 15, weapons: { 'nova:238': 1 } });
+                    const tube = makeOutfit('nova:445',
+                        { max: 6, weapons: { 'nova:236': 1 } });
+                    const nuke = makeOutfit('nova:444',
+                        { max: 120, ammoFor: 'nova:238' });
+                    const outfits = [rack, tube, nuke];
+                    const weapons = [rackWeapon, tubeWeapon];
+
+                    // Two racks hold 16 rounds whether or not a tube is
+                    // fitted -- racks are the magazine.
+                    expect(ammoCapacity(nuke, makeContext({
+                        outfits, weapons, owned: [['nova:446', 2]],
+                    }))).toBe(16);
+                    expect(ammoCapacity(nuke, makeContext({
+                        outfits, weapons,
+                        owned: [['nova:446', 2], ['nova:445', 1]],
+                    }))).toBe(16);
+
+                    // A tube with no rack holds nothing. Reading the
+                    // DRAWER's MaxAmmo of 0 instead would have made this
+                    // "unlimited" and let the player buy 120 nukes with
+                    // nowhere to put them.
+                    const tubeOnly = makeContext({
+                        outfits, weapons, owned: [['nova:445', 1]],
+                    });
+                    expect(ammoCapacity(nuke, tubeOnly)).toBe(0);
+                    expect(canBuyOutfit(nuke, tubeOnly)).toEqual(
+                        jasmine.objectContaining(
+                            { allowed: false, reason: 'needsLauncher' }));
+                });
+
+            it('holds ammo for a supply weapon that draws energy', () => {
+                // The 'singularity' plug-in's shape: oütf 476 "Nuetrino
+                // Shard" is ammo for wëap 264, which has MaxAmmo 25 AND an
+                // AmmoType of ["energy", n] -- it burns fuel per shot as
+                // well as consuming a shard. Nothing draws on its supply,
+                // so a walk over drawers found no capacity at all and that
+                // ammunition could never be bought.
+                const cannonWeapon = makeWeapon('singularity:264', {
+                    ammoType: ['energy', 3], maxAmmo: 25,
+                });
+                const cannon = makeOutfit('singularity:475',
+                    { max: 6, weapons: { 'singularity:264': 1 } });
+                const shard = makeOutfit('singularity:476',
+                    { max: 120, ammoFor: 'singularity:264' });
+                const context = makeContext({
+                    outfits: [cannon, shard],
+                    weapons: [cannonWeapon],
+                    owned: [['singularity:475', 2]],
+                });
+                expect(ammoCapacity(shard, context)).toBe(50);
+                expect(canBuyOutfit(shard, context)).toEqual({ allowed: true });
+                expect(maxBuyCount(shard, context)).toBe(50);
+            });
+
+            it('multiplies by the instances one outfit grants', () => {
+                // A twin launcher: one item, two mounts, so twice the
+                // magazine ("if you have two of these weapons, the max
+                // amount of ammo ... would actually be twice MaxAmmo").
+                const twin = makeOutfit('nova:400',
+                    { weapons: { 'nova:134': 2 } });
+                expect(ammoCapacity(ammo, makeContext({
+                    outfits: [twin, ammo],
+                    weapons: [launcherWeapon],
+                    owned: [['nova:400', 2]],
+                }))).toBe(60);
+            });
         });
     });
 
@@ -730,6 +884,246 @@ describe('canSellOutfit', () => {
             owned: [['nova:200', 1]],
         });
         expect(canSellOutfit(outfit, context)).toEqual({ allowed: true });
+    });
+
+    describe('the launcher sell rule', () => {
+        // A stock-shaped missile launcher: MaxAmmo 0, so its ammo is
+        // constrained by the oütf Max field alone and is freely buyable
+        // with no launcher at all (the IR Missile / IR Missile Launcher
+        // pair). Selling the launcher out from under the rounds is still
+        // refused -- see THE LAUNCHER SELL RULE beside canSellOutfit.
+        const missileWeapon = makeWeapon('nova:134', {
+            ammoType: ['weapon', 'nova:134'],
+            maxAmmo: 0,
+        });
+        const missileLauncher = makeOutfit('nova:133', {
+            name: 'IR Missile Launcher',
+            weapons: { 'nova:134': 1 },
+        });
+        const missile = makeOutfit('nova:135', {
+            name: 'IR Missile', max: 200, ammoFor: 'nova:134',
+        });
+        const missileContext = (owned: [string, number][]) => makeContext({
+            outfits: [missileLauncher, missile],
+            weapons: [missileWeapon],
+            owned,
+        });
+
+        it('refuses the last launcher while its magazine is loaded', () => {
+            const context = missileContext(
+                [['nova:133', 1], ['nova:135', 50]]);
+            expect(canSellOutfit(missileLauncher, context)).toEqual({
+                allowed: false,
+                reason: 'ammoAboard',
+                message: 'You need to sell 50 units of ammunition before'
+                    + ' you can sell your IR Missile Launcher.',
+            });
+            // The greyed Sell button and the bulk-sell dialog both read
+            // through maxSellCount, so they agree for free.
+            expect(maxSellCount(missileLauncher, context)).toBe(0);
+        });
+
+        it('uses the singular unit word for one round (STR# 208)', () => {
+            const context = missileContext(
+                [['nova:133', 1], ['nova:135', 1]]);
+            expect(canSellOutfit(missileLauncher, context)).toEqual(
+                jasmine.objectContaining({
+                    message: 'You need to sell 1 unit of ammunition before'
+                        + ' you can sell your IR Missile Launcher.',
+                }));
+        });
+
+        it('sells the launcher once the magazine is empty', () => {
+            expect(canSellOutfit(missileLauncher,
+                missileContext([['nova:133', 1], ['nova:135', 0]])))
+                .toEqual({ allowed: true });
+        });
+
+        it('sells one of two launchers with rounds still aboard', () => {
+            // MaxAmmo 0: there is no per-launcher capacity to shrink, so
+            // any surviving launcher keeps the rounds mountable. Only the
+            // LAST one is refused.
+            const context = missileContext(
+                [['nova:133', 2], ['nova:135', 50]]);
+            expect(canSellOutfit(missileLauncher, context))
+                .toEqual({ allowed: true });
+            expect(maxSellCount(missileLauncher, context)).toBe(1);
+        });
+
+        it('leaves the ammunition itself sellable', () => {
+            // Ammo grants no weapon, so it is nobody's launcher. Selling
+            // the rounds is exactly how the player clears the refusal.
+            const context = missileContext(
+                [['nova:133', 1], ['nova:135', 50]]);
+            expect(canSellOutfit(missile, context)).toEqual({ allowed: true });
+            expect(maxSellCount(missile, context)).toBe(50);
+        });
+
+        it('ignores a weapon whose ammunition the player does not own',
+            () => {
+                expect(canSellOutfit(missileLauncher,
+                    missileContext([['nova:133', 1]])))
+                    .toEqual({ allowed: true });
+            });
+
+        describe('with a per-launcher capacity (MaxAmmo > 0)', () => {
+            // A rack-shaped magazine: 8 rounds per instance.
+            const rackWeapon = makeWeapon('nova:238', { maxAmmo: 8 });
+            const rack = makeOutfit('nova:446', {
+                name: 'Nuke Storage Rack', max: 15,
+                weapons: { 'nova:238': 1 },
+            });
+            const nuke = makeOutfit('nova:444', {
+                name: 'Nuclear Missile', max: 120, ammoFor: 'nova:238',
+            });
+            const rackContext = (racks: number, nukes: number) => makeContext({
+                outfits: [rack, nuke],
+                weapons: [rackWeapon],
+                owned: [['nova:446', racks], ['nova:444', nukes]],
+            });
+
+            it('allows the sale when the racks left still hold them', () => {
+                // 3 racks (24) with 16 aboard: two racks hold 16 exactly.
+                expect(canSellOutfit(rack, rackContext(3, 16)))
+                    .toEqual({ allowed: true });
+            });
+
+            it('names the shortfall, not the whole magazine', () => {
+                // 2 racks (16) with 15 aboard: one rack holds 8, so 7 must
+                // go -- not all 15.
+                expect(canSellOutfit(rack, rackContext(2, 15))).toEqual({
+                    allowed: false,
+                    reason: 'ammoAboard',
+                    message: 'You need to sell 7 units of ammunition before'
+                        + ' you can sell your Nuke Storage Rack.',
+                });
+            });
+
+            it('lets maxSellCount stop at the last sellable rack', () => {
+                // 4 racks (32) with 17 aboard: 3 racks hold 24 and 2 hold
+                // 16, so exactly one may go.
+                expect(maxSellCount(rack, rackContext(4, 17))).toBe(1);
+                // 9 aboard: down to 2 racks (16) is fine, 1 rack (8) is
+                // not, so two may go.
+                expect(maxSellCount(rack, rackContext(4, 9))).toBe(2);
+                // Empty: all four.
+                expect(maxSellCount(rack, rackContext(4, 0))).toBe(4);
+            });
+
+            it('agrees with a unit-by-unit scan on every boundary', () => {
+                for (let racks = 1; racks <= 5; racks++) {
+                    for (let nukes = 0; nukes <= 40; nukes++) {
+                        const context = rackContext(racks, nukes);
+                        // The straight-line answer: each sale must leave
+                        // 8 x (racks - sold) >= nukes.
+                        let scan = 0;
+                        while (scan < racks
+                            && 8 * (racks - (scan + 1)) >= nukes) {
+                            scan++;
+                        }
+                        expect(maxSellCount(rack, context)).toBe(scan,
+                            `${racks} racks, ${nukes} nukes`);
+                    }
+                }
+            });
+
+            it('does not check a weapon that merely draws on the supply',
+                () => {
+                    // The Nuke plug-in's split: oütf 445 "Missile Launcer"
+                    // grants wëap 236, which FIRES nukes (its AmmoType
+                    // draws on 238) but holds none. The racks are the
+                    // magazine, so the tube sells freely with a full hold.
+                    const tubeWeapon = makeWeapon('nova:236', {
+                        ammoType: ['weapon', 'nova:238'], maxAmmo: 0,
+                    });
+                    const tube = makeOutfit('nova:445', {
+                        name: 'Missile Launcer', max: 6,
+                        weapons: { 'nova:236': 1 },
+                    });
+                    const context = makeContext({
+                        outfits: [rack, tube, nuke],
+                        weapons: [rackWeapon, tubeWeapon],
+                        owned: [['nova:446', 1], ['nova:445', 1],
+                            ['nova:444', 8]],
+                    });
+                    expect(canSellOutfit(tube, context))
+                        .toEqual({ allowed: true });
+                    // The rack it all hangs on is the one that is locked.
+                    expect(canSellOutfit(rack, context)).toEqual(
+                        jasmine.objectContaining({
+                            allowed: false, reason: 'ammoAboard',
+                        }));
+                });
+        });
+
+        it('composes the sentence from the data set\'s own strings', () => {
+            // A localised or modified STR# 2002 replaces the wording; the
+            // count and the item name stay where the original puts them.
+            const context = makeContext({
+                outfits: [missileLauncher, missile],
+                weapons: [missileWeapon],
+                owned: [['nova:133', 1], ['nova:135', 3]],
+            });
+            expect(canSellOutfit(missileLauncher, {
+                ...context,
+                ammoSellStrings: {
+                    needToSell: 'Dump', unit: 'round', units: 'rounds',
+                    ofAmmunition: 'of ordnance', beforeYouCanSell: 'to shed',
+                },
+            })).toEqual(jasmine.objectContaining({
+                message: 'Dump 3 rounds of ordnance to shed'
+                    + ' IR Missile Launcher.',
+            }));
+        });
+    });
+
+    describe('negative free mass (STR# 2002 index 206)', () => {
+        // A Mass Expansion: stock oütf 190 has Mass -10, i.e. it GRANTS
+        // ten tons of outfit space. Selling it takes that space back.
+        const expansion = makeOutfit('nova:190', { name: 'Mass Expansion' },
+            { freeMass: -10 });
+        const cargo = makeOutfit('nova:200', {}, { freeMass: 30 });
+
+        it('refuses when the freed space is already spent', () => {
+            // A hull with 20 tons, plus 10 from the expansion, with 30
+            // tons installed: free mass is 0 and selling the expansion
+            // would put it at -10.
+            const context = makeContext({
+                ship: makeShip({ freeMass: 20 }),
+                outfits: [expansion, cargo],
+                owned: [['nova:190', 1], ['nova:200', 1]],
+            });
+            expect(freeMass(context)).toBe(0);
+            expect(canSellOutfit(expansion, context)).toEqual({
+                allowed: false,
+                reason: 'negativeFreeMass',
+                message: NEGATIVE_FREE_MASS_REFUSAL,
+            });
+            expect(maxSellCount(expansion, context)).toBe(0);
+        });
+
+        it('allows the sale while the space it frees is spare', () => {
+            const context = makeContext({
+                ship: makeShip({ freeMass: 30 }),
+                outfits: [expansion, cargo],
+                owned: [['nova:190', 1], ['nova:200', 1]],
+            });
+            expect(canSellOutfit(expansion, context))
+                .toEqual({ allowed: true });
+        });
+
+        it('stops the bulk sell at the units the hold can spare', () => {
+            // Four expansions (40 tons granted) on a 20-ton hull with 30
+            // tons of cargo pods installed: 30 tons spare, so three of
+            // the four may go before the hold would go negative.
+            const context = makeContext({
+                ship: makeShip({ freeMass: 20 }),
+                outfits: [expansion, cargo],
+                owned: [['nova:190', 4], ['nova:200', 1]],
+            });
+            expect(freeMass(context)).toBe(30);
+            expect(maxSellCount(expansion, context)).toBe(3);
+        });
     });
 });
 

@@ -159,6 +159,34 @@ describe('escort restock', () => {
             expect(outfits.get('ammo')!.count).toEqual(20);
         });
 
+    it('restocks to the SUPPLY weapon\'s instances, not its drawers\'',
+        async () => {
+            // The Nuke plug-in's shape (see ammoCapacity in
+            // outfitter_rules.ts): the magazine is the outfit granting the
+            // supply weapon 'rack' (MaxAmmo 8), while 'tube' merely fires
+            // from that supply and holds nothing. Two racks and any number
+            // of tubes hold 16 rounds.
+            const nuke = outfit({ id: 'ammo', ammoFor: 'rack', max: 120 });
+            const rackOutfit = outfit({
+                id: 'rackOutfit', weapons: { rack: 1 },
+            });
+            const tubeOutfit = outfit({
+                id: 'tubeOutfit', weapons: { tube: 1 },
+            });
+            const rack = launcherWeapon({ id: 'rack', maxAmmo: 8 });
+            const tube = launcherWeapon({
+                id: 'tube', maxAmmo: 0, ammoType: ['weapon', 'rack'],
+            });
+            const outfits: OutfitsState = new Map([
+                ['ammo', { count: 1 }],
+                ['rackOutfit', { count: 2 }],
+                ['tubeOutfit', { count: 3 }],
+            ]);
+            await restockEscortEntity(escortEntity(outfits),
+                gameDataOf([nuke, rackOutfit, tubeOutfit], [rack, tube]));
+            expect(outfits.get('ammo')!.count).toEqual(16);
+        });
+
     it('falls back to the outfit Max when the weapon has no maxAmmo',
         async () => {
             // maxAmmo 0 means "constrained by the ammo outfit's Max".
