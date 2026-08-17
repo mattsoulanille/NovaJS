@@ -7,6 +7,7 @@ import { Vector } from "nova_ecs/datatypes/vector";
 import { Entity } from "nova_ecs/entity";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { Optional } from "nova_ecs/optional";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
@@ -16,7 +17,8 @@ import { DisplayAssetDataResource } from "../nova_plugin/game_data_resource.js";
 import { ProjectileExplodeEvent } from "../nova_plugin/projectile_plugin.js";
 import { SoundEvent } from "../nova_plugin/sound_plugin.js";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
-import { DeathEvent, PlayerDeathSystem, ZeroArmorEvent } from "../nova_plugin/death_plugin.js";
+import { armorFullyRestored, DeathEvent, PlayerDeathSystem, ZeroArmorEvent } from "../nova_plugin/death_plugin.js";
+import { ArmorComponent } from "../nova_plugin/health_plugin.js";
 import { ShipComponent, ShipDataComponent } from "../nova_plugin/ship_plugin.js";
 import { DeathAISystem } from "../nova_plugin/npc_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
@@ -54,7 +56,11 @@ const ExplosionSystem = new System({
     }
 });
 
-const SecondaryExplosionComponent = new Component<{
+/**
+ * Exported for tests: this is the component that, when it leaks onto a
+ * living ship, makes it trail explosions around the system.
+ */
+export const SecondaryExplosionComponent = new Component<{
     explosion: ExplosionData,
     lastTime?: number,
     period: number,
@@ -156,9 +162,20 @@ const ShipFinalExplosionSystem = new System({
 const ShipSecondaryExplosionSystem = new System({
     name: 'ShipSecondaryExplosionSystem',
     events: [ZeroArmorEvent],
-    args: [ShipDataComponent, GetEntity, DisplayAssetDataResource] as const,
-    step(ship, {components}, gameData) {
+    args: [ShipDataComponent, GetEntity, DisplayAssetDataResource,
+        Optional(ArmorComponent)] as const,
+    step(ship, {components}, gameData, armor) {
         if (ship.initialExplosion == null) {
+            return;
+        }
+        // The bridge replays a whole frame's worth of simulation events
+        // in emit order against already-applied state, so a
+        // ZeroArmorEvent can land here describing a life that ended
+        // (and respawned) earlier in the same batch. Starting the
+        // secondary explosions then pins them to a living ship forever,
+        // since only a DeathEvent takes them off again. See
+        // armorFullyRestored.
+        if (armorFullyRestored(armor)) {
             return;
         }
 
@@ -184,6 +201,38 @@ const ShipSecondaryExplosionDoneSystem = new System({
     }
 });
 
+/**
+ * Self-heal: a ship at FULL armor is not exploding, so it must not be
+ * trailing secondary explosions.
+ *
+ * ShipSecondaryExplosionDoneSystem is edge-triggered on DeathEvent, which
+ * makes a leak permanent whenever the removing edge is missed or arrives
+ * out of order — the exact failure Matthew hit (an exploding animation
+ * that followed his ship around after a respawn). This level-triggered
+ * sweep is the backstop: whatever went wrong upstream, the animation
+ * stops as soon as the mirrored armor is back to full.
+ *
+ * Full armor, not merely nonzero: a hulk mid-explosion normally sits a
+ * hair *above* zero (see armorFullyRestored — 70 of the 288 stock ships
+ * recharge armor, and they get one tick of it before the disable freezes
+ * them), so a nonzero test would cut most real death animations short on
+ * their first frame.
+ *
+ * Gated on ArmorComponent, so the standalone explosion entities
+ * makeExplosion creates — which carry SecondaryExplosionComponent and no
+ * armor — are untouched.
+ */
+const ShipSecondaryExplosionStaleSystem = new System({
+    name: 'ShipSecondaryExplosionStaleSystem',
+    args: [SecondaryExplosionComponent, ArmorComponent, GetEntity] as const,
+    step(_explosion, armor, { components }) {
+        if (armorFullyRestored(armor)) {
+            components.delete(SecondaryExplosionComponent);
+        }
+    },
+    before: [SecondaryExplosionSystem],
+});
+
 // Loops the death sound (snd 371) for the whole duration of the LOCAL
 // player's own explosion sequence. Both events are targeted at the ship
 // that zeroed / died, so the PlayerShipSelector arg fires these only on
@@ -191,11 +240,19 @@ const ShipSecondaryExplosionDoneSystem = new System({
 // at zero, but starting a loop already in LoopingSounds is a no-op
 // (playSound), so no debounce is needed; DeathEvent ends the sequence
 // (and respawns), stopping the loop.
+//
+// The armorFullyRestored guard is what keeps that last sentence true: a
+// ZeroArmorEvent replayed after the respawn would restart the loop
+// *after* its stopping DeathEvent, leaving the death sound howling for
+// the rest of the flight.
 const PlayerExplosionSoundStartSystem = new System({
     name: 'PlayerExplosionSoundStart',
     events: [ZeroArmorEvent],
-    args: [PlayerShipSelector, Emit] as const,
-    step(_player, emit) {
+    args: [PlayerShipSelector, Emit, Optional(ArmorComponent)] as const,
+    step(_player, emit, armor) {
+        if (armorFullyRestored(armor)) {
+            return;
+        }
         emit(UiSoundEvent, { id: SOUND_EXPLOSION_LOOP, loop: true });
     }
 });
@@ -240,6 +297,7 @@ export const ExplosionPlugin: Plugin = {
         world.addSystem(ShipFinalExplosionSystem);
         world.addSystem(ShipSecondaryExplosionSystem);
         world.addSystem(ShipSecondaryExplosionDoneSystem);
+        world.addSystem(ShipSecondaryExplosionStaleSystem);
         world.addSystem(PlayerExplosionSoundStartSystem);
         world.addSystem(PlayerExplosionSoundStopSystem);
     },
@@ -250,6 +308,7 @@ export const ExplosionPlugin: Plugin = {
         world.removeSystem(ShipFinalExplosionSystem);
         world.removeSystem(ShipSecondaryExplosionSystem);
         world.removeSystem(ShipSecondaryExplosionDoneSystem);
+        world.removeSystem(ShipSecondaryExplosionStaleSystem);
         world.removeSystem(PlayerExplosionSoundStartSystem);
         world.removeSystem(PlayerExplosionSoundStopSystem);
     }

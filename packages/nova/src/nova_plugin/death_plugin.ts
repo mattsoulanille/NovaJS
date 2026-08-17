@@ -19,6 +19,7 @@ import { ControlledByComponent } from './ship_control.js';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Component } from 'nova_ecs/component';
 import { GetEntity } from 'nova_ecs/arg_types';
+import { Stat } from './stat.js';
 
 // const DamageQuery = new Query([Optional(ShieldComponent), Optional(ArmorComponent),
 // Optional(IonizationComponent), Optional(IonizationColorComponent),
@@ -93,12 +94,66 @@ export function disableOnlyArmorFloor(maxArmor: number): number {
 }
 
 export const ExplodingComponent = new Component<number>('ShipExplodingComponent');
+
+/**
+ * Whether a ship's armor is full — the tell that it is NOT in a death
+ * sequence, however it was asked.
+ *
+ * This exists because ZeroArmorEvent is *queued* the instant armor
+ * reaches zero but handled later, and by then the ship may have come
+ * back to life. The window is not hypothetical: ExplodingFinishedSystem
+ * queues the DeathEvent that ends a death sequence from step system #30,
+ * while every damage source runs after it (ProjectileCollisionSystem
+ * #34, BlastCollisionSystem #118, BeamDamageSystem #138). One more hit
+ * landing on a hulk in the very tick its explosion finishes therefore
+ * queues a ZeroArmorEvent *behind* that DeathEvent, and PlayerDeathSystem
+ * has already refilled the player's armor by the time it is handled. The
+ * display sees a worse version of the same thing: the simulation bridge
+ * forwards these events to the display world in *emit* order, batched
+ * across every tick since the last frame, and replays them after the
+ * frame's state (already showing the respawned, full-armor ship) has
+ * been applied.
+ *
+ * Acting on such an event restarts the death sequence on a ship that is
+ * flying around at full armor. In the simulation that re-attaches
+ * ExplodingComponent — making the player untargetable and unable to
+ * fire, and teleporting them back to the origin a deathDelay later. On
+ * the display it pins SecondaryExplosionComponent to the ship, which is
+ * only ever removed by a DeathEvent, so the ship trails explosions for
+ * the rest of the flight. That is Matthew's playtest report: "my ship
+ * was constantly playing the exploding animation while flying around ...
+ * after I died and respawned and probably died again immediately".
+ *
+ * So every consumer that *starts* something on zero armor re-checks
+ * against live state instead of trusting the event.
+ *
+ * WHY FULL ARMOR AND NOT MERELY ABOVE ZERO. 70 of the 288 stock ships
+ * have a nonzero armor recharge, and ArmorRecharge (step system #56)
+ * runs after the weapons that zero them, so a hulk's armor is typically
+ * a hair *above* zero (one tick of recharge, ~0.01) by the time its
+ * ZeroArmorEvent is handled — it then freezes there, since the hulk is
+ * below its disable threshold and disabled ships regenerate nothing.
+ * Treating "above zero" as alive would make every one of those ships
+ * immortal. Full armor is unreachable that way: only a respawn
+ * (PlayerDeathSystem refills to max) or an outside repair gets there.
+ *
+ * A ship with no armor stat, or a degenerate one with no armor to give,
+ * cannot be judged this way and is taken at face value.
+ */
+export function armorFullyRestored(armor?: Stat): boolean {
+    return Boolean(armor && armor.max > 0 && armor.current >= armor.max);
+}
+
 const ShipZeroArmorSystem = new System({
     name: 'ShipZeroArmorSystem',
-    args: [ShipDataComponent, ZeroArmorEvent, GetEntity] as const,
+    args: [ShipDataComponent, ZeroArmorEvent, GetEntity,
+        Optional(ArmorComponent)] as const,
     events: [ZeroArmorEvent],
-    step(ship, zeroArmorTime, {components}) {
-        if (components.has(ExplodingComponent)) {
+    step(ship, zeroArmorTime, {components}, armor) {
+        // Already dying (the hulk keeps taking hits), or the event
+        // describes a life that has already ended.
+        if (components.has(ExplodingComponent)
+            || armorFullyRestored(armor)) {
             return;
         }
         // TODO: Normalize all times to ms
@@ -109,16 +164,41 @@ const ShipZeroArmorSystem = new System({
 
 const ExplodingFinishedSystem = new System({
     name: 'ExplodingFinishedSystem',
-    args: [TimeResource, ExplodingComponent, GetEntity, UUID, Emit] as const,
-    step(time, endExplosionTime, entity, uuid, emit) {
+    args: [TimeResource, ExplodingComponent, UUID, Emit] as const,
+    step(time, endExplosionTime, uuid, emit) {
         if (endExplosionTime < time.time) {
-            entity.components.delete(ExplodingComponent);
+            // Deliberately does NOT delete ExplodingComponent here.
+            // DeathEvent is queued, so it is handled after the rest of
+            // this tick's step systems — including every weapon that
+            // deals damage. Clearing the marker now would leave a
+            // window in which the ship is neither exploding nor yet
+            // respawned, and a hit landing in that window would start a
+            // *second* death sequence through ShipZeroArmorSystem's
+            // has-ExplodingComponent guard. ExplodingClearedSystem
+            // clears it as part of handling the death instead, which is
+            // still within this same tick.
             emit(DeathEvent, time, [uuid]);
         }
     },
     // Determinism rule 4: the explosion end check compares against
     // time.time, so this must run after TimeSystem advances the clock.
     after: [TimeSystem],
+});
+
+/**
+ * Ends the death sequence when the death is *handled*, closing the
+ * window described in ExplodingFinishedSystem. Runs exactly once per
+ * death: ExplodingFinishedSystem is a step system, so it emits at most
+ * one DeathEvent per tick per exploding entity, and the event queue is
+ * drained before the next step.
+ */
+const ExplodingClearedSystem = new System({
+    name: 'ExplodingClearedSystem',
+    events: [DeathEvent],
+    args: [GetEntity] as const,
+    step({ components }) {
+        components.delete(ExplodingComponent);
+    },
 });
 
 /**
@@ -230,6 +310,7 @@ export const DeathPlugin: Plugin = {
         world.addSystem(PlayerDeathSystem);
         world.addSystem(ShipZeroArmorSystem);
         world.addSystem(ExplodingFinishedSystem);
+        world.addSystem(ExplodingClearedSystem);
     },
     remove(world) {
         world.removeSystem(DamageSystem);
@@ -237,5 +318,6 @@ export const DeathPlugin: Plugin = {
         world.removeSystem(PlayerDeathSystem);
         world.removeSystem(ShipZeroArmorSystem);
         world.removeSystem(ExplodingFinishedSystem);
+        world.removeSystem(ExplodingClearedSystem);
     }
 }

@@ -9,7 +9,7 @@ import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
-import { DamagedEvent, DeathEvent, ZeroArmorEvent } from './death_plugin.js';
+import { armorFullyRestored, DamagedEvent, DeathEvent, ZeroArmorEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { SourceComponent } from './weapon_components.js';
@@ -132,10 +132,18 @@ const KillCreditSystem = new System({
     events: [ZeroArmorEvent],
     args: [ZeroArmorEvent, ShipDataComponent, Optional(GovtComponent),
         Optional(DamageAttributionComponent), GetEntity, Entities,
-        Optional(GovtsResource), SimulationGameDataResource] as const,
+        Optional(GovtsResource), SimulationGameDataResource,
+        Optional(ArmorComponent)] as const,
     step(_time, shipData, govt, attribution, { components }, entities,
-        govts, gameData) {
+        govts, gameData, armor) {
         if (attribution?.killCredited) {
+            return;
+        }
+        // A ZeroArmorEvent that arrives after its subject already
+        // respawned (see armorFullyRestored) must not mark the new life
+        // as already-killed: whoever destroys it next would then get no
+        // combat rating and no legal penalty for the kill.
+        if (armorFullyRestored(armor)) {
             return;
         }
         if (attribution) {
