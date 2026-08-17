@@ -41,6 +41,9 @@ import { JunkParse } from "./parsers/junk_parse.js";
 import { OopsParse } from "./parsers/oops_parse.js";
 import { GovtParse } from "./parsers/govt_parse.js";
 import { MisnParse } from "./parsers/misn_parse.js";
+import {
+    builtInOutfitWeaponId, makeBuiltInAmmoOutfit, makeBuiltInWeaponOutfit,
+} from "./built_in_weapon_outfit.js";
 import { OutfitParse } from "./parsers/outfit_parse.js";
 import { PersParse } from "./parsers/pers_parse.js";
 import { PictImageMulti, PictImageMultiParse } from "./parsers/pict_parse.js";
@@ -275,8 +278,7 @@ export class NovaParse implements GameDataInterface {
         var data: NovaDataInterface = {
             Asteroid: this.makeGettable<RoidResource, AsteroidData>(NovaResourceType.röid, AsteroidParse),
             Ship: this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
-            Outfit: this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf,
-                async (outf, notFound) => OutfitParse(outf, notFound, await this.flagMap)),
+            Outfit: this.makeOutfitGettable(),
             Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
             Pict: this.pictGettable,
             PictImage: this.pictImageGettable,
@@ -399,6 +401,31 @@ export class NovaParse implements GameDataInterface {
             }
         }
         return shipPICTMap;
+    }
+
+    /**
+     * The oütf resources, plus the implicit outfits that mount a ship's
+     * built-in weapons when no oütf provides them (see
+     * built_in_weapon_outfit.ts). Implicit ids resolve here but are
+     * deliberately absent from `ids.Outfit`, so nothing enumerating the
+     * outfit catalogue — the outfitter's shelves above all — ever offers
+     * one for sale.
+     */
+    private makeOutfitGettable(): Gettable<OutfitData> {
+        const resources = this.makeGettable<OutfResource, OutfitData>(
+            NovaResourceType.oütf,
+            async (outf, notFound) => OutfitParse(outf, notFound, await this.flagMap));
+        return new Gettable(async (id: string, priority: number) => {
+            const builtIn = builtInOutfitWeaponId(id);
+            if (builtIn === undefined) {
+                return resources.get(id, priority);
+            }
+            const weapon = await this.data.Weapon.get(
+                builtIn.weaponId, priority);
+            return builtIn.kind === "weapon"
+                ? makeBuiltInWeaponOutfit(weapon)
+                : makeBuiltInAmmoOutfit(weapon);
+        });
     }
 
     private async makeWeaponOutfitMap(): WeaponOutfitMap {

@@ -738,6 +738,14 @@ export function visibleOutfits(outfits: Iterable<OutfitData>,
     }
 
     return ordered.filter(outfit => {
+        // A built-in weapon is part of the hull, not an item: no oütf
+        // defines it, so the original has nothing to show or buy back
+        // (see novaparse's built_in_weapon_outfit.ts). Such ids are
+        // already absent from NovaIDs.Outfit, so the shop never enumerates
+        // one; this keeps an owned built-in off the shelves too.
+        if (outfit.builtIn) {
+            return false;
+        }
         // A suppressed item the player owns still shows, so it can be sold;
         // 0x1000 governs what is offered FOR SALE, not what the player is
         // allowed to get rid of.
