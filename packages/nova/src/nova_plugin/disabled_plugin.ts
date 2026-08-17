@@ -156,11 +156,13 @@ export const ShipDisableSystem = new System({
  *    far faster than any sane deceleration would bleed off before it left
  *    the screen. DisabledMovementSystem still runs afterwards and keeps it
  *    at rest.
- *  - THE ROUTE IS PUT BACK. beginJump SHIFTS the destination off
- *    JumpRouteComponent when it starts, so a cancelled jump has to unshift
- *    it or the repaired ship's next jump would silently skip a hop and fly
- *    somewhere the pilot never chose. Fuel needs no such care: it is only
- *    charged at departure, which never happened.
+ *  - THE ROUTE IS PUT BACK, unless the hop was already FLOWN. beginJump
+ *    SHIFTS the destination off JumpRouteComponent when it starts, so a
+ *    cancelled jump has to unshift it or the repaired ship's next jump
+ *    would silently skip a hop and fly somewhere the pilot never chose. The
+ *    exception is stage 'arriving', which runs in the destination system:
+ *    see the unshift below. Fuel needs no such care: it is only charged at
+ *    departure, which never happened.
  *
  * ORDERING is the substance of the rule. `after: [ShipDisableSystem]` sees
  * a ship disabled on THIS tick, and `before: [JumpSequenceSystem]` means
@@ -199,8 +201,18 @@ export const JumpDisableCancelSystem = new System({
         movement.turnBack = false;
         // Give the destination back to the route. A FOLLOWER never took
         // one (beginFollowJump copies the leader's heading and consumes
-        // nothing), and a vanishing NPC has no route at all.
-        if (jump.follows === undefined && jump.to !== undefined && jumpRoute
+        // nothing), and a vanishing NPC has no route at all (and names no
+        // real destination to give back — see VANISH_DESTINATION).
+        //
+        // NOT AT STAGE 'arriving'. That stage runs in the DESTINATION
+        // system: the hop was flown, and the ship is sitting in it. Giving
+        // it back points the route at the system the ship is already in,
+        // and the next jump leaves and re-enters it — the pilot enters one
+        // system twice along a single route (Matthew's playtest,
+        // 2026-08-17). Nothing is lost by keeping it off: the hop is
+        // reached, and the rest of the route is untouched.
+        if (jump.follows === undefined && !jump.vanish
+            && jump.stage !== 'arriving' && jumpRoute
             && jumpRoute.route[0] !== jump.to) {
             jumpRoute.route.unshift(jump.to);
         }

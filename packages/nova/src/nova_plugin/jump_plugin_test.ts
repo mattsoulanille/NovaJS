@@ -5,7 +5,7 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { World } from "nova_ecs/world";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
 import { completeEntity } from "./entity_data_loader.js";
-import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
+import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
 import { makeShip } from "./make_ship.js";
 import { makeSystem, SIMULATION_STEP_MS } from "./make_system.js";
 import { applyControlEvents } from "./ship_control.js";
@@ -753,9 +753,181 @@ describe('reconcileRouteOnArrival', () => {
         expect(routeOf(ship)).toEqual(['nova:131', 'nova:132']);
     });
 
+    it('hyperspace arrival: drops a head naming the system just arrived in',
+        () => {
+            // The map, opened during the jump sequence and closed before
+            // departure, re-derives the route from the ORIGIN and writes it
+            // back — putting the hop the ship is already committed to back
+            // on the route. Arriving must not leave it there, or the next
+            // jump would go straight back out and in again.
+            const ship = shipWithRoute(['nova:130', 'nova:131']);
+            reconcileRouteOnArrival(ship, 'nova:130', 'jump');
+            expect(routeOf(ship)).toEqual(['nova:131']);
+        });
+
     it('is a no-op without a route component', () => {
         const ship = new Entity('ship');
         expect(() => reconcileRouteOnArrival(ship, 'nova:130', 'gate'))
             .not.toThrow();
     });
+});
+
+/**
+ * A route hop naming the system the ship is ALREADY IN must never be flown.
+ * Flying one jumps out of a system and straight back into it — the pilot
+ * enters the same system twice along one route (Matthew's playtest,
+ * 2026-08-17).
+ *
+ * Three ways a stale head gets onto the route, all repaired in the
+ * SIMULATION (deterministically, off server-visible state: the route
+ * component and the world's own SystemIdResource) rather than trusted to
+ * whichever client wrote it:
+ *
+ *  - the starmap, opened DURING a jump sequence and closed before the ship
+ *    departs, re-derives the route from the origin and writes back the hop
+ *    the ship is already committed to (starmap_plugin's setJumpRoute path);
+ *  - a jump cancelled after the ship has already arrived gives its
+ *    destination back to the route (disabled_plugin, fixed there too);
+ *  - the hop is a STACKED DUPLICATE of the current system — Nova swaps
+ *    between copies of a system at the same map position with control bits
+ *    (Sol is nova:130 under !(b147|b305) and nova:531 under (b147|b305)),
+ *    so a route pinned under one set of bits can name the copy of the very
+ *    system the player is standing in.
+ */
+describe('a route hop naming the system the ship is already in', () => {
+    /** A player ship, outside the no-jump zone, in `systemId`'s world. */
+    async function shipInSystem(systemId: string, route: string[]) {
+        const gameData = await getIntegrationGameData();
+        const ids = await gameData.ids;
+        const world = await makeSystem(systemId, gameData, undefined,
+            { npcs: false });
+        let shipData;
+        for (const shipId of [...ids.Ship].sort()) {
+            const candidate = await gameData.data.Ship.get(shipId);
+            if (!candidate.physics.inertialess
+                && !candidate.physics.canJumpWithoutSlowing) {
+                shipData = candidate;
+                break;
+            }
+        }
+        const ship = makeShip(shipData!);
+        ship.components.set(PlayerShipSelector, undefined);
+        ship.components.set(JumpRouteComponent, { route });
+        await completeEntity(world, ship);
+        world.entities.set(SHIP_UUID, ship);
+        ship.components.get(MovementStateComponent)!.position =
+            new Position(0, -(JUMP_DISTANCE * 2));
+        return { gameData, world, ship };
+    }
+
+    it('is dropped on arrival, so a held key jumps one hop further along',
+        async () => {
+            const { gameData, world, ship, destinationId } =
+                await makeJumpHarness();
+            const destination = await gameData.data.System.get(destinationId);
+            const nextId = [...destination.links].sort()[0];
+            if (!nextId) {
+                throw new Error('Expected the destination to have links');
+            }
+            await gameData.data.System.get(nextId);
+            ship.components.set(JumpRouteComponent,
+                { route: [destinationId, nextId] });
+            const movement = ship.components.get(MovementStateComponent)!;
+            movement.position = new Position(0, -(JUMP_DISTANCE * 2));
+            world.step();
+
+            let finishJump: FinishJump | undefined;
+            world.events.get(FinishJumpEvent).subscribe(({ data }) => {
+                finishJump = data;
+            });
+            pressHyperjump(world);
+            // What the map does when it is closed mid-sequence: the route
+            // is re-derived from the ORIGIN, so the destination this ship
+            // is already flying to is back at its head.
+            ship.components.get(JumpRouteComponent)!.route =
+                [destinationId, nextId];
+            stepUntil(world, () => finishJump !== undefined);
+            expect(finishJump!.to).toEqual(destinationId);
+
+            const destWorld = await makeSystem(destinationId, gameData,
+                undefined, { npcs: false });
+            const jumpedShip = finishJump!.entity;
+            await completeEntity(destWorld, jumpedShip);
+            destWorld.entities.set(SHIP_UUID, jumpedShip);
+            applyControlEvents(destWorld, undefined,
+                [{ action: 'hyperjump', state: 'repeat' }]);
+            destWorld.step();
+            destWorld.step();
+
+            const nextJump = jumpedShip.components.get(JumpComponent);
+            expect(nextJump).toBeDefined();
+            // Never back out of and into the system it just arrived in.
+            expect(nextJump!.to).not.toEqual(destinationId);
+            expect(nextJump!.to).toEqual(nextId);
+        }, 60_000);
+
+    it('is dropped even when the hop is a stacked DUPLICATE of this system',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            // The two Sols: same name, same map position, swapped by
+            // (b147 | b305). Both are linked from Tichel (nova:129), so a
+            // route pinned under the other set of bits can name the copy.
+            const sol = await gameData.data.System.get('nova:130');
+            const otherSol = await gameData.data.System.get('nova:531');
+            expect(otherSol.name).toEqual(sol.name);
+            expect(otherSol.position).toEqual(sol.position);
+            const onward = [...sol.links].sort()[0]!;
+            await gameData.data.System.get(onward);
+
+            const { world, ship } = await shipInSystem('nova:130',
+                ['nova:531', onward]);
+            world.step();
+            pressHyperjump(world);
+
+            const jump = ship.components.get(JumpComponent);
+            expect(jump).toBeDefined();
+            expect(jump!.to).not.toEqual('nova:531');
+            expect(jump!.to).toEqual(onward);
+        }, 60_000);
+
+    it('is dropped before a multi-jump chain auto-continues', async () => {
+        const gameData = await getIntegrationGameData();
+        const { originId, destinationId } = await findLinkedSystems();
+        await gameData.data.System.get(destinationId);
+        // Arrived in `originId` with the multi-jump continuation marker
+        // still set and a route whose head names this very system.
+        const { world, ship } = await shipInSystem(originId,
+            [originId, destinationId]);
+        ship.components.set(MultiJumpContinueComponent, { left: 1 });
+        world.step();
+
+        const jump = ship.components.get(JumpComponent);
+        expect(jump).toBeDefined();
+        expect(jump!.to).not.toEqual(originId);
+        expect(jump!.to).toEqual(destinationId);
+    }, 60_000);
+
+    it('a jump cancelled AFTER arrival does not give the hop back',
+        async () => {
+            // JumpDisableCancelSystem hands the destination back to the
+            // route so a repaired pilot still flies where they chose — but
+            // a jump cancelled at stage 'arriving' has already REACHED its
+            // destination, and handing that back points the route at the
+            // system the ship is sitting in.
+            const { destinationId } = await findLinkedSystems();
+            const { world, ship } = await shipInSystem(destinationId, []);
+            // One step to derive the ship's health/physics components.
+            world.step();
+            ship.components.set(JumpComponent, {
+                stage: 'arriving', to: destinationId, direction: 0,
+            });
+            const armor = ship.components.get(ArmorComponent)!;
+            armor.current = armor.max * 0.05;
+            armor.recharge = 0;
+            ship.components.set(DisabledComponent, { repairAt: null });
+            world.step();
+
+            expect(ship.components.get(JumpComponent)).toBeUndefined();
+            expect(ship.components.get(JumpRouteComponent)!.route).toEqual([]);
+        }, 60_000);
 });

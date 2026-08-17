@@ -7,7 +7,7 @@ import { Component } from 'nova_ecs/component';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
 import { isExplored, markExplored } from '../nova_plugin/explored_store.js';
-import { JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
+import { JumpComponent, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
 import { missionMapMarks } from '../nova_plugin/mission_logic.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
@@ -149,6 +149,20 @@ export const StarmapPlugin: Plugin = {
                 const route = await starmap.show(jumpRoute?.route ?? []);
                 if (disposed) {
                     return route;
+                }
+                // A JUMP ALREADY IN PROGRESS has consumed its destination
+                // off the route (beginJump shifts it at jump start), but
+                // the map re-derives the route from the system the ship is
+                // still in, so that hop is back at the head. Written back
+                // as-is, the ship would arrive and immediately jump out of
+                // and back into the system it just reached (Matthew's
+                // playtest, 2026-08-17). The simulation drops such a head
+                // on arrival regardless (JumpRouteReconcileSystem); this
+                // keeps the route the player and their peers see correct
+                // in the meantime.
+                const committed = playerComponent(world, JumpComponent)?.to;
+                if (committed && route[0] === committed) {
+                    route.shift();
                 }
                 if (jumpRoute) {
                     jumpRoute.route = route;

@@ -26,6 +26,23 @@ import { GameDate } from 'novadatainterface/player_start_data';
 
 export type Adjacency = ReadonlyMap<string, readonly string[]>;
 
+/**
+ * Whether two system ids name the same PLACE. Nova stacks several copies of
+ * one system at the same map position and swaps between them with control
+ * bits (the two Sols at (0,0): nova:130 under `!(b147|b305)`, nova:531 under
+ * `(b147|b305)`, both linked from Tichel). The copies have different ids but
+ * are one system to the player, so a route that leads to a copy of where the
+ * player already is flies them out and straight back in — they enter the
+ * same system twice (Matthew's playtest, 2026-08-17).
+ *
+ * Injected rather than derived here because this module only knows ids and
+ * links; the map passes a test over system names and coordinates
+ * (starmap.ts). The default is plain id equality, which is what every caller
+ * without stacked data wants.
+ */
+export type SamePlace = (a: string, b: string) => boolean;
+const sameId: SamePlace = (a, b) => a === b;
+
 export interface RouteState {
     /** Ordered waypoint systems the player pinned via shift-click. */
     pinned: string[];
@@ -103,13 +120,17 @@ export function shortestPath(adj: Adjacency, from: string,
  * with no path from the previous anchor is SKIPPED (it stays pinned on the
  * map but contributes no hops) — emitting it directly would break the
  * adjacent-consecutive-hops contract the jump plugin's staging relies on.
+ *
+ * A pin that is the same PLACE as the anchor is skipped as well, not only
+ * the same id: routing to a stacked duplicate of where the ship already is
+ * would send it out and straight back in (see {@link SamePlace}).
  */
 export function expandRoute(adj: Adjacency, current: string,
-    pinned: readonly string[]): string[] {
+    pinned: readonly string[], samePlace: SamePlace = sameId): string[] {
     const route: string[] = [];
     let anchor = current;
     for (const pin of pinned) {
-        if (pin === anchor) {
+        if (samePlace(pin, anchor)) {
             continue;
         }
         const segment = shortestPath(adj, anchor, pin);
@@ -164,12 +185,12 @@ export function cycleSingle(adjacent: readonly string[],
  * waypoint produces a route.
  */
 export function effectiveRoute(adj: Adjacency, current: string,
-    state: RouteState): string[] {
-    const multi = expandRoute(adj, current, state.pinned);
+    state: RouteState, samePlace: SamePlace = sameId): string[] {
+    const multi = expandRoute(adj, current, state.pinned, samePlace);
     if (multi.length > 0) {
         return multi;
     }
-    if (state.single !== undefined && state.single !== current
+    if (state.single !== undefined && !samePlace(state.single, current)
         && adjacentSystems(adj, current).includes(state.single)) {
         return [state.single];
     }
@@ -188,9 +209,12 @@ export function effectiveRoute(adj: Adjacency, current: string,
  * Pure: returns a new state.
  */
 export function reconcileRouteState(state: RouteState, current: string,
-    adj: Adjacency, simRoute: readonly string[]): RouteState {
+    adj: Adjacency, simRoute: readonly string[],
+    samePlace: SamePlace = sameId): RouteState {
     const pinned = [...state.pinned];
-    while (pinned.length > 0 && pinned[0] === current) {
+    // "Arrived at" by PLACE, not by id: a pin made under different control
+    // bits can name another copy of the system the player is now in.
+    while (pinned.length > 0 && samePlace(pinned[0]!, current)) {
         pinned.shift();
     }
     let single = state.single;
