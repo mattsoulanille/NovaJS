@@ -1,10 +1,13 @@
+import { ShipData } from "novadatainterface/ship_data";
 import { ExplosionData } from "novadatainterface/explosion_data";
-import { Emit, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
+import { Emit, EmitFunction, Entities, GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Angle } from "nova_ecs/datatypes/angle";
 import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { Entity } from "nova_ecs/entity";
+import { EntityMap } from "nova_ecs/entity_map";
+import { DeleteEvent } from "nova_ecs/events";
 import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Optional } from "nova_ecs/optional";
@@ -12,6 +15,7 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
 import { v4 } from "uuid";
+import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { ExplosionDataComponent } from "../nova_plugin/animation_plugin.js";
 import { DisplayAssetDataResource } from "../nova_plugin/game_data_resource.js";
 import { ProjectileExplodeEvent } from "../nova_plugin/projectile_plugin.js";
@@ -188,9 +192,9 @@ function randomPointInCircle(r: number): Vector {
  * looping for the whole sequence (PlayerExplosionSoundStartSystem). That
  * loop IS the player's breakup sound in the original, so layering 302
  * over it would be playing the same event twice. The final explosion
- * still sounds for player and NPC alike: it comes off the standalone
- * explosion entity, and the 371 loop stops on the same DeathEvent that
- * spawns it.
+ * still sounds for player and NPC alike — {@link spawnFinalExplosion}
+ * plays the Explode2 bööm's own sound — and the 371 loop stops on the
+ * same death that spawns it.
  */
 const SecondaryExplosionSystem = new System({
     name: 'SecondaryExplosion',
@@ -281,8 +285,36 @@ const ProjectileExplosionSystem = new System({
 });
 
 /**
+ * Marks a ship the display believes is in its death sequence: set when
+ * its armor reaches zero, cleared when the death is handled (or when
+ * the armor comes back — see ShipSecondaryExplosionStaleSystem).
+ *
+ * It exists so the final explosion survives the ONE ordering the
+ * display cannot control: an NPC's entity is deleted by the simulation
+ * (DeathAISystem) on the very tick it dies, and the bridge applies a
+ * frame's STATE — the deletion included — before it replays that
+ * frame's EVENTS. By the time the display's DeathEvent is dispatched,
+ * the ship it names is gone from the display world, and an event
+ * targeted at a missing entity runs on nothing at all: no fireball, no
+ * bööm sound, for every NPC death in the game. (The local player's ship
+ * respawns rather than being deleted, so only its death ever reached
+ * ShipFinalExplosionSystem.)
+ *
+ * The deletion itself is the display's reliable signal, since nova_ecs
+ * hands DeleteEvent the removed Entity OBJECT — still carrying the
+ * hull's shïp data and its last synced position, which is all the final
+ * explosion needs. This marker is what separates "deleted because it
+ * died" from "deleted because it left the system", and whichever of the
+ * two paths fires first clears it, so a ship can never explode twice.
+ */
+const ShipDyingComponent = new Component<undefined>('ShipDying');
+
+/**
  * Draws the fireball a ship "disappears in" when its death sequence
- * ends, from the TWO separate shïp fields the Bible gives for it:
+ * ends — and plays the Explode2 bööm's own sound with it (bööm 133
+ * "ship exploding" -> snd 303 for every stock ship, but read from the
+ * bööm, never assumed) — from the TWO separate shïp fields the Bible
+ * gives for the graphic:
  *
  *  - Explode2 (~:2445) names the bööm, and Explode2 + 1000 adds "a
  *    random number of type-0 explosions around it" — ShipData
@@ -299,38 +331,143 @@ const ProjectileExplosionSystem = new System({
  * neither. They were previously collapsed into one `largeExplosion`
  * field, which meant every DeathDelay >= 60 ship nested extra copies of
  * bööm 133 around itself and no ship's fireball ever grew.
+ *
+ * THE SOUND IS EMITTED HERE, not from ExplosionSystem as an ordinary
+ * explosion's is, and the fireball entity is handed a copy of the bööm
+ * with `sound: null` so it cannot play twice. ExplosionSystem plays a
+ * sound only once the entity's PIXI graphic has loaded, which is a
+ * per-peer, per-cache-state delay of unbounded length on the very death
+ * that has the coldest cache — the one moment a death sound must not be
+ * late. Emitting at the explosion keeps it on the everyone-hears
+ * SoundEvent channel with the breakup sounds (same volume and the same
+ * per-frame SoundStartLimiter), exactly once, at the ship's position.
+ */
+function spawnFinalExplosion(ship: ShipData,
+    gameData: DisplayAssetDataInterface, position: Position,
+    entities: EntityMap, emit: EmitFunction) {
+    if (!ship.finalExplosion) {
+        return;
+    }
+    const explosionData =
+        gameData.data.Explosion.getCached(ship.finalExplosion);
+
+    if (!explosionData) {
+        return;
+    }
+    let sparks: ExplosionData | undefined;
+    if (ship.finalExplosionSparks) {
+        // Not yet loaded just means no sparks this time; the fireball
+        // itself still shows.
+        sparks = gameData.data.Explosion
+            .getCached(ship.finalExplosionSparks) ?? undefined;
+    }
+    const scale = ship.largeExplosion
+        ? finalExplosionScale(ship.physics.mass) : 1;
+    if (explosionData.sound) {
+        emit(SoundEvent, { id: explosionData.sound });
+    }
+    entities.set(v4(), makeExplosion(
+        { ...explosionData, sound: null }, position, sparks, scale));
+}
+
+/**
+ * The final explosion of a ship whose entity is still in the display
+ * world when its death is replayed — the local player's, which respawns
+ * rather than being deleted. Everything else comes through
+ * ShipDeletedFinalExplosionSystem; see ShipDyingComponent for why there
+ * are two paths.
  */
 const ShipFinalExplosionSystem = new System({
     name: 'ShipFinalExplosionSystem',
     events: [DeathEvent],
     before: [PlayerDeathSystem, DeathAISystem],
-    args: [ShipDataComponent, DisplayAssetDataResource, MovementStateComponent, Entities] as const,
-    step(ship, gameData, movement, entities) {
-        if (!ship.finalExplosion) {
-            return;
-        }
-        const explosionData =
-            gameData.data.Explosion.getCached(ship.finalExplosion);
-
-        if (!explosionData) {
-            return;
-        }
-        let sparks: ExplosionData | undefined;
-        if (ship.finalExplosionSparks) {
-            // Not yet loaded just means no sparks this time; the fireball
-            // itself still shows.
-            sparks = gameData.data.Explosion
-                .getCached(ship.finalExplosionSparks) ?? undefined;
-        }
-        const scale = ship.largeExplosion
-            ? finalExplosionScale(ship.physics.mass) : 1;
-        entities.set(v4(), makeExplosion(
-            explosionData,
-            Position.fromVectorLike(movement.position),
-            sparks, scale));
-
+    args: [ShipDataComponent, DisplayAssetDataResource, MovementStateComponent,
+        Entities, Emit, GetEntity] as const,
+    step(ship, gameData, movement, entities, emit, { components }) {
+        // Whichever path explodes the ship takes the marker with it, so
+        // a later deletion of the same hull cannot explode it again.
+        components.delete(ShipDyingComponent);
+        spawnFinalExplosion(ship, gameData,
+            Position.fromVectorLike(movement.position), entities, emit);
     }
 });
+
+/**
+ * The final explosion of a ship that the simulation DELETED as it died
+ * — every NPC, and any hull the room drops mid-sequence. The entity is
+ * already out of the display world by the time its DeathEvent arrives
+ * (see ShipDyingComponent), so the deletion is what has to draw it.
+ *
+ * Gated on the marker, so a ship that leaves the world for any other
+ * reason — jumping out, a bay fighter recovered, the room dropping a
+ * distant NPC — is removed silently, as it always was.
+ */
+const ShipDeletedFinalExplosionSystem = new System({
+    name: 'ShipDeletedFinalExplosionSystem',
+    events: [DeleteEvent],
+    args: [ShipDyingComponent, ShipDataComponent, DisplayAssetDataResource,
+        MovementStateComponent, Entities, Emit, GetEntity] as const,
+    step(_dying, ship, gameData, movement, entities, emit, { components }) {
+        components.delete(ShipDyingComponent);
+        spawnFinalExplosion(ship, gameData,
+            Position.fromVectorLike(movement.position), entities, emit);
+    }
+});
+
+/**
+ * Starts a ship's death sequence in the display: marks the hull as
+ * dying (see ShipDyingComponent) and starts loading what its final
+ * explosion will need, a whole shïp DeathDelay before it needs it.
+ *
+ * THE PREFETCH IS THE OTHER HALF OF THE MISSING SOUND. Both the bööm
+ * and its snd are reached with getCached, whose FIRST call for an id
+ * always misses (it returns undefined and starts a background load), so
+ * a cold id is silent exactly once. The breakup explosions hide this —
+ * a death sequence asks for bööm 132's sound a dozen times, so only the
+ * first puff is quiet — but a ship explodes finally exactly once, and
+ * nothing else in the game plays bööm 133 or snd 303, so the miss lands
+ * squarely on the sound this system exists to make audible. Warming
+ * both at zero armor gives the load the entire death delay (0.33 s for
+ * the twitchiest stock hull, 8.3 s for a Leviathan) to finish.
+ *
+ * Display-only and load-timing dependent by nature: nothing here is
+ * read by the simulation, and a prefetch that loses the race merely
+ * costs one silent explosion, exactly as before.
+ */
+const ShipDeathSequenceStartSystem = new System({
+    name: 'ShipDeathSequenceStart',
+    events: [ZeroArmorEvent],
+    args: [ShipDataComponent, DisplayAssetDataResource, GetEntity,
+        Optional(ArmorComponent)] as const,
+    step(ship, gameData, { components }, armor) {
+        // The same replayed-after-the-respawn event ShipSecondary-
+        // ExplosionSystem guards against; marking a living ship as
+        // dying would explode it the next time it left the system.
+        if (armorFullyRestored(armor)) {
+            return;
+        }
+        components.set(ShipDyingComponent, undefined);
+        prefetchExplosionSound(gameData, ship.finalExplosion);
+        prefetchExplosionSound(gameData, ship.initialExplosion);
+    }
+});
+
+/** Warms a bööm and its snd so the explosion that needs them is audible. */
+function prefetchExplosionSound(gameData: DisplayAssetDataInterface,
+    explosionId: string | null) {
+    if (!explosionId) {
+        return;
+    }
+    // A missing bööm or snd is the game data's problem, not this
+    // prefetch's: the explosion path warns about it on its own, so a
+    // failure here is swallowed rather than logged twice.
+    void gameData.data.Explosion.get(explosionId).then(explosion => {
+        if (explosion?.sound) {
+            return gameData.data.Sound.get(explosion.sound);
+        }
+        return undefined;
+    }).catch(() => { });
+}
 
 /**
  * Starts a ship's breakup animation when its armor reaches zero.
@@ -393,6 +530,7 @@ const ShipSecondaryExplosionDoneSystem = new System({
     events: [DeathEvent],
     step(entity) {
         entity.components.delete(SecondaryExplosionComponent);
+        entity.components.delete(ShipDyingComponent);
     }
 });
 
@@ -416,13 +554,18 @@ const ShipSecondaryExplosionDoneSystem = new System({
  * Gated on ArmorComponent, so the standalone explosion entities
  * makeExplosion creates — which carry SecondaryExplosionComponent and no
  * armor — are untouched.
+ *
+ * It sweeps ShipDyingComponent on the same rule and for the same
+ * reason: a hull left marked as dying after coming back to full armor
+ * would draw a final explosion the next time it left the display world.
  */
 const ShipSecondaryExplosionStaleSystem = new System({
     name: 'ShipSecondaryExplosionStaleSystem',
-    args: [SecondaryExplosionComponent, ArmorComponent, GetEntity] as const,
-    step(_explosion, armor, { components }) {
+    args: [ArmorComponent, GetEntity] as const,
+    step(armor, { components }) {
         if (armorFullyRestored(armor)) {
             components.delete(SecondaryExplosionComponent);
+            components.delete(ShipDyingComponent);
         }
     },
     before: [SecondaryExplosionSystem],
@@ -513,6 +656,8 @@ export const ExplosionPlugin: Plugin = {
         world.addSystem(ProjectileExplosionSystem);
         world.addSystem(SecondaryExplosionSystem);
         world.addSystem(ShipFinalExplosionSystem);
+        world.addSystem(ShipDeletedFinalExplosionSystem);
+        world.addSystem(ShipDeathSequenceStartSystem);
         world.addSystem(ShipSecondaryExplosionSystem);
         world.addSystem(ShipSecondaryExplosionDoneSystem);
         world.addSystem(ShipSecondaryExplosionStaleSystem);
@@ -524,6 +669,8 @@ export const ExplosionPlugin: Plugin = {
         world.removeSystem(ProjectileExplosionSystem);
         world.removeSystem(SecondaryExplosionSystem);
         world.removeSystem(ShipFinalExplosionSystem);
+        world.removeSystem(ShipDeletedFinalExplosionSystem);
+        world.removeSystem(ShipDeathSequenceStartSystem);
         world.removeSystem(ShipSecondaryExplosionSystem);
         world.removeSystem(ShipSecondaryExplosionDoneSystem);
         world.removeSystem(ShipSecondaryExplosionStaleSystem);

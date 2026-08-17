@@ -55,7 +55,16 @@ function stubScale(): { x: number, y: number, set(s: number): void } {
     };
 }
 
-function makeAssets(): DisplayAssetDataInterface {
+/**
+ * The display's asset side, with the two-stage cache that matters here:
+ * `getCached` MISSES until something has awaited `get` for that id — the
+ * real Gettable's behaviour (novadatainterface/gettable.ts), and the
+ * reason a cold bööm or snd is silent exactly once. `soundRequests`
+ * records every snd id asked for, so the death sequence's prefetch can
+ * be asserted.
+ */
+function makeAssets(soundRequests: string[] = [],
+    coldExplosions = new Set<string>()): DisplayAssetDataInterface {
     const explosions: { [id: string]: ExplosionData } = {
         [EXPLOSION_ID]: {
             ...getDefaultExplosionData(), id: EXPLOSION_ID,
@@ -73,8 +82,20 @@ function makeAssets(): DisplayAssetDataInterface {
     return {
         data: {
             Explosion: {
-                getCached: (id: string) => explosions[id],
-                get: (id: string) => Promise.resolve(explosions[id]),
+                getCached: (id: string) =>
+                    coldExplosions.has(id) ? undefined : explosions[id],
+                get: (id: string) => {
+                    coldExplosions.delete(id);
+                    return Promise.resolve(explosions[id]);
+                },
+            },
+            Sound: {
+                getCached: (id: string) => soundRequests.includes(id)
+                    ? { id } : undefined,
+                get: (id: string) => {
+                    soundRequests.push(id);
+                    return Promise.resolve({ id });
+                },
             },
         },
     } as unknown as DisplayAssetDataInterface;
@@ -98,9 +119,14 @@ async function displayWorld(armorCurrent: number,
         finalExplosionSparks?: string | null,
         largeExplosion?: boolean, mass?: number,
         graphics?: boolean,
+        /** bööm ids whose data is not in the cache yet. */
+        coldExplosions?: string[],
     } = {}) {
     const world = new World('explosion display test');
-    world.resources.set(DisplayAssetDataResource, makeAssets());
+    /** Every snd id the display has asked the asset layer to load. */
+    const soundRequests: string[] = [];
+    world.resources.set(DisplayAssetDataResource, makeAssets(soundRequests,
+        new Set(options.coldExplosions ?? [])));
     // The display world's clock; advanced by hand below.
     const time = { time: 0, delta_ms: 100, delta_s: 0.1 };
     world.resources.set(TimeResource, time as never);
@@ -213,11 +239,27 @@ async function displayWorld(armorCurrent: number,
         { time: simTime.time, delta_ms: 0, delta_s: 0, frame: 0 }, [SHIP]);
     const die = () => world.emit(DeathEvent,
         { time: simTime.time, delta_ms: 0, delta_s: 0, frame: 0 }, [SHIP]);
+    /**
+     * A death as the real client sees it for every ship the simulation
+     * deletes — every NPC (DeathAISystem removes the entity on the tick
+     * it dies), and any hull the room drops.
+     *
+     * The order is the bridge's, and it is the whole bug:
+     * applySimulationFrame applies the frame's STATE (this deletion)
+     * and only then replays the frame's EVENTS (this DeathEvent), so
+     * the event names a ship that is already gone from the display
+     * world. Both land in the event queue and are dispatched by the
+     * step that follows, deletion first.
+     */
+    const dieAndVanish = () => {
+        world.entities.delete(SHIP);
+        die();
+    };
 
     return {
         world, ship, stepTime, explosionCount, newExplosions,
         newExplosionIds, scalesOf, time, simTime,
-        sounds, uiSounds, zeroArmor, die,
+        sounds, uiSounds, soundRequests, zeroArmor, die, dieAndVanish,
     };
 }
 
@@ -480,9 +522,6 @@ describe('death sequence explosion sounds', () => {
                     ship.components.set(PlayerShipSelector, undefined);
                 }
                 die();
-                // Two steps: the stubbed graphic lands on the first one,
-                // so ExplosionSystem (which plays the sound) picks the
-                // entity up on the second.
                 stepTime();
                 stepTime();
                 // The Explode2 bööm's graphic...
@@ -494,6 +533,171 @@ describe('death sequence explosion sounds', () => {
                 expect(sounds).toEqual([FINAL_SOUND]);
             }
         });
+});
+
+/**
+ * Matthew's playtest report: "final ship explosion sound is missing".
+ *
+ * Two independent causes, both of which had to go:
+ *
+ *  1. THE DISPLAY NEVER SAW MOST DEATHS. An NPC's entity is deleted by
+ *     the simulation on the tick it dies, and the bridge applies a
+ *     frame's state before replaying its events — so the DeathEvent that
+ *     draws the fireball named an entity the display world had already
+ *     dropped, and a targeted event with no surviving target runs on
+ *     nothing. Every NPC death in the game was missing its Explode2
+ *     fireball AND its bööm sound; only the player's own ship, which
+ *     respawns instead of being deleted, ever got one.
+ *  2. THE FIRST ONE WAS SILENT ANYWAY. Both the bööm and its snd come
+ *     from getCached, which misses (and merely starts a load) the first
+ *     time an id is asked for. A breakup asks a dozen times so only its
+ *     first puff is quiet, but a ship explodes finally exactly once —
+ *     the miss lands on the very sound that is supposed to play.
+ */
+describe('final explosion sound', () => {
+    /** The stock hull: Explode1 -> bööm 132, Explode2 -> bööm 133. */
+    const stockShip = {
+        deathDelay: 1, finalExplosion: FINAL_EXPLOSION_ID, graphics: true,
+    };
+
+    it('plays the bööm\'s sound when the simulation deletes the dying '
+        + 'ship — every NPC death', async () => {
+            const { world, stepTime, sounds, zeroArmor, dieAndVanish } =
+                await displayWorld(0, stockShip);
+            zeroArmor();
+            stepTime();
+            dieAndVanish();
+            stepTime();
+
+            // Explode2's bööm sound (bööm 133 -> snd 303 in the stock
+            // data), from the bööm's own `sound` field — not a constant.
+            expect(sounds.filter(id => id === FINAL_SOUND).length)
+                .toEqual(1);
+            // ...at the ship's position, with the fireball.
+            const finals = [...world.entities].filter(([, entity]) =>
+                entity.components.get(ExplosionDataComponent)?.id
+                === FINAL_EXPLOSION_ID);
+            expect(finals.length).toEqual(1);
+            expect(finals[0][1].components.get(MovementStateComponent)
+                ?.position).toEqual(new Position(10, 20));
+        });
+
+    it('plays it exactly once, however the death is ordered', async () => {
+        // The deleted-entity path and the DeathEvent path both fire for
+        // a hull the bridge deletes; whichever runs first must take the
+        // death with it.
+        for (const [name, order] of [
+            ['deletion first', (w: Awaited<ReturnType<typeof displayWorld>>) =>
+                w.dieAndVanish()],
+            ['event first', (w: Awaited<ReturnType<typeof displayWorld>>) => {
+                w.die();
+                w.world.entities.delete(SHIP);
+            }],
+        ] as const) {
+            const world = await displayWorld(0, stockShip);
+            world.zeroArmor();
+            world.stepTime();
+            order(world);
+            for (let i = 0; i < 5; i++) {
+                world.stepTime();
+            }
+            expect(world.sounds.filter(id => id === FINAL_SOUND).length)
+                .withContext(name).toEqual(1);
+        }
+    });
+
+    it('does not explode a ship that merely LEFT the world', async () => {
+        // Jumping out, a bay fighter recovered, the room dropping a
+        // distant NPC: a deletion with no death sequence behind it.
+        const { world, stepTime, sounds, explosionCount } =
+            await displayWorld(100, stockShip);
+        world.entities.delete(SHIP);
+        for (let i = 0; i < 5; i++) {
+            stepTime();
+        }
+        expect(sounds).toEqual([]);
+        expect(explosionCount()).toEqual(0);
+    });
+
+    it('does not explode a ship whose armor came back before it left',
+        async () => {
+            // The zero-armor event replayed after a respawn (see
+            // armorFullyRestored): the ship is alive at full armor, so
+            // the marker must never be set — and the stale sweep clears
+            // it if it somehow was.
+            const { world, stepTime, sounds, zeroArmor } =
+                await displayWorld(100, stockShip);
+            zeroArmor();
+            stepTime();
+            world.entities.delete(SHIP);
+            stepTime();
+            expect(sounds).toEqual([]);
+        });
+
+    it('warms the bööm and its snd at zero armor, so the first death in '
+        + 'a session is not the silent one', async () => {
+            // getCached misses (and only starts a load) the first time,
+            // so without the prefetch the one explosion that plays snd
+            // 303 is exactly the one that finds it uncached.
+            const { stepTime, soundRequests, zeroArmor } =
+                await displayWorld(0, {
+                    ...stockShip,
+                    coldExplosions: [EXPLOSION_ID, FINAL_EXPLOSION_ID],
+                });
+            zeroArmor();
+            stepTime();
+            // Awaiting the prefetch's promise chain.
+            await Promise.resolve();
+            await Promise.resolve();
+            expect(soundRequests).toContain(FINAL_SOUND);
+            expect(soundRequests).toContain(BREAKUP_SOUND);
+        });
+
+    it('still plays for the LOCAL player, whose ship respawns instead of '
+        + 'being deleted', async () => {
+            const { ship, stepTime, sounds, uiSounds, zeroArmor, die } =
+                await displayWorld(0, stockShip);
+            ship.components.set(PlayerShipSelector, undefined);
+            zeroArmor();
+            stepTime();
+            die();
+            stepTime();
+            // The breakup loop (snd 371) stops, and the final bööm plays
+            // over the everyone-hears channel — one event, not two.
+            expect(uiSounds[uiSounds.length - 1])
+                .toEqual({ id: SOUND_EXPLOSION_LOOP, stop: true });
+            expect(sounds.filter(id => id === FINAL_SOUND).length)
+                .toEqual(1);
+        });
+
+    it('does not play twice when the fireball\'s graphic loads', async () => {
+        // The fireball entity carries a copy of the bööm with its sound
+        // stripped, so ExplosionSystem — which plays an ordinary
+        // explosion's sound once its graphic arrives — cannot repeat it.
+        const { stepTime, sounds, zeroArmor, dieAndVanish } =
+            await displayWorld(0, stockShip);
+        zeroArmor();
+        stepTime();
+        dieAndVanish();
+        for (let i = 0; i < 10; i++) {
+            stepTime();
+        }
+        expect(sounds.filter(id => id === FINAL_SOUND).length).toEqual(1);
+    });
+
+    it('says nothing for a ship with no Explode2 at all', async () => {
+        // 0 of the 288 stock ships, but a plug-in may leave it unset.
+        const { world, stepTime, sounds, zeroArmor, dieAndVanish } =
+            await displayWorld(0, { ...stockShip, finalExplosion: null });
+        zeroArmor();
+        stepTime();
+        dieAndVanish();
+        stepTime();
+        expect(sounds.filter(id => id === FINAL_SOUND).length).toEqual(0);
+        expect([...world.entities].filter(([, entity]) =>
+            entity.components.get(ExplosionDataComponent)?.id
+            === FINAL_EXPLOSION_ID).length).toEqual(0);
+    });
 });
 
 /**
