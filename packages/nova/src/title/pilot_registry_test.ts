@@ -295,6 +295,40 @@ describe('pilot registry', () => {
     });
 
     describe('export / import', () => {
+        it('imports a pilot whose save carries a Map-coded field (a mission '
+            + 'with special ships) — the shipped regression', () => {
+            // ActiveMission.shipObjective.live is a `map(...)` codec: the
+            // io-ts DECODED file.save held a live Map, and JSON.stringify of
+            // a Map is "{}", so re-validating the decoded object rejected
+            // every pilot who had ever taken a special-ship mission.
+            const store = new MemoryStorage();
+            const a = createPilot(profile('Hunter'), store);
+            const withMission: SaveData = {
+                ...SAMPLE_SAVE,
+                missions: [['nova:257', {
+                    id: 'nova:257', acceptedDay: 1, acceptedAt: 'nova:134',
+                    travelPlanet: null, returnPlanet: 'nova:128',
+                    cargoType: -1, cargoQty: 0, cargoLoaded: false,
+                    travelDone: false, deadlineDay: null,
+                    shipObjective: {
+                        goal: 0, systemId: 'nova:532', shipStart: 1,
+                        behavior: 0, dudeId: 'nova:251', total: 1,
+                        satisfied: 0, complete: false, failed: false,
+                        shipDonePending: false, live: new Map(),
+                    },
+                }]],
+            };
+            store.setItem(a.saveKey, encodeSave(withMission));
+            const text = exportPilot(a.id, store)!;
+
+            const fresh = new MemoryStorage();
+            const result = importPilot(text, fresh);
+            expect(result.ok).withContext(JSON.stringify(result)).toBeTrue();
+            if (!result.ok) { return; }
+            expect(fresh.raw(result.pilot.saveKey))
+                .toBe(JSON.stringify(JSON.parse(encodeSave(withMission))));
+        });
+
         it('round-trips a pilot with its save intact', () => {
             const store = new MemoryStorage();
             const a = createPilot(profile('Traveller'), store);

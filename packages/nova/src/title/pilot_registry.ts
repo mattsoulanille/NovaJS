@@ -570,10 +570,15 @@ export function importPilot(text: string, storage?: PrefsStorage):
                 + `this build (expected 1 to ${PILOT_FILE_VERSION}).`,
         };
     }
-    // Validate the payload through the live save path before writing.
+    // Validate the payload through the live save path before writing —
+    // from the RAW parsed JSON, not the io-ts-decoded `file.save`: the
+    // codec turns Map/Set-typed fields (missions, cargo, control bits)
+    // into live Maps, which JSON.stringify to "{}", so re-encoding the
+    // decoded object made every pilot that had ever played unreadable.
     let saveText: string | undefined;
-    if (file.save) {
-        saveText = JSON.stringify(file.save);
+    const rawSave = (parsed as { save?: unknown }).save;
+    if (file.save && rawSave) {
+        saveText = JSON.stringify(rawSave);
         if (decodeSave(saveText) === undefined) {
             return {
                 ok: false,
