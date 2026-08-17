@@ -222,6 +222,33 @@ export function plunderDialogContent(boarding: BoardingState,
     };
 }
 
+/**
+ * Which of the three boarding dialogs owns the screen.
+ *
+ *  'none'     no session — nothing is up.
+ *  'offer'    a board-triggered mission offer is being answered (përs
+ *             Flags 0x0200); it comes FIRST and holds the others back,
+ *             because the stock offer texts ARE the boarding narration.
+ *  'capture'  the ship was taken; the assignment dialog is up.
+ *  'plunder'  the ordinary case.
+ *
+ * Pure, so the ordering is pinned without a PIXI stage — the same split
+ * plunderDialogContent uses for the dialog's rules.
+ */
+export type BoardingDialogPhase = 'none' | 'offer' | 'capture' | 'plunder';
+
+export function boardingDialogPhase(boarding: BoardingState | undefined,
+    /** A mission offer for THIS boarding is on screen. */
+    offering: boolean): BoardingDialogPhase {
+    if (!boarding) {
+        return 'none';
+    }
+    if (offering) {
+        return 'offer';
+    }
+    return boarding.capture === 'succeeded' ? 'capture' : 'plunder';
+}
+
 /** One selectable action row. */
 interface Row {
     action: ControlAction;
@@ -576,17 +603,8 @@ class BoardingUi {
     update(boarding: BoardingState | undefined, target: Entity | undefined,
         playerCrew: number) {
         this.reposition();
-        if (!boarding) {
-            this.plunder.close();
-            this.assignment.close();
-            // A new session against the same hull can never happen (one
-            // plunder per life segment), but the set is per-display-world
-            // state and there is no reason to grow it across systems.
-            this.offered.clear();
-            this.holding = undefined;
-            return;
-        }
-        if (this.offerMission && !this.offered.has(boarding.target)) {
+        if (boarding && this.offerMission
+            && !this.offered.has(boarding.target)) {
             this.offered.add(boarding.target);
             this.holding = boarding.target;
             const uuid = boarding.target;
@@ -598,20 +616,34 @@ class BoardingUi {
                 }
             });
         }
-        if (this.holding === boarding.target) {
-            // The offer popup owns the screen (and the keyboard, through
-            // its own MenuControls) until the player answers.
-            this.plunder.close();
-            this.assignment.close();
-            return;
-        }
-        if (boarding.capture === 'succeeded') {
-            this.plunder.close();
-            this.assignment.open();
-        } else {
-            this.assignment.close();
-            this.plunder.open();
-            this.plunder.refresh(boarding, target, playerCrew);
+        const phase = boardingDialogPhase(boarding,
+            !!boarding && this.holding === boarding.target);
+        switch (phase) {
+            case 'none':
+                this.plunder.close();
+                this.assignment.close();
+                // A new session against the same hull can never happen
+                // (one plunder per life segment), but the set is
+                // per-display-world state and there is no reason to grow
+                // it across systems.
+                this.offered.clear();
+                this.holding = undefined;
+                return;
+            case 'offer':
+                // The offer popup owns the screen (and the keyboard,
+                // through its own MenuControls) until it is answered.
+                this.plunder.close();
+                this.assignment.close();
+                return;
+            case 'capture':
+                this.plunder.close();
+                this.assignment.open();
+                return;
+            case 'plunder':
+                this.assignment.close();
+                this.plunder.open();
+                this.plunder.refresh(boarding!, target, playerCrew);
+                return;
         }
     }
 }
