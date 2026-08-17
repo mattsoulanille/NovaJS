@@ -63,7 +63,21 @@ export const ShipOutfitsProvider = Provide({
 
 export const ShipPhysicsComponent = new Component<ShipPhysics>('ShipPhysicsComponent');
 
-function deriveShipPhysics(shipData: ShipData,
+/**
+ * A ship's OUTFITTED physics: its hull's ShipPhysics with every owned
+ * outfit's modifiers summed on top. Returns undefined when an owned
+ * outfit's data is not cached yet, so the caller can retry (the provider
+ * next step; a UI caller after awaiting the loads itself).
+ *
+ * Exported because this is the ONE derivation of a ship's physics: the
+ * provider and the takeoff deriver below, and the docked spaceport
+ * dialogs (spaceport/player_info.ts, which have no ShipPhysicsComponent
+ * to read while the outfitter has deleted it), all go through it — so
+ * what the player reads while landed is exactly what the relaunched ship
+ * flies with. Off-world callers must not ATTACH the result to the
+ * detached entity; see the reconciliation note further down.
+ */
+export function deriveShipPhysics(shipData: ShipData,
     gameData: SimulationGameDataInterface, outfitsState: OutfitsState) {
     const outfits: (readonly [OutfitData, number])[] = [];
     for (const [id, { count }] of outfitsState) {

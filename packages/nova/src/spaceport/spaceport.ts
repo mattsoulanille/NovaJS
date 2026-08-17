@@ -164,6 +164,13 @@ export class Spaceport extends Menu<Entity> {
             this.input = await this.outfitter.show(this.input);
             this.setLiveStatus(undefined);
             // Delete these so they are re-created with the new outfits.
+            // Nothing re-derives them while docked (the entity is out of
+            // the world, so no ChangeEvent can fire — see the note in
+            // nova_plugin/ship_plugin.ts): the relaunch rebuilds both.
+            // Anything that must show outfitted physics WHILE STILL
+            // LANDED therefore has to re-derive it for display rather
+            // than read the component — see player_info.ts's
+            // dialogShipPhysics.
             // TODO: Find a better way to do this.
             this.input.components.delete(WeaponsStateComponent);
             this.input.components.delete(ShipPhysicsComponent);

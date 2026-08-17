@@ -1,4 +1,4 @@
-import { ShipData } from 'novadatainterface/ship_data';
+import { ShipData, ShipPhysics } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
@@ -9,11 +9,11 @@ import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../nova_plugin/health_plugin.js';
 import { cargoName, missionCargoKey } from '../nova_plugin/mission_logic.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { OutfitsState, OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
 import { combatRatingName } from '../nova_plugin/reputation.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
+import { deriveShipPhysics, ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
 import { Button } from './button.js';
 import { frameOrigin, INK_TO_BOX } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
@@ -125,6 +125,66 @@ export function legalStatusName(record: number): string {
         return 'Good Citizen';
     }
     return 'Pillar of Society';
+}
+
+/**
+ * The ShipPhysics the player-info dialog reports for the player's ship:
+ * the hull's numbers with the ship's CURRENT outfits summed onto them.
+ *
+ * WHY THIS IS NOT JUST `entity.components.get(ShipPhysicsComponent)`.
+ * While the player is landed their entity is out of the world, and the
+ * outfitter DELETES ShipPhysicsComponent from it so that takeoff rebuilds
+ * it with the new outfit set (spaceport.ts showOutfitter; an outfit
+ * granted by an accepted mission does the same, mission_accept.ts). So
+ * after any visit to the outfitter the component is simply ABSENT while
+ * still docked, and the old `component ?? shipData.physics` fallback
+ * printed the BARE HULL's Speed / Accel / Turn — every outfit modifier
+ * silently vanished from the General page until the player took off.
+ *
+ * Re-deriving goes through ship_plugin's deriveShipPhysics, the very
+ * function the takeoff deriver uses, over the same outfit state — so the
+ * landed numbers are the ones the ship will fly with (player_info_physics_test
+ * pins that identity). The result is deliberately NOT attached to the
+ * entity: setting a derived component on a DETACHED entity fires no
+ * ChangeEvent, which is exactly the off-world staleness the reconciling
+ * stat systems in ship_plugin.ts exist to undo.
+ *
+ * `attached` (the entity's own ShipPhysicsComponent, while it still has
+ * one) then the bare hull are the fallbacks for a cold outfit cache —
+ * the dialog's load() awaits every owned outfit first, so a miss means
+ * an outfit whose data failed to load at all.
+ */
+export function dialogShipPhysics(gameData: SimulationGameDataInterface,
+    shipData?: ShipData, outfits?: OutfitsState,
+    attached?: ShipPhysics): ShipPhysics | undefined {
+    if (shipData && outfits) {
+        const derived = deriveShipPhysics(shipData, gameData, outfits);
+        if (derived) {
+            return derived;
+        }
+    }
+    return attached ?? shipData?.physics;
+}
+
+/**
+ * The General page's three physics rows, straight off the physics
+ * `dialogShipPhysics` resolved. Turn rate is stored in rad/sec (raw EVN
+ * units * 0.3°/sec); speed and acceleration in px/sec (raw * 30/100).
+ * Display the original's raw-unit numbers, as the reference does. All
+ * three read '-' only when the ship's physics could not be resolved at
+ * all (no ship data).
+ */
+export function physicsRows(physics?: ShipPhysics): [string, string][] {
+    if (!physics) {
+        return [['Turn Rate:', '-'], ['Accel Rate:', '-'],
+            ['Max Speed:', '-']];
+    }
+    return [
+        ['Turn Rate:',
+            `${Math.round(physics.turnRate * 180 / Math.PI)}°/sec`],
+        ['Accel Rate:', `${Math.round(physics.acceleration * 100 / 30)}`],
+        ['Max Speed:', `${Math.round(physics.speed * 100 / 30)}`],
+    ];
 }
 
 /**
@@ -357,8 +417,13 @@ export class PlayerInfoDialog {
         const fuel = entity.components.get(FuelComponent);
         const rating = entity.components.get(CombatRatingComponent);
         const records = entity.components.get(LegalRecordsComponent);
-        const physics = entity.components.get(ShipPhysicsComponent)
-            ?? this.shipData?.physics;
+        // Re-derived from the ship's current outfits rather than read off
+        // the entity, which while landed may have no ShipPhysicsComponent
+        // at all — see dialogShipPhysics. load() has already awaited every
+        // owned outfit's data, so the cache it reads is warm.
+        const physics = dialogShipPhysics(this.simulationData, this.shipData,
+            entity.components.get(OutfitsStateComponent),
+            entity.components.get(ShipPhysicsComponent));
 
         const percent = (part?: { current: number, max: number }) =>
             part && part.max > 0
@@ -389,24 +454,12 @@ export class PlayerInfoDialog {
                 ? `${percent(fuel)} (${Math.floor(fuel.current / 100)} jumps)`
                 : '-'],
         ];
-        // Turn rate is stored in rad/sec (raw EVN units * 0.3°/sec);
-        // speed and acceleration in px/sec (raw * 30/100). Display the
-        // original's raw-unit numbers, as the reference does.
-        const degPerSec = physics
-            ? Math.round(physics.turnRate * 180 / Math.PI) : undefined;
-        const rawSpeed = physics
-            ? Math.round(physics.speed * 100 / 30) : undefined;
-        const rawAccel = physics
-            ? Math.round(physics.acceleration * 100 / 30) : undefined;
         const right: [string, string][] = [
             // Player ship naming isn't modeled; both rows show the
             // class (the original's Ship Name is the pilot's own).
             ['Ship Name:', this.shipData?.name ?? '-'],
             ['Ship Class:', this.shipData?.name ?? '-'],
-            ['Turn Rate:', degPerSec !== undefined
-                ? `${degPerSec}°/sec` : '-'],
-            ['Accel Rate:', rawAccel !== undefined ? `${rawAccel}` : '-'],
-            ['Max Speed:', rawSpeed !== undefined ? `${rawSpeed}` : '-'],
+            ...physicsRows(physics),
             ['Credits:', credits
                 ? credits.credits.toLocaleString() : '-'],
         ];
