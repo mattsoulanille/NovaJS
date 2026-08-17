@@ -21,7 +21,10 @@ import { SpriteSheetData } from 'novadatainterface/sprite_sheet_data';
 import { SystemData } from 'novadatainterface/system_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import urlJoin from 'url-join';
-import { idsPath } from '../../common/game_data_paths.js';
+import { controlBitNamespacesPath, idsPath } from '../../common/game_data_paths.js';
+import {
+    ControlBitNamespaces, getDefaultControlBitNamespaces,
+} from 'novadatainterface/control_bit_namespaces';
 import { BatchDataFetcher } from './batch_data_fetcher.js';
 
 class WeaponGettable extends Gettable<WeaponData> {
@@ -47,6 +50,7 @@ export interface SimulationGameDataInterface {
     readonly data: SimulationGameDataResources;
     readonly ids: Promise<NovaIDs>;
     readonly preloadData?: Promise<PreloadData>;
+    readonly controlBitNamespaces?: Promise<ControlBitNamespaces>;
     readonly loaded?: Promise<void>;
     getSettings?(file: string): Promise<unknown>;
 }
@@ -55,6 +59,7 @@ export class SimulationGameData implements SimulationGameDataInterface {
     public readonly data: SimulationGameDataResources;
     public readonly ids: Promise<NovaIDs>;
     readonly preloadData: Promise<PreloadData>;
+    readonly controlBitNamespaces: Promise<ControlBitNamespaces>;
     public loaded = Promise.resolve();
 
     /**
@@ -92,6 +97,7 @@ export class SimulationGameData implements SimulationGameDataInterface {
         this.preloadData = this.preload();
         this.loaded = this.preloadData.then(() => { });
         this.ids = this.getIds();
+        this.controlBitNamespaces = this.getControlBitNamespaces();
     }
 
     getSettings(file: string): Promise<unknown> {
@@ -143,5 +149,21 @@ export class SimulationGameData implements SimulationGameDataInterface {
 
     private async getIds(): Promise<NovaIDs> {
         return await this.getJson(idsPath + '.json') as NovaIDs;
+    }
+
+    /**
+     * The server's control-bit namespace mapping (see
+     * novadatainterface/control_bit_namespaces.ts). Older servers do not
+     * serve it; the default (no plug-ins, stock numbering) keeps a save's
+     * stock bits round-tripping and parks the rest.
+     */
+    private async getControlBitNamespaces(): Promise<ControlBitNamespaces> {
+        try {
+            return await this.getJson(controlBitNamespacesPath + '.json') as
+                ControlBitNamespaces;
+        } catch (e) {
+            console.warn('Failed to load control bit namespaces:', e);
+            return getDefaultControlBitNamespaces();
+        }
     }
 }

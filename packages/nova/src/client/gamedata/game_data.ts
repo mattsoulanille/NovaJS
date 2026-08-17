@@ -20,6 +20,7 @@ export class GameData implements GameDataInterface {
     };
     public readonly ids: Promise<NovaIDs>;
     readonly preloadData = this.simulation.preloadData;
+    readonly controlBitNamespaces = this.simulation.controlBitNamespaces;
     public loaded = this.simulation.loaded;
 
     constructor() {

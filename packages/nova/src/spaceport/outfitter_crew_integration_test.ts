@@ -1,6 +1,8 @@
 import 'jasmine';
 import { OutfitData } from 'novadatainterface/outfit_data';
-import { getPluginGameData } from '../communication/simulation_test_fixture.js';
+import {
+    getPluginGameData, pluginControlBit,
+} from '../communication/simulation_test_fixture.js';
 import {
     canBuyOutfit, OutfitterContext, playerContribute, requirementsMet,
 } from './outfitter_rules.js';
@@ -54,7 +56,11 @@ describe('Extra Outfits crew requirements against real plug-in data', () => {
                 bits: new Set(bits),
                 credits: 100000000,
             });
-        return { outfits, context, shipData };
+        // The plug-in's own bit numbers, as NovaParse renumbered them (see
+        // nova_plugin/control_bit_namespaces.ts).
+        const [B9009, B9010] = await Promise.all(
+            [9009, 9010].map(raw => pluginControlBit(gameData, PLUGIN, raw)));
+        return { outfits, context, shipData, B9009, B9010 };
     }
 
     it('denies an Engineer with no Crew Quarters aboard', async () => {
@@ -67,7 +73,7 @@ describe('Extra Outfits crew requirements against real plug-in data', () => {
         // before, so the Availability gate passes and Require is what
         // decides. Without it the item is merely hidden (0x4000).
         const check = canBuyOutfit(b.outfits.get(ENGINEER)!,
-            b.context([], [9009]));
+            b.context([], [b.B9009]));
         expect(check.allowed).toBe(false);
         expect(check.allowed || check.reason).toBe('require');
     });
@@ -78,7 +84,7 @@ describe('Extra Outfits crew requirements against real plug-in data', () => {
             pending('Extra Outfits plug-in not installed');
             return;
         }
-        const context = b.context([[QUARTERS, 1]], [9009]);
+        const context = b.context([[QUARTERS, 1]], [b.B9009]);
         expect(requirementsMet(b.outfits.get(ENGINEER)!, context)).toBe(true);
         expect(canBuyOutfit(b.outfits.get(ENGINEER)!, context))
             .toEqual({ allowed: true });
@@ -116,7 +122,7 @@ describe('Extra Outfits crew requirements against real plug-in data', () => {
             // 513-515), which is what resolving Oxxx per plug-in fixes.
             const owned: [string, number][] =
                 [[OFFICER_QUARTERS, 1], [OFFICER, 1]];
-            const context = b.context(owned, [9010]);
+            const context = b.context(owned, [b.B9010]);
             for (const other of [OFFICER_BAD, OFFICER_GOOD]) {
                 const check = canBuyOutfit(b.outfits.get(other)!, context);
                 expect(check.allowed).withContext(other).toBe(false);
@@ -124,7 +130,7 @@ describe('Extra Outfits crew requirements against real plug-in data', () => {
                     .withContext(other).toBe('availability');
             }
             // With no grade owned, any of them may be hired.
-            const empty = b.context([[OFFICER_QUARTERS, 1]], [9010]);
+            const empty = b.context([[OFFICER_QUARTERS, 1]], [b.B9010]);
             for (const grade of [OFFICER_BAD, OFFICER, OFFICER_GOOD]) {
                 expect(canBuyOutfit(b.outfits.get(grade)!, empty))
                     .withContext(grade).toEqual({ allowed: true });

@@ -7,6 +7,7 @@ import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 import { FilesystemData } from "../server/parsing/filesystem_data.js";
 import { NovaParse } from "novaparse";
+import { ControlBitResolver } from "../nova_plugin/control_bit_namespaces.js";
 import { completeEntity } from "../nova_plugin/entity_data_loader.js";
 import { makeShip } from "../nova_plugin/make_ship.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
@@ -87,6 +88,23 @@ export async function getPluginGameData(
     return promise;
 }
 
+/**
+ * The PHYSICAL control bit that plug-in `namespace`'s raw bit `bit` was
+ * given under `gameData`'s plug-in set (see
+ * nova_plugin/control_bit_namespaces.ts). Specs that drive a plug-in's
+ * gates by its own bit numbers (`b9009` in Extra Outfits, say) must go
+ * through this, because NovaParse renumbers plug-in-private bits.
+ */
+export async function pluginControlBit(gameData: GameDataAggregator,
+    namespace: string, bit: number): Promise<number> {
+    const resolver = new ControlBitResolver(await gameData.controlBitNamespaces);
+    const physical = resolver.physicalBit([namespace, bit]);
+    if (physical === undefined) {
+        throw new Error(`Plug-in '${namespace}' has no control bit b${bit}`);
+    }
+    return physical;
+}
+
 async function buildPluginGameData(pluginDirectories: string[]):
     Promise<GameDataAggregator | undefined> {
     const novaParse = makePluginNovaParse(pluginDirectories);
@@ -132,6 +150,7 @@ export function makePluginNovaParse(pluginDirectories: string[]):
     // The one-time flag namespacing diagnostics are for people loading a
     // real Plug-ins folder, not for the test log.
     novaParse.flagNamespaceWarn = () => { };
+    novaParse.controlBitNamespaceWarn = () => { };
     return novaParse;
 }
 

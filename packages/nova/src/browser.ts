@@ -66,6 +66,9 @@ import { initialRecordsFromGovtStatuses } from "./nova_plugin/reputation.js";
 import { CombatRatingComponent, LegalRecordsComponent } from "./nova_plugin/reputation_plugin.js";
 import { resetExplored } from "./nova_plugin/explored_store.js";
 import {
+    ControlBitPair, ControlBitResolver,
+} from './nova_plugin/control_bit_namespaces.js';
+import {
     EscortToSave, SavedEscort, collectEscortsToSave, extractSaveData,
     extractSavedEscorts, loadSave, resetSave, restorePlayerState,
     restoreSavedEscorts, writeSave,
@@ -260,6 +263,17 @@ let restoredSaveEscorts: SavedEscort[] | undefined;
  * OwnerComponent/SourceComponent onto the live player.
  */
 let restoredSavePlayerUuid: string | undefined;
+/**
+ * The control-bit namespace resolver for the plug-in set the SERVER
+ * loaded, and the saved bits it could not represent (their plug-in is not
+ * loaded here). Set once per game session by startGame from the save it
+ * restored; saveNow writes bits as (namespace, bit) pairs through the
+ * resolver and carries the parked pairs along unchanged, so a pilot's
+ * progress in a plug-in survives a stint on a server without it (see
+ * nova_plugin/control_bit_namespaces.ts).
+ */
+let controlBitResolver: ControlBitResolver | undefined;
+let parkedControlBits: ControlBitPair[] = [];
 /**
  * The end of the formation-slot run the client has already handed out for a
  * player, so a later insertion in the same session cannot reuse those slots.
@@ -904,7 +918,10 @@ function saveNow() {
     if (!playerShip) {
         return;
     }
-    const data = extractSaveData(playerShip, activeSystemId);
+    const data = extractSaveData(playerShip, activeSystemId,
+        controlBitResolver
+            ? { resolver: controlBitResolver, parked: parkedControlBits }
+            : undefined);
     if (!data) {
         return;
     }
@@ -1571,6 +1588,11 @@ async function startGame() {
     }
     const ids = await simulationGameData.ids;
     const query = new URLSearchParams(window.location.search);
+    // How this server namespaced the plug-ins' control bits: needed to
+    // read a save's (namespace, bit) pairs and to write them.
+    controlBitResolver = new ControlBitResolver(
+        await simulationGameData.controlBitNamespaces);
+    parkedControlBits = [];
 
     // ?reset wipes the save before we read it, so a bad session can be
     // recovered by adding &reset to the URL.
@@ -1651,7 +1673,8 @@ async function startGame() {
     // from the chär (credits, date, OnStart control bits, starting
     // legal statuses and combat rating).
     if (save) {
-        restorePlayerState(shipEntity, save);
+        parkedControlBits = restorePlayerState(shipEntity, save,
+            controlBitResolver).parkedControlBits;
     } else if (playerStart) {
         // chär Govt1-4/Status1-4: the status applies to the govt and
         // its allies, negated for its enemies (reputation.ts). The

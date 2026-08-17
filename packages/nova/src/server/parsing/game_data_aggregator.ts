@@ -32,6 +32,9 @@ import { SoundFile } from "novadatainterface/sound_file";
 import { RankData } from "novadatainterface/rank_data";
 import { StringTableData } from "novadatainterface/string_table_data";
 import { DescriptionData } from "novadatainterface/description_data";
+import {
+    ControlBitNamespaces, getDefaultControlBitNamespaces,
+} from "novadatainterface/control_bit_namespaces";
 
 /**
  * Combines multiple GameDataInterface instances into a single GameDataInterface
@@ -41,6 +44,7 @@ class GameDataAggregator implements GameDataInterface {
     readonly data: NovaDataInterface;
     readonly ids: Promise<NovaIDs>;
     readonly preloadData: Promise<PreloadData>;
+    readonly controlBitNamespaces: Promise<ControlBitNamespaces>;
     private dataSources: Array<GameDataInterface>;
     private warningReporter: (w: string) => void;
 
@@ -85,6 +89,21 @@ class GameDataAggregator implements GameDataInterface {
         this.ids = this.getAllIDs();
 
         this.preloadData = this.getPreloadData();
+        this.controlBitNamespaces = this.getControlBitNamespaces();
+    }
+
+    /**
+     * The control-bit namespacing comes from whichever data source parses
+     * plug-ins (NovaParse); there is only ever one such source, so the
+     * first that has a mapping wins. None: the default (no plug-ins).
+     */
+    private async getControlBitNamespaces(): Promise<ControlBitNamespaces> {
+        for (const dataSource of this.dataSources) {
+            if (dataSource.controlBitNamespaces) {
+                return await dataSource.controlBitNamespaces;
+            }
+        }
+        return getDefaultControlBitNamespaces();
     }
 
     getDataSources() {

@@ -5,10 +5,13 @@ import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
 
 /**
- * The player's Nova control bits (see ncb.ts): the set of bit numbers
- * (b0 - b9999) that are currently set. Bits are player-scoped state;
- * they live on the player's ship entity and follow the player when
- * they trade ships.
+ * The player's Nova control bits (see ncb.ts): the set of PHYSICAL bit
+ * numbers that are currently set — stock bits under their own numbers
+ * (b0 - b9999) and plug-in-private bits renumbered by NovaParse (see
+ * novadatainterface/control_bit_namespaces.ts). Bits are player-scoped
+ * state; they live on the player's ship entity and follow the player when
+ * they trade ships. Saves persist them as (namespace, bit) pairs so that
+ * they survive a change of plug-in set (control_bit_namespaces.ts here).
  */
 export const ControlBitsType = set(t.number);
 export type ControlBits = t.TypeOf<typeof ControlBitsType>;

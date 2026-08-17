@@ -55,6 +55,10 @@ import {
     writeSave,
 } from './save_game.js';
 import { ShipComponent } from './ship_plugin.js';
+import {
+    ControlBitNamespaces, FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
+} from 'novadatainterface/control_bit_namespaces';
+import { ControlBitResolver } from './control_bit_namespaces.js';
 
 /** An in-memory SaveStorage for tests. */
 class FakeStorage implements SaveStorage {
@@ -238,6 +242,112 @@ describe('save_game schema', () => {
             expect(ranked.components.get(ActiveRanksComponent))
                 .toEqual(new Set(['nova:147']));
         });
+
+    describe('namespaced control bits', () => {
+        // Stock base set {13, 342}; arpia privately uses 2050 (-> P0) and
+        // singularity 1300 (-> P0 + 1).
+        const P0 = FIRST_PRIVATE_PHYSICAL_CONTROL_BIT;
+        const namespaces: ControlBitNamespaces = {
+            baseSet: [13, 342],
+            namespaces: [
+                { namespace: 'arpia', bits: [[2050, P0]] },
+                { namespace: 'singularity', bits: [[1300, P0 + 1]] },
+            ],
+            pluginOrder: ['singularity', 'arpia'],
+        };
+        const resolver = new ControlBitResolver(namespaces);
+
+        function playerWithBits(bits: number[]): Entity {
+            const entity = new Entity('player');
+            entity.components.set(ShipComponent, { id: 'nova:164' });
+            entity.components.set(ControlBitsComponent, new Set(bits));
+            return entity;
+        }
+
+        it('writes pairs, the legacy numbers, and the plug-in manifest', () => {
+            const saved = extractSaveData(playerWithBits([342, P0 + 1, 13, P0]),
+                'nova:130', { resolver })!;
+            expect(saved.controlBits).toEqual([
+                ['arpia', 2050], ['nova', 13], ['nova', 342], ['singularity', 1300],
+            ]);
+            // The legacy field is still written (sorted) for older builds.
+            expect(saved.novaControlBits).toEqual([
+                ['13', 1], ['342', 1], [String(P0), 1], [String(P0 + 1), 1],
+            ]);
+            expect(saved.plugins).toEqual(['singularity', 'arpia']);
+        });
+
+        it('writes only the legacy numbers without a resolver', () => {
+            const saved = extractSaveData(playerWithBits([342, 13]), 'nova:130')!;
+            expect(saved.novaControlBits).toEqual([['13', 1], ['342', 1]]);
+            expect(saved.controlBits).toBeUndefined();
+            expect(saved.plugins).toBeUndefined();
+        });
+
+        it('prefers the pairs on load and parks what is not loaded', () => {
+            const save: SaveData = {
+                ...SAMPLE,
+                // Stale legacy numbers, deliberately different from the
+                // pairs: the pairs win.
+                novaControlBits: [['1', 1]],
+                controlBits: [
+                    ['nova', 342], ['arpia', 2050], ['Planet Rico', 4601],
+                    ['arpia', 7777],
+                ],
+                plugins: ['Planet Rico', 'arpia'],
+            };
+            const decoded = decodeSave(encodeSave(save))!;
+            const entity = new Entity('restored');
+            entity.components.set(ShipComponent, { id: 'nova:164' });
+            const { parkedControlBits } = restorePlayerState(entity, decoded, resolver);
+            expect(entity.components.get(ControlBitsComponent))
+                .toEqual(new Set([342, P0]));
+            expect(parkedControlBits)
+                .toEqual([['Planet Rico', 4601], ['arpia', 7777]]);
+
+            // Round trip: the parked pairs ride along into the next save,
+            // and the physical set is unchanged.
+            const again = extractSaveData(entity, 'nova:130',
+                { resolver, parked: parkedControlBits })!;
+            expect(again.controlBits).toEqual([
+                ['Planet Rico', 4601], ['arpia', 2050], ['arpia', 7777], ['nova', 342],
+            ]);
+            const third = new Entity('third');
+            const second = restorePlayerState(third, decodeSave(encodeSave(again))!, resolver);
+            expect(third.components.get(ControlBitsComponent))
+                .toEqual(new Set([342, P0]));
+            expect(second.parkedControlBits).toEqual(parkedControlBits);
+        });
+
+        it('migrates a legacy save\'s bare numbers', () => {
+            // A pre-namespacing save: 342 is stock, 2050 was the shared bit
+            // arpia meant, 1300 singularity's, 4601 (Planet Rico, not
+            // loaded here) nobody's -> stays a stock-range number.
+            const legacy: SaveData = {
+                ...SAMPLE,
+                novaControlBits: [['342', 1], ['2050', 1], ['1300', 1], ['4601', 1]],
+            };
+            const entity = new Entity('restored');
+            const { parkedControlBits } = restorePlayerState(entity,
+                decodeSave(encodeSave(legacy))!, resolver);
+            expect(entity.components.get(ControlBitsComponent))
+                .toEqual(new Set([342, P0, P0 + 1, 4601]));
+            expect(parkedControlBits).toEqual([]);
+        });
+
+        it('reads pairs with no namespace data as stock bits plus parked', () => {
+            const save: SaveData = {
+                ...SAMPLE,
+                controlBits: [['nova', 342], ['arpia', 2050]],
+            };
+            const entity = new Entity('restored');
+            const { parkedControlBits } = restorePlayerState(entity,
+                decodeSave(encodeSave(save))!);
+            expect(entity.components.get(ControlBitsComponent))
+                .toEqual(new Set([342]));
+            expect(parkedControlBits).toEqual([['arpia', 2050]]);
+        });
+    });
 
     it('loads a v1 save written before player state existed', () => {
         // Exactly what an old build wrote: only ship/outfits/system.
