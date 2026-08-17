@@ -13,6 +13,7 @@ import { OwnerComponent } from './weapon_components.js';
 import { FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
 import { DisabledComponent } from './disabled_component.js';
+import { ShipExplosionComponent } from './ship_explosion.js';
 
 
 export { BlastDamageComponent, BlastIgnoreComponent } from './blast_data.js';
@@ -22,8 +23,9 @@ export const BlastCollisionSystem = new System({
     events: [CollisionEvent],
     args: [CollisionEvent, BlastDamageComponent, Entities,
         Optional(BlastIgnoreComponent), Optional(FiringGroupComponent),
-        EmitNow, UUID] as const,
-    step(collision, damage, entities, ignore, firingGroup, emitNow, uuid) {
+        EmitNow, UUID, Optional(ShipExplosionComponent)] as const,
+    step(collision, damage, entities, ignore, firingGroup, emitNow, uuid,
+        shipExplosion) {
         if (ignore?.has(collision.other)) {
             return;
         }
@@ -41,7 +43,12 @@ export const BlastCollisionSystem = new System({
             other.components.has(DisabledComponent))) {
             return;
         }
-        emitNow(DamagedEvent, { damage, damager: uuid }, [collision.other])
+        // A ship's own final explosion can hurt but never disable or
+        // destroy a ship (ship_explosion_plugin.ts).
+        emitNow(DamagedEvent, {
+            damage, damager: uuid,
+            nonLethal: Boolean(shipExplosion),
+        }, [collision.other])
     }
 });
 

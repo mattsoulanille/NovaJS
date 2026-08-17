@@ -22,6 +22,7 @@ import { IdFactoryResource } from "./id_factory.js";
 import { PlanetDataComponent } from "./planet_plugin.js";
 import { ProjectileBlastHull, ProjectileDataComponent } from "./projectile_data.js";
 import { ShipDataComponent } from "./ship_plugin.js";
+import { ShipExplosionComponent } from "./ship_explosion.js";
 import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from "./bay_plugin.js";
 import { ExplodingComponent } from "./death_plugin.js";
 import { ChooseRandomTargetComponent, DeathAIComponent, FollowComponent, ShootAllWeaponsComponent } from "./npc_plugin.js";
@@ -171,6 +172,13 @@ export function configureSnapshotPolicies(world: World) {
         policy: 'clone',
         clone: data => ({ ...data }),
     });
+    // The exploding hull's mass, on the blast a ship's final explosion
+    // drops (ship_explosion_plugin.ts). Cloned, not shared: it is an
+    // object, so the snapshot must not alias the live world's copy.
+    policies.set(ShipExplosionComponent, {
+        policy: 'clone',
+        clone: data => ({ ...data }),
+    });
     policies.set(ShipControlStateComponent, {
         policy: 'clone',
         clone: state => new Map(state),
@@ -215,6 +223,8 @@ export function configureSnapshotPolicies(world: World) {
     policies.setWire(ExplodingComponent, passthroughWire<number>());
     policies.setWire(TargetIndexComponent, passthroughWire());
     policies.setWire(BlastDoneComponent, passthroughWire());
+    // {mass: number} — already JSON.
+    policies.setWire(ShipExplosionComponent, passthroughWire());
     // {bayWeaponId: string} — already JSON.
     policies.setWire(BayFighterComponent, passthroughWire());
     policies.setWire(ReturnWhenTargetRemovedComponent, {
