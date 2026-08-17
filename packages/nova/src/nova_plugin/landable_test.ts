@@ -1,7 +1,9 @@
 import 'jasmine';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { landable } from './landable.js';
+import {
+    isInhabited, isPort, landable, systemIsInhabited,
+} from './landable.js';
 
 function planet(flags: Partial<PlanetData['flags']>): PlanetData {
     const base = getDefaultPlanetData();
@@ -23,6 +25,77 @@ describe('landable', () => {
                 canLand: true, landOnlyIfDestroyed: true,
             }))).toBeFalse();
         });
+});
+
+describe('isInhabited (spöb Flags 0x0020)', () => {
+    it('is true when the uninhabited bit is CLEAR', () => {
+        expect(isInhabited({ uninhabited: false })).toBeTrue();
+    });
+
+    it('is false when the uninhabited bit is SET', () => {
+        expect(isInhabited({ uninhabited: true })).toBeFalse();
+    });
+
+    it('ignores landability entirely — the two bits are independent', () => {
+        // Hel\'A\'Forius (nova:510) is exactly this shape in stock data.
+        expect(isInhabited({ uninhabited: false })).toBeTrue();
+    });
+});
+
+describe('isPort (landable AND inhabited)', () => {
+    // The four flag combinations, each with a stock exemplar.
+    it('admits a landable, inhabited stellar (Earth)', () => {
+        expect(isPort({ canLand: true, uninhabited: false })).toBeTrue();
+    });
+
+    it('refuses a landable but UNINHABITED stellar (Pan, a wormhole)', () => {
+        expect(isPort({ canLand: true, uninhabited: true })).toBeFalse();
+    });
+
+    it('refuses an inhabited but UNLANDABLE stellar (Hel\'A\'Forius)', () => {
+        expect(isPort({ canLand: false, uninhabited: false })).toBeFalse();
+    });
+
+    it('refuses a stellar that is neither (Jupiter)', () => {
+        expect(isPort({ canLand: false, uninhabited: true })).toBeFalse();
+    });
+
+    it('refuses a land-only-if-destroyed stellar', () => {
+        expect(isPort({
+            canLand: true, uninhabited: false, landOnlyIfDestroyed: true,
+        })).toBeFalse();
+    });
+
+    it('treats an absent landOnlyIfDestroyed as clear, so mission_logic\'s '
+        + 'already-resolved StellarInfo works unchanged', () => {
+            expect(isPort({ canLand: true, uninhabited: false })).toBeTrue();
+        });
+});
+
+describe('systemIsInhabited', () => {
+    const port = planet({ canLand: true, uninhabited: false });
+    const rock = planet({ canLand: true, uninhabited: true });
+    const scenery = planet({ canLand: false, uninhabited: true });
+    const lookup = (map: Record<string, PlanetData>) =>
+        (id: string) => map[id];
+
+    it('is false for a system with no stellars at all (Pollux)', () => {
+        expect(systemIsInhabited([], lookup({}))).toBeFalse();
+    });
+
+    it('is false when every stellar is uninhabited (HJG-1034)', () => {
+        expect(systemIsInhabited(['a', 'b'],
+            lookup({ a: rock, b: scenery }))).toBeFalse();
+    });
+
+    it('is true as soon as ONE stellar is a port (Sol)', () => {
+        expect(systemIsInhabited(['a', 'b', 'c'],
+            lookup({ a: scenery, b: port, c: rock }))).toBeTrue();
+    });
+
+    it('skips stellars that do not resolve rather than counting them', () => {
+        expect(systemIsInhabited(['missing'], lookup({}))).toBeFalse();
+    });
 });
 
 describe('landable against real Nova data', () => {

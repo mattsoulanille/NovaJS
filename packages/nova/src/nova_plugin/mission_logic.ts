@@ -5,7 +5,7 @@ import { PlanetData } from 'novadatainterface/planet_data';
 import { DEFAULT_CARGO_NAMES } from 'novadatainterface/player_start_data';
 import { evaluateNCBTest, makeControlBitHooks, NCBParseError, NCBSetHooks, runNCBSet } from './ncb.js';
 import { Cargo, cargoUsed } from './cargo_plugin.js';
-import { landable } from './landable.js';
+import { isInhabited, isPort, landable } from './landable.js';
 import { resolveShipObjective, shipGoalOfferable } from './mission_ship_logic.js';
 import type { SystemInfo } from './mission_ship_logic.js';
 import {
@@ -203,7 +203,11 @@ export function matchesStellarRef(ref: number, refId: string | null,
     getGovt: (id: string) => GovtData | undefined,
     adjacency?: StellarAdjacency): boolean {
     if (ref === -1) {
-        return !stellar.uninhabited;
+        // "Any inhabited stellar" — the spöb 0x0020 bit alone (landable.ts
+        // isInhabited). Landability is not part of it: the candidate here is
+        // the stellar the player is standing on, which is landable by
+        // construction.
+        return isInhabited(stellar);
     }
     if (refId !== null) {
         return stellar.id === refId;
@@ -525,10 +529,10 @@ function resolveStellarRef(ref: number, refId: string | null,
     let candidates: StellarInfo[];
     if (ref === -2) {
         candidates = ctx.stellarCandidates.filter(
-            s => !s.uninhabited && s.canLand && stellarVisible(s, ctx.bits));
+            s => isPort(s) && stellarVisible(s, ctx.bits));
     } else if (ref === -3) {
         candidates = ctx.stellarCandidates.filter(
-            s => s.uninhabited && s.canLand && stellarVisible(s, ctx.bits));
+            s => !isInhabited(s) && s.canLand && stellarVisible(s, ctx.bits));
     } else {
         candidates = ctx.stellarCandidates.filter(s => s.canLand
             && stellarVisible(s, ctx.bits)

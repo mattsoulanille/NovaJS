@@ -7,6 +7,7 @@ import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
 import { displayName } from "../nova_plugin/display_name.js";
 import { MissionMapMark, STANDARD_CARGO_NAMES } from "../nova_plugin/mission_logic.js";
+import { isPort, systemIsInhabited } from "../nova_plugin/landable.js";
 import { evaluateNCBTest } from "../nova_plugin/ncb.js";
 import { legalStatusName } from "../nova_plugin/reputation.js";
 import { LegalRecordsState } from "../nova_plugin/reputation_plugin.js";
@@ -26,7 +27,17 @@ import {
 
 
 const GREY = 0x666666;
-const BLUE = 0x0000BB;
+// System-dot colors, sampled off the original at 1:1 in
+// ui_screenshots/original_macos_screenshots/map/govt_borders.png (see
+// drawSystem for the rule each one encodes). All three share one black
+// interior.
+/** An EXPLORED system that has at least one port. */
+export const SYSTEM_INHABITED_COLOR = 0x0000ff;
+/** An EXPLORED system with no port. */
+export const SYSTEM_UNINHABITED_COLOR = 0xc6c6c6;
+/** A system the player has never entered — nothing is known about it. */
+export const SYSTEM_UNEXPLORED_COLOR = 0x424242;
+export const SYSTEM_INTERIOR_COLOR = 0x000000;
 // Hypergate network links, drawn in a distinct cyan so the instant-travel
 // hypergate routes read apart from the grey normal-jump hyperspace links.
 const HYPERGATE_LINK_COLOR = 0x00cccc;
@@ -195,17 +206,48 @@ export function representativeSystems<
     return [...byPosition.values()];
 }
 
+/**
+ * The color of a system's dot on the map. TWO independent questions, in this
+ * order — both measured on the original at 1:1 in
+ * ui_screenshots/original_macos_screenshots/map/govt_borders.png, whose 40
+ * dots were matched back to sÿst ids through the map's own layout:
+ *
+ *  1. HAS THE PLAYER EXPLORED IT? Every one of the 22 dark grey (#424242)
+ *     dots is an unlabeled system, and every labeled system is either blue
+ *     or light grey. Unexplored systems are drawn dim whatever is in them:
+ *     Sirius (2 ports), Aldebaran (3) and Gefjon (2) are all #424242 there.
+ *     This is what keeps a "secret" installation secret — an inhabited
+ *     station in a system the player has never entered does not advertise
+ *     itself on the map.
+ *
+ *  2. IS IT INHABITED? An explored system is BLUE iff it contains at least
+ *     one PORT — a stellar that is landable (spöb Flags 0x0001) AND not
+ *     uninhabited (0x0020 clear); see landable.ts isPort, which is also
+ *     what fills the "Ports:" readout. All 15 blue dots have >= 1 port and
+ *     all 3 light grey (#c6c6c6) ones have none. Landability alone is NOT
+ *     enough: HJG-1034's UHP-0474 and Procyon's UHP-1002 are both landable
+ *     but flagged uninhabited, and both systems draw light grey.
+ *
+ * The stock data leaves one corner of rule 2 unwitnessed: four Wraith
+ * systems (sÿst 510/521/582/593) hold a stellar that is inhabited but NOT
+ * landable, and no reference screenshot covers them. They draw grey here,
+ * on the reading that the map is showing ports.
+ */
+export function systemDotColor(explored: boolean,
+    inhabited: boolean): number {
+    if (!explored) {
+        return SYSTEM_UNEXPLORED_COLOR;
+    }
+    return inhabited ? SYSTEM_INHABITED_COLOR : SYSTEM_UNINHABITED_COLOR;
+}
+
 function drawSystem(system: SystemData, graphics: PIXI.Graphics,
-    x: number, y: number) {
-    // Use blue if the system has a planet. Otherwise, grey.
-    // TODO: Check if the planet is inhabited.
-    const inhabited = system.planets.length > 0;
-    const outColor = inhabited ? BLUE : GREY;
-    const inColor = inhabited ? 0x000044 : 0x000000;
+    x: number, y: number, explored: boolean, inhabited: boolean) {
+    const outColor = systemDotColor(explored, inhabited);
     graphics.lineStyle(1, outColor);
     graphics.beginFill(outColor)
     graphics.drawCircle(x, y, SYSTEM_RADIUS);
-    graphics.beginFill(inColor);
+    graphics.beginFill(SYSTEM_INTERIOR_COLOR);
     graphics.drawCircle(x, y, 1.8 * BASE_SCALE);
     graphics.endFill();
 }
@@ -258,6 +300,22 @@ export interface SystemGraphOptions {
      * no blob. Injected so the graph itself stays free of async data loads.
      */
     govtColorOf?: (system: SystemData) => number | null;
+    /**
+     * Whether a system contains at least one port, deciding the blue dot
+     * (see drawSystem). Injected — like govtColorOf — because answering it
+     * needs the spöb data the graph deliberately never loads itself; every
+     * caller passes `system => systemIsInhabited(system.planets, getPlanet)`
+     * over its MissionUniverse. Defaults to "no port", so a graph built
+     * without spöb data draws an honestly grey galaxy rather than guessing.
+     */
+    isSystemInhabited?: (system: SystemData) => boolean;
+    /**
+     * Whether the player has explored (entered) a system; unexplored ones
+     * draw dim (see drawSystem). Defaults to "explored", which is what the
+     * maps that have no exploration record of their own (the rollback
+     * screen's replay map) want.
+     */
+    isSystemExplored?: (systemId: string) => boolean;
 }
 
 export class SystemGraph {
@@ -322,6 +380,10 @@ export class SystemGraph {
     /** The picked system in destination-picker mode, if any. */
     selectedSystem?: string;
     private size: { x: number, y: number };
+    // The two questions drawSystem asks about each dot. Injected; see
+    // SystemGraphOptions.
+    private readonly isSystemInhabited: (system: SystemData) => boolean;
+    private readonly isSystemExplored: (systemId: string) => boolean;
 
     constructor(systems: SystemData[], private currentSystem: string,
         options: SystemGraphOptions = {}) {
@@ -331,6 +393,8 @@ export class SystemGraph {
         this.missionMarks = options.missionMarks ?? [];
         this.viewedMarks = options.viewedMarks ?? [];
         this.missionMarkTextures = options.missionMarkTextures;
+        this.isSystemInhabited = options.isSystemInhabited ?? (() => false);
+        this.isSystemExplored = options.isSystemExplored ?? (() => true);
         const size = this.size = options.size ?? { x: 456, y: 419 };
         // NCB-hidden systems don't exist for the player: they aren't drawn,
         // clicked, linked, or routed through. The current system is always
@@ -423,7 +487,13 @@ export class SystemGraph {
         const circleGraphics = new PIXI.Graphics();
         const labelContainer = new PIXI.Container();
         for (const { system, x, y } of this.clickTargets) {
-            drawSystem(system, circleGraphics, x, y);
+            drawSystem(system, circleGraphics, x, y,
+                this.isSystemExplored(system.id),
+                this.isSystemInhabited(system));
+            // NOTE: the original also hides a system's NAME until it has been
+            // explored (in the reference screenshot exactly the 18 labeled
+            // systems are the non-dim ones). Labels are still drawn for
+            // everything here; only the dot color follows exploration so far.
             if (fontReady) {
                 const label = new PIXI.BitmapText(displayName(system.name), {
                     fontName: LABEL_FONT_NAME,
@@ -1288,6 +1358,9 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             viewedMarks,
             missionMarkTextures: this.missionMarkTextures,
             govtColorOf: system => this.govtColorOf(system),
+            isSystemInhabited: system => systemIsInhabited(system.planets,
+                id => this.universe.getPlanet(id)),
+            isSystemExplored: id => this.isSystemExplored(id),
         });
         this.systemGraph.container.position.set(MAP_POS.x, MAP_POS.y);
         // Keep the graph under the buttons/readouts (they were added to the
@@ -1389,11 +1462,14 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
                 [legalStatusName(record, govt.crimeTol)]);
         }
 
-        // Ports: the landable stellars. Goods/services aggregate over them.
+        // Ports: the landable, INHABITED stellars (landable.ts isPort — the
+        // same predicate that colors the dot). Goods/services aggregate over
+        // them. Sol's readout in the original is "Earth, Mars, Europa": its
+        // landable-but-uninhabited Wormhole is not a port.
         const planets = system.planets
             .map(id => this.universe.getPlanet(id))
             .filter(<T>(p: T): p is NonNullable<T> => p != null);
-        const ports = planets.filter(p => p.flags.canLand);
+        const ports = planets.filter(p => isPort(p.flags));
 
         const goods = new Set<number>();
         let trading = false, outfitting = false, shipyard = false;

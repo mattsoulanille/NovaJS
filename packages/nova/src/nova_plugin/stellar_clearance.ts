@@ -1,5 +1,6 @@
 import { GovtData } from 'novadatainterface/govt_data';
 import { PlanetData } from 'novadatainterface/planet_data';
+import { isInhabited } from './landable.js';
 import { LegalRecords, recordWith } from './reputation.js';
 
 /**
@@ -274,7 +275,7 @@ export function stellarClearance(stellar: ClearanceStellar,
         return CLEARED;
     }
     // The Bible's own parenthesis: no traffic control, no clearance to deny.
-    if (stellar.flags.uninhabited) {
+    if (!isInhabited(stellar.flags)) {
         return CLEARED;
     }
     // ränk 0x0200 makes the whole MinStatus field read as "ignored"; the
