@@ -3,6 +3,8 @@ An EV Nova data file and plug-in parser built for [NovaJS](https://github.com/ma
 
 In contrast to how EV Nova parsed files, NovaParse separates Plug-ins into their own namespaces to prevent ID conflicts. Each plug-in placed directly in the `Plug-ins` directory has access to its own IDs and to the global `Nova Files` IDs, but does not have access to IDs defined in other plug-ins. Creating a subdirectory inside the `Plug-ins` directory creates a shared namespace, and any plug-ins placed into that directory will have access to each other's IDs (in addition to the `Nova Files` ids), allowing plug-in packs like Extra Outfits and ARPIA2 to work correctly.
 
+The same namespacing applies to the two things EV Nova shares globally by number rather than by resource id: the 64 Require/Contribute flag bits (`src/flag_namespace.ts`) and the 10,000 control bits (`src/ncb_namespace.ts`). Every bit that the stock `Nova Files` themselves use anywhere is a shared "base set" bit that keeps its number for everyone; every other bit a plug-in references is private to the plug-in that wrote the resource, and is renumbered (control bits into `b20000` and up) before any consumer sees the expression. Plug-ins that share a subdirectory share those bits too. NovaParse logs a diagnostic at load for each bit two plug-ins were both using privately (now separated) and for each plug-in Require or control-bit test that nothing can ever satisfy.
+
 
 ## Prerequisites
 git, npm

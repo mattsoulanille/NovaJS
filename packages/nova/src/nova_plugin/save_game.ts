@@ -5,6 +5,9 @@ import {
     EncodedEntity, Serializer,
 } from 'nova_ecs/plugins/serializer_plugin';
 import { CargoComponent } from './cargo_plugin.js';
+import {
+    ControlBitPair, ControlBitResolver, sortControlBitPairs,
+} from './control_bit_namespaces.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import {
@@ -160,10 +163,30 @@ export const SaveData = t.intersection([
         date: GameDateType,
         // Active missions and their runtime state, keyed by mission id.
         missions: t.array(t.tuple([t.string, ActiveMissionType])),
-        // Set Nova control bits, keyed by decimal bit id ("342").
-        // The number is unused (always 1); the shape predates this
-        // field being written and stays for compatibility.
+        // Set Nova control bits as PHYSICAL bit numbers, keyed by decimal
+        // bit id ("342"). The number is unused (always 1); the shape
+        // predates this field being written and stays for compatibility.
+        //
+        // LEGACY since `controlBits` below: still written (so an older
+        // build reads a sensible stock bit set) and read only when
+        // `controlBits` is absent, through the best-effort migration in
+        // control_bit_namespaces.ts.
         novaControlBits: t.array(t.tuple([t.string, t.number])),
+        // Set Nova control bits as [namespace, raw bit] pairs — the form
+        // that survives a change of plug-in set (see
+        // control_bit_namespaces.ts): ["nova", 212] is stock b212,
+        // ["arpia", 2050] is ARPIA's own b2050. Includes bits PARKED from
+        // a plug-in that is not currently loaded, so they come back when
+        // it is. Preferred over `novaControlBits` on load.
+        //
+        // ADDITIVE and optional, like `ranks`: an older build ignores it,
+        // and a save without it reads through the legacy field.
+        controlBits: t.array(t.tuple([t.string, t.number])),
+        // The plug-in set the save was written under: every loaded plug-in
+        // prefix in load order (IDSpaceHandler's sorted order). Purely a
+        // manifest for diagnostics and future migrations — nothing is
+        // refused for it. Additive and optional.
+        plugins: t.array(t.string),
         // The player's active ränks, as global ränk ids ('nova:147').
         // Set and cleared by the same set strings the control bits are
         // (the Kxxx/Lxxx operators; see rank_logic.ts), and persisted
@@ -226,13 +249,27 @@ export const SaveEnvelope = t.type({
 export type SaveEnvelope = t.TypeOf<typeof SaveEnvelope>;
 
 /**
+ * How control bits are translated for a save (see
+ * control_bit_namespaces.ts): the resolver for the CURRENT plug-in set,
+ * and the pairs parked at load that must ride along unchanged.
+ */
+export interface ControlBitSaveOptions {
+    resolver: ControlBitResolver;
+    parked?: readonly ControlBitPair[];
+}
+
+/**
  * Builds a save payload from the player's ship entity and the id of the
  * system it is in. Reads existing components; does not mutate the entity.
  * Returns undefined if the entity is missing the ship type, in which case
  * there is nothing meaningful to persist.
+ *
+ * `controlBits` supplies the namespace resolver; without one only the
+ * legacy physical-number field is written (tests, and callers with no
+ * game data to hand).
  */
-export function extractSaveData(entity: Entity, systemId: string):
-    SaveData | undefined {
+export function extractSaveData(entity: Entity, systemId: string,
+    controlBits?: ControlBitSaveOptions): SaveData | undefined {
     const ship = entity.components.get(ShipComponent);
     if (!ship) {
         return undefined;
@@ -261,7 +298,18 @@ export function extractSaveData(entity: Entity, systemId: string):
     }
     const bits = entity.components.get(ControlBitsComponent);
     if (bits) {
-        save.novaControlBits = [...bits].map(bit => [String(bit), 1]);
+        // Sorted so the same bit set always writes the same bytes.
+        save.novaControlBits = [...bits].sort((a, b) => a - b)
+            .map(bit => [String(bit), 1]);
+        if (controlBits) {
+            save.controlBits = sortControlBitPairs([
+                ...controlBits.resolver.toPairs(bits),
+                ...(controlBits.parked ?? []),
+            ]);
+        }
+    }
+    if (controlBits) {
+        save.plugins = [...controlBits.resolver.pluginOrder];
     }
     const ranks = entity.components.get(ActiveRanksComponent);
     if (ranks) {
@@ -287,12 +335,31 @@ export function extractSaveData(entity: Entity, systemId: string):
     return save;
 }
 
+/** What restorePlayerState could not put on the entity. */
+export interface RestoredPlayerState {
+    /**
+     * Saved control bits no loaded plug-in can represent (see
+     * control_bit_namespaces.ts). Hand them back to extractSaveData so
+     * they survive until their plug-in is installed again.
+     */
+    parkedControlBits: ControlBitPair[];
+}
+
 /**
  * Applies the optional player-state fields of a save onto the player
  * entity's components. The required fields (ship/outfits/system) are
  * consumed by the spawn path in browser.ts; this handles the rest.
+ *
+ * Control bits: the namespaced `controlBits` pairs are preferred, mapped
+ * to physical bits under `resolver` (a default resolver, knowing no
+ * plug-ins, when none is given — stock bits still map, plug-in bits park).
+ * A save with only the legacy `novaControlBits` numbers goes through the
+ * best-effort migration.
  */
-export function restorePlayerState(entity: Entity, save: SaveData): void {
+export function restorePlayerState(entity: Entity, save: SaveData,
+    resolver: ControlBitResolver = new ControlBitResolver()):
+    RestoredPlayerState {
+    const restored: RestoredPlayerState = { parkedControlBits: [] };
     if (save.credits !== undefined) {
         entity.components.set(CreditsComponent, { credits: save.credits });
     }
@@ -303,11 +370,23 @@ export function restorePlayerState(entity: Entity, save: SaveData): void {
         entity.components.set(MissionsComponent, new Map(
             save.missions.map(([id, mission]) => [id, { ...mission }])));
     }
-    if (save.novaControlBits) {
-        entity.components.set(ControlBitsComponent, new Set(
+    if (save.controlBits) {
+        const { physical, parked } = resolver.fromPairs(save.controlBits);
+        entity.components.set(ControlBitsComponent, physical);
+        restored.parkedControlBits = parked;
+    } else if (save.novaControlBits) {
+        const { physical, parked } = resolver.migrateLegacy(
             save.novaControlBits
                 .map(([bit]) => parseInt(bit, 10))
-                .filter(bit => !Number.isNaN(bit))));
+                .filter(bit => !Number.isNaN(bit)));
+        entity.components.set(ControlBitsComponent, physical);
+        restored.parkedControlBits = parked;
+    }
+    if (save.plugins && !samePlugins(save.plugins, resolver.pluginOrder)) {
+        console.info('The save was written under a different plug-in set '
+            + `(${describePlugins(save.plugins)}); now `
+            + `${describePlugins(resolver.pluginOrder)}. Control bits of `
+            + 'plug-ins that are no longer loaded are kept for when they are.');
     }
     if (save.ranks) {
         entity.components.set(ActiveRanksComponent, new Set(save.ranks));
@@ -330,6 +409,15 @@ export function restorePlayerState(entity: Entity, save: SaveData): void {
             entity.components.set(CombatRatingComponent, { kills });
         }
     }
+    return restored;
+}
+
+function samePlugins(a: readonly string[], b: readonly string[]): boolean {
+    return a.length === b.length && a.every((p, i) => p === b[i]);
+}
+
+function describePlugins(plugins: readonly string[]): string {
+    return plugins.length === 0 ? 'no plug-ins' : plugins.join(', ');
 }
 
 /**

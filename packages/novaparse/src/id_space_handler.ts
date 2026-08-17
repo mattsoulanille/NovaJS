@@ -3,6 +3,10 @@ import * as path from "path";
 import { readNovaFile } from "./read_nova_file.js";
 import { NovaResources, NovaResourceType, getEmptyNovaResources } from "./resource_parsers/resource_holder_base.js";
 import { buildFlagNamespaceMap, FlagNamespaceMap, scanBaseFlagSet } from "./flag_namespace.js";
+import {
+    applyControlBitNamespaces, buildControlBitNamespaceMap, ControlBitNamespaceMap,
+    scanBaseControlBitSet,
+} from "./ncb_namespace.js";
 
 class BadDirectoryStructureError extends Error { };
 
@@ -46,6 +50,11 @@ class IDSpaceHandler {
     // build(); read the map through getFlagMap().
     private baseFlagSet: Set<number> | null = null;
     private flagMap: FlagNamespaceMap | null = null;
+    // Likewise for the control bits (ncb_namespace.ts): the stock base set
+    // and the finished mapping. Unlike the flag map, which parsers consult
+    // on demand, this one is APPLIED to the raw resources once in build().
+    private baseControlBitSet: Set<number> | null = null;
+    private controlBitMap: ControlBitNamespaceMap | null = null;
 
     constructor(novaPath: string,
         { novaFiles, novaPlugins }: NovaSubPaths = DEFAULT_SUB_PATHS) {
@@ -65,6 +74,7 @@ class IDSpaceHandler {
         // The base set of the flag space is defined by the stock data alone,
         // so it is taken now, before a plug-in can override anything.
         this.baseFlagSet = scanBaseFlagSet(this.tmpBuildingResources);
+        this.baseControlBitSet = scanBaseControlBitSet(this.tmpBuildingResources);
         // A null plug-ins path is an explicit opt-out, not an error: the
         // caller wants base "Nova Files" data only.
         if (this.novaPluginsPath !== null) {
@@ -75,6 +85,13 @@ class IDSpaceHandler {
         // which resources later happen to be parsed (which is on demand).
         this.flagMap = buildFlagNamespaceMap(this.tmpBuildingResources,
             this.baseFlagSet, this.pluginPrefixOrder);
+        // Same for the control bits, and then rewrite every NCB expression
+        // in the raw resources to physical bit numbers, so no parser (and
+        // nothing in the game) ever sees a raw plug-in bit number.
+        this.controlBitMap = buildControlBitNamespaceMap(
+            this.tmpBuildingResources, this.baseControlBitSet,
+            this.pluginPrefixOrder);
+        applyControlBitNamespaces(this.tmpBuildingResources, this.controlBitMap);
         return this.tmpBuildingResources;
     }
 
@@ -91,6 +108,22 @@ class IDSpaceHandler {
             throw new Error("Flag namespace map was not built");
         }
         return this.flagMap;
+    }
+
+    /**
+     * The control-bit namespace mapping for the loaded data (already
+     * applied to the raw resources). Rejects like getIDSpace when the core
+     * data failed to load.
+     */
+    public async getControlBitMap(): Promise<ControlBitNamespaceMap> {
+        var result = await this.globalResources;
+        if (result instanceof Error) {
+            throw result;
+        }
+        if (this.controlBitMap === null) {
+            throw new Error("Control bit namespace map was not built");
+        }
+        return this.controlBitMap;
     }
 
     /** Plug-in prefixes in load (= flag namespace allocation) order. */

@@ -3,6 +3,7 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import {
     getIntegrationGameData, getPluginGameData, makePluginNovaParse,
+    pluginControlBit,
 } from '../communication/simulation_test_fixture.js';
 import {
     canBuyOutfit, OutfitterContext, playerContribute, requirementsMet,
@@ -61,8 +62,12 @@ describe('Require/Contribute namespacing across plug-ins', () => {
         for (const id of [LAUNCHER, QUARTERS, ENGINEER]) {
             outfits.set(id, await gameData.data.Outfit.get(id));
         }
+        // Extra Outfits' b9009, as NovaParse renumbered it (plug-in
+        // control bits are namespaced too; see
+        // nova_plugin/control_bit_namespaces.ts).
+        const B9009 = await pluginControlBit(gameData, EXTRA, 9009);
         return {
-            outfits, shipData,
+            outfits, shipData, B9009,
             context: (owned: [string, number][], bits: number[]) =>
                 makeContext(shipData, outfits, owned, bits),
         };
@@ -77,7 +82,7 @@ describe('Require/Contribute namespacing across plug-ins', () => {
             }
             // b9009 opens the Availability gate, so Require decides.
             const check = canBuyOutfit(b.outfits.get(ENGINEER)!,
-                b.context([[LAUNCHER, 1]], [9009]));
+                b.context([[LAUNCHER, 1]], [b.B9009]));
             expect(check.allowed).toBe(false);
             expect(check.allowed || check.reason).toBe('require');
         });
@@ -89,7 +94,7 @@ describe('Require/Contribute namespacing across plug-ins', () => {
                 pending('Nuke and/or Extra Outfits plug-in not installed');
                 return;
             }
-            const context = b.context([[QUARTERS, 1]], [9009]);
+            const context = b.context([[QUARTERS, 1]], [b.B9009]);
             expect(requirementsMet(b.outfits.get(ENGINEER)!, context))
                 .toBe(true);
             expect(canBuyOutfit(b.outfits.get(ENGINEER)!, context))

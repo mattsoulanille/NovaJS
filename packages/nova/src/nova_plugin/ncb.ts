@@ -15,6 +15,9 @@
  * operators are supplied by the caller.
  */
 
+import {
+    FIRST_PRIVATE_PHYSICAL_CONTROL_BIT, isPhysicalControlBit, MAX_CONTROL_BIT,
+} from 'novadatainterface/control_bit_namespaces';
 import { RankData } from 'novadatainterface/rank_data';
 import { activateRank, deactivateRank } from './rank_logic.js';
 
@@ -25,14 +28,23 @@ export class NCBParseError extends Error {
     }
 }
 
-/** Bits are numbered b0 - b9999. */
-export const MAX_CONTROL_BIT = 9999;
+/**
+ * Bits are numbered b0 - b9999 in the data. The expressions this module
+ * sees have already been namespaced per plug-in by NovaParse
+ * (novaparse/src/ncb_namespace.ts): stock bits keep their numbers and
+ * plug-in-private bits are renumbered to >= FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
+ * so both ranges are accepted here; the gap between them never occurs in
+ * well-formed data and is rejected exactly as an out-of-range raw bit
+ * always was.
+ */
+export { MAX_CONTROL_BIT };
 
 function parseBitNumber(digits: string, expression: string): number {
     const bit = parseInt(digits, 10);
-    if (bit > MAX_CONTROL_BIT) {
+    if (!isPhysicalControlBit(bit)) {
         throw new NCBParseError(
-            `Control bit b${bit} out of range (b0 - b${MAX_CONTROL_BIT})` +
+            `Control bit b${bit} out of range (b0 - b${MAX_CONTROL_BIT}, or a` +
+            ` namespaced bit >= b${FIRST_PRIVATE_PHYSICAL_CONTROL_BIT})` +
             ` in ${JSON.stringify(expression)}`);
     }
     return bit;

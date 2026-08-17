@@ -1,7 +1,7 @@
 import 'jasmine';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
-import { getPluginGameData } from '../communication/simulation_test_fixture.js';
+import { getPluginGameData, pluginControlBit } from '../communication/simulation_test_fixture.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
 import { idPrefix } from '../nova_plugin/mission_logic.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
@@ -82,7 +82,17 @@ describe('Extra Outfits crafting chain against real plug-in data', () => {
             session.runMissionSet(outfit.onPurchase, idPrefix(outfit.id));
         };
 
-        return { gameData, entity, session, outfits, context, buy };
+        // The plug-in's own bit numbers, as NovaParse renumbered them
+        // (plug-in-private control bits live in their own namespace; see
+        // nova_plugin/control_bit_namespaces.ts).
+        const bit = (raw: number) => pluginControlBit(gameData, PLUGIN, raw);
+        const [B9001, B9002, B9003, B9004] = await Promise.all(
+            [9001, 9002, 9003, 9004].map(bit));
+
+        return {
+            gameData, entity, session, outfits, context, buy,
+            B9001, B9002, B9003, B9004,
+        };
     }
 
     /** The three parts, bought in order; returns the bench. */
@@ -124,7 +134,7 @@ describe('Extra Outfits crafting chain against real plug-in data', () => {
             return;
         }
         expect([...bench.session.state.bits].sort((a, b) => a - b))
-            .toEqual([9002, 9003, 9004]);
+            .toEqual([bench.B9002, bench.B9003, bench.B9004].sort((a, b) => a - b));
     });
 
     it('builds the cannon when the hull is bought', async () => {
@@ -145,7 +155,7 @@ describe('Extra Outfits crafting chain against real plug-in data', () => {
                 .withContext(`${id} should be consumed`).toBe(0);
         }
         // ...and the bits flipped from "parts on hand" to "cannon built".
-        expect([...bench.session.state.bits]).toEqual([9001]);
+        expect([...bench.session.state.bits]).toEqual([bench.B9001]);
     });
 
     it('grants the cannon even though its Require bits died with the parts',
@@ -185,7 +195,7 @@ describe('Extra Outfits crafting chain against real plug-in data', () => {
             for (const id of [COMPUTER, SOFTWARE, CELL, HULL]) {
                 expect(owned.has(id)).withContext(id).toBe(false);
             }
-            expect(entity.components.get(ControlBitsComponent)!.has(9001))
+            expect(entity.components.get(ControlBitsComponent)!.has(bench.B9001))
                 .toBe(true);
         });
 

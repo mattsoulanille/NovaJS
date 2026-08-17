@@ -31,6 +31,8 @@ import { TargetCornersData } from "novadatainterface/target_corners_data";
 import { WeaponData } from "novadatainterface/weapon_data";
 import { DEFAULT_SUB_PATHS, IDSpaceHandler, NovaSubPaths } from "./id_space_handler.js";
 import { describeFlagNamespaceReport, FlagNamespaceMap } from "./flag_namespace.js";
+import { ControlBitNamespaceMap, describeControlBitNamespaceReport } from "./ncb_namespace.js";
+import { ControlBitNamespaces } from "novadatainterface/control_bit_namespaces";
 import { AsteroidParse } from "./parsers/asteroid_parse.js";
 import { DudeParse } from "./parsers/dude_parse.js";
 import { ExplosionParse } from "./parsers/explosion_parse.js";
@@ -135,10 +137,20 @@ export class NovaParse implements GameDataInterface {
     // Rejects when the core data failed to load; parsers that need it then
     // fail the same way idSpace consumers do.
     public readonly flagMap: Promise<FlagNamespaceMap>;
+    // The per-plug-in control bit namespacing (ncb_namespace.ts). The map
+    // has already been applied to the raw resources by the time it
+    // resolves; it is exposed for diagnostics, tests and the client-facing
+    // `controlBitNamespaces` below.
+    public readonly controlBitMap: Promise<ControlBitNamespaceMap>;
+    // GameDataInterface.controlBitNamespaces: the JSON-safe mapping the
+    // server hands to the client for save-game (namespace, bit) pairs.
+    public readonly controlBitNamespaces: Promise<ControlBitNamespaces>;
     // Where the one-time flag namespace diagnostics (separated cross-plug-in
     // collisions, unsatisfiable Requires) go. Overridable, like
     // resourceNotFoundFunction, so tests can silence it.
     public flagNamespaceWarn: (message: string) => void = console.warn;
+    // Same for the control bit namespacing diagnostics.
+    public controlBitNamespaceWarn: (message: string) => void = console.warn;
 
     // subPaths.novaPlugins may be set to null to parse the base "Nova Files"
     // data only, ignoring the Plug-ins directory entirely. The default keeps
@@ -178,6 +190,19 @@ export class NovaParse implements GameDataInterface {
         // Same no-op catch as idSpace: constructing over broken core data
         // must not itself produce an unhandled rejection.
         this.flagMap.catch((_e: Error) => { });
+
+        this.controlBitMap = this.idSpaceHandler.getControlBitMap().then(map => {
+            const lines = describeControlBitNamespaceReport(map.report);
+            if (lines.length > 0) {
+                this.controlBitNamespaceWarn(
+                    "NovaParse: control bit namespacing:\n    "
+                    + lines.join("\n    "));
+            }
+            return map;
+        });
+        this.controlBitMap.catch((_e: Error) => { });
+        this.controlBitNamespaces = this.controlBitMap.then(map => map.data);
+        this.controlBitNamespaces.catch((_e: Error) => { });
 
         this.shipPICTMap = this.makeShipPictMap();
         this.systemBacklinkMap = this.makeSystemBacklinkMap();

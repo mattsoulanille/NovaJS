@@ -1,7 +1,8 @@
 import * as express from "express";
 import { Express } from "express";
 import * as path from 'path';
-import { idsPath, dataPath, batchPath, settingsPrefix } from "../common/game_data_paths.js";
+import { getDefaultControlBitNamespaces } from "novadatainterface/control_bit_namespaces";
+import { idsPath, dataPath, batchPath, settingsPrefix, controlBitNamespacesPath } from "../common/game_data_paths.js";
 import { GameDataInterface } from "novadatainterface/game_data_interface";
 import { NovaDataType } from "novadatainterface/nova_data_interface";
 
@@ -179,6 +180,8 @@ class GameDataServer {
         this.app.get(path.join(dataPath, ":name/:item.mp3"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
+        this.app.get(controlBitNamespacesPath + ".json",
+            this.controlBitNamespacesFulfiller.bind(this));
 
         this.app.use('/preloadData.json', async (_req, res) => {
             // Express 4 does not catch async rejections; see
@@ -301,6 +304,25 @@ class GameDataServer {
         } catch (e) {
             if (!res.headersSent) {
                 res.status(500).send({ error: 'Failed to resolve batch request' });
+            }
+        }
+    }
+
+    /**
+     * The control-bit namespace mapping (see
+     * novadatainterface/control_bit_namespaces.ts). A data source without
+     * one serves the default (no plug-ins), which the client treats as
+     * stock numbering.
+     */
+    private async controlBitNamespacesFulfiller(_req: express.Request,
+        res: express.Response): Promise<void> {
+        try {
+            res.send(this.gameData.controlBitNamespaces
+                ? await this.gameData.controlBitNamespaces
+                : getDefaultControlBitNamespaces());
+        } catch (e) {
+            if (!res.headersSent) {
+                res.status(500).send("Failed to get control bit namespaces");
             }
         }
     }

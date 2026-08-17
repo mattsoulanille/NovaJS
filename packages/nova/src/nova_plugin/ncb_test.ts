@@ -73,9 +73,14 @@ describe('parseNCBTest', () => {
         expect(parseNCBTest('B13 & O142')).toEqual(parseNCBTest('b13 & o142'));
     });
 
-    it('rejects bits above 9999', () => {
+    it('rejects bits above 9999 that are not namespaced physical bits', () => {
         expect(() => parseNCBTest('b10000')).toThrowError(NCBParseError);
+        expect(() => parseNCBTest('b19999')).toThrowError(NCBParseError);
         expect(() => parseNCBTest('b9999')).not.toThrow();
+        // Plug-in-private bits are renumbered by NovaParse into the
+        // physical range and must read back as bits.
+        expect(parseNCBTest('b20000')).toEqual({ type: 'bit', bit: 20000 });
+        expect(parseNCBTest('20345')).toEqual({ type: 'bit', bit: 20345 });
     });
 
     // Plug-in-data compatibility rule; see parseNCBTest's docs for why a
@@ -269,6 +274,9 @@ describe('parseNCBSet', () => {
         expect(() => parseNCBSet('b1)')).toThrowError(NCBParseError);
         expect(() => parseNCBSet('b10000')).toThrowError(NCBParseError);
         expect(() => parseNCBSet('!G142')).toThrowError(NCBParseError);
+        // ...but a namespaced physical bit is fine.
+        expect(parseNCBSet('b20000 !b20001')).toEqual([
+            { type: 'set', bit: 20000 }, { type: 'clear', bit: 20001 }]);
     });
 });
 

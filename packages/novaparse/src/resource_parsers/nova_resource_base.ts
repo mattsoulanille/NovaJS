@@ -64,6 +64,11 @@ class BaseResource {
         return this._writerPrefix;
     }
 
+    /** `writerPrefix`, or null if it was never set (hand-made resources). */
+    get writerPrefixIfSet(): string | null {
+        return this._writerPrefix;
+    }
+
     set writerPrefix(id: string) {
         this._writerPrefix = id;
     }
