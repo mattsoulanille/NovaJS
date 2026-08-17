@@ -223,28 +223,59 @@ export function plunderDialogContent(boarding: BoardingState,
 }
 
 /**
- * Which of the three boarding dialogs owns the screen.
+ * Which of the boarding dialogs owns the screen.
  *
- *  'none'     no session — nothing is up.
- *  'offer'    a board-triggered mission offer is being answered (përs
- *             Flags 0x0200); it comes FIRST and holds the others back,
- *             because the stock offer texts ARE the boarding narration.
- *  'capture'  the ship was taken; the assignment dialog is up.
- *  'plunder'  the ordinary case.
+ *  'none'       no session — nothing is up.
+ *  'offer'      a board-triggered mission offer is being answered (përs
+ *               Flags 0x0200); it comes FIRST and holds the others back,
+ *               because the stock offer texts ARE the boarding narration.
+ *  'offerOnly'  that offer has been answered, and it was the WHOLE
+ *               boarding: nothing else is shown and the session is ended
+ *               (see below).
+ *  'capture'    the ship was taken; the assignment dialog is up.
+ *  'plunder'    the ordinary case.
+ *
+ * ============================================================================
+ * THE OFFER REPLACES THE PLUNDER DIALOG — IT DOES NOT PRECEDE IT
+ * ============================================================================
+ * (Matthew's ruling, authoritative)
+ *
+ * Boarding a ship that offers a mission shows the mission text and that is
+ * the end of the boarding: no plunder screen, no capture screen, whether
+ * the player accepted or refused. mïsn 134's offer opens "You match
+ * velocities with the derelict ship and dock with it. Passing through the
+ * airlock you are surprised to encounter the surviving crew of the vessel,
+ * who are overjoyed at their rescue" — that IS the boarding, start to
+ * finish, and a plunder table sliding up behind it reads as nonsense
+ * (rob the people you just rescued?). mïsn 133's trap does the same.
+ *
+ * This used to render 'plunder' the moment the offer resolved. It now
+ * ends the session instead, and the sim hands the hulk's one plunder back
+ * (see boarding_plugin's endBoardingForOffer), so the derelict is still
+ * robbable on a LATER boarding once its offer has been taken and there is
+ * no mission left to show. An ordinary hulk — no përs, no mission, offer
+ * already spent — never reaches 'offerOnly' at all: presentShipOffer
+ * resolves false and the very next frame renders 'plunder' as before.
  *
  * Pure, so the ordering is pinned without a PIXI stage — the same split
  * plunderDialogContent uses for the dialog's rules.
  */
-export type BoardingDialogPhase = 'none' | 'offer' | 'capture' | 'plunder';
+export type BoardingDialogPhase =
+    'none' | 'offer' | 'offerOnly' | 'capture' | 'plunder';
 
 export function boardingDialogPhase(boarding: BoardingState | undefined,
     /** A mission offer for THIS boarding is on screen. */
-    offering: boolean): BoardingDialogPhase {
+    offering: boolean,
+    /** A mission offer for THIS boarding has been made and answered. */
+    offerMade = false): BoardingDialogPhase {
     if (!boarding) {
         return 'none';
     }
     if (offering) {
         return 'offer';
+    }
+    if (offerMade) {
+        return 'offerOnly';
     }
     return boarding.capture === 'succeeded' ? 'capture' : 'plunder';
 }
@@ -546,31 +577,32 @@ class CaptureAssignmentDialog {
  * Owns both dialogs and switches between them from the synced state.
  *
  * ============================================================================
- * THE BOARD-OFFERED MISSION COMES FIRST (përs Flags 0x0200)
+ * THE BOARD-OFFERED MISSION IS THE WHOLE BOARDING (përs Flags 0x0200)
  * ============================================================================
  *
  * A përs whose Flags 0x0200 is set offers "the ship's LinkMission when
  * boarding it instead of when hailing it" (EVN Bible). When the player
- * boards such a hull, the mission offer is shown BEFORE the plunder
- * dialog, and the plunder dialog is held closed until the player has
- * answered — which is both what the original does and what the stock text
- * requires. mïsn 134's offer opens "You match velocities with the derelict
- * ship and dock with it. Passing through the airlock you are surprised to
- * encounter the surviving crew of the vessel, who are overjoyed at their
- * rescue" — it is the boarding itself, and would read as nonsense after a
- * plunder screen. mïsn 133's does the same for the trap.
+ * boards such a hull the mission offer is shown INSTEAD OF the plunder
+ * dialog, and once it is answered the boarding is over — see
+ * boardingDialogPhase for the ruling and the stock text that demands it.
  *
  * ONE ATTEMPT PER SESSION. The presentation is async and the update system
  * is not, so the attempt is kicked off once per boarded target (`offered`)
  * and `holding` suppresses the plunder dialog meanwhile. If the offer turns
  * out not to apply — no përs, no mission, already taken — the promise
  * resolves false and the plunder dialog opens on the very next frame, so
- * an ordinary boarding is unaffected but for one frame of nothing.
+ * an ordinary boarding is unaffected but for one frame of nothing. If it
+ * DID apply, `made` remembers so, and the session is closed out through
+ * the sim (once, guarded by `ended`) rather than falling through to the
+ * plunder dialog.
  *
  * The plunder session itself is SIM state and keeps running throughout:
- * this only decides which dialog is on screen. A session that ends while
- * the offer is up (the target is destroyed, say) simply finds no plunder
- * dialog to close.
+ * this only decides which dialog is on screen and, in the offer case, asks
+ * the simulation to end the session. A session that ends while the offer
+ * is up (the target is destroyed, say) simply finds no plunder dialog to
+ * close, and the 'plunderOfferOnly' edge is idempotent — the sim's action
+ * system ends an already-ended session by deleting a component that is
+ * already gone.
  */
 class BoardingUi {
     readonly plunder: PlunderDialog;
@@ -579,10 +611,15 @@ class BoardingUi {
     private offered = new Set<string>();
     /** The target whose offer popup is currently up, if any. */
     private holding?: string;
+    /** Targets whose offer was actually MADE (and answered): the boarding
+     * is over for them, and no plunder dialog is owed. */
+    private made = new Set<string>();
+    /** Targets whose session we have already asked the sim to end. */
+    private ended = new Set<string>();
 
     constructor(displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
-        send: (action: ControlAction) => void,
+        private send: (action: ControlAction) => void,
         private screen: { x: number, y: number },
         /** Presents a boarding-triggered offer; the plugin wires this to
          * presentShipOffer. Omitted in specs that only drive the dialogs. */
@@ -608,7 +645,13 @@ class BoardingUi {
             this.offered.add(boarding.target);
             this.holding = boarding.target;
             const uuid = boarding.target;
-            void this.offerMission(uuid).catch(e => {
+            void this.offerMission(uuid).then(offered => {
+                if (offered) {
+                    // An offer was really made and answered, so this
+                    // boarding is finished (see the class note).
+                    this.made.add(uuid);
+                }
+            }).catch(e => {
                 console.warn('Board-offered mission failed:', e);
             }).finally(() => {
                 if (this.holding === uuid) {
@@ -617,16 +660,19 @@ class BoardingUi {
             });
         }
         const phase = boardingDialogPhase(boarding,
-            !!boarding && this.holding === boarding.target);
+            !!boarding && this.holding === boarding.target,
+            !!boarding && this.made.has(boarding.target));
         switch (phase) {
             case 'none':
                 this.plunder.close();
                 this.assignment.close();
-                // A new session against the same hull can never happen
-                // (one plunder per life segment), but the set is
-                // per-display-world state and there is no reason to grow
-                // it across systems.
+                // A new session against the same hull is possible again
+                // once the offer is spent (the sim hands the plunder
+                // back), and these are per-display-world sets anyway, so
+                // there is no reason to grow them across sessions.
                 this.offered.clear();
+                this.made.clear();
+                this.ended.clear();
                 this.holding = undefined;
                 return;
             case 'offer':
@@ -634,6 +680,20 @@ class BoardingUi {
                 // through its own MenuControls) until it is answered.
                 this.plunder.close();
                 this.assignment.close();
+                return;
+            case 'offerOnly':
+                // Answered, and that was the whole boarding: nothing else
+                // is shown, and the session is ended sim-side. Sent ONCE
+                // per target — `update` runs every frame and the synced
+                // BoardingComponent takes a bridge round trip to
+                // disappear, so without the guard this would spam the
+                // input path for as long as that takes.
+                this.plunder.close();
+                this.assignment.close();
+                if (!this.ended.has(boarding!.target)) {
+                    this.ended.add(boarding!.target);
+                    this.send('plunderOfferOnly');
+                }
                 return;
             case 'capture':
                 this.plunder.close();

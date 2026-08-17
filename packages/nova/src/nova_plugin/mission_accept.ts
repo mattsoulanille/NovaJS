@@ -11,6 +11,7 @@ import { MissionShipComponent } from './mission_ship_plugin.js';
 import { NpcComponent } from './npc_ai_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 import { findControlledEntity } from './ship_control.js';
 
@@ -273,6 +274,14 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
     if (offering) {
         offering.components.set(ShipOfferSpentComponent,
             { missionId: accepted.missionId });
+        // The offer is off the table, so the person is free to go: the
+        // 'shipOffer' hold that kept a Refuel Trader from warping out
+        // mid-radio-call is released here, at the exact moment its
+        // business concludes (see system_hold.ts). Usually academic —
+        // përs Flags 0x0040 removes the hull from play on this same tick
+        // — but the 'stay' përs live on, and they must not be pinned to
+        // this system for the rest of the visit.
+        offering.components.delete(SystemHoldComponent);
     }
 
     if (accepted.creditsDelta) {

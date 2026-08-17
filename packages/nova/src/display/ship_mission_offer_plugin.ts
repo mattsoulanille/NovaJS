@@ -68,12 +68,14 @@ import { showStatusMessage } from './status_message_plugin.js';
  * own Accept/Refuse labels and its offer dësc picture. When no offer
  * applies, the comm dialog opens exactly as before.
  *
- * The boarding case shows the offer BEFORE the plunder dialog, which is
- * both what the original does and what the stock text demands: mïsn 134's
- * offer text opens "You match velocities with the derelict ship and dock
- * with it. Passing through the airlock you are surprised to encounter the
- * surviving crew..." — it IS the boarding narration, and it would read as
- * nonsense after a plunder screen.
+ * The boarding case shows the offer INSTEAD OF the plunder dialog, and the
+ * boarding ends with it (Matthew's ruling; see boardingDialogPhase). mïsn
+ * 134's offer text opens "You match velocities with the derelict ship and
+ * dock with it. Passing through the airlock you are surprised to encounter
+ * the surviving crew..." — it IS the boarding, whole, and a plunder screen
+ * either side of it reads as nonsense. The hulk's one plunder is handed
+ * back by the sim so a LATER boarding, once the offer is spent, can still
+ * rob it.
  *
  * HOW IT REACHES THE SIMULATION. Not directly, ever. Accept resolves the
  * whole acceptance against a DETACHED COPY of the player's state

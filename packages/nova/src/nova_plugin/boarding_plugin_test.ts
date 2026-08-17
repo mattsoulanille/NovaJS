@@ -1147,6 +1147,59 @@ describe('boarding in a live world', () => {
                     .toEqual("You can't board this ship.");
             });
 
+        it('hands the plunder BACK when the boarding only offered a '
+            + 'mission (përs Flags 0x0200)', async () => {
+                // Matthew's ruling: boarding a ship that offers a mission
+                // shows the mission text and that is the whole boarding —
+                // no plunder dialog — and that boarding does not consume
+                // the hulk's one plunder, so the derelict is still
+                // robbable later, once its offer has been taken.
+                const { world, boarder, target } = await boardingWorld();
+                press(world, BOARDER, 'board');
+                expect(target.components.get(BoardedComponent)?.plundered)
+                    .toBeTrue();
+
+                press(world, BOARDER, 'plunderOfferOnly');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                // Session over, record handed back.
+                expect(target.components.get(BoardedComponent)?.active)
+                    .toBeFalsy();
+                expect(target.components.get(BoardedComponent)?.plundered)
+                    .toBeFalsy();
+
+                // ...so the NEXT boarding (the offer is spent by then, so
+                // the display shows the plunder dialog) opens normally.
+                press(world, BOARDER, 'board');
+                expect(boarder.components.get(BoardingComponent)?.target)
+                    .toEqual(TARGET);
+                // And that one DOES spend it, exactly once.
+                press(world, BOARDER, 'plunderDone');
+                expect(target.components.get(BoardedComponent)?.plundered)
+                    .toBeTrue();
+                press(world, BOARDER, 'board');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+            });
+
+        it('takes no booty on the offer-only ending, and repeats harmlessly',
+            async () => {
+                // The plunder dialog never opened, so nothing can have
+                // been taken; and the display sends the edge once, but a
+                // replayed input must not do anything different.
+                const { world, boarder, target } = await boardingWorld();
+                const credits =
+                    boarder.components.get(CreditsComponent)!.credits;
+                press(world, BOARDER, 'board');
+                press(world, BOARDER, 'plunderOfferOnly');
+                press(world, BOARDER, 'plunderOfferOnly');
+                expect(boarder.components.get(CreditsComponent)!.credits)
+                    .toEqual(credits);
+                expect(target.components.get(CargoComponent)!.get('cargo:0'))
+                    .toEqual(2);
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                expect(target.components.get(BoardedComponent)?.plundered)
+                    .toBeFalsy();
+            });
+
         it('blocks a second boarding while a session is OPEN', async () => {
             const { world, boarder, target } = await boardingWorld();
             press(world, BOARDER, 'board');

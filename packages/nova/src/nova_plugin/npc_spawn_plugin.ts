@@ -29,6 +29,7 @@ import { IdFactory, IdFactoryResource } from './id_factory.js';
 import { JUMP_ARRIVAL_MARGIN_S, JUMP_DISTANCE } from './jump_plugin.js';
 import { loadWithRetries } from './load_retry.js';
 import { evaluateNCBTest } from './ncb.js';
+import { GOAL_RESCUE } from './mission_ship_state.js';
 import { DeathAIComponent } from './npc_plugin.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { FormationComponent, NpcComponent, formationSlotPosition } from './npc_ai_plugin.js';
@@ -36,6 +37,7 @@ import { WeaponEntries } from './fire_weapon_plugin.js';
 import { PersComponent } from './pers_plugin.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
 import { Stat } from './stat.js';
+import { SystemHoldComponent } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
 
 /**
@@ -167,7 +169,7 @@ export type NpcSpawnEntry = t.TypeOf<typeof NpcSpawnEntry>;
 
 /** One person eligible to appear in this system (the genesis-staged
  * projection of PersData the 5% roll draws from). */
-export const PersSpawnEntry = t.type({
+export const PersSpawnEntry = t.intersection([t.type({
     /** PersData id. */
     id: t.string,
     name: t.string,
@@ -185,7 +187,22 @@ export const PersSpawnEntry = t.type({
      * Bible's flat 5%.
      */
     chance: t.number,
-});
+}), t.partial({
+    /**
+     * This person's LinkMission is a RESCUE mission (mïsn ShipGoal 5,
+     * "Rescue them") — the stock Refuel Traders, mïsn 141/650/651/652.
+     * Such a person is stranded by definition, so they are spawned held
+     * in the system until their offer is taken: see system_hold.ts for
+     * the ruling and maybeSpawnPers for the stamp.
+     *
+     * Resolved at GENESIS, where the mïsn resource is already being
+     * loaded off disk, rather than at spawn time — the simulation must
+     * never depend on a getCached hit for a decision. Optional so
+     * pre-hold snapshots still decode (absent means "no hold", which is
+     * what every other person gets anyway).
+     */
+    holdsForOffer: t.boolean,
+})]);
 export type PersSpawnEntry = t.TypeOf<typeof PersSpawnEntry>;
 
 /**
@@ -539,6 +556,27 @@ export async function buildPersSpawnTable(world: World, systemId: string,
     const stagedOk = await pooledMap(eligible,
         ({ pers }) => stageOnce(pers.ship, pers.govt));
 
+    // "Does this person's LinkMission ask to be rescued?" — resolved
+    // HERE, where mïsn resources can be awaited, so the spawner never
+    // has to consult mission game data (see PersSpawnEntry's
+    // holdsForOffer). Deduped per mission id: 63 stock përs share the
+    // four Refuel Trader missions.
+    const missionIds = [...new Set(eligible
+        .map(({ pers }) => pers.linkMission)
+        .filter((id): id is string => !!id))].sort();
+    const rescueMissions = new Set<string>();
+    await pooledMap(missionIds, async missionId => {
+        try {
+            const mission = await gameData.data.Mission.get(missionId);
+            if (mission.shipGoal === GOAL_RESCUE) {
+                rescueMissions.add(missionId);
+            }
+        } catch {
+            // Unreadable mïsn: no hold, exactly as for a person with no
+            // LinkMission at all.
+        }
+    });
+
     return eligible.filter((_, index) => stagedOk[index])
         .map(({ pers, chance }) => ({
             id: pers.id,
@@ -548,6 +586,8 @@ export async function buildPersSpawnTable(world: World, systemId: string,
             govt: pers.govt,
             aiType: pers.aiType,
             chance,
+            ...(pers.linkMission && rescueMissions.has(pers.linkMission)
+                ? { holdsForOffer: true } : {}),
         }));
 }
 
@@ -643,6 +683,14 @@ function maybeSpawnPers(world: World,
     // so they spawn disabled — a hulk drifting in space (the origin of the
     // "; Only show hail quote when disabled" derelict përs flavour).
     applyStartsDisabled(ship, gameData);
+    // A person whose LinkMission asks to be RESCUED (a Refuel Trader) is
+    // stranded, and stays in this system until somebody takes the offer
+    // off their hands — otherwise the radio call the player is flying
+    // across the system to answer belongs to a ship that has warped out.
+    // See system_hold.ts; released by applyAcceptMission.
+    if (pers.holdsForOffer) {
+        ship.components.set(SystemHoldComponent, { reason: 'shipOffer' });
+    }
     // The 'npc' uuid prefix: a person IS an NPC (population counting,
     // system-furniture checks); the PersComponent is the tag.
     world.entities.set(ids.next('npc'), ship);

@@ -20,6 +20,7 @@ import {
     ShipOfferSpentComponent, ShipOfferSpentType,
 } from './mission_accept.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 import {
     ActiveMission, CreditsComponent, Missions, MissionsComponent,
 } from './player_state_plugin.js';
@@ -206,8 +207,14 @@ function pickUpOnBoarding(active: ActiveMission, owner: Entity): void {
 function rescueBoarded(active: ActiveMission, owner: Entity,
     ship: Entity): void {
     if (active.shipObjective?.goal === GOAL_RESCUE) {
-        // Rescued: it is no longer a hulk, so it flies off.
+        // Rescued: it is no longer a hulk, so it flies off — and the
+        // in-system hold that kept it here to BE rescued goes with the
+        // disable (system_hold.ts). Both are dropped together on purpose:
+        // "stays put until refuelled" and "adrift until boarded" are the
+        // same fact, and a ship that could move but not leave would be
+        // the worst of the two.
         ship.components.delete(DisabledComponent);
+        ship.components.delete(SystemHoldComponent);
     }
     if (!active.autoAbortOnBoard || active.autoAbortPending) {
         return;
