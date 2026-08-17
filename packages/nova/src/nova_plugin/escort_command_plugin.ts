@@ -28,6 +28,9 @@ import { EscortLandingComponent, PlayerEscortComponent } from './player_escort.j
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
 import { ShipControlEvent, ShipControlStateComponent } from './ship_control.js';
 import { TargetComponent } from './target_component.js';
+import {
+    shortestSuicideReach, suicideWeaponInReach,
+} from './weapon_range.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
 /**
@@ -322,13 +325,45 @@ function isHostileTo(other: Entity, rootUuid: string, escortUuid: string,
 const HostileCandidatesQuery = new Query(
     [UUID, GetEntity, MovementStateComponent, ShipComponent] as const);
 
-/** Point-and-thrust pursuit of a target (attack/defend engagements). */
-function steerAttack(movement: MovementState, target: MovementState) {
+/**
+ * Point-and-thrust pursuit of a target (attack/defend engagements).
+ *
+ * `standoff` is the range the escort stops closing at — normally
+ * ESCORT_ATTACK_STANDOFF, but shorter for a ship whose killing blow only
+ * lands closer than that (see attackStandoff).
+ */
+function steerAttack(movement: MovementState, target: MovementState,
+    standoff: number) {
     const toTarget = target.position.subtract(movement.position);
     movement.turnTo = toTarget.angle;
     movement.turnBack = false;
-    movement.accelerating =
-        toTarget.length > ESCORT_ATTACK_STANDOFF ? 1 : 0;
+    movement.accelerating = toTarget.length > standoff ? 1 : 0;
+}
+
+/**
+ * How close this escort flies to the ship it is attacking.
+ *
+ * Ordinarily ESCORT_ATTACK_STANDOFF — a comfortable gunnery range that
+ * keeps escorts out of each other's way. A ship carrying a SUICIDE
+ * weapon (wëap AmmoType -999) is a different animal: its one shot has a
+ * fixed, usually very short reach, and holding station outside that
+ * reach means it can never use the only thing it is for. Such a ship
+ * closes to the reach of its shortest-ranged suicide weapon instead —
+ * which for the Intelligent EMP Torpedo plug-in is what turns a drone
+ * that orbits at 250px into one that flies into its victim and detonates.
+ *
+ * Never LONGER than the ordinary standoff: a suicide weapon that
+ * outranges it (a long beam, say) changes nothing about how the ship
+ * flies.
+ */
+function attackStandoff(weapons: Iterable<readonly [string, unknown]>,
+    gameData: SimulationGameDataInterface): number {
+    const reach = shortestSuicideReach(
+        [...weapons].map(([id]) => id),
+        id => gameData.data.Weapon.getCached(id));
+    return reach === undefined
+        ? ESCORT_ATTACK_STANDOFF
+        : Math.min(ESCORT_ATTACK_STANDOFF, reach);
 }
 
 /**
@@ -451,16 +486,26 @@ export const EscortCommandBehaviorSystem = new System({
         const fireAt = (victim: string) => {
             const victimMovement = entities.get(victim)?.components
                 .get(MovementStateComponent);
-            const inRange = victimMovement !== undefined
-                && victimMovement.position.subtract(movement.position)
-                    .lengthSquared <= ESCORT_FIRE_RANGE * ESCORT_FIRE_RANGE;
+            const distanceSquared = victimMovement === undefined
+                ? Infinity
+                : victimMovement.position.subtract(movement.position)
+                    .lengthSquared;
+            const inRange =
+                distanceSquared <= ESCORT_FIRE_RANGE * ESCORT_FIRE_RANGE;
             for (const [id, weapon] of weapons) {
-                const weaponType = gameData.data.Weapon.getCached(id)?.type;
-                if (weaponType == null || weaponType === 'BayWeaponData') {
+                const weaponData = gameData.data.Weapon.getCached(id);
+                if (weaponData == null
+                    || weaponData.type === 'BayWeaponData') {
                     continue;
                 }
                 weapon.target = victim;
-                weapon.firing = inRange;
+                // The flat ESCORT_FIRE_RANGE is fine for a weapon whose
+                // wasted shot costs a round of ammo. A SUICIDE weapon
+                // (wëap AmmoType -999) spends the ship, so it is held
+                // until the shot can actually connect — see
+                // weapon_range.ts.
+                weapon.firing = inRange
+                    && suicideWeaponInReach(weaponData, distanceSquared);
             }
         };
         const root = escortParent(entity);
@@ -489,7 +534,8 @@ export const EscortCommandBehaviorSystem = new System({
                     return;
                 }
                 target.target = command.target;
-                steerAttack(movement, victimMovement);
+                steerAttack(movement, victimMovement,
+                    attackStandoff(weapons, gameData));
                 fireAt(command.target!);
                 return;
             }
@@ -540,7 +586,8 @@ export const EscortCommandBehaviorSystem = new System({
                     break;
                 }
                 target.target = command.target;
-                steerAttack(movement, engagedMovement);
+                steerAttack(movement, engagedMovement,
+                    attackStandoff(weapons, gameData));
                 fireAt(command.target!);
                 return;
             }
