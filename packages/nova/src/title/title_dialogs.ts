@@ -265,8 +265,14 @@ export interface PilotDialogActions {
     refresh(): PilotEntry[];
     /** Downloads the pilot as a file. */
     onExport(id: string): void;
-    /** Validates and adds a pilot file. Returns a message to display. */
-    onImport(text: string): { ok: boolean, message: string };
+    /**
+     * Validates and adds a pilot file from its bytes — a NovaJS JSON pilot
+     * file or an ORIGINAL EV Nova pilot (Windows .plt, or extracted Mac
+     * resource-fork data; the caller sniffs which). Resolves a message
+     * to display.
+     */
+    onImport(bytes: Uint8Array, fileName: string):
+        Promise<{ ok: boolean, message: string }>;
     /** Deletes a pilot and its save. */
     onDelete(id: string): void;
     /**
@@ -399,9 +405,14 @@ export function showOpenPilotDialog(entries: PilotEntry[],
 
         // A hidden file input is the only way a browser can read a local
         // file; it is appended so a headless driver can set files on it.
+        // The picker accepts NovaJS exports (.plt/.json) AND original EV
+        // Nova pilots: Windows .plt files, and Mac pilots whose resource
+        // fork was copied out (.rsrc/.rez, or any extension — a browser
+        // only ever sees a file's data fork; see original_pilot_import.ts).
+        // Read as BYTES; the importer sniffs JSON vs. binary.
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
-        fileInput.accept = '.plt,.json,application/json';
+        fileInput.accept = '.plt,.json,.rsrc,.rez,application/json';
         fileInput.dataset.testid = 'open-pilot-file';
         fileInput.style.display = 'none';
         modal.panel.appendChild(fileInput);
@@ -410,11 +421,19 @@ export function showOpenPilotDialog(entries: PilotEntry[],
             if (!file || !actions) { return; }
             const reader = new FileReader();
             reader.onload = () => {
-                const result = actions.onImport(String(reader.result ?? ''));
-                refresh(result.message);
+                const buffer = reader.result;
+                const bytes = buffer instanceof ArrayBuffer
+                    ? new Uint8Array(buffer) : new Uint8Array(0);
+                status.textContent = 'Importing…';
+                actions.onImport(bytes, file.name).then(
+                    result => refresh(result.message),
+                    e => {
+                        console.warn('Pilot import failed:', e);
+                        refresh('Could not import that file.');
+                    });
             };
             reader.onerror = () => { status.textContent = 'Could not read that file.'; };
-            reader.readAsText(file);
+            reader.readAsArrayBuffer(file);
             fileInput.value = '';
         });
 

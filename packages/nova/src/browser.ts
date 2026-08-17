@@ -111,9 +111,12 @@ import {
 // clearPilotProfile is wired into the ?reset path below.
 import {
     applyActivePilot, createPilot, deletePilot, exportCheckpointFile,
-    exportFileName, exportPilot, getActivePilot, importPilot, listPilots,
-    loadPilotControls, selectPilot,
+    exportFileName, exportPilot, getActivePilot, importOriginalPilot,
+    importPilot, ImportResult, listPilots, loadPilotControls, selectPilot,
 } from "./title/pilot_registry.js";
+import {
+    looksLikeOriginalPilot, OriginalPilotContext,
+} from "./title/original_pilot_import.js";
 import {
     checkpointCount, latestState, loadHistory, recordCheckpoint,
     rewindPilotSave,
@@ -2539,6 +2542,43 @@ function downloadText(text: string, filename: string): void {
 }
 
 /**
+ * The game-data lookups an ORIGINAL EV Nova pilot import needs
+ * (title/original_pilot_import.ts): resource existence by global id, the
+ * planet -> system and system -> gövt maps, and the default start system.
+ */
+async function originalPilotContext(): Promise<OriginalPilotContext> {
+    const ids = await simulationGameData.ids;
+    const universe = MissionUniverse.shared(simulationGameData);
+    await universe.load();
+    let fallbackSystem = ids.System[0] ?? 'nova:128';
+    try {
+        const starts = await Promise.all(ids.PlayerStart.map(
+            id => simulationGameData.data.PlayerStart.get(id)));
+        const start = starts.find(s => s.isDefault) ?? starts[0];
+        if (start && start.systems.length > 0) {
+            fallbackSystem = start.systems[0];
+        }
+    } catch {
+        // Keep the first system.
+    }
+    const ships = new Set(ids.Ship);
+    const outfits = new Set(ids.Outfit);
+    const missions = new Set(ids.Mission);
+    const ranks = new Set(ids.Rank);
+    const junk = new Set(ids.Junk);
+    return {
+        knownShip: id => ships.has(id),
+        knownOutfit: id => outfits.has(id),
+        knownMission: id => missions.has(id),
+        knownRank: id => ranks.has(id),
+        knownJunk: id => junk.has(id),
+        systemOfPlanet: id => universe.systemIdOfPlanet(id),
+        govtOfSystem: id => universe.getSystemInfo(id)?.govt,
+        fallbackSystem,
+    };
+}
+
+/**
  * Builds the bottom status readout for the title screen from the
  * current save + pilot profile. A pure read; never mutates state.
  */
@@ -2890,17 +2930,28 @@ async function runTitle() {
                         downloadText(text,
                             exportFileName(pilot?.name ?? 'pilot'));
                     },
-                    onImport: (text) => {
-                        const result = importPilot(text);
+                    onImport: async (bytes, fileName) => {
+                        // Content sniffing: a NovaJS export is JSON; anything
+                        // else is tried as an original EV Nova pilot.
+                        let result: ImportResult;
+                        if (looksLikeOriginalPilot(bytes)) {
+                            result = importOriginalPilot(bytes, fileName,
+                                await originalPilotContext());
+                        } else {
+                            result = importPilot(
+                                new TextDecoder().decode(bytes));
+                        }
                         if (!result.ok) {
                             return { ok: false, message: result.reason };
                         }
+                        const notes = result.notes?.length
+                            ? ` Notes: ${result.notes.join(' ')}` : '';
                         return {
                             ok: true,
-                            message: result.renamed
+                            message: (result.renamed
                                 ? `Imported as "${result.pilot.name}" (a pilot `
                                 + 'with that name already existed).'
-                                : `Imported "${result.pilot.name}".`,
+                                : `Imported "${result.pilot.name}".`) + notes,
                         };
                     },
                     onDelete: (id) => { deletePilot(id); },

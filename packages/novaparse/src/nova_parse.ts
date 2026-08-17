@@ -99,7 +99,8 @@ import { SoundFile } from "novadatainterface/sound_file";
 // save_game.ts) can `import { readPilot, PilotData } from "novaparse"`. See
 // docs/pilot_file_format.md.
 export type { PilotData, PilotGlobalsData, PilotPlayerData } from "./pilot/pilot_data.js";
-export { parsePilotResources, parsePltPilot, readPilot } from "./pilot/pilot_parse.js";
+export { parsePilotBytes, parsePilotResources, parsePltPilot } from "./pilot/pilot_parse.js";
+export { readPilot } from "./pilot/pilot_read.js";
 
 // Per-plug-in Require/Contribute flag namespacing; see flag_namespace.ts.
 export type {

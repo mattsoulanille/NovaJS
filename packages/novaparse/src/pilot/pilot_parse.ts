@@ -27,7 +27,7 @@
  * packages/nova/src/nova_plugin/save_game.ts's SaveData — see
  * docs/pilot_file_format.md for the field correspondence.
  */
-import { decode_macroman, readResourceFork, ResourceMap } from "resource_fork";
+import { decode_macroman, parseResourceFork, ResourceMap } from "resource_fork/parse";
 import { Reader } from "../resource_parsers/reader.js";
 import { simpleCrypt } from "./simple_crypt.js";
 import {
@@ -381,26 +381,36 @@ export function parsePltPilot(data: Uint8Array): PilotData {
 }
 
 /**
- * Reads a pilot file from disk, auto-detecting the container:
- * - a flat Windows-style .plt file (data fork), or
- * - a Mac pilot: resource fork (or resource-fork-format data fork, e.g. a
- *   pilot copied off a Mac as raw fork data) holding 'NpïL' 128/129.
+ * Parses a pilot from a file's BYTES, auto-detecting the container:
+ * - a flat Windows-style .plt file, or
+ * - resource-fork-format data holding 'NpïL' 128/129 (a Mac pilot whose
+ *   resource fork was extracted to a plain file, e.g. `cp file/..namedfork/
+ *   rsrc out.rsrc`, or a .rez container).
+ *
+ * This is the browser entry point: a browser only ever sees a file's data
+ * fork, so a Mac pilot picked directly (whose data fork is empty) cannot
+ * be read this way — see the error message. Disk reads with resource-fork
+ * access live in pilot_read.ts (node only).
  */
-export async function readPilot(filePath: string): Promise<PilotData> {
-    const fs = await import("fs");
-    const dataFork = await fs.promises.readFile(filePath);
-    const dataForkBytes = new Uint8Array(
-        dataFork.buffer, dataFork.byteOffset, dataFork.byteLength);
-    if (isPltPilot(dataForkBytes)) {
-        return parsePltPilot(dataForkBytes);
+export function parsePilotBytes(data: Uint8Array): PilotData {
+    if (isPltPilot(data)) {
+        return parsePltPilot(data);
+    }
+    if (data.length === 0) {
+        throw new Error('The file is empty. A Mac pilot keeps its data in '
+            + 'the resource fork, which a browser cannot read; copy the fork '
+            + 'out first (e.g. `cp "Pilot/..namedfork/rsrc" Pilot.rsrc`) and '
+            + 'import that, or use a Windows .plt pilot.');
     }
     let map: ResourceMap;
     try {
-        map = await readResourceFork(filePath, true);
+        // A copy of the bytes: the fork parser addresses the whole buffer.
+        const copy = new Uint8Array(data.length);
+        copy.set(data);
+        map = parseResourceFork(copy.buffer);
     } catch {
-        // No (valid) resource fork; the data fork may itself be resource-
-        // fork-format data.
-        map = await readResourceFork(filePath, false);
+        throw new Error('Not an EV Nova pilot file (neither a Windows .plt '
+            + 'nor resource-fork data).');
     }
     return parsePilotResources(map);
 }

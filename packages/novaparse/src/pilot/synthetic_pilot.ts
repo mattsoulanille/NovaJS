@@ -10,13 +10,16 @@
  *
  * No real save games are committed to the repo; integration tests read
  * Matthew's local pilots from /Applications/EV Nova when present.
+ *
+ * Lives in src (not test) so packages/nova's import specs can build the
+ * same fixtures through the package's exports.
  */
 import {
     GLOBALS_DATA_SIZE,
     MAC_PLAYER_DATA_SIZE,
     PLT_PLAYER_DATA_SIZE,
-} from "../../src/pilot/pilot_parse.js";
-import { simpleCrypt } from "../../src/pilot/simple_crypt.js";
+} from "./pilot_parse.js";
+import { simpleCrypt } from "./simple_crypt.js";
 
 /** The values the builders below write, for tests to assert against. */
 export const SYNTHETIC = {

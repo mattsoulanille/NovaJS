@@ -26,7 +26,7 @@
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 import {
-    decodeSave, SaveEnvelope, SAVE_KEY, setActiveSaveKey,
+    decodeSave, encodeSave, SaveEnvelope, SAVE_KEY, setActiveSaveKey,
 } from '../nova_plugin/save_game.js';
 import {
     ControlsOverride, GameSettingsOverride, loadControlsOverride,
@@ -34,9 +34,12 @@ import {
     saveControlsOverride, saveGameSettings,
 } from './client_prefs.js';
 import {
-    checkpointState, decodeHistoryValue, loadHistory, PilotHistoryCodec,
-    removeHistory, saveHistory, truncateAfter,
+    appendCheckpoint, checkpointState, decodeHistoryValue, loadHistory,
+    PilotHistoryCodec, removeHistory, saveHistory, truncateAfter,
 } from './pilot_history.js';
+import {
+    convertOriginalPilotBytes, OriginalPilotContext,
+} from './original_pilot_import.js';
 
 /** localStorage key: the pilot registry. */
 export const PILOT_REGISTRY_KEY = 'novajs:pilots';
@@ -595,8 +598,74 @@ export function exportFileName(name: string): string {
 }
 
 export type ImportResult =
-    | { ok: true; pilot: PilotRecord; renamed: boolean }
+    | { ok: true; pilot: PilotRecord; renamed: boolean; notes?: string[] }
     | { ok: false; reason: string };
+
+/**
+ * Imports an ORIGINAL EV Nova pilot file's bytes as a new pilot
+ * (title/original_pilot_import.ts maps the parsed file onto a save). The
+ * converted save is validated through the live save codec like a NovaJS
+ * import, then written with a one-checkpoint history ("Imported from EV
+ * Nova pilot") so the rollback view can always return to the import.
+ * `ctx` supplies the game-data lookups the mapping needs.
+ */
+export function importOriginalPilot(bytes: Uint8Array, fileName: string,
+    ctx: OriginalPilotContext, storage?: PrefsStorage): ImportResult {
+    let converted;
+    try {
+        converted = convertOriginalPilotBytes(bytes, fileName, ctx);
+    } catch (e) {
+        return {
+            ok: false,
+            reason: e instanceof Error ? e.message
+                : 'That file is not an EV Nova pilot file.',
+        };
+    }
+    const saveText = encodeSave(converted.save);
+    if (decodeSave(saveText) === undefined) {
+        return {
+            ok: false,
+            reason: 'The converted pilot did not pass this build\'s save '
+                + 'validation, so it was not imported.',
+        };
+    }
+    const store = getStorage(storage);
+    const registry = loadRegistry(storage);
+    const id = makePilotId(registry.pilots, store);
+    const requested = converted.profile.name;
+    const name = uniquePilotName(requested, registry.pilots);
+    const now = Date.now();
+    const record: PilotRecord = {
+        id,
+        name,
+        saveKey: `${PILOT_SAVE_KEY_PREFIX}${id}`,
+        profile: converted.profile,
+        created: now,
+        updated: now,
+    };
+    if (store) {
+        try {
+            store.setItem(record.saveKey, saveText);
+        } catch (e) {
+            return { ok: false, reason: 'Could not write the imported save.' };
+        }
+        const history = appendCheckpoint(undefined, JSON.parse(saveText), {
+            label: 'Imported from EV Nova pilot',
+            kind: 'import',
+            date: converted.save.date,
+            system: converted.save.system,
+            ...(converted.lastStellar ? { stellar: converted.lastStellar } : {}),
+            at: now,
+        });
+        saveHistory(record.saveKey, history, store);
+    }
+    registry.pilots.push(record);
+    saveRegistry(registry, storage);
+    return {
+        ok: true, pilot: record, renamed: name !== requested,
+        notes: converted.notes,
+    };
+}
 
 /**
  * Validates and adds an exported pilot file.
