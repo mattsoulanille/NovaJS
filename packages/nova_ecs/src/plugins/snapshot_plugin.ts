@@ -80,6 +80,70 @@ export const SnapshotPoliciesResource =
 
 type StoredComponent = [UnknownComponent, unknown, 'value' | 'encoded'];
 
+const objectProto = Object.prototype;
+
+/**
+ * Deep-copies serializer-encoded component data with structuredClone's
+ * result shape, but without structuredClone's per-call serialization
+ * round trip, which dominated the per-tick rollback snapshot (every
+ * component of every entity, every tick).
+ *
+ * Encoded data is JSON-like: primitives, arrays and objects. Objects
+ * become plain objects holding their own enumerable string-keyed
+ * properties — exactly what structuredClone produces for ordinary
+ * objects, including class instances such as Position that identity
+ * codecs pass through (their symbol-keyed immerable marker is dropped
+ * either way; decode rebuilds the class). Anything structuredClone
+ * treats specially (Map, Set, Date, RegExp, ArrayBuffer views, boxed
+ * primitives, errors) and anything it rejects (functions) is handed
+ * to structuredClone itself, so the result — or the thrown
+ * DataCloneError — is the same as before.
+ */
+export function cloneEncoded<T>(value: T): T {
+    if (typeof value !== 'object' || value === null) {
+        if (typeof value === 'function' || typeof value === 'symbol') {
+            return structuredClone(value);
+        }
+        return value;
+    }
+    if (Array.isArray(value)) {
+        const length = value.length;
+        // Only dense arrays with no extra properties take the fast path.
+        if (Object.keys(value).length !== length) {
+            return structuredClone(value);
+        }
+        const copy = new Array(length);
+        for (let i = 0; i < length; i++) {
+            copy[i] = cloneEncoded(value[i]);
+        }
+        return copy as T;
+    }
+    const proto = Object.getPrototypeOf(value);
+    if (proto !== objectProto && proto !== null && !isOrdinaryClassInstance(value)) {
+        return structuredClone(value);
+    }
+    const copy: Record<string, unknown> = {};
+    for (const key in value) {
+        if (Object.prototype.hasOwnProperty.call(value, key)) {
+            copy[key] = cloneEncoded((value as Record<string, unknown>)[key]);
+        }
+    }
+    return copy as T;
+}
+
+const objectToString = Object.prototype.toString;
+
+/**
+ * True for instances of user-defined classes, which structured clone
+ * serializes as ordinary objects. Everything with its own class tag
+ * (Map, Set, Date, RegExp, errors, buffers and views, boxed primitives,
+ * platform objects, anything with a Symbol.toStringTag) is left to
+ * structuredClone.
+ */
+function isOrdinaryClassInstance(value: object): boolean {
+    return objectToString.call(value) === '[object Object]';
+}
+
 interface SnapshotEntity {
     uuid: string;
     name?: string;
@@ -92,6 +156,9 @@ export interface WorldSnapshot {
     resources: unknown[];
 }
 
+const CODEC_POLICY: ComponentSnapshotPolicy = { policy: 'codec' };
+const SKIP_POLICY: ComponentSnapshotPolicy = { policy: 'skip' };
+
 function snapshotComponents(world: World, entity: Entity,
     policies: SnapshotPolicies): StoredComponent[] {
     const serializer = world.resources.get(SerializerResource);
@@ -100,7 +167,7 @@ function snapshotComponents(world: World, entity: Entity,
         let policy = policies.components.get(component);
         if (!policy) {
             policy = serializer?.hasComponent(component)
-                ? { policy: 'codec' } : { policy: 'skip' };
+                ? CODEC_POLICY : SKIP_POLICY;
         }
         switch (policy.policy) {
             case 'share':
@@ -113,10 +180,10 @@ function snapshotComponents(world: World, entity: Entity,
                 // io-ts optimizes all-identity codecs (e.g. VectorLike,
                 // passthrough types) to return the live object, and even
                 // non-identity codecs can share mutable inner objects.
-                // Structurally clone so the snapshot cannot be mutated
-                // by continued simulation; decode reconstructs class
+                // Deep-copy so the snapshot cannot be mutated by
+                // continued simulation; decode reconstructs class
                 // instances from the plain data.
-                stored.push([component, structuredClone(
+                stored.push([component, cloneEncoded(
                     serializer!.encodeComponent(component, data)), 'encoded']);
                 break;
             case 'skip':
@@ -139,7 +206,7 @@ function restoreComponents(world: World, entity: Entity,
             // mutate) the snapshot's stored data, corrupting it for a
             // second restore of the same snapshot.
             const decoded = serializer!.decodeComponent(
-                component.name, structuredClone(data));
+                component.name, cloneEncoded(data));
             if (!decoded || isLeft(decoded)) {
                 throw new Error(`Failed to restore component ${component.name}`);
             }
