@@ -65,6 +65,79 @@ export interface OutfitterContext {
      * Require test. Absent means "no ranks", the pre-rank behaviour.
      */
     rankContribute?: bigint;
+    /**
+     * The five STR# 2002 fragments the launcher sell refusal is composed
+     * from, read out of the loaded game data by the Outfitter menu.
+     * Absent falls back to AMMO_SELL_STRINGS, the stock wording (which
+     * outfitter_rules_stock_test.ts pins against the real table).
+     */
+    ammoSellStrings?: AmmoSellStrings;
+}
+
+/**
+ * The stock launcher-sell refusal, which the original composes from five
+ * separate STR# 2002 ("misc strings", Nova Data 5.ndat) entries rather
+ * than storing whole. Verified against the real table:
+ *
+ *   207 "You need to sell"   208 "unit"   209 "units"
+ *   210 "of ammunition"      211 "before you can sell your"
+ *
+ * The count and the launcher's name are interpolated, giving e.g. "You
+ * need to sell 4 units of ammunition before you can sell your Viper Bay."
+ * Its immediate sibling at 206 is the other sell refusal
+ * (NEGATIVE_FREE_MASS_REFUSAL below), and the anchors that pin the
+ * numbering are 52 "No response.", 172 "Forbidden", and 222/223, all
+ * already cited elsewhere in the codebase.
+ */
+export interface AmmoSellStrings {
+    /** 207 */ needToSell: string;
+    /** 208 */ unit: string;
+    /** 209 */ units: string;
+    /** 210 */ ofAmmunition: string;
+    /** 211 */ beforeYouCanSell: string;
+}
+
+/** The STR# table the sell refusals live in, and their indices. */
+export const SELL_REFUSAL_TABLE = 'nova:2002';
+export const NEGATIVE_FREE_MASS_INDEX = 206;
+export const AMMO_SELL_INDICES: { [K in keyof AmmoSellStrings]: number } = {
+    needToSell: 207,
+    unit: 208,
+    units: 209,
+    ofAmmunition: 210,
+    beforeYouCanSell: 211,
+};
+
+/** Stock Nova's wording, verbatim, as the fallback for a short table. */
+export const AMMO_SELL_STRINGS: AmmoSellStrings = {
+    needToSell: 'You need to sell',
+    unit: 'unit',
+    units: 'units',
+    ofAmmunition: 'of ammunition',
+    beforeYouCanSell: 'before you can sell your',
+};
+
+/**
+ * STR# 2002 index 206, the sell refusal for an item whose own removal
+ * would leave the ship over its outfit-space limit — a Mass Expansion
+ * (stock oütf 190, Mass -10) with the tonnage it freed already spent.
+ */
+export const NEGATIVE_FREE_MASS_REFUSAL = 'Can\'t sell that item, because'
+    + ' your ship would have negative free mass afterwards.';
+
+/**
+ * "You need to sell 4 units of ammunition before you can sell your Viper
+ * Bay.", composed the way the original does: fragment 207, the count,
+ * the singular/plural unit word (208/209), fragment 210, fragment 211,
+ * and the launcher's display name. The trailing period is the engine's;
+ * none of the five fragments carries one (206, which IS a whole
+ * sentence, does).
+ */
+export function ammoSellRefusal(units: number, launcherName: string,
+    strings: AmmoSellStrings = AMMO_SELL_STRINGS): string {
+    const unitWord = units === 1 ? strings.unit : strings.units;
+    return `${strings.needToSell} ${units} ${unitWord} ${strings.ofAmmunition}`
+        + ` ${strings.beforeYouCanSell} ${launcherName}.`;
 }
 
 /**
@@ -133,6 +206,8 @@ export type SellDenialReason =
     | 'notOwned'
     | 'cantSell'
     | 'fightersDeployed'
+    | 'ammoAboard'
+    | 'negativeFreeMass'
     | 'notStocked';
 
 /**
@@ -261,39 +336,71 @@ export function effectiveMax(outfit: OutfitData,
 }
 
 /**
+ * How many instances of a weapon the player's installed outfits mount in
+ * total (an outfit granting 2 of a weapon, owned 3 times, mounts 6).
+ * Every weapon a ship carries arrives through an outfit, built-in hull
+ * weapons included — novaparse synthesizes an oütf for those (see its
+ * built_in_weapon_outfit.ts) — so this is the whole count.
+ */
+function mountedWeaponCount(weaponId: string,
+    context: OutfitterContext): number {
+    let mounted = 0;
+    for (const [outfit, count] of ownedOutfits(context)) {
+        mounted += (outfit.weapons[weaponId] ?? 0) * count;
+    }
+    return mounted;
+}
+
+/**
  * The maximum units of ammunition the player's launchers support, or
- * undefined if this outfit is not launcher-restricted. Per the EVN
- * Bible's MaxAmmo docs, ammo whose weapon has MaxAmmo <= 0 is
- * constrained by the outfit's Max field alone (freely buyable); ammo
- * whose weapon has MaxAmmo > 0 is capped at MaxAmmo per owned
- * launcher instance, so with no launcher none can be bought.
+ * undefined if this outfit is not launcher-restricted (its quantity is
+ * governed by the oütf Max field alone, so it is freely buyable).
+ *
+ * THE RULE, from the Bible's two fields. An ammo oütf (ModType 3) names a
+ * wëap in its ModVal — the SUPPLY weapon, `ammoFor` here — and that
+ * weapon's MaxAmmo is "the maximum amount of ammo per each instance of
+ * this weapon. (so, if you have two of these weapons, the max amount of
+ * ammo for that weapon type would actually be twice MaxAmmo, and so on)
+ * Set to 0 or -1 if you want the ammo quantity to be constrained by the
+ * oütf resource's Max field instead" (~:3375). So:
+ *
+ *   MaxAmmo <= 0  ->  undefined: oütf Max governs, no launcher needed.
+ *   MaxAmmo  > 0  ->  MaxAmmo x (instances of the SUPPLY weapon mounted).
+ *
+ * "Instances of this weapon" is instances of the supply weapon itself,
+ * NOT of every weapon that draws from its supply — those are two
+ * different sets, and the difference is load-bearing in real data:
+ *
+ *  - The Nuclear Missile plug-in ('Nuke') splits them deliberately. Its
+ *    ammo oütf 444 "Nuclear Missile" (Max 120) is ammo for wëap 238
+ *    "Nuke Storage Rack" (MaxAmmo 8), a dummy weapon granted by oütf 446
+ *    "Nuke Storage Rack" (Max 15); the thing that FIRES nukes is wëap 236,
+ *    granted by oütf 445 "Missile Launcer", whose AmmoType draws on 238
+ *    and whose own MaxAmmo is 0. Capacity is 8 per RACK — racks are the
+ *    magazine, tubes are not. Walking the drawers instead read 236's
+ *    MaxAmmo of 0 as "unlimited" and let a player with a tube and no rack
+ *    buy 120 nukes, while a player with racks and no tube could buy none.
+ *  - The 'singularity' plug-in has three ammo outfits whose supply weapon
+ *    has MaxAmmo > 0 and an AmmoType of ["energy", n] (it burns fuel per
+ *    shot as well as consuming an ammo outfit) — e.g. oütf 476 "Nuetrino
+ *    Shard" for wëap 264 (MaxAmmo 25), granted by oütf 475. No weapon
+ *    anywhere draws from those supplies, so the drawer walk found nothing
+ *    and pinned capacity at 0: that ammo could never be bought at all.
+ *
+ * Nothing in stock distinguishes the two readings (every stock supply
+ * weapon is its own launcher and points its AmmoType at itself), so this
+ * is a strict improvement with no stock behaviour change.
  */
 export function ammoCapacity(outfit: OutfitData,
     context: OutfitterContext): number | undefined {
     if (!outfit.ammoFor) {
         return undefined;
     }
-    const suppliedWeapon = context.getWeapon(outfit.ammoFor);
-    if (!suppliedWeapon || suppliedWeapon.maxAmmo <= 0) {
+    const supply = context.getWeapon(outfit.ammoFor);
+    if (!supply || supply.maxAmmo <= 0) {
         return undefined;
     }
-    let capacity = 0;
-    for (const [owned, outfitCount] of ownedOutfits(context)) {
-        for (const [weaponId, weaponCount] of Object.entries(owned.weapons)) {
-            const launcher = context.getWeapon(weaponId);
-            if (!launcher || launcher.ammoType === 'unlimited'
-                || launcher.ammoType[0] !== 'weapon'
-                || launcher.ammoType[1] !== outfit.ammoFor) {
-                continue;
-            }
-            if (launcher.maxAmmo <= 0) {
-                // This launcher defers to the outfit's Max field.
-                return undefined;
-            }
-            capacity += launcher.maxAmmo * weaponCount * outfitCount;
-        }
-    }
-    return capacity;
+    return supply.maxAmmo * mountedWeaponCount(outfit.ammoFor, context);
 }
 
 /** Units of this outfit the player owns but that are not aboard (bay
@@ -319,26 +426,41 @@ export function ownedCount(outfitId: string, context: OutfitterContext):
 }
 
 /**
+ * The owned ammo units drawing from one weapon's supply, split by where
+ * they physically are. Deployed rounds are gone from context.outfits
+ * (consumeAmmo spent them at launch), so ownedOutfits cannot see them and
+ * they are added separately — a fully-launched magazine has a zero (or
+ * missing) aboard count and only deployed units.
+ *
+ * The split matters on the SELL side and only there: a round aboard can
+ * be handed over to free magazine space, a deployed one cannot (see
+ * canSellOutfit). Everything else wants the total.
+ */
+function ammoHeldFor(ammoFor: string, context: OutfitterContext):
+    { aboard: number, deployed: number } {
+    let aboard = 0;
+    for (const [outfit, count] of ownedOutfits(context)) {
+        if (outfit.ammoFor === ammoFor) {
+            aboard += count;
+        }
+    }
+    let deployed = 0;
+    for (const [id, count] of context.deployedCounts ?? []) {
+        if (context.getOutfit(id)?.ammoFor === ammoFor) {
+            deployed += count;
+        }
+    }
+    return { aboard, deployed };
+}
+
+/**
  * The total owned ammo units drawing from the same weapon's supply,
  * counting rounds that are currently deployed rather than in the
  * magazine — a launched fighter still occupies its slot in the bay.
  */
 function ownedAmmoCount(ammoFor: string, context: OutfitterContext): number {
-    let owned = 0;
-    for (const [outfit, count] of ownedOutfits(context)) {
-        if (outfit.ammoFor === ammoFor) {
-            owned += count;
-        }
-    }
-    // Deployed units are gone from context.outfits, so ownedOutfits
-    // cannot see them; add them separately. A fully-launched magazine
-    // has a zero (or missing) count and only deployed units.
-    for (const [id, count] of context.deployedCounts ?? []) {
-        if (context.getOutfit(id)?.ammoFor === ammoFor) {
-            owned += count;
-        }
-    }
-    return owned;
+    const { aboard, deployed } = ammoHeldFor(ammoFor, context);
+    return aboard + deployed;
 }
 
 /**
@@ -519,41 +641,60 @@ export function buysBackOutfit(outfit: OutfitData,
 }
 
 /**
- * How many bay fighters belonging to THIS outfit's own bays are currently
- * deployed — launched, or landed as escorts, and so not aboard.
+ * Every ammunition supply that selling ONE unit of this outfit would
+ * shrink, with the rounds held for it and the room that would be left.
  *
- * `outfit.weapons` names the weapons an outfit grants. A bay weapon's
- * fighters are the ammo outfits whose `ammoFor` is that weapon, and that
- * ammo outfit id is exactly the key deployedCounts is built on (see
+ * `outfit.weapons` names the weapons an outfit grants, and a weapon is a
+ * MAGAZINE for the ammo outfits whose `ammoFor` names it (that same
+ * ammo-outfit id is the key deployedCounts is built on — see
  * deployed_outfits.ts, which attributes each flying fighter back to an
- * owned ammo outfit via its BayFighterComponent.bayWeaponId). So summing
- * the deployed counts of every ammo outfit feeding any weapon this outfit
- * grants gives the fighters that would be stranded by selling it.
+ * owned ammo outfit via its BayFighterComponent.bayWeaponId). A bay is
+ * just the case of this where the rounds are fighters.
  *
- * Zero for an ordinary outfit (it grants no weapons) and zero for the
- * FIGHTER outfit itself (a fighter grants no weapon), which is what keeps
- * the ammo units still aboard sellable while their siblings are out.
+ * The room left after the sale mirrors ammoCapacity's two branches:
+ *
+ *  - MaxAmmo > 0: capacity is MaxAmmo per mounted instance, so selling one
+ *    unit of an outfit granting n of them frees MaxAmmo x n. What remains
+ *    is MaxAmmo x (mounted - n).
+ *  - MaxAmmo <= 0: there is no per-launcher capacity at all; the oütf Max
+ *    governs and it does not shrink. So the room left is unbounded while
+ *    ANY instance survives, and nothing at all once the last one goes —
+ *    ammunition for a weapon the ship no longer carries has nowhere to be.
+ *
+ * Yields nothing for an ordinary outfit (it grants no weapons), for the
+ * FIGHTER or ammo outfit itself (ammunition grants no weapon), and for a
+ * weapon no owned ammo outfit feeds. That last one is why selling the
+ * Nuke plug-in's firing tube (oütf 445, granting wëap 236) is free while
+ * selling a rack (oütf 446, granting the supply wëap 238) is checked: no
+ * ammo oütf names 236, so the tube is not a magazine.
  */
-function deployedFightersOf(outfit: OutfitData,
-    context: OutfitterContext): number {
-    if (!context.deployedCounts?.size) {
-        return 0;
-    }
-    let deployed = 0;
+function shrunkenMagazines(outfit: OutfitData, context: OutfitterContext):
+    { aboard: number, deployed: number, roomLeft: number }[] {
+    const magazines = [];
     for (const [weaponId, mounted] of Object.entries(outfit.weapons)) {
         if (mounted <= 0) {
             continue;
         }
-        for (const [id, count] of context.deployedCounts) {
-            if (count > 0 && context.getOutfit(id)?.ammoFor === weaponId) {
-                deployed += count;
-            }
+        const held = ammoHeldFor(weaponId, context);
+        if (held.aboard + held.deployed <= 0) {
+            continue;
         }
+        const supply = context.getWeapon(weaponId);
+        const remaining =
+            mountedWeaponCount(weaponId, context) - mounted;
+        const roomLeft = !supply || supply.maxAmmo <= 0
+            ? (remaining > 0 ? Infinity : 0)
+            : supply.maxAmmo * remaining;
+        magazines.push({ ...held, roomLeft });
     }
-    return deployed;
+    return magazines;
 }
 
-/** Checks whether the player may sell one of this outfit. */
+/**
+ * Checks whether the player may sell one of this outfit.
+ *
+ * See THE LAUNCHER SELL RULE below for the ammunition half.
+ */
 export function canSellOutfit(outfit: OutfitData,
     context: OutfitterContext): OutfitterCheck<SellDenialReason> {
     // Only units actually aboard may be sold; a fighter still in flight is
@@ -564,19 +705,35 @@ export function canSellOutfit(outfit: OutfitData,
     if (outfit.cantSell) {
         return denied('cantSell', 'This can\'t be sold.');
     }
-    // Selling the BAY while its fighters are out is the exploit Matthew
-    // named: buy a bay and its fighters, launch them, land, sell the bay
-    // back. The fighters are not in context.outfits (consumeAmmo spent
-    // them at launch), so the notOwned check above cannot see them, and
-    // nothing else here looks at the bay->fighter link. The result was a
-    // full complement of fighters converted to credits, with the fighters
-    // themselves left pointing at a hangar that no longer exists —
-    // refundFighterToBay then silently drops each one on docking, because
-    // the carrier mounts zero bays so the magazine capacity is zero
-    // (bay_plugin.ts). Recall them first.
-    if (deployedFightersOf(outfit, context) > 0) {
-        return denied('fightersDeployed',
-            'You can\'t sell this while its fighters are deployed.');
+    for (const { aboard, deployed, roomLeft } of
+        shrunkenMagazines(outfit, context)) {
+        // Deployed rounds first: they cannot be sold to make room (they
+        // are not aboard, so canSellOutfit denies them as notOwned), so
+        // when THEY alone overflow what is left, the only move is to
+        // recall — different advice, hence its own wording. This is also
+        // the exploit Matthew named: buy a bay and its fighters, launch
+        // them, land, sell the bay back. The fighters are not in
+        // context.outfits at all, so the notOwned check above cannot see
+        // them; without this they were converted to credits and left
+        // pointing at a hangar that no longer exists, and
+        // refundFighterToBay silently dropped each one on docking because
+        // the carrier mounted zero bays (bay_plugin.ts).
+        if (deployed > roomLeft) {
+            return denied('fightersDeployed',
+                'You can\'t sell this while its fighters are deployed.');
+        }
+        if (aboard + deployed > roomLeft) {
+            return denied('ammoAboard', ammoSellRefusal(
+                aboard + deployed - roomLeft, outfit.name,
+                context.ammoSellStrings));
+        }
+    }
+    // Selling an item that GRANTED outfit space (a negative-Mass Mass
+    // Expansion, stock oütf 190) shrinks the hold it freed. STR# 2002
+    // index 206 is the original's own sentence for exactly this.
+    if (outfit.physics.freeMass < 0
+        && freeMass(context) + outfit.physics.freeMass < 0) {
+        return denied('negativeFreeMass', NEGATIVE_FREE_MASS_REFUSAL);
     }
     if (context.planet && !buysBackOutfit(outfit, context.planet)) {
         return denied('notStocked', 'They don\'t deal in these here.');
@@ -585,39 +742,53 @@ export function canSellOutfit(outfit: OutfitData,
 }
 
 /*
- * SELLING A LAUNCHER: what the stock data says, and what is implemented.
+ * THE LAUNCHER SELL RULE.
  *
- * Stock STR# 2002 ("misc strings", Nova Data 5.ndat) carries a composed
- * sentence for exactly this family of denial, at indices 207-211:
+ * A launcher cannot be sold while ammunition for it is still aboard —
+ * stock behaviour, and stock STR# 2002 carries a sentence composed for
+ * this denial and nothing else, at indices 207-211 (see AmmoSellStrings):
+ * "You need to sell 4 units of ammunition before you can sell your Viper
+ * Bay." Its sibling at 206 is the other sell refusal, which is why sell
+ * denials are captioned in the outfitter at all.
  *
- *   207 "You need to sell"   208 "unit"   209 "units"
- *   210 "of ammunition"      211 "before you can sell your"
+ * WHAT COUNTS AS A LAUNCHER is not a flag but a relation: an outfit is a
+ * launcher for some ammunition when it grants the wëap that ammunition's
+ * ModVal names (its `ammoFor`). Ordinary equipment grants no weapons; a
+ * gun whose ammo nobody owns has an empty magazine; and a weapon that
+ * merely DRAWS on someone else's supply is not that supply's magazine (the
+ * Nuke plug-in's tube versus its racks — see shrunkenMagazines).
  *
- * i.e. "You need to sell 4 units of ammunition before you can sell your
- * Viper Bay." That string is proof the ORIGINAL refuses to sell any
- * launcher while ammunition for it is still aboard — a broader rule than
- * the one implemented here, and one NovaJS does not implement at all: you
- * can currently sell a missile launcher with a full magazine.
+ * SELLING ONE OF N LAUNCHERS is allowed exactly when the launchers left
+ * still hold the rounds held. RULING (Bible-consistent, ~:3375): MaxAmmo
+ * is "the maximum amount of ammo per each instance of this weapon", so N
+ * launchers hold N x MaxAmmo and N-1 hold one MaxAmmo less; the sale is
+ * refused only by the shortfall, and the count in the sentence is that
+ * shortfall — two Viper Bays (4 each) with 8 fighters aboard says "You
+ * need to sell 4 units", not 8. For a MaxAmmo <= 0 supply there is no
+ * per-launcher capacity to shrink (the oütf Max governs), so selling down
+ * to one launcher is always fine and selling the LAST one is what the
+ * rounds cannot survive. That is the asymmetry visible in stock data: 200
+ * IR Missiles may be BOUGHT with no launcher at all (canBuyOutfit, oütf
+ * Max 200, wëap MaxAmmo 0), yet the launcher may not be sold out from
+ * under them — buying ammo you cannot fire is the player's business,
+ * stranding ammo the ship can no longer mount is the engine's.
  *
- * DELIBERATELY NOT ADOPTED WHOLESALE. The broad rule is a separate change
- * with its own reason code and its own pluralised, item-named caption, and
- * it changes behaviour for every launcher/ammo pair in the game rather
- * than closing the exploit at hand. It is left as a seam.
+ * THE DEPLOYED-FIGHTER INTERACTION. A bay is a launcher whose rounds are
+ * fighters, so both refusals live on the same shortfall: rounds ABOARD can
+ * be sold to make room and get the stock sentence, deployed ones cannot
+ * and get 'fightersDeployed' ("recall them"). Selling one of two full
+ * Viper Bays with 4 fighters out and 4 aboard therefore asks for the 4
+ * aboard to go; with 5 out and none aboard it asks for a recall; with 3
+ * out and none aboard it just succeeds, because the surviving bay holds
+ * all three. That last case used to be refused outright, deliberately,
+ * as the conservative choice available before this rule existed.
  *
- * WHY THE 'fightersDeployed' MESSAGE IS NOT THE STOCK ONE. The stock
- * sentence tells the player to SELL the ammunition first. For a deployed
- * fighter that is impossible advice — it is not aboard, so canSellOutfit
- * denies it as notOwned. The player has to RECALL the fighters, which is a
- * different instruction, so it gets its own wording.
- *
- * CONSERVATIVE ON MULTIPLE BAYS. Owning two units of a bay outfit with one
- * fighter out denies selling EITHER unit, even though the surviving bay
- * could still take the fighter home. Refining that means simulating the
- * sale and comparing the remaining ammoCapacity against the deployed count
- * — but that refinement also has to decide what to do about the fighters
- * already ABOARD, which the same shrunken magazine no longer fits, and
- * that is the broad stock rule above. Until the broad rule lands, denying
- * is the choice that cannot strand a fighter; the player recalls and sells.
+ * NOT COVERED: the other way an ammunition ceiling can shrink is selling an
+ * increase-maximum item (ModType 27) that was multiplying the ammo's oütf
+ * Max. Neither the Bible nor the STR# strings connect that to this refusal,
+ * and it is unreachable in shipped data — a survey of stock plus all
+ * twenty-six bundled plug-ins finds no ModType 27 resource at all — so it
+ * is left alone rather than guessed at.
  */
 
 /** A sane ceiling for bulk purchases of an effectively unlimited
@@ -683,13 +854,39 @@ export function hasPurchaseSideEffects(outfit: OutfitData): boolean {
 }
 
 /**
- * The most of this outfit the player could sell right now: everything
- * owned, or nothing when it can't be sold.
+ * The most of this outfit the player could sell right now, for the
+ * option-click quantity dialog and the greyed Sell button.
+ *
+ * Not simply "everything owned" any more: since the launcher sell rule
+ * landed, the nth sale can be refused while the first is allowed — three
+ * Viper Bays holding 8 fighters may drop to two (8 of 8 still fit) but not
+ * to one (only 4 would). Every sell gate tightens monotonically as units
+ * go (each sale can only shrink the magazine left and the free mass left),
+ * so the largest allowed count is a binary search, exactly as maxBuyCount
+ * does on the buy side.
  */
 export function maxSellCount(outfit: OutfitData,
     context: OutfitterContext): number {
-    return canSellOutfit(outfit, context).allowed
-        ? (context.outfits.get(outfit.id) ?? 0) : 0;
+    const owned = context.outfits.get(outfit.id) ?? 0;
+    const canSellN = (n: number) => {
+        const working = new Map(context.outfits);
+        working.set(outfit.id, owned - (n - 1));
+        return canSellOutfit(outfit, { ...context, outfits: working }).allowed;
+    };
+    if (owned <= 0 || !canSellN(1)) {
+        return 0;
+    }
+    let lo = 1;            // known sellable
+    let hi = owned + 1;    // known not sellable
+    while (hi - lo > 1) {
+        const mid = Math.floor((lo + hi) / 2);
+        if (canSellN(mid)) {
+            lo = mid;
+        } else {
+            hi = mid;
+        }
+    }
+    return lo;
 }
 
 /**
