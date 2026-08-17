@@ -39,6 +39,8 @@ import { LeaveSpaceportEvent, OpenSpaceportEvent } from "./display/spaceport_plu
 import { Stage } from "./display/stage_resource.js";
 import { AddEnemyEvent, DebugActionEvent } from "./display/status_bar.js";
 import { PlunderActionEvent } from "./display/boarding_plugin.js";
+import { AcceptShipMissionEvent } from "./display/ship_mission_offer_plugin.js";
+import { AcceptedMission } from "./nova_plugin/mission_accept.js";
 import { daysPerJump } from "./nova_plugin/calendar.js";
 import { ControlEvent, ControlsSubject, EcsControlEvent } from "./nova_plugin/controls_plugin.js";
 import { Controls, getActions, SavedControls } from "./nova_plugin/controls.js";
@@ -1247,6 +1249,28 @@ async function enterSystem({ entity, to, uuid }:
     newDisplayWorld.events.get(HailRequestEvent).subscribe(({ data }) => {
         void newSimulationBridge.hail(data.action);
     });
+    // A mission accepted from a përs ship in flight (mïsn AvailLoc 2).
+    // The display resolved the whole acceptance against a detached copy
+    // of the player and handed over the resulting record plus the raw
+    // mission ships; the ships are ENCODED here, where the bridge's
+    // serializer lives, and the pair goes out as ONE input record so the
+    // mission and its ambush land on the same tick on every peer.
+    newDisplayWorld.events.get(AcceptShipMissionEvent)
+        .subscribe(({ data }) => {
+            const serializer = newSimulationBridge.getSerializer();
+            const record: AcceptedMission = data.ships.length > 0
+                ? {
+                    ...data.record,
+                    ships: data.ships.map(ship => ({
+                        uuid: v4(),
+                        entity: serializer.encode(ship) as never,
+                    })),
+                }
+                : data.record;
+            void newSimulationBridge.acceptMission(record).catch(e => {
+                console.warn('Failed to accept a ship-offered mission:', e);
+            });
+        });
     newDisplayWorld.events.get(LandEvent).subscribe(({ data, entities }) => {
         if (pendingDockedShip || dockedShip || pendingGateShip || gateDockedShip) {
             return;

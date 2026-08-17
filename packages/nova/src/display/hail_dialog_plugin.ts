@@ -74,6 +74,7 @@ import { HailContext, HailDialog } from '../spaceport/hail_dialog.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { displayName } from '../nova_plugin/display_name.js';
+import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { showStatusMessage } from './status_message_plugin.js';
 import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
 
@@ -728,6 +729,20 @@ export const HailDialogPlugin: Plugin = {
             }
             opening = true;
             try {
+                // A përs with a mission for you answers with the MISSION
+                // rather than with small talk — Matthew: "accepted by
+                // hailing the ship, which pops up a mission dialog box
+                // instead of the normal hailing box". The comm dialog is
+                // not opened at all in that case; see
+                // display/ship_mission_offer_plugin.ts. Everything else
+                // about the hail (unanswerable stellars above, the
+                // escort/bribe/assist paths below) is untouched.
+                const shipTarget = getPlayerShip(world)?.entity
+                    .components.get(TargetComponent)?.target;
+                if (shipTarget && world.entities.has(shipTarget)
+                    && await presentShipOffer(world, shipTarget, 'hail')) {
+                    return;
+                }
                 const computed = await computeContext(world, simulationData,
                     displayAssets);
                 if (!computed) {
