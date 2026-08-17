@@ -30,6 +30,8 @@ interface Star extends BBox {
     sprite: PIXI.Sprite,
     position: Vector,
     factor: number,
+    /** The draw() generation that last found this star on screen. */
+    seen: number,
 }
 
 class Starfield {
@@ -41,7 +43,16 @@ class Starfield {
     private graphics = new PIXI.Graphics();
     private fudge: number;
     private random: () => number;
+    /**
+     * Stars currently on screen — the only ones attached to the
+     * container. Every star used to be a permanent (mostly hidden)
+     * child, which made PIXI walk all ~8000 of them per frame in
+     * render, updateTransform and the cursor plugin's modal-shield
+     * scan; keeping the display list to the visible few hundred is
+     * what makes the starfield cheap.
+     */
     private visibleStars: Star[] = [];
+    private generation = 0;
 
     constructor({ textures, density, positionFactorRange, seed }: StarfieldArgs) {
         this.textures = textures;
@@ -67,8 +78,6 @@ class Starfield {
         const texture = this.textures[
             Math.floor(this.random() * this.textures.length)];
         const sprite = new PIXI.Sprite(texture);
-        sprite.visible = false;
-        this.container.addChild(sprite);
         // TODO: not uniform
         const factor = this.sampleRange(...this.positionFactorRange);
 
@@ -84,6 +93,7 @@ class Starfield {
             position,
             sprite,
             factor,
+            seen: -1,
         }
     }
 
@@ -125,20 +135,29 @@ class Starfield {
             maxY: y + this.screen.height / 2,
         }
 
-        // Hide stars from the last frame
-        for (const star of this.visibleStars) {
-            star.sprite.visible = false;
+        const generation = ++this.generation;
+        const nowVisible = this.rbush.search(screenBBox);
+        for (const star of nowVisible) {
+            star.seen = generation;
         }
-        this.visibleStars = this.rbush.search(screenBBox);
-
+        // Detach stars that left the screen since the last frame.
         for (const star of this.visibleStars) {
+            if (star.seen !== generation) {
+                this.container.removeChild(star.sprite);
+            }
+        }
+        this.visibleStars = nowVisible;
+
+        for (const star of nowVisible) {
             const spritePos = star.position
                 .add(shipPos.scale(star.factor))
                 .subtract(shipPos);
 
             star.sprite.position.x = spritePos.x;
             star.sprite.position.y = spritePos.y;
-            star.sprite.visible = true;
+            if (star.sprite.parent !== this.container) {
+                this.container.addChild(star.sprite);
+            }
         }
     }
 
@@ -167,9 +186,13 @@ class Starfield {
             star.minY = bbox.minY;
             star.maxX = bbox.maxX;
             star.maxY = bbox.maxY;
-            star.sprite.visible = false;
         }
         this.rbush.load(stars);
+        // The next draw() re-attaches whatever the resized screen shows.
+        for (const star of this.visibleStars) {
+            this.container.removeChild(star.sprite);
+        }
+        this.visibleStars = [];
 
         // this.graphics.clear();
         // this.graphics.lineStyle(1, 0xff0000, 0.5);
