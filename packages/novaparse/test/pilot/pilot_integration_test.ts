@@ -13,7 +13,7 @@ import "jasmine";
 import * as path from "path";
 import { fileURLToPath } from "url";
 import { IDSpaceHandler } from "../../src/id_space_handler.js";
-import { readPilot } from "../../src/pilot/pilot_parse.js";
+import { readPilot } from "../../src/pilot/pilot_read.js";
 import { PilotData } from "../../src/pilot/pilot_data.js";
 import { NovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 

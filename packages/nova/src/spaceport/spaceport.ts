@@ -13,6 +13,7 @@ import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/health_plugin.js';
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
+import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, MissionEvent, MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js';
 import { expandMissionText } from '../nova_plugin/mission_text.js';
 import {
@@ -22,6 +23,7 @@ import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
 import { Bar } from './bar.js';
 import { Button } from './button.js';
+import { describeOutfitChanges, requestCheckpoint } from './checkpoint_requests.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
@@ -64,6 +66,12 @@ const REFUEL_COST_PER_JUMP = 100;
 export function refuelCost(fuel: { current: number, max: number }): number {
     return Math.ceil(
         (fuel.max - fuel.current) / FUEL_PER_JUMP * REFUEL_COST_PER_JUMP);
+}
+
+/** The entity's owned outfits as [id, count] pairs (empty when none). */
+function outfitCounts(entity: Entity | undefined): [string, number][] {
+    const outfits = entity?.components.get(OutfitsStateComponent);
+    return outfits ? [...outfits].map(([id, { count }]) => [id, count]) : [];
 }
 
 export class Spaceport extends Menu<Entity> {
@@ -161,8 +169,10 @@ export class Spaceport extends Menu<Entity> {
             // The outfitter mutates the ship's outfits and the
             // player's control bits.
             this.setLiveStatus(() => this.outfitter.dockedStatus());
+            const outfitsBefore = outfitCounts(this.input);
             this.input = await this.outfitter.show(this.input);
             this.setLiveStatus(undefined);
+            this.announcePurchases(outfitsBefore);
             // Delete these so they are re-created with the new outfits.
             // Nothing re-derives them while docked (the entity is out of
             // the world, so no ChangeEvent can fire — see the note in
@@ -246,7 +256,22 @@ export class Spaceport extends Menu<Entity> {
                 await runShipBuildWorld(newInput, simulationData,
                     displayAssets);
             }
+            const boughtShip = newInput !== this.input;
             this.input = newInput;
+            if (boughtShip) {
+                // A ship purchase is a checkpoint (pilot_history.ts). The
+                // NEW entity is passed explicitly: the client's docked
+                // handle still points at the traded-in one until depart.
+                const shipId = newInput.components.get(ShipComponent)?.id;
+                const name = shipId
+                    ? simulationData.data.Ship.getCached(shipId)?.name
+                        ?.split(';')[0].trim() ?? shipId
+                    : 'a ship';
+                requestCheckpoint({
+                    label: `Bought ${name}`, kind: 'purchase',
+                    entity: newInput, stellar: this.id,
+                });
+            }
 
             this.controls.bind();
         };
@@ -460,6 +485,24 @@ export class Spaceport extends Menu<Entity> {
         }
         await presentOffers(this.offerPopup, session, this.universe, offers);
         session.commit();
+    }
+
+    /**
+     * Announces an outfitter visit's net purchases/sales as a pilot-history
+     * checkpoint ("Bought Battery Pack ×3; Sold Blaster ×1"), comparing
+     * the docked ship's outfits before and after the visit. Nothing is
+     * announced for a browse that bought nothing. Outfit names come from
+     * the warm cache (the outfitter just displayed them); an unloaded one
+     * falls back to its id.
+     */
+    private announcePurchases(before: [string, number][]) {
+        const label = describeOutfitChanges(before, outfitCounts(this.input),
+            id => this.simulationData.data.Outfit.getCached(id)?.name);
+        if (label) {
+            requestCheckpoint({
+                label, kind: 'purchase', entity: this.input, stellar: this.id,
+            });
+        }
     }
 
     /** Points the status bar at the docked ship for this landing. */

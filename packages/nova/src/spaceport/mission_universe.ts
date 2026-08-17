@@ -190,6 +190,13 @@ export class MissionUniverse {
         return this.systemInfosById.get(systemId);
     }
 
+    /** A system's display name ("; note" suffix stripped), or undefined
+     * for an unknown id. */
+    systemName(systemId: string): string | undefined {
+        const name = this.systemsById.get(systemId)?.name;
+        return name === undefined ? undefined : displayName(name);
+    }
+
     /** Whether two system ids are stacked duplicates of one system: same
      * name and map coordinates (see systemIdOfPlanet). */
     sameSystem(a: string, b: string): boolean {

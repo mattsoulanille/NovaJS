@@ -11,7 +11,7 @@ import {
     buildMacPilotBlobs,
     buildPltPilotFile,
     SYNTHETIC,
-} from "./synthetic_pilot.js";
+} from "../../src/pilot/synthetic_pilot.js";
 
 /**
  * The synthetic fixtures write plaintext at the absolute offsets documented

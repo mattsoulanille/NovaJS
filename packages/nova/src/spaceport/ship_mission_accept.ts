@@ -282,8 +282,13 @@ export async function buildShipMissionAccept(player: Entity,
     const { offeredBy, offeredByFate } = options;
     const ships = options.ships ?? [];
     const copy = detachPlayerState(player);
+    // No checkpoint announcement from the detached copy: it lacks the
+    // outfits/cron/etc. components a snapshot needs. The client's periodic
+    // save notices the new mission on the real player entity instead
+    // (checkpoint_requests.ts describeFlightChanges).
     const session = await MissionSession.create(copy, gameData, universe,
-        inFlightStellar(universe, options.systemId));
+        inFlightStellar(universe, options.systemId),
+        { announceCheckpoints: false });
     const before = detachPlayerState(copy);
     const result = acceptOffer(session.machinery, offer, session.outfits);
     if (!result.accepted) {

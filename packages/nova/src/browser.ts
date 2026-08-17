@@ -43,7 +43,7 @@ import { AcceptShipMissionEvent } from "./display/ship_mission_offer_plugin.js";
 import { AcceptedMission } from "./nova_plugin/mission_accept.js";
 import { daysPerJump } from "./nova_plugin/calendar.js";
 import { ControlEvent, ControlsSubject, EcsControlEvent } from "./nova_plugin/controls_plugin.js";
-import { Controls, getActions, SavedControls } from "./nova_plugin/controls.js";
+import { ControlAction, Controls, getActions, SavedControls } from "./nova_plugin/controls.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "./nova_plugin/game_data_resource.js";
 import { FinishJumpEvent, JumpComponent, JumpRouteComponent, reconcileRouteOnArrival } from "./nova_plugin/jump_plugin.js";
 import { GateArrivalComponent, GateTransitEvent } from "./nova_plugin/gate_transit_plugin.js";
@@ -69,9 +69,9 @@ import {
     ControlBitPair, ControlBitResolver,
 } from './nova_plugin/control_bit_namespaces.js';
 import {
-    EscortToSave, SavedEscort, collectEscortsToSave, extractSaveData,
-    extractSavedEscorts, loadSave, resetSave, restorePlayerState,
-    restoreSavedEscorts, writeSave,
+    EscortToSave, SavedEscort, collectEscortsToSave, decodeSave, encodeSave,
+    extractSaveData, extractSavedEscorts, getActiveSaveKey, loadSave,
+    resetSave, restorePlayerState, restoreSavedEscorts, SaveData, writeSave,
 } from "./nova_plugin/save_game.js";
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
@@ -113,10 +113,24 @@ import {
 } from "./title/client_prefs.js";
 // clearPilotProfile is wired into the ?reset path below.
 import {
-    applyActivePilot, createPilot, deletePilot, exportFileName, exportPilot,
-    getActivePilot, importPilot, listPilots, loadPilotControls, selectPilot,
+    applyActivePilot, createPilot, deletePilot, exportCheckpointFile,
+    exportFileName, exportPilot, getActivePilot, importOriginalPilot,
+    importPilot, ImportResult, listPilots, loadPilotControls, selectPilot,
 } from "./title/pilot_registry.js";
+import {
+    looksLikeOriginalPilot, OriginalPilotContext,
+} from "./title/original_pilot_import.js";
+import {
+    checkpointCount, latestState, loadHistory, recordCheckpoint,
+    rewindPilotSave,
+} from "./title/pilot_history.js";
+import { RollbackScreen, ROLLBACK_PANEL } from "./title/rollback_screen.js";
+import { JsonValue } from "./title/json_patch.js";
+import {
+    CheckpointRequest, checkpointRequests, describeFlightChanges,
+} from "./spaceport/checkpoint_requests.js";
 import { combatRatingName } from "./nova_plugin/reputation.js";
+import { displayName } from "./nova_plugin/display_name.js";
 import { formatDate } from "./nova_plugin/calendar.js";
 import { isTextEntryActive } from "./input_focus.js";
 import { MenuControls } from "./spaceport/menu_controls.js";
@@ -899,31 +913,34 @@ function escortsToSave(player: string): EscortToSave[] {
 }
 
 /**
- * Serializes the local player's current state to localStorage. A pure
- * read of the display world's player entity (which mirrors the simulation),
- * so it's a safe observer that never mutates sim state. No-op if there's no
+ * The save payload for the local player right now: `entity` when given
+ * (a venue's just-committed docked ship, see checkpoint_requests.ts),
+ * else the player entity this client currently holds. A pure read of the
+ * display world's player entity (which mirrors the simulation), so it's a
+ * safe observer that never mutates sim state. Undefined if there's no
  * player ship yet (e.g. mid-jump) or nothing meaningful to persist.
  */
-function saveNow() {
+function buildSaveData(entity?: Entity): SaveData | undefined {
     if (!displayWorld || !activeSystemId) {
-        return;
+        return undefined;
     }
     // While docked the player entity is out of the display world; the
     // docked/relaunching entity carries the freshest state (mission
     // acceptances, payments, the advanced date).
-    const playerShip = pendingLaunchedShip
+    const playerShip = entity
+        ?? pendingLaunchedShip
         ?? dockedShip?.entity
         ?? pendingDockedShip?.entity
         ?? getPlayerShipEntity(displayWorld);
     if (!playerShip) {
-        return;
+        return undefined;
     }
     const data = extractSaveData(playerShip, activeSystemId,
         controlBitResolver
             ? { resolver: controlBitResolver, parked: parkedControlBits }
             : undefined);
     if (!data) {
-        return;
+        return undefined;
     }
     // Escorts, as whole serialized entities. Needs the simulation's
     // serializer, which exists for as long as there is a system; if it
@@ -947,7 +964,133 @@ function saveNow() {
             data.playerUuid = player;
         }
     }
+    return data;
+}
+
+/**
+ * Serializes the local player's current state to localStorage (see
+ * buildSaveData). No-op with nothing to persist. In flight, also notices
+ * state changes the SIMULATION made since the last checkpoint — a capture,
+ * a mission accepted from a ship — and records a checkpoint for them.
+ */
+function saveNow() {
+    const data = buildSaveData();
+    if (!data) {
+        return;
+    }
     writeSave(data);
+    noticeFlightChanges(data);
+}
+
+// ---------------------------------------------------------------------------
+// Pilot-history checkpoints (title/pilot_history.ts).
+// ---------------------------------------------------------------------------
+
+/**
+ * The save at the ACTIVE pilot's newest checkpoint, as this session last
+ * saw it: the baseline the in-flight change detector compares against.
+ * Loaded from the stored history on game entry, then tracked in memory
+ * as checkpoints are recorded (so no history fold per periodic save).
+ */
+let lastCheckpointData: SaveData | undefined;
+
+/** Seeds the in-flight change baseline from the stored history. */
+function loadCheckpointBaseline() {
+    const newest = latestState(loadHistory(getActiveSaveKey()));
+    lastCheckpointData = newest === undefined
+        ? undefined : decodeSave(JSON.stringify(newest));
+}
+
+/**
+ * Records a checkpoint of the player's state for the active pilot: writes
+ * the save from the requested entity (so save and checkpoint agree) and
+ * appends the checkpoint to the pilot's history. Skipped when there is
+ * nothing to snapshot (mid-jump, no player yet). Client-local; the sim is
+ * never involved.
+ */
+function recordCheckpointNow(request: CheckpointRequest) {
+    // Mid-jump the player is in no world and its escorts are on the jump
+    // roster under no known player uuid; a snapshot then would silently
+    // drop them, so wait for the next depart / periodic detection instead.
+    if (!localPlayerUuid()) {
+        return;
+    }
+    const data = buildSaveData(request.entity);
+    if (!data) {
+        return;
+    }
+    writeSave(data);
+    let envelope: JsonValue;
+    try {
+        envelope = JSON.parse(encodeSave(data)) as JsonValue;
+    } catch (e) {
+        console.warn('Failed to encode the save for a checkpoint:', e);
+        return;
+    }
+    const stellar = request.stellar
+        ?? dockedShip?.planetId ?? pendingDockedShip?.planetId;
+    try {
+        recordCheckpoint(getActiveSaveKey(), envelope, {
+            label: request.label,
+            kind: request.kind,
+            ...(data.date ? { date: { ...data.date } } : {}),
+            ...(activeSystemId ? { system: activeSystemId } : {}),
+            ...(stellar ? { stellar } : {}),
+            at: Date.now(),
+        });
+        lastCheckpointData = data;
+    } catch (e) {
+        console.warn('Failed to record a checkpoint:', e);
+    }
+}
+
+/**
+ * The in-flight half of checkpoint recording: nothing landed announces a
+ * boarding capture or a mission accepted from a ship in flight, so the
+ * periodic save compares the ship type and mission set against the last
+ * checkpoint and records one for whatever changed. Only IN FLIGHT: while
+ * docked, the venues announce their own changes (and a just-bought ship
+ * lives on a new entity the docked handle does not yet point at).
+ */
+function noticeFlightChanges(data: SaveData) {
+    if (dockedShip || pendingDockedShip || pendingLaunchedShip
+        || gateDockedShip || pendingGateShip || !lastCheckpointData) {
+        return;
+    }
+    const universe = MissionUniverse.shared(simulationGameData);
+    const changes = describeFlightChanges(lastCheckpointData, data, {
+        shipName: id => simulationGameData.data.Ship.getCached(id)?.name
+            ?.split(';')[0].trim(),
+        missionName: id => {
+            const name = universe.getMission(id)?.name;
+            return name === undefined ? undefined : displayName(name);
+        },
+    });
+    if (changes.length === 0) {
+        return;
+    }
+    // One checkpoint for the batch; the first change names its kind.
+    recordCheckpointNow({
+        label: changes.map(c => c.label).join('; '),
+        kind: changes[0].kind,
+    });
+}
+
+let checkpointRecorderInstalled = false;
+
+/** Subscribes the recorder to the landed UI's checkpoint requests. */
+function installCheckpointRecorder() {
+    if (checkpointRecorderInstalled) {
+        return;
+    }
+    checkpointRecorderInstalled = true;
+    checkpointRequests.subscribe(request => {
+        try {
+            recordCheckpointNow(request);
+        } catch (e) {
+            console.warn('Checkpoint request failed:', e);
+        }
+    });
 }
 
 let saveTriggersInstalled = false;
@@ -1233,6 +1376,19 @@ async function enterSystem({ entity, to, uuid }:
     newDisplayWorld.events.get(LeaveSpaceportEvent).subscribe(({ data }) => {
         pendingLaunchedShip = data;
         document.body.classList.remove('nova-docked');
+        // Departure is THE checkpoint (the original saved the pilot file
+        // on every depart). The relaunching entity carries everything the
+        // venues committed, including a ship bought at the shipyard.
+        const planetId = dockedShip?.planetId;
+        const planetName = planetId
+            ? simulationGameData.data.Planet.getCached(planetId)?.name
+            : undefined;
+        recordCheckpointNow({
+            label: `Departed ${planetName ?? 'the spaceport'}`,
+            kind: 'depart',
+            entity: data,
+            ...(planetId ? { stellar: planetId } : {}),
+        });
     });
     newDisplayWorld.events.get(AddEnemyEvent).subscribe(async ({ data }) => {
         const { shipId } = data;
@@ -1606,6 +1762,10 @@ async function startGame() {
     // override it. A corrupt or old-version save is quarantined by
     // loadSave and we fall back to defaults.
     const save = loadSave();
+    // The pilot's checkpoint history: baseline for the in-flight change
+    // detector, and the recorder for the landed venues' requests.
+    loadCheckpointBaseline();
+    installCheckpointRecorder();
     // Hand the saved escorts to the first system entry, which is the only
     // place with a serializer to decode them (see restoredSaveEscorts).
     // Deliberately NOT gated on `usingSavedShip`: escorts are ships of
@@ -2405,6 +2565,43 @@ function downloadText(text: string, filename: string): void {
 }
 
 /**
+ * The game-data lookups an ORIGINAL EV Nova pilot import needs
+ * (title/original_pilot_import.ts): resource existence by global id, the
+ * planet -> system and system -> gövt maps, and the default start system.
+ */
+async function originalPilotContext(): Promise<OriginalPilotContext> {
+    const ids = await simulationGameData.ids;
+    const universe = MissionUniverse.shared(simulationGameData);
+    await universe.load();
+    let fallbackSystem = ids.System[0] ?? 'nova:128';
+    try {
+        const starts = await Promise.all(ids.PlayerStart.map(
+            id => simulationGameData.data.PlayerStart.get(id)));
+        const start = starts.find(s => s.isDefault) ?? starts[0];
+        if (start && start.systems.length > 0) {
+            fallbackSystem = start.systems[0];
+        }
+    } catch {
+        // Keep the first system.
+    }
+    const ships = new Set(ids.Ship);
+    const outfits = new Set(ids.Outfit);
+    const missions = new Set(ids.Mission);
+    const ranks = new Set(ids.Rank);
+    const junk = new Set(ids.Junk);
+    return {
+        knownShip: id => ships.has(id),
+        knownOutfit: id => outfits.has(id),
+        knownMission: id => missions.has(id),
+        knownRank: id => ranks.has(id),
+        knownJunk: id => junk.has(id),
+        systemOfPlanet: id => universe.systemIdOfPlanet(id),
+        govtOfSystem: id => universe.getSystemInfo(id)?.govt,
+        fallbackSystem,
+    };
+}
+
+/**
  * Builds the bottom status readout for the title screen from the
  * current save + pilot profile. A pure read; never mutates state.
  */
@@ -2522,6 +2719,83 @@ async function runTitle() {
                 { accept: 'Okay' }, { pict: about?.pict ?? null });
         } finally {
             app.stage.removeChild(aboutPopup.container);
+        }
+    };
+
+    // ── Pilot history / rollback ───────────────────────────────────────
+    // The rollback view (title/rollback_screen.ts) is a PIXI panel over the
+    // title art, like the About popup. The title has no game controls
+    // pipeline, so a keydown adaptor feeds it arrow/page/Escape presses as
+    // ControlEvents on its own subject while it is up. Built lazily: it
+    // loads every system for its map on first use.
+    const rollbackControls = new Subject<ControlEvent>();
+    let rollbackScreen: RollbackScreen | undefined;
+    const rollbackKeyActions: Record<string, ControlAction> = {
+        ArrowUp: 'up', ArrowDown: 'down', PageUp: 'left', PageDown: 'right',
+        Escape: 'depart',
+    };
+    const onRollbackKey = (event: KeyboardEvent) => {
+        const action = rollbackKeyActions[event.key];
+        if (!action) {
+            return;
+        }
+        event.preventDefault();
+        rollbackControls.next({
+            action, state: event.repeat ? 'repeat' : 'start',
+        });
+    };
+    const centreRollback = () => rollbackScreen?.container.position.set(
+        Math.max(0, (app.screen.width - ROLLBACK_PANEL.width) / 2),
+        Math.max(0, (app.screen.height - ROLLBACK_PANEL.height) / 2));
+    window.addEventListener('resize', centreRollback);
+    /**
+     * Opens the rollback view for a pilot; resolves a status line for the
+     * Open Pilot dialog. A rewind installs the chosen checkpoint's save as
+     * the pilot's current save (title/pilot_history.ts rewindPilotSave).
+     */
+    const openRollback = async (id: string): Promise<string> => {
+        const pilot = listPilots().find(p => p.id === id);
+        if (!pilot) {
+            return 'That pilot no longer exists.';
+        }
+        const history = loadHistory(pilot.saveKey);
+        if (!history || history.checkpoints.length === 0) {
+            return `${pilot.name} has no checkpoints yet (they are recorded `
+                + 'on every departure).';
+        }
+        rollbackScreen ??= new RollbackScreen(displayAssetData,
+            simulationGameData, rollbackControls);
+        app.stage.addChild(rollbackScreen.container);
+        centreRollback();
+        document.addEventListener('keydown', onRollbackKey);
+        try {
+            const result = await rollbackScreen.show({
+                pilotName: pilot.name,
+                history,
+                onExport: (index) => {
+                    const copy = exportCheckpointFile(id, index);
+                    if (copy) {
+                        downloadText(copy.text, exportFileName(copy.name));
+                    }
+                },
+            });
+            if (result.action === 'rewind') {
+                const label = history.checkpoints[result.index]?.label
+                    ?? 'checkpoint';
+                if (rewindPilotSave(pilot.saveKey, result.index)) {
+                    // The in-flight change baseline moves with the save.
+                    if (getActivePilot()?.id === id) {
+                        loadCheckpointBaseline();
+                    }
+                    void refreshStatus();
+                    return `Rewound ${pilot.name} to "${label}".`;
+                }
+                return 'The rewind could not be written.';
+            }
+            return '';
+        } finally {
+            document.removeEventListener('keydown', onRollbackKey);
+            app.stage.removeChild(rollbackScreen.container);
         }
     };
 
@@ -2659,6 +2933,11 @@ async function runTitle() {
                     if (isActive) {
                         parts.push('(current)');
                     }
+                    const checkpoints = checkpointCount(loadHistory(p.saveKey));
+                    if (checkpoints > 0) {
+                        parts.push(`· ${checkpoints} checkpoint`
+                            + `${checkpoints === 1 ? '' : 's'}`);
+                    }
                     return {
                         id: p.id, name: p.name,
                         detail: parts.join(' ') || undefined,
@@ -2674,20 +2953,32 @@ async function runTitle() {
                         downloadText(text,
                             exportFileName(pilot?.name ?? 'pilot'));
                     },
-                    onImport: (text) => {
-                        const result = importPilot(text);
+                    onImport: async (bytes, fileName) => {
+                        // Content sniffing: a NovaJS export is JSON; anything
+                        // else is tried as an original EV Nova pilot.
+                        let result: ImportResult;
+                        if (looksLikeOriginalPilot(bytes)) {
+                            result = importOriginalPilot(bytes, fileName,
+                                await originalPilotContext());
+                        } else {
+                            result = importPilot(
+                                new TextDecoder().decode(bytes));
+                        }
                         if (!result.ok) {
                             return { ok: false, message: result.reason };
                         }
+                        const notes = result.notes?.length
+                            ? ` Notes: ${result.notes.join(' ')}` : '';
                         return {
                             ok: true,
-                            message: result.renamed
+                            message: (result.renamed
                                 ? `Imported as "${result.pilot.name}" (a pilot `
                                 + 'with that name already existed).'
-                                : `Imported "${result.pilot.name}".`,
+                                : `Imported "${result.pilot.name}".`) + notes,
                         };
                     },
                     onDelete: (id) => { deletePilot(id); },
+                    onRollback: openRollback,
                 };
                 const chosen = await showOpenPilotDialog(listEntries(), actions);
                 if (chosen) {

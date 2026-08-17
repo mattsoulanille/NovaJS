@@ -1,4 +1,6 @@
-import { decode_macroman } from "resource_fork";
+// From the browser-safe module (no fs), so the pilot parser can bundle
+// for the browser through this reader.
+import { decode_macroman } from "resource_fork/parse";
 
 /**
  * Sequential reader for Nova resource data. Big-endian by default.

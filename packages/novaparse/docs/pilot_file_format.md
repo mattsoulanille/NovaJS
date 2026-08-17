@@ -111,7 +111,20 @@ skipped or exposed as `unused*`.
   scenario chär data flows into the save, so don't validate against stock
   strings.
 
-## Import hook (future work)
+## Import (packages/nova)
+
+Implemented: `packages/nova/src/title/original_pilot_import.ts` maps
+`PilotData` onto `SaveData` (ship, outfits, credits, date, last stellar ->
+system, control bits, ranks, combat rating, cargo/jünk, per-system legal
+status -> per-gövt records, active missions without special ships) and the
+title screen's Open Pilot import sniffs binary vs JSON. In a browser only
+the DATA FORK is readable: Windows `.plt` files import directly; a Mac pilot
+must have its resource fork copied out first (`cp "Pilot/..namedfork/rsrc"
+Pilot.rsrc`) — `parsePilotBytes` handles both. `readPilot` (disk +
+resource fork, node only) lives in `pilot_read.ts`; the parser itself is
+browser-safe. The notes below describe the mapping.
+
+## Import hook (original design note)
 
 `readPilot(path): Promise<PilotData>` is exported from the `novaparse`
 entry point. A future "import pilot file" feature in packages/nova would map
@@ -123,6 +136,6 @@ entry point. A future "import pilot file" feature in packages/nova would map
 - `player.cash` → `credits`, `player.missionBits` → `novaControlBits`,
 - `player.legalStatus` / `player.rating` → `reputations` / `combatRatings`.
 
-Browser use requires supplying file bytes directly (`parsePltPilot`, or
-`parsePilotResources` on a parsed resource map): `readPilot` itself reads
-from disk (and macOS resource forks) via node's `fs`.
+Browser use supplies file bytes directly (`parsePilotBytes`, which
+auto-detects .plt vs resource-fork data): `readPilot` itself reads from
+disk (and macOS resource forks) via node's `fs`.
