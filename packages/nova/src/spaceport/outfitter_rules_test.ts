@@ -459,6 +459,146 @@ describe('canBuyOutfit', () => {
                 expect(maxSellCount(fighter, allOut)).toBe(0);
             });
 
+            describe('selling the bay out from under them', () => {
+                // Matthew's rule: "I should not be able to buy a bay and
+                // fighters, launch the fighters, land, and then sell the
+                // bay." The fighters are not in `outfits` at all (launching
+                // spent them), so only the bay -> fighter link catches it.
+                it('refuses to sell the bay while its fighters are out',
+                    () => {
+                        const context = makeContext({
+                            outfits: [bayOutfit, fighter],
+                            weapons: [bayWeapon],
+                            owned: [['nova:157', 1], ['nova:158', 0]],
+                            deployed: [['nova:158', 4]],
+                        });
+                        expect(canSellOutfit(bayOutfit, context)).toEqual(
+                            jasmine.objectContaining({
+                                allowed: false,
+                                reason: 'fightersDeployed',
+                            }));
+                        // The bulk-sell dialog and the greyed Sell button
+                        // both read through here, so they agree with the
+                        // rule for free.
+                        expect(maxSellCount(bayOutfit, context)).toBe(0);
+                    });
+
+                it('sells the bay once the fighters are home again', () => {
+                    const returned = makeContext({
+                        outfits: [bayOutfit, fighter],
+                        weapons: [bayWeapon],
+                        owned: [['nova:157', 1], ['nova:158', 4]],
+                    });
+                    expect(canSellOutfit(bayOutfit, returned))
+                        .toEqual({ allowed: true });
+                    expect(maxSellCount(bayOutfit, returned)).toBe(1);
+                });
+
+                it('sells the bay once the fighters have been destroyed',
+                    () => {
+                        // Shot down while the player shopped: the provider
+                        // is re-read per refresh, so the count drops to
+                        // zero with nothing coming back aboard.
+                        const destroyed = makeContext({
+                            outfits: [bayOutfit, fighter],
+                            weapons: [bayWeapon],
+                            owned: [['nova:157', 1], ['nova:158', 0]],
+                            deployed: [['nova:158', 0]],
+                        });
+                        expect(canSellOutfit(bayOutfit, destroyed))
+                            .toEqual({ allowed: true });
+                    });
+
+                it('still sells the fighter units that ARE aboard', () => {
+                    // 1 aboard, 3 flying. The aboard unit is on the ship
+                    // and may be handed over; the BAY may not, because
+                    // three fighters still need somewhere to dock.
+                    const context = makeContext({
+                        outfits: [bayOutfit, fighter],
+                        weapons: [bayWeapon],
+                        owned: [['nova:157', 1], ['nova:158', 1]],
+                        deployed: [['nova:158', 3]],
+                    });
+                    expect(canSellOutfit(fighter, context))
+                        .toEqual({ allowed: true });
+                    expect(maxSellCount(fighter, context)).toBe(1);
+                    expect(canSellOutfit(bayOutfit, context)).toEqual(
+                        jasmine.objectContaining({
+                            allowed: false, reason: 'fightersDeployed',
+                        }));
+                });
+
+                it('locks only the bay the deployed fighters belong to',
+                    () => {
+                        const otherWeapon = makeWeapon('nova:150', {
+                            ammoType: ['weapon', 'nova:150'],
+                            maxAmmo: 2,
+                        });
+                        const otherBay = makeOutfit('nova:159', {
+                            weapons: { 'nova:150': 1 },
+                        });
+                        const otherFighter = makeOutfit('nova:160', {
+                            max: 9999,
+                            ammoFor: 'nova:150',
+                        });
+                        const context = makeContext({
+                            outfits: [bayOutfit, fighter, otherBay,
+                                otherFighter],
+                            weapons: [bayWeapon, otherWeapon],
+                            owned: [['nova:157', 1], ['nova:158', 0],
+                                ['nova:159', 1], ['nova:160', 2]],
+                            deployed: [['nova:158', 4]],
+                        });
+                        expect(canSellOutfit(bayOutfit, context)).toEqual(
+                            jasmine.objectContaining({
+                                allowed: false,
+                                reason: 'fightersDeployed',
+                            }));
+                        // A second, unrelated bay with its own complement
+                        // sitting in it is untouched by the first bay's
+                        // fighters being out.
+                        expect(canSellOutfit(otherBay, context))
+                            .toEqual({ allowed: true });
+                        expect(canSellOutfit(otherFighter, context))
+                            .toEqual({ allowed: true });
+                    });
+
+                it('leaves outfits that grant no bay alone', () => {
+                    const cannon = makeOutfit('nova:200', {
+                        weapons: { 'nova:120': 1 },
+                    });
+                    const context = makeContext({
+                        outfits: [bayOutfit, fighter, cannon],
+                        weapons: [bayWeapon],
+                        owned: [['nova:157', 1], ['nova:158', 0],
+                            ['nova:200', 1]],
+                        deployed: [['nova:158', 4]],
+                    });
+                    expect(canSellOutfit(cannon, context))
+                        .toEqual({ allowed: true });
+                });
+
+                it('is conservative when a second bay could take them',
+                    () => {
+                        // Two units of the SAME bay outfit, one fighter
+                        // out: the surviving bay could take it home, but
+                        // selling either unit is refused anyway. A
+                        // deliberate call, documented beside
+                        // canSellOutfit — the player recalls and sells.
+                        const context = makeContext({
+                            outfits: [bayOutfit, fighter],
+                            weapons: [bayWeapon],
+                            owned: [['nova:157', 2], ['nova:158', 0]],
+                            deployed: [['nova:158', 1]],
+                        });
+                        expect(canSellOutfit(bayOutfit, context)).toEqual(
+                            jasmine.objectContaining({
+                                allowed: false,
+                                reason: 'fightersDeployed',
+                            }));
+                    });
+            });
+
             it('leaves mass, cargo and hardpoints reading only what is '
                 + 'installed', () => {
                     // A deliberate boundary (see deployed_outfits.ts):

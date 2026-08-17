@@ -36,10 +36,12 @@ export interface OutfitterContext {
      * fighters out cannot be used to buy past the cap. Absent or empty
      * means everything owned is aboard.
      *
-     * They deliberately do NOT count towards mass, cargo, hardpoints,
-     * Contribute, or what may be SOLD — a fighter in flight is not on
-     * the ship to sell. See deployed_outfits.ts for the rationale and
-     * for how to add further sources of deployed units.
+     * They deliberately do NOT count towards mass, cargo, hardpoints or
+     * Contribute, and they are not themselves sellable — a fighter in
+     * flight is not on the ship to hand over. They DO block selling the
+     * BAY they came out of, which would otherwise strand them (see
+     * canSellOutfit). See deployed_outfits.ts for the rationale and for
+     * how to add further sources of deployed units.
      */
     deployedCounts?: ReadonlyMap<string, number>;
     /**
@@ -127,7 +129,11 @@ export type BuyDenialReason =
     | 'cargo'
     | 'credits';
 
-export type SellDenialReason = 'notOwned' | 'cantSell' | 'notStocked';
+export type SellDenialReason =
+    | 'notOwned'
+    | 'cantSell'
+    | 'fightersDeployed'
+    | 'notStocked';
 
 /**
  * The fraction of an outfit's purchase price the player recovers when
@@ -512,6 +518,41 @@ export function buysBackOutfit(outfit: OutfitData,
         || meetsTechLevel(outfit.techLevel, stellar);
 }
 
+/**
+ * How many bay fighters belonging to THIS outfit's own bays are currently
+ * deployed — launched, or landed as escorts, and so not aboard.
+ *
+ * `outfit.weapons` names the weapons an outfit grants. A bay weapon's
+ * fighters are the ammo outfits whose `ammoFor` is that weapon, and that
+ * ammo outfit id is exactly the key deployedCounts is built on (see
+ * deployed_outfits.ts, which attributes each flying fighter back to an
+ * owned ammo outfit via its BayFighterComponent.bayWeaponId). So summing
+ * the deployed counts of every ammo outfit feeding any weapon this outfit
+ * grants gives the fighters that would be stranded by selling it.
+ *
+ * Zero for an ordinary outfit (it grants no weapons) and zero for the
+ * FIGHTER outfit itself (a fighter grants no weapon), which is what keeps
+ * the ammo units still aboard sellable while their siblings are out.
+ */
+function deployedFightersOf(outfit: OutfitData,
+    context: OutfitterContext): number {
+    if (!context.deployedCounts?.size) {
+        return 0;
+    }
+    let deployed = 0;
+    for (const [weaponId, mounted] of Object.entries(outfit.weapons)) {
+        if (mounted <= 0) {
+            continue;
+        }
+        for (const [id, count] of context.deployedCounts) {
+            if (count > 0 && context.getOutfit(id)?.ammoFor === weaponId) {
+                deployed += count;
+            }
+        }
+    }
+    return deployed;
+}
+
 /** Checks whether the player may sell one of this outfit. */
 export function canSellOutfit(outfit: OutfitData,
     context: OutfitterContext): OutfitterCheck<SellDenialReason> {
@@ -523,11 +564,61 @@ export function canSellOutfit(outfit: OutfitData,
     if (outfit.cantSell) {
         return denied('cantSell', 'This can\'t be sold.');
     }
+    // Selling the BAY while its fighters are out is the exploit Matthew
+    // named: buy a bay and its fighters, launch them, land, sell the bay
+    // back. The fighters are not in context.outfits (consumeAmmo spent
+    // them at launch), so the notOwned check above cannot see them, and
+    // nothing else here looks at the bay->fighter link. The result was a
+    // full complement of fighters converted to credits, with the fighters
+    // themselves left pointing at a hangar that no longer exists —
+    // refundFighterToBay then silently drops each one on docking, because
+    // the carrier mounts zero bays so the magazine capacity is zero
+    // (bay_plugin.ts). Recall them first.
+    if (deployedFightersOf(outfit, context) > 0) {
+        return denied('fightersDeployed',
+            'You can\'t sell this while its fighters are deployed.');
+    }
     if (context.planet && !buysBackOutfit(outfit, context.planet)) {
         return denied('notStocked', 'They don\'t deal in these here.');
     }
     return { allowed: true };
 }
+
+/*
+ * SELLING A LAUNCHER: what the stock data says, and what is implemented.
+ *
+ * Stock STR# 2002 ("misc strings", Nova Data 5.ndat) carries a composed
+ * sentence for exactly this family of denial, at indices 207-211:
+ *
+ *   207 "You need to sell"   208 "unit"   209 "units"
+ *   210 "of ammunition"      211 "before you can sell your"
+ *
+ * i.e. "You need to sell 4 units of ammunition before you can sell your
+ * Viper Bay." That string is proof the ORIGINAL refuses to sell any
+ * launcher while ammunition for it is still aboard — a broader rule than
+ * the one implemented here, and one NovaJS does not implement at all: you
+ * can currently sell a missile launcher with a full magazine.
+ *
+ * DELIBERATELY NOT ADOPTED WHOLESALE. The broad rule is a separate change
+ * with its own reason code and its own pluralised, item-named caption, and
+ * it changes behaviour for every launcher/ammo pair in the game rather
+ * than closing the exploit at hand. It is left as a seam.
+ *
+ * WHY THE 'fightersDeployed' MESSAGE IS NOT THE STOCK ONE. The stock
+ * sentence tells the player to SELL the ammunition first. For a deployed
+ * fighter that is impossible advice — it is not aboard, so canSellOutfit
+ * denies it as notOwned. The player has to RECALL the fighters, which is a
+ * different instruction, so it gets its own wording.
+ *
+ * CONSERVATIVE ON MULTIPLE BAYS. Owning two units of a bay outfit with one
+ * fighter out denies selling EITHER unit, even though the surviving bay
+ * could still take the fighter home. Refining that means simulating the
+ * sale and comparing the remaining ammoCapacity against the deployed count
+ * — but that refinement also has to decide what to do about the fighters
+ * already ABOARD, which the same shrunken magazine no longer fits, and
+ * that is the broad stock rule above. Until the broad rule lands, denying
+ * is the choice that cannot strand a fighter; the player recalls and sells.
+ */
 
 /** A sane ceiling for bulk purchases of an effectively unlimited
  * outfit (zero mass, no Max): the quantity dialog clamps here. */

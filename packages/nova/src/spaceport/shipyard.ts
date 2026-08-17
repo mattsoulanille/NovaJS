@@ -38,6 +38,7 @@ import {
     purchaseContextFrom,
     ShipPurchaseContext,
 } from './shipyard_rules.js';
+import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { dayNumber } from '../nova_plugin/calendar.js';
 import { getDefaultGameDate } from 'novadatainterface/player_start_data';
 import {
@@ -69,6 +70,13 @@ export class Shipyard extends Menu<Entity> {
     /** The docked stellar's global id, for the deterministic
      * BuyRandom roll. */
     private stellarId?: string;
+    /**
+     * The spaceport's owned-but-not-aboard provider, set once per landing
+     * (Spaceport.setDeployedOutfitCounts). Resolved fresh on every
+     * purchaseContext() call rather than snapshotted, because a fighter can
+     * still be shot down or touch down mid-visit.
+     */
+    private deployedOutfitCounts?: DeployedOutfitCounts;
     private text = {
         description: new PIXI.Text("", FONT.normal),
         // The price pane under the ship picture. Labels and values in
@@ -278,7 +286,12 @@ export class Shipyard extends Menu<Entity> {
             return undefined;
         }
         return purchaseContextFrom(this.input, this.currentShipData,
-            id => this.allOutfits.get(id));
+            id => this.allOutfits.get(id), this.deployedOutfitCounts);
+    }
+
+    /** See the deployedOutfitCounts field. */
+    setDeployedOutfitCounts(counts?: DeployedOutfitCounts) {
+        this.deployedOutfitCounts = counts;
     }
 
     protected override setInput(input: Entity) {

@@ -184,6 +184,105 @@ describe('shipyard purchase rules', () => {
         });
     });
 
+    /*
+     * Judgment call 8: a trade-in hands over the hull with its bays, so a
+     * fighter still out would have no hangar to return to. The outfitter
+     * refuses to sell the bay for the same reason (outfitter_rules
+     * canSellOutfit); this is the other half of that rule.
+     */
+    describe('deployed bay fighters', () => {
+        const fighter = outfit('nova:158', { ammoFor: 'nova:149' });
+
+        it('REFUSES the trade while a fighter is deployed', () => {
+            const ctx = {
+                ...context({
+                    currentShip: ship('nova:100', { price: 40000 }),
+                    outfits: [['nova:158', 0]],
+                    catalogue: [fighter],
+                    credits: Infinity,
+                }),
+                deployedCounts: new Map([['nova:158', 2]]),
+            };
+            const check = canBuyShip(ship('nova:101', { price: 100000 }), ctx);
+            expect(check.allowed).toBe(false);
+            expect(check.allowed ? '' : check.reason).toBe('fightersDeployed');
+        });
+
+        it('refuses even a trade the player could easily afford', () => {
+            // Structural, not financial: the fighter check runs before
+            // affordability, so more money does not unlock it.
+            const ctx = {
+                ...context({
+                    currentShip: ship('nova:100', { price: 10000000 }),
+                    credits: Infinity,
+                }),
+                deployedCounts: new Map([['nova:158', 1]]),
+            };
+            const check = canBuyShip(ship('nova:101', { price: 1 }), ctx);
+            expect(check.allowed ? '' : check.reason).toBe('fightersDeployed');
+        });
+
+        it('allows the trade once the fighters are back aboard', () => {
+            const ctx = {
+                ...context({
+                    currentShip: ship('nova:100', { price: 40000 }),
+                    outfits: [['nova:158', 2]],
+                    catalogue: [fighter],
+                    credits: 90000,
+                }),
+                deployedCounts: new Map<string, number>(),
+            };
+            expect(canBuyShip(ship('nova:101', { price: 100000 }), ctx))
+                .toEqual({ allowed: true });
+        });
+
+        it('ignores zero-count deployed entries', () => {
+            // The provider leaves a spent magazine's key in place; a zero
+            // must not read as "a fighter is out".
+            const ctx = {
+                ...context({
+                    currentShip: ship('nova:100', { price: 40000 }),
+                    outfits: [['nova:158', 2]],
+                    catalogue: [fighter],
+                    credits: 90000,
+                }),
+                deployedCounts: new Map([['nova:158', 0]]),
+            };
+            expect(canBuyShip(ship('nova:101', { price: 100000 }), ctx))
+                .toEqual({ allowed: true });
+        });
+
+        it('allows the trade when nothing supplies deployed counts', () => {
+            // No provider (headless tests, an old save) means "everything
+            // owned is aboard", the behaviour before this rule existed.
+            const ctx = context({
+                currentShip: ship('nova:100', { price: 40000 }),
+                credits: 90000,
+            });
+            expect(ctx.deployedCounts).toBeUndefined();
+            expect(canBuyShip(ship('nova:101', { price: 100000 }), ctx))
+                .toEqual({ allowed: true });
+        });
+
+        it('does not pay for the deployed fighters it refuses to strand',
+            () => {
+                // Belt and braces on the money side: a deployed fighter is
+                // absent from `outfits`, so even if the trade went through
+                // it would never be valued into the trade-in.
+                const ctx = {
+                    ...context({
+                        currentShip: ship('nova:100', { price: 40000 }),
+                        outfits: [['nova:158', 0]],
+                        catalogue: [outfit('nova:158', {
+                            ammoFor: 'nova:149', price: 20000,
+                        })],
+                    }),
+                    deployedCounts: new Map([['nova:158', 4]]),
+                };
+                expect(tradeInValue(ctx)).toBe(10000);
+            });
+    });
+
     describe('outfit persistence', () => {
         const beam = outfit('nova:221', { price: 0, persistent: true });
         const cannon = outfit('nova:200', { price: 12000 });
@@ -399,5 +498,28 @@ describe('shipyard purchase rules', () => {
             expect(bought2.components.get(OutfitsStateComponent)!.get('nova:221'))
                 .toEqual({ count: 1 });
         });
+
+        it('resolves the deployed-count provider against the owned ids',
+            () => {
+                // The provider is a function, not a map, because a flying
+                // fighter names only its bay weapon and has to be
+                // attributed back to one of the player's ammo outfits --
+                // so it has to be handed the ids this entity owns.
+                const { bought, target } = purchase();
+                let sawIds: string[] = [];
+                const ctx = purchaseContextFrom(bought, target,
+                    id => new Map([['nova:221', beam]]).get(id),
+                    ids => {
+                        sawIds = [...ids];
+                        return new Map([['nova:158', 3]]);
+                    });
+                expect(sawIds).toEqual(
+                    [...bought.components.get(OutfitsStateComponent)!.keys()]);
+                expect(ctx.deployedCounts).toEqual(new Map([['nova:158', 3]]));
+                // ...and that is enough to stop a third trade.
+                const check = canBuyShip(ship('nova:103', { price: 1 }), ctx);
+                expect(check.allowed ? '' : check.reason)
+                    .toBe('fightersDeployed');
+            });
     });
 });

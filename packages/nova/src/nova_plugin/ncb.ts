@@ -298,7 +298,24 @@ export type NCBSetOperation =
     | { type: 'startMission', id: number }
     /** Gxxx: grant one of outfit ID xxx to the player. */
     | { type: 'grantOutfit', id: number }
-    /** Dxxx: remove (delete) one of outfit ID xxx from the player. */
+    /**
+     * Dxxx: remove (delete) one of outfit ID xxx from the player.
+     *
+     * DELIBERATELY UNGUARDED against stranding bay fighters. The outfitter
+     * and shipyard both refuse to part the player from a bay while its
+     * fighters are deployed (outfitter_rules canSellOutfit, shipyard_rules
+     * judgment call 8), but a Dxxx naming a bay outfit takes it anyway:
+     * these operations are the scenario author's word, and Gxxx/Dxxx
+     * already bypass every outfitter check by design (see
+     * makeControlBitHooks below). A mission that confiscates a carrier's
+     * bay is entitled to do so.
+     *
+     * The stranded fighters then take the graceful-loss path rather than
+     * crashing: bay_plugin's ReturnAI only needs the carrier entity, which
+     * still exists, and refundFighterToBay finds zero bays mounted, so the
+     * magazine capacity is zero and each fighter is absorbed on docking
+     * without being credited back.
+     */
     | { type: 'removeOutfit', id: number }
     /**
      * Mxxx / Nxxx: move the player to system xxx. M puts the player on
