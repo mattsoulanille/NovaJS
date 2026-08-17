@@ -20,6 +20,7 @@ import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ShipComponent } from "../nova_plugin/ship_plugin.js";
 import { idPrefix } from "../nova_plugin/mission_logic.js";
 import { Button, ButtonClick } from "./button.js";
+import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
 import { ItemGrid, ItemTile } from "./item_grid.js";
 import { Menu } from "./menu.js";
@@ -290,6 +291,11 @@ export class Outfitter extends Menu<Entity> {
         // original's outfitter does.
         this.buttons.buy.click.subscribe(click => this.buyOutfit(click));
         this.buttons.sell.click.subscribe(click => this.sellOutfit(click));
+        // Debug: shift+click presses a greyed Buy/Sell anyway (DEBUG_FLAGS).
+        const overridePress = (event: { shiftKey: boolean }) =>
+            DEBUG_FLAGS.tradeOverride && event.shiftKey;
+        this.buttons.buy.pressGreyIf = overridePress;
+        this.buttons.sell.pressGreyIf = overridePress;
         this.buttons.done.click.subscribe(this.done.bind(this));
         this.addButtons(this.buttons);
 
@@ -704,10 +710,15 @@ export class Outfitter extends Menu<Entity> {
             return;
         }
 
-        if (!canBuyOutfit(outfit, context).allowed) {
-            // The persistent caption and greyed button already explain.
-            this.refreshTradeState();
-            return;
+        const buyCheck = canBuyOutfit(outfit, context);
+        if (!buyCheck.allowed) {
+            if (this.debugOverride(click, buyCheck.message)) {
+                // Fall through: the purchase goes ahead regardless.
+            } else {
+                // The persistent caption and greyed button already explain.
+                this.refreshTradeState();
+                return;
+            }
         }
 
         this.applyBuy(outfit);
@@ -787,14 +798,33 @@ export class Outfitter extends Menu<Entity> {
 
         const check = canSellOutfit(outfit, context);
         if (!check.allowed) {
-            this.text.status.text = check.message;
-            return;
+            // Selling something not aboard is meaningless even for debug.
+            if (!(check.reason !== 'notOwned'
+                && this.debugOverride(click, check.message))) {
+                this.text.status.text = check.message;
+                return;
+            }
         }
 
         this.applySell(outfit);
         this.refreshGrid();
         this.setFreeMassText();
         this.refreshTradeState();
+    }
+
+    /**
+     * The shift+click DEBUG override (DEBUG_FLAGS.tradeOverride): a refused
+     * buy/sell goes through anyway and the status line says so, naming the
+     * rule it overrode. Display-local: it only changes what this player asks
+     * for; the resulting outfit state reaches the sim the normal way.
+     */
+    private debugOverride(click: ButtonClick | undefined,
+        refusal: string): boolean {
+        if (!DEBUG_FLAGS.tradeOverride || !click?.shift) {
+            return false;
+        }
+        this.text.status.text = `DEBUG override (shift+click): ${refusal}`;
+        return true;
     }
 
     /** The option-click bulk sell: prefilled with everything owned. */

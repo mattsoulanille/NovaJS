@@ -26,6 +26,8 @@ const LEFT_POS = 13.2 // TODO: infer from texture width
  * which the original uses for bulk buy/sell quantity entry. */
 export interface ButtonClick {
     option: boolean;
+    /** The shift key was held: the debug trade override modifier. */
+    shift: boolean;
 }
 
 /** A pointer event the press state machine reacts to. */
@@ -54,11 +56,13 @@ export interface PressResult {
  * active press it changes nothing.
  */
 export function pressTransition(currentState: string,
-    pressedFrom: string | undefined, event: PressEvent): PressResult {
+    pressedFrom: string | undefined, event: PressEvent,
+    /** Let a GREY button take the press anyway (debug override). */
+    pressGrey = false): PressResult {
     const unchanged = { state: undefined, pressedFrom, fire: false };
     switch (event) {
         case 'down':
-            if (currentState === 'grey') {
+            if (currentState === 'grey' && !pressGrey) {
                 return unchanged;
             }
             return { state: 'clicked', pressedFrom: currentState, fire: false };
@@ -66,7 +70,13 @@ export function pressTransition(currentState: string,
             if (pressedFrom === undefined) {
                 return unchanged;
             }
-            return { state: 'normal', pressedFrom: undefined, fire: true };
+            // A grey button pressed through the override goes back to grey
+            // (its owner re-greys on refresh anyway); everything else
+            // releases to normal.
+            return {
+                state: pressedFrom === 'grey' ? 'grey' : 'normal',
+                pressedFrom: undefined, fire: true,
+            };
         case 'upoutside':
             if (pressedFrom === undefined) {
                 return unchanged;
@@ -78,6 +88,11 @@ export function pressTransition(currentState: string,
 export class Button {
     container = new PIXI.Container();
     private states = new Map<string, PIXI.Container>();
+    /**
+     * When set, a press on a GREYED button is accepted if this returns true
+     * for the pointer event (the outfitter's shift+click debug override).
+     */
+    pressGreyIf?: (event: PIXI.FederatedPointerEvent) => boolean;
     readonly click = new Subject<ButtonClick>();
     /**
      * Fires on a press-DOWN that the state machine accepted (i.e. never on
@@ -141,9 +156,10 @@ export class Button {
 
         this.container.interactive = true;
         this.container.cursor = 'pointer';
-        this.container.on('pointerdown', () => {
+        this.container.on('pointerdown', (event: PIXI.FederatedPointerEvent) => {
             const result = pressTransition(
-                this.wrappedState, this.pressedFrom, 'down');
+                this.wrappedState, this.pressedFrom, 'down',
+                this.pressGreyIf?.(event) ?? false);
             this.applyPress(result);
             if (result.state === 'clicked') {
                 this.press.next();
@@ -153,7 +169,7 @@ export class Button {
         this.container.on('pointerup', (event: PIXI.FederatedPointerEvent) => {
             if (this.applyPress(pressTransition(
                 this.wrappedState, this.pressedFrom, 'up'))) {
-                this.click.next({ option: event.altKey });
+                this.click.next({ option: event.altKey, shift: event.shiftKey });
             }
         });
 

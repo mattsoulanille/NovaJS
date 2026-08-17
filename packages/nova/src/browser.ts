@@ -134,6 +134,7 @@ import { displayName } from "./nova_plugin/display_name.js";
 import { formatDate } from "./nova_plugin/calendar.js";
 import { isTextEntryActive } from "./input_focus.js";
 import { MenuControls } from "./spaceport/menu_controls.js";
+import { DEBUG_FLAGS } from "./debug_flags.js";
 import { BUILD_VERSION } from "./common/generated_build_version.js";
 import { installVersionCheck } from "./client/version_reload.js";
 
@@ -1365,6 +1366,8 @@ async function enterSystem({ entity, to, uuid }:
     }
     (window as any).simulationWorker = worker;
     (window as any).displayWorld = newDisplayWorld;
+    // Debug switches (see debug_flags.ts): e.g. `debugFlags.tradeOverride`.
+    (window as any).debugFlags = DEBUG_FLAGS;
 
     const newStage = newDisplayWorld.resources.get(Stage);
     if (!newStage) {

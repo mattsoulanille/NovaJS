@@ -21,6 +21,16 @@ describe('Button pressTransition', () => {
         expect(up.fire).toBeFalse();
     });
 
+    it('presses THROUGH grey when the debug override asks, fires the click, '
+        + 'and settles back to grey', () => {
+        const down = pressTransition('grey', undefined, 'down', true);
+        expect(down.state).toBe('clicked');
+        expect(down.pressedFrom).toBe('grey');
+        const up = pressTransition('clicked', down.pressedFrom, 'up');
+        expect(up.fire).toBeTrue();
+        expect(up.state).toBe('grey');
+    });
+
     it('stays grey through a drag-off release', () => {
         const down = pressTransition('grey', undefined, 'down');
         const out = pressTransition('grey', down.pressedFrom, 'upoutside');
