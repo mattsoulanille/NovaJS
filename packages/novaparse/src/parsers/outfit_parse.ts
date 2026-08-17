@@ -358,6 +358,9 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         // Read by the shipyard's purchase rules, not the outfitter's.
         persistent: (outf.flags & 0x4) > 0,
         cantSell: (outf.flags & 0x8) > 0,
+        // A parsed oütf is a real item by definition; only synthesized
+        // built-in-weapon outfits set this.
+        builtIn: false,
         // Outfitter visibility / sellability flags; see outfit_data.ts and
         // spaceport/outfitter_rules.ts for what each one gates.
         hideUnlessRequirementsMet: (outf.flags & 0x100) > 0,

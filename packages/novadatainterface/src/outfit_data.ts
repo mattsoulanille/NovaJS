@@ -106,6 +106,17 @@ export interface OutfitData extends BaseData {
     /** This item can't be sold. */
     cantSell: boolean,
     /**
+     * True for an IMPLICIT item that no oütf resource defines: the
+     * synthesized outfit that mounts a ship's built-in weapon (or its
+     * stock ammo load) when the data provides no purchasable item for it.
+     * See novaparse's built_in_weapon_outfit.ts.
+     *
+     * A built-in is part of the hull, not cargo the player acquired: it is
+     * never stocked or bought, never sold back, and never listed among the
+     * player's extras. Always false for a real oütf.
+     */
+    builtIn: boolean,
+    /**
      * The globalID of the weapon whose ammo supply this item fills, or
      * null if this isn't ammunition. Each item of the outfit is one
      * round of that weapon's ammo. Whether the item requires a
@@ -266,6 +277,7 @@ export function getDefaultOutfitData(): OutfitData {
         turret: false,
         persistent: false,
         cantSell: false,
+        builtIn: false,
         ammoFor: null,
         increasesMax: null,
         miningScoop: false,

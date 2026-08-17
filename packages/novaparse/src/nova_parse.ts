@@ -41,6 +41,9 @@ import { JunkParse } from "./parsers/junk_parse.js";
 import { OopsParse } from "./parsers/oops_parse.js";
 import { GovtParse } from "./parsers/govt_parse.js";
 import { MisnParse } from "./parsers/misn_parse.js";
+import {
+    builtInOutfitWeaponId, makeBuiltInAmmoOutfit, makeBuiltInWeaponOutfit,
+} from "./built_in_weapon_outfit.js";
 import { OutfitParse } from "./parsers/outfit_parse.js";
 import { PersParse } from "./parsers/pers_parse.js";
 import { PictImageMulti, PictImageMultiParse } from "./parsers/pict_parse.js";
@@ -54,7 +57,9 @@ import { SpriteSheetMulti, SpriteSheetMultiParse } from "./parsers/sprite_sheet_
 import { StatusBarParse } from "./parsers/status_bar_parse.js";
 import { StringTableParse } from "./parsers/string_table_parse.js";
 import { DescriptionParse } from "./parsers/description_parse.js";
-import { SystemParse } from "./parsers/system_parse.js";
+import {
+    SystemBacklinkMap, SystemParseClosure,
+} from "./parsers/system_parse.js";
 import { TargetCornersParse } from "./parsers/target_corners_parse.js";
 import { WeaponParse } from "./parsers/weapon_parse.js";
 import { BoomResource } from "./resource_parsers/boom_resource.js";
@@ -116,6 +121,7 @@ export class NovaParse implements GameDataInterface {
     private shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
 
     private shipPICTMap: ShipPictMap;
+    private systemBacklinkMap: SystemBacklinkMap;
     private weaponOutfitMap: WeaponOutfitMap;
     private ammoOutfitMap: AmmoOutfitMap;
     resourceNotFoundFunction: (message: string) => void;
@@ -174,6 +180,7 @@ export class NovaParse implements GameDataInterface {
         this.flagMap.catch((_e: Error) => { });
 
         this.shipPICTMap = this.makeShipPictMap();
+        this.systemBacklinkMap = this.makeSystemBacklinkMap();
         this.weaponOutfitMap = this.makeWeaponOutfitMap();
         this.ammoOutfitMap = this.makeAmmoOutfitMap();
         this.shipParser = ShipParseClosure(this.shipPICTMap,
@@ -275,8 +282,7 @@ export class NovaParse implements GameDataInterface {
         var data: NovaDataInterface = {
             Asteroid: this.makeGettable<RoidResource, AsteroidData>(NovaResourceType.röid, AsteroidParse),
             Ship: this.makeGettable<ShipResource, ShipData>(NovaResourceType.shïp, this.shipParser),
-            Outfit: this.makeGettable<OutfResource, OutfitData>(NovaResourceType.oütf,
-                async (outf, notFound) => OutfitParse(outf, notFound, await this.flagMap)),
+            Outfit: this.makeOutfitGettable(),
             Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
             Pict: this.pictGettable,
             PictImage: this.pictImageGettable,
@@ -286,7 +292,9 @@ export class NovaParse implements GameDataInterface {
             Rank: this.makeGettable<RankResource, RankData>(NovaResourceType.ränk,
                 async (rank, notFound) => RankParse(rank, notFound, await this.flagMap)),
             Planet: this.makeGettable<SpobResource, PlanetData>(NovaResourceType.spöb, PlanetParse),
-            System: this.makeGettable<SystResource, SystemData>(NovaResourceType.sÿst, SystemParse),
+            System: this.makeGettable<SystResource, SystemData>(
+                NovaResourceType.sÿst,
+                SystemParseClosure(this.systemBacklinkMap)),
             Govt: this.makeGettable<GovtResource, GovtData>(NovaResourceType.gövt, GovtParse),
             Dude: this.makeGettable<DudeResource, DudeData>(NovaResourceType.düde, DudeParse),
             Fleet: this.makeGettable<FletResource, FleetData>(NovaResourceType.flët, FleetParse),
@@ -399,6 +407,69 @@ export class NovaParse implements GameDataInterface {
             }
         }
         return shipPICTMap;
+    }
+
+    /**
+     * The oütf resources, plus the implicit outfits that mount a ship's
+     * built-in weapons when no oütf provides them (see
+     * built_in_weapon_outfit.ts). Implicit ids resolve here but are
+     * deliberately absent from `ids.Outfit`, so nothing enumerating the
+     * outfit catalogue — the outfitter's shelves above all — ever offers
+     * one for sale.
+     */
+    private makeOutfitGettable(): Gettable<OutfitData> {
+        const resources = this.makeGettable<OutfResource, OutfitData>(
+            NovaResourceType.oütf,
+            async (outf, notFound) => OutfitParse(outf, notFound, await this.flagMap));
+        return new Gettable(async (id: string, priority: number) => {
+            const builtIn = builtInOutfitWeaponId(id);
+            if (builtIn === undefined) {
+                return resources.get(id, priority);
+            }
+            const weapon = await this.data.Weapon.get(
+                builtIn.weaponId, priority);
+            return builtIn.kind === "weapon"
+                ? makeBuiltInWeaponOutfit(weapon)
+                : makeBuiltInAmmoOutfit(weapon);
+        });
+    }
+
+    /**
+     * For each system, the OTHER systems that name it in their own
+     * Con1-Con16 — the half of its adjacency it does not declare itself.
+     *
+     * A hyperspace link is undirected: "Each system can be linked to up
+     * to 16 other systems, and the player can make hyperspace jumps back
+     * and forth between them" (EVN Bible, the sÿst resource). Data in
+     * the wild leans on that. Stock Nova has 49 links declared from one
+     * end only — every swapped duplicate system (the five Glimmers, the
+     * Procyons, SPC-1421) is entered through one — and the Singularity
+     * plug-in's AP Fringe IX declares its links to Fer'I'Jus from its own
+     * end alone, which is exactly why the system was unreachable.
+     *
+     * Built from the raw resources (no full parse) and sorted, so a
+     * system's completed link list is identical on every peer.
+     */
+    private async makeSystemBacklinkMap(): SystemBacklinkMap {
+        const idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return {};
+        }
+
+        const backlinks: { [index: string]: Set<string> } = {};
+        for (const systemID in idSpace.sÿst) {
+            const system = idSpace.sÿst[systemID];
+            for (const localLink of system.links) {
+                const target = system.idSpace.sÿst[localLink];
+                if (!target || target.globalID === system.globalID) {
+                    continue;
+                }
+                (backlinks[target.globalID] ??= new Set())
+                    .add(system.globalID);
+            }
+        }
+        return Object.fromEntries(Object.entries(backlinks)
+            .map(([id, sources]) => [id, [...sources].sort()]));
     }
 
     private async makeWeaponOutfitMap(): WeaponOutfitMap {

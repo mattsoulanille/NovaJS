@@ -23,6 +23,7 @@ import { HailDialogPlugin } from "./hail_dialog_plugin.js";
 import { PlayerInfoPlugin } from "./player_info_plugin.js";
 import { ScreenSizePlugin } from "./screen_size_plugin.js";
 import { ShipAnimationPlugin } from "./ship_animation_plugin.js";
+import { ShipPhysicsDisplayPlugin } from "./ship_physics_display_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
 import { SpaceportPlugin } from "./spaceport_plugin.js";
 import { BoardingDisplayPlugin } from "./boarding_plugin.js";
@@ -71,6 +72,9 @@ export const Display: Plugin = {
         // systems that read it; CenterShipSystem refreshes it each frame.
         world.resources.set(CameraFocus, { x: 0, y: 0 });
         await world.addPlugin(ScreenSizePlugin);
+        // Before StatusBarPlugin and UiSoundTriggersPlugin: both read the
+        // derived ShipPhysicsComponent, which does not cross the bridge.
+        await world.addPlugin(ShipPhysicsDisplayPlugin);
         await world.addPlugin(starfieldPlugin);
         // After the starfield so it can hide it on negative murk.
         await world.addPlugin(SystemEnvironmentPlugin);
@@ -153,6 +157,7 @@ export const Display: Plugin = {
         await world.removePlugin(StatusBarPlugin);
         await world.removePlugin(StatusMessagePlugin);
         await world.removePlugin(starfieldPlugin);
+        await world.removePlugin(ShipPhysicsDisplayPlugin);
         await world.removePlugin(ScreenSizePlugin);
 
         const stage = world.resources.get(Stage);

@@ -32,6 +32,17 @@ export interface SystemPersonChance {
 
 export interface SystemData extends BaseData {
     position: [number, number],
+    /**
+     * The systems one hyperspace jump away, in BOTH directions.
+     *
+     * A hyperspace link is undirected: "Each system can be linked to up
+     * to 16 other systems, and the player can make hyperspace jumps back
+     * and forth between them" (EVN Bible, the sÿst resource). Only one
+     * end of an edge has to declare it, so this list is the union of
+     * this system's own Con1-Con16 (in resource order) and every other
+     * system that names this one (appended in id order). The parser
+     * closes it; consumers can treat it as plain adjacency.
+     */
     links: Array<string>,
     planets: Array<string>,
     /**

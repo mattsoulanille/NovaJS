@@ -3,6 +3,9 @@ import { BaseData } from "novadatainterface/base_data";
 import { getDefaultPictData } from "novadatainterface/pict_data";
 import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
 import { BayGuidanceSet } from "novadatainterface/weapon_data";
+import {
+    builtInAmmoOutfitId, builtInWeaponOutfitId,
+} from "../built_in_weapon_outfit.js";
 import { NovaResources } from "../resource_parsers/resource_holder_base.js";
 import { ShipResource } from "../resource_parsers/ship_resource.js";
 import { BaseParse } from "./base_parse.js";
@@ -186,11 +189,15 @@ export async function ShipParse(ship: ShipResource,
         }
         var globalID = weapon.globalID;
 
-        var outfitID = (await weaponOutfitMap)[globalID];
-        if (!outfitID) {
-            notFoundFunction("No matching oütf for weapon of id " + weapon.globalID);
-            continue;
-        }
+        // A shïp's WeapType weapons are wëap ids, not oütf ids: an oütf
+        // exists only so the weapon can be BOUGHT (EVN Bible ~:2382).
+        // Plug-ins ship NPC-only weapons with no oütf — Planet Rico's
+        // "Swarmer Discharge" on its Swarmer fighter, say — so when none
+        // provides this weapon, mount it through an implicit,
+        // unpurchasable outfit rather than dropping it and leaving the
+        // ship unarmed.
+        var outfitID = (await weaponOutfitMap)[globalID]
+            ?? builtInWeaponOutfitId(globalID);
         if (!outfits[outfitID]) {
             outfits[outfitID] = 0;
         }
@@ -199,21 +206,20 @@ export async function ShipParse(ship: ShipResource,
         // The stock ammo load (AmmoLoad) becomes that many of the
         // weapon's ammo outfit. It is ignored for weapons that don't
         // draw ammo from an outfit. Bay weapons DO draw from one (their
-        // fighters — see AmmoTypeParse), so a bay with an AmmoLoad and
-        // no fighter oütf is a genuine data gap and warns like the
-        // rest; no stock or bundled-plugin bay hits that path.
+        // fighters — see AmmoTypeParse). When the weapon burns ammo but
+        // no oütf feeds it, the load rides in an implicit magazine for
+        // the same reason the weapon itself does: otherwise the ship
+        // carries a weapon it can never fire.
         if (w.ammo > 0) {
-            var ammoOutfitID = (await ammoOutfitMap)[globalID];
+            const usesAmmoOutfit = BayGuidanceSet.has(weapon.guidance)
+                || (weapon.ammoType >= 0 && weapon.ammoType <= 255);
+            var ammoOutfitID = (await ammoOutfitMap)[globalID]
+                ?? (usesAmmoOutfit ? builtInAmmoOutfitId(globalID) : undefined);
             if (ammoOutfitID) {
                 if (!outfits[ammoOutfitID]) {
                     outfits[ammoOutfitID] = 0;
                 }
                 outfits[ammoOutfitID] += w.ammo;
-            }
-            else if (BayGuidanceSet.has(weapon.guidance)
-                || (weapon.ammoType >= 0 && weapon.ammoType <= 255)) {
-                notFoundFunction("No ammo oütf for weapon of id "
-                    + weapon.globalID + " on ship of id " + base.id);
             }
         }
     }
@@ -223,7 +229,13 @@ export async function ShipParse(ship: ShipResource,
     // (this is done while outfits are parsed).
     var freeMass = ship.freeSpace;
     for (let outfitID in outfits) {
+        // Implicit built-in-weapon outfits have no oütf resource behind
+        // them and take up no space: the hull's own mass budget already
+        // accounts for the weapons it comes with.
         let outfit = globalIDSpace.oütf[outfitID];
+        if (!outfit) {
+            continue;
+        }
         freeMass += outfit.mass * outfits[outfitID];
     }
 

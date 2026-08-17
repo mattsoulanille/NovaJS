@@ -148,7 +148,8 @@ export class PlayerInfoDialog {
     private cargoCapacity = 0;
     /** Standard cargo names (STR# 4000), loaded on first show. */
     private cargoNames: string[] = [];
-    private outfitNames = new Map<string, { name: string, price: number }>();
+    private outfitNames =
+        new Map<string, { name: string, price: number, builtIn: boolean }>();
     /** The player's active ranks, loaded on show for the Honors page. */
     private ranks: RankData[] = [];
 
@@ -283,10 +284,14 @@ export class PlayerInfoDialog {
                 try {
                     const outfit =
                         await this.simulationData.data.Outfit.get(id);
-                    this.outfitNames.set(id,
-                        { name: outfit.name, price: outfit.price });
+                    this.outfitNames.set(id, {
+                        name: outfit.name,
+                        price: outfit.price,
+                        builtIn: outfit.builtIn,
+                    });
                 } catch {
-                    this.outfitNames.set(id, { name: id, price: 0 });
+                    this.outfitNames.set(id,
+                        { name: id, price: 0, builtIn: false });
                 }
             }
         }
@@ -486,6 +491,12 @@ export class PlayerInfoDialog {
                     continue;
                 }
                 const info = this.outfitNames.get(id);
+                // A built-in weapon is part of the hull, not an extra the
+                // player bought — and it has no trade-in value, because
+                // the shipyard's valuation prices real oütf items.
+                if (info?.builtIn) {
+                    continue;
+                }
                 const name = info?.name ?? id;
                 parts.push(count > 1 ? `${count} x ${name}` : name);
                 outfitValue += (info?.price ?? 0) * count;
