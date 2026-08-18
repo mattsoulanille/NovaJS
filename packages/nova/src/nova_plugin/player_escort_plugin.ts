@@ -215,6 +215,29 @@ export const ESCORT_APPROACH_RCS_SPEED = 60;
  * callers must treat undefined as "no new information" rather than "not
  * owned".
  */
+/**
+ * The fields of an existing ownership marker that a RE-STAMP must carry
+ * over, because they say something the live chain cannot: whether the
+ * player is currently away (`detached`) and how the escort was acquired
+ * (`provenance`). Both sites that re-stamp the marker from a freshly walked
+ * chain go through this, so neither can quietly drop one of them.
+ *
+ * Returns a partial that is spread over the new link, so an absent field
+ * stays absent rather than being written as undefined (which would change
+ * the component's encoded shape, and with it the desync hash).
+ */
+function carriedFields(existing: PlayerEscort | undefined):
+    Partial<PlayerEscort> {
+    const carried: Partial<PlayerEscort> = {};
+    if (existing?.detached) {
+        carried.detached = true;
+    }
+    if (existing?.provenance !== undefined) {
+        carried.provenance = existing.provenance;
+    }
+    return carried;
+}
+
 export function playerEscortLink(uuid: string,
     getEntity: (uuid: string) => Entity | undefined):
     PlayerEscort | undefined {
@@ -345,8 +368,13 @@ export function sweepableEscorts(entities: EscortSweepEntities,
             // the entity we are about to serialize carries its own
             // `parent`, so prepareCarriedEscorts can put a just-launched
             // fighter back on its carrier instead of flattening it onto the
-            // player.
-            escort.components.set(PlayerEscortComponent, link);
+            // player. Any provenance already recorded is carried over for
+            // the same reason MarkPlayerEscortsSystem carries it.
+            escort.components.set(PlayerEscortComponent, {
+                ...link,
+                ...carriedFields(
+                    escort.components.get(PlayerEscortComponent)),
+            });
         }
         if (!escortFollows(kind, escort)) {
             continue;
@@ -508,9 +536,13 @@ export const MarkPlayerEscortsSystem = new System({
             return;
         }
         // Preserve the pending-return flag so this system's ordering
-        // against EscortReattachSystem cannot matter.
-        entity.components.set(PlayerEscortComponent, existing?.detached
-            ? { ...link, detached: true } : link);
+        // against EscortReattachSystem cannot matter, and the PROVENANCE
+        // (hired / captured), which is a fact about how the escort was
+        // acquired and must survive every re-parenting of the live chain —
+        // a captured prize does not become a hire because its formation
+        // leader changed.
+        entity.components.set(PlayerEscortComponent,
+            { ...link, ...carriedFields(existing) });
     },
 });
 

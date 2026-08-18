@@ -11,6 +11,9 @@ import { applySetTarget } from "../nova_plugin/target_plugin.js";
 import { applySetPlanetTarget } from "../nova_plugin/planet_plugin.js";
 import { applyHail, HailAction } from "../nova_plugin/hail_plugin.js";
 import { AcceptedMission, applyAcceptMission } from "../nova_plugin/mission_accept.js";
+import { applyEscortAction, EscortAction } from "../nova_plugin/escort_action.js";
+import { loadShipGameData } from "../nova_plugin/entity_data_loader.js";
+import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 
 /**
  * Everything that changes the simulation from outside is an input,
@@ -45,6 +48,14 @@ export type SimulationInput =
      * See mission_accept.ts for where the trust boundary sits and why.
      */
     | { kind: 'acceptMission', accepted: AcceptedMission }
+    /**
+     * A hail-dialog ESCORT MANAGEMENT action against one of the player's
+     * own escorts: release, sell, or upgrade (escort_action.ts). Prices,
+     * provenance and eligibility are all recomputed sim-side; the record
+     * carries only which escort and (for an upgrade) which class the
+     * client staged, which the sim verifies against the escort's own.
+     */
+    | { kind: 'escortAction', action: EscortAction }
     | { kind: 'addEntity', uuid: string, entity: EncodedEntity }
     | { kind: 'removeEntity', uuid: string }
     | { kind: 'setJumpRoute', route: string[] }
@@ -103,6 +114,21 @@ export async function loadInputRecordsGameData(
     }
     for (const record of records) {
         for (const input of record.inputs) {
+            // An escort UPGRADE carries no entity, but it does name a ship
+            // CLASS the simulation must be able to build synchronously the
+            // tick the record lands (escort_action's replaceEscortShipClass
+            // reads it out of the cache). Stage its closure exactly as an
+            // inserted entity's is staged; applyEscortAction refuses the
+            // upgrade outright if it is still cold, so a peer that skipped
+            // this diverges by refusing rather than by deriving late.
+            if (input.kind === 'escortAction'
+                && input.action.kind === 'upgradeEscort') {
+                const gameData =
+                    world.resources.get(SimulationGameDataResource);
+                if (gameData) {
+                    await loadShipGameData(gameData, input.action.toShip);
+                }
+            }
             // Every input that carries an ENTITY must stage it, or a peer
             // that did not originate the record derives against unloaded
             // game data and diverges. acceptMission carries a BATCH of
@@ -177,6 +203,10 @@ export function applySimulationInputs(world: World, inputs: SimulationInput[],
             }
             case 'acceptMission': {
                 applyAcceptMission(world, peerId, input.accepted);
+                break;
+            }
+            case 'escortAction': {
+                applyEscortAction(world, peerId, input.action);
                 break;
             }
             case 'removeEntity': {

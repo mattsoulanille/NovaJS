@@ -430,23 +430,51 @@ export async function computeContext(world: World,
         }
 
         if (isEscort) {
-            // Hired-escort management box (hail/hail_escort.png). The LOWER
-            // well holds the whole identity block — "Hired Escort:" over the
-            // escort's ship name and class subtitle, indented exactly as the
-            // reference indents them. The UPPER well is the reference's
-            // Upgrade Cost / daily Pay readout; NovaJS models neither an
-            // escort salary nor an upgrade price, so it stays EMPTY (a
-            // documented content gap) and the buttons carry the seam story.
+            // ESCORT MANAGEMENT BOX (hail/hail_escort.png for a hire,
+            // hail/hail_captured_escort.png for a prize). The LOWER well
+            // holds the identity block — "Hired Escort:" / "Captured
+            // Escort:" over the escort's ship name and class subtitle,
+            // indented exactly as the references indent them — and the
+            // UPPER well holds the price readout the references put there
+            // (escortReadout).
+            //
+            // Every figure comes off the escort's CURRENT ship class
+            // through spaceport/escort_fees.ts, which is the same module
+            // the simulation prices these actions with — so the dialog can
+            // never quote a number applyEscortAction would disagree with,
+            // and an escort that has just been upgraded reprices itself
+            // with nothing else to update.
             const escortName = shipData?.name || 'Escort';
             const escortClass = shipData?.subtitle?.trim();
+            const provenance = escortProvenance(shipTarget);
+            const upgradeTo = shipData?.escortUpgradeShip ?? null;
+            const upgradeCost = shipData ? escortUpgradeCost(shipData) : 0;
+            const escort: EscortManagement = {
+                provenance,
+                upgrade: shipData && upgradeTo !== null
+                    ? {
+                        toShip: upgradeTo, cost: upgradeCost,
+                        canAfford: credits >= upgradeCost,
+                    }
+                    : undefined,
+                // Only a CAPTURED hull is the player's to sell; a hired
+                // pilot's ship never was (the reference greys the button).
+                sell: shipData && provenance === 'captured'
+                    ? { value: escortSellValue(shipData) } : undefined,
+                // ...and only a HIRED pilot draws a wage.
+                dailyFee: shipData && provenance === 'hired'
+                    ? escortDailyFee(shipData) : undefined,
+            };
+            const label = provenance === 'captured'
+                ? 'Captured Escort:' : 'Hired Escort:';
             return {
                 context: {
                     variant: 'escort', image,
                     heading: escortClass
-                        ? `Hired Escort:\n ${escortName}\n ${escortClass}`
-                        : `Hired Escort:\n ${escortName}`,
-                    body: '',
-                    escort: true,
+                        ? `${label}\n ${escortName}\n ${escortClass}`
+                        : `${label}\n ${escortName}`,
+                    body: escortReadout(escort),
+                    escort,
                 },
                 target: shipTargetUuid, isEscort: true,
                 replies: ASSIST_REPLIES_FALLBACK,

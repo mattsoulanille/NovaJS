@@ -46,7 +46,13 @@ export const ShipDataProvider = ProvideFromCache({
     factory: deriveShipData,
 });
 
-function deriveShipOutfits(shipData: ShipData): OutfitsState {
+/**
+ * A ship class's STOCK loadout as an outfits state. Exported because the
+ * escort upgrade replaces a ship's class in place (escort_action.ts) and
+ * must write the new class's loadout itself rather than hoping the provider
+ * below re-derives it in the right order relative to ShipDataProvider.
+ */
+export function deriveShipOutfits(shipData: ShipData): OutfitsState {
     return new Map(Object.entries(shipData.outfits)
         .map(([id, count]) => [id, { count }]));
 }

@@ -202,6 +202,29 @@ export interface ShipData extends SpaceObjectData {
      */
     escortType: number;
     /**
+     * The ship class an ESCORT of this type upgrades to (shïp UpgradeTo),
+     * as a global ship id, or null when this class cannot be upgraded.
+     *
+     * EVN Bible ~:2661: "If an escort ship of this type can be upgraded,
+     * this field holds the ID of the ship type that it can be upgraded to.
+     * Set to 0 or -1 if this ship class can't be upgraded." BOTH sentinels
+     * are normalized to null here, so consumers test one thing.
+     */
+    escortUpgradeShip: string | null;
+    /**
+     * What upgrading an escort of this class to {@link escortUpgradeShip}
+     * costs (shïp EscUpgrdCost). Meaningless when escortUpgradeShip is null.
+     */
+    escortUpgradeCost: number;
+    /**
+     * Raw shïp EscSellValue: "The amount of cash the player gets for selling
+     * off a captured escort of this type" (EVN Bible ~:2668). A value <= 0
+     * means "default to 10% of the ship's original cost" — that rule lives in
+     * spaceport/escort_fees.ts's escortSellValue, which is what callers should
+     * use rather than reading this directly.
+     */
+    escortSellValue: number;
+    /**
      * The short name shown in shipyard-style grids (shïp ShortName).
      * "\n" splits it into subtitle lines, e.g. "Viper\n- Fighter -".
      * Empty when unset; fall back to the resource name.
@@ -288,6 +311,9 @@ export function getDefaultShipData(): ShipData {
         techLevel: 0,
         hireRandom: 0,
         escortType: -1,
+        escortUpgradeShip: null,
+        escortUpgradeCost: 0,
+        escortSellValue: 0,
         shortName: "",
         longName: "",
         subtitle: "",

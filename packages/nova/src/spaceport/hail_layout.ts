@@ -238,6 +238,60 @@ export function commButtonSlots(variant: 'ship' | 'planet' | 'escort',
         : ['greetings', 'close'];
 }
 
+/** The buttons the ESCORT management column holds, top to bottom. */
+export type EscortButton =
+    'upgradeEscort' | 'sellEscort' | 'release' | 'close';
+
+/** One row of the escort column: which button, and whether it is live. */
+export interface EscortButtonSlot {
+    slot: EscortButton;
+    enabled: boolean;
+}
+
+/**
+ * The ESCORT comm's button column (PICT 8513).
+ *
+ * FOUR FIXED ROWS in every reference — Upgrade Escort / Sell Escort /
+ * Release / Close Channel — and the difference between a hired and a
+ * captured escort is which of them are GREYED, never which are drawn:
+ *
+ *   hail/hail_escort.png          a hired Terrapin: Sell Escort greyed,
+ *                                 Upgrade Escort and Release live.
+ *   hail/hail_captured_escort.png a captured Pirate Viper: all four live.
+ *
+ * Greying rather than omitting is the same convention the planet column
+ * already uses for Demand Tribute, and here it is the original's own
+ * behaviour rather than a NovaJS habit: the reference greys Sell Escort in
+ * place and keeps Close Channel on the fourth row.
+ *
+ * The rules, in one place so the buttons and the simulation's
+ * applyEscortAction cannot disagree:
+ *
+ *  - UPGRADE is offered when the escort's class has a shïp UpgradeTo at all
+ *    AND the player can afford its EscUpgrdCost. An unaffordable upgrade is
+ *    greyed rather than hidden, so the price in the readout above still has
+ *    a button to belong to.
+ *  - SELL is offered only for a CAPTURED escort. A hired pilot's ship was
+ *    never the player's to sell (player_escort.ts's provenance).
+ *  - RELEASE and CLOSE CHANNEL are always live: letting a ship go costs
+ *    nothing and needs nothing.
+ */
+export function escortButtonSlots(escort: {
+    provenance: 'hired' | 'captured',
+    upgrade?: { canAfford: boolean },
+    sell?: unknown,
+}): EscortButtonSlot[] {
+    return [
+        {
+            slot: 'upgradeEscort',
+            enabled: !!escort.upgrade && escort.upgrade.canAfford,
+        },
+        { slot: 'sellEscort', enabled: !!escort.sell },
+        { slot: 'release', enabled: true },
+        { slot: 'close', enabled: true },
+    ];
+}
+
 /** Frame-local top of the `index`-th button in a column. */
 export function buttonRowY(frame: CommFrameLayout, index: number): number {
     return frame.buttonTop + index * frame.buttonPitch;

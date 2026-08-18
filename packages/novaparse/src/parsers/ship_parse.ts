@@ -260,6 +260,23 @@ export async function ShipParse(ship: ShipResource,
         ? (ship.idSpace.gövt[interfaceGovtLocalId]?.globalID ?? null)
         : null;
 
+    // ESCORT UPGRADE TARGET (EVN Bible shïp UpgradeTo ~:2661): a LOCAL shïp
+    // id, resolved to a global one exactly like inherentGovt below. BOTH of
+    // the Bible's "can't be upgraded" sentinels — 0 and -1 — land under 128
+    // and become null, so a consumer has one thing to test. An id that names
+    // no ship in this id space is reported through notFoundFunction like
+    // every other dangling reference and likewise becomes null, rather than
+    // silently naming a class the upgrade could never produce.
+    let escortUpgradeShip: string | null = null;
+    if (ship.escortUpgradeShip >= 128) {
+        escortUpgradeShip =
+            ship.idSpace.shïp[ship.escortUpgradeShip]?.globalID ?? null;
+        if (escortUpgradeShip === null) {
+            notFoundFunction("No matching shïp of id " + ship.escortUpgradeShip
+                + " for the escort upgrade of ship of id " + base.id);
+        }
+    }
+
     // EVN Bible shïp Flags: slow (75%), semi-fast (125%), and fast
     // (150%) hyperspace jump speed. The bits are mutually exclusive.
     var jumpSpeedMult = 1;
@@ -362,6 +379,18 @@ export async function ShipParse(ship: ShipResource,
         techLevel: ship.techLevel,
         hireRandom: ship.hireRandom,
         escortType: ship.escortType,
+        // ESCORT MANAGEMENT (EVN Bible shïp ~:2661). UpgradeTo is a LOCAL
+        // shïp id, resolved to a global one like inherentGovt above; BOTH of
+        // the Bible's "can't be upgraded" sentinels (0 and -1) — and a id
+        // that names no ship in this id space — collapse to null, so the
+        // consumer has one thing to test. A dangling id is reported through
+        // notFound like every other unresolvable reference rather than
+        // silently becoming an upgrade to nothing.
+        escortUpgradeShip,
+        escortUpgradeCost: ship.escortUpgradeCost,
+        // Raw: the "<= 0 means 10% of the ship's cost" default is applied by
+        // spaceport/escort_fees.ts, which is where the price rules live.
+        escortSellValue: ship.escortSellValue,
         shortName: ship.shortName,
         longName: ship.longName,
         subtitle: ship.subtitle,

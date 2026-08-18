@@ -648,8 +648,13 @@ async function spawnHiredEscorts(
             // Durable ownership from the first tick (the simulation's
             // MarkPlayerEscortsSystem would stamp this anyway, one tick
             // later, from the formation link).
+            // PROVENANCE 'hired': this pilot was engaged at the bar. It is
+            // what makes the comm dialog charge a daily wage for them and
+            // refuse to sell their ship (it was never the player's) — see
+            // player_escort.ts's provenance and spaceport/escort_fees.ts.
             escort.components.set(PlayerEscortComponent,
-                { player: leaderUuid, parent: leaderUuid });
+                { player: leaderUuid, parent: leaderUuid,
+                    provenance: 'hired' });
             if (ownerUuid) {
                 escort.components.set(MultiplayerData, { owner: ownerUuid });
             }

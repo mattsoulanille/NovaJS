@@ -1093,8 +1093,13 @@ function convertToEscort(target: Entity, targetUuid: string,
     // player-controlled captor can name a player; for anything else the
     // marking system decides.
     if (leaderControlled) {
+        // PROVENANCE 'captured' is stamped here, at the one moment the fact
+        // is known: this hull was TAKEN, not hired. It is what makes the
+        // comm dialog offer "Sell Escort" for it and charge it no daily
+        // wage (player_escort.ts's provenance; spaceport/escort_fees.ts).
         target.components.set(PlayerEscortComponent,
-            { player: leaderUuid, parent: leaderUuid });
+            { player: leaderUuid, parent: leaderUuid,
+                provenance: 'captured' });
     }
     // Clear leftover hostility so a reverted-to-NPC escort (leader lost)
     // isn't still gunning for the ex-owner. The MODE goes with it: a

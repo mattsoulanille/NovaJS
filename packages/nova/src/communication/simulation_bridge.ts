@@ -13,6 +13,9 @@ import { loadEntityGameData, loadWireSnapshotGameData } from "../nova_plugin/ent
 import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
 import { applyInputRecords, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { HailAction } from "../nova_plugin/hail_plugin.js";
+import { EscortAction } from "../nova_plugin/escort_action.js";
+import { loadShipGameData } from "../nova_plugin/entity_data_loader.js";
+import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 import { AcceptedMission } from "../nova_plugin/mission_accept.js";
 import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, PROTOCOL_VERSION, RollbackLogEntry, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 import { makeNpc } from "../nova_plugin/npc_plugin.js";
@@ -137,6 +140,7 @@ export interface SimulationBridgeHostApi {
     setTarget(target: string | null): void;
     setPlanetTarget(target: string | null): void;
     hail(action: HailAction): void;
+    escortAction(action: EscortAction): void | Promise<void>;
     acceptMission(accepted: AcceptedMission): void | Promise<void>;
     step(count?: number): void;
     snapshot(): SimulationFrame;
@@ -170,6 +174,7 @@ export interface AsyncSimulationBridgeHostApi {
     setTarget(target: string | null): Promise<void>;
     setPlanetTarget(target: string | null): Promise<void>;
     hail(action: HailAction): Promise<void>;
+    escortAction(action: EscortAction): Promise<void>;
     acceptMission(accepted: AcceptedMission): Promise<void>;
     step(count?: number): Promise<void>;
     snapshot(): Promise<SimulationFrame>;
@@ -567,7 +572,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     private integrateStaged(record: InputRecord) {
         if (record.inputs.some(input => input.kind === 'addEntity'
-            || input.kind === 'acceptMission')) {
+            || input.kind === 'acceptMission'
+            // An escort upgrade names a ship CLASS that must be buildable
+            // synchronously on this peer too (see loadInputRecordsGameData).
+            || (input.kind === 'escortAction'
+                && input.action.kind === 'upgradeEscort'))) {
             // If the buffer is cleared while staging (a catch-up log
             // arrived, which contains this record), drop it: pushing
             // after the clear would apply it twice.
@@ -973,6 +982,24 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
     }
 
     /**
+     * An escort-management action from the comm dialog (escort_action.ts).
+     * An UPGRADE stages the target ship class's game-data closure BEFORE
+     * scheduling, exactly as acceptMission stages its ships: applying (and
+     * replaying) the record has to be synchronous, and applyEscortAction
+     * refuses an upgrade whose class is not cached.
+     */
+    async escortAction(action: EscortAction) {
+        if (action.kind === 'upgradeEscort') {
+            const gameData = this.world.resources
+                .get(SimulationGameDataResource);
+            if (gameData) {
+                await loadShipGameData(gameData, action.toShip);
+            }
+        }
+        this.schedule({ kind: 'escortAction', action });
+    }
+
+    /**
      * An in-flight mission acceptance (mission_accept.ts). Stages the
      * mission's special/aux ships BEFORE scheduling, exactly as addEntity
      * stages its single one — applying (and replaying) the input has to
@@ -1209,6 +1236,10 @@ export class SimulationBridgeClient {
         this.host.hail(structuredClone(action));
     }
 
+    escortAction(action: EscortAction) {
+        return this.host.escortAction(structuredClone(action));
+    }
+
     acceptMission(accepted: AcceptedMission) {
         return this.host.acceptMission(structuredClone(accepted));
     }
@@ -1332,6 +1363,10 @@ export class AsyncSimulationBridgeClient {
 
     async hail(action: HailAction) {
         await this.guard(() => this.host.hail(action));
+    }
+
+    async escortAction(action: EscortAction) {
+        await this.guard(() => this.host.escortAction(action));
     }
 
     async acceptMission(accepted: AcceptedMission) {

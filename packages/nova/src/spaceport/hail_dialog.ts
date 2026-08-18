@@ -5,7 +5,8 @@ import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { Button } from './button.js';
 import {
     buttonRowY, commButtonSlots, COMM_ESCORT, COMM_HAGGLE, COMM_LINE_HEIGHT,
-    COMM_PLANET, COMM_SHIP, CommFrameLayout, fitImage, frameOrigin,
+    COMM_PLANET, COMM_SHIP, CommFrameLayout, escortButtonSlots, fitImage,
+    frameOrigin,
 } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
 
@@ -26,16 +27,16 @@ import { MenuControls } from './menu_controls.js';
  * which routes it through the deterministic input path (bridge.hail /
  * escort-command control events). The dialog never mutates the sim directly.
  *
- * The ESCORT comm dialog (PICT 8513) manages a hired escort — it does NOT
- * issue fleet commands (Attack / Defend / Formation / ...); commanding escorts
- * is the keyboard escort-controls' job. Per the reference screenshots
- * (hail/hail_escort.png and the upgrading/captured/sell variants) the button
- * column is, top to bottom: Upgrade Escort, Sell Escort, Release, Close
- * Channel. All three management actions depend on state NovaJS does not model
- * yet — a shipyard upgrade-transfer, an escort resale value, and per-escort
- * release (a future per-escort-control feature Matthew will spec separately) —
- * so they render as GREYED seams; only Close Channel is live. See the plugin
- * for the documented seams.
+ * The ESCORT comm dialog (PICT 8513) MANAGES one of the player's own escorts
+ * — it does NOT issue fleet commands (Attack / Defend / Formation / ...);
+ * commanding escorts is the keyboard escort-controls' job. Per the reference
+ * screenshots (hail/hail_escort.png, hail/hail_captured_escort.png) the button
+ * column is four fixed rows, top to bottom: Upgrade Escort, Sell Escort,
+ * Release, Close Channel — with the ones that do not apply GREYED in place
+ * (Sell Escort for a HIRED escort, whose ship the player never owned). All
+ * three functions are live: they price themselves off the escort's current
+ * ship class (spaceport/escort_fees.ts) and dispatch through the deterministic
+ * input path (nova_plugin/escort_action.ts), which re-derives every number.
  */
 
 /** Comms-dialog background PICT ids (see novajs-spaceport-ui memory map). */
@@ -94,9 +95,82 @@ export interface HailContext {
          */
         accepted?: string,
     };
-    /** Escort-management dialog (escort variant only): show the Upgrade
-     * Escort / Sell Escort / Release seam buttons above Close Channel. */
-    escort?: boolean;
+    /** Escort-management dialog (escort variant only): what this escort
+     * costs, what it is worth, and which functions are on offer. */
+    escort?: EscortManagement;
+}
+
+/**
+ * What the comm dialog can do with one of the player's OWN escorts, and
+ * what the readout says about it — everything the escort box needs, already
+ * priced. Computed by hail_dialog_plugin from the escort's CURRENT ship
+ * class through spaceport/escort_fees.ts, so the numbers shown here are
+ * exactly the ones the simulation charges (nova_plugin/escort_action.ts
+ * re-derives them from the same class).
+ */
+export interface EscortManagement {
+    /**
+     * How the escort came to be the player's (player_escort.ts). Picks the
+     * readout's label — "Hired Escort:" on hail/hail_escort.png,
+     * "Captured Escort:" on hail/hail_captured_escort.png — and decides
+     * whether Sell Escort is live and whether a wage is shown.
+     */
+    provenance: 'hired' | 'captured';
+    /**
+     * The shïp UpgradeTo offer, absent when this class cannot be upgraded.
+     * `toShip` is the target class's global id, carried so the press can
+     * name (and stage) it; the simulation verifies it against the escort's
+     * own class before honouring anything.
+     */
+    upgrade?: { toShip: string, cost: number, canAfford: boolean };
+    /** What selling the hull pays. CAPTURED escorts only. */
+    sell?: { value: number };
+    /** The daily wage. HIRED escorts only — a captured hull draws none. */
+    dailyFee?: number;
+}
+
+/**
+ * The escort box's UPPER well: a fixed three-slot block, exactly as the
+ * references lay it out —
+ *
+ *   1. the upgrade price   "Upgrade Cost: 50,000 credits"
+ *   2. the resale price    "Sell Price:   11,000 credits"  (captured only)
+ *   3. the daily wage      "Pay:  1,100 credits per day"   (hired only)
+ *
+ * That fixed order is what explains the BLANK LINE on hail/hail_escort.png:
+ * the hired Terrapin's "Upgrade Cost" and "Pay" lines sit 30px apart (two
+ * 15px rows) because slot 2, the resale line, is empty for a hire — while
+ * hail/hail_captured_escort.png's "Upgrade Cost" and "Sell Price" are
+ * adjacent, 15px apart, because for a capture it is slot 3 that is empty.
+ * One layout, two fillings.
+ *
+ * Empty slots at the ENDS are trimmed (a captured escort's block is two
+ * lines, not three); an empty slot BETWEEN two filled ones is kept, because
+ * that gap is the thing the reference shows. So a hired escort whose class
+ * cannot be upgraded gets a one-line block rather than two blank rows and a
+ * wage.
+ *
+ * Pure, so the wording is pinned by specs rather than by a screenshot.
+ */
+export function escortReadout(escort: EscortManagement): string {
+    const rows = [
+        escort.upgrade
+            ? `Upgrade Cost: ${escort.upgrade.cost.toLocaleString()} credits`
+            : '',
+        escort.sell
+            ? `Sell Price: ${escort.sell.value.toLocaleString()} credits`
+            : '',
+        escort.dailyFee !== undefined
+            ? `Pay: ${escort.dailyFee.toLocaleString()} credits per day`
+            : '',
+    ];
+    while (rows.length > 0 && rows[0] === '') {
+        rows.shift();
+    }
+    while (rows.length > 0 && rows[rows.length - 1] === '') {
+        rows.pop();
+    }
+    return rows.join('\n');
 }
 
 /** Callbacks the dialog fires. `requestAssistance`/`bribe` route to the
@@ -116,6 +190,14 @@ export interface HailCallbacks {
      */
     requestAssistance(): string;
     bribe(): void;
+    /**
+     * An escort-management press (Upgrade Escort / Sell Escort / Release).
+     * Routes to the deterministic input path exactly as `bribe` does — the
+     * plugin turns it into an `escortAction` SimulationInput, and the
+     * simulation re-derives the price and the eligibility. The channel
+     * closes straight after (see {@link hailPress}), so nothing comes back.
+     */
+    escortAction(action: 'upgrade' | 'sell' | 'release'): void;
     playSound(id: string): void;
 }
 
@@ -254,7 +336,14 @@ export type HailPress =
     /** Pay the demand (the haggle page). */
     | { kind: 'pay' }
     /** Back out of the haggle page. */
-    | { kind: 'cancel' };
+    | { kind: 'cancel' }
+    /**
+     * The escort box's three management functions. Each ends the
+     * conversation (see the state machine below).
+     */
+    | { kind: 'upgradeEscort' }
+    | { kind: 'sellEscort' }
+    | { kind: 'releaseEscort' };
 
 /**
  * THE COMM DIALOG'S PAGE STATE MACHINE — pure, so the behaviour the
@@ -309,6 +398,27 @@ export function hailPress(state: HailPage, press: HailPress,
             // already granted this player.
             return { phase: 'main', context: { ...context, body: accepted } };
         }
+        // THE THREE ESCORT FUNCTIONS ALL CLOSE THE CHANNEL, for the same
+        // reason a paid PORT bribe does: what the box was reporting is no
+        // longer true the instant the press lands. A released or sold
+        // escort is not the player's any more and there is nothing left to
+        // manage; an upgraded one is flying a DIFFERENT CLASS, so its wage,
+        // its next upgrade price and its resale value have all changed, and
+        // a fresh hail is what re-derives them. (The original defers both
+        // deals to the next shipyard and keeps the channel open showing a
+        // Cancel button — see the divergence note in escort_action.ts.)
+        //
+        // Each is ignored unless the context actually offers it, the same
+        // rule the assist and bribe slots follow: a press cannot conjure a
+        // function the box did not draw a live button for.
+        case 'upgradeEscort':
+            return context.escort?.upgrade ? 'close' : state;
+        case 'sellEscort':
+            return context.escort?.sell ? 'close' : state;
+        case 'releaseEscort':
+            // Release needs nothing but an escort: it is live on both
+            // reference captures, hired and captured alike.
+            return context.escort ? 'close' : state;
     }
 }
 
@@ -535,15 +645,26 @@ export class HailDialog {
             }
         }
 
-        // Upper well: what they said.
-        const response = new PIXI.Text(context.body, {
-            ...BODY_FONT,
-            wordWrapWidth: frame.responseWell.width
-                - (frame.responseText.x - frame.responseWell.x) - 4,
-        });
-        response.position.set(originX + frame.responseText.x,
-            originY + frame.responseText.y);
-        this.content.addChild(response);
+        // Upper well: what they said. The ESCORT box's readout is not
+        // speech but a PRICE LIST, and the references draw it the way they
+        // draw the identity block below — dim "Upgrade Cost:" / "Sell
+        // Price:" / "Pay:" labels with white figures beside them — so it
+        // goes through the same run splitter rather than one flat white
+        // string. (identityRuns leaves a colon-less line white and whole,
+        // which is what every spoken response is.)
+        if (context.escort) {
+            this.drawRuns(context.body, frame.responseWell,
+                frame.responseText, originX, originY);
+        } else {
+            const response = new PIXI.Text(context.body, {
+                ...BODY_FONT,
+                wordWrapWidth: frame.responseWell.width
+                    - (frame.responseText.x - frame.responseWell.x) - 4,
+            });
+            response.position.set(originX + frame.responseText.x,
+                originY + frame.responseText.y);
+            this.content.addChild(response);
+        }
 
         // Lower well: who they are, in the reference's colours — dim labels,
         // white values, and a RED status (identityRuns). Each line is laid
@@ -551,35 +672,48 @@ export class HailDialog {
         // the block still starts at the measured infoText origin and keeps
         // the frames' 15px leading.
         if (frame.infoWell) {
-            const wrapWidth = frame.infoWell.width
-                - (frame.infoText.x - frame.infoWell.x) - 4;
-            let y = originY + frame.infoText.y;
-            for (const runs of identityRuns(context.heading)) {
-                let x = originX + frame.infoText.x;
-                // A single-run line can still WRAP inside the well (a long
-                // pers name); a label+value line is short by construction and
-                // is laid out inline, as the references show it.
-                const wordWrap = runs.length === 1;
-                let height = COMM_LINE_HEIGHT;
-                for (const run of runs) {
-                    const text = new PIXI.Text(run.text, {
-                        ...HEADING_FONT, fill: run.color,
-                        wordWrap, wordWrapWidth: wrapWidth,
-                    });
-                    text.position.set(x, y);
-                    this.content.addChild(text);
-                    x += text.width;
-                    height = Math.max(height, text.height);
-                }
-                y += height;
-            }
+            this.drawRuns(context.heading, frame.infoWell, frame.infoText,
+                originX, originY);
         }
 
         if (context.escort) {
-            this.renderEscortButtons(frame, originX, originY);
+            this.renderEscortButtons(context.escort, frame, originX, originY);
             return;
         }
         this.renderCommButtons(context, frame, originX, originY);
+    }
+
+    /**
+     * Lays a block of text out as the coloured runs the original draws
+     * (identityRuns): dim labels, white values, a red status. Each line is
+     * a row of runs with the pen advancing by each run's own width, so the
+     * block starts at the measured text origin and keeps the frames' 15px
+     * leading. Shared by the lower well's identity block and the escort
+     * box's price readout, which the references draw identically.
+     */
+    private drawRuns(block: string, well: { x: number, width: number },
+        origin: { x: number, y: number }, originX: number, originY: number) {
+        const wrapWidth = well.width - (origin.x - well.x) - 4;
+        let y = originY + origin.y;
+        for (const runs of identityRuns(block)) {
+            let x = originX + origin.x;
+            // A single-run line can still WRAP inside the well (a long
+            // pers name); a label+value line is short by construction and
+            // is laid out inline, as the references show it.
+            const wordWrap = runs.length === 1;
+            let height = COMM_LINE_HEIGHT;
+            for (const run of runs) {
+                const text = new PIXI.Text(run.text, {
+                    ...HEADING_FONT, fill: run.color,
+                    wordWrap, wordWrapWidth: wrapWidth,
+                });
+                text.position.set(x, y);
+                this.content.addChild(text);
+                x += text.width;
+                height = Math.max(height, text.height);
+            }
+            y += height;
+        }
     }
 
     /**
@@ -639,28 +773,67 @@ export class HailDialog {
     }
 
     /**
-     * The escort comm MANAGES a hired escort; it does not issue fleet
-     * commands (that's the keyboard escort-controls' job). Per
-     * hail/hail_escort.png the column reads, top to bottom: Upgrade Escort /
-     * Sell Escort / Release / Close Channel. The first three depend on state
-     * NovaJS does not model yet — shipyard upgrade transfer, escort resale
-     * value, and per-escort release (a future per-escort-control feature) —
-     * so they render GREYED with no handler (seams). The reference greys Sell
-     * Escort for the same reason our three are greyed: nothing to sell.
+     * The escort comm MANAGES one of the player's own escorts; it does not
+     * issue fleet commands (that's the keyboard escort-controls' job). Per
+     * hail/hail_escort.png and hail/hail_captured_escort.png the column
+     * reads, top to bottom: Upgrade Escort / Sell Escort / Release / Close
+     * Channel — four fixed rows, with the ones that do not apply GREYED
+     * rather than dropped. Which is which is {@link escortButtonSlots}; the
+     * captions are the original's own, STR# 150 indices 51 / 53 / 31 / 20.
      */
-    private renderEscortButtons(frame: CommFrameLayout, originX: number,
-        originY: number) {
-        const seams = ['Upgrade Escort', 'Sell Escort', 'Release'];
-        seams.forEach((label, row) => {
+    private renderEscortButtons(escort: EscortManagement,
+        frame: CommFrameLayout, originX: number, originY: number) {
+        escortButtonSlots(escort).forEach(({ slot, enabled }, row) => {
+            let label: string;
+            let onPress: (() => void) | undefined;
+            switch (slot) {
+                case 'upgradeEscort':
+                    label = 'Upgrade Escort';
+                    onPress = () => this.pressEscort('upgrade',
+                        { kind: 'upgradeEscort' });
+                    break;
+                case 'sellEscort':
+                    label = 'Sell Escort';
+                    onPress = () => this.pressEscort('sell',
+                        { kind: 'sellEscort' });
+                    break;
+                case 'release':
+                    label = 'Release';
+                    onPress = () => this.pressEscort('release',
+                        { kind: 'releaseEscort' });
+                    break;
+                default:
+                    label = 'Close Channel';
+                    onPress = () => this.close();
+                    break;
+            }
             const button =
                 this.placeButton(label, frame, originX, originY, row);
-            button.state = 'grey';
+            if (enabled) {
+                button.click.subscribe(onPress);
+            } else {
+                button.state = 'grey';
+            }
             this.content.addChild(button.container);
         });
-        const close = this.placeButton('Close Channel', frame, originX,
-            originY, seams.length);
-        close.click.subscribe(() => this.close());
-        this.content.addChild(close.container);
+    }
+
+    /**
+     * One escort-management press: dispatch it to the simulation, then run
+     * it through the page machine, which closes the channel (see
+     * {@link hailPress}). Dispatching FIRST, and only for a press the
+     * context actually offers, keeps the two in step — the callback is what
+     * reaches the sim, and it must not fire for a button the box would have
+     * refused.
+     */
+    private pressEscort(action: 'upgrade' | 'sell' | 'release',
+        press: HailPress) {
+        if (!this.context?.escort) {
+            return;
+        }
+        this.beep();
+        this.callbacks.escortAction(action);
+        this.apply(press);
     }
 
     private renderHaggle(frame: CommFrameLayout, originX: number,
