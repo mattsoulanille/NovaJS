@@ -8,14 +8,8 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import {
-    ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { rankContribute } from '../nova_plugin/rank_logic.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { MissionUniverse } from './mission_universe.js';
-import { numericId } from '../nova_plugin/mission_logic.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { GameDateComponent } from '../nova_plugin/player_state_plugin.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
 import { Button } from './button.js';
@@ -39,8 +33,7 @@ import {
     ShipPurchaseContext,
 } from './shipyard_rules.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
-import { dayNumber } from '../nova_plugin/calendar.js';
-import { getDefaultGameDate } from 'novadatainterface/player_start_data';
+import { shipGateContext } from './ship_gate_context.js';
 import {
     canBuyShip as canBuyStockShip,
     ShipyardContext,
@@ -226,42 +219,20 @@ export class Shipyard extends Menu<Entity> {
      * day, stellar id) for the current player and day.
      */
     private stockContext(): ShipyardContext {
-        const day = dayNumber(this.input?.components.get(GameDateComponent)
-            ?? getDefaultGameDate());
-        return {
-            planet: this.planet,
-            bits: this.input?.components.get(ControlBitsComponent) ?? new Set(),
-            contribute: this.playerContributeBits(),
-            day,
-            stellarId: this.stellarId ? numericId(this.stellarId) : null,
-        };
-    }
-
-    /**
-     * The player's 64-bit Contribute set: their current hull's contribute
-     * or'd with the contribute sets of every owned outfit.
-     */
-    private playerContributeBits(): bigint {
-        // Plus the active ranks' Contribute (EVN Bible: rank Contribute
+        // Shared with the bar's hire pool (ship_gate_context.ts), so the
+        // two ship shops can never read the player's gate state
+        // differently. Ranks contribute too (EVN Bible: rank Contribute
         // "can be used to prevent the player from buying certain items ...
         // until achieving a certain rank"), which for the shipyard is what
         // gates rank-restricted hulls.
         const universe = MissionUniverse.shared(this.simulationData);
-        let contribute = rankContribute(
-            this.input?.components.get(ActiveRanksComponent),
-            id => universe.getRank(id));
-        contribute |= this.currentShipData
-            ? BigInt(this.currentShipData.contribute ?? '0x0') : 0n;
-        const outfits = this.input?.components.get(OutfitsStateComponent);
-        if (outfits) {
-            for (const [id, { count }] of outfits) {
-                if (count > 0) {
-                    contribute |= BigInt(
-                        this.allOutfits.get(id)?.contribute ?? '0x0');
-                }
-            }
-        }
-        return contribute;
+        return shipGateContext(this.input, {
+            planet: this.planet,
+            stellarId: this.stellarId ?? null,
+            currentShipData: this.currentShipData,
+            getOutfit: id => this.allOutfits.get(id),
+            getRank: id => universe.getRank(id),
+        });
     }
 
     /** Loads every outfit once, for the trade-in valuation. */

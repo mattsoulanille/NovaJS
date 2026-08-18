@@ -1,6 +1,17 @@
 /**
- * The shipyard's STOCK gates (which ships appear, and whether the player
- * can buy one), per the EVN Bible's shïp documentation:
+ * The shïp resource's STOCK gates — which ships a stellar offers, and
+ * whether the player may take one. Used by BOTH shops that hand out
+ * whole ships:
+ *
+ *   - the SHIPYARD (spöb hasShipyard), which sells hulls; and
+ *   - the BAR's hire-escort dialog (spöb hasBar), which hires pilots.
+ *
+ * They share every gate except the daily roll: the shipyard rolls
+ * BuyRandom, the bar rolls HireRandom (EVN Bible ~:2630/~:2634). Both
+ * quote {@link shipStockGatesPass} for the rest, so a ship can never be
+ * hireable at a stellar that would not stock it.
+ *
+ * Per the EVN Bible's shïp documentation:
  *
  *   - TechLevel (~:2413): "This ship will be available at all shipyards
  *     with a tech level of this value or higher" — with the spöb
@@ -14,6 +25,9 @@
  *   - BuyRandom (~:2630): "The percent chance that a ship of this type
  *     will be available for purchase on a given day. A BuyRandom of 0
  *     means this ship will never be made available for purchase."
+ *   - HireRandom (~:2634): "The percent chance that a ship of this type
+ *     will be available for hire in the bar on a given day. A HireRandom
+ *     of 0 means this ship will never be made available for hire."
  *   - Flags3 0x0100 / 0x0200 / 0x4000 (~:2655-2658).
  *
  * Pure logic; the Shipyard menu supplies the context. This module is the
@@ -176,8 +190,46 @@ export function shipBuyRandomPasses(ship: ShipData,
  */
 export function buyRandomDayRoll(ship: ShipData,
     ctx: ShipyardContext): number {
+    return dayRoll('buy', ship, ctx);
+}
+
+/**
+ * Whether the bar offers a pilot flying this ship class today (the shïp
+ * HireRandom half of the daily roll). Unlike BuyRandom's, this roll is
+ * LIVE: the hire pool has always rolled, and there is no equivalent of
+ * {@link BUY_RANDOM_DAY_ROLL_ENABLED} to switch it off.
+ */
+export function shipHireRandomPasses(ship: ShipData,
+    ctx: ShipyardContext): boolean {
+    if (ship.hireRandom <= 0) {
+        // "A HireRandom of 0 means this ship will never be made
+        // available for hire."
+        return false;
+    }
+    if (ship.hireRandom >= 100) {
+        return true;
+    }
+    return hireRandomDayRoll(ship, ctx) < ship.hireRandom;
+}
+
+/**
+ * The day's 0-99 roll for a pilot of this ship class at this stellar,
+ * compared against HireRandom. Salted differently from
+ * {@link buyRandomDayRoll} so a ship sold in the shipyard and hired in the
+ * bar do not share one coin flip.
+ */
+export function hireRandomDayRoll(ship: ShipData,
+    ctx: ShipyardContext): number {
+    return dayRoll('hire', ship, ctx);
+}
+
+/**
+ * The shared "this ship at this stellar on this day" roll. Salted per
+ * shop so the bar and the shipyard draw independently.
+ */
+function dayRoll(salt: string, ship: ShipData, ctx: ShipyardContext): number {
     const shipNum = resourceNumber(ship.id) ?? 0;
-    return fnv1a(`${ctx.day}|${ctx.stellarId ?? 0}|${shipNum}`) % 100;
+    return fnv1a(`${salt}|${ctx.day}|${ctx.stellarId ?? 0}|${shipNum}`) % 100;
 }
 
 /** FNV-1a 32-bit hash of a string (offset basis 2166136261, prime
@@ -226,10 +278,47 @@ export function shipStocked(ship: ShipData, ctx: ShipyardContext): boolean {
  */
 export function shipAvailableForSale(ship: ShipData,
     ctx: ShipyardContext): boolean {
+    return shipStockGatesPass(ship, ctx)
+        && shipBuyRandomPasses(ship, ctx);
+}
+
+/**
+ * THE shared gate both ship shops apply before their own daily roll:
+ * the stellar stocks this tech level (TechLevel / SpecialTech), the
+ * player's Contribute covers its Require, and its Availability control-bit
+ * expression passes.
+ *
+ * The shipyard adds BuyRandom on top ({@link shipAvailableForSale}); the
+ * bar's hire pool adds HireRandom ({@link shipHireable}). Keeping the
+ * three gates in one place is what stops the two shops from drifting
+ * apart — the bar used to test only `techLevel <= planet.techLevel`,
+ * which silently emptied the hire pool at every SpecialTech-only stellar
+ * (Extra Outfits' Tektaara Station: spöb TechLevel -1, SpecialTech 10000,
+ * where the tech-10000 Anti-Missile Drone is the whole pool).
+ */
+export function shipStockGatesPass(ship: ShipData,
+    ctx: ShipyardContext): boolean {
     return shipStocked(ship, ctx)
         && shipRequirementsMet(ship.require, ctx.contribute)
-        && shipAvailabilityPasses(ship, ctx)
-        && shipBuyRandomPasses(ship, ctx);
+        && shipAvailabilityPasses(ship, ctx);
+}
+
+/**
+ * Whether a pilot flying this ship class is in the bar's hire pool at
+ * this stellar today: the shared stock gates, a nonzero price (the hire
+ * fee is a percentage of it — see hire_escort.hirePrice), and the day's
+ * HireRandom roll.
+ *
+ * Deliberately NOT gated on BuyRandom: a ship the shipyard never sells
+ * can still be hired (Extra Outfits' drones and stock Nova's second-hand
+ * hulls, nova:361-372, all have BuyRandom 0 and a nonzero HireRandom),
+ * and the Bible keeps the two rolls in separate fields for exactly that
+ * reason.
+ */
+export function shipHireable(ship: ShipData, ctx: ShipyardContext): boolean {
+    return ship.price > 0
+        && shipStockGatesPass(ship, ctx)
+        && shipHireRandomPasses(ship, ctx);
 }
 
 /**

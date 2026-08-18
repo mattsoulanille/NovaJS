@@ -231,7 +231,12 @@ export class Bar extends Menu<Entity> {
         this.controls.unbind();
         const result =
             await this.hireEscort.show(this.session.state.credits,
-                this.hired, this.session.state.bits);
+                this.hired,
+                // The bar's working control bits (a mission accepted this
+                // visit already counts) plus the landed entity, which is
+                // where the hire pool reads the player's outfits, ranks
+                // and the game date from.
+                { entity: this.input, bits: this.session.state.bits });
         if (result === 'empty') {
             // No pilots today: the original says so in a plain popup rather
             // than opening an empty shipyard grid (STR# 2002 index 223 —
