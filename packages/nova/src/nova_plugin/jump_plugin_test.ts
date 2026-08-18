@@ -5,7 +5,7 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { World } from "nova_ecs/world";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
 import { completeEntity } from "./entity_data_loader.js";
-import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
+import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
 import { makeShip } from "./make_ship.js";
 import { makeSystem, SIMULATION_STEP_MS } from "./make_system.js";
 import { applyControlEvents } from "./ship_control.js";
@@ -889,6 +889,44 @@ describe('a route hop naming the system the ship is already in', () => {
             expect(jump!.to).not.toEqual('nova:531');
             expect(jump!.to).toEqual(onward);
         }, 60_000);
+
+    it('drops a stacked duplicate WITHOUT reading its record (archive parity)',
+        async () => {
+            // The server archive stages only this system and its links, so
+            // the twin (never a link of its counterpart) is COLD there while
+            // the browser worker's preload has warmed it. The verdict must
+            // not depend on that (review r13 HIGH): only the current
+            // system's own link list is consulted.
+            const gameData = await getIntegrationGameData();
+            const sol = await gameData.data.System.get('nova:130');
+            expect(sol.links).not.toContain('nova:531');
+            expect(hopIsUnflyableFromHere('nova:531', 'nova:130', gameData))
+                .toBeTrue();
+            const onward = [...sol.links].sort()[0]!;
+            expect(hopIsUnflyableFromHere(onward, 'nova:130', gameData))
+                .toBeFalse();
+            expect(hopIsUnflyableFromHere('nova:130', 'nova:130', gameData))
+                .toBeTrue();
+        }, 60_000);
+
+    it('drops a stale head that is not a link of this system', async () => {
+        const gameData = await getIntegrationGameData();
+        const { originId, destinationId } = await findLinkedSystems();
+        const origin = await gameData.data.System.get(originId);
+        // Some system that is neither here nor adjacent: a route planned
+        // elsewhere and never re-planned would otherwise sit unflyable at
+        // the head forever.
+        const ids = [...(await gameData.ids).System].sort();
+        const far = ids.find(id => id !== originId && !origin.links.includes(id))!;
+        expect(far).toBeDefined();
+        await gameData.data.System.get(destinationId);
+        const { world, ship } = await shipInSystem(originId, [far, destinationId]);
+        world.step();
+        pressHyperjump(world);
+        const jump = ship.components.get(JumpComponent);
+        expect(jump).toBeDefined();
+        expect(jump!.to).toEqual(destinationId);
+    }, 60_000);
 
     it('is dropped before a multi-jump chain auto-continues', async () => {
         const gameData = await getIntegrationGameData();

@@ -523,9 +523,10 @@ const ProjectileBlastSystem = new System({
     args: [ProjectileDataComponent, ProjectileBlastHull, CollisionHitterComponent,
         MovementStateComponent, Optional(OwnerComponent),
         Optional(FiringGroupComponent), Entities,
-        IdFactoryResource, ProjectileExplodeEvent, CreateTime, TimeResource] as const,
+        IdFactoryResource, ProjectileExplodeEvent, CreateTime, TimeResource,
+        Optional(SourceComponent)] as const,
     step(projectileData, blastHull, hitter, movement, owner, firingGroup,
-        entities, ids, explosion, createTime, time) {
+        entities, ids, explosion, createTime, time, source) {
         const blastIgnore = new Set<string>();
         // TODO: Tag ship that was hit as immune to explosion, since it's already hit.
 
@@ -566,6 +567,10 @@ const ProjectileBlastSystem = new System({
             if (group) {
                 blast.components.set(FiringGroupComponent, group);
             }
+        }
+        if (source !== undefined) {
+            // For BlastCollisionSystem's disabled-firer carve-out.
+            blast.components.set(SourceComponent, source);
         }
         entities.set(ids.next('blast'), blast);
     }

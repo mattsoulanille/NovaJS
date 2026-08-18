@@ -9,8 +9,8 @@ import { BlastDamageComponent, BlastIgnoreComponent } from './blast_data.js';
 import { CollisionSystem } from './collisions_plugin.js';
 import { CollisionEvent } from './collision_interaction.js';
 import { DamagedEvent } from './death_plugin.js';
-import { OwnerComponent } from './weapon_components.js';
-import { FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
+import { OwnerComponent, SourceComponent } from './weapon_components.js';
+import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
 import { DisabledComponent } from './disabled_component.js';
 import { ShipExplosionComponent } from './ship_explosion.js';
@@ -23,9 +23,10 @@ export const BlastCollisionSystem = new System({
     events: [CollisionEvent],
     args: [CollisionEvent, BlastDamageComponent, Entities,
         Optional(BlastIgnoreComponent), Optional(FiringGroupComponent),
-        EmitNow, UUID, Optional(ShipExplosionComponent)] as const,
+        EmitNow, UUID, Optional(ShipExplosionComponent),
+        Optional(SourceComponent)] as const,
     step(collision, damage, entities, ignore, firingGroup, emitNow, uuid,
-        shipExplosion) {
+        shipExplosion, source) {
         if (ignore?.has(collision.other)) {
             return;
         }
@@ -40,7 +41,14 @@ export const BlastCollisionSystem = new System({
                 collision.other),
             firingGroup?.govt,
             other.components.get(GovtComponent)?.id,
-            other.components.has(DisabledComponent))) {
+            // Same rule as the projectile and beam paths: a DISABLED
+            // victim forfeits group immunity, except the shot's own
+            // firer (a ship that dies by firing — wëap AmmoType -999 —
+            // is disabled the same tick its shot is still in the air).
+            // The blast carries the projectile's SourceComponent for
+            // exactly this test (review r13 LOW).
+            disabledCancelsImmunity(collision.other,
+                other.components.has(DisabledComponent), source))) {
             return;
         }
         // A ship's own final explosion can hurt but never disable or

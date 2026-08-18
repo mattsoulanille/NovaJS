@@ -17,6 +17,17 @@ const WeaponState = t.intersection([t.type({
      */
     fireGroup: t.string,
     /**
+     * For a SUICIDE weapon (wëap AmmoType -999, WeaponData
+     * destroyShipWhenFiring) the reach of its one shot in px, copied from
+     * its game data when the state is derived — for the same reason as
+     * fireGroup: an escort carrying one closes to this distance instead
+     * of the ordinary standoff (escort_command_plugin attackStandoff), and
+     * a steering decision must never read `getCached` (review r13 MEDIUM:
+     * a cold cache on one peer fell back to the 250px standoff while a
+     * warm one closed to 124px). Absent for every other weapon.
+     */
+    suicideReach: t.number,
+    /**
      * Simulation time of the last shot this weapon ACTUALLY emitted, set
      * by WeaponsSystem on the same branch that stamps the local
      * `lastFired` reload clock — i.e. only when `fireFromEntity` really

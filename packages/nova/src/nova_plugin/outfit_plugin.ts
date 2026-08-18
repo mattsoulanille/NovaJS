@@ -14,6 +14,7 @@ import { DefaultMap } from '../common/default_map.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { Stat } from './stat.js';
 import { WeaponsStateComponent, WeaponState } from './weapons_state.js';
+import { weaponReach } from './weapon_range.js';
 
 const OutfitState = t.type({
     count: t.number,
@@ -103,6 +104,9 @@ function deriveWeaponsState(outfits: OutfitsState,
                     const weaponState = weaponsState.get(weaponId);
                     weaponState.count += count * state.count;
                     weaponState.fireGroup = weapon.fireGroup;
+                    if (weapon.destroyShipWhenFiring) {
+                        weaponState.suicideReach = weaponReach(weapon);
+                    }
                 }
             }
         }

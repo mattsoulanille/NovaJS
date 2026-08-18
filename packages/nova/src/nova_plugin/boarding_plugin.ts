@@ -60,6 +60,7 @@ import {
 } from './ship_plugin.js';
 import { PlayerSoundEvent } from './sound_plugin.js';
 import { TargetComponent } from './target_component.js';
+import { PersComponent } from './pers_plugin.js';
 
 /** Interface beep when a plunder session opens (snd nova:390), heard only
  * by the boarding player (emitted targeted at the boarder). */
@@ -729,7 +730,13 @@ function markBootyTaken(target: Entity, boarderUuid: string,
 function endBoardingForOffer(entity: Entity,
     target: Entity | undefined): void {
     const boarded = target?.components.get(BoardedComponent);
-    if (boarded) {
+    // The sim enforces the "përs only" population itself rather than
+    // trusting the sender: a stray or forged 'plunderOfferOnly' for an
+    // ordinary hulk (or a mission special ship) must not hand back a
+    // spent plunder — that would be a credit farm, and for a mission
+    // ship would un-credit a ShipGoal 2/5 boarding (review r13 MEDIUM).
+    // For a non-përs target this is just an ordinary session end.
+    if (boarded && target?.components.has(PersComponent)) {
         boarded.plundered = false;
     }
     endBoardingSession(entity, target);

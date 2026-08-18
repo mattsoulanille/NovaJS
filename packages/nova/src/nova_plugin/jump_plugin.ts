@@ -606,8 +606,9 @@ const MultiJumpContinueSystem = new System({
 });
 
 /**
- * Drops route hops naming the system the ship is ALREADY IN, before anything
- * can fly one. A hop like that is not a jump: it takes the ship out of a
+ * Drops route hops the ship cannot fly from the system it is ALREADY IN —
+ * this system itself, or anything that is not one of its hyperlinks —
+ * before anything can fly one. A hop like that is not a jump: it takes the ship out of a
  * system and puts it straight back into the same one, so the pilot enters it
  * twice along a single route (Matthew's playtest, 2026-08-17).
  *
@@ -622,14 +623,16 @@ const MultiJumpContinueSystem = new System({
  *    route — the ship is IN that destination (also fixed at the source, in
  *    disabled_plugin's JumpDisableCancelSystem).
  *  - the hop is a stacked duplicate of this system: a different id for the
- *    same place (see hopIsCurrentSystem).
+ *    same place — or any other hop that is not a link of this system, which
+ *    could never be flown from here (see hopIsUnflyableFromHere).
  *
  * THE FIX BELONGS IN THE SIMULATION, not in the client that wrote the route.
  * A route arrives here from three separate paths (carried on the entity at
  * insertion, a setJumpRoute input from any peer, and the sim's own cancel
  * unshift), every peer simulates every ship, and the jump destination has to
  * derive from server-visible state alone. This reads only the route
- * component and the world's own SystemIdResource, and it is idempotent
+ * component, the world's own SystemIdResource and this system's own staged
+ * link list, and it is idempotent
  * within a tick, so a rollback that re-executes it reaches the same state.
  *
  * The whole leading run goes, not one hop: a stack can hold several copies
@@ -655,7 +658,7 @@ export const JumpRouteReconcileSystem = new System({
             return;
         }
         while (jumpRoute.route.length > 0
-            && hopIsCurrentSystem(jumpRoute.route[0]!, systemId, gameData)) {
+            && hopIsUnflyableFromHere(jumpRoute.route[0]!, systemId, gameData)) {
             jumpRoute.route.shift();
         }
     },
@@ -666,7 +669,8 @@ export const JumpRouteReconcileSystem = new System({
 });
 
 /**
- * Whether a route hop names the system a ship in `systemId` is ALREADY IN.
+ * Whether a route hop is one a ship in `systemId` CANNOT FLY from here — it
+ * names this very system, or it is not a hyperlink of this system at all.
  *
  * Not just the same id. Nova stacks several copies of one system at the same
  * map position and swaps between them with control bits — Sol is nova:130
@@ -674,29 +678,35 @@ export const JumpRouteReconcileSystem = new System({
  * from Tichel (nova:129) — so a route pinned under one set of bits can name
  * a DIFFERENT id for the very place the player is standing in. Flying it
  * would leave the system and arrive in a system with the same name at the
- * same coordinates: the pilot sees themselves enter one system twice. Same
- * name and same map position is the same "same system" rule the mission
- * layer uses (mission_universe.ts sameSystem).
+ * same coordinates: the pilot sees themselves enter one system twice.
  *
- * DETERMINISTIC. Both reads go through getCached, under the same staging
- * contract beginJump relies on: `systemId` is this world's own system, and a
- * hop that is not staged is not one this world could jump to anyway
- * (beginJump would refuse it for the same missing data), so an unstaged hop
- * answers "not here" identically on every peer. makeSystem stages the system
- * and its links before any world steps, on every peer, so the answer is the
- * same everywhere.
+ * DETERMINISTIC BY CONSTRUCTION, and this is why the rule is "not a link
+ * of here" rather than "same name and position as here": the ONLY system
+ * data this reads is the current system's own record, which makeSystem
+ * stages on every peer before the world steps (browser worker, server
+ * archive, node worker alike). The hop's own record is never read. It
+ * cannot be: the browser worker bulk-warms every system from the preload
+ * bundle while the server archive stages only this system and its links,
+ * so a getCached read of an arbitrary hop is warm on one peer and cold on
+ * another — and a stacked duplicate is never a link of its twin (0 of the
+ * 330 same-name-and-position pairs in the stock data are), so it is exactly
+ * the read that would diverge (review r13 HIGH). A route is a Dijkstra path
+ * over system.links (route.ts), so a legitimate next hop is always in this
+ * system's link list; anything else at the head is either this system, its
+ * twin, or a stale hop from wherever the route was planned, and none of
+ * those can be jumped to from here (beginJump would refuse the unstaged
+ * ones on the archive anyway — silently, and forever).
+ *
+ * If this system's own record is somehow not staged the hop is kept: the
+ * answer is then the same "no data" every peer sees.
  */
-export function hopIsCurrentSystem(hop: string, systemId: string,
+export function hopIsUnflyableFromHere(hop: string, systemId: string,
     gameData: SimulationGameDataInterface): boolean {
     if (hop === systemId) {
         return true;
     }
     const here = gameData.data.System.getCached(systemId);
-    const there = gameData.data.System.getCached(hop);
-    return here !== undefined && there !== undefined
-        && here.name === there.name
-        && here.position[0] === there.position[0]
-        && here.position[1] === there.position[1];
+    return here !== undefined && !here.links.includes(hop);
 }
 
 /** Overrides whatever the player's held controls just wrote: control

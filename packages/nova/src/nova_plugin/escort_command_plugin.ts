@@ -29,9 +29,9 @@ import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_p
 import { ShipControlEvent, ShipControlStateComponent } from './ship_control.js';
 import { TargetComponent } from './target_component.js';
 import {
-    shortestSuicideReach, suicideWeaponInReach,
+    shortestSuicideReachOfStates, suicideWeaponInReach,
 } from './weapon_range.js';
-import { WeaponsStateComponent } from './weapons_state.js';
+import { WeaponsStateComponent, WeaponState } from './weapons_state.js';
 
 /**
  * ============================================================================
@@ -356,11 +356,12 @@ function steerAttack(movement: MovementState, target: MovementState,
  * outranges it (a long beam, say) changes nothing about how the ship
  * flies.
  */
-function attackStandoff(weapons: Iterable<readonly [string, unknown]>,
-    gameData: SimulationGameDataInterface): number {
-    const reach = shortestSuicideReach(
-        [...weapons].map(([id]) => id),
-        id => gameData.data.Weapon.getCached(id));
+function attackStandoff(weapons: Iterable<readonly [string, WeaponState]>): number {
+    // From the SYNCED weapon states, never from getCached: the reach was
+    // copied out of the weapon data when the states derived (outfit_plugin
+    // deriveWeaponsState), so every peer steers by the same number
+    // whatever its cache holds (review r13 MEDIUM).
+    const reach = shortestSuicideReachOfStates(weapons);
     return reach === undefined
         ? ESCORT_ATTACK_STANDOFF
         : Math.min(ESCORT_ATTACK_STANDOFF, reach);
@@ -535,7 +536,7 @@ export const EscortCommandBehaviorSystem = new System({
                 }
                 target.target = command.target;
                 steerAttack(movement, victimMovement,
-                    attackStandoff(weapons, gameData));
+                    attackStandoff(weapons));
                 fireAt(command.target!);
                 return;
             }
@@ -587,7 +588,7 @@ export const EscortCommandBehaviorSystem = new System({
                 }
                 target.target = command.target;
                 steerAttack(movement, engagedMovement,
-                    attackStandoff(weapons, gameData));
+                    attackStandoff(weapons));
                 fireAt(command.target!);
                 return;
             }

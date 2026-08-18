@@ -58,6 +58,7 @@ import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
 } from './ship_control.js';
 import { ShipComponent, ShipDataComponent } from './ship_plugin.js';
+import { PersComponent } from './pers_plugin.js';
 import { TargetComponent } from './target_component.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
@@ -1155,6 +1156,10 @@ describe('boarding in a live world', () => {
                 // the hulk's one plunder, so the derelict is still
                 // robbable later, once its offer has been taken.
                 const { world, boarder, target } = await boardingWorld();
+                // Only a PËRS can offer (presentShipOffer refuses
+                // otherwise), and the sim checks that itself.
+                target.components.set(PersComponent,
+                    { id: 'nova:131', name: 'Drifting Derelict', subtitle: '' });
                 press(world, BOARDER, 'board');
                 expect(target.components.get(BoardedComponent)?.plundered)
                     .toBeTrue();
@@ -1186,6 +1191,8 @@ describe('boarding in a live world', () => {
                 // been taken; and the display sends the edge once, but a
                 // replayed input must not do anything different.
                 const { world, boarder, target } = await boardingWorld();
+                target.components.set(PersComponent,
+                    { id: 'nova:131', name: 'Drifting Derelict', subtitle: '' });
                 const credits =
                     boarder.components.get(CreditsComponent)!.credits;
                 press(world, BOARDER, 'board');
@@ -1198,6 +1205,26 @@ describe('boarding in a live world', () => {
                 expect(boarder.components.has(BoardingComponent)).toBeFalse();
                 expect(target.components.get(BoardedComponent)?.plundered)
                     .toBeFalsy();
+            });
+
+        it('does NOT hand the plunder back for a hulk that is not a përs',
+            async () => {
+                // A forged or stray 'plunderOfferOnly' for an ordinary
+                // hulk (nothing there could have offered) ends the
+                // session like any other ending and keeps the plunder
+                // spent — otherwise it would be a credit farm, and for a
+                // mission special ship it would un-credit a ShipGoal 2/5
+                // boarding (review r13).
+                const { world, boarder, target } = await boardingWorld();
+                press(world, BOARDER, 'board');
+                press(world, BOARDER, 'plunderOfferOnly');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                expect(target.components.get(BoardedComponent)?.active)
+                    .toBeFalsy();
+                expect(target.components.get(BoardedComponent)?.plundered)
+                    .toBeTrue();
+                press(world, BOARDER, 'board');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
             });
 
         it('blocks a second boarding while a session is OPEN', async () => {

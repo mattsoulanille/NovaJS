@@ -106,3 +106,24 @@ export function shortestSuicideReach(weaponIds: Iterable<string>,
     }
     return shortest;
 }
+
+/**
+ * The shortest reach among a ship's suicide weapons, read from its SYNCED
+ * weapon states (WeaponState.suicideReach, copied from the data when the
+ * states derived), or undefined when it mounts none. This is the form the
+ * simulation's steering must use: `shortestSuicideReach` above takes a
+ * data lookup, and a getCached lookup there is per-world cache warmth,
+ * not shared state.
+ */
+export function shortestSuicideReachOfStates(
+    weapons: Iterable<readonly [string, { suicideReach?: number }]>):
+    number | undefined {
+    let shortest: number | undefined;
+    for (const [, state] of weapons) {
+        if (state.suicideReach !== undefined
+            && (shortest === undefined || state.suicideReach < shortest)) {
+            shortest = state.suicideReach;
+        }
+    }
+    return shortest;
+}
