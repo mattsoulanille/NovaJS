@@ -4,6 +4,7 @@ import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getDefaultProjectileWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import {
     ammoCapacity,
+    availableForSale,
     BULK_BUY_LIMIT,
     canBuyOutfit,
     canSellOutfit,
@@ -13,11 +14,14 @@ import {
     maxBuyCount,
     maxSellCount,
     NEGATIVE_FREE_MASS_REFUSAL,
+    neverOnSale,
     OUTFIT_RESALE_FRACTION,
     outfitResaleValue,
     OutfitterContext,
     playerContribute,
     sellRefund,
+    stellarStocks,
+    visibleOutfits,
 } from './outfitter_rules.js';
 
 function makeShip(physics: Partial<ShipData['physics']> = {},
@@ -32,9 +36,20 @@ function makeOutfit(id: string, outfit: Partial<OutfitData> = {},
     return {
         ...getDefaultOutfitData(),
         id,
+        // As real data does for everything but a plug-in's OVERRIDE of a
+        // stock resource, which keeps the stock id and is the one case a
+        // spec has to state a differing writerPrefix explicitly.
+        prefix: idPrefix(id),
+        writerPrefix: idPrefix(id),
         ...outfit,
         physics: { freeMass: 0, ...physics },
     };
+}
+
+/** The prefix half of a global id, as novaparse assigns it. */
+function idPrefix(id: string): string {
+    const colon = id.lastIndexOf(':');
+    return colon < 0 ? 'nova' : id.slice(0, colon);
 }
 
 function makeWeapon(id: string, weapon: Partial<WeaponData> = {}): WeaponData {
@@ -241,6 +256,41 @@ describe('canBuyOutfit', () => {
                 owned: [['nova:300', 1]],
             }))).toEqual({ allowed: true });
         });
+
+    it('resolves an Oxxx written by the plug-in that OVERRODE a stock outfit',
+        () => {
+            // The Extra Outfits afterburner shape: the plug-in overrides
+            // stock oütf 197 purely to add `!o548`, naming its OWN oütf 548.
+            // The override keeps the stock id, so the id's prefix says
+            // "nova" and only writerPrefix knows who wrote the expression;
+            // reading the id's prefix looked for a stock outfit 548 that
+            // does not exist and left the term permanently false.
+            const firstGen = makeOutfit('nova:197', {
+                availability: '!o548', writerPrefix: 'plug',
+            });
+            const secondGen = makeOutfit('plug:548');
+            expect(canBuyOutfit(firstGen, makeContext({
+                outfits: [firstGen, secondGen],
+                owned: [['plug:548', 1]],
+            }))).toEqual(jasmine.objectContaining(
+                { allowed: false, reason: 'availability' }));
+            expect(canBuyOutfit(firstGen, makeContext({
+                outfits: [firstGen, secondGen],
+            }))).toEqual({ allowed: true });
+        });
+
+    it('still prefers the stock id when stock defines that number', () => {
+        // The mirror case, and why the stock lookup comes FIRST: the
+        // plug-in's own `!o197` means the (overridden) stock afterburner,
+        // not some plug:197 of its own.
+        const secondGen = makeOutfit('plug:548', { availability: '!o197' });
+        const firstGen = makeOutfit('nova:197', { writerPrefix: 'plug' });
+        expect(canBuyOutfit(secondGen, makeContext({
+            outfits: [firstGen, secondGen],
+            owned: [['nova:197', 1]],
+        }))).toEqual(jasmine.objectContaining(
+            { allowed: false, reason: 'availability' }));
+    });
 
     it('counts a deployed fighter as owned for Oxxx', () => {
         // Bible: "The Oxxx operator also considers any carried fighters
@@ -811,6 +861,73 @@ describe('canBuyOutfit', () => {
         const free = makeOutfit('nova:200', { price: 0 });
         expect(canBuyOutfit(free, makeContext({ credits: 0 })))
             .toEqual({ allowed: true });
+    });
+
+    it('refuses an item with BuyRandom 0, which is never put on sale', () => {
+        const never = makeOutfit('nova:200', { buyRandom: 0 });
+        expect(canBuyOutfit(never, makeContext({ outfits: [never] })))
+            .toEqual(jasmine.objectContaining(
+                { allowed: false, reason: 'notStocked' }));
+        // A positive value is just "offered"; NovaJS doesn't roll the
+        // daily chance, and >100 is the Bible's own "means 100".
+        for (const buyRandom of [1, 55, 100, 120]) {
+            expect(canBuyOutfit(makeOutfit('nova:200', { buyRandom }),
+                makeContext())).withContext(`BuyRandom ${buyRandom}`)
+                .toEqual({ allowed: true });
+        }
+    });
+});
+
+describe('neverOnSale (oütf BuyRandom 0)', () => {
+    it('keeps the item off the shelves entirely', () => {
+        const never = makeOutfit('nova:200', { buyRandom: 0 });
+        const sold = makeOutfit('nova:201', { buyRandom: 40 });
+        const context = makeContext({ outfits: [never, sold] });
+        expect(neverOnSale(never)).toBe(true);
+        expect(neverOnSale(sold)).toBe(false);
+        expect(visibleOutfits([never, sold], context).map(o => o.id))
+            .toEqual(['nova:201']);
+        expect(availableForSale(never, context)).toBe(false);
+        expect(availableForSale(sold, context)).toBe(true);
+    });
+
+    it('still lets an owned unit be shown and sold back', () => {
+        // Mission-granted junk routinely has BuyRandom 0; it exists to be
+        // dumped for credits, so the shop must still take it.
+        const never = makeOutfit('nova:200', { buyRandom: 0, price: 1000 });
+        const context = makeContext({
+            outfits: [never], owned: [['nova:200', 1]],
+        });
+        expect(visibleOutfits([never], context).map(o => o.id))
+            .toEqual(['nova:200']);
+        expect(canSellOutfit(never, context)).toEqual({ allowed: true });
+        expect(canBuyOutfit(never, context)).toEqual(jasmine.objectContaining(
+            { allowed: false, reason: 'notStocked' }));
+    });
+
+    it('does not suppress a higher-numbered equal-DispWeight item', () => {
+        // The 0x1000 exclusion is driven only by items that are themselves
+        // available FOR SALE, and one that is never offered is not.
+        const never = makeOutfit('nova:200', {
+            buyRandom: 0, displayWeight: 50, excludesEqualDisplayWeight: true,
+        });
+        const other = makeOutfit('nova:201', { displayWeight: 50 });
+        expect(visibleOutfits([never, other],
+            makeContext({ outfits: [never, other] })).map(o => o.id))
+            .toEqual(['nova:201']);
+    });
+
+    it('gates on stellar tech level as well (stellarStocks)', () => {
+        const stellar = { techLevel: 5, specialTech: [81] };
+        expect(stellarStocks(makeOutfit('nova:200', { techLevel: 3 }), stellar))
+            .toBe(true);
+        expect(stellarStocks(makeOutfit('nova:201', { techLevel: 81 }), stellar))
+            .toBe(true);
+        expect(stellarStocks(makeOutfit('nova:202', { techLevel: 80 }), stellar))
+            .toBe(false);
+        expect(stellarStocks(
+            makeOutfit('nova:203', { techLevel: 3, buyRandom: 0 }), stellar))
+            .toBe(false);
     });
 });
 

@@ -345,6 +345,9 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         displayWeight: outf.displayWeight,
         techLevel: outf.techLevel,
         max: outf.max,
+        // oütf BuyRandom (the resource's "Available Random" word). Zero
+        // means never offered for sale; see outfitter_rules' neverOnSale.
+        buyRandom: outf.availableRandom,
         availability: outf.availability,
         onPurchase: outf.onPurchase,
         onSell: outf.onSell,

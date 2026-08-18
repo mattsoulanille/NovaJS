@@ -119,6 +119,22 @@ describe("OutfitParse", () => {
         expect(outfit.iffScramblerClass).toBeNull();
     });
 
+    it("carries the WRITING plug-in through as writerPrefix", async () => {
+        // A plug-in's override of a stock oütf keeps the stock id (and so
+        // prefix "nova"), which is why the writer has to travel separately:
+        // it is the namespace a bare Oxxx in the resource's own Availability
+        // is scoped to. See BaseData.writerPrefix.
+        const override = await OutfitParse({
+            ...fakeOutf([["shield", 10]]), writerPrefixIfSet: "extra-outfits",
+        } as unknown as OutfResource, () => { });
+        expect(override.prefix).toEqual("nova");
+        expect(override.writerPrefix).toEqual("extra-outfits");
+
+        // A hand-made resource never had one set; it is its own prefix.
+        const plain = await OutfitParse(fakeOutf([["shield", 10]]), () => { });
+        expect(plain.writerPrefix).toEqual("nova");
+    });
+
     describe("outfitter visibility fields", () => {
         /** fakeOutf with an explicit TechLevel and Flags word. */
         function techOutf(techLevel: number, flags: number): OutfResource {
@@ -140,6 +156,19 @@ describe("OutfitParse", () => {
                 const outfit = await OutfitParse(techOutf(15000, 0), () => { });
                 expect(outfit.techLevel).toEqual(15000);
             });
+
+        it("carries BuyRandom through as buyRandom", async () => {
+            // The oütf's "Available Random" word. Zero is the data's marker
+            // for an item that is never put on sale (see the outfitter's
+            // neverOnSale); everything else is a percentage NovaJS reads as
+            // simply "offered".
+            for (const availableRandom of [0, 55, 100]) {
+                const outfit = await OutfitParse({
+                    ...techOutf(7, 0), availableRandom,
+                } as unknown as OutfResource, () => { });
+                expect(outfit.buyRandom).toEqual(availableRandom);
+            }
+        });
 
         it("decodes the four outfitter visibility flags", async () => {
             const outfit = await OutfitParse(

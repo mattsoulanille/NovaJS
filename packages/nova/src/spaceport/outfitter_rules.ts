@@ -178,6 +178,55 @@ export function meetsTechLevel(techLevel: number,
 }
 
 /**
+ * NEVER ON SALE — the oütf BuyRandom rule.
+ *
+ * BuyRandom is "the percent chance that an item of this type will be
+ * available for purchase on a given day, from 1-100" (Bible ~:2034). NovaJS
+ * does not model a per-day shop inventory, so a positive value is simply
+ * "offered". The Bible adds "values less than 1 or greater than 100 are
+ * interpreted as 100", and the >100 half is honoured; the ZERO case is not,
+ * because every piece of real data says zero means the item is never put on
+ * a shelf at all — which is the ONLY thing left in an oütf that can say so:
+ *
+ *  - Extra Outfits' Bremesol Reactor is one item in two states, oütf 611
+ *    "Online" and 612 "Offline". Same TechLevel (10000), same DispWeight,
+ *    same 4,500,000cr cost, mutually exclusive Availability (`!o612` /
+ *    `!o611`), and both are stocked by Tektaara Station (SpecialTech
+ *    10000). The only field that differs is BuyRandom: 80 on the Online
+ *    one, 0 on the Offline one — the state the reactor DEGRADES into,
+ *    which the player is obviously not meant to buy.
+ *  - Its oütf 524 "TAM Drone PD Laser" and 592 "TO Drone Offensive Laser"
+ *    are drone-carried guns, and their dësc reads, in full: "Unused
+ *    description. If you can read this something isn't working as
+ *    intended." They are otherwise indistinguishable from oütf 460 "PD
+ *    Laser", a real item on the same shelf (TechLevel 10000, DispWeight
+ *    199, blank Availability, Require 0x900000001, no hide flags) — except
+ *    that 460 has BuyRandom 55 and both drone guns have 0.
+ *  - Stock agrees and costs nothing: of the 50 stock outfits with BuyRandom
+ *    0, exactly ONE has a TechLevel any stellar stocks (oütf 347 "Rebel
+ *    Cloaking Device - illegal"), and that one is already invisible via
+ *    Availability `b9999` plus the 0x4000 hide flag. So this rule cannot
+ *    change stock behaviour at all; it only stops plug-in items their own
+ *    authors marked unsaleable from turning up on the shelves.
+ *
+ * It gates OFFERING only. An owned unit still shows so it can be sold, and
+ * buysBackOutfit never consults this — mission-granted junk exists to be
+ * dumped for credits, and its BuyRandom is routinely 0.
+ */
+export function neverOnSale(outfit: OutfitData): boolean {
+    return outfit.buyRandom === 0;
+}
+
+/**
+ * Whether a stellar puts this item on its shelves at all: it must be
+ * offerable (see neverOnSale) and within the stellar's tech reach.
+ */
+export function stellarStocks(outfit: OutfitData,
+    stellar: TechStellar): boolean {
+    return !neverOnSale(outfit) && meetsTechLevel(outfit.techLevel, stellar);
+}
+
+/**
  * The stock rules of the stellar the player is docked at. The
  * buys-anything bit is a spöb Flags2 bit that planet_parse decodes into
  * the named flags, so it is read from there rather than from a raw field.
@@ -464,7 +513,7 @@ function ownedAmmoCount(ammoFor: string, context: OutfitterContext): number {
 }
 
 /**
- * The global id an `Oxxx` term inside `from`'s Availability names.
+ * The global id an `Oxxx` term inside outfit `from`'s Availability names.
  *
  * Numeric ids in scenario scripting live in ONE flat space: a plug-in
  * that defines resource 514 either overrides the stock 514 or occupies an
@@ -472,22 +521,32 @@ function ownedAmmoCount(ammoFor: string, context: OutfitterContext): number {
  * the loader (novaparse's IDSpaceHandler) resolves the collision the same
  * way every time — a plug-in resource keeps the "nova:" prefix when it
  * overrides a stock one, and only gets its own prefix when there is no
- * stock resource to override. So "the plug-in's own id if it has one,
- * else the stock id" reproduces exactly what the original engine sees.
+ * stock resource to override. So "the stock id if there is one, else the
+ * WRITING plug-in's own" reproduces exactly what the original engine
+ * sees; it is mission_logic's resolveNumberedResource, applied to outfits.
  *
- * Hard-coding "nova:" here instead meant an Oxxx term in a plug-in outfit
- * pointed at a stock outfit that usually does not exist, so the term was
- * always false. The Extra Outfits plug-in leans on Oxxx for mutual
- * exclusion — its three Engineering Officer grades (oütf 513/514/515)
- * are each `b9010 & !O<other> & !O<other>`, and about twenty more of its
- * outfits pair up the same way — and stock outfits stop at 443, so every
- * one of those exclusions silently passed and all three grades could be
- * bought at once.
+ * The writer is `from.writerPrefix`, NOT the prefix of its id, and the
+ * difference is the whole point (see BaseData.writerPrefix). Reading the
+ * id's prefix broke every Oxxx written by a plug-in INTO an overridden
+ * stock resource. Extra Outfits overrides stock oütf 197 / 228 / 256 (the
+ * Afterburner, Solar Panels and Battery Pack) purely to add `!o548`,
+ * `!o593`, `!o594` — "not while you have my 2nd Generation one". Those
+ * ids resolved to nonexistent stock outfits 548/593/594, so every term was
+ * false, `!false` was true, and the first-generation item stayed on sale
+ * with its successor installed.
+ *
+ * Hard-coding "nova:" (the state before any of this existed) had the
+ * mirror-image failure for a plug-in's OWN outfits: Extra Outfits' three
+ * Engineering Officer grades (oütf 513/514/515) are each
+ * `b9010 & !O<other> & !O<other>`, and stock outfits stop at 443, so every
+ * one of those exclusions silently passed and all three could be bought.
  */
-function resolveOutfitReference(id: number, from: string,
+function resolveOutfitReference(id: number, from: OutfitData,
     context: OutfitterContext): string {
-    const local = `${resourcePrefix(from)}:${id}`;
-    return context.getOutfit(local) ? local : `nova:${id}`;
+    if (context.getOutfit(`nova:${id}`)) {
+        return `nova:${id}`;
+    }
+    return `${from.writerPrefix || resourcePrefix(from.id)}:${id}`;
 }
 
 /**
@@ -503,7 +562,7 @@ function resolveOutfitReference(id: number, from: string,
 export function availabilityTest(outfit: OutfitData,
     context: OutfitterContext): boolean {
     const resolveId = context.resolveId
-        ?? (id => resolveOutfitReference(id, outfit.id, context));
+        ?? (id => resolveOutfitReference(id, outfit, context));
     try {
         return evaluateNCBTest(outfit.availability ?? '', {
             getBit: bit => context.bits.has(bit),
@@ -535,8 +594,11 @@ export function canBuyOutfit(outfit: OutfitData,
     // The shop has to deal in it at all. Normally an out-of-stock item is
     // not even displayed, but an owned one can be on show purely so it can
     // be SOLD (see visibleOutfits) — that must not make it buyable.
-    if (context.planet
-        && !meetsTechLevel(outfit.techLevel, context.planet)) {
+    // neverOnSale is a property of the ITEM, so it holds with or without a
+    // stellar; the tech level needs one to compare against.
+    if (neverOnSale(outfit)
+        || (context.planet
+            && !meetsTechLevel(outfit.techLevel, context.planet))) {
         return denied('notStocked', 'They don\'t sell these here.');
     }
 
@@ -982,8 +1044,9 @@ export function compareOutfitIds(a: string, b: string): number {
  */
 export function availableForSale(outfit: OutfitData,
     context: OutfitterContext): boolean {
-    if (context.planet
-        && !meetsTechLevel(outfit.techLevel, context.planet)) {
+    if (neverOnSale(outfit)
+        || (context.planet
+            && !meetsTechLevel(outfit.techLevel, context.planet))) {
         return false;
     }
     return requirementsMet(outfit, context)
@@ -999,8 +1062,9 @@ export function availableForSale(outfit: OutfitData,
  * canBuyOutfit's 'availability' denial.
  */
 function buyVisible(outfit: OutfitData, context: OutfitterContext): boolean {
-    if (context.planet
-        && !meetsTechLevel(outfit.techLevel, context.planet)) {
+    if (neverOnSale(outfit)
+        || (context.planet
+            && !meetsTechLevel(outfit.techLevel, context.planet))) {
         return false;
     }
     // Both of these hide-flags spare an item the player already has at
@@ -1020,8 +1084,9 @@ function buyVisible(outfit: OutfitData, context: OutfitterContext): boolean {
 /**
  * The outfits an outfitter shows, in display order.
  *
- * An outfit appears when the shop offers it (tech level, plus the 0x0100 /
- * 0x4000 hide-flags and the 0x1000 exclusion), OR when the player owns one
+ * An outfit appears when the shop offers it (BuyRandom and tech level, plus
+ * the 0x0100 / 0x4000 hide-flags and the 0x1000 exclusion), OR when the
+ * player owns one
  * and this shop will buy it back — owned stock stays visible so it can be
  * sold, which is also why the two hide-flags carve out "already has at
  * least one". An owned item the shop will NOT buy back (its tech level is

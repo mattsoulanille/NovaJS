@@ -189,6 +189,7 @@ async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: s
                 id: baseWeapon.id,
                 name: baseWeapon.name,
                 prefix: baseWeapon.prefix,
+                writerPrefix: baseWeapon.writerPrefix,
                 images: {
                     baseImage: {
                         id: rledResource.globalID,

@@ -70,6 +70,17 @@ export interface OutfitData extends BaseData {
     hideUnlessAvailable: boolean,
     /** How many you can have (not counting weapon limitations). 0 = unlimited. */
     max: number,
+    /**
+     * oütf BuyRandom: "The percent chance that an item of this type will be
+     * available for purchase on a given day, from 1-100" (Bible ~:2034).
+     *
+     * NovaJS does not roll the daily chance (there is no per-day shop
+     * inventory), so every positive value means "offered". ZERO does not:
+     * it is the data's marker for an item that is never offered for sale at
+     * all — see `neverOnSale` in nova's spaceport/outfitter_rules.ts for the
+     * evidence and the exact rule.
+     */
+    buyRandom: number,
     /** Control bit test expression gating purchase. Blank = available. */
     availability: string,
     /** Control bit set expression evaluated on purchase. */
@@ -268,6 +279,8 @@ export function getDefaultOutfitData(): OutfitData {
         excludesEqualDisplayWeight: false,
         hideUnlessAvailable: false,
         max: 0,
+        // 100, not 0: a hand-made or synthesized outfit is always offered.
+        buyRandom: 100,
         availability: "",
         onPurchase: "",
         onSell: "",

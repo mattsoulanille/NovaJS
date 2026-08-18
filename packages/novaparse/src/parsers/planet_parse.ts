@@ -126,6 +126,7 @@ export async function PlanetParse(spob: SpobResource, notFoundFunction: (m: stri
         id: base.id,
         name: base.name,
         prefix: base.prefix,
+        writerPrefix: base.writerPrefix,
         images: {
             baseImage: {
                 id: rledID,
