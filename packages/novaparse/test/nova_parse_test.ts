@@ -439,7 +439,9 @@ describe("NovaParse", () => {
         expect(p194.position).toEqual([22, -56]);
     });
 
-    it("Should load Plug-ins in reverse alphabetical order", async () => {
+    it("Should load Plug-ins in alphabetical order, last name winning", async () => {
+        // "Loaded Before.ndat" and "Loaded Last.ndat" both define dësc
+        // 13074 (shïp 202's description); the later name must win.
         const s201 = await np.data.Ship.get("nova:202");
         expect(s201.desc).toEqual("This should overwrite the Loaded Before plug-in");
     });
