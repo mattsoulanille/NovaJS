@@ -108,6 +108,69 @@ describe('SimulationBridge', () => {
         ]);
     });
 
+    it('detects in-place mutation of a component whose codec is the identity', async () => {
+        // io-ts returns the LIVE data object for all-identity codecs
+        // (t.type({x: t.number}) here). The frame diff must not compare
+        // that object against itself next frame; it keeps its own copy.
+        const data = { x: 3 };
+        const entity = new Entity('foo').addComponent(FooComponent, data);
+        await client.addEntity('foo-uuid', entity);
+        client.step();
+        const added = client.snapshot();
+        expect(added.added.length).toBe(1);
+        const sentAdded = added.added[0]![1].components
+            .find(([name]) => name === 'Foo')![1] as { x: number };
+        expect(sentAdded).toEqual({ x: 3 });
+
+        const live = world.entities.get('foo-uuid')!.components.get(FooComponent)!;
+        // Mutate in place (no components.set): the wire copy must not
+        // follow, and the next frame must report the change.
+        live.x = 4;
+        expect(sentAdded.x).toBe(3);
+        const changed = client.snapshot();
+        expect(changed.changed).toEqual([
+            ['foo-uuid', { changed: [['Foo', { x: 4 }]], removed: [] }],
+        ]);
+        const sentChanged = changed.changed[0]![1].changed[0]![1] as { x: number };
+        live.x = 5;
+        expect(sentChanged.x).toBe(4);
+        expect(client.snapshot().changed).toEqual([
+            ['foo-uuid', { changed: [['Foo', { x: 5 }]], removed: [] }],
+        ]);
+        // And an unchanged tick sends nothing.
+        expect(client.snapshot().changed).toEqual([]);
+    });
+
+    it('sends the same deltas the JSON string comparison did', async () => {
+        // The old diff compared JSON.stringify output; the new one walks
+        // the values. Cover stringify's quirks: dropped undefined
+        // properties, NaN reading as null, key order mattering.
+        const Quirky = new Component<{ a?: number, b: number, c: number[] }>('Quirky');
+        const serializer = world.resources.get(SerializerResource)!;
+        serializer.addComponent(Quirky, t.type({
+            a: t.union([t.number, t.undefined]), b: t.number, c: t.array(t.number),
+        }));
+        const entity = new Entity('q').addComponent(Quirky, { a: undefined, b: 1, c: [1] });
+        await client.addEntity('q-uuid', entity);
+        client.step();
+        client.snapshot();
+        const live = world.entities.get('q-uuid')!.components.get(Quirky)!;
+        // Removing an undefined-valued key: not a change under JSON.
+        delete live.a;
+        expect(client.snapshot().changed).toEqual([]);
+        // NaN reads as null; a change from 1 to NaN is a change...
+        live.b = NaN;
+        expect(client.snapshot().changed.length).toBe(1);
+        // ...but NaN to Infinity is not (both null).
+        live.b = Infinity;
+        expect(client.snapshot().changed).toEqual([]);
+        // Array element change is a change; same values are not.
+        live.c = [1];
+        expect(client.snapshot().changed).toEqual([]);
+        live.c = [2];
+        expect(client.snapshot().changed.length).toBe(1);
+    });
+
     it('steps the world through bridge commands', () => {
         const initialFrame = client.snapshot();
 
