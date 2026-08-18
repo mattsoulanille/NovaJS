@@ -59,6 +59,13 @@ export interface ShipyardStellar {
     techLevel: number;
     /** Extra tech levels stocked by EXACT match only (spöb SpecialTech). */
     specialTech: readonly number[];
+    /**
+     * The global id of the gövt that OWNS this stellar (spöb Govt), or null.
+     * Not a stock gate — it is what a ränk PriceMod is matched against
+     * (price_mod.ts). Optional so the many callers that only care about tech
+     * levels need not name it.
+     */
+    govt?: string | null;
 }
 
 /**
@@ -88,6 +95,12 @@ export interface ShipyardContext {
     day: number;
     /** The numeric local id of the docked stellar, or null. */
     stellarId: number | null;
+    /**
+     * The ränk PriceMod percentage in force here (price_mod.ts). Absent
+     * means 100 — prices unchanged. Not a stock gate: the shipyard's grid
+     * shows the same ships either way, they are just priced differently.
+     */
+    priceMod?: number;
 }
 
 /**
@@ -316,6 +329,9 @@ export function shipStockGatesPass(ship: ShipData,
  * reason.
  */
 export function shipHireable(ship: ShipData, ctx: ShipyardContext): boolean {
+    // The LIST price, not the ränk-modified one (price_mod.ts): a hull that
+    // is free at this stellar still has a pilot at the bar, offering it for
+    // nothing — which is exactly what Extra Outfits' Spica Shipyard is for.
     return ship.price > 0
         && shipStockGatesPass(ship, ctx)
         && shipHireRandomPasses(ship, ctx);

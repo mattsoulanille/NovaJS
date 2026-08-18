@@ -123,6 +123,8 @@ describe('outfitter grid on a mock planet', () => {
         const world = planet({ techLevel: 3 });
         expect(stellarOf(world)).toEqual({
             techLevel: 3, specialTech: [], buysAnyOutfit: false,
+            // Not a stock gate; carried for the ränk PriceMod (price_mod.ts).
+            govt: null,
         });
     });
 
@@ -131,6 +133,13 @@ describe('outfitter grid on a mock planet', () => {
             { buysAnyOutfit: true });
         expect(stellarOf(world)).toEqual({
             techLevel: 0, specialTech: [42], buysAnyOutfit: true,
+            govt: null,
         });
+    });
+
+    it('carries the owning govt through, for the ränk PriceMod', () => {
+        const world = planet({ techLevel: 3 });
+        world.govt = 'nova:144';
+        expect(stellarOf(world).govt).toBe('nova:144');
     });
 });

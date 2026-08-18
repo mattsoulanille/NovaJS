@@ -256,8 +256,12 @@ export class Shipyard extends Menu<Entity> {
         if (!this.currentShipData || !this.input) {
             return undefined;
         }
+        // The PriceMod comes off the SAME shipGateContext the grid is built
+        // from (ship_gate_context.ts), so the quoted ship price, the amount
+        // charged and the bar's hire fee are all bent by one number.
         return purchaseContextFrom(this.input, this.currentShipData,
-            id => this.allOutfits.get(id), this.deployedOutfitCounts);
+            id => this.allOutfits.get(id), this.deployedOutfitCounts,
+            this.stockContext().priceMod);
     }
 
     /** See the deployedOutfitCounts field. */

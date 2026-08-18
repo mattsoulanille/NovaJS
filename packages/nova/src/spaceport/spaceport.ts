@@ -601,8 +601,13 @@ export class Spaceport extends Menu<Entity> {
         // The shipyard stocks ships by the same tech level / SpecialTech
         // (see shipyard_stock_rules.ts) and rolls the per-day BuyRandom
         // pool against this stellar's id.
+        // govt is not a stock gate; it is what a ränk PriceMod is matched
+        // against (price_mod.ts).
         this.shipyard.setPlanet(
-            { techLevel: data.techLevel, specialTech: data.specialTech },
+            {
+                techLevel: data.techLevel, specialTech: data.specialTech,
+                govt: data.govt,
+            },
             this.id);
         const title = new PIXI.Text(data.name, this.font.title);
         title.anchor.x = 0.5;

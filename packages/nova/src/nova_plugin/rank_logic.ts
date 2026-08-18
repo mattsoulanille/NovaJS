@@ -231,27 +231,65 @@ export function rankContribute(active: Iterable<string> | undefined,
 }
 
 /**
- * The PriceMod multiplier to apply at a stellar owned by `govtId`, as a
- * percentage. "A value of 100 equals 100% of original price (i.e. prices are
- * unchanged). Higher or lower values raise or lower the prices
- * correspondingly."
+ * The PriceMod multiplier to apply at a stellar OWNED BY `govtId`, as a
+ * percentage. "Used to modify the prices of items and ships at planets owned
+ * by the affiliated government. A value of 100 equals 100% of original price
+ * (i.e. prices are unchanged). Higher or lower values raise or lower the
+ * prices correspondingly."
+ *
+ * "Owned by" is read as ownership only — a stellar whose gövt IS the rank's
+ * AffilGovt. An ally's worlds are not the affiliated government's worlds, and
+ * every other rank privilege that reaches beyond ownership says so in its own
+ * words (0x0800 is explicitly "ships ALLIED with the affiliated govt", while
+ * 0x0200 is "all planets OF the affiliated government").
  *
  * ZERO MEANS UNUSED, not free. Ten stock ranks (nova:145, 146, 147, and
  * 151-158) leave PriceMod at 0 while carrying real privileges; reading that
  * literally would hand the player every ship and outfit in Federation and
- * Hypergate space for nothing. The same "0 or -1 means unused" convention the
- * Bible states outright for SalaryCap.
+ * Hypergate space for nothing. Extra Outfits agrees: its ränk 162 "GRN Racing
+ * License" and 177 "Have Access to Stargate System" are PriceMod 0 with an
+ * AffilGovt, and neither is meant to be a shopping spree. The same "0 or -1
+ * means unused" convention the Bible states outright for SalaryCap.
  *
- * With several affiliated ranks active, the BEST (lowest) modifier wins: the
- * privileges of a rank are cumulative, and the Bible frames PriceMod as the
- * "special deal" a distinguished player gets.
+ * SEVERAL AFFILIATED RANKS COMPOUND: each one's percentage is applied in
+ * turn, so two 50% ranks give 25% and not 50%. This is the reading the
+ * plug-in data forces, and the evidence is unusually sharp. Extra Outfits'
+ * Spica Shipyard — the station the player pays 10,000,000 cr to build (oütf
+ * extra-outfits:552 "Buy Station", OnPurchase `b20001 N800 K167 K168 K169
+ * K170 K171`) — is spöb extra-outfits:802, gövt extra-outfits:302 "SSC"
+ * (Spica Shipyard Corp.). Four of the five ranks that purchase grants,
+ * extra-outfits:168-171, are otherwise EMPTY resources: no name, no ConvName,
+ * no salary, no flags, weight 1 — nothing but AffilGovt extra-outfits:302 and
+ * PriceMod 1. The author's intent is plainly "ships and outfits at my own
+ * shipyard are free" (you already paid to construct them), and four identical
+ * 1% ranks only reach free if they compound:
+ *
+ *   1 rank  -> 1%      of 12,000,000 (the Leviathan, the dearest hull there)
+ *                      = 120,000 cr
+ *   2 ranks -> 0.01%   =   1,200 cr
+ *   3 ranks -> 0.0001% =      12 cr
+ *   4 ranks -> 1e-6 %  =    0.12 cr -> 0 cr, and a 0 hire fee
+ *
+ * Four is exactly the smallest count that floors the most expensive ship in
+ * the plug-in to zero — a coincidence far too tight to be one. Taking the
+ * best (lowest) modifier instead would leave that hull at 120,000 cr and its
+ * hire fee at 12,000 cr, which is not what the feature does.
+ *
+ * Compounding is also the only rule that behaves sanely as ranks accumulate:
+ * stock nova:128 (85%) and nova:129 (60%) are both Federation and both
+ * permanent, so a player who finishes the Fed string holds both, and "each
+ * rank is a further discount" is what a promotion is supposed to feel like.
+ *
+ * The result is a percentage and may be fractional (1e-6 above). Only IEEE
+ * multiply/divide are used, over `ranksForGovt`'s totally ordered list, so
+ * every peer computes the identical double.
  */
 export function rankPriceMod(active: Iterable<string> | undefined,
     getRank: RankLookup, govtId: string | null | undefined): number {
     let mod = 100;
     for (const rank of ranksForGovt(active, getRank, govtId)) {
         if (rank.priceMod > 0) {
-            mod = Math.min(mod, rank.priceMod);
+            mod = mod * rank.priceMod / 100;
         }
     }
     return mod;

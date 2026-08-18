@@ -42,6 +42,7 @@ import { ControlledByComponent } from '../nova_plugin/ship_control.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
+import { modifiedPrice } from './price_mod.js';
 
 /**
  * The fraction of the current ship-and-outfits value that is credited
@@ -74,6 +75,13 @@ export interface ShipPurchaseContext {
      * refuses the purchase while one is out. See judgment call 8.
      */
     deployedCounts?: ReadonlyMap<string, number>;
+    /**
+     * The ränk PriceMod percentage in force at the docked stellar
+     * (price_mod.ts). Absent means 100 -- prices unchanged. It scales the NEW
+     * hull's price only; the trade-in valuation stays on "original cost" (see
+     * judgment call 9).
+     */
+    priceMod?: number;
 }
 
 /*
@@ -157,6 +165,16 @@ export interface ShipPurchaseContext {
  *    mounted, so the magazine capacity is zero and the fighter is absorbed
  *    on docking without a refund. The graceful-loss path is the fallback,
  *    not the plan.
+ *
+ * 9. ränk PriceMod SCALES THE NEW HULL, NOT THE TRADE-IN. The Bible's
+ *    PriceMod "modif[ies] the prices of items and ships at planets owned by
+ *    the affiliated government", and the price of a ship is what the shipyard
+ *    asks for it. The trade-in is not a price but a valuation of the player's
+ *    own property, and the Bible pins it to "25% of the ORIGINAL cost of your
+ *    current ship and upgrades" -- so a discount rank must not also devalue
+ *    what the player brings in. Nothing can be farmed either way: the
+ *    trade-in only ever offsets a purchase and is clamped at zero (judgment
+ *    call 4), so it never pays out cash. See price_mod.ts.
  */
 
 /** Whether this outfit survives a ship trade (oütf flag 0x0004). */
@@ -202,12 +220,23 @@ export function tradeInValue(context: ShipPurchaseContext): number {
 }
 
 /**
- * The credits the player is actually charged for `newShip`: its price
+ * `newShip`'s asking price at this shipyard: its shïp Cost after the docked
+ * stellar's ränk PriceMod (price_mod.ts). This is the figure the grid's "Ship
+ * Price" line shows and the one shipPurchasePrice deducts the trade-in from,
+ * so the display and the charge can never disagree.
+ */
+export function shipListPrice(newShip: ShipData,
+    context: ShipPurchaseContext): number {
+    return modifiedPrice(newShip.price, context.priceMod);
+}
+
+/**
+ * The credits the player is actually charged for `newShip`: its asking price
  * less the trade-in, never below zero (judgment call 4).
  */
 export function shipPurchasePrice(newShip: ShipData,
     context: ShipPurchaseContext): number {
-    return Math.max(0, newShip.price - tradeInValue(context));
+    return Math.max(0, shipListPrice(newShip, context) - tradeInValue(context));
 }
 
 export type ShipDenialReason = 'fightersDeployed' | 'credits';
@@ -367,7 +396,8 @@ export const CARRIED_COMPONENTS: readonly Component<any>[] = [
  */
 export function purchaseContextFrom(entity: Entity, currentShip: ShipData,
     getOutfit: (id: string) => OutfitData | undefined,
-    deployedCounts?: DeployedOutfitCounts): ShipPurchaseContext {
+    deployedCounts?: DeployedOutfitCounts,
+    priceMod?: number): ShipPurchaseContext {
     const outfitsState = entity.components.get(OutfitsStateComponent);
     const outfits = new Map([...outfitsState ?? []].map(
         ([id, { count }]) => [id, count]));
@@ -377,6 +407,7 @@ export function purchaseContextFrom(entity: Entity, currentShip: ShipData,
         getOutfit,
         credits: entity.components.get(CreditsComponent)?.credits ?? 0,
         deployedCounts: deployedCounts?.(outfits.keys()),
+        priceMod,
     };
 }
 

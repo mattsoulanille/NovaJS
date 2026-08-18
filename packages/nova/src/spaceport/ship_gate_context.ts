@@ -10,6 +10,7 @@ import {
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { GameDateComponent } from '../nova_plugin/player_state_plugin.js';
 import { RankLookup, rankContribute } from '../nova_plugin/rank_logic.js';
+import { stellarPriceMod } from './price_mod.js';
 import { ShipyardContext, ShipyardStellar } from './shipyard_stock_rules.js';
 
 /**
@@ -21,6 +22,10 @@ import { ShipyardContext, ShipyardStellar } from './shipyard_stock_rules.js';
  * day). This module assembles that context once so the two venues can
  * never read it differently; the gates themselves live in
  * shipyard_stock_rules.ts.
+ *
+ * It also resolves the ränk PriceMod in force at the stellar (price_mod.ts),
+ * which is not a gate but belongs here for the same reason: the shipyard's
+ * ship prices and the bar's hire fees must be bent by the same number.
  */
 
 /** What the caller must supply beyond the player entity itself. */
@@ -77,5 +82,10 @@ export function shipGateContext(entity: Entity | undefined,
         day: dayNumber(entity?.components.get(GameDateComponent)
             ?? getDefaultGameDate()),
         stellarId: sources.stellarId ? numericId(sources.stellarId) : null,
+        // The ränk PriceMod of this stellar's OWNING govt (price_mod.ts),
+        // resolved here so the shipyard's grid prices and the bar's hire
+        // fees are bent by exactly the same number.
+        priceMod: stellarPriceMod(entity, sources.getRank,
+            sources.planet?.govt),
     };
 }
