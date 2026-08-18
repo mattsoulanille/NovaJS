@@ -102,8 +102,18 @@ export const ShipObjectiveType = t.type({
     complete: t.boolean,
     /** The goal can no longer be achieved; fail the mission on landing. */
     failed: t.boolean,
-    /** OnShipDone has not run yet (runs at the next date advance — the
-     * first jump or landing after the goal completes). */
+    /**
+     * The ship goal has just completed and OnShipDone has not run yet
+     * (it runs at the next date advance — the first jump or landing
+     * after the goal completes).
+     *
+     * ALSO THE DISPLAY'S CUE for the mïsn ShipDoneText, which the
+     * original shows at this very moment rather than at that landing:
+     * the owner's client watches this flag and puts the text on screen
+     * in flight (display/mission_ship_done_plugin.ts). Reading it is
+     * player-local and changes nothing here — only runShipDoneIfPending
+     * clears it.
+     */
     shipDonePending: t.boolean,
     /** Live tracked mission ships (uuid -> per-ship flags). Cleared by
      * the owner's client before it re-enters a system. */

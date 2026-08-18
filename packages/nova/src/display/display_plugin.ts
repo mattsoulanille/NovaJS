@@ -28,6 +28,7 @@ import { ShipPhysicsDisplayPlugin } from "./ship_physics_display_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
 import { SpaceportPlugin } from "./spaceport_plugin.js";
 import { BoardingDisplayPlugin } from "./boarding_plugin.js";
+import { MissionShipDonePlugin } from "./mission_ship_done_plugin.js";
 import { ShipMissionOfferPlugin } from "./ship_mission_offer_plugin.js";
 import { CameraFocus, Space } from "./space_resource.js";
 import { Stage } from "./stage_resource.js";
@@ -114,6 +115,10 @@ export const Display: Plugin = {
         // dialogs): each of them calls presentShipOffer, which needs the
         // shared offer popup this plugin owns.
         await world.addPlugin(ShipMissionOfferPlugin);
+        // Owns the ShipDoneText popup, which BoardingDisplayPlugin below
+        // presents through for board/rescue goals — so it must be built
+        // first, for the same reason ShipMissionOfferPlugin is.
+        await world.addPlugin(MissionShipDonePlugin);
         await world.addPlugin(HailDialogPlugin);
         await world.addPlugin(SpaceportPlugin);
         // After the spaceport so the plunder/capture dialogs render over
@@ -144,6 +149,7 @@ export const Display: Plugin = {
         await world.removePlugin(BoardingDisplayPlugin);
         await world.removePlugin(SpaceportPlugin);
         await world.removePlugin(HailDialogPlugin);
+        await world.removePlugin(MissionShipDonePlugin);
         await world.removePlugin(ShipMissionOfferPlugin);
         await world.removePlugin(MissionInfoPlugin);
         await world.removePlugin(PlayerInfoPlugin);

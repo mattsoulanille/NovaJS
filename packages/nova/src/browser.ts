@@ -83,6 +83,7 @@ import { FormationComponent, formationSlotPosition } from "./nova_plugin/npc_ai_
 import { makeNpcShip } from "./nova_plugin/npc_spawn_plugin.js";
 import { buildMissionShipSpawns } from "./nova_plugin/mission_ship_spawn.js";
 import { advanceEntityDate, ensurePlayerStateComponents } from "./spaceport/mission_session.js";
+import { clearShipDoneTextShown } from "./spaceport/ship_done_shown.js";
 import { PendingEscortsComponent } from "./spaceport/pending_escorts.js";
 import {
     carriedBatchMustHold, carriedBatchSettled, CarriedEscort,
@@ -1727,6 +1728,11 @@ async function gateTransit(data: {
 }
 
 async function startGame() {
+    // "Which ShipDoneTexts has the player already read in flight" belongs
+    // to ONE pilot's session; a switch to another pilot (or a reset)
+    // starts with none read. Cheap insurance: an entry is normally
+    // consumed by the very next date advance anyway.
+    clearShipDoneTextShown();
     world = new World();
     world.resources.set(SimulationGameDataResource, simulationGameData);
     await world.addPlugin(multiplayer(multiRoom.join('main room')));

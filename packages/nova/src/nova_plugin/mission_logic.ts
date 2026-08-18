@@ -1324,6 +1324,15 @@ function completeMission(machinery: MissionMachineryContext,
  * control bits player-locally, so the earliest deterministic, owner-
  * driven point is the next date advance (jump or landing). Clears the
  * pending flag so it runs exactly once.
+ *
+ * THE TEXT IS NOT DEFERRED — only the set string is. The owner's DISPLAY
+ * shows the ShipDoneText at the moment the goal completes, off the same
+ * `shipDonePending` flag (display/mission_ship_done_plugin.ts), which is
+ * where the original shows it. The event queued here is still the one the
+ * landing popups render, so processInFlightMissions drops it when the
+ * client reports having already shown that text
+ * (spaceport/ship_done_shown.ts) — belt and braces for the case where it
+ * never got the chance (a quit between the two moments).
  */
 function runShipDoneIfPending(machinery: MissionMachineryContext,
     active: ActiveMission, mission: MissionData,

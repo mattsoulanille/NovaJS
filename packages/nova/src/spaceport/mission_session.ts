@@ -33,6 +33,7 @@ import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
 import { MissionUniverse } from './mission_universe.js';
 import { rankSalaryPerDay } from '../nova_plugin/rank_logic.js';
 import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
+import { takeShipDoneTextShown } from './ship_done_shown.js';
 
 /**
  * A player-local editing session over the mission-related components
@@ -561,7 +562,18 @@ async function processInFlightMissions(entity: Entity,
     // sweep: a mission that has already aborted must not also be failed.
     runPendingAutoAborts(session.machinery, session.outfits);
     failExpiredMissions(session.machinery, currentDay, session.outfits);
-    const events = session.commit();
+    // The ShipDoneText the deferred pass just queued has usually ALREADY
+    // been read: the display shows it the moment the goal completes, in
+    // flight, which is where the original shows it (see
+    // display/mission_ship_done_plugin.ts). Taking the mark drops the
+    // duplicate popup while leaving OnShipDone — the half that really is
+    // deferred — to run here as before. Nothing else about the event is
+    // suppressed, and a text the client never got to show (the player
+    // quit between the goal completing and this date advance) carries no
+    // mark, so it still surfaces at the next spaceport.
+    const events = session.commit().filter(event =>
+        !(event.type === 'shipDone'
+            && takeShipDoneTextShown(event.missionId)));
     if (events.length > 0) {
         const existing =
             entity.components.get(PendingMissionNoticesComponent) ?? [];

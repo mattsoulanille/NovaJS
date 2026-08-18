@@ -26,9 +26,22 @@ import {
     PLUNDER_LINE_HEIGHT,
 } from '../spaceport/hail_layout.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
+import {
+    boardShipDoneStatusOf, presentBoardShipDone, ShipDoneBoardStatus,
+} from './mission_ship_done_plugin.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { Stage } from './stage_resource.js';
+
+/**
+ * How long the plunder dialog is held back waiting for the simulation to
+ * settle a board/rescue goal ('missionWait'). The answer normally arrives
+ * within a frame or two — the credit and the boarding session are written
+ * by systems in the same simulation tick — so this is a ceiling, not a
+ * delay: about a second at 60fps, after which the ordinary plunder dialog
+ * opens.
+ */
+const SHIP_DONE_WAIT_FRAMES = 60;
 
 /**
  * The plunder (PICT 8515) and capture-assignment (PICT 8516) dialogs.
@@ -226,13 +239,20 @@ export function plunderDialogContent(boarding: BoardingState,
  * Which of the boarding dialogs owns the screen.
  *
  *  'none'       no session — nothing is up.
- *  'offer'      a board-triggered mission offer is being answered (përs
- *               Flags 0x0200); it comes FIRST and holds the others back,
- *               because the stock offer texts ARE the boarding narration.
- *  'offerOnly'  that offer has been answered, and it was the WHOLE
- *               boarding: nothing else is shown and the session is ended
- *               (see below).
+ *  'offer'      a board-triggered mission offer (përs Flags 0x0200) or a
+ *               mission's ShipDoneText is being read; it comes FIRST and
+ *               holds the others back, because those texts ARE the
+ *               boarding narration.
+ *  'offerOnly'  that text has been read, and it was the WHOLE boarding:
+ *               nothing else is shown and the session is ended (see
+ *               below).
  *  'capture'    the ship was taken; the assignment dialog is up.
+ *  'missionWait' the boarded hull is one of the local player's own
+ *               board/rescue special ships and the simulation has not yet
+ *               said what the boarding did to the goal. Nothing is shown
+ *               for those few frames, so the plunder table cannot flash
+ *               up and be replaced by the mission's ShipDoneText (see
+ *               display/mission_ship_done_plugin.ts).
  *  'plunder'    the ordinary case.
  *
  * ============================================================================
@@ -261,13 +281,17 @@ export function plunderDialogContent(boarding: BoardingState,
  * plunderDialogContent uses for the dialog's rules.
  */
 export type BoardingDialogPhase =
-    'none' | 'offer' | 'offerOnly' | 'capture' | 'plunder';
+    'none' | 'offer' | 'offerOnly' | 'capture' | 'missionWait' | 'plunder';
 
 export function boardingDialogPhase(boarding: BoardingState | undefined,
-    /** A mission offer for THIS boarding is on screen. */
+    /** A mission text for THIS boarding is on screen (a përs offer, or a
+     * mission's ShipDoneText). */
     offering: boolean,
-    /** A mission offer for THIS boarding has been made and answered. */
-    offerMade = false): BoardingDialogPhase {
+    /** A mission text for THIS boarding has been shown and dismissed. */
+    offerMade = false,
+    /** The boarded hull is one of the local player's own board/rescue
+     * special ships and the goal outcome has not arrived yet. */
+    settling = false): BoardingDialogPhase {
     if (!boarding) {
         return 'none';
     }
@@ -277,7 +301,13 @@ export function boardingDialogPhase(boarding: BoardingState | undefined,
     if (offerMade) {
         return 'offerOnly';
     }
-    return boarding.capture === 'succeeded' ? 'capture' : 'plunder';
+    if (boarding.capture === 'succeeded') {
+        return 'capture';
+    }
+    // After the capture check: a captured mission ship stops being one
+    // (convertToEscort drops its MissionShipComponent), so the prize
+    // dialog must not be held behind a goal that no longer exists.
+    return settling ? 'missionWait' : 'plunder';
 }
 
 /** One selectable action row. */
@@ -603,6 +633,32 @@ class CaptureAssignmentDialog {
  * close, and the 'plunderOfferOnly' edge is idempotent — the sim's action
  * system ends an already-ended session by deleting a component that is
  * already gone.
+ *
+ * ============================================================================
+ * A BOARDING THAT COMPLETES A MISSION'S SHIP GOAL (mïsn ShipGoal 2 / 5)
+ * ============================================================================
+ *
+ * The second thing a boarding can BE, rather than precede. When the hull
+ * is one of the local player's own special ships and boarding it completes
+ * the mission's ship goal, the mission's ShipDoneText is what the original
+ * shows — at that moment, in space (EVN Bible: "the desc to show when you
+ * complete the special ship goal"). It rides this same one-text-and-done
+ * path: `shipDone.status` is consulted every frame while the session is
+ * open, the plunder dialog is held back ('missionWait') until the
+ * simulation says what the boarding did to the goal, and when it says
+ * "complete" the text is presented on the shared popup and the boarding
+ * ends with it, through the very same 'plunderOfferOnly' action.
+ *
+ * THAT ACTION IS SAFE HERE, and deliberately so: endBoardingForOffer hands
+ * the hulk's plunder back only for a hull carrying a PersComponent, which
+ * a mission special ship never does (mission_ship_spawn stamps
+ * MissionShipComponent instead), so for these hulls it is an ordinary
+ * session end. That matters — the goal credit READS the `plundered`
+ * record, so handing it back would un-credit the boarding that just
+ * completed the goal.
+ *
+ * A hull with neither a përs offer nor a completing goal reaches neither
+ * path and gets the plunder dialog exactly as before.
  */
 class BoardingUi {
     readonly plunder: PlunderDialog;
@@ -616,6 +672,11 @@ class BoardingUi {
     private made = new Set<string>();
     /** Targets whose session we have already asked the sim to end. */
     private ended = new Set<string>();
+    /** Targets a ShipDoneText presentation has been started for. */
+    private shipDoneTried = new Set<string>();
+    /** Frames spent holding the plunder dialog back waiting for the sim
+     * to settle a board/rescue goal (see SHIP_DONE_WAIT_FRAMES). */
+    private settleFrames = 0;
 
     constructor(displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
@@ -624,7 +685,14 @@ class BoardingUi {
         /** Presents a boarding-triggered offer; the plugin wires this to
          * presentShipOffer. Omitted in specs that only drive the dialogs. */
         private offerMission?:
-            (targetUuid: string) => Promise<boolean>) {
+            (targetUuid: string) => Promise<boolean>,
+        /** The mission ShipDoneText half (see the class note); the plugin
+         * wires it to mission_ship_done_plugin. Omitted in specs that
+         * only drive the dialogs. */
+        private shipDone?: {
+            status: (targetUuid: string) => ShipDoneBoardStatus,
+            present: (targetUuid: string) => Promise<boolean>,
+        }) {
         this.plunder = new PlunderDialog(displayAssets, controlEvents, send);
         this.assignment =
             new CaptureAssignmentDialog(displayAssets, controlEvents, send);
@@ -659,9 +727,45 @@ class BoardingUi {
                 }
             });
         }
+        // The mission-goal text, once the përs offer has had its turn
+        // (they are mutually exclusive: `holding` covers the frames the
+        // offer promise is in flight, and a hull that offered one is
+        // finished with by `made`).
+        let settling = false;
+        if (boarding && this.shipDone
+            && this.holding !== boarding.target
+            && !this.made.has(boarding.target)
+            && !this.shipDoneTried.has(boarding.target)) {
+            const uuid = boarding.target;
+            const status = this.shipDone.status(uuid);
+            if (status === 'show') {
+                this.shipDoneTried.add(uuid);
+                this.holding = uuid;
+                void this.shipDone.present(uuid).then(shown => {
+                    if (shown) {
+                        // Shown and dismissed: that was the boarding.
+                        this.made.add(uuid);
+                    }
+                }).catch(e => {
+                    console.warn('Mission ship-done text failed:', e);
+                }).finally(() => {
+                    if (this.holding === uuid) {
+                        this.holding = undefined;
+                    }
+                });
+            } else if (status === 'wait') {
+                // Bounded: if the answer never comes (a mission ship the
+                // simulation stopped tracking, say), fall through to the
+                // ordinary plunder dialog rather than showing nothing for
+                // the rest of the session.
+                this.settleFrames++;
+                settling = this.settleFrames <= SHIP_DONE_WAIT_FRAMES;
+            }
+        }
         const phase = boardingDialogPhase(boarding,
             !!boarding && this.holding === boarding.target,
-            !!boarding && this.made.has(boarding.target));
+            !!boarding && this.made.has(boarding.target),
+            settling);
         switch (phase) {
             case 'none':
                 this.plunder.close();
@@ -673,6 +777,8 @@ class BoardingUi {
                 this.offered.clear();
                 this.made.clear();
                 this.ended.clear();
+                this.shipDoneTried.clear();
+                this.settleFrames = 0;
                 this.holding = undefined;
                 return;
             case 'offer':
@@ -698,6 +804,13 @@ class BoardingUi {
             case 'capture':
                 this.plunder.close();
                 this.assignment.open();
+                return;
+            case 'missionWait':
+                // Nothing on screen while the simulation settles the
+                // board/rescue goal; the next few frames either present
+                // the ShipDoneText or fall through to 'plunder'.
+                this.plunder.close();
+                this.assignment.close();
                 return;
             case 'plunder':
                 this.assignment.close();
@@ -744,7 +857,17 @@ export const BoardingDisplayPlugin: Plugin = {
         const ui = new BoardingUi(displayAssets, controls, send, screen,
             // përs Flags 0x0200: the boarding trigger for a ship-offered
             // mission. A no-op for every hull that isn't such a përs.
-            targetUuid => presentShipOffer(world, targetUuid, 'board'));
+            targetUuid => presentShipOffer(world, targetUuid, 'board'),
+            // mïsn ShipGoal 2/5: boarding one of your own special ships
+            // shows the mission's ShipDoneText. A no-op for every hull
+            // that isn't one (MissionShipDonePlugin must be built first —
+            // see display_plugin.ts).
+            {
+                status: targetUuid =>
+                    boardShipDoneStatusOf(world, targetUuid),
+                present: targetUuid =>
+                    presentBoardShipDone(world, targetUuid),
+            });
         stage.addChild(ui.plunder.container);
         stage.addChild(ui.assignment.container);
         world.resources.set(BoardingUiResource, ui);
