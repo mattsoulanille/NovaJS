@@ -17,7 +17,7 @@ import { ItemGrid, ItemTile } from './item_grid.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
-import { modifiedPrice } from './price_mod.js';
+import { hirePrice } from './escort_fees.js';
 import { shipGateContext } from './ship_gate_context.js';
 import {
     shipHireable, ShipyardContext, ShipyardStellar,
@@ -57,21 +57,11 @@ export async function noShipsForHire(
 }
 
 /**
- * The one-time fee to hire an escort: 10% of the ship's price.
- * Matches the original's observed behavior (a 300,000 cr Thunderhead
- * hires for 30,000 cr); the exact rule is not in the Bible.
- *
- * The 10% is taken on the price AFTER the docked stellar's ränk PriceMod
- * (price_mod.ts) — hiring is buying a ship's services, so a rank that makes
- * a hull free here makes hiring its pilot free too. That is exactly what
- * Extra Outfits' Spica Shipyard is for: the four PriceMod-1 ranks its "Buy
- * Station" outfit grants (extra-outfits:168-171, gövt extra-outfits:302)
- * compound to 1e-6 percent, so every hull the station builds hires for 0 cr
- * because the player already paid to construct it.
+ * The one-time fee to hire an escort — see escort_fees.ts, which also holds
+ * the DAILY wage that follows it, so the two cannot drift apart. Re-exported
+ * here because this dialog is where the fee is quoted.
  */
-export function hirePrice(ship: ShipData, priceMod?: number): number {
-    return Math.round(modifiedPrice(ship.price, priceMod) / 10);
-}
+export { hirePrice } from './escort_fees.js';
 
 /**
  * Who is doing the hiring: the landed player's entity (control bits,

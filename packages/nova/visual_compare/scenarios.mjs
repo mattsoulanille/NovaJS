@@ -574,7 +574,11 @@ export const scenarios = [
         description: 'The player-info dialog toggled with KeyP in flight. '
             + 'Compare the 8518/8519/8520 three-part frame, tab row and Done '
             + 'row against p_properties/general.png. Text values legitimately '
-            + 'differ (date, credits, ship).',
+            + 'differ (date, credits, ship), as do two rows by design: the '
+            + 'reference pilot\'s "Expenses: 3,300 credits per day" line is '
+            + 'absent here because this pilot has no escorts and no salaried '
+            + 'ränk (the line only appears when there is one), and our Shield '
+            + '/ Armor rows carry the ship\'s total points in parentheses.',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => { await driver.openPlayerInfo(page); },

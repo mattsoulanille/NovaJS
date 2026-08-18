@@ -308,7 +308,39 @@ export function rankPriceMod(active: Iterable<string> | undefined,
  */
 export function rankSalaryPerDay(active: Iterable<string> | undefined,
     getRank: RankLookup, credits: number): number {
-    let salary = 0;
+    const { income, expenses } =
+        rankSalaryBreakdown(active, getRank, credits);
+    return income - expenses;
+}
+
+/**
+ * The same day's salaries, split into what the ranks PAY the player and what
+ * they COST them — which the player-info dialog needs as two separate lines
+ * ("Income: N credits per day" / "Expenses: N credits per day", see
+ * spaceport/player_info.ts) and which nothing else may compute for itself:
+ * the number displayed has to be the number charged.
+ *
+ * A NEGATIVE Salary IS AN EXPENSE, and real data relies on it. Extra
+ * Outfits' ränk 167 is literally named "Shipyard Expenses (1000 per day)"
+ * and carries Salary -1000 with no AffilGovt — the running cost of the
+ * station its "Buy Station" outfit grants. The Bible's wording ("the number
+ * of credits that the affiliated government will pay the player, per day")
+ * does not exclude a negative, and the field is signed; a plug-in author
+ * charging upkeep through it is using the only lever there is.
+ *
+ * SalaryCap is applied exactly as the Bible states it, to both signs: it is
+ * a test on the player's cash at the start of the day ("the maximum amount
+ * of money the player can have before the affiliated government stops paying
+ * the salary"), with 0 or -1 meaning unused. On a negative salary that reads
+ * as "stop charging once the player is rich enough", which is odd but is
+ * what the field says; no stock or plug-in rank observed pairs a negative
+ * Salary with a cap, so nothing turns on it today.
+ */
+export function rankSalaryBreakdown(active: Iterable<string> | undefined,
+    getRank: RankLookup, credits: number):
+    { income: number, expenses: number } {
+    let income = 0;
+    let expenses = 0;
     for (const rank of activeRankData(active, getRank)) {
         if (rank.salary === 0) {
             continue;
@@ -316,9 +348,13 @@ export function rankSalaryPerDay(active: Iterable<string> | undefined,
         if (rank.salaryCap > 0 && credits >= rank.salaryCap) {
             continue;
         }
-        salary += rank.salary;
+        if (rank.salary > 0) {
+            income += rank.salary;
+        } else {
+            expenses -= rank.salary;
+        }
     }
-    return salary;
+    return { income, expenses };
 }
 
 /**

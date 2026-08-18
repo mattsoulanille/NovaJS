@@ -230,10 +230,17 @@ export const hailInfoScenarios = [
             + 'references. The frame is a fixed 413x227 on every page (8518 '
             + 'at screen 754,427 and 8520 at 754,614 in each capture), so the '
             + 'tab row, content pane and bottom strip are compared as three '
-            + 'separate bands. The reference\'s General page carries an '
-            + '"Expenses: N credits per day" row NovaJS has no state for '
-            + '(CONTENT gap); the Honors page is empty on our side because '
-            + 'ränk resources are not parsed yet.',
+            + 'separate bands. Two CONTENT differences are expected in the '
+            + 'pane band and are not chrome drift: the reference pilot has '
+            + 'hired escorts, so their General page carries an "Expenses: '
+            + '3,300 credits per day" row that this capture (a fresh pilot '
+            + 'with no escorts and no salaried ränk) correctly omits — the '
+            + 'row only appears when there is something to show, see '
+            + 'player_info.ts\'s budgetRows; and our Shield / Armor rows '
+            + 'carry the ship\'s total points in parentheses ("100% (150)") '
+            + 'where the original prints the percentage alone, a deliberate '
+            + 'addition (Matthew: "let\'s put the total shields / armor next '
+            + 'to Shield Status and Armor Status like we do for energy").',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => { await driver.openPlayerInfo(page); },
