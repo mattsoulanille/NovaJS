@@ -121,8 +121,18 @@ export const ESCORT_SELL_DEFAULT_FRACTION = 0.10;
  * re-exports it, so the bar's own callers are unchanged.)
  */
 export function hirePrice(ship: ShipData, priceMod?: number): number {
+    return hirePriceForPrice(ship.price, priceMod);
+}
+
+/**
+ * {@link hirePrice} on a bare price, for the callers that hold a NUMBER
+ * rather than a whole ShipData — chiefly the daily-expenses readout, which
+ * sums a fleet from what each escort's class costs.
+ */
+export function hirePriceForPrice(shipPrice: number,
+    priceMod?: number): number {
     return Math.round(
-        modifiedPrice(ship.price, priceMod) * ESCORT_HIRE_FRACTION);
+        modifiedPrice(shipPrice, priceMod) * ESCORT_HIRE_FRACTION);
 }
 
 /**
@@ -143,7 +153,21 @@ export function hirePrice(ship: ShipData, priceMod?: number): number {
  * ruling can be changed in one place.
  */
 export function escortDailyFee(ship: ShipData, priceMod?: number): number {
-    return Math.round(hirePrice(ship, priceMod) * ESCORT_DAILY_FRACTION);
+    return escortDailyFeeForPrice(ship.price, priceMod);
+}
+
+/**
+ * {@link escortDailyFee} on a bare ship PRICE.
+ *
+ * This is the form the daily Income/Expenses readout wants: it walks the
+ * player's escorts and has each class's price to hand, not a ShipData, and
+ * it must charge the exact figure the comm dialog quotes. Both go through
+ * this one arithmetic so the two readouts can never disagree by a credit.
+ */
+export function escortDailyFeeForPrice(shipPrice: number,
+    priceMod?: number): number {
+    return Math.round(
+        hirePriceForPrice(shipPrice, priceMod) * ESCORT_DAILY_FRACTION);
 }
 
 /**

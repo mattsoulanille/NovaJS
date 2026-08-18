@@ -26,8 +26,9 @@ import { RankLookup, rankPriceMod } from '../nova_plugin/rank_logic.js';
  *                                    credits actually deducted)
  *   outfitter  outfitter_rules.ts   outfitPrice, outfitResaleValue,
  *                                   sellRefund, maxBuyCount, canBuyOutfit
- *   bar/hire   hire_escort.ts       hirePrice (10% of the MODIFIED ship
- *                                   price, so a free ship hires for nothing)
+ *   bar/hire   escort_fees.ts       hirePrice (10% of the MODIFIED ship
+ *                                   price, so a free ship hires for nothing;
+ *                                   hire_escort.ts re-exports it)
  *
  * NOT modified: the ship TRADE-IN valuation (shipyard_rules' tradeInValue).
  * The Bible pins that to "25% of the ORIGINAL cost of your current ship and

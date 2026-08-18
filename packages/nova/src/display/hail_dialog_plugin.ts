@@ -74,7 +74,14 @@ import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
-import { HailContext, HailDialog } from '../spaceport/hail_dialog.js';
+import {
+    EscortManagement, escortReadout, HailContext, HailDialog,
+} from '../spaceport/hail_dialog.js';
+import {
+    escortDailyFee, escortSellValue, escortUpgradeCost,
+} from '../spaceport/escort_fees.js';
+import { escortProvenance } from '../nova_plugin/player_escort.js';
+import { EscortAction } from '../nova_plugin/escort_action.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { displayName } from '../nova_plugin/display_name.js';
@@ -90,7 +97,8 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  *
  * Everything the dialog can DO to the simulation is dispatched as a display-
  * world event that browser.ts forwards to the deterministic bridge:
- *  - HailRequestEvent  -> bridge.hail(action)          (assist / bribe)
+ *  - HailRequestEvent   -> bridge.hail(action)         (assist / bribe)
+ *  - EscortActionEvent  -> bridge.escortAction(action) (release/sell/upgrade)
  * The dialog itself never touches the sim, keeping every effect on the
  * input-record path that all peers replay identically.
  *
@@ -100,13 +108,15 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  * bottom-left status line and the can't-do beep, the same feedback a blocked
  * landing gets. See hailIsUnanswerable / refuseHail.
  *
- * ESCORT COMM: the escort variant is a hired-escort MANAGEMENT dialog
- * (Upgrade / Sell / Release / Close Channel per hail/hail_escort.png), not a
- * fleet-command panel — commanding escorts is the keyboard escort-controls'
- * job. Upgrade / Sell / Release all depend on unmodeled state (shipyard
- * upgrade transfer, escort resale value, per-escort release — a future
- * per-escort-control feature) and render as greyed seams; only Close Channel
- * is live, so the escort dialog issues NO simulation effect today.
+ * ESCORT COMM: the escort variant MANAGES one of the player's own escorts
+ * (Upgrade / Sell / Release / Close Channel per hail/hail_escort.png and
+ * hail/hail_captured_escort.png), not a fleet-command panel — commanding
+ * escorts is the keyboard escort-controls' job. All three functions are live.
+ * Their prices come off the escort's CURRENT ship class through
+ * spaceport/escort_fees.ts — the same module nova_plugin/escort_action.ts
+ * re-derives them from sim-side — and each press leaves as an
+ * EscortActionEvent, so the escort dialog's effects ride the same
+ * input-record path every other simulation effect does.
  */
 
 const HailDialogResource = new Resource<HailDialog>('HailDialog');
@@ -116,6 +126,21 @@ const HailControlsSubscription =
 /** Fired when a hail dialog action needs a deterministic sim effect. */
 export const HailRequestEvent =
     new EcsEvent<{ action: HailAction }>('HailRequestEvent');
+
+/**
+ * Fired when the escort-management box's Upgrade / Sell / Release is
+ * pressed. browser.ts forwards it to bridge.escortAction, which STAGES an
+ * upgrade's target ship class before scheduling the input record — which is
+ * exactly why this is a separate event from HailRequestEvent rather than a
+ * fourth HailAction: an escort upgrade is an async, game-data-staging
+ * dispatch and a hail is not.
+ *
+ * The record carries INTENT ONLY (which escort, and which class an upgrade
+ * claims to be going to). Prices, provenance and eligibility are all
+ * recomputed by applyEscortAction against synced state.
+ */
+export const EscortActionEvent =
+    new EcsEvent<{ action: EscortAction }>('EscortActionEvent');
 
 function getPlayerShip(world: World) {
     for (const [uuid, entity] of world.entities) {
@@ -720,6 +745,13 @@ export const HailDialogPlugin: Plugin = {
 
         let currentTarget: string | undefined;
         let currentReplies = ASSIST_REPLIES_FALLBACK;
+        // The escort offer the OPEN channel was computed with. Kept beside
+        // `currentTarget` for the same reason `currentReplies` is: the
+        // button handlers are synchronous, so what the box drew has to be
+        // remembered rather than re-derived on the press. It is only ever
+        // used to name the upgrade's target CLASS — every figure is
+        // recomputed sim-side (escort_action.ts).
+        let currentEscort: EscortManagement | undefined;
         const dialog = new HailDialog(displayAssets, controls, {
             requestAssistance: () => {
                 // ONE call decides and answers: the ship's line comes back
@@ -741,6 +773,40 @@ export const HailDialogPlugin: Plugin = {
                 if (currentTarget) {
                     world.emit(HailRequestEvent,
                         { action: { kind: 'bribe', target: currentTarget } });
+                }
+            },
+            // The escort box's three management functions. Each becomes one
+            // EscortActionEvent naming the escort; an UPGRADE also names the
+            // class the box priced, so the bridge can stage that class's
+            // game data before the record is scheduled (an upgrade must be
+            // applied synchronously on every peer). The simulation checks
+            // the named class against the escort's own shïp UpgradeTo, so
+            // this can only ever confirm what the escort already says.
+            //
+            // An action the OPEN CONTEXT does not offer is dropped here as
+            // well as in the sim: no upgrade without an upgrade offer, no
+            // sale without a sale offer. The dialog greys those buttons, so
+            // this is belt and braces against a keyboard route or a stale
+            // context — never the only guard.
+            escortAction: (action: 'upgrade' | 'sell' | 'release') => {
+                const target = currentTarget;
+                const escort = currentEscort;
+                if (!target || !escort) {
+                    return;
+                }
+                let record: EscortAction | undefined;
+                if (action === 'release') {
+                    record = { kind: 'releaseEscort', target };
+                } else if (action === 'sell' && escort.sell) {
+                    record = { kind: 'sellEscort', target };
+                } else if (action === 'upgrade' && escort.upgrade) {
+                    record = {
+                        kind: 'upgradeEscort', target,
+                        toShip: escort.upgrade.toShip,
+                    };
+                }
+                if (record) {
+                    world.emit(EscortActionEvent, { action: record });
                 }
             },
             // Local client UI beep through the shared display audio path
@@ -802,6 +868,7 @@ export const HailDialogPlugin: Plugin = {
                 }
                 currentTarget = computed.target;
                 currentReplies = computed.replies;
+                currentEscort = computed.context.escort;
                 // Re-add to move above later-added containers (spaceport).
                 stage.addChild(dialog.container);
                 dialog.container.position.set(

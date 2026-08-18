@@ -345,9 +345,14 @@ describe('boarding in a live world', () => {
                     expect(target.components
                         .has(ReturnWhenTargetRemovedComponent)).toBeFalse();
                     // Durable ownership is stamped at once, not a tick
-                    // later, so nothing can retire it in between.
+                    // later, so nothing can retire it in between — and it
+                    // carries the PROVENANCE that makes this hull sellable
+                    // and wage-free (player_escort.ts).
                     expect(target.components.get(PlayerEscortComponent))
-                        .toEqual({ player: BOARDER, parent: BOARDER });
+                        .toEqual({
+                            player: BOARDER, parent: BOARDER,
+                            provenance: 'captured',
+                        });
                 });
 
             for (const command of ['attack', 'defend', 'formation',

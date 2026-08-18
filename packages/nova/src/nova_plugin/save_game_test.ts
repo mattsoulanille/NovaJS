@@ -20,7 +20,9 @@ import { ArmorComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
 import { FormationComponent } from './npc_ai_plugin.js';
-import { PlayerEscortComponent } from './player_escort.js';
+import {
+    escortProvenance, PlayerEscortComponent,
+} from './player_escort.js';
 import { Stat } from './stat.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
@@ -606,6 +608,48 @@ describe('save_game escorts', () => {
         expect(restored[0].entity.components.get(ArmorComponent)?.current)
             .toBe(41);
     });
+
+    it('round-trips a CAPTURED escort\'s provenance', async () => {
+        // How an escort was acquired decides whether it draws a wage and
+        // whether it can be sold (player_escort.ts). It rides the durable
+        // ownership marker, so it has to survive the save like the rest of
+        // it — a prize taken by boarding must still be a prize after a
+        // quit and reload, or its resale value quietly evaporates.
+        const { serializer, makeEscort } = fixture;
+        const prize = await makeEscort(ship => ship.components.set(
+            PlayerEscortComponent,
+            { player: PLAYER, parent: PLAYER, provenance: 'captured' }));
+        const hire = await makeEscort(ship => ship.components.set(
+            PlayerEscortComponent,
+            { player: PLAYER, parent: PLAYER, provenance: 'hired' }));
+
+        const toSave = collectEscortsToSave(PLAYER,
+            [['prize', prize], ['hire', hire]], []);
+        const restored = saveAndLoad(
+            extractSavedEscorts(toSave, serializer), serializer);
+        // (The roster is swept in uuid order — 'hire' before 'prize'.)
+        expect(restored.map(({ uuid, entity }) => [uuid, entity.components
+            .get(PlayerEscortComponent)?.provenance]))
+            .toEqual([['hire', 'hired'], ['prize', 'captured']]);
+    });
+
+    it('restores an escort saved BEFORE provenance existed, and reads it '
+        + 'as hired', async () => {
+            // The field is additive on a component that older saves
+            // already carry, so an escort without one has to decode. It
+            // reads as 'hired' — the reading that cannot be turned into
+            // cash — so no pre-existing save can be mined for credits.
+            const { serializer, makeEscort } = fixture;
+            const legacy = await makeEscort(ship => ship.components.set(
+                PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+            const restored = saveAndLoad(extractSavedEscorts(
+                collectEscortsToSave(PLAYER, [['old', legacy]], []),
+                serializer), serializer);
+            const marker = restored[0].entity.components
+                .get(PlayerEscortComponent);
+            expect(marker).toEqual({ player: PLAYER, parent: PLAYER });
+            expect(escortProvenance(restored[0].entity)).toBe('hired');
+        });
 
     it('includes a batch waiting on a carried jump', async () => {
         const { serializer, makeEscort } = fixture;

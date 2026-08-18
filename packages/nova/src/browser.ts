@@ -34,7 +34,7 @@ import { SimulationTimeResource } from "./display/simulation_time.js";
 import { PixiAppResource } from "./display/pixi_app_resource.js";
 import { ResizeEvent } from "./display/screen_size_plugin.js";
 import { SetJumpRouteEvent } from "./display/starmap_plugin.js";
-import { HailRequestEvent } from "./display/hail_dialog_plugin.js";
+import { EscortActionEvent, HailRequestEvent } from "./display/hail_dialog_plugin.js";
 import { LeaveSpaceportEvent, OpenSpaceportEvent } from "./display/spaceport_plugin.js";
 import { Stage } from "./display/stage_resource.js";
 import { AddEnemyEvent, DebugActionEvent } from "./display/status_bar.js";
@@ -1426,11 +1426,18 @@ async function enterSystem({ entity, to, uuid }:
         void newSimulationBridge.setPlayerJumpRoute(data.route);
     });
     // Hail dialog actions become deterministic input records: assist/bribe go
-    // through bridge.hail. (The escort comm dialog is management-only and
-    // issues no simulation effect — commanding escorts is the keyboard
-    // escort-controls' job.)
+    // through bridge.hail.
     newDisplayWorld.events.get(HailRequestEvent).subscribe(({ data }) => {
         void newSimulationBridge.hail(data.action);
+    });
+    // The escort comm dialog's MANAGEMENT functions (release / sell /
+    // upgrade — nova_plugin/escort_action.ts) take the same road, on their
+    // own bridge call because an upgrade must STAGE its target ship class's
+    // game data before the record is scheduled, exactly as an accepted
+    // mission stages its ships. (Commanding escorts is still the keyboard
+    // escort-controls' job; this dialog does not issue fleet orders.)
+    newDisplayWorld.events.get(EscortActionEvent).subscribe(({ data }) => {
+        void newSimulationBridge.escortAction(data.action);
     });
     // A mission accepted from a përs ship in flight (mïsn AvailLoc 2).
     // The display resolved the whole acceptance against a detached copy
