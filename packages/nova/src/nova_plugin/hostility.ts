@@ -9,7 +9,7 @@ import { OwnerComponent } from './weapon_components.js';
 import { isInFlock } from './flock.js';
 import { GovtComponent } from './govt_component.js';
 import { shipDisposition, targetCornerStyle } from './iff_plugin.js';
-import { NpcComponent } from './npc_ai_plugin.js';
+import { isPacifiedToward, NpcComponent } from './npc_ai_plugin.js';
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
 import { LegalRecordsComponent } from './reputation_plugin.js';
 import { ActiveRanksComponent } from './ncb_plugin.js';
@@ -60,6 +60,21 @@ import { TargetComponent } from './target_component.js';
  *     transitively following them (see flock.ts) always show the
  *     friendly corners, ahead of every political/behavioral tier: your
  *     own ships are yours regardless of government.
+ *  2b. BOUGHT OFF: a ship this player has bribed to leave them alone
+ *     (beg for mercy — NpcComponent.pacifiedFrom/pacifiedUntil, set by
+ *     hail_plugin's applyHail) reads NEUTRAL to the briber, ahead of both
+ *     the behavioral and the political tiers, for as long as the reprieve
+ *     runs. Matthew: "when an NPC accepts a beg-for-mercy bribe, its IFF
+ *     should become neutral again so PD weapons don't shoot at it and
+ *     anger it again." That is not cosmetic — the point defense prey
+ *     filter (point_defense.ts) shoots hostile fighters, so a pirate that
+ *     stayed red after taking the money was hosed down by the player's own
+ *     turrets, which voided the reprieve (NpcDecisionSystem drops
+ *     pacifiedFrom the moment the briber damages it) and restarted the
+ *     fight the bribe had just bought off. The political tier alone can
+ *     never clear it: a pirate government is hostile by its flags forever.
+ *     It is per-briber, so only the ship that paid sees the change; every
+ *     other pilot still sees a pirate.
  *  3. Behavioral: a ship that is *currently attacking the player* shows
  *     hostile corners regardless of politics — a brave trader fighting
  *     the player back, or a neutral-govt warship the player provoked,
@@ -101,6 +116,16 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     }
     if (isInFlock(targetUuid, playerUuid, getEntity)) {
         return 'friendly';
+    }
+    // Bought off (beg for mercy): neutral to the briber until the reprieve
+    // lapses, ahead of both the behavioral and the political tiers — see
+    // tier 2b above. Not 'friendly': the money buys indifference, not an
+    // ally, and the ship goes back to hostile the moment it lapses or the
+    // player shoots it (NpcDecisionSystem clears pacifiedFrom on damage from
+    // the briber, which flips this tier straight back off).
+    if (isPacifiedToward(targetEntity.components.get(NpcComponent),
+        playerUuid, now)) {
+        return targetCornerStyle('neutral', false);
     }
     const govtId = targetEntity.components.get(GovtComponent)?.id;
     // Display-side getCached: a cold cache shows neutral corners for a

@@ -27,6 +27,7 @@ import { PersComponent } from "../nova_plugin/pers_plugin.js";
 import { MissionShipComponent } from "../nova_plugin/mission_ship_plugin.js";
 import { targetIdentity } from "./target_identity.js";
 import { DisabledComponent } from "../nova_plugin/disabled_component.js";
+import { isPacifiedToward, NpcComponent } from "../nova_plugin/npc_ai_plugin.js";
 import { ActiveRanksComponent } from "../nova_plugin/ncb_plugin.js";
 import { PlanetComponent, PlanetDataComponent, PlanetTargetComponent, stellarClearanceFor, StellarBribesComponent } from "../nova_plugin/planet_plugin.js";
 import { landable } from "../nova_plugin/landable.js";
@@ -950,12 +951,14 @@ const DrawRadar = new System({
         StatusBarResource, MovementStateComponent,
     new Query([UUID, MovementStateComponent, ShipDataComponent,
         Optional(CloakActiveComponent), Optional(CloakComponent),
-        Optional(GovtComponent), Optional(DisabledComponent)] as const),
+        Optional(GovtComponent), Optional(DisabledComponent),
+        Optional(NpcComponent)] as const),
     new Query([UUID, MovementStateComponent, PlanetDataComponent,
         PlanetComponent] as const),
-        SimulationGameDataResource, GetEntity, PlayerShipSelector] as const,
+        SimulationGameDataResource, GetEntity, UUID,
+        PlayerShipSelector] as const,
     step(radarTime, { time }, simTime, statusBar, { position }, ships, planets,
-        gameData, entity) {
+        gameData, entity, playerUuid) {
         if (!radarTime) {
             radarTime = { lastTime: 0 };
             entity.components.set(RadarTime, radarTime);
@@ -1005,11 +1008,22 @@ const DrawRadar = new System({
             const playerRecords = hasIff
                 ? entity.components.get(LegalRecordsComponent) : undefined;
             const shipColors = new Map<string, number>();
-            for (const [uuid, , , , , shipGovt, disabled] of visibleShips) {
+            for (const [uuid, , , , , shipGovt, disabled, npc]
+                of visibleShips) {
                 const govt = (hasIff && shipGovt)
                     ? gameData.data.Govt.getCached(shipGovt.id) : undefined;
+                // A ship this player has BOUGHT OFF (beg for mercy) reads
+                // neutral until the reprieve lapses, the same tier the
+                // target corners and the point defense prey filter honour
+                // (hostility.ts's styleForTarget) — Matthew: "its IFF should
+                // become neutral again". A pirate's politics never soften,
+                // so without this the blip stayed red for a truce the player
+                // had already paid for. Judged on the MIRRORED SIM CLOCK,
+                // which is what stamped pacifiedUntil; this world's
+                // TimeResource is wall-clock epoch ms and would call every
+                // reprieve expired.
                 const color = shipBlipColor(
-                    hasIff
+                    hasIff && !isPacifiedToward(npc, playerUuid, simTime.time)
                         ? shipDisposition(govt, playerGovt, playerRecords)
                         : 'neutral',
                     hasIff, disabled !== undefined);

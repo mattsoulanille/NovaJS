@@ -8,11 +8,15 @@ import {
 } from '../display/status_bar_content.js';
 import {
     busyResponseText, BUSY_RESPONSE_COUNT, BUSY_RESPONSE_FALLBACK,
-    BUSY_RESPONSE_FIRST_INDEX, HAIL_RESPONSE_TABLE,
+    BUSY_RESPONSE_FIRST_INDEX, channelOpenText, CHANNEL_OPEN_COUNT,
+    CHANNEL_OPEN_FALLBACK, CHANNEL_OPEN_FIRST_INDEX, genericGreetings,
+    GENERIC_GREETING_COUNT, GENERIC_GREETING_FALLBACK,
+    GENERIC_GREETING_FIRST_INDEX, greetingText, HAIL_RESPONSE_TABLE,
     HOSTILE_RESPONSE_COUNT, HOSTILE_RESPONSE_FALLBACK,
-    HOSTILE_RESPONSE_FIRST_INDEX, MISC_STRING_TABLE, NO_NEED_RESPONSE_COUNT,
-    NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
-    NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX,
+    HOSTILE_RESPONSE_FIRST_INDEX, mercyAcceptedText, MERCY_ACCEPTED_COUNT,
+    MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX, MISC_STRING_TABLE,
+    NO_NEED_RESPONSE_COUNT, NO_NEED_RESPONSE_FALLBACK,
+    NO_NEED_RESPONSE_FIRST_INDEX, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX,
 } from './hail.js';
 
 // These assertions run against the real Nova game data (Nova_Data). They
@@ -81,6 +85,104 @@ describe('StringTable against real Nova data', () => {
             expect(table.strings[NO_RESPONSE_INDEX]).toBe(NO_RESPONSE_FALLBACK);
             expect(table.strings[NO_RESPONSE_INDEX + 1]).toBe(
                 'Unable to send hail - target ship is entering hyperspace.');
+        });
+
+    it('pins the CHANNEL-OPEN group a ship answers a fresh hail with '
+        + '(STR# 3000, indices 0-4)', async () => {
+            // hail/hail.png: a freshly hailed Terrapin's response well reads
+            // "Channel open." with the Greetings button still unpressed.
+            // Opening a channel is not a greeting — this is the group the
+            // ship comm now OPENS with, the twin of STR# 3002's stellar
+            // channel-open group.
+            const gameData = await getIntegrationGameData();
+            const table =
+                await gameData.data.StringTable.get(HAIL_RESPONSE_TABLE);
+            const open = table.strings.slice(CHANNEL_OPEN_FIRST_INDEX,
+                CHANNEL_OPEN_FIRST_INDEX + CHANNEL_OPEN_COUNT);
+            expect(open).toEqual([
+                'Channel open.',
+                'Communications channel open.',
+                'Communications interlink established.',
+                'Hailing frequencies open.',
+                'Hailing channel ready.',
+            ]);
+            // The hardcoded fallback must stay in step with the data.
+            expect(table.strings[CHANNEL_OPEN_FIRST_INDEX])
+                .toBe(CHANNEL_OPEN_FALLBACK);
+            // The NEXT group is "No response." — an off-by-five would open
+            // every channel by telling the player nobody answered.
+            expect(table.strings[CHANNEL_OPEN_FIRST_INDEX + 5])
+                .toBe('No response.');
+            // Every seed lands on a real line of the group.
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(open).toContain(channelOpenText(table.strings, seed));
+            }
+        });
+
+    it('pins the generic greeting group the Greetings button falls back on '
+        + '(STR# 3000, indices 45-49)', async () => {
+            // hail/greetings.png: the SAME Terrapin, after Greetings is
+            // pressed, answers "Greetings." — index 47 here. It carries no
+            // government, so this stock group is where a govt-less ship's
+            // greeting has to come from.
+            const gameData = await getIntegrationGameData();
+            const table =
+                await gameData.data.StringTable.get(HAIL_RESPONSE_TABLE);
+            const group = table.strings.slice(GENERIC_GREETING_FIRST_INDEX,
+                GENERIC_GREETING_FIRST_INDEX + GENERIC_GREETING_COUNT);
+            expect(group).toEqual([
+                'Nice to meet you.',
+                'Hello there.',
+                'Greetings.',
+                'Hi there.',
+                'Howdy.',
+            ]);
+            expect(group).toContain('Greetings.');
+            expect(table.strings[GENERIC_GREETING_FIRST_INDEX])
+                .toBe(GENERIC_GREETING_FALLBACK);
+            // The neighbours are the dismissive replies (50-54, "Whatever.")
+            // and the "wasting my time" group (65-69) — an off-by-five would
+            // make every friendly hello a brush-off.
+            expect(table.strings[GENERIC_GREETING_FIRST_INDEX + 5])
+                .toBe('Whatever.');
+            // And a govt-less ship really does reach the reference's line
+            // through greetingText, not through the synthetic fallback.
+            expect(greetingText({
+                genericGreetings: genericGreetings(table.strings),
+                talkative: true, seed: 2,
+            })).toBe('Greetings.');
+        });
+
+    it('pins the bribe-accepted group (STR# 3000, indices 135-139)',
+        async () => {
+            // What a ship says once a beg-for-mercy demand is PAID. The comm
+            // dialog shows it in place of closing the channel, so the player
+            // hears the deal land and the Beg For Mercy button survives its
+            // own press.
+            const gameData = await getIntegrationGameData();
+            const table =
+                await gameData.data.StringTable.get(HAIL_RESPONSE_TABLE);
+            const group = table.strings.slice(MERCY_ACCEPTED_FIRST_INDEX,
+                MERCY_ACCEPTED_FIRST_INDEX + MERCY_ACCEPTED_COUNT);
+            expect(group).toEqual([
+                "Okay, I'll leave you alone.",
+                "All right, I'll leave you alone.",
+                "Okay, I'll leave you alone.",
+                "All right, I'll leave you alone.",
+                "Okay, I'll leave you alone.",
+            ]);
+            expect(table.strings[MERCY_ACCEPTED_FIRST_INDEX])
+                .toBe(MERCY_ACCEPTED_FALLBACK);
+            // The group BEFORE is the "Huh?" confusion set and the one after
+            // is the paid-help offer — an off-by-five would have a bribed
+            // pirate answer "Huh?" or demand money all over again.
+            expect(table.strings[MERCY_ACCEPTED_FIRST_INDEX - 5]).toBe('Huh?');
+            expect(table.strings[MERCY_ACCEPTED_FIRST_INDEX + 5]).toBe(
+                "All right, I'll give you some help, but it'll cost you.");
+            for (const seed of [0, 1, 2, 3, 4, 987654]) {
+                expect(group)
+                    .toContain(mercyAcceptedText(table.strings, seed));
+            }
         });
 
     it('pins the ship-comm busy responses (STR# 3000, indices 80-84)',
