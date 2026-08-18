@@ -21,7 +21,15 @@ import { Resource } from 'nova_ecs/resource';
 export interface DockedLiveStatus {
     /** Working credit balance (trade center / outfitter / bar-gambling). */
     credits?: number;
-    /** Working cargo hold (trade center). */
+    /**
+     * Working cargo hold (trade center only).
+     *
+     * ALREADY FLEET-WIDE: the status bar's cargo readout reports the whole
+     * fleet (spaceport/fleet_cargo.ts), and a venue that publishes working
+     * cargo must therefore publish the working FLEET — its escort holds are
+     * uncommitted, so nothing else can see them. When this is unset the
+     * status bar folds the landed roster in itself.
+     */
     cargo?: ReadonlyMap<string, number>;
     /** Working cargo capacity in tons, when an outfit changed it. */
     cargoCapacity?: number;
@@ -39,6 +47,17 @@ export interface DockedLiveStatus {
 export class DockedShip {
     /** Set by the spaceport while a venue is open; cleared when it closes. */
     liveStatus?: () => DockedLiveStatus;
+    /**
+     * The client's landed-escort roster for this landing, and the docked
+     * ship's uuid to attribute it by. The status bar's cargo readout is
+     * fleet-wide, and while docked the escorts are on this roster rather
+     * than in any world, so it is the only place to find them.
+     *
+     * A getter, not a snapshot: escorts keep touching down while the
+     * player shops, and each one's hold joins the readout as it arrives.
+     */
+    landedEscorts?: () => readonly { player: string, entity: Entity }[];
+    playerUuid?: string;
     constructor(public readonly entity: Entity) { }
 }
 

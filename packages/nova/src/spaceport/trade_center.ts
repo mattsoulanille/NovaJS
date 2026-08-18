@@ -26,6 +26,7 @@ import {
     FleetHold, fleetBuy, fleetBuyQuantity, fleetCargo, fleetFreeSpace,
     fleetHeld, fleetSell, fleetSellQuantity, freeSpaceLines,
     maxFleetBuyQuantity, maxFleetSellQuantity, quantityColumnHeader,
+    sumFleetCargo,
 } from './fleet_cargo.js';
 import {
     LINE_HEIGHT, ROW_HEIGHT, SELECTION_COLOR, TRADE, TRADE_ROW_TEXT_DY,
@@ -537,24 +538,26 @@ export class TradeCenter extends Menu<Entity> {
      * cargo hold, capacity, and credit balance, so the bar's Free and Credits
      * readouts follow each buy/sell before Done commits them.
      *
-     * THE PLAYER'S SHIP ONLY, deliberately (Matthew's instruction): the
-     * status bar's cargo lines and "Free:" describe the hull the player is
-     * flying, matching this dialog's own "in your ship" line.
+     * THE WHOLE FLEET, summed here rather than by the status bar: the
+     * bar's readout is fleet-wide (Matthew's ruling — see
+     * fleet_cargo.ts's sumFleetCargo and the references it cites), and the
+     * escort holds this dialog is editing are UNCOMMITTED, so the bar
+     * cannot read them off the roster entities as it does for every other
+     * venue. Reporting the working fleet is what keeps "Free:" in step
+     * with each buy and sell.
      *
-     * Noted for the record, because it is the one place the references
-     * disagree: trade_center/earth_trade_center.png shows "Free: 390"
-     * beside "in your ship: 15 tons / in your fleet: 390 tons", and
-     * 390_medical_supplies.png (same pilot, after the purchase) shows
-     * "Med: 390" on a 15-ton hull — so stock Nova's status bar appears to
-     * report FLEET totals. Switching it would mean teaching the in-flight
-     * DrawStatusBarCargo system to sum escorts as well; left as a
-     * follow-up rather than a half-fleet-aware readout.
+     * Note this is deliberately NOT the dialog's own "in your ship" line,
+     * which stays the hull's alone.
      */
     dockedStatus(): DockedLiveStatus {
+        const fleet = sumFleetCargo([
+            { cargo: this.state.cargo, capacity: this.state.cargoCapacity },
+            ...this.holds,
+        ]);
         return {
             credits: this.state.credits.credits,
-            cargo: this.state.cargo,
-            cargoCapacity: this.state.cargoCapacity,
+            cargo: fleet.cargo,
+            cargoCapacity: fleet.capacity,
         };
     }
 

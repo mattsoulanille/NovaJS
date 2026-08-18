@@ -1,6 +1,6 @@
 import { PlanetData } from "novadatainterface/planet_data";
 import { StatusBarData, StatusBarDataArea } from "novadatainterface/status_bar_data";
-import { GetEntity, RunQuery, UUID } from "nova_ecs/arg_types";
+import { Entities, GetEntity, RunQuery, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
 import { Position, wrapNearestDelta } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
@@ -36,6 +36,10 @@ import { canJump, jumpRadiusFor } from "../nova_plugin/jump_readiness.js";
 import { CargoComponent } from "../nova_plugin/cargo_plugin.js";
 import { CreditsComponent, MissionsComponent } from "../nova_plugin/player_state_plugin.js";
 import { OutfitsState } from "../nova_plugin/outfit_plugin.js";
+import { Entity } from "nova_ecs/entity";
+import {
+    entityCarriesFleetCargo, FleetMemberCargo, sumFleetCargo,
+} from "../spaceport/fleet_cargo.js";
 import { DockedShipResource } from "./docked_ship.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { SingletonComponent } from "nova_ecs/world";
@@ -1355,17 +1359,90 @@ export function cargoDisplayOf(cargo: ReadonlyMap<string, number> | undefined,
     return { free, lines, special: specialCargoSummary(specialNames) };
 }
 
+/**
+ * The player's cargo-carrying escorts among a set of candidate entities,
+ * as {@link FleetMemberCargo} contributions to the bar's fleet readout.
+ *
+ * Anything whose ship or outfit data has not cached yet is SKIPPED rather
+ * than counted at zero, so the readout never briefly under-reports a
+ * loaded freighter's capacity as free space it does not have; the
+ * getCached calls warm the data, and the next frame includes it.
+ *
+ * Display-only, and it reads only serializer-registered components
+ * (ShipComponent, OutfitsStateComponent, CargoComponent, and the markers
+ * entityCarriesFleetCargo tests), so it sees exactly what every peer's
+ * display world sees.
+ */
+export function fleetCargoMembers(escorts: Iterable<Entity>,
+    gameData: SimulationGameDataInterface): FleetMemberCargo[] {
+    const members: FleetMemberCargo[] = [];
+    for (const entity of escorts) {
+        const ship = entity.components.get(ShipComponent);
+        if (!ship) {
+            continue;
+        }
+        const shipData = gameData.data.Ship.getCached(ship.id);
+        if (!entityCarriesFleetCargo(entity, shipData)) {
+            continue;
+        }
+        const capacity = cargoCapacityOf(ship.id,
+            entity.components.get(OutfitsStateComponent), gameData);
+        if (capacity === undefined) {
+            continue;
+        }
+        members.push(
+            { cargo: entity.components.get(CargoComponent), capacity });
+    }
+    return members;
+}
+
+/**
+ * The player's escorts that are PRESENT IN THIS WORLD, in uuid order.
+ *
+ * Presence is the whole filter: an escort left behind in another system,
+ * or one still sitting on a planet the player took off from, is not in
+ * this world's entity map and so contributes nothing — which is the
+ * behavior we want, since its hold is not with the fleet. Fighters in the
+ * player's own bays and mission ships are dropped later, by
+ * fleetCargoMembers.
+ *
+ * PlayerEscortComponent.player is the durable ownership marker (it
+ * survives landings and jumps), so a carrier escort's own wing is
+ * included too — it belongs to the player just as directly.
+ */
+export function playerEscortEntities(entities: ReadonlyMap<string, Entity>,
+    playerUuid: string): Entity[] {
+    const found: [string, Entity][] = [];
+    for (const [uuid, entity] of entities) {
+        if (entity.components.get(PlayerEscortComponent)?.player
+            === playerUuid) {
+            found.push([uuid, entity]);
+        }
+    }
+    found.sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
+    return found.map(([, entity]) => entity);
+}
+
 const DrawStatusBarCargo = new System({
     name: 'DrawStatusBarCargo',
     args: [StatusBarResource, Optional(CargoComponent), Optional(CreditsComponent),
         ShipComponent, Optional(OutfitsStateComponent),
-        SimulationGameDataResource, PlayerShipSelector] as const,
-    step(statusBar, cargo, credits, ship, outfits, gameData) {
+        SimulationGameDataResource, Entities, UUID,
+        PlayerShipSelector] as const,
+    step(statusBar, cargo, credits, ship, outfits, gameData, entities, uuid) {
         const capacity = cargoCapacityOf(ship.id, outfits, gameData);
         if (capacity === undefined) {
             return; // Ship/outfit data not cached yet.
         }
-        const { free, lines, special } = cargoDisplayOf(cargo, capacity, gameData);
+        // The FLEET's cargo, not just this hull's (Matthew's ruling; see
+        // spaceport/fleet_cargo.ts's sumFleetCargo).
+        const fleet = sumFleetCargo([
+            { cargo, capacity },
+            ...fleetCargoMembers(
+                playerEscortEntities(entities, uuid), gameData),
+        ]);
+        const { free, lines, special } =
+            cargoDisplayOf(fleet.cargo, fleet.capacity, gameData);
         statusBar.drawCargo(free, credits?.credits ?? 0, lines, special);
     }
 });
@@ -1407,13 +1484,29 @@ const DrawDockedStatus = new System({
         if (!ship) {
             return;
         }
-        const cargo = live.cargo ?? entity.components.get(CargoComponent);
         const capacity = live.cargoCapacity ?? cargoCapacityOf(
             ship.id, entity.components.get(OutfitsStateComponent), gameData);
         if (capacity === undefined) {
             return; // Ship/outfit data not cached yet.
         }
-        const { free, lines, special } = cargoDisplayOf(cargo, capacity, gameData);
+        // Docked, the fleet's escorts are on the client's landed roster
+        // rather than in any world. A venue that publishes working cargo
+        // (only the trade center) has ALREADY summed its holds into it —
+        // it has to, because those holds are uncommitted — so the roster
+        // is folded in only for the venues that don't.
+        const fleet = live.cargo !== undefined
+            ? { cargo: live.cargo, capacity }
+            : sumFleetCargo([
+                { cargo: entity.components.get(CargoComponent), capacity },
+                ...fleetCargoMembers(
+                    (docked.landedEscorts?.() ?? [])
+                        .filter(({ player }) => docked.playerUuid === undefined
+                            || player === docked.playerUuid)
+                        .map(({ entity: escort }) => escort),
+                    gameData),
+            ]);
+        const { free, lines, special } =
+            cargoDisplayOf(fleet.cargo, fleet.capacity, gameData);
         statusBar.drawCargo(free, credits, lines, special);
     }
 });

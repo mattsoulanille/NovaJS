@@ -356,26 +356,79 @@ export interface FleetEscortEntry {
 }
 
 /**
- * Whether one landed escort can carry the fleet's trade goods.
+ * Whether one of the player's ships can carry the fleet's trade goods.
  *
- * Excluded, in order: escorts belonging to another player (multiplayer
- * rosters are shared), BAY-LAUNCHED FIGHTERS (a deployed fighter is not a
- * freighter no matter what its hull's InherentAI says — the Bible's rule
- * is about ships "used to carry cargo when they are the player's
- * escorts"), mission ships (never the player's property), and any hull
- * whose InherentAI is not 1 or 2.
+ * Excluded: BAY-LAUNCHED FIGHTERS (a deployed fighter is not a freighter
+ * no matter what its hull's InherentAI says — the Bible's rule is about
+ * ships "used to carry cargo when they are the player's escorts"),
+ * mission ships (never the player's property), and any hull whose
+ * InherentAI is not 1 or 2.
+ *
+ * Shared by the exchange's holds and the status bar's fleet readout, so
+ * the tonnage the bar reports is exactly the tonnage the exchange trades.
+ */
+export function entityCarriesFleetCargo(entity: Entity,
+    shipData: ShipData | undefined): boolean {
+    const components = entity.components;
+    if (components.has(ReturnWhenTargetRemovedComponent)
+        || components.has(MissionShipComponent)) {
+        return false;
+    }
+    return shipData !== undefined && carriesCargo(shipData);
+}
+
+/**
+ * {@link entityCarriesFleetCargo} for a roster entry, additionally
+ * skipping escorts belonging to another player (multiplayer rosters are
+ * shared).
  */
 export function escortCarriesFleetCargo(entry: FleetEscortEntry,
     playerUuid: string | undefined, shipData: ShipData | undefined): boolean {
     if (playerUuid !== undefined && entry.player !== playerUuid) {
         return false;
     }
-    const components = entry.entity.components;
-    if (components.has(ReturnWhenTargetRemovedComponent)
-        || components.has(MissionShipComponent)) {
-        return false;
+    return entityCarriesFleetCargo(entry.entity, shipData);
+}
+
+/**
+ * One ship's contribution to a fleet-wide readout: what it is carrying
+ * and how much it could carry.
+ */
+export interface FleetMemberCargo {
+    cargo?: ReadonlyMap<string, number>;
+    capacity: number;
+}
+
+/**
+ * The fleet's combined manifest and capacity, for the STATUS BAR's cargo
+ * panel.
+ *
+ * RULING (Matthew): "'Free''s total in the status bar should include the
+ * fleet." The references agree — trade_center/earth_trade_center.png
+ * reads "Free: 390" beside a hull with 15 tons free, and
+ * 390_medical_supplies.png (the same pilot, one purchase later) reads
+ * "Med: 390" on that 15-ton hull. So both the per-commodity lines and the
+ * free figure are fleet-wide, which is also the only way the player can
+ * see what their freighters are hauling.
+ *
+ * Members are summed in the order given (the player's own ship first),
+ * so the manifest's line order is stable. Mission cargo can only ever be
+ * the player's own, so the "Special:" summary derived from this map is
+ * unaffected by the fold.
+ */
+export function sumFleetCargo(members: readonly FleetMemberCargo[]):
+    { cargo: Cargo, capacity: number } {
+    const cargo: Cargo = new Map();
+    let capacity = 0;
+    for (const member of members) {
+        capacity += member.capacity;
+        for (const [key, tons] of member.cargo ?? []) {
+            if (tons > 0) {
+                cargo.set(key, (cargo.get(key) ?? 0) + tons);
+            }
+        }
     }
-    return shipData !== undefined && carriesCargo(shipData);
+    return { cargo, capacity };
 }
 
 /**

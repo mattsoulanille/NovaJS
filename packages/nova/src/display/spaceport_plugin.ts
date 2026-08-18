@@ -98,6 +98,10 @@ const OpenSpaceportSystem = new System({
         // keeps drawing its credits/fuel/cargo, and let the spaceport push
         // each venue's live working state through it per-transaction.
         const dockedShip = new DockedShip(ship);
+        // ...and the roster, so the bar's fleet-wide cargo readout can
+        // see the escorts' holds while they are out of every world.
+        dockedShip.landedEscorts = landedEscorts;
+        dockedShip.playerUuid = uuid;
         dockedHolder.current = dockedShip;
         spaceport.setDockedShip(dockedShip);
 
