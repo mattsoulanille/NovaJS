@@ -29,7 +29,7 @@ import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_p
 import { ShipControlEvent, ShipControlStateComponent } from './ship_control.js';
 import { TargetComponent } from './target_component.js';
 import {
-    shortestSuicideReachOfStates, suicideWeaponInReach,
+    shortestSuicideReachOfStates, suicideWeaponInReachState,
 } from './weapon_range.js';
 import { WeaponsStateComponent, WeaponState } from './weapons_state.js';
 
@@ -506,7 +506,7 @@ export const EscortCommandBehaviorSystem = new System({
                 // until the shot can actually connect — see
                 // weapon_range.ts.
                 weapon.firing = inRange
-                    && suicideWeaponInReach(weaponData, distanceSquared);
+                    && suicideWeaponInReachState(weapon, distanceSquared);
             }
         };
         const root = escortParent(entity);

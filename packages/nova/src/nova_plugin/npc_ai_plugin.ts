@@ -48,7 +48,7 @@ import { SourceComponent } from './weapon_components.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
 import { heldInSystem, SystemHoldComponent, SystemHoldType } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
-import { suicideWeaponInReach } from './weapon_range.js';
+import { suicideWeaponInReachState } from './weapon_range.js';
 import { WeaponsStateComponent } from './weapons_state.js';
 
 /**
@@ -1730,7 +1730,7 @@ const NpcFireControlSystem = new System({
             // practice a suicide weapon reaches the field on a bay
             // fighter, and every bay fighter is an escort.)
             weapon.firing =
-                suicideWeaponInReach(weaponData, distanceSquared);
+                suicideWeaponInReachState(weapon, distanceSquared);
         }
     },
     after: [NpcDecisionSystem],

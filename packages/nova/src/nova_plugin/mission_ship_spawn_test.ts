@@ -127,8 +127,8 @@ describe('buildMissionShipSpawns', () => {
         }
     });
 
-    it('holds every goal but chase-off in the system', async () => {
-        for (const goal of [GOAL_NONE, GOAL_DESTROY, GOAL_DISABLE,
+    it('holds every goal but chase-off and none in the system', async () => {
+        for (const goal of [GOAL_DESTROY, GOAL_DISABLE,
             GOAL_BOARD, GOAL_ESCORT, GOAL_OBSERVE]) {
             const player = makePlayer(makeObjective({ goal, total: 1 }));
             const [ship] = await buildMissionShipSpawns(player, OWNER,
@@ -137,6 +137,16 @@ describe('buildMissionShipSpawns', () => {
                 .withContext(`goal ${goal}`)
                 .toEqual({ reason: 'missionGoal' });
         }
+    });
+
+    it('does not hold a GOAL_NONE ship: nothing would ever release it', async () => {
+        // Ambushers and scenery have no goal, so `complete` never flips
+        // for them and a hold would outlive the whole mission (review r14
+        // M2). They behave like any other ship of their düde.
+        const player = makePlayer(makeObjective({ goal: GOAL_NONE, total: 1 }));
+        const [ship] = await buildMissionShipSpawns(player, OWNER,
+            'nova:128', makeGameData(), makeUniverse());
+        expect(ship.components.has(SystemHoldComponent)).toBeFalse();
     });
 
     it('holds a rescue target for its OWN more specific reason', async () => {

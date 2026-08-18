@@ -9,8 +9,7 @@ import { FiringGroupComponent } from './firing_group.js';
 import { auxShipsMatchSystem, SystemInfo } from './mission_ship_logic.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import {
-    GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, ShipObjective, shipsToSpawn,
-} from './mission_ship_state.js';
+    GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, ShipObjective, shipsToSpawn, GOAL_NONE } from './mission_ship_state.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
 import {
     applyStartsDisabledData,
@@ -258,7 +257,11 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     }
 
     const npc = ship.components.get(NpcComponent);
-    if (options.goal !== GOAL_CHASE_OFF) {
+    // GOAL_NONE ships (ambushers, scenery) have no goal to keep them here
+    // and nothing that would ever release a hold — they behave like any
+    // other ship of their düde (review r14 M2). Chase-off ships must be
+    // free to leave: leaving is the goal.
+    if (options.goal !== GOAL_CHASE_OFF && options.goal !== GOAL_NONE) {
         // Goal targets must stick around to be fought/boarded/observed.
         //
         // TWO MECHANISMS, because there are two ways out. Pushing

@@ -4,7 +4,8 @@ import {
     getDefaultProjectileWeaponData, WeaponData,
 } from 'novadatainterface/weapon_data';
 import {
-    shortestSuicideReach, suicideWeaponInReach, weaponReach,
+    shortestSuicideReach, shortestSuicideReachOfStates, suicideWeaponInReach,
+    suicideWeaponInReachState, weaponReach,
 } from './weapon_range.js';
 
 function projectile(over: Partial<ReturnType<
@@ -86,5 +87,41 @@ describe('shortestSuicideReach', () => {
 
     it('skips ids whose data is not cached yet', () => {
         expect(shortestSuicideReach(['not-loaded'], get)).toBeUndefined();
+    });
+});
+
+describe('synced-state forms (never getCached at decision time)', () => {
+    it('shortestSuicideReachOfStates picks the shortest suicideReach aboard', () => {
+        expect(shortestSuicideReachOfStates([
+            ['a', { suicideReach: 300 }],
+            ['b', {}],
+            ['c', { suicideReach: 124.5 }],
+        ])).toBe(124.5);
+    });
+
+    it('shortestSuicideReachOfStates is undefined with no suicide weapon', () => {
+        expect(shortestSuicideReachOfStates([['a', {}], ['b', {}]]))
+            .toBeUndefined();
+        expect(shortestSuicideReachOfStates([])).toBeUndefined();
+    });
+
+    it('shortestSuicideReachOfStates is order-independent', () => {
+        const forward = shortestSuicideReachOfStates(
+            [['a', { suicideReach: 5 }], ['b', { suicideReach: 2 }]]);
+        const backward = shortestSuicideReachOfStates(
+            [['b', { suicideReach: 2 }], ['a', { suicideReach: 5 }]]);
+        expect(forward).toBe(2);
+        expect(backward).toBe(2);
+    });
+
+    it('suicideWeaponInReachState holds a suicide weapon until in reach', () => {
+        const state = { suicideReach: 100 };
+        expect(suicideWeaponInReachState(state, 101 * 101)).toBeFalse();
+        expect(suicideWeaponInReachState(state, 100 * 100)).toBeTrue();
+        expect(suicideWeaponInReachState(state, 0)).toBeTrue();
+    });
+
+    it('suicideWeaponInReachState never restricts an ordinary weapon', () => {
+        expect(suicideWeaponInReachState({}, Infinity)).toBeTrue();
     });
 });

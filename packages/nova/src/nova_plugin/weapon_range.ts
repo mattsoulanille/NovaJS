@@ -127,3 +127,16 @@ export function shortestSuicideReachOfStates(
     }
     return shortest;
 }
+
+/**
+ * The synced-state form of suicideWeaponInReach: the fire trigger for a
+ * suicide weapon from WeaponState.suicideReach (copied from the data at
+ * derivation), so the decision never reads getCached — a cold cache on
+ * one peer must not hold a trigger a warm peer pulls (review r14 M1).
+ * A weapon with no suicideReach is not a suicide weapon: always true.
+ */
+export function suicideWeaponInReachState(
+    state: { suicideReach?: number }, distanceSquared: number): boolean {
+    const reach = state.suicideReach;
+    return reach === undefined || distanceSquared <= reach * reach;
+}

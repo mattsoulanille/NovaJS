@@ -18,7 +18,7 @@ import { CreditsComponent } from "../nova_plugin/player_state_plugin.js";
 import { cleanRecords, LegalRecords } from "../nova_plugin/reputation.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ShipComponent } from "../nova_plugin/ship_plugin.js";
-import { idPrefix } from "../nova_plugin/mission_logic.js";
+import { idPrefix, resolveNumberedResource } from "../nova_plugin/mission_logic.js";
 import { Button, ButtonClick } from "./button.js";
 import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
@@ -573,11 +573,16 @@ export class Outfitter extends Menu<Entity> {
             // the resulting state reaches the simulation.
             runNCBSet(expression, makeControlBitHooks(this.controlBits, {
                 outfits: this.outfits,
-                // Numeric ids in an outfit's own set string are scoped to
-                // the plug-in that defined it, exactly as the mission path
-                // scopes them (makeMissionSetHooks). Hard-coding "nova"
-                // here made a plug-in's `G472` grant the STOCK outfit 472.
-                resolveId: id => `${resourcePrefix}:${id}`,
+                // Numeric ids in an outfit's own set string resolve
+                // exactly as the mission path resolves them
+                // (resolveNumberedResource: the stock outfit if stock
+                // defines that number, else the writer plug-in's own).
+                // Hard-coding "nova" here once made a plug-in's `G472`
+                // grant the STOCK outfit 472; writer-only made a plug-in
+                // cron's `G135` miss the stock IR Missile (review r14 L2).
+                resolveId: id => resolveNumberedResource(id, resourcePrefix,
+                    globalId => MissionUniverse.shared(this.simulationData)
+                        .hasOutfit(globalId)),
             }), Math.random);
         } catch (error) {
             if (error instanceof NCBParseError) {

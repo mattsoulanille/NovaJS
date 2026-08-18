@@ -93,12 +93,19 @@ import { Entity } from 'nova_ecs/entity';
  * input record (mission_ship_spawn). Nothing here consults game data at
  * simulation time and nothing draws from the PRNG.
  */
+/** The reasons this build knows. */
+export type SystemHoldReason = 'shipOffer' | 'rescue' | 'missionGoal';
 export const SystemHoldType = t.type({
-    /** Why this ship is staying (see the module comment). */
-    reason: t.union([t.literal('shipOffer'), t.literal('rescue'),
-        t.literal('missionGoal')]),
+    /**
+     * Why this ship is staying (see the module comment). Encoded as a
+     * plain string, not a union of literals, so a new reason is an
+     * ADDITIVE change to the wire shape: a decoder that does not know
+     * the reason still decodes the component (review r14 M4).
+     */
+    reason: t.string,
 });
-export type SystemHold = t.TypeOf<typeof SystemHoldType>;
+export type SystemHold = Omit<t.TypeOf<typeof SystemHoldType>, 'reason'>
+    & { reason: SystemHoldReason };
 export const SystemHoldComponent =
     new Component<SystemHold>('SystemHoldComponent');
 
