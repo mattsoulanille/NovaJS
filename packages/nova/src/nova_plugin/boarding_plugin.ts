@@ -61,6 +61,7 @@ import {
 import { PlayerSoundEvent } from './sound_plugin.js';
 import { TargetComponent } from './target_component.js';
 import { PersComponent } from './pers_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 
 /** Interface beep when a plunder session opens (snd nova:390), heard only
  * by the boarding player (emitted targeted at the boarder). */
@@ -1129,6 +1130,15 @@ function convertToEscort(target: Entity, targetUuid: string,
     //    replacement on the next system entry and the prize is left alone
     //    — which is exactly the outcome asked for.
     target.components.delete(MissionShipComponent);
+    // ...and with the identity goes the UNFINISHED BUSINESS that pinned it
+    // to this system (system_hold.ts): the mission goal it was a target of,
+    // the rescue it was waiting for, the offer it was standing by to make.
+    // None of that survives the capture — the ship belongs to the player
+    // now, and a prize that could never leave the system it was taken in
+    // would be a strange thing to own. (The escort sweep would carry it
+    // anyway; this is about the day its escort command lapses and NPC AI
+    // takes the wheel again.)
+    target.components.delete(SystemHoldComponent);
     // Every other ship's MEMORY of this hull, so the fleet it just left
     // stops shooting at it (see clearHostilityToward)...
     clearHostilityToward(targetUuid, entities);

@@ -30,6 +30,7 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { ActiveMission, MissionsComponent } from './player_state_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 
 const LETHAL_DAMAGE = {
     shield: 1e9, armor: 1e9, ionization: 0, ionizationColor: 0,
@@ -370,6 +371,49 @@ describe('mission ships in the shared simulation', () => {
                 expect(activeObjective()!.satisfied).toBe(1);
                 expect(activeObjective()!.complete).toBeTrue();
             }, 30_000);
+
+        it('lets a boarded board-goal target go about its business again',
+            async () => {
+                // The in-system hold is about OUTSTANDING business (see
+                // system_hold.ts). The sample is aboard; the Hyperioid is
+                // an ordinary trader again and may fly home.
+                const { world, shipUuid, missionShipUuid, activeObjective } =
+                    await makeWorldWithMissionShip(GOAL_BOARD);
+                const ship = world.entities.get(missionShipUuid)!;
+                ship.components.set(SystemHoldComponent,
+                    { reason: 'missionGoal' });
+                for (let i = 0; i < 5; i++) {
+                    world.step();
+                }
+                expect(ship.components.has(SystemHoldComponent))
+                    .withContext('still held while the goal is open')
+                    .toBeTrue();
+
+                ship.components.set(BoardedComponent,
+                    { boarder: shipUuid, plundered: true });
+                for (let i = 0; i < 5; i++) {
+                    world.step();
+                }
+                expect(activeObjective()!.complete).toBeTrue();
+                expect(ship.components.has(SystemHoldComponent)).toBeFalse();
+            }, 30_000);
+
+        it('does not release a hold it did not place', async () => {
+            // 'shipOffer' and 'rescue' are released by their own owners;
+            // a settled objective must not reach past its own reason.
+            const { world, shipUuid, missionShipUuid, activeObjective } =
+                await makeWorldWithMissionShip(GOAL_BOARD);
+            const ship = world.entities.get(missionShipUuid)!;
+            ship.components.set(SystemHoldComponent, { reason: 'shipOffer' });
+            ship.components.set(BoardedComponent,
+                { boarder: shipUuid, plundered: true });
+            for (let i = 0; i < 5; i++) {
+                world.step();
+            }
+            expect(activeObjective()!.complete).toBeTrue();
+            expect(ship.components.get(SystemHoldComponent))
+                .toEqual({ reason: 'shipOffer' });
+        }, 30_000);
 
         it('fires the deferred auto-abort on that boarding: pay, fuel, '
             + 'and a pending abort', async () => {

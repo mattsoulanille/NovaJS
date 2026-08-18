@@ -274,10 +274,10 @@ function rescueBoarded(active: ActiveMission, owner: Entity,
  * npcPlunderEligible enforces that — but the goal must not depend on
  * that flag staying the way it is.
  *
- * GOAL_BOARD is still not OFFERED (mission_ship_state's goalSupported):
- * turning board missions on is a content decision, and the sibling
- * GOAL_RESCUE additionally needs the "spawns disabled and stays disabled"
- * mechanic. The evaluation half is now real and specced either way.
+ * GOAL_BOARD and GOAL_RESCUE are both OFFERED now (mission_ship_state's
+ * goalSupported), on top of this evaluation: rescue targets spawn as
+ * hulks and stay that way until boarded, and board targets stay in the
+ * system until they have been (mission_ship_spawn's 'missionGoal' hold).
  */
 const MissionShipTrackSystem = new System({
     name: 'MissionShipTrackSystem',
@@ -321,6 +321,20 @@ const MissionShipTrackSystem = new System({
                 .lengthSquared <= OBSERVE_RANGE * OBSERVE_RANGE) {
                 shipObserved(objective, uuid);
             }
+        }
+        // OUTSTANDING business only. A special ship is pinned in the
+        // system while its mission still wants something from it
+        // (mission_ship_spawn's 'missionGoal' hold); the moment the
+        // objective is settled — the sample is aboard, the bounty is
+        // collected, the goal has become unachievable — it is an ordinary
+        // ship again and may fly off. The other hold reasons are released
+        // by their own owners ('rescue' by rescueBoarded above,
+        // 'shipOffer' by ShipOfferHoldReleaseSystem), so only ours is
+        // touched here. See system_hold.ts.
+        if ((objective.complete || objective.failed)
+            && shipEntity.components.get(SystemHoldComponent)?.reason
+            === 'missionGoal') {
+            shipEntity.components.delete(SystemHoldComponent);
         }
     },
     after: [TimeSystem],

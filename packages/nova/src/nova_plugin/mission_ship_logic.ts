@@ -35,11 +35,10 @@ export function hasSpecialShips(mission: MissionData): boolean {
 
 /**
  * The offer gate: whether the engine supports this mission's
- * special-ship goal. Board (2) and rescue (5) goals require boarding,
- * which does not exist in the simulation — offering such a mission
- * would make it impossible to complete, so they stay suppressed.
- * Everything else (no goal, destroy, disable, escort, observe, chase
- * off) is evaluated by mission_ship_plugin.ts.
+ * special-ship goal. All seven are supported and evaluated by
+ * mission_ship_plugin.ts today (board and rescue included, since
+ * boarding is real now); the predicate remains as the one place a
+ * future unsupported goal would be listed. See goalSupported.
  */
 export function shipGoalOfferable(mission: MissionData): boolean {
     if (!hasSpecialShips(mission)) {

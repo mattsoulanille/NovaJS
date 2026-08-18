@@ -57,9 +57,25 @@ import { TargetComponent } from './target_component.js';
  *  - 2 (destroy enemy stellars): planet bombardment isn't modeled;
  *    standard AI (documented gap).
  *
- * Goal ships other than chase-off targets never auto-depart (their
- * NPC departure timer is pushed past any session); chase-off targets
- * keep natural timers and flee behavior, since leaving is the point.
+ * SPECIAL SHIPS WITH AN OUTSTANDING GOAL DO NOT LEAVE THE SYSTEM. The
+ * Bible does not say so in as many words, but ShipGoal 6 does: "Chase
+ * them off (either kill them or scare them into jumping out of the
+ * system)". A goal that is ABOUT making the ships leave is only a goal at
+ * all if the ships of the other goals — destroy, disable, board, escort,
+ * observe, rescue — stay put; otherwise every destroy target could
+ * quietly satisfy nothing by warping out, and the player would be left
+ * hunting a system that no longer contains their quarry.
+ *
+ * So goal ships other than chase-off targets get BOTH a suppressed
+ * departure timer (MISSION_SHIP_NO_DEPART_MS) and a SystemHoldComponent
+ * (system_hold.ts, reason 'missionGoal'), which between them close every
+ * route a ship has out of a system under its own power. Chase-off targets
+ * keep natural timers and flee behavior, since leaving is the point. Aux
+ * ships are pure atmosphere and keep ordinary NPC behavior throughout.
+ *
+ * The hold is released — by MissionShipTrackSystem — as soon as the
+ * objective is complete or failed, so a boarded sample-carrier or a
+ * chased-down bounty is free to go about its business again.
  */
 
 /** Sim time (ms) that never arrives: suppresses NPC auto-departure.
@@ -242,9 +258,32 @@ async function buildShip(ctx: SpawnContext, missionId: string,
     }
 
     const npc = ship.components.get(NpcComponent);
-    if (npc && options.goal !== GOAL_CHASE_OFF) {
-        // Goal targets must stick around to be fought/observed.
-        npc.departAt = MISSION_SHIP_NO_DEPART_MS;
+    if (options.goal !== GOAL_CHASE_OFF) {
+        // Goal targets must stick around to be fought/boarded/observed.
+        //
+        // TWO MECHANISMS, because there are two ways out. Pushing
+        // `departAt` past any session stops the TIMER-driven departure
+        // ("this ship has been here long enough"), and that is all it
+        // stops. The hold stops the ones that are not timer-driven:
+        //  - a trader with NOWHERE TO GO. The trader loop's fallback when
+        //    it cannot pick a stellar to fly to is to leave the system,
+        //    and it takes that branch on its FIRST think. That is the
+        //    "Take Hyperioid Sample" bug: More Blasters CHEAT mïsn 1000
+        //    puts a brave trader (düde nova:147) in NGC-1317, which has
+        //    no stellars at all, so the ship the player has to board
+        //    warped out about a sixtieth of a second after it appeared.
+        //  - a FLEE that reaches the rim, which jumps out (or, failing
+        //    that, despawns) without ever being a departure decision.
+        // See system_hold.ts, and mission_ship_hold_integration_test.ts.
+        if (npc) {
+            npc.departAt = MISSION_SHIP_NO_DEPART_MS;
+        }
+        // GOAL_RESCUE already carries its own hold (below/above), for its
+        // own reason; don't overwrite the more specific one.
+        if (options.goal !== GOAL_RESCUE) {
+            ship.components.set(SystemHoldComponent,
+                { reason: 'missionGoal' });
+        }
     }
     if (options.behavior === 0 && npc) {
         // Always attack the player: spawn already aggressed.

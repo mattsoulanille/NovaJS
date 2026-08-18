@@ -15,11 +15,17 @@ import {
     MissionShipUniverse,
 } from './mission_ship_spawn.js';
 import {
+    GOAL_BOARD,
     GOAL_CHASE_OFF,
     GOAL_DESTROY,
+    GOAL_DISABLE,
     GOAL_ESCORT,
+    GOAL_NONE,
+    GOAL_OBSERVE,
+    GOAL_RESCUE,
     ShipObjective,
 } from './mission_ship_state.js';
+import { SystemHoldComponent } from './system_hold.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
 import { ActiveMission, MissionsComponent } from './player_state_plugin.js';
 import { TargetComponent } from './target_component.js';
@@ -111,7 +117,37 @@ describe('buildMissionShipSpawns', () => {
             // Goal targets must not auto-depart.
             expect(ship.components.get(NpcComponent)?.departAt)
                 .toBe(MISSION_SHIP_NO_DEPART_MS);
+            // ...and must not leave by any of the routes the timer does
+            // not govern either (system_hold.ts). A suppressed departAt
+            // alone let "Take Hyperioid Sample"'s board target leave one
+            // tick after it spawned, because a trader with no stellar to
+            // fly to departs without ever consulting the timer.
+            expect(ship.components.get(SystemHoldComponent))
+                .toEqual({ reason: 'missionGoal' });
         }
+    });
+
+    it('holds every goal but chase-off in the system', async () => {
+        for (const goal of [GOAL_NONE, GOAL_DESTROY, GOAL_DISABLE,
+            GOAL_BOARD, GOAL_ESCORT, GOAL_OBSERVE]) {
+            const player = makePlayer(makeObjective({ goal, total: 1 }));
+            const [ship] = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', makeGameData(), makeUniverse());
+            expect(ship.components.get(SystemHoldComponent))
+                .withContext(`goal ${goal}`)
+                .toEqual({ reason: 'missionGoal' });
+        }
+    });
+
+    it('holds a rescue target for its OWN more specific reason', async () => {
+        // A rescue target is held because it is adrift waiting to be
+        // refuelled, and rescueBoarded releases it by that name.
+        const player = makePlayer(makeObjective(
+            { goal: GOAL_RESCUE, total: 1 }));
+        const [ship] = await buildMissionShipSpawns(player, OWNER,
+            'nova:128', makeGameData(), makeUniverse());
+        expect(ship.components.get(SystemHoldComponent))
+            .toEqual({ reason: 'rescue' });
     });
 
     it('spawns in a STACKED DUPLICATE of the frozen objective system '
@@ -239,6 +275,9 @@ describe('buildMissionShipSpawns', () => {
         const [ship] = await buildMissionShipSpawns(player, OWNER,
             'nova:128', makeGameData(), makeUniverse());
         expect(ship.components.get(NpcComponent)?.departAt).toBeUndefined();
+        // ...and no hold either: ShipGoal 6 is satisfied by scaring them
+        // into jumping out, so leaving is the whole point of them.
+        expect(ship.components.get(SystemHoldComponent)).toBeUndefined();
     });
 
     it('names ships from the mission ShipNameID list', async () => {
@@ -393,9 +432,14 @@ describe('buildMissionShipSpawns', () => {
                 owner: OWNER,
                 aux: true,
             });
-            // Aux ships keep natural AI and departure behavior.
+            // Aux ships keep natural AI and departure behavior. The
+            // Bible: "Auxiliary ships cannot be given specific
+            // instructions, and no goals can be set for them; they simply
+            // are 'normal' ships ... for the purpose of adding
+            // atmosphere". Nothing is outstanding, so nothing holds them.
             expect(ship.components.get(NpcComponent)?.departAt)
                 .toBeUndefined();
+            expect(ship.components.get(SystemHoldComponent)).toBeUndefined();
         }
     });
 });

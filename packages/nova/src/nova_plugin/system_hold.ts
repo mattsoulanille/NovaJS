@@ -34,8 +34,12 @@ import { Entity } from 'nova_ecs/entity';
  * the trader dwell loop (npc_ai_plugin), which keeps the entity in the
  * world; the remaining exits are death, and being SWEPT ALONG by a
  * jumping leader (EscortFollowJumpBeginSystem) or by an owner leaving the
- * system — neither of which a held ship is ever in a position to take,
- * because the people and rescue targets this marks fly alone.
+ * system — neither of which a held ship is ever in a position to take.
+ * The people and rescue targets this marks fly alone, and a mission
+ * special ship is excluded from the escort sweep outright
+ * (sweepableEscorts), even the ones flying formation on the player under
+ * ShipBehav 1; when their owner leaves, they are despawned rather than
+ * carried (MissionShipCleanupSystem), and respawned on arrival.
  *
  * THE HOLD IS RELEASED as soon as the business is done — that is the whole
  * point of it being state rather than a permanent property:
@@ -51,6 +55,25 @@ import { Entity } from 'nova_ecs/entity';
  *                (mïsn ShipGoal 5). Released by mission_ship_plugin's
  *                rescueBoarded, alongside the disable it lifts, so the
  *                refuelled trader is free to fly off and jump out.
+ *   'missionGoal' the ship is a mission SPECIAL ship whose ShipGoal is
+ *                still outstanding — destroy it, disable it, board it,
+ *                escort it, observe it. The Bible implies the rule rather
+ *                than stating it: ShipGoal 6 is "Chase them off (either
+ *                kill them or scare them into jumping out of the
+ *                system)", which is only a distinct goal because the
+ *                ships of the other goals do NOT leave of their own
+ *                accord. Chase-off targets are therefore the one kind of
+ *                special ship that is never marked. Released by
+ *                MissionShipTrackSystem once the objective is complete or
+ *                failed. See mission_ship_spawn.ts.
+ *
+ *                This is the reason "Take Hyperioid Sample" (More
+ *                Blasters CHEAT mïsn 1000) was impossible: its board
+ *                target is a brave trader in NGC-1317, a system with no
+ *                stellars, and a trader with nothing to fly to leaves —
+ *                on its first think, one tick after it spawned, with a
+ *                departure timer that had been suppressed for the next
+ *                thirty thousand years.
  *
  * BELT AND BRACES ON THE 'rescue' SIDE, deliberately. A rescue target is
  * already pinned twice over — it spawns as a HULK, and a disabled ship
@@ -72,7 +95,8 @@ import { Entity } from 'nova_ecs/entity';
  */
 export const SystemHoldType = t.type({
     /** Why this ship is staying (see the module comment). */
-    reason: t.union([t.literal('shipOffer'), t.literal('rescue')]),
+    reason: t.union([t.literal('shipOffer'), t.literal('rescue'),
+        t.literal('missionGoal')]),
 });
 export type SystemHold = t.TypeOf<typeof SystemHoldType>;
 export const SystemHoldComponent =

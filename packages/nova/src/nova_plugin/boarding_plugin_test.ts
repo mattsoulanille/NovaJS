@@ -22,6 +22,7 @@ import {
 } from './boarding_plugin.js';
 import { AggressionComponent } from './aggression.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
+import { SystemHoldComponent } from './system_hold.js';
 import { BoardedComponent, BoardingComponent } from './boarding_component.js';
 import { InitiateJumpEvent } from './jump_plugin.js';
 import { LandEvent } from './planet_plugin.js';
@@ -502,6 +503,10 @@ describe('boarding in a live world', () => {
             }]]));
             target.components.set(MissionShipComponent,
                 { mission: 'nova:9999', owner: BOARDER });
+            // ...and the in-system hold that pinned it here as a mission
+            // target (system_hold.ts).
+            target.components.set(SystemHoldComponent,
+                { reason: 'missionGoal' });
             world.step();
             // Precondition: it survived as a mission ship.
             expect(target.components.has(MissionShipComponent)).toBeTrue();
@@ -509,6 +514,10 @@ describe('boarding in a live world', () => {
             captureAsEscort(world, boarder);
 
             expect(target.components.has(MissionShipComponent)).toBeFalse();
+            // The unfinished business goes with the identity: a prize that
+            // could never leave the system it was taken in would be a
+            // strange thing to own.
+            expect(target.components.has(SystemHoldComponent)).toBeFalse();
             expect(target.components.get(FormationComponent)?.leader)
                 .toEqual(BOARDER);
         });
