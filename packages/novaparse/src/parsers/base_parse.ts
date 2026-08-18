@@ -19,6 +19,11 @@ export async function BaseParse(resource: BaseResource, _notFoundFunction: (mess
     return {
         id: resource.globalID,
         name: resource.name,
-        prefix: resource.prefix
+        prefix: resource.prefix,
+        // Which plug-in supplied this resource, as opposed to which
+        // namespace its id landed in (see BaseData.writerPrefix). Only
+        // hand-made resources leave it unset, and for those the two are
+        // the same thing.
+        writerPrefix: resource.writerPrefixIfSet ?? resource.prefix,
     };
 }

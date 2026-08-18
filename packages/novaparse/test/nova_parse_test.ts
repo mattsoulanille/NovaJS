@@ -288,6 +288,7 @@ describe("NovaParse", () => {
                 id: w132.id,
                 name: w132.name,
                 prefix: w132.prefix,
+                writerPrefix: w132.writerPrefix,
                 images: {
                     baseImage: {
                         id: "nova:1600",

@@ -615,7 +615,7 @@ export class Outfitter extends Menu<Entity> {
                     this.govts);
             }
         }
-        this.runSetString(outfit.onPurchase, idPrefix(outfit.id));
+        this.runSetString(outfit.onPurchase, setStringPrefix(outfit));
     }
 
     /**
@@ -634,7 +634,7 @@ export class Outfitter extends Menu<Entity> {
         if (this.outfits.get(outfit.id) === 0) {
             this.outfits.delete(outfit.id);
         }
-        this.runSetString(outfit.onSell, idPrefix(outfit.id));
+        this.runSetString(outfit.onSell, setStringPrefix(outfit));
     }
 
     /**
@@ -1072,6 +1072,17 @@ export class Outfitter extends Menu<Entity> {
             { credits: this.credits.credits });
         super.done();
     }
+}
+
+/**
+ * The namespace a bare resource number inside an outfit's own OnPurchase /
+ * OnSell set string is scoped to: the plug-in that WROTE the oütf, which is
+ * not the prefix of its id when that plug-in overrode a stock resource (see
+ * BaseData.writerPrefix, and resolveOutfitReference for the read-side twin).
+ * Falls back to the id's own prefix for hand-made data with no writer.
+ */
+function setStringPrefix(outfit: OutfitData): string {
+    return outfit.writerPrefix || idPrefix(outfit.id);
 }
 
 /**
