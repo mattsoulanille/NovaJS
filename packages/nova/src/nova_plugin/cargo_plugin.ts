@@ -7,13 +7,21 @@ import { Provide } from 'nova_ecs/provide';
 import { ShipComponent } from './ship_plugin.js';
 
 /**
- * What a ship is carrying: commodity key -> tons. This is the seed of
- * the future cargo/trading system. There is no full commodity model or
- * trading UI yet; the only source of cargo today is scooping asteroid
- * debris (see asteroid_plugin.ts), which uses the commodity keys
- * produced by the röid parser ("cargo:<0-5>" for standard cargo types,
- * "junk:<globalID>" for jünk commodities). A future trading system
- * should reuse this component and key scheme.
+ * What a ship is carrying: commodity key -> tons.
+ *
+ * Three key namespaces share the one map: "cargo:<0-5>" for the standard
+ * commodities (STR# 4000 order), "junk:<globalID>" for jünk commodities
+ * (both produced by the röid parser as well, for scooped debris), and
+ * "mission:<missionId>" for mission freight (mission_logic's
+ * missionCargoKey). Sources: the commodity exchange
+ * (spaceport/trade_center.ts), mission load/unload, plundering
+ * (boarding_plugin.ts), and scooping asteroid debris
+ * (asteroid_plugin.ts).
+ *
+ * EVERY ship has one, including escorts: the trade center trades against
+ * the player's whole FLEET, and a cargo-carrying escort's tons live in
+ * its own component (spaceport/fleet_cargo.ts) — which is also how they
+ * ride the escort's serialized entity into a save and are lost with it.
  *
  * Capacity is not stored here: a ship's cargo space is
  * ShipPhysicsComponent.freeCargo (base hull space plus freeCargo from

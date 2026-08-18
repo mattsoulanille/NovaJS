@@ -323,9 +323,14 @@ export function freeMass(context: OutfitterContext): number {
 }
 
 /**
- * The ship's cargo capacity after outfit modifications. Carried cargo
- * is not modeled yet (there's no trading), so this only keeps
- * cargo-consuming outfits from driving the capacity negative.
+ * The ship's cargo capacity after outfit modifications.
+ *
+ * THE DOCKED SHIP'S OWN HULL ONLY. Escort holds (spaceport/fleet_cargo.ts)
+ * are deliberately invisible here: a mass expansion, a retool, or any
+ * other freeCargo outfit is judged against the hull it is being bolted
+ * to, never against tonnage a freighter escort happens to be hauling.
+ * `OutfitterContext` carries no fleet field, which is what keeps that
+ * true by construction.
  */
 export function freeCargo(context: OutfitterContext): number {
     let free = context.shipData.physics.freeCargo;

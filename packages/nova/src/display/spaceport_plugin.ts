@@ -48,14 +48,17 @@ const SpaceportQuery = new Query([SpaceportComponent, PlanetComponent] as const)
  * assumes everything the player owns is aboard.
  *
  * `landedEscorts` is a live getter for the client's landed-escort roster
- * (browser.ts / spaceport/landed_escorts.ts): bay fighters that LANDED
- * with the player are out of the display world but still deployed, so
- * the outfitter must count them too. A getter because escorts keep
- * touching down while the player shops.
+ * (browser.ts / spaceport/landed_escorts.ts). Two venues read it: the
+ * outfitter, because bay fighters that LANDED with the player are out of
+ * the display world but still deployed and still occupy their magazine
+ * slots; and the trade center, because a cargo-carrying escort's hold is
+ * part of the fleet's cargo space (spaceport/fleet_cargo.ts). A getter
+ * because escorts keep touching down while the player shops.
  */
 export const OpenSpaceportEvent = new EcsEvent<{
     planetId: string, ship: Entity, uuid?: string,
-    landedEscorts?: () => readonly { player: string, entity: Entity }[],
+    landedEscorts?: () =>
+        readonly { player: string, uuid: string, entity: Entity }[],
 }>('OpenSpaceportEvent');
 export const LeaveSpaceportEvent = new EcsEvent<Entity>('LeaveSpaceportEvent');
 
@@ -85,6 +88,11 @@ const OpenSpaceportSystem = new System({
                 countDeployedFighters(entities, uuid, getOutfit),
                 ...landedEscorts === undefined ? []
                     : [countLandedFighters(landedEscorts, uuid, getOutfit)]));
+
+        // The same roster feeds the trade center's fleet cargo: escorts
+        // that landed with the player and can carry cargo (shïp
+        // InherentAI 1/2) trade out of their own holds.
+        spaceport.setLandedEscorts(landedEscorts, uuid);
 
         // Publish the held ship so the status bar (out-of-world while docked)
         // keeps drawing its credits/fuel/cargo, and let the spaceport push
