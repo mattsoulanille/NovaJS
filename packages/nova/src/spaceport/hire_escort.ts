@@ -17,6 +17,7 @@ import { ItemGrid, ItemTile } from './item_grid.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
+import { modifiedPrice } from './price_mod.js';
 import { shipGateContext } from './ship_gate_context.js';
 import {
     shipHireable, ShipyardContext, ShipyardStellar,
@@ -55,11 +56,21 @@ export async function noShipsForHire(
     }
 }
 
-/** The one-time fee to hire an escort: 10% of the ship's price.
+/**
+ * The one-time fee to hire an escort: 10% of the ship's price.
  * Matches the original's observed behavior (a 300,000 cr Thunderhead
- * hires for 30,000 cr); the exact rule is not in the Bible. */
-export function hirePrice(ship: ShipData): number {
-    return Math.round(ship.price / 10);
+ * hires for 30,000 cr); the exact rule is not in the Bible.
+ *
+ * The 10% is taken on the price AFTER the docked stellar's ränk PriceMod
+ * (price_mod.ts) — hiring is buying a ship's services, so a rank that makes
+ * a hull free here makes hiring its pilot free too. That is exactly what
+ * Extra Outfits' Spica Shipyard is for: the four PriceMod-1 ranks its "Buy
+ * Station" outfit grants (extra-outfits:168-171, gövt extra-outfits:302)
+ * compound to 1e-6 percent, so every hull the station builds hires for 0 cr
+ * because the player already paid to construct it.
+ */
+export function hirePrice(ship: ShipData, priceMod?: number): number {
+    return Math.round(modifiedPrice(ship.price, priceMod) / 10);
 }
 
 /**
@@ -115,6 +126,12 @@ export class HireEscortDialog {
     private loadPromise?: Promise<void>;
     /** The docked stellar's tech rules, from its PlanetData (see load). */
     private stellar?: ShipyardStellar;
+    /**
+     * The ränk PriceMod in force in this bar, taken off the same
+     * ShipyardContext the hire pool is rolled from (see hireContext) so the
+     * quoted fee, the affordability check and the charge share one number.
+     */
+    private priceMod?: number;
 
     private text = {
         description: new PIXI.Text('', FONT.normal),
@@ -200,6 +217,8 @@ export class HireEscortDialog {
             this.stellar = {
                 techLevel: planet.techLevel,
                 specialTech: planet.specialTech,
+                // Not a stock gate: it is what the ränk PriceMod matches.
+                govt: planet.govt,
             };
             this.ships = await Promise.all(ids.Ship.map(
                 id => this.simulationData.data.Ship.get(id, 100)));
@@ -275,7 +294,7 @@ export class HireEscortDialog {
             tile.item.pilotDesc || tile.item.desc,
             makeDescTextContext(this.bits ?? [], playerGender()));
         this.text.price.text =
-            `${hirePrice(tile.item).toLocaleString()} cr`;
+            `${hirePrice(tile.item, this.priceMod).toLocaleString()} cr`;
         this.refreshButtons();
     }
 
@@ -283,7 +302,7 @@ export class HireEscortDialog {
         this.text.count.text = `${this.credits.credits.toLocaleString()} cr`;
         const ship = this.itemGrid?.selection;
         this.buttons.hire.state =
-            ship && this.credits.credits >= hirePrice(ship)
+            ship && this.credits.credits >= hirePrice(ship, this.priceMod)
                 ? 'normal' : 'grey';
     }
 
@@ -292,7 +311,7 @@ export class HireEscortDialog {
         if (!ship) {
             return;
         }
-        const price = hirePrice(ship);
+        const price = hirePrice(ship, this.priceMod);
         if (this.credits.credits < price) {
             this.text.status.text = 'You cannot afford this pilot\'s fee.';
             return;
@@ -324,7 +343,9 @@ export class HireEscortDialog {
         let pool: ShipData[] = [];
         try {
             await this.load();
-            pool = this.rollPool(await this.hireContext(player));
+            const context = await this.hireContext(player);
+            this.priceMod = context.priceMod;
+            pool = this.rollPool(context);
         } catch (e) {
             console.warn('Hire escort dialog failed to load:', e);
         }

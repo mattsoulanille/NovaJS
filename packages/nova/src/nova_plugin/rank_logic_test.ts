@@ -300,21 +300,81 @@ describe('rank privileges', () => {
                 .toBeUndefined();
         });
 
-    it('takes the BEST PriceMod of the affiliated ranks, and reads 0 as '
-        + 'unused rather than free', () => {
+    it('leaves prices unchanged with no affiliated rank active', () => {
+        const get = lookup(rank('nova:300', { priceMod: 50 }));
+        expect(rankPriceMod(undefined, get, 'nova:128')).toBe(100);
+        expect(rankPriceMod(new Set(), get, 'nova:128')).toBe(100);
+        // PriceMod 100 is the Bible's own "prices are unchanged".
+        const plain = lookup(rank('nova:301', { priceMod: 100 }));
+        expect(rankPriceMod(new Set(['nova:301']), plain, 'nova:128'))
+            .toBe(100);
+    });
+
+    it('applies an affiliated rank\'s PriceMod only at that govt\'s '
+        + 'stellars', () => {
             const get = lookup(
-                rank('nova:300', { priceMod: 80 }),
-                rank('nova:301', { priceMod: 50 }),
-                // Ten stock ranks (145-147, 151-158) leave PriceMod at 0.
-                rank('nova:302', { priceMod: 0 }),
+                rank('nova:300', { priceMod: 50 }),
                 rank('nova:303', { priceMod: 10, govt: 'nova:129' }));
-            expect(rankPriceMod(
-                new Set(['nova:300', 'nova:301']), get, 'nova:128')).toBe(50);
-            expect(rankPriceMod(new Set(['nova:302']), get, 'nova:128'))
-                .toBe(100);
-            // A rank of a different govt does not discount this one's ports.
+            expect(rankPriceMod(new Set(['nova:300']), get, 'nova:128'))
+                .toBe(50);
+            // A rank of a different govt does not discount this one's ports,
+            // and "owned by the affiliated government" means owned, so a
+            // stellar with no govt at all is never discounted.
             expect(rankPriceMod(new Set(['nova:303']), get, 'nova:128'))
                 .toBe(100);
+            expect(rankPriceMod(new Set(['nova:300']), get, null)).toBe(100);
+            expect(rankPriceMod(new Set(['nova:300']), get, undefined))
+                .toBe(100);
+            // An unaffiliated rank (AffilGovt -1) has no stellars at all.
+            const loose = lookup(rank('nova:304', { priceMod: 1, govt: null }));
+            expect(rankPriceMod(new Set(['nova:304']), loose, 'nova:128'))
+                .toBe(100);
+        });
+
+    it('reads PriceMod 0 as UNUSED rather than free', () => {
+        // Ten stock ranks (145-147, 151-158) leave PriceMod at 0 while
+        // carrying real privileges; so do Extra Outfits' 162 and 177.
+        const get = lookup(rank('nova:302', { priceMod: 0 }));
+        expect(rankPriceMod(new Set(['nova:302']), get, 'nova:128'))
+            .toBe(100);
+    });
+
+    it('COMPOUNDS the PriceMods of several affiliated ranks', () => {
+        const get = lookup(
+            rank('nova:300', { priceMod: 50 }),
+            rank('nova:301', { priceMod: 50 }),
+            rank('nova:302', { priceMod: 0 }),
+            rank('nova:303', { priceMod: 10, govt: 'nova:129' }));
+        // Two halves make a quarter, not a half.
+        expect(rankPriceMod(
+            new Set(['nova:300', 'nova:301']), get, 'nova:128')).toBe(25);
+        // The unused one (0) and the other govt's contribute nothing.
+        expect(rankPriceMod(
+            new Set(['nova:300', 'nova:301', 'nova:302', 'nova:303']),
+            get, 'nova:128')).toBe(25);
+    });
+
+    it('compounds Extra Outfits\' four PriceMod-1 Spica ranks down to '
+        + 'free', () => {
+            // ränk extra-outfits:168-171: empty resources whose only content
+            // is AffilGovt extra-outfits:302 (the Spica Shipyard's own govt)
+            // and PriceMod 1. Four of them is exactly what it takes to floor
+            // the plug-in's dearest hull (the 12,000,000 cr Leviathan) to 0.
+            const spica = lookup(
+                rank('extra:168', { priceMod: 1, govt: 'extra:302' }),
+                rank('extra:169', { priceMod: 1, govt: 'extra:302' }),
+                rank('extra:170', { priceMod: 1, govt: 'extra:302' }),
+                rank('extra:171', { priceMod: 1, govt: 'extra:302' }));
+            const all = new Set(
+                ['extra:168', 'extra:169', 'extra:170', 'extra:171']);
+            const mod = rankPriceMod(all, spica, 'extra:302');
+            expect(mod).toBeCloseTo(1e-6, 12);
+            expect(Math.floor(12_000_000 * mod / 100)).toBe(0);
+            // Three would NOT be free — 12 cr, and a 1 cr hire fee.
+            const three = rankPriceMod(
+                new Set(['extra:168', 'extra:169', 'extra:170']),
+                spica, 'extra:302');
+            expect(Math.floor(12_000_000 * three / 100)).toBe(12);
         });
 
     it('pays Salary per day and stops at SalaryCap (0 meaning uncapped)',

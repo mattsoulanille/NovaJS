@@ -18,15 +18,17 @@
  * price is the clamped 0 of shipPurchasePrice's judgment call 4).
  *
  * Every number here is produced by the same shipyard_rules functions the
- * purchase itself charges through -- tradeInValue and shipPurchasePrice
- * -- so the quoted price can never drift from the amount debited. In
- * particular the exclusion of persistent (oütf 0x0004) outfits from the
- * trade-in is inherited rather than restated.
+ * purchase itself charges through -- shipListPrice, tradeInValue and
+ * shipPurchasePrice -- so the quoted price can never drift from the amount
+ * debited. In particular the exclusion of persistent (oütf 0x0004) outfits
+ * from the trade-in, and the ränk PriceMod applied to the "Ship Price" line
+ * (price_mod.ts), are inherited rather than restated.
  */
 import { ShipData } from 'novadatainterface/ship_data';
 import { formatPrice } from './format_price.js';
 import {
     ShipPurchaseContext,
+    shipListPrice,
     shipPurchasePrice,
     tradeInValue,
 } from './shipyard_rules.js';
@@ -151,7 +153,7 @@ export function shipyardPriceReadout(newShip: ShipData | undefined,
         return undefined;
     }
     return {
-        shipPrice: formatPrice(newShip.price),
+        shipPrice: formatPrice(shipListPrice(newShip, context)),
         tradeIn: formatPrice(tradeInValue(context)),
         finalPrice: formatPrice(shipPurchasePrice(newShip, context)),
         youHave: formatPrice(context.credits),

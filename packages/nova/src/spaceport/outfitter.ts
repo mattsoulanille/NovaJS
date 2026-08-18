@@ -26,9 +26,9 @@ import { ItemGrid, ItemTile } from "./item_grid.js";
 import { Menu } from "./menu.js";
 import { MissionSession } from "./mission_session.js";
 import { MissionUniverse } from "./mission_universe.js";
-import { rankContribute } from "../nova_plugin/rank_logic.js";
+import { rankContribute, rankPriceMod } from "../nova_plugin/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
-import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, maxBuyCount, maxSellCount, sellRefund, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 
@@ -210,6 +210,24 @@ export class Outfitter extends Menu<Entity> {
         const ranks = this.missionSession?.state.ranks;
         const universe = MissionUniverse.shared(this.simulationData);
         return rankContribute(ranks, id => universe.getRank(id));
+    }
+
+    /**
+     * The ränk PriceMod in force in this outfitter (price_mod.ts): the
+     * compounded PriceMod of the active ranks affiliated with the gövt that
+     * OWNS the docked stellar.
+     *
+     * Read off the mission session's WORKING rank set for the same reason
+     * rankContribute is: a rank granted by an OnPurchase set string has to
+     * take effect on the very next refresh, before commit. That is what makes
+     * Extra Outfits' "Buy Station" outfit (extra-outfits:552, OnPurchase
+     * `... K167 K168 K169 K170 K171`) drop the shop's prices the instant it
+     * is bought. 100 without a session, which is the pre-rank behaviour.
+     */
+    private priceMod(): number {
+        const universe = MissionUniverse.shared(this.simulationData);
+        return rankPriceMod(this.missionSession?.state.ranks,
+            id => universe.getRank(id), this.planetData?.govt);
     }
     /**
      * Owned-but-not-aboard units for this landing (bay fighters still in
@@ -515,6 +533,7 @@ export class Outfitter extends Menu<Entity> {
             getWeapon: id => this.simulationData.data.Weapon.getCached(id),
             bits: this.controlBits,
             rankContribute: this.rankContribute(),
+            priceMod: this.priceMod(),
             credits: this.credits.credits,
             // Resolved against the outfits the player owns, because a
             // deployed fighter names only its bay weapon and has to be
@@ -596,7 +615,10 @@ export class Outfitter extends Menu<Entity> {
         // the OnPurchase / legal-record hooks below run ONCE per call, so
         // callers must pass units=1 for outfits that have them
         // (hasPurchaseSideEffects).
-        this.credits.credits -= outfit.price * units;
+        // The ränk-modified price, the same one the grid quotes and
+        // canBuyOutfit checked against (price_mod.ts).
+        this.credits.credits -=
+            outfitPrice(outfit, { priceMod: this.priceMod() }) * units;
         this.outfits.set(outfit.id, this.outfits.get(outfit.id) + units);
         // Record the same-visit purchase so selling it back before
         // leaving refunds the full price (see applySell).
@@ -627,7 +649,8 @@ export class Outfitter extends Menu<Entity> {
      * the per-unit loop calls this repeatedly.
      */
     private applySell(outfit: OutfitData) {
-        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id));
+        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id),
+            { priceMod: this.priceMod() });
         this.credits.credits += refund.credited;
         this.visitPurchases.set(outfit.id, refund.boughtThisVisit);
         this.outfits.set(outfit.id, Math.max(0, this.outfits.get(outfit.id) - 1));
@@ -934,8 +957,10 @@ export class Outfitter extends Menu<Entity> {
             outfitTile.item.desc,
             makeDescTextContext(this.controlBits, playerGender()));
 
-        // Set price text
-        this.text.price.text = formatPrice(outfitTile.item.price);
+        // Set price text -- the ränk-modified price the Buy button charges
+        // (outfitter_rules' outfitPrice, see price_mod.ts).
+        this.text.price.text = formatPrice(
+            outfitPrice(outfitTile.item, { priceMod: this.priceMod() }));
 
         if (outfitTile.item.physics.freeMass > 0) {
             // Set mass text
