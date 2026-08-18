@@ -57,13 +57,14 @@ export async function noShipsForHire(
 }
 
 /**
- * The one-time fee to hire an escort, re-exported from the module that now
- * owns every escort price (spaceport/escort_fees.ts) so the daily wage, the
- * upgrade cost and the resale value can all be derived from the same rule
- * without importing this PIXI-heavy dialog. The bar's own callers — and the
- * price_mod specs — import it from here exactly as before.
+ * The one-time fee to hire an escort — see escort_fees.ts, which owns every
+ * escort price (the daily wage, the upgrade cost and the resale value are
+ * all derived from the same rule there) so none of them can drift apart, and
+ * so the simulation can price an escort without importing this PIXI-heavy
+ * dialog. Re-exported here because this dialog is where the fee is quoted,
+ * and so the bar's own callers — and the price_mod specs — are unchanged.
  */
-export { hirePrice };
+export { hirePrice } from './escort_fees.js';
 
 /**
  * Who is doing the hiring: the landed player's entity (control bits,

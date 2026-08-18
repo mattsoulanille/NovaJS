@@ -8,6 +8,7 @@ import { DisabledComponent } from '../nova_plugin/disabled_component.js';
 import { GovtComponent } from '../nova_plugin/govt_component.js';
 import { FormationComponent, NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { ShootAllWeaponsComponent } from '../nova_plugin/npc_plugin.js';
+import { EscortCommandComponent } from '../nova_plugin/escort_command.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
 import {
     cornersSweepSystem, styleForTarget, TargetCorners,
@@ -101,6 +102,45 @@ describe('styleForTarget (target corner selection)', () => {
                 .addComponent(ShootAllWeaponsComponent, undefined)
                 .addComponent(TargetComponent, { target: PLAYER });
             expect(style('enemy', { enemy })).toBe('hostile');
+        });
+
+    it("shows hostile corners for another player's escort ordered onto us "
+        + "('f' = command attack), before it has fired", () => {
+            const escort = new Entity('their escort')
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1 })
+                .addComponent(EscortCommandComponent,
+                    { command: 'attack', target: PLAYER })
+                .addComponent(TargetComponent, { target: PLAYER });
+            expect(style('escort', { escort })).toBe('hostile');
+        });
+
+    it("shows hostile corners for another player's escort DEFENDING "
+        + "against us", () => {
+            const escort = new Entity('their escort')
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1 })
+                .addComponent(EscortCommandComponent,
+                    { command: 'defend', target: PLAYER })
+                .addComponent(TargetComponent, { target: PLAYER });
+            expect(style('escort', { escort })).toBe('hostile');
+        });
+
+    it("keeps neutral corners for another player's escort attacking "
+        + "someone else, or merely in formation", () => {
+            const busy = new Entity('their escort')
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1 })
+                .addComponent(EscortCommandComponent,
+                    { command: 'attack', target: 'someone-else' })
+                .addComponent(TargetComponent, { target: 'someone-else' });
+            expect(style('busy', { busy })).toBe('neutral');
+            const idle = new Entity('their escort')
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1 })
+                .addComponent(EscortCommandComponent, { command: 'formation' })
+                .addComponent(TargetComponent, { target: PLAYER });
+            expect(style('idle', { idle })).toBe('neutral');
         });
 
     it('shows friendly corners for a ship sharing the player government',

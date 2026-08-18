@@ -11,7 +11,7 @@ import {
 } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import {
-    CollectableEscortComponent, ReturnComponent,
+    BayFighterComponent, CollectableEscortComponent, ReturnComponent,
     ReturnWhenTargetRemovedComponent,
 } from './bay_plugin.js';
 import { completeEntity } from './entity_data_loader.js';
@@ -25,11 +25,13 @@ import { makeSystem } from './make_system.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import { FormationComponent } from './npc_ai_plugin.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from './planet_plugin.js';
-import { EscortLandingComponent, PlayerEscortComponent } from './player_escort.js';
+import {
+    EscortLandingComponent, EscortPayrollComponent, PlayerEscortComponent,
+} from './player_escort.js';
 import {
     escortFollows, EscortJump, EscortJumpEvent, EscortLanded,
-    EscortLandedEvent, ESCORT_LAND_DISTANCE_SQUARED, sweepableEscorts,
-    playerEscortLink, steerToStellar,
+    EscortLandedEvent, escortsOnPayroll, ESCORT_LAND_DISTANCE_SQUARED,
+    sweepableEscorts, playerEscortLink, steerToStellar,
 } from './player_escort_plugin.js';
 import { ControlledByComponent } from './ship_control.js';
 import { prepareCarriedEscort } from '../spaceport/landed_escorts.js';
@@ -806,6 +808,108 @@ describe('sweepableEscorts', () => {
             expect(sweepableEscorts(world.entities, PLAYER, 'gate'))
                 .toEqual([]);
         });
+});
+
+/**
+ * The wage bill mirror. The daily fee is debited by `advanceEntityDate`
+ * (spaceport/mission_session.ts) while the PLAYER's entity is out of the
+ * world — docked, or mid-jump — where the escorts themselves cannot be
+ * reached, so the flock's ship classes are mirrored onto the player while
+ * they are all still in the world together.
+ */
+describe('the escort payroll', () => {
+    it('mirrors the flock\'s ship classes onto the player', async () => {
+        const { world, addEscort, player } = await makeWorld();
+        await addEscort('c');
+        await addEscort('a', 0, 300, () => { }, NO_ENERGY_SHIP_ID);
+        world.step();
+
+        expect(escortsOnPayroll(world.entities, PLAYER))
+            .toEqual([NO_ENERGY_SHIP_ID, SHIP_ID].sort());
+        expect(player.components.get(EscortPayrollComponent))
+            .toEqual([NO_ENERGY_SHIP_ID, SHIP_ID].sort());
+    });
+
+    it('bills one wage per escort, not one per class', async () => {
+        const { world, addEscort } = await makeWorld();
+        await addEscort('a');
+        await addEscort('b', 0, 300);
+        world.step();
+        expect(escortsOnPayroll(world.entities, PLAYER))
+            .toEqual([SHIP_ID, SHIP_ID]);
+    });
+
+    it('does not bill the player for their own bay fighters', async () => {
+        // A launched fighter is the player's own outfit flying: there is
+        // nobody to pay, and a wing that launches and docks a dozen times
+        // in a fight must not make the daily expense flicker.
+        const { world, addEscort, player } = await makeWorld();
+        await addEscort('fighter', 0, 250, ship => {
+            ship.components.set(BayFighterComponent,
+                { bayWeaponId: 'test:bay' });
+        });
+        world.step();
+        expect(escortsOnPayroll(world.entities, PLAYER)).toEqual([]);
+        expect(player.components.get(EscortPayrollComponent)).toBeUndefined();
+    });
+
+    it('does not bill the player for a CAPTURED escort', async () => {
+        // Matthew's spec: a hired pilot draws a daily fee, a captured hull
+        // draws none — it is property, not an employee. The original's own
+        // comm box says the same: hail/hail_escort.png's hired Terrapin has
+        // a "Pay:" line and hail/hail_captured_escort.png's prize has none.
+        const { world, addEscort, player } = await makeWorld();
+        await addEscort('prize', 0, 250, ship => {
+            ship.components.set(PlayerEscortComponent, {
+                player: PLAYER, parent: PLAYER, provenance: 'captured',
+            });
+        });
+        world.step();
+        expect(escortsOnPayroll(world.entities, PLAYER)).toEqual([]);
+        expect(player.components.get(EscortPayrollComponent)).toBeUndefined();
+    });
+
+    it('bills an escort with NO recorded provenance — an old save reads '
+        + 'as hired, which is where it has always been', async () => {
+            const { world, addEscort } = await makeWorld();
+            await addEscort('legacy', 0, 250, ship => {
+                ship.components.set(PlayerEscortComponent,
+                    { player: PLAYER, parent: PLAYER });
+            });
+            world.step();
+            expect(escortsOnPayroll(world.entities, PLAYER))
+                .toEqual([SHIP_ID]);
+        });
+
+    it('drops an escort that is gone, and stays put otherwise', async () => {
+        const { world, addEscort, player } = await makeWorld();
+        await addEscort('doomed');
+        world.step();
+        const first = player.components.get(EscortPayrollComponent);
+        expect(first).toEqual([SHIP_ID]);
+        // No change, no rewrite: the component is serializer-registered, so
+        // a fresh array every step would churn every rollback snapshot and
+        // wire baseline for a value that never moves.
+        world.step();
+        expect(player.components.get(EscortPayrollComponent)).toBe(first!);
+
+        world.entities.delete('doomed');
+        world.step();
+        expect(player.components.get(EscortPayrollComponent)).toEqual([]);
+    });
+
+    it('ignores another player\'s escorts, and mission ships', async () => {
+        const { world, addShip } = await makeWorld();
+        await addShip('mission', 0, 300, ship => {
+            ship.components.set(FormationComponent,
+                { leader: PLAYER, slot: 1 });
+            ship.components.set(MissionShipComponent,
+                { mission: 'test:mission', owner: PLAYER });
+        });
+        world.step();
+        expect(escortsOnPayroll(world.entities, PLAYER)).toEqual([]);
+        expect(escortsOnPayroll(world.entities, 'someone else')).toEqual([]);
+    });
 });
 
 describe('steerToStellar', () => {

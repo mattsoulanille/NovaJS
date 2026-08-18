@@ -1,8 +1,8 @@
 import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import {
-    escortDailyFee, escortDailyFeeForPrice, escortSellValue,
-    escortUpgradeCost, escortUpgradeShip, hirePrice, hirePriceForPrice,
+    escortDailyFee, escortPayrollFee, escortSellValue, escortUpgradeCost,
+    escortUpgradeShip, hirePrice,
 } from './escort_fees.js';
 import { hirePrice as hirePriceFromBar } from './hire_escort.js';
 
@@ -19,16 +19,67 @@ import { hirePrice as hirePriceFromBar } from './hire_escort.js';
  *   escortUpgradeCost shïp EscUpgrdCost, or 0 with no target
  *   escortSellValue   shïp EscSellValue, defaulting to 10% of the cost
  *
- * The Bible gives the last two verbatim; the first two are not in it and
- * are pinned by the original's own captures. See the module comment for
- * the ONE reference figure the daily wage disagrees with (hail_escort.png's
- * 1,100 cr/day Terrapin against this rule's 1,500) — that disagreement is
- * pinned below too, deliberately, so it cannot be "fixed" by accident.
+ * The Bible gives the last two verbatim; the first two are not in it and are
+ * pinned by the original's own captures. See escort_fees.ts's module comment
+ * for the ONE reference figure the daily wage disagrees with
+ * (hail_escort.png's 1,100 cr/day Terrapin against this rule's 1,500) — that
+ * disagreement is pinned below too, deliberately, so it cannot be "fixed" by
+ * accident.
  */
 
 function makeShip(ship: Partial<ShipData>): ShipData {
     return { ...getDefaultShipData(), ...ship };
 }
+
+describe('escort fees', () => {
+    function ship(price: number, id = 'nova:307'): ShipData {
+        return { ...getDefaultShipData(), id, price };
+    }
+
+    it('charges a day\'s wage of 10% of the hire price', () => {
+        const thunderhead = ship(320_000);
+        expect(hirePrice(thunderhead)).toBe(32_000);
+        expect(escortDailyFee(thunderhead)).toBe(3_200);
+        expect(escortDailyFee(thunderhead))
+            .toBe(Math.round(hirePrice(thunderhead) / 10));
+    });
+
+    it('is 1% of the hull price, rounded, at every scale', () => {
+        expect(escortDailyFee(ship(9_995))).toBe(100); // a used Heavy Shuttle
+        expect(escortDailyFee(ship(12_000_000))).toBe(120_000); // a Leviathan
+        expect(escortDailyFee(ship(0))).toBe(0);
+    });
+
+    it('does NOT bend the wage by a stellar\'s ränk PriceMod, though the '
+        + 'hire fee is bent', () => {
+            // A discount is a thing a particular government's shops do; a
+            // wage is drawn wherever the flock happens to be, including deep
+            // space where no stellar's rules apply. Hiring at Spica's 1%
+            // shipyard is cheap, but the pilot still eats.
+            const leviathan = ship(12_000_000);
+            expect(hirePrice(leviathan, 1)).toBe(12_000);
+            expect(escortDailyFee(leviathan)).toBe(120_000);
+            // The parameter is there for a caller genuinely quoting a shop
+            // price, and then it does apply.
+            expect(escortDailyFee(leviathan, 1)).toBe(1_200);
+        });
+
+    it('sums the payroll and skips a hull the data set cannot produce', () => {
+        const ships = new Map([
+            ['nova:307', ship(320_000, 'nova:307')],
+            ['nova:335', ship(110_000, 'nova:335')],
+        ]);
+        expect(escortPayrollFee(['nova:307', 'nova:335'],
+            id => ships.get(id))).toBe(3_200 + 1_100);
+        // Two of the same class each draw their own wage.
+        expect(escortPayrollFee(['nova:307', 'nova:307'],
+            id => ships.get(id))).toBe(6_400);
+        // Better to undercharge than to invent a fee for an unknown hull.
+        expect(escortPayrollFee(['nova:307', 'nova:999'],
+            id => ships.get(id))).toBe(3_200);
+        expect(escortPayrollFee([], id => ships.get(id))).toBe(0);
+    });
+});
 
 describe('hirePrice', () => {
     it('charges 10% of the ship price', () => {
@@ -47,55 +98,25 @@ describe('hirePrice', () => {
     });
 
     it('is ONE definition — the bar re-exports this module\'s', () => {
-        // hire_escort.ts used to own it; it now re-exports, so the wage
-        // below cannot drift from what the player was charged at the bar.
+        // hire_escort.ts used to own it; it now re-exports, so the wage,
+        // the upgrade cost and the resale value cannot drift from what the
+        // player was charged at the bar.
         expect(hirePriceFromBar).toBe(hirePrice);
-    });
-
-    it('has a bare-price form that agrees with the ShipData form', () => {
-        for (const price of [0, 1, 2_000, 17_500, 150_000, 300_000]) {
-            expect(hirePriceForPrice(price))
-                .toBe(hirePrice(makeShip({ price })));
-        }
     });
 });
 
-describe('escortDailyFee', () => {
-    it('pays 10% of the hire fee per day (1% of the ship price)', () => {
-        // Matthew's rule, and the only shape specified: the wage is a
-        // fixed fraction of what the pilot was hired for.
-        expect(escortDailyFee(makeShip({ price: 300_000 }))).toBe(3_000);
-        expect(escortDailyFee(makeShip({ price: 2_000 }))).toBe(20);
-        expect(escortDailyFee(makeShip({ price: 0 }))).toBe(0);
-    });
-
-    it('is exactly ESCORT_DAILY_FRACTION of hirePrice for any hull', () => {
-        for (const price of [0, 999, 17_500, 150_000, 12_000_000]) {
-            const ship = makeShip({ price });
-            expect(escortDailyFee(ship))
-                .toBe(Math.round(hirePrice(ship) * 0.10));
-        }
-    });
-
-    it('DIVERGES from the reference capture, knowingly', () => {
-        // hail/hail_escort.png: a hired Terrapin (shïp nova:136, cost
-        // 150,000) reads "Pay: 1,100 credits per day". Matthew's rule
-        // gives 1,500. One sample is not enough to reverse-engineer the
-        // original's formula (1,100 is 0.733% of the hull price and
-        // matches no obvious function of its cost, crew, strength or
-        // mass), so the specified shape is what ships — and this spec is
-        // here so that changing it is a decision rather than an accident.
-        expect(escortDailyFee(makeShip({ price: 150_000 }))).toBe(1_500);
-    });
-
-    it('has a bare-price form for the daily expenses readout', () => {
-        // The Income/Expenses panel sums a fleet from each escort's class
-        // price; it must charge exactly what the comm dialog quotes.
-        for (const price of [0, 2_000, 150_000, 300_000]) {
-            expect(escortDailyFeeForPrice(price))
-                .toBe(escortDailyFee(makeShip({ price })));
-        }
-    });
+describe('escortDailyFee: the KNOWN divergence from the original', () => {
+    it('pays 1,500 cr/day for a Terrapin where the capture shows 1,100',
+        () => {
+            // hail/hail_escort.png: a hired Terrapin (shïp nova:136, cost
+            // 150,000) reads "Pay: 1,100 credits per day". Matthew's rule
+            // gives 1,500. One sample is not enough to reverse-engineer the
+            // original's formula (1,100 is 0.733% of the hull price and
+            // matches no obvious function of its cost, crew, strength or
+            // mass), so the specified shape is what ships — and this spec is
+            // here so that changing it is a decision rather than an accident.
+            expect(escortDailyFee(makeShip({ price: 150_000 }))).toBe(1_500);
+        });
 });
 
 describe('escortUpgradeShip / escortUpgradeCost', () => {

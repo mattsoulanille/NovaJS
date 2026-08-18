@@ -17,7 +17,10 @@ import { deriveShipPhysics, ShipComponent, ShipPhysicsComponent } from '../nova_
 import { Button } from './button.js';
 import { frameOrigin, INK_TO_BOX } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
-import { computeCargoCapacity } from './mission_session.js';
+import {
+    computeCargoCapacity, loadPayrollShips, playerPayroll,
+} from './mission_session.js';
+import { DailyBudget, dailyBudget } from './daily_budget.js';
 import { ActiveRanksComponent } from '../nova_plugin/ncb_plugin.js';
 import { activeRankData } from '../nova_plugin/rank_logic.js';
 import { RankData } from 'novadatainterface/rank_data';
@@ -167,6 +170,33 @@ export function dialogShipPhysics(gameData: SimulationGameDataInterface,
 }
 
 /**
+ * One line of a table page.
+ *
+ * The ordinary row is a dim `label` in the left column and a white `value`
+ * 75px further right (VALUE_OFFSET) — the two-column table the reference
+ * screenshots show on both halves of the General page.
+ *
+ * The BUDGET rows are the exception, and the reference is unambiguous about
+ * it. Measured off p_properties/general.png's last row, the ink runs:
+ * "Expenses:" at frame x 9..52 in the dim label grey (0xa0a0a0-ish, the
+ * screenshot's 192), then "3,300 credits" at 60..121 in white, then
+ * "per day" at 126..158 dim again. So the value does NOT start in the value
+ * column (which is at 84) — the line simply FLOWS: label, value, tail, each
+ * a space apart, with only the middle run white. Hence `flow` and `tail`.
+ */
+export interface InfoRow {
+    /** Dim, left column. */
+    label: string;
+    /** White. */
+    value: string;
+    /** Dim text after the value on the same line ("per day"). */
+    tail?: string;
+    /** Run the value straight on from the label instead of starting it in
+     * the value column. */
+    flow?: boolean;
+}
+
+/**
  * The General page's three physics rows, straight off the physics
  * `dialogShipPhysics` resolved. Turn rate is stored in rad/sec (raw EVN
  * units * 0.3°/sec); speed and acceleration in px/sec (raw * 30/100).
@@ -174,17 +204,100 @@ export function dialogShipPhysics(gameData: SimulationGameDataInterface,
  * three read '-' only when the ship's physics could not be resolved at
  * all (no ship data).
  */
-export function physicsRows(physics?: ShipPhysics): [string, string][] {
+export function physicsRows(physics?: ShipPhysics): InfoRow[] {
     if (!physics) {
-        return [['Turn Rate:', '-'], ['Accel Rate:', '-'],
-            ['Max Speed:', '-']];
+        return [{ label: 'Turn Rate:', value: '-' },
+            { label: 'Accel Rate:', value: '-' },
+            { label: 'Max Speed:', value: '-' }];
     }
     return [
-        ['Turn Rate:',
-            `${Math.round(physics.turnRate * 180 / Math.PI)}°/sec`],
-        ['Accel Rate:', `${Math.round(physics.acceleration * 100 / 30)}`],
-        ['Max Speed:', `${Math.round(physics.speed * 100 / 30)}`],
+        { label: 'Turn Rate:',
+            value: `${Math.round(physics.turnRate * 180 / Math.PI)}°/sec` },
+        { label: 'Accel Rate:',
+            value: `${Math.round(physics.acceleration * 100 / 30)}` },
+        { label: 'Max Speed:',
+            value: `${Math.round(physics.speed * 100 / 30)}` },
     ];
+}
+
+/**
+ * "Shield Status: 100% (150)" — the percentage the original shows, plus the
+ * ship's TOTAL shield or armor points in parentheses (Matthew: "let's put
+ * the total shields / armor next to Shield Status and Armor Status like we
+ * do for energy"). The TOTAL and not "current/max": the parenthesis on the
+ * Energy row is a derived capacity figure ("(5 jumps)"), so the matching
+ * thing to put here is the capacity too, and the percentage already says
+ * where in that capacity the ship is.
+ *
+ * THE CAPACITY COMES FROM THE DERIVED PHYSICS, not from the Stat's own max,
+ * and the percentage is taken against that same number. This is the docked
+ * staleness `dialogShipPhysics` exists for, one layer on: while the player
+ * is landed the outfitter deletes ShipPhysicsComponent so takeoff rebuilds
+ * it, and the Stat's `max` is only reconciled by the stat systems once the
+ * ship is back in the world (ship_plugin's shipStatSystem). Reading the
+ * stale max would print the shield capacity the player had BEFORE they
+ * bought the booster they are standing in the outfitter holding. Taking the
+ * percentage against the same max keeps the pair honest: a freshly bought
+ * booster reads "95% (44)" — 42 points of shielding in a 44-point envelope,
+ * which is exactly what lifts off — rather than a "100%" that is not true of
+ * either number.
+ *
+ * '-' when there is no capacity to report at all (no physics and no stat, or
+ * a hull with none of that stat), as the other unresolved rows do.
+ */
+export function healthStatus(stat?: { current: number, max: number },
+    derivedMax?: number): string {
+    const max = derivedMax ?? stat?.max;
+    if (max === undefined || max <= 0) {
+        return '-';
+    }
+    const current = Math.max(0, Math.min(max, stat?.current ?? max));
+    return `${Math.round(100 * current / max)}% (${Math.round(max)})`;
+}
+
+/**
+ * The budget line under Energy Status, in the reference's own words:
+ * "Expenses: 3,300 credits per day".
+ *
+ * ONE LINE, NOT TWO, and the layout is what settles it. The content pane is
+ * 147px tall and the table steps 16px from an ink baseline at frame y=45, so
+ * the left column has room for exactly NINE rows (y = 45..173) — and
+ * p_properties/general.png uses all nine: the eight fixed rows (Pilot Name
+ * through Energy Status) plus one budget line. A tenth row would ink at y=189
+ * and land on the 8520 bottom strip, over the Done button. The original's
+ * General page is dimensioned for one budget row, so this reports the NET of
+ * the day's books and labels it with its sign:
+ *
+ *     income > expenses   ->  "Income: N credits per day"
+ *     expenses > income   ->  "Expenses: N credits per day"
+ *
+ * That is also the honest reading of the line: it is what a day does to the
+ * player's credits, which is exactly what `settleDailyBudget` applies. A
+ * pilot drawing a 200 cr salary while paying a 1,100 cr Viper is 900 cr a day
+ * worse off, and the line says so.
+ *
+ * IT ONLY APPEARS WHEN THERE IS SOMETHING TO SAY. The reference pilot pays
+ * escorts and draws no salary, so their page shows the Expenses line and
+ * nothing else; a pilot with no escorts and no salaried ränk gets the eight
+ * rows the dialog has always had, rather than "0 credits per day". Books that
+ * happen to balance (a salary that exactly covers the flock) are in that
+ * same "nothing happens to your credits" case and print nothing.
+ *
+ * The numbers are {@link DailyBudget}'s, which is the very computation
+ * `advanceEntityDate` settles the player's credits with (daily_budget.ts) —
+ * the rate quoted here is the rate charged.
+ */
+export function budgetRows(budget: DailyBudget): InfoRow[] {
+    const net = Math.round(budget.income) - Math.round(budget.expenses);
+    if (net === 0) {
+        return [];
+    }
+    return [{
+        label: net > 0 ? 'Income:' : 'Expenses:',
+        value: `${Math.abs(net).toLocaleString()} credits`,
+        tail: 'per day',
+        flow: true,
+    }];
 }
 
 /**
@@ -212,6 +325,10 @@ export class PlayerInfoDialog {
         new Map<string, { name: string, price: number, builtIn: boolean }>();
     /** The player's active ranks, loaded on show for the Honors page. */
     private ranks: RankData[] = [];
+    /** The same ranks by id, for the General page's salary arithmetic. */
+    private rankData = new Map<string, RankData>();
+    /** Ship classes of the escorts on the player's payroll, for Expenses. */
+    private payrollShips = new Map<string, ShipData>();
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private simulationData: SimulationGameDataInterface,
@@ -335,6 +452,13 @@ export class PlayerInfoDialog {
             }
         }
         this.ranks = activeRankData(active, id => loaded.get(id));
+        this.rankData = loaded;
+
+        // The hulls of the escorts drawing a wage, so the General page's
+        // "Expenses:" line can price them (mission_session.loadPayrollShips
+        // is the same fetch the date advance does before it charges).
+        this.payrollShips =
+            await loadPayrollShips(entity, this.simulationData);
 
         // Outfit names and prices, for the Extras page.
         this.outfitNames.clear();
@@ -392,14 +516,31 @@ export class PlayerInfoDialog {
         }
     }
 
-    private addRows(rows: [string, string][], x: number) {
-        rows.forEach(([label, value], i) => {
-            const labelText = new PIXI.Text(label, LABEL_FONT);
-            labelText.position.set(x, CONTENT_TOP + i * ROW_HEIGHT);
-            const valueText = new PIXI.Text(value, INFO_FONT);
-            valueText.position.set(x + VALUE_OFFSET,
-                CONTENT_TOP + i * ROW_HEIGHT);
-            this.content.addChild(labelText, valueText);
+    private addRows(rows: InfoRow[], x: number) {
+        rows.forEach((row, i) => {
+            const y = CONTENT_TOP + i * ROW_HEIGHT;
+            const labelText = new PIXI.Text(row.label, LABEL_FONT);
+            labelText.position.set(x, y);
+            this.content.addChild(labelText);
+            // A `flow` row is one sentence with a white middle, so each run
+            // is placed by MEASURING THE PREFIX of the whole string rather
+            // than by adding up the widths of the runs: that is what makes
+            // "Expenses:" + " 3,300 credits" + " per day" lay out exactly as
+            // the single string would, spaces and kerning included.
+            const width = (text: string) => PIXI.TextMetrics.measureText(
+                text, new PIXI.TextStyle(LABEL_FONT)).width;
+            const valueX = row.flow ? width(row.label) : VALUE_OFFSET;
+            const valueText = new PIXI.Text(
+                row.flow ? ` ${row.value}` : row.value, INFO_FONT);
+            valueText.position.set(x + valueX, y);
+            this.content.addChild(valueText);
+            if (row.tail !== undefined) {
+                const tailText = new PIXI.Text(` ${row.tail}`, LABEL_FONT);
+                tailText.position.set(x + (row.flow
+                    ? width(`${row.label} ${row.value}`)
+                    : valueX + width(row.value)), y);
+                this.content.addChild(tailText);
+            }
         });
     }
 
@@ -440,31 +581,56 @@ export class PlayerInfoDialog {
             }
         }
 
-        const left: [string, string][] = [
+        const left: InfoRow[] = [
             // Pilot naming isn't modeled (the original shows the
             // save-file pilot's name here).
-            ['Pilot Name:', '-'],
-            ['Current Date:', date ? formatDate(date) : '-'],
-            ['System:', this.systemName ?? '-'],
-            ['Legal Status:', legal],
-            ['Combat Rating:', combatRatingName(rating?.kills ?? 0)],
-            ['Shield Status:', percent(shield)],
-            ['Armor Status:', percent(armor)],
-            ['Energy Status:', fuel
+            { label: 'Pilot Name:', value: '-' },
+            { label: 'Current Date:', value: date ? formatDate(date) : '-' },
+            { label: 'System:', value: this.systemName ?? '-' },
+            { label: 'Legal Status:', value: legal },
+            { label: 'Combat Rating:',
+                value: combatRatingName(rating?.kills ?? 0) },
+            { label: 'Shield Status:',
+                value: healthStatus(shield, physics?.shield) },
+            { label: 'Armor Status:',
+                value: healthStatus(armor, physics?.armor) },
+            { label: 'Energy Status:', value: fuel
                 ? `${percent(fuel)} (${Math.floor(fuel.current / 100)} jumps)`
-                : '-'],
+                : '-' },
+            // "Income:" / "Expenses:", each only when there is one — the
+            // reference pilot pays escorts and draws no salary, so
+            // general.png shows Expenses alone (budgetRows).
+            ...budgetRows(this.budget(entity, credits?.credits ?? 0)),
         ];
-        const right: [string, string][] = [
+        const right: InfoRow[] = [
             // Player ship naming isn't modeled; both rows show the
             // class (the original's Ship Name is the pilot's own).
-            ['Ship Name:', this.shipData?.name ?? '-'],
-            ['Ship Class:', this.shipData?.name ?? '-'],
+            { label: 'Ship Name:', value: this.shipData?.name ?? '-' },
+            { label: 'Ship Class:', value: this.shipData?.name ?? '-' },
             ...physicsRows(physics),
-            ['Credits:', credits
-                ? credits.credits.toLocaleString() : '-'],
+            { label: 'Credits:',
+                value: credits ? credits.credits.toLocaleString() : '-' },
         ];
         this.addRows(left, CONTENT_X);
         this.addRows(right, RIGHT_COLUMN_X);
+    }
+
+    /**
+     * The player's daily books as of right now — the numbers the Income /
+     * Expenses rows print.
+     *
+     * Deliberately the SAME call the date advance settles credits with
+     * (daily_budget.ts's `dailyBudget`, over the same payroll list from
+     * `playerPayroll` and the same rank set): what this dialog quotes is
+     * what the next landing or jump will actually debit and credit.
+     */
+    private budget(entity: Entity, credits: number): DailyBudget {
+        return dailyBudget({
+            ranks: entity.components.get(ActiveRanksComponent),
+            getRank: id => this.rankData.get(id),
+            escortShips: playerPayroll(entity),
+            getShip: id => this.payrollShips.get(id),
+        }, credits);
     }
 
     private systemName?: string;

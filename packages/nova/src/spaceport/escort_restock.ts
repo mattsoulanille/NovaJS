@@ -20,12 +20,13 @@ import { deployedFightersByBay } from './landed_escorts.js';
  * with full fuel and full magazines, FREE OF CHARGE.
  *
  * WHY FREE, when the player's own refuel is PAID (spaceport.ts charges for
- * it). Matthew's ruling: the hire fee is the whole commercial relationship
- * — an escort pilot maintains their own ship out of it, so their upkeep is
- * not itemized back to the player. Charging for it would also need a
- * per-escort price UI that the original never shows. Note this is
- * deliberately NOT symmetric with the player, and the asymmetry is the
- * design, not an oversight.
+ * it). Matthew's ruling: the FEES are the whole commercial relationship —
+ * the hiring price and the daily wage that follows it (escort_fees.ts) — and
+ * an escort pilot maintains their own ship out of that, so their upkeep is
+ * never itemized back to the player at the pad. Charging separately for it
+ * would also need a per-escort price UI that the original never shows. Note
+ * this is deliberately NOT symmetric with the player, and the asymmetry is
+ * the design, not an oversight.
  *
  * WHAT IS RESTOCKED: fuel (FuelComponent.current -> max), ammunition
  * (every owned outfit with an `ammoFor` goes back to capacity), and — since
@@ -37,9 +38,9 @@ import { deployedFightersByBay } from './landed_escorts.js';
  * case.
  *
  * The hull work is free for the same reason the fuel and ammo are: the
- * hire fee is the whole commercial relationship, and an escort pilot
- * maintains their own ship out of it (Matthew's ruling). It stays
- * deliberately asymmetric with the player, who pays their own yard bill.
+ * hiring price and the daily wage are the whole commercial relationship, and
+ * an escort pilot maintains their own ship out of them (Matthew's ruling).
+ * It stays deliberately asymmetric with the player, who pays their own bill.
  * A ship that never lands still repairs only by the slow in-flight rules —
  * this is a PORT VISIT, not a free repair beam.
  *

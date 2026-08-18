@@ -109,6 +109,40 @@ export function escortProvenance(escort: Entity): EscortProvenance {
     return escort.components.get(PlayerEscortComponent)?.provenance ?? 'hired';
 }
 
+/**
+ * The player's PAYROLL: the ship-class ids of the escorts drawing a daily
+ * wage from them, sorted, kept on the PLAYER's own entity.
+ *
+ * WHY IT LIVES ON THE PLAYER AND NOT ON THE ESCORTS. The daily wage is
+ * debited by `advanceEntityDate` (spaceport/mission_session.ts), which runs
+ * on the player's entity while that entity is OUT of the simulation — docked
+ * at a spaceport, or mid-jump between two systems. The escorts are not
+ * reachable from there: they have been serialized out to the owning client's
+ * carried roster (spaceport/landed_escorts.ts) or, at a landing, are still
+ * flying down to the rock. So the roster is mirrored onto the player while
+ * they ARE in the world together (EscortPayrollSystem), and the mirror rides
+ * the player's entity out of the world with everything else.
+ *
+ * A CACHE, recomputed from the live flock every step: an escort that dies,
+ * is released, or is upgraded to another hull needs no bookkeeping of its own
+ * — the next step's sweep simply reports a different list. That also means a
+ * stale value (a save restored before the player has been stepped once) fixes
+ * itself as soon as the player is in a world with their escorts.
+ *
+ * BAY FIGHTERS ARE NOT ON IT. A fighter launched from the player's own bays
+ * is a player escort in every other sense, but it is the player's OWN outfit
+ * flying — there is no pilot to pay — and charging for it would make the
+ * expense flicker every time a wing launched or docked. See
+ * `escortsOnPayroll` in player_escort_plugin.ts, which is the one place that
+ * rule lives.
+ *
+ * The fee itself is spaceport/escort_fees.ts's `escortDailyFee`, taken on
+ * each escort's CURRENT ship class — which is why this stores ship ids and
+ * not a precomputed total.
+ */
+export const EscortPayrollComponent =
+    new Component<string[]>('EscortPayroll');
+
 export const EscortLanding = t.type({
     /** Entity uuid of the stellar the escort is landing on. */
     planet: t.string,

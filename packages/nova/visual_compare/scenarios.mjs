@@ -574,7 +574,11 @@ export const scenarios = [
         description: 'The player-info dialog toggled with KeyP in flight. '
             + 'Compare the 8518/8519/8520 three-part frame, tab row and Done '
             + 'row against p_properties/general.png. Text values legitimately '
-            + 'differ (date, credits, ship).',
+            + 'differ (date, credits, ship), as do two rows by design: the '
+            + 'reference pilot\'s "Expenses: 3,300 credits per day" line is '
+            + 'absent here because this pilot has no escorts and no salaried '
+            + 'ränk (the line only appears when there is one), and our Shield '
+            + '/ Armor rows carry the ship\'s total points in parentheses.',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => { await driver.openPlayerInfo(page); },
@@ -1474,33 +1478,45 @@ export const scenarios = [
     {
         id: 'hail_escort',
         title: 'Hail — escort comm (8513)',
-        description: 'The escort communications dialog (8513): a hired-escort '
+        description: 'The escort communications dialog (8513): an escort '
             + 'MANAGEMENT panel (Upgrade Escort / Sell Escort / Release / Close '
             + 'Channel), not a fleet-command panel — commanding escorts is the '
-            + 'keyboard escort-controls\' job. Upgrade / Sell / Release render '
-            + 'GREYED (they need unmodeled state: shipyard upgrade transfer, '
-            + 'escort resale, per-escort release); only Close Channel is live. '
+            + 'keyboard escort-controls\' job. All three functions are live '
+            + '(nova_plugin/escort_action.ts); Sell Escort renders GREYED for a '
+            + 'HIRED escort, exactly as the reference greys it, because the '
+            + 'player never owned that hull. '
             + 'The 8513 frame is shared by every escort reference, so this one '
             + 'scenario compares our single escort dialog against all four — '
             + 'the normal hired escort (hail_escort.png), the upgrading state '
-            + '(hail_escort_upgrading.png: "Cancel Upgrade"), and the captured '
+            + '(hail_escort_upgrading.png: "Cancel Upgrade" — NovaJS applies '
+            + 'the upgrade immediately instead of deferring it to the next '
+            + 'shipyard, a documented divergence), and the captured '
             + 'variants (hail_captured_escort / sell_captured_escort: Sell '
             + 'Escort ACTIVE). The frame / left column / image box are the '
-            + 'positionable chrome; the button labels and upper info box '
-            + '(Upgrade Cost / Pay / Sell Price — states we don\'t model) '
-            + 'legitimately differ (CONTENT).',
+            + 'positionable chrome; the upper info box\'s daily Pay figure '
+            + 'legitimately differs (CONTENT: 1,500 vs the reference\'s 1,100 '
+            + '— see spaceport/escort_fees.ts).',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
             // The whole identity block goes in the LOWER well, the way
             // computeContext builds it (and the way hail_escort.png stacks
             // "Hired Escort: / Terrapin / Standard" there); the upper well is
-            // the reference's Upgrade Cost / Pay readout, which we don't model.
+            // the reference's Upgrade Cost / Pay readout, with the blank row
+            // between them that the reference shows for a hire.
             await driver.showHail(page, {
                 variant: 'escort',
                 heading: 'Hired Escort:\n Terrapin\n Standard',
-                image: 'nova:5003', body: '',
-                escort: true,
+                image: 'nova:5003',
+                body: 'Upgrade Cost: 50,000 credits\n\n'
+                    + 'Pay: 1,500 credits per day',
+                escort: {
+                    provenance: 'hired',
+                    upgrade: {
+                        toShip: 'nova:137', cost: 50000, canAfford: true,
+                    },
+                    dailyFee: 1500,
+                },
             });
             await driver.sleep(1200);
         },

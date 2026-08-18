@@ -4,7 +4,7 @@ import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { OutfitsState } from '../nova_plugin/outfit_plugin.js';
 import { deriveShipPhysics } from '../nova_plugin/ship_plugin.js';
-import { dialogShipPhysics, physicsRows } from './player_info.js';
+import { dialogShipPhysics, InfoRow, physicsRows } from './player_info.js';
 
 /**
  * The player-info General page's Turn Rate / Accel Rate / Max Speed rows
@@ -67,34 +67,35 @@ describe('the docked player-info physics rows', () => {
         return new Map(ids.map(([id, count]) => [id, { count }]));
     }
 
-    const HULL_ROWS: [string, string][] = [
-        ['Turn Rate:', '30°/sec'], ['Accel Rate:', '300'],
-        ['Max Speed:', '300'],
-    ];
+    /**
+     * The three rows as {label, value} records — physicsRows returns the
+     * dialog's InfoRow shape now that the General page has a row style with
+     * a dim trailing run ("Expenses: 3,300 credits per day").
+     */
+    const rows = (...pairs: [string, string][]): InfoRow[] =>
+        pairs.map(([label, value]) => ({ label, value }));
+
+    const HULL_ROWS: InfoRow[] = rows(['Turn Rate:', '30°/sec'],
+        ['Accel Rate:', '300'], ['Max Speed:', '300']);
 
     it('shows the outfitted numbers with no ShipPhysicsComponent aboard '
         + '(the state the outfitter leaves the docked entity in)', () => {
             const ship = hull();
-            const rows = physicsRows(dialogShipPhysics(
+            const actual = physicsRows(dialogShipPhysics(
                 gameData([booster('nova:200')]), ship,
                 owned(['nova:200', 1]), undefined));
 
-            expect(rows).toEqual([
-                ['Turn Rate:', '45°/sec'], ['Accel Rate:', '400'],
-                ['Max Speed:', '360'],
-            ]);
+            expect(actual).toEqual(rows(['Turn Rate:', '45°/sec'],
+                ['Accel Rate:', '400'], ['Max Speed:', '360']));
             // What the old bare-hull fallback printed instead.
-            expect(rows).not.toEqual(HULL_ROWS);
+            expect(actual).not.toEqual(HULL_ROWS);
         });
 
     it('stacks several units of an outfit', () => {
-        const rows = physicsRows(dialogShipPhysics(
+        expect(physicsRows(dialogShipPhysics(
             gameData([booster('nova:200')]), hull(),
-            owned(['nova:200', 3])));
-        expect(rows).toEqual([
-            ['Turn Rate:', '75°/sec'], ['Accel Rate:', '600'],
-            ['Max Speed:', '480'],
-        ]);
+            owned(['nova:200', 3])))).toEqual(rows(['Turn Rate:', '75°/sec'],
+                ['Accel Rate:', '600'], ['Max Speed:', '480']));
     });
 
     it('matches, field for field, the physics the takeoff deriver builds '
@@ -117,8 +118,8 @@ describe('the docked player-info physics rows', () => {
         const stale = { ...ship.physics, speed: 999, acceleration: 999 };
         expect(physicsRows(dialogShipPhysics(gameData([booster('nova:200')]),
             ship, owned(['nova:200', 1]), stale)))
-            .toEqual([['Turn Rate:', '45°/sec'], ['Accel Rate:', '400'],
-                ['Max Speed:', '360']]);
+            .toEqual(rows(['Turn Rate:', '45°/sec'], ['Accel Rate:', '400'],
+                ['Max Speed:', '360']));
     });
 
     it('leaves the hull data untouched (the derivation copies)', () => {
@@ -147,8 +148,8 @@ describe('the docked player-info physics rows', () => {
             };
             expect(physicsRows(dialogShipPhysics(gameData([]), ship,
                 owned(['nova:200', 1]), attached)))
-                .toEqual([['Turn Rate:', '45°/sec'], ['Accel Rate:', '400'],
-                    ['Max Speed:', '360']]);
+                .toEqual(rows(['Turn Rate:', '45°/sec'],
+                    ['Accel Rate:', '400'], ['Max Speed:', '360']));
         });
 
     it('falls back to the hull when there is no component either', () => {
@@ -159,7 +160,7 @@ describe('the docked player-info physics rows', () => {
     it('dashes every row when there is no ship data at all', () => {
         expect(dialogShipPhysics(gameData([]), undefined, owned()))
             .toBeUndefined();
-        expect(physicsRows(undefined)).toEqual([['Turn Rate:', '-'],
-            ['Accel Rate:', '-'], ['Max Speed:', '-']]);
+        expect(physicsRows(undefined)).toEqual(rows(['Turn Rate:', '-'],
+            ['Accel Rate:', '-'], ['Max Speed:', '-']));
     });
 });

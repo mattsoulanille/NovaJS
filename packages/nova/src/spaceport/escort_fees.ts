@@ -7,20 +7,26 @@ import { modifiedPrice } from './price_mod.js';
  * ============================================================================
  *
  * Four numbers hang off an escort's CURRENT ship class, and they all live
- * here so that the bar, the comm dialog, the simulation and the daily
- * expenses readout cannot disagree about any of them:
+ * here so that the bar, the comm dialog, the simulation, the daily debit at a
+ * date advance and the player-info dialog's "Expenses:" line cannot disagree
+ * about any of them:
  *
- *   {@link hirePrice}        the one-time fee to hire the pilot (the bar)
- *   {@link escortDailyFee}   the wage a HIRED escort draws every day
+ *   {@link hirePrice}         the one-time fee to hire the pilot (the bar)
+ *   {@link escortDailyFee}    the wage a HIRED escort draws every day
  *   {@link escortUpgradeCost} what upgrading it to its UpgradeTo class costs
- *   {@link escortSellValue}  what selling a CAPTURED escort pays
+ *   {@link escortSellValue}   what selling a CAPTURED escort pays
+ *
+ * A second copy of `price / 10` anywhere is a bug waiting to happen, because
+ * the player would be shown one number and charged another.
  *
  * "CURRENT ship class" is the load-bearing part. Upgrading an escort
  * replaces its class in place (nova_plugin/escort_action.ts), and because
  * every one of these is a pure function of the class the escort is flying
  * right now, an upgrade automatically raises the wage, changes what a
  * further upgrade costs, and changes what the hull would sell for. Nothing
- * has to remember the price the escort was hired at.
+ * has to remember the price the escort was hired at — and the payroll
+ * mirror (player_escort.ts's EscortPayrollComponent) stores ship-class ids
+ * rather than a precomputed total for exactly the same reason.
  *
  * ---------------------------------------------------------------------------
  * THE BIBLE'S RULES, AND THE TWO ASSUMPTIONS
@@ -39,7 +45,7 @@ import { modifiedPrice } from './price_mod.js';
  *                  of the ship's original cost."
  *
  * Those three are DATA, so they are exact. Verified against the real Nova
- * data and the original-hardware captures (see escort_fees_test.ts):
+ * data and the original-hardware captures (see escort_fees_stock_test.ts):
  * hail/hail_escort.png's Terrapin (shïp nova:136) reads "Upgrade Cost:
  * 50,000 credits" and shïp 136's EscUpgrdCost is 50,000;
  * hail/hail_captured_escort.png's Pirate Viper (shïp nova:166, cost
@@ -50,20 +56,21 @@ import { modifiedPrice } from './price_mod.js';
  *
  *  - HIRE = 10% of the ship's price. Not in the Bible, but pinned by the
  *    original: bar/hire_escort/select_escort.png offers a Cargo Drone
- *    (shïp cost 2,000) at "Hiring Price: 200 cr". This is the rule NovaJS
- *    already shipped and it survives the check.
+ *    (shïp cost 2,000) at "Hiring Price: 200 cr", and a 300,000 cr
+ *    Thunderhead hires for 30,000. This is the rule NovaJS already shipped
+ *    and it survives the check.
  *
- *  - DAILY WAGE = 10% of the hire fee (i.e. 1% of the ship's price). THIS
- *    IS AN ASSUMPTION, and it is the one number here that the reference
- *    capture disagrees with: hail_escort.png's Terrapin (cost 150,000, so
+ *  - DAILY WAGE = 10% of the hire fee (i.e. 1% of the ship's price), which
+ *    is Matthew's ruling. THIS IS THE ONE NUMBER HERE THAT THE REFERENCE
+ *    CAPTURE DISAGREES WITH: hail_escort.png's Terrapin (cost 150,000, so
  *    hire 15,000) draws "Pay: 1,100 credits per day" where this rule says
  *    1,500. One sample is not enough to reverse-engineer the original's
  *    formula — 1,100 is 0.733% of the hull price and matches no obvious
  *    function of the class's cost, crew (4), strength (20) or mass (175) —
  *    so rather than invent a fit to one point, the wage follows the shape
- *    Matthew specified (a fixed fraction of the hire fee) and the
- *    discrepancy is recorded here and pinned in the specs. If the real
- *    formula is ever recovered, THIS FUNCTION is the only thing that moves.
+ *    Matthew specified and the discrepancy is recorded here and pinned in
+ *    the specs. If the real formula is ever recovered, {@link escortDailyFee}
+ *    is the only thing that moves.
  *
  * ---------------------------------------------------------------------------
  * WHERE ränk PriceMod APPLIES, AND WHERE IT DOES NOT
@@ -75,14 +82,18 @@ import { modifiedPrice } from './price_mod.js';
  *  - HIRING is a purchase made at a stellar, in the bar, with a stellar's
  *    owner to be favoured by — it takes the modifier, and always has
  *    (Extra Outfits' Spica Shipyard hires its free hulls' pilots for 0 cr).
- *  - UPGRADING, SELLING and the daily WAGE are struck over a comm channel
- *    in deep space. There is no planet, no owning government, and so no
- *    modifier to apply: these three take the LIST price. Passing a
- *    modifier is still possible (every function takes the same optional
- *    argument) so that a future "upgrade at the shipyard" flow, or a
- *    different ruling on the wage, is one argument away rather than a
- *    rewrite — but the default, and what the comm dialog uses, is
- *    unmodified.
+ *  - The daily WAGE is drawn wherever the flock happens to be, including
+ *    deep space where no stellar's rules apply; bending it by whatever rock
+ *    the player last docked at would make the same escort cost different
+ *    amounts on different days with nothing about the escort having changed.
+ *  - UPGRADING and SELLING are struck over a comm channel in deep space.
+ *    There is no planet and no owning government, so there is no modifier to
+ *    apply: they take the LIST price.
+ *
+ * Passing a modifier is still possible (every function takes the same
+ * optional argument) so that a future "upgrade at the shipyard" flow, or a
+ * different ruling on the wage, is one argument away rather than a rewrite —
+ * but the default, and what the comm dialog uses, is unmodified.
  *
  * Every function here is pure, total, and free of clocks and randomness,
  * so the display dialog quotes exactly what the simulation charges.
@@ -121,53 +132,57 @@ export const ESCORT_SELL_DEFAULT_FRACTION = 0.10;
  * re-exports it, so the bar's own callers are unchanged.)
  */
 export function hirePrice(ship: ShipData, priceMod?: number): number {
-    return hirePriceForPrice(ship.price, priceMod);
-}
-
-/**
- * {@link hirePrice} on a bare price, for the callers that hold a NUMBER
- * rather than a whole ShipData — chiefly the daily-expenses readout, which
- * sums a fleet from what each escort's class costs.
- */
-export function hirePriceForPrice(shipPrice: number,
-    priceMod?: number): number {
     return Math.round(
-        modifiedPrice(shipPrice, priceMod) * ESCORT_HIRE_FRACTION);
+        modifiedPrice(ship.price, priceMod) * ESCORT_HIRE_FRACTION);
 }
 
 /**
- * What a HIRED escort of this class draws per day: 10% of its hire fee,
- * i.e. 1% of the ship's price.
+ * The WAGE an escort's pilot draws, per day, for as long as they fly with
+ * the player: **10% of that escort's hire price** (Matthew's ruling), i.e.
+ * 1% of the hull's price. A 320,000 cr Thunderhead hires for 32,000 cr and
+ * then costs 3,200 cr a day.
  *
- * A CAPTURED escort draws nothing — it is property, not an employee — so
- * callers gate on provenance (player_escort.ts's `provenance`) rather than
- * this function returning zero for them.
+ * This is the number the player-info dialog's "Expenses: N credits per day"
+ * line reports (p_properties/general.png), the number the escort comm box's
+ * "Pay: N credits per day" line reports (hail/hail_escort.png), and the
+ * number a date advance actually debits — all of them through this function
+ * (via daily_budget.ts's `dailyBudget` for the last two), so the quoted rate
+ * and the charge cannot drift apart.
  *
- * Read off the escort's CURRENT class, which is what makes an upgrade raise
- * the wage with nothing else to update. See the module comment for the one
- * reference capture this disagrees with (1,500 here vs the original's 1,100
- * for a Terrapin) and why the shape was kept anyway.
+ * ONLY A HIRED ESCORT DRAWS ONE. A captured hull is property, not an
+ * employee (Matthew's spec: "captured: no daily salary"), so the payroll
+ * sweep filters on provenance — player_escort_plugin.ts's `escortsOnPayroll`
+ * — rather than this function returning zero for them.
  *
- * `priceMod` defaults to unmodified: a recurring wage is not a price paid
- * at a rank-owned world (see the module comment). It is accepted so the
- * ruling can be changed in one place.
+ * NOT PriceMod-adjusted by default; see the module comment's ruling.
+ *
+ * ONE ARGUMENT, THE SHIP CLASS: an escort's fee follows its CURRENT hull, so
+ * an escort upgraded to a bigger ship starts drawing the bigger wage with
+ * nothing else to update.
  */
 export function escortDailyFee(ship: ShipData, priceMod?: number): number {
-    return escortDailyFeeForPrice(ship.price, priceMod);
+    return Math.round(hirePrice(ship, priceMod) * ESCORT_DAILY_FRACTION);
 }
 
 /**
- * {@link escortDailyFee} on a bare ship PRICE.
+ * The whole flock's daily wage bill: {@link escortDailyFee} summed over the
+ * escorts on the player's payroll (nova_plugin/player_escort.ts's
+ * EscortPayrollComponent holds their ship-class ids).
  *
- * This is the form the daily Income/Expenses readout wants: it walks the
- * player's escorts and has each class's price to hand, not a ShipData, and
- * it must charge the exact figure the comm dialog quotes. Both go through
- * this one arithmetic so the two readouts can never disagree by a credit.
+ * A ship class the data set cannot produce is skipped rather than guessed
+ * at, exactly as the shops skip an unloadable hull — better to undercharge
+ * than to invent a fee.
  */
-export function escortDailyFeeForPrice(shipPrice: number,
-    priceMod?: number): number {
-    return Math.round(
-        hirePriceForPrice(shipPrice, priceMod) * ESCORT_DAILY_FRACTION);
+export function escortPayrollFee(shipIds: Iterable<string>,
+    getShip: (id: string) => ShipData | undefined): number {
+    let total = 0;
+    for (const id of shipIds) {
+        const ship = getShip(id);
+        if (ship) {
+            total += escortDailyFee(ship);
+        }
+    }
+    return total;
 }
 
 /**

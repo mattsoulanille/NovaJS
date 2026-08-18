@@ -10,6 +10,7 @@ import { isInFlock } from './flock.js';
 import { GovtComponent } from './govt_component.js';
 import { shipDisposition, targetCornerStyle } from './iff_plugin.js';
 import { isPacifiedToward, NpcComponent } from './npc_ai_plugin.js';
+import { EscortCommandComponent } from './escort_command.js';
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
 import { LegalRecordsComponent } from './reputation_plugin.js';
 import { ActiveRanksComponent } from './ncb_plugin.js';
@@ -139,7 +140,22 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     const targetsPlayer = targetEntity.components
         .get(TargetComponent)?.target === playerUuid;
     const npcMode = targetEntity.components.get(NpcComponent)?.mode;
+    // Another player's ESCORT engaging us — ordered onto us with 'f'
+    // (command 'attack') or holding its leader's perimeter against us
+    // (command 'defend') — is attacking us in every sense that matters,
+    // even before its first shot lands (which is when tier 3b would
+    // catch it). Escorts fly on the escort command, not on NpcComponent
+    // mode 'attack', so the posture reads from EscortCommandComponent;
+    // both commands point TargetComponent at the victim. Matthew: "when
+    // an escort is attacking another player (due to 'f' or due to
+    // defending), it should be IFF hostile from that player's
+    // perspective."
+    const escortCommand = targetEntity.components
+        .get(EscortCommandComponent)?.command;
+    const escortEngaging = escortCommand === 'attack'
+        || escortCommand === 'defend';
     const attackingPlayer = (targetsPlayer && (npcMode === 'attack'
+        || escortEngaging
         || targetEntity.components.has(ShootAllWeaponsComponent)))
         // Tier 3b: what this ship has actually done to us lately.
         || isRecentAggressor(playerEntity.components.get(AggressionComponent),
