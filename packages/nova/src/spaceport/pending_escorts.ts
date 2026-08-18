@@ -14,8 +14,15 @@ import { Component } from 'nova_ecs/component';
  * through PlayerEscortComponent and the carried-escort roster — see
  * nova_plugin/player_escort_plugin.ts and landed_escorts.ts.
  *
- * SCOPE LIMIT (documented gap): escorts are not persisted to the save
- * game, so they do not survive a reload (see save_game.ts).
+ * PERSISTENCE. Once spawned, hired escorts are ordinary escorts: they
+ * follow the player through jumps and gates (PlayerEscortComponent and
+ * the sweep systems in nova_plugin/player_escort_plugin.ts) and are
+ * written into the save as whole serialized entities (`escorts`, added
+ * in SAVE_VERSION 2 — see save_game.ts, `SavedEscort`). What is NOT
+ * saved is this component itself: it is display-side bookkeeping on the
+ * docked ship, popped by browser.ts at lift-off, and it is not part of
+ * SaveData — so a save written while docked, between hiring at the bar
+ * and lifting off, does not carry the not-yet-spawned hires.
  */
 export const PendingEscortsComponent =
     new Component<string[]>('PendingEscorts');

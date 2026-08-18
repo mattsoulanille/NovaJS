@@ -592,9 +592,10 @@ function routesEqual(a?: string[], b?: string[]) {
  * the same input-record addEntity path the player entity itself uses
  * — deterministic across peers because the fully-built entity is
  * baked into the record. Slots continue after any followers the
- * player already has. In-system only: hired escorts do not follow
- * through hyperspace (documented gap; tied to future persistence
- * work).
+ * player already has. From here on they are ordinary escorts: they
+ * follow the player through jumps and gates (PlayerEscortComponent and
+ * the sweep systems in nova_plugin/player_escort_plugin.ts) and are
+ * persisted with the save (save_game.ts `escorts`, SAVE_VERSION 2).
  */
 /** The first free formation slot on `leaderUuid` in the display
  * world (used to continue slot numbering across spawn batches). */

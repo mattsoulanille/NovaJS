@@ -98,8 +98,10 @@ export interface HirePlayer {
  *
  * Hiring charges the credits working copy (committed when the bar
  * session commits) and records the ship id for browser.ts to spawn
- * on launch (see pending_escorts.ts — in-system only, does not follow
- * through hyperspace).
+ * on launch (see pending_escorts.ts). Once spawned, the escort is an
+ * ordinary escort: it follows through hyperspace and gates
+ * (nova_plugin/player_escort_plugin.ts) and is persisted in the save
+ * (save_game.ts `escorts`).
  */
 export class HireEscortDialog {
     container = new PIXI.Container();
