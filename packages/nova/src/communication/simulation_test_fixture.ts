@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import fs from "fs";
 import os from "os";
 import path from "path";
@@ -135,8 +136,14 @@ export function makePluginNovaParse(pluginDirectories: string[]):
     }
     // A fixed scratch root, reused across runs rather than a fresh mkdtemp
     // each time, so repeated test runs don't litter the temp directory.
+    // Keyed by this checkout too: worktrees run these specs concurrently,
+    // and a root shared between them would flip the links under a
+    // running parse (and go stale when the worktree that made it is
+    // removed).
+    const checkoutKey = crypto.createHash("sha1").update(packageRoot)
+        .digest("hex").slice(0, 8);
     const root = path.join(os.tmpdir(),
-        `novajs-plugin-fixture-${pluginDirectories.join("+")}`);
+        `novajs-plugin-fixture-${checkoutKey}-${pluginDirectories.join("+")}`);
     fs.mkdirSync(path.join(root, "Plug-ins"), { recursive: true });
     linkOnce(path.join(novaData, "Nova Files"), path.join(root, "Nova Files"));
     for (let i = 0; i < pluginDirectories.length; i++) {
@@ -155,8 +162,18 @@ export function makePluginNovaParse(pluginDirectories: string[]):
 }
 
 function linkOnce(target: string, link: string) {
-    if (fs.existsSync(link)) {
-        return;
+    // lstat, not existsSync: a DANGLING link (its worktree was removed)
+    // reports as absent and the symlink then fails with EEXIST. Re-point
+    // anything that is not already the wanted link.
+    try {
+        if (fs.readlinkSync(link) === target) {
+            return;
+        }
+        fs.unlinkSync(link);
+    } catch (e) {
+        if ((e as NodeJS.ErrnoException).code !== "ENOENT") {
+            throw e;
+        }
     }
     fs.symlinkSync(target, link);
 }
