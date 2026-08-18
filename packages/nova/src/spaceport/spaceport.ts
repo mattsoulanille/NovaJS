@@ -37,6 +37,7 @@ import { playerIdentitySubs } from './player_identity.js';
 import { runShipBuildWorld } from './ship_build_world.js';
 import { Shipyard } from './shipyard.js';
 import { OpenStarmapOptions } from './starmap.js';
+import { FleetEscortEntry } from './fleet_cargo.js';
 import { TradeCenter } from './trade_center.js';
 
 // The 618x517 spaceport frame (PICT 8500): the landing image fills the
@@ -524,6 +525,18 @@ export class Spaceport extends Menu<Entity> {
     setDeployedOutfitCounts(counts?: DeployedOutfitCounts) {
         this.outfitter.setDeployedOutfitCounts(counts);
         this.shipyard.setDeployedOutfitCounts(counts);
+    }
+
+    /**
+     * Points the trade center at the client's landed-escort roster, so
+     * cargo-carrying escorts (shïp InherentAI 1/2) contribute their holds
+     * to the exchange's fleet cargo space (spaceport/fleet_cargo.ts). Set
+     * per-landing, like setDeployedOutfitCounts, because it closes over
+     * the docked ship's uuid.
+     */
+    setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
+        playerUuid?: string) {
+        this.tradeCenter.setLandedEscorts(roster, playerUuid);
     }
 
     /**

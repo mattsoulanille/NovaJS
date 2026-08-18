@@ -12,6 +12,7 @@ import {
 import { prepareCarriedEscorts } from '../spaceport/landed_escorts.js';
 import { BayFighterComponent, ReturnWhenTargetRemovedComponent } from './bay_plugin.js';
 import { CargoComponent } from './cargo_plugin.js';
+import { commitFleetHolds } from '../spaceport/fleet_cargo.js';
 import { completeEntity } from './entity_data_loader.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { OwnerComponent, SourceComponent } from './fire_weapon_plugin.js';
@@ -641,6 +642,58 @@ describe('save_game escorts', () => {
                 [roster]);
             expect(toSave.map(({ uuid }) => uuid)).toEqual(['both']);
             expect(extractSavedEscorts(toSave, serializer).length).toBe(1);
+        });
+
+    it('carries FLEET CARGO bought at the exchange inside the escort\'s own '
+        + 'record, and loses it with the escort', async () => {
+            const { serializer, makeEscort } = fixture;
+            const hauler = await makeEscort(ship => ship.components.set(
+                PlayerEscortComponent,
+                { player: PLAYER, parent: PLAYER, detached: true }));
+            const escortB = await makeEscort(ship => ship.components.set(
+                PlayerEscortComponent,
+                { player: PLAYER, parent: PLAYER, detached: true }));
+
+            // What Done in the trade center does to the landed roster: the
+            // working holds are written onto the escorts themselves. No new
+            // persisted shape is involved — CargoComponent already rides
+            // inside the SavedEscort entity blob.
+            commitFleetHolds([
+                {
+                    uuid: 'hauler', capacity: 400, entity: hauler,
+                    cargo: new Map([['cargo:0', 375], ['junk:test:1', 5]]),
+                },
+                {
+                    uuid: 'doomed', capacity: 100, entity: escortB,
+                    cargo: new Map([['cargo:0', 90]]),
+                },
+            ]);
+
+            const roster: RosterEscort[] = [
+                { player: PLAYER, uuid: 'hauler', entity: hauler },
+                { player: PLAYER, uuid: 'doomed', entity: escortB },
+            ];
+            const restored = saveAndLoad(extractSavedEscorts(
+                collectEscortsToSave(PLAYER, [], [roster]), serializer),
+                serializer);
+            expect(restored.map(({ uuid }) => uuid))
+                .toEqual(['doomed', 'hauler']);
+            expect(restored.find(({ uuid }) => uuid === 'hauler')!
+                .entity.components.get(CargoComponent))
+                .toEqual(new Map([['cargo:0', 375], ['junk:test:1', 5]]));
+
+            // Now the second escort is destroyed before the save: it is on
+            // no roster and in no world, so nothing writes its record and
+            // its 90 tons are simply gone. (Decision where the Bible is
+            // silent — see spaceport/fleet_cargo.ts.)
+            const afterLoss = saveAndLoad(extractSavedEscorts(
+                collectEscortsToSave(PLAYER, [], [[roster[0]]]), serializer),
+                serializer);
+            expect(afterLoss.map(({ uuid }) => uuid)).toEqual(['hauler']);
+            const fleetTons = afterLoss.reduce((tons, { entity }) =>
+                tons + (entity.components.get(CargoComponent)?.get('cargo:0')
+                    ?? 0), 0);
+            expect(fleetTons).toBe(375);
         });
 
     it('ignores escorts belonging to another player', async () => {

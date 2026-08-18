@@ -14,20 +14,19 @@ import { dayNumber } from '../nova_plugin/calendar.js';
 import { CreditsComponent, GameDateComponent } from '../nova_plugin/player_state_plugin.js';
 import { activePriceEvents, applyPriceEvents } from '../nova_plugin/price_events.js';
 import {
-    buyGood,
-    buyGoodQuantity,
-    freeCargoSpace,
     junkTradeGood,
-    maxBuyQuantity,
-    maxSellQuantity,
     otherCargoNames,
-    sellGood,
-    sellGoodQuantity,
     standardTradeGoods,
     TradeGood,
     TradeWorkingState,
 } from '../nova_plugin/trade_logic.js';
 import { Button, ButtonClick } from './button.js';
+import {
+    collectFleetHolds, commitFleetHolds, FleetCargoState, FleetEscortEntry,
+    FleetHold, fleetBuy, fleetBuyQuantity, fleetCargo, fleetFreeSpace,
+    fleetHeld, fleetSell, fleetSellQuantity, freeSpaceLines,
+    maxFleetBuyQuantity, maxFleetSellQuantity, quantityColumnHeader,
+} from './fleet_cargo.js';
 import {
     LINE_HEIGHT, ROW_HEIGHT, SELECTION_COLOR, TRADE, TRADE_ROW_TEXT_DY,
     listRowY,
@@ -49,12 +48,12 @@ const RIGHT_FONT: Partial<PIXI.ITextStyle> =
 /**
  * The exchange's column headers and cargo-summary wording, stock Nova's
  * own (STR# 2002 indices 196-199 and 362-368). "In Hold:" is the
- * no-escort form; a player with escorts sees "In Fleet:" and a split
- * ship/fleet free-space readout (documented gap: we have no fleet-cargo
- * model, so only the solo wording is rendered).
+ * no-escort form; a player with cargo-carrying escorts sees "In Fleet:"
+ * and a split ship/fleet free-space readout — both live in fleet_cargo.ts
+ * (quantityColumnHeader / freeSpaceLines) beside the model that decides
+ * which applies.
  */
 const HEADER_COMMODITY = 'Commodity:';
-const HEADER_HOLD = 'In Hold:';
 const HEADER_PRICE = 'Price:';
 
 /**
@@ -110,6 +109,11 @@ export function missionCargoTons(cargo: ReadonlyMap<string, number>): number {
  * whole held quantity — the original's one-click behavior. Commit on
  * Done, the outfitter/mission-session pattern. Mission cargo
  * ('mission:*') is never tradeable; it only counts against free space.
+ *
+ * The hold traded against is the whole FLEET: the player's ship plus any
+ * cargo-carrying escort that landed with them (fleet_cargo.ts). With no
+ * such escort the fleet is just the ship and every readout falls back to
+ * the solo wording, so this is the same dialog it always was.
  */
 export class TradeCenter extends Menu<Entity> {
     private planet?: PlanetData;
@@ -124,6 +128,19 @@ export class TradeCenter extends Menu<Entity> {
         credits: { credits: 0 },
         cargoCapacity: 0,
     };
+    /**
+     * The cargo-carrying escorts' working holds for this visit, snapshotted
+     * from the landed roster when the exchange opens (see fleet_cargo.ts on
+     * why it is a snapshot and not a live getter).
+     */
+    private holds: FleetHold[] = [];
+    /**
+     * The client's landed-escort roster and the docked ship's uuid, set
+     * per-landing by the Spaceport. Unset (single-ship testing, or a
+     * landing the client could not attribute) means "no fleet".
+     */
+    private landedEscorts?: () => readonly FleetEscortEntry[];
+    private playerUuid?: string;
     private selectedIndex = 0;
     private listContainer = new PIXI.Container();
     private highlight = new PIXI.Graphics();
@@ -137,10 +154,12 @@ export class TradeCenter extends Menu<Entity> {
 
     private text = {
         headerCommodity: new PIXI.Text(HEADER_COMMODITY, LIST_FONT),
-        headerHold: new PIXI.Text(HEADER_HOLD, LIST_FONT),
+        headerHold: new PIXI.Text('', LIST_FONT),
         headerPrice: new PIXI.Text(HEADER_PRICE, LIST_FONT),
         otherCargo: new PIXI.Text('', LIST_FONT),
         freeSpace: new PIXI.Text('', LIST_FONT),
+        /** The fleet free-space line, one row under the ship's. */
+        freeSpaceFleet: new PIXI.Text('', LIST_FONT),
         // The active price-event description line ("An enormous food
         // surplus has lowered the price of food."), shown persistently.
         event: new PIXI.Text('', LIST_FONT),
@@ -183,6 +202,8 @@ export class TradeCenter extends Menu<Entity> {
         this.text.headerPrice.position.set(TRADE.tierX, TRADE.headerY);
         this.text.otherCargo.position.set(TRADE.nameX, TRADE.summaryTop);
         this.text.freeSpace.position.set(TRADE.nameX, TRADE.summaryTop);
+        this.text.freeSpaceFleet.position.set(
+            TRADE.nameX, TRADE.summaryTop + LINE_HEIGHT);
         // The event line sits in the strip below the pane (the reference
         // screenshot's "food surplus" position); transaction feedback
         // shows just under it.
@@ -205,6 +226,24 @@ export class TradeCenter extends Menu<Entity> {
             sell: this.sell.bind(this),
             depart: this.done.bind(this),
         };
+    }
+
+    /**
+     * Points the exchange at the client's landed-escort roster for this
+     * landing, so cargo-carrying escorts join the fleet. Set per-landing
+     * (like Spaceport.setDeployedOutfitCounts) because it closes over the
+     * docked ship's uuid; `uuid` undefined means the client could not
+     * attribute the landing, and the exchange trades the ship alone.
+     */
+    setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
+        playerUuid?: string) {
+        this.landedEscorts = roster;
+        this.playerUuid = playerUuid;
+    }
+
+    /** The player's hold plus this visit's escort holds. */
+    private get fleet(): FleetCargoState {
+        return { ship: this.state, holds: this.holds };
     }
 
     private loadPromise?: Promise<void>;
@@ -253,6 +292,13 @@ export class TradeCenter extends Menu<Entity> {
             cargoCapacity: await computeCargoCapacity(
                 input, this.simulationData),
         };
+        // The escorts that landed with the player and can carry cargo
+        // (shïp InherentAI 1/2). Empty when there are none, which is what
+        // makes every readout below fall back to the solo wording.
+        this.holds = this.landedEscorts
+            ? await collectFleetHolds(this.landedEscorts(), this.playerUuid,
+                this.simulationData)
+            : [];
         const bits = input.components.get(ControlBitsComponent)
             ?? new Set<number>();
         this.goods = this.planet
@@ -308,7 +354,7 @@ export class TradeCenter extends Menu<Entity> {
             void this.bulkBuy(good);
             return;
         }
-        const bought = buyGood(this.state, good);
+        const bought = fleetBuy(this.fleet, good);
         this.text.status.text = bought > 0
             ? `Bought ${bought} ton${bought === 1 ? '' : 's'} of ${good.name}.`
             : '';
@@ -320,7 +366,10 @@ export class TradeCenter extends Menu<Entity> {
      * clamped to) the most that fits and is affordable.
      */
     private async bulkBuy(good: TradeGood) {
-        const max = maxBuyQuantity(this.state, good);
+        // FLEET free space, not the ship's: the reference screenshot
+        // (trade_center/buy_quantity.png) prefills 390 on a pilot whose
+        // own hold has 15 tons free.
+        const max = maxFleetBuyQuantity(this.fleet, good);
         if (max <= 0) {
             return;
         }
@@ -329,7 +378,7 @@ export class TradeCenter extends Menu<Entity> {
         if (!quantity) {
             return;
         }
-        const bought = buyGoodQuantity(this.state, good, quantity);
+        const bought = fleetBuyQuantity(this.fleet, good, quantity);
         this.text.status.text = bought > 0
             ? `Bought ${bought} ton${bought === 1 ? '' : 's'} of ${good.name}.`
             : '';
@@ -346,7 +395,7 @@ export class TradeCenter extends Menu<Entity> {
             void this.bulkSell(good);
             return;
         }
-        const sold = sellGood(this.state, good);
+        const sold = fleetSell(this.fleet, good);
         this.text.status.text = sold > 0
             ? `Sold ${sold} ton${sold === 1 ? '' : 's'} of ${good.name}.`
             : '';
@@ -358,7 +407,7 @@ export class TradeCenter extends Menu<Entity> {
      * in the trade_center_hold_option_amount reference screenshot.
      */
     private async bulkSell(good: TradeGood) {
-        const max = maxSellQuantity(this.state, good);
+        const max = maxFleetSellQuantity(this.fleet, good);
         if (max <= 0) {
             return;
         }
@@ -367,7 +416,7 @@ export class TradeCenter extends Menu<Entity> {
         if (!quantity) {
             return;
         }
-        const sold = sellGoodQuantity(this.state, good, quantity);
+        const sold = fleetSellQuantity(this.fleet, good, quantity);
         this.text.status.text = sold > 0
             ? `Sold ${sold} ton${sold === 1 ? '' : 's'} of ${good.name}.`
             : '';
@@ -378,13 +427,12 @@ export class TradeCenter extends Menu<Entity> {
         const good = this.selectedGood();
         return !!good && good.canBuy
             && this.state.credits.credits >= good.price
-            && freeCargoSpace(this.state) > 0;
+            && fleetFreeSpace(this.fleet) > 0;
     }
 
     private canSellSelected(): boolean {
         const good = this.selectedGood();
-        return !!good && good.canSell
-            && (this.state.cargo.get(good.key) ?? 0) > 0;
+        return !!good && good.canSell && fleetHeld(this.fleet, good.key) > 0;
     }
 
     /** Redraws the list, summary lines, and button states. */
@@ -402,6 +450,10 @@ export class TradeCenter extends Menu<Entity> {
         this.highlight.clear();
 
         const tierLabel = { low: 'Low', med: 'Med', high: 'High' } as const;
+        // The quantity column is a FLEET total when escorts carry cargo
+        // (the reference's "In Fleet:" header), otherwise the ship's own.
+        const manifest = fleetCargo(this.fleet);
+        this.text.headerHold.text = quantityColumnHeader(this.fleet);
         this.goods.forEach((good, index) => {
             const slot = tradeSlot(good, this.goods);
             const y = listRowY(TRADE.listTop, slot,
@@ -428,7 +480,7 @@ export class TradeCenter extends Menu<Entity> {
             });
             this.listContainer.addChild(hit);
             this.rowHits.push(hit);
-            const held = this.state.cargo.get(good.key) ?? 0;
+            const held = manifest.get(good.key) ?? 0;
             // A price event replaces the Low/Med/High word with the
             // comparative "Lower"/"Higher", as in the reference.
             const tierWord = good.event
@@ -457,16 +509,24 @@ export class TradeCenter extends Menu<Entity> {
         // "Other cargo: N tons of mission cargo", a blank line, and the
         // free-space readout (trade_center_port_kane_...png: caps at
         // y544 and y568, 24px apart).
-        const other = otherCargoNames(this.state.cargo, this.goods);
-        const missionTons = missionCargoTons(this.state.cargo);
+        // "Other cargo" reads the FLEET manifest too, so a jünk an escort
+        // is hauling that doesn't trade here is still reported. Mission
+        // cargo can only ever be the player's own (fleet_cargo.ts).
+        const other = otherCargoNames(manifest, this.goods);
+        const missionTons = missionCargoTons(manifest);
         this.text.otherCargo.text = missionTons > 0
             ? `Other cargo: ${missionTons} `
             + `ton${missionTons === 1 ? '' : 's'} of mission cargo`
             : other.length > 0 ? `Other cargo: ${other.join(', ')}` : '';
-        this.text.freeSpace.y = TRADE.summaryTop
+        // One line solo; the reference's split ship/fleet pair once
+        // cargo-carrying escorts are along, on consecutive rows.
+        const summaryTop = TRADE.summaryTop
             + (this.text.otherCargo.text ? 2 * LINE_HEIGHT : 0);
-        this.text.freeSpace.text =
-            `Free cargo space: ${freeCargoSpace(this.state)} tons`;
+        const [shipLine, fleetLine] = freeSpaceLines(this.fleet);
+        this.text.freeSpace.y = summaryTop;
+        this.text.freeSpace.text = shipLine ?? '';
+        this.text.freeSpaceFleet.y = summaryTop + LINE_HEIGHT;
+        this.text.freeSpaceFleet.text = fleetLine ?? '';
 
         this.buttons.buy.state = this.canBuySelected() ? 'normal' : 'grey';
         this.buttons.sell.state = this.canSellSelected() ? 'normal' : 'grey';
@@ -476,6 +536,19 @@ export class TradeCenter extends Menu<Entity> {
      * The live working state for the docked status bar: the not-yet-committed
      * cargo hold, capacity, and credit balance, so the bar's Free and Credits
      * readouts follow each buy/sell before Done commits them.
+     *
+     * THE PLAYER'S SHIP ONLY, deliberately (Matthew's instruction): the
+     * status bar's cargo lines and "Free:" describe the hull the player is
+     * flying, matching this dialog's own "in your ship" line.
+     *
+     * Noted for the record, because it is the one place the references
+     * disagree: trade_center/earth_trade_center.png shows "Free: 390"
+     * beside "in your ship: 15 tons / in your fleet: 390 tons", and
+     * 390_medical_supplies.png (same pilot, after the purchase) shows
+     * "Med: 390" on a 15-ton hull — so stock Nova's status bar appears to
+     * report FLEET totals. Switching it would mean teaching the in-flight
+     * DrawStatusBarCargo system to sum escorts as well; left as a
+     * follow-up rather than a half-fleet-aware readout.
      */
     dockedStatus(): DockedLiveStatus {
         return {
@@ -485,11 +558,17 @@ export class TradeCenter extends Menu<Entity> {
         };
     }
 
-    /** Commits the working cargo and credits back onto the entity. */
+    /**
+     * Commits the working cargo and credits back onto the entity, and each
+     * escort hold back onto its roster entity — so the escorts lift off
+     * carrying what was bought, and a save taken later records it inside
+     * their own serialized entities.
+     */
     protected override done() {
         this.input.components.set(CargoComponent, this.state.cargo);
         this.input.components.set(CreditsComponent,
             { credits: this.state.credits.credits });
+        commitFleetHolds(this.holds);
         super.done();
     }
 }
