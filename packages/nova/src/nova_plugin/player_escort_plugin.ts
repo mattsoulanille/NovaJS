@@ -20,7 +20,9 @@ import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
 import { registerSimulationBridgeEvent } from '../communication/simulation_bridge_events.js';
 import { deImmerify } from '../util/deimmerify.js';
-import { CollectableEscortComponent, ReturnComponent } from './bay_plugin.js';
+import {
+    BayFighterComponent, CollectableEscortComponent, ReturnComponent,
+} from './bay_plugin.js';
 import { clearPlunderRecord } from './boarding_component.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { FiringGroupComponent } from './firing_group.js';
@@ -39,7 +41,8 @@ import {
 } from './npc_ai_plugin.js';
 import { LandEvent, PlanetDataComponent } from './planet_plugin.js';
 import {
-    EscortLanding, EscortLandingComponent, PlayerEscort, PlayerEscortComponent,
+    EscortLanding, EscortLandingComponent, EscortPayrollComponent,
+    PlayerEscort, PlayerEscortComponent,
 } from './player_escort.js';
 import { ControlledByComponent } from './ship_control.js';
 import { ShipComponent, ShipPhysicsComponent } from './ship_plugin.js';
@@ -515,6 +518,77 @@ export const MarkPlayerEscortsSystem = new System({
 });
 
 /**
+ * The escorts of `player` that draw a WAGE, as their ship-class ids, sorted.
+ *
+ * The payroll is the owned flock minus the ships that are not somebody
+ * else's ship:
+ *
+ *  - BAY FIGHTERS (BayFighterComponent) are the player's own outfit flying.
+ *    There is nobody to pay, and a wing that launches and docks a dozen
+ *    times in a fight must not make the daily expense flicker.
+ *  - Anything with no ShipComponent has no hull to price.
+ *
+ * A CAPTURED hulk IS on the payroll: it is crewed by people the player is
+ * now responsible for, and the original charges for captured escorts just as
+ * it does for hired ones. (If that ever proves wrong in play, this function
+ * is the single place to change it.)
+ *
+ * Sorted so the value is a pure function of the world's contents: entity-map
+ * iteration order is not stable across peers, and this result is written into
+ * a serializer-registered component that is hashed for desync detection.
+ */
+export function escortsOnPayroll(
+    entities: Iterable<[string, Entity]>, player: string): string[] {
+    const ships: string[] = [];
+    for (const [, escort] of entities) {
+        if (escort.components.get(PlayerEscortComponent)?.player !== player) {
+            continue;
+        }
+        if (escort.components.has(BayFighterComponent)) {
+            continue;
+        }
+        const shipId = escort.components.get(ShipComponent)?.id;
+        if (shipId !== undefined) {
+            ships.push(shipId);
+        }
+    }
+    return ships.sort();
+}
+
+/**
+ * Mirrors the player's wage-drawing flock onto the player's own entity
+ * (EscortPayrollComponent), so the daily debit at a date advance — which
+ * runs on the player entity while it is OUT of the world — has something to
+ * charge against. See the component's own doc for why it must be a mirror.
+ *
+ * Runs AFTER MarkPlayerEscortsSystem so an escort that joined the flock this
+ * very tick (a hulk just captured, an escort just re-attached) is already
+ * marked and is on the payroll from the first step it exists.
+ *
+ * Writes only on a real change: the component is serializer-registered, so
+ * an unconditional `set` every step would put a fresh array into every
+ * rollback snapshot and wire baseline for a value that almost never moves.
+ */
+export const EscortPayrollSystem = new System({
+    name: 'EscortPayroll',
+    args: [UUID, GetEntity, ControlledByComponent, Entities] as const,
+    step(uuid, entity, _controlledBy, entities) {
+        const ships = escortsOnPayroll(entities, uuid);
+        const previous = entity.components.get(EscortPayrollComponent);
+        if (previous && previous.length === ships.length
+            && previous.every((id, i) => id === ships[i])) {
+            return;
+        }
+        if (!previous && ships.length === 0) {
+            // A player who never had an escort never gets the component.
+            return;
+        }
+        entity.components.set(EscortPayrollComponent, ships);
+    },
+    after: [MarkPlayerEscortsSystem],
+});
+
+/**
  * The player landed: their escorts head for the same stellar.
  *
  * Runs on the landing ship (LandEvent is targeted at it) on every peer,
@@ -963,6 +1037,9 @@ export const PlayerEscortPlugin: Plugin = {
         // baselines).
         serializer?.addComponent(PlayerEscortComponent, PlayerEscort);
         serializer?.addComponent(EscortLandingComponent, EscortLanding);
+        // The payroll mirror rides the PLAYER's entity out of the world at
+        // a landing or a jump, which is exactly when it gets charged.
+        serializer?.addComponent(EscortPayrollComponent, t.array(t.string));
         if (serializer) {
             serializer.addEvent(EscortJumpEvent, escortCarryEventType(
                 'EscortJumpEventType', EscortJumpRest, serializer));
@@ -970,6 +1047,7 @@ export const PlayerEscortPlugin: Plugin = {
                 'EscortLandedEventType', EscortLandedRest, serializer));
         }
         world.addSystem(MarkPlayerEscortsSystem);
+        world.addSystem(EscortPayrollSystem);
         world.addSystem(EscortLandOrderSystem);
         world.addSystem(EscortLandingSystem);
         world.addSystem(EscortFollowJumpBeginSystem);

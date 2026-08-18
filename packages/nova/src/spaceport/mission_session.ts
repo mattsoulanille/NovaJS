@@ -31,7 +31,10 @@ import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/rep
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
 import { MissionUniverse } from './mission_universe.js';
-import { rankSalaryPerDay } from '../nova_plugin/rank_logic.js';
+import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
+import { ShipData } from 'novadatainterface/ship_data';
+import { settleDailyBudget } from './daily_budget.js';
+import { PendingEscortsComponent } from './pending_escorts.js';
 import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
 import { takeShipDoneTextShown } from './ship_done_shown.js';
 
@@ -255,40 +258,88 @@ export class MissionSession {
 }
 
 /**
- * Pays the active ranks' salaries for `days` days of calendar advance.
+ * Settles the player's daily books for `days` days of calendar advance:
+ * the active ranks' salaries, and the wages of the escorts on their payroll.
  *
  * EVN Bible, ränk: Salary is "The number of credits that the affiliated
  * government will pay the player, per day"; SalaryCap is "The maximum amount
  * of money the player can have before the affiliated government stops paying
- * the salary. Set to 0 or -1 if unused."
+ * the salary. Set to 0 or -1 if unused." A NEGATIVE Salary is an expense
+ * (Extra Outfits' ränk 167, "Shipyard Expenses (1000 per day)"), and an
+ * escort draws 10% of its hire price a day (escort_fees.ts).
  *
- * Paid DAY BY DAY, re-reading the balance each day, so a capped salary stops
- * on the day the cap is crossed rather than paying the whole jump at once
- * (and so several days' pay cannot vault a player past a cap they should have
- * stopped at). Player-local, like every other part of the date advance: the
- * resulting CreditsComponent is what reaches peers.
+ * Settled DAY BY DAY, re-reading the balance each day, so a capped salary
+ * stops on the day the cap is crossed rather than paying the whole jump at
+ * once (and so several days' pay cannot vault a player past a cap they should
+ * have stopped at). Player-local, like every other part of the date advance:
+ * the resulting CreditsComponent is what reaches peers.
+ *
+ * The arithmetic itself is daily_budget.ts's `settleDailyBudget`, because the
+ * player-info dialog prints the very same rate as its "Income:" / "Expenses:"
+ * lines and the two must not be able to disagree.
  *
  * The ranks passed in are the set the crons just finished mutating, so a rank
- * granted mid-advance starts earning from the following day.
+ * granted mid-advance starts earning from the following day. The escort
+ * payroll is the mirror EscortPayrollSystem left on the entity the last time
+ * the player and their flock were in the world together (see
+ * EscortPayrollComponent) — plus any escort hired at the bar this very
+ * landing, which has not been spawned yet (PendingEscortsComponent).
  */
-function payRankSalaries(entity: Entity, ranks: Set<string>,
-    universe: MissionUniverse, days: number): void {
+function settlePlayerBudget(entity: Entity, ranks: Set<string>,
+    universe: MissionUniverse, days: number,
+    getShip?: (id: string) => ShipData | undefined): void {
     const credits = entity.components.get(CreditsComponent);
-    if (!credits || ranks.size === 0) {
+    if (!credits) {
         return;
     }
-    const getRank = (id: string) => universe.getRank(id);
-    let balance = credits.credits;
-    for (let day = 0; day < days; day++) {
-        const pay = rankSalaryPerDay(ranks, getRank, balance);
-        if (pay === 0) {
-            break; // Nothing active pays, and nothing here can change that.
-        }
-        balance += pay;
-    }
+    const inputs = {
+        ranks,
+        getRank: (id: string) => universe.getRank(id),
+        escortShips: playerPayroll(entity),
+        getShip,
+    };
+    const balance = settleDailyBudget(inputs, credits.credits, days);
     if (balance !== credits.credits) {
         entity.components.set(CreditsComponent, { credits: balance });
     }
+}
+
+/**
+ * Every escort whose wage the player owes: the mirror of the flock that was
+ * in the world with them (EscortPayrollComponent) plus the pilots hired at
+ * the bar this landing, who are still standing at the bar
+ * (PendingEscortsComponent) and only become entities at lift-off.
+ *
+ * The two lists cannot overlap: browser.ts pops PendingEscorts off the entity
+ * before the launch record is encoded, and the payroll mirror only sees them
+ * once they are spawned ships.
+ */
+export function playerPayroll(entity: Entity): string[] {
+    return [...(entity.components.get(EscortPayrollComponent) ?? []),
+        ...(entity.components.get(PendingEscortsComponent) ?? [])];
+}
+
+/**
+ * The ship data behind {@link playerPayroll}'s ids, so the (synchronous)
+ * budget arithmetic can price each escort's hull. A class the data set
+ * cannot produce is simply absent and contributes no fee — the same rule
+ * the shops use for an unloadable hull.
+ */
+export async function loadPayrollShips(entity: Entity,
+    gameData?: SimulationGameDataInterface):
+    Promise<Map<string, ShipData>> {
+    const ships = new Map<string, ShipData>();
+    if (!gameData) {
+        return ships;
+    }
+    for (const id of new Set(playerPayroll(entity))) {
+        try {
+            ships.set(id, await gameData.data.Ship.get(id));
+        } catch {
+            // No hull, no fee.
+        }
+    }
+    return ships;
 }
 
 /**
@@ -473,7 +524,13 @@ export async function advanceEntityDate(entity: Entity, days: number,
         entity.components.set(ActiveRanksComponent, ranks);
         entity.components.set(CronStatesComponent, cronStates);
         commitCronOutfits(entity, ownedOutfits);
-        payRankSalaries(entity, ranks, universe, days);
+        // Escort wages need the hull prices, so the payroll's ship classes
+        // are fetched first. Without game data (the bare callers) there are
+        // no prices and so no escort expense — the same "gameData-less
+        // callers see less" rule the Contribute mask above follows.
+        const payrollShips = await loadPayrollShips(entity, gameData);
+        settlePlayerBudget(entity, ranks, universe, days,
+            id => payrollShips.get(id));
     } catch (e) {
         console.warn('Cron evaluation failed:', e);
     }
