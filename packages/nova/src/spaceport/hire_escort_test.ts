@@ -1,9 +1,6 @@
 import 'jasmine';
-import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
-import {
-    hirePrice, shipHireable, NO_SHIPS_FOR_HIRE,
-} from './hire_escort.js';
+import { hirePrice, NO_SHIPS_FOR_HIRE } from './hire_escort.js';
 
 function makeShip(ship: Partial<ShipData>): ShipData {
     return { ...getDefaultShipData(), ...ship };
@@ -30,25 +27,5 @@ describe('NO_SHIPS_FOR_HIRE', () => {
         // hire string has NO trailing "here".
         expect(NO_SHIPS_FOR_HIRE)
             .toBe('There are no ships available for hire.');
-    });
-});
-
-describe('shipHireable', () => {
-    const planet = { ...getDefaultPlanetData(), techLevel: 8 };
-
-    it('requires HireRandom, a price, and the stellar tech level', () => {
-        expect(shipHireable(makeShip(
-            { hireRandom: 25, price: 10_000, techLevel: 5 }), planet))
-            .toBeTrue();
-        // HireRandom 0 = never for hire (Bible, shïp HireRandom).
-        expect(shipHireable(makeShip(
-            { hireRandom: 0, price: 10_000, techLevel: 5 }), planet))
-            .toBeFalse();
-        expect(shipHireable(makeShip(
-            { hireRandom: 25, price: 0, techLevel: 5 }), planet))
-            .toBeFalse();
-        expect(shipHireable(makeShip(
-            { hireRandom: 25, price: 10_000, techLevel: 9 }), planet))
-            .toBeFalse();
     });
 });

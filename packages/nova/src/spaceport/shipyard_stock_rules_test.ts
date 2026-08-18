@@ -8,7 +8,10 @@ import {
     shipAvailabilityPasses,
     shipAvailableForSale,
     shipBuyRandomPasses,
+    shipHireable,
     shipRequirementsMet,
+    shipStockGatesPass,
+    hireRandomDayRoll,
     ShipyardContext,
     visibleShips,
 } from './shipyard_stock_rules.js';
@@ -338,5 +341,183 @@ describe('shipAvailableForSale', () => {
             planet: STELLAR_TECH_5, bits: new Set([3]),
             contribute: 0n });
         expect(shipAvailableForSale(ship, unmet)).toBeFalse();
+    });
+});
+
+/**
+ * The BAR's hire pool (Matthew, 2026-08-18: "I can't hire TAM drones (or
+ * any escorts) at Tektaara Station"). Hiring is a bar function (EVN Bible,
+ * shïp HireRandom: "available for hire in the bar on a given day"), and it
+ * gates on the SAME shïp stock rules the shipyard uses — the bar used to
+ * test only `techLevel <= planet.techLevel`, which is empty at every
+ * SpecialTech-only stellar.
+ */
+describe('shipHireable', () => {
+    const TEKTAARA = { techLevel: -1, specialTech: [10000] };
+
+    it('hires ships at or below the stellar tech level', () => {
+        const ship = makeShip('nova:167', {
+            techLevel: 4, hireRandom: 95, price: 80_000,
+        });
+        expect(shipHireable(ship, makeContext(ship, {
+            planet: STELLAR_TECH_5 }))).toBeTrue();
+    });
+
+    it('hires a ship whose TechLevel is an exact SpecialTech match', () => {
+        // Extra Outfits' Anti-Missile Drone at Tektaara Station: the
+        // stellar's own TechLevel is -1, so ONLY the exact SpecialTech
+        // match can put this pilot in the bar.
+        const drone = makeShip('extra-outfits:800', {
+            techLevel: 10000, hireRandom: 100, price: 500_000,
+        });
+        expect(shipHireable(drone, makeContext(drone, { planet: TEKTAARA })))
+            .toBeTrue();
+    });
+
+    it('refuses a ship the stellar does not stock', () => {
+        // techLevel 10003 is a SpecialTech of Spica Shipyard, NOT of
+        // Tektaara — near misses must not slip through.
+        const other = makeShip('extra-outfits:806', {
+            techLevel: 10003, hireRandom: 100, price: 300_000,
+        });
+        expect(shipHireable(other, makeContext(other, { planet: TEKTAARA })))
+            .toBeFalse();
+        const beyond = makeShip('nova:999', {
+            techLevel: 999, hireRandom: 100, price: 1000,
+        });
+        expect(shipHireable(beyond, makeContext(beyond, {
+            planet: STELLAR_TECH_5 }))).toBeFalse();
+    });
+
+    it('honours the Availability control-bit expression', () => {
+        const rebel = makeShip('nova:177', {
+            techLevel: 5, hireRandom: 100, price: 120_000,
+            availability: 'b130',
+        });
+        expect(shipHireable(rebel, makeContext(rebel, {
+            planet: STELLAR_TECH_5 }))).toBeFalse();
+        expect(shipHireable(rebel, makeContext(rebel, {
+            planet: STELLAR_TECH_5, bits: new Set([130]) }))).toBeTrue();
+    });
+
+    it('honours the Require bits against the player Contribute', () => {
+        const frigate = makeShip('nova:140', {
+            techLevel: 5, hireRandom: 100, price: 750_000,
+            require: '0x300000000',
+        });
+        expect(shipHireable(frigate, makeContext(frigate, {
+            planet: STELLAR_TECH_5 }))).toBeFalse();
+        expect(shipHireable(frigate, makeContext(frigate, {
+            planet: STELLAR_TECH_5, contribute: 0x300000000n }))).toBeTrue();
+    });
+
+    it('never hires a HireRandom 0 ship, however cheap or low-tech', () => {
+        // "A HireRandom of 0 means this ship will never be made available
+        // for hire." Extra Outfits' Offensive Drone is exactly this: a
+        // tech-10000 ship Tektaara stocks but no pilot ever flies.
+        const offensive = makeShip('extra-outfits:816', {
+            techLevel: 10000, hireRandom: 0, price: 1_000_000,
+        });
+        expect(shipHireable(offensive, makeContext(offensive, {
+            planet: TEKTAARA }))).toBeFalse();
+    });
+
+    it('does not require BuyRandom: a never-sold ship can be hired', () => {
+        // The Anti-Missile Drone (and stock Nova's second-hand hulls,
+        // nova:361-372) have BuyRandom 0 and a nonzero HireRandom.
+        const drone = makeShip('extra-outfits:800', {
+            techLevel: 10000, hireRandom: 100, price: 500_000, buyRandom: 0,
+        });
+        const ctx = makeContext(drone, { planet: TEKTAARA });
+        expect(shipAvailableForSale(drone, ctx)).toBeFalse();
+        expect(shipHireable(drone, ctx)).toBeTrue();
+    });
+
+    it('needs a price: the hire fee is a percentage of it', () => {
+        const free = makeShip('nova:895', {
+            techLevel: 0, hireRandom: 100, price: 0,
+        });
+        expect(shipHireable(free, makeContext(free, {
+            planet: STELLAR_TECH_5 }))).toBeFalse();
+    });
+
+    it('rolls HireRandom per day, deterministically', () => {
+        const ship = makeShip('nova:141', {
+            techLevel: 5, hireRandom: 20, price: 2_000_000,
+        });
+        const at = (day: number) => makeContext(ship, {
+            planet: STELLAR_TECH_5, day, stellarId: 472 });
+        // Pure: the same day gives the same answer, so closing and
+        // reopening the bar cannot reroll the pool.
+        expect(hireRandomDayRoll(ship, at(200)))
+            .toBe(hireRandomDayRoll(ship, at(200)));
+        expect(shipHireable(ship, at(200)))
+            .toBe(shipHireable(ship, at(200)));
+        // And it actually varies: a 20% ship is neither always nor never
+        // in the pool over a long stretch of days.
+        let open = 0;
+        for (let day = 0; day < 500; day++) {
+            if (shipHireable(ship, at(day))) {
+                open++;
+            }
+        }
+        expect(open).toBeGreaterThan(0);
+        expect(open).toBeLessThan(500);
+    });
+
+    it('rolls hire and buy independently for the same ship/day', () => {
+        // Different salts: a ship must not be "in the bar exactly on the
+        // days it is in the shipyard".
+        const ship = makeShip('nova:141', { hireRandom: 50, buyRandom: 50 });
+        let differ = 0;
+        for (let day = 0; day < 200; day++) {
+            const ctx = makeContext(ship, {
+                planet: STELLAR_TECH_5, day, stellarId: 472 });
+            if (hireRandomDayRoll(ship, ctx) !== buyRandomDayRoll(ship, ctx)) {
+                differ++;
+            }
+        }
+        expect(differ).toBeGreaterThan(150);
+    });
+
+    it('never uses Math.random or Date.now', () => {
+        const random = spyOn(Math, 'random').and.callThrough();
+        const now = spyOn(Date, 'now').and.callThrough();
+        const ship = makeShip('nova:141', {
+            techLevel: 5, hireRandom: 20, price: 2_000_000,
+        });
+        shipHireable(ship, makeContext(ship, {
+            planet: STELLAR_TECH_5, day: 7, stellarId: 472 }));
+        expect(random).not.toHaveBeenCalled();
+        expect(now).not.toHaveBeenCalled();
+    });
+});
+
+/** The gate the shipyard and the bar literally share. */
+describe('shipStockGatesPass', () => {
+    it('is the sale gate minus the daily roll', () => {
+        const ship = makeShip('nova:167', { techLevel: 4, buyRandom: 0 });
+        const ctx = makeContext(ship, { planet: STELLAR_TECH_5 });
+        expect(shipStockGatesPass(ship, ctx)).toBeTrue();
+        expect(shipAvailableForSale(ship, ctx)).toBeFalse();
+    });
+
+    it('fails on tech, Availability or Require', () => {
+        const ctxOf = (ship: ShipData, over: Partial<ShipyardContext> = {}) =>
+            makeContext(ship, { planet: STELLAR_TECH_5, ...over });
+        const tooHigh = makeShip('nova:999', { techLevel: 999 });
+        expect(shipStockGatesPass(tooHigh, ctxOf(tooHigh))).toBeFalse();
+        const gated = makeShip('nova:177', {
+            techLevel: 4, availability: 'b130',
+        });
+        expect(shipStockGatesPass(gated, ctxOf(gated))).toBeFalse();
+        expect(shipStockGatesPass(gated,
+            ctxOf(gated, { bits: new Set([130]) }))).toBeTrue();
+        const needs = makeShip('nova:140', {
+            techLevel: 4, require: '0x300000000',
+        });
+        expect(shipStockGatesPass(needs, ctxOf(needs))).toBeFalse();
+        expect(shipStockGatesPass(needs,
+            ctxOf(needs, { contribute: 0x300000000n }))).toBeTrue();
     });
 });

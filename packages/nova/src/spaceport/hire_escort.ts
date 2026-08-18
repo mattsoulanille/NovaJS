@@ -1,4 +1,5 @@
-import { PlanetData } from 'novadatainterface/planet_data';
+import { Entity } from 'nova_ecs/entity';
+import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
@@ -7,11 +8,19 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
+import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
 import { MenuControls } from './menu_controls.js';
+import { MissionUniverse } from './mission_universe.js';
 import { FONT } from './outfitter.js';
+import { shipGateContext } from './ship_gate_context.js';
+import {
+    shipHireable, ShipyardContext, ShipyardStellar,
+} from './shipyard_stock_rules.js';
 
 /**
  * What the bar says when the day's hire pool comes up empty.
@@ -54,18 +63,38 @@ export function hirePrice(ship: ShipData): number {
 }
 
 /**
+ * Who is doing the hiring: the landed player's entity (control bits,
+ * owned outfits, active ranks and the game date all come off it) and,
+ * optionally, the bar's MissionSession working control bits, so a bit
+ * set by a mission accepted this very visit already counts.
+ *
+ * Everything is optional: a headless harness with no entity gets the
+ * "no player context" defaults (no bits, no contribute, day 0), which
+ * is the same fallback the shipyard's stock context uses.
+ */
+export interface HirePlayer {
+    entity?: Entity;
+    bits?: ReadonlySet<number>;
+}
+
+/**
  * The bar's hire-escort dialog, on the shipyard frame (PICT 8501):
  * a grid of pilots for hire, the pilot description (dësc 14000+),
  * the ship pict, and the hiring price against the player's credits.
  *
- * Which ships appear follows the Bible's hire rules: a ship class
- * with HireRandom > 0 has that percent chance per day of a pilot
- * being available, gated by the stellar's tech level. Like the
- * mission board's AvailRandom, the roll happens once per opening with
- * plain Math.random — player-local UI; only hired-escort state
- * reaches the simulation. Documented gap: spöb SpecialTech levels are
- * not parsed onto PlanetData yet, so only the base TechLevel gates
- * the pool.
+ * Which ships appear follows the Bible's hire rules, and they are the
+ * SHIPYARD's rules with HireRandom swapped in for BuyRandom: the stellar
+ * must stock the ship's TechLevel (its own TechLevel or an exact
+ * SpecialTech match), the ship's Availability expression must pass
+ * against the player's control bits, the player's Contribute must cover
+ * its Require bits, and the day's HireRandom roll must come up. All of
+ * that is `shipHireable` in shipyard_stock_rules.ts, one module away from
+ * the shipyard's `shipAvailableForSale`, so the two shops cannot drift.
+ *
+ * The day's roll is deterministic (FNV-1a over day|stellar|ship, salted
+ * 'hire'), not Math.random: closing and reopening the bar must not reroll
+ * the pool, which is both what the original does and what stops
+ * "reopen until the Leviathan shows up".
  *
  * Hiring charges the credits working copy (committed when the bar
  * session commits) and records the ship id for browser.ts to spawn
@@ -84,6 +113,8 @@ export class HireEscortDialog {
     private bits?: ReadonlySet<number>;
     private hired: string[] = [];
     private loadPromise?: Promise<void>;
+    /** The docked stellar's tech rules, from its PlanetData (see load). */
+    private stellar?: ShipyardStellar;
 
     private text = {
         description: new PIXI.Text('', FONT.normal),
@@ -154,25 +185,78 @@ export class HireEscortDialog {
         });
     }
 
+    /**
+     * Every ship class in the data set, plus the docked stellar's tech
+     * rules. Loaded once; which of them a PILOT is flying today is decided
+     * per opening by {@link rollPool}, because the gates are per-player
+     * (control bits, Contribute) and per-day (the HireRandom roll).
+     */
     private load(): Promise<void> {
         this.loadPromise ??= (async () => {
             const [planet, ids] = await Promise.all([
                 this.simulationData.data.Planet.get(this.planetId),
                 this.simulationData.ids,
             ]);
-            const ships = await Promise.all(ids.Ship.map(
+            this.stellar = {
+                techLevel: planet.techLevel,
+                specialTech: planet.specialTech,
+            };
+            this.ships = await Promise.all(ids.Ship.map(
                 id => this.simulationData.data.Ship.get(id, 100)));
-            this.ships = ships.filter(
-                ship => shipHireable(ship, planet));
             this.ships.sort((a, b) => b.displayWeight - a.displayWeight);
         })();
         return this.loadPromise;
     }
 
-    /** Rolls the day's pool once per opening (see class doc). */
-    private rollPool(): ShipData[] {
-        return this.ships.filter(
-            ship => Math.random() * 100 < ship.hireRandom);
+    /**
+     * The pilots standing at the bar today: the shared shïp stock gates
+     * plus the day's HireRandom roll (see the class doc). Pure in its
+     * context, so reopening the bar on the same day shows the same people.
+     */
+    private rollPool(ctx: ShipyardContext): ShipData[] {
+        return this.ships.filter(ship => shipHireable(ship, ctx));
+    }
+
+    /**
+     * The gate context for the player standing in this bar — built by the
+     * same assembler the shipyard uses (ship_gate_context.ts). Only the
+     * outfits the player actually owns are loaded, since those are the
+     * only ones that can contribute.
+     */
+    private async hireContext(player: HirePlayer): Promise<ShipyardContext> {
+        const outfits = new Map<string, OutfitData>();
+        const owned = player.entity?.components.get(OutfitsStateComponent);
+        await Promise.all([...(owned?.keys() ?? [])].map(async id => {
+            try {
+                outfits.set(id, await this.simulationData.data.Outfit.get(id));
+            } catch {
+                // An outfit the data set can't produce contributes nothing.
+            }
+        }));
+        let currentShipData: ShipData | undefined;
+        const shipId = player.entity?.components.get(ShipComponent)?.id;
+        if (shipId) {
+            try {
+                currentShipData =
+                    await this.simulationData.data.Ship.get(shipId);
+            } catch {
+                // Same: an unloadable hull contributes nothing.
+            }
+        }
+        // The shared universe (the spaceport's own instance) supplies
+        // rank Contribute; load() is idempotent and already resolved by
+        // the time the bar is open, but awaiting it keeps the hire pool
+        // correct even on the very first opening.
+        const universe = MissionUniverse.shared(this.simulationData);
+        await universe.load().catch(() => { });
+        return shipGateContext(player.entity, {
+            planet: this.stellar,
+            stellarId: this.planetId,
+            currentShipData,
+            getOutfit: id => outfits.get(id),
+            getRank: id => universe.getRank(id),
+            bits: player.bits,
+        });
     }
 
     private setShipSelected(tile: ItemTile<ShipData> | undefined) {
@@ -232,17 +316,19 @@ export class HireEscortDialog {
      */
     async show(credits: { credits: number },
         hired: string[],
-        bits?: ReadonlySet<number>): Promise<'closed' | 'empty'> {
+        player: HirePlayer = {}): Promise<'closed' | 'empty'> {
         this.credits = credits;
         this.hired = hired;
-        this.bits = bits;
+        this.bits = player.bits
+            ?? player.entity?.components.get(ControlBitsComponent);
+        let pool: ShipData[] = [];
         try {
             await this.load();
+            pool = this.rollPool(await this.hireContext(player));
         } catch (e) {
             console.warn('Hire escort dialog failed to load:', e);
         }
 
-        const pool = this.rollPool();
         if (pool.length === 0) {
             return 'empty';
         }
@@ -263,10 +349,4 @@ export class HireEscortDialog {
         this.container.visible = false;
         return 'closed';
     }
-}
-
-/** Whether a ship class can ever offer a pilot at this stellar. */
-export function shipHireable(ship: ShipData, planet: PlanetData): boolean {
-    return ship.hireRandom > 0 && ship.price > 0
-        && ship.techLevel <= planet.techLevel;
 }

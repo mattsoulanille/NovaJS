@@ -72,6 +72,21 @@ const POPUP_FONT: Partial<PIXI.ITextStyle> = {
 const POPUP_WRAP_WIDTH = 416;
 const PICT_WRAP_WIDTH = 412;
 
+/**
+ * What the 'depart' control (Escape / 'd' — the landed UI's universal
+ * "close this") does to a popup.
+ *
+ * A NOTICE — one button, e.g. the bar's "There are no ships available for
+ * hire." or a mission briefing — closes exactly as its lone button would.
+ * A two-button OFFER returns undefined: accept-or-refuse is a real
+ * decision with consequences (a mission taken or turned down), and a key
+ * that means "get me out of here" must not silently pick one of them.
+ */
+export function popupDepartChoice(hasRefuse: boolean):
+    'accept' | undefined {
+    return hasRefuse ? undefined : 'accept';
+}
+
 /** Optional rendering choices for a mission-text popup. */
 export interface PopupOptions {
     /** Global PICT id shown beside the text (the dësc Graphic). When set,
@@ -112,7 +127,12 @@ export class OfferPopup {
     /**
      * Keyboard: up/down arrows scroll a paginated popup a line at a time
      * (the same step as an arrow-button press) and 'accept' presses the
-     * accept button. Bound only while a popup is up, on the shared
+     * accept button. 'depart' (Escape / 'd', the landed UI's universal
+     * "close this") dismisses a NOTICE — a popup with only an accept
+     * button, such as the bar's "There are no ships available for hire."
+     * — exactly as pressing its lone button would. A two-button OFFER
+     * ignores it: accept-or-refuse is a real choice, and Escape must not
+     * silently pick one. Bound only while a popup is up, on the shared
      * MenuControls focus stack — so it also mutes the owner's keys, which
      * is why owners no longer need a separate empty "popup blocker".
      * Optional: a popup built without control events (the About box, the
@@ -121,6 +141,9 @@ export class OfferPopup {
      * key pressed between two consecutive popups doesn't leak through.
      */
     private controls?: MenuControls;
+    /** Whether the popup now showing offers a Refuse button (see the
+     * controls doc: only a one-button NOTICE is Escape-dismissable). */
+    private hasRefuse = false;
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         controlEvents?: Observable<ControlEvent>) {
@@ -131,6 +154,7 @@ export class OfferPopup {
                 up: () => this.scrollBy(-POPUP_SCROLL_STEP),
                 down: () => this.scrollBy(POPUP_SCROLL_STEP),
                 accept: () => this.choice.next('accept'),
+                depart: () => this.dismiss(),
             });
         }
         // Headless-harness hook, like window.novaHailDialog: the
@@ -150,6 +174,17 @@ export class OfferPopup {
         }
     }
 
+    /**
+     * Escape / 'd' on a one-button notice: the same outcome its lone
+     * button gives. A popup that also offers Refuse is left alone.
+     */
+    private dismiss() {
+        const choice = popupDepartChoice(this.hasRefuse);
+        if (choice) {
+            this.choice.next(choice);
+        }
+    }
+
     async show(text: string, buttons: {
         accept: string,
         refuse?: string | null,
@@ -157,6 +192,7 @@ export class OfferPopup {
         this.container.removeChildren();
         this.endHold();
         this.scroll = undefined;
+        this.hasRefuse = Boolean(buttons.refuse);
 
         if (options.pict) {
             this.buildWithPict(text, buttons, options.pict);
