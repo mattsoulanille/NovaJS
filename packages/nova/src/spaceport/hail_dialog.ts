@@ -62,8 +62,20 @@ export interface HailContext {
      * 'nova:4001', or a planet pict), or null for no image. Already prefixed —
      * the caller must NOT add another 'nova:'. */
     image: string | null;
-    /** Body: greeting, hostile line, or planet/escort status text. */
+    /**
+     * Body: what the hailed party says as the channel OPENS — the
+     * channel-open line for a ship or planet, the hostile group's line for a
+     * hostile ship, or the escort status text. NOT the greeting: that is
+     * {@link greeting}, which the Greetings button produces.
+     */
     body: string;
+    /**
+     * What the Greetings button answers with (hail/greetings.png), when the
+     * hailed party has a greeting to give. Absent for a hostile ship or a
+     * non-talkative government, whose Greetings press simply restores the
+     * line the channel opened with.
+     */
+    greeting?: string;
     /** Request-assistance offer (fuel/repair), when eligible. */
     assist?: { free: boolean };
     /**
@@ -74,6 +86,13 @@ export interface HailContext {
      */
     bribe?: {
         amount: number, canAfford: boolean, purpose?: 'mercy' | 'landing',
+        /**
+         * What the hailed SHIP says once the demand is paid (STR# 3000
+         * 135-139, "Okay, I'll leave you alone."). Present on a mercy offer
+         * only: paying a PORT closes the channel instead, since the
+         * clearance it just sold has to be re-derived by a fresh hail.
+         */
+        accepted?: string,
     };
     /** Escort-management dialog (escort variant only): show the Upgrade
      * Escort / Sell Escort / Release seam buttons above Close Channel. */
@@ -218,6 +237,81 @@ export function assistSlotAction(phase: 'main' | 'haggle',
     return undefined;
 }
 
+/** Which page of the comm dialog is showing, and with what contents. */
+export interface HailPage {
+    phase: 'main' | 'haggle';
+    context: HailContext;
+}
+
+/** A button press the page state machine understands. */
+export type HailPress =
+    /** The top button: ask for a hello. */
+    | { kind: 'greetings' }
+    /** The offer slot for a friendly ship, carrying WHAT IT ANSWERED. */
+    | { kind: 'assist', answer: string }
+    /** The offer slot for a hostile ship / a shut port: onto the haggle page. */
+    | { kind: 'beg' }
+    /** Pay the demand (the haggle page). */
+    | { kind: 'pay' }
+    /** Back out of the haggle page. */
+    | { kind: 'cancel' };
+
+/**
+ * THE COMM DIALOG'S PAGE STATE MACHINE — pure, so the behaviour the
+ * reference screenshots pin can be tested without a canvas (the same reason
+ * button.ts's pressTransition is pure). {@link HailDialog} is then only the
+ * drawing of whatever this returns; `'close'` means the channel shuts.
+ *
+ * `opening` is the context the channel opened with, which is what a Greetings
+ * press restores for a party that has no greeting of its own.
+ *
+ * The rule the two nits come down to: A PRESS NEVER REMOVES ITS OWN BUTTON.
+ * The offer slot is drawn from the context (hail_layout's commButtonSlots),
+ * and no transition here clears `assist` or `bribe` — hail/hail.png,
+ * hail/greetings.png and hail/request_assistance.png are the same three-row
+ * column in every state, including after the ship has answered.
+ */
+export function hailPress(state: HailPage, press: HailPress,
+    opening?: HailContext): HailPage | 'close' {
+    const { phase, context } = state;
+    switch (press.kind) {
+        case 'greetings': {
+            // The greeting the Greetings button exists for; a party with
+            // none (a hostile ship, a silent govt) restores what the channel
+            // opened with, which is what the button is good for after a
+            // refusal has replaced the response text.
+            const body = context.greeting ?? opening?.body ?? context.body;
+            return body === context.body
+                ? state : { phase, context: { ...context, body } };
+        }
+        case 'assist':
+            // The answer goes in the well and THE OFFER STAYS — asking again
+            // re-asks, and the answer is recomputed from live state.
+            return context.assist
+                ? { phase, context: { ...context, body: press.answer } }
+                : state;
+        case 'beg':
+            return context.bribe ? { phase: 'haggle', context } : state;
+        case 'cancel':
+            return { phase: 'main', context };
+        case 'pay': {
+            const accepted = context.bribe?.accepted;
+            if (accepted === undefined) {
+                // A PORT's clearance has to be re-derived (the landing gate
+                // reads the bribe the sim just recorded), so the channel
+                // closes and a fresh hail reports the new verdict.
+                return 'close';
+            }
+            // A SHIP takes the money and says so ("Okay, I'll leave you
+            // alone." — STR# 3000 135-139): back to the main page with its
+            // answer, Beg For Mercy still in its slot. A second press costs
+            // nothing — applyHail refuses to charge for a reprieve it has
+            // already granted this player.
+            return { phase: 'main', context: { ...context, body: accepted } };
+        }
+    }
+}
+
 export class HailDialog {
     container = new PIXI.Container();
     private content = new PIXI.Container();
@@ -270,25 +364,49 @@ export class HailDialog {
 
     /**
      * The Greetings press (the top button in every ship/planet reference):
-     * hails again. NovaJS's greeting line is a deterministic function of the
-     * target (hail_dialog_plugin's greetingText, seeded by its uuid), so the
-     * answer is the SAME line every time — pressing it restores the greeting
-     * the channel opened with, which is what it is good for after a refusal
-     * has replaced the response text.
+     * asks the hailed party for a hello. The channel itself opened with
+     * "Channel open." (hail/hail.png); pressing Greetings is what puts
+     * "Greetings." in the response well (hail/greetings.png), so this is the
+     * ONLY thing that shows the greeting at all.
+     *
+     * NovaJS's greeting is a deterministic function of the target
+     * (hail.ts's greetingText, seeded by its uuid) rather than a fresh random
+     * pick, so pressing it repeatedly answers the same line — and a hailed
+     * party with no greeting to give (a hostile ship, a non-talkative govt)
+     * falls back to restoring whatever the channel opened with, which is what
+     * the button is good for after a refusal has replaced the response text.
      */
     private pressGreetings() {
         this.beep();
-        if (this.context && this.opening
-            && this.context.body !== this.opening.body) {
-            this.context = { ...this.context, body: this.opening.body };
-            void this.render();
-        }
+        this.apply({ kind: 'greetings' });
     }
 
     /** The Beg for Mercy press: into the haggle page. */
     private pressBeg() {
         this.beep();
-        this.phase = 'haggle';
+        this.apply({ kind: 'beg' });
+    }
+
+    /**
+     * Runs one press through {@link hailPress} and redraws if anything moved.
+     * All of the dialog's page behaviour lives in that pure function; this is
+     * the only thing that turns its answer into pixels.
+     */
+    private apply(press: HailPress) {
+        if (!this.context) {
+            return;
+        }
+        const next = hailPress({ phase: this.phase, context: this.context },
+            press, this.opening);
+        if (next === 'close') {
+            this.close();
+            return;
+        }
+        if (next.phase === this.phase && next.context === this.context) {
+            return;
+        }
+        this.phase = next.phase;
+        this.context = next.context;
         void this.render();
     }
 
@@ -296,20 +414,30 @@ export class HailDialog {
      * The Request Assistance press. WHATEVER the ship answers — an acceptance
      * ("All right, I'll help you."), a busy refusal ("I'm busy.") or "you
      * don't need help" — the channel stays OPEN showing the line, so the
-     * player actually hears the reply and closes the channel themselves. The
-     * offer button goes away with the answer, so one request cannot be
-     * hammered at a ship that has already replied. (Accepting used to slam the
-     * dialog shut the moment the request was dispatched.)
+     * player actually hears the reply and closes the channel themselves.
+     *
+     * THE BUTTON STAYS. hail/request_assistance.png is the reference: the
+     * ship has already answered "You're not in any trouble." and the Request
+     * Assistance pill is still sitting in the middle slot, exactly where
+     * hail.png had it. NovaJS used to drop the offer with the answer, so the
+     * column silently collapsed to two rows and a player who asked too early
+     * (before taking damage, or while the ship was busy) could never ask
+     * again without closing and re-opening the channel. Re-asking is free:
+     * the answer is recomputed from live state on every press (the plugin's
+     * assistAnswer), and only an acceptance dispatches anything to the sim,
+     * where applyHail re-checks the same predicates.
      */
     private pressAssist() {
-        const context = this.context;
-        if (!context?.assist) {
+        if (!this.context?.assist) {
             return;
         }
         this.beep();
-        const answer = this.callbacks.requestAssistance();
-        this.context = { ...context, body: answer, assist: undefined };
-        void this.render();
+        // ONE call decides and answers (see HailCallbacks.requestAssistance);
+        // the sim effect, if any, is already dispatched by the time it
+        // returns, and what comes back is the line to show.
+        this.apply({
+            kind: 'assist', answer: this.callbacks.requestAssistance(),
+        });
     }
 
     /**
@@ -562,7 +690,10 @@ export class HailDialog {
             pay.click.subscribe(() => {
                 this.beep();
                 this.callbacks.bribe();
-                this.close();
+                // A SHIP answers and the channel stays open with Beg For
+                // Mercy still in its slot; a PORT's channel closes. See
+                // hailPress.
+                this.apply({ kind: 'pay' });
             });
             this.content.addChild(pay.container);
         }
@@ -570,8 +701,7 @@ export class HailDialog {
             this.placeButton('Never Mind', frame, originX, originY, 1);
         cancel.click.subscribe(() => {
             this.beep();
-            this.phase = 'main';
-            void this.render();
+            this.apply({ kind: 'cancel' });
         });
         this.content.addChild(cancel.container);
     }

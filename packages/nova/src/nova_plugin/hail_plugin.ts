@@ -32,7 +32,10 @@ import { ranksAllowAssistance } from './rank_logic.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { ShipDataComponent } from './ship_plugin.js';
 import { shipDisposition } from './iff_plugin.js';
-import { NpcComponent, NpcSteeringSystem } from './npc_ai_plugin.js';
+import {
+    isPacifiedToward, NpcComponent, NpcSteeringSystem,
+} from './npc_ai_plugin.js';
+import { AggressionComponent } from './aggression.js';
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
 import { CreditsComponent, MissionsComponent } from './player_state_plugin.js';
 import { GovtsResource, LegalRecordsComponent } from './reputation_plugin.js';
@@ -288,6 +291,17 @@ export function applyHail(world: World, peerId: string | undefined,
     if (disposition !== 'hostile' && !attackingPlayer) {
         return;
     }
+    // ONE PAYMENT PER REPRIEVE. The comm dialog keeps Beg For Mercy in its
+    // slot after a successful bribe (the reference keeps Request Assistance
+    // there too — hail/request_assistance.png), so a second Pay press can
+    // reach here; charging for a reprieve the player already owns would let
+    // the button drain them. The reprieve itself is not extended either: it
+    // runs from the payment that bought it, and a player who wants a fresh
+    // one waits for this one to lapse (or provokes the ship, which voids it).
+    if (isPacifiedToward(target.components.get(NpcComponent), found.uuid,
+        world.resources.get(TimeResource)?.time ?? 0)) {
+        return;
+    }
     const aiType = target.components.get(NpcComponent)?.aiType;
     if (targetGovt?.flags2.noAssistOrMercy
         || !shipTakesBribes(targetGovt, aiType)) {
@@ -319,6 +333,44 @@ export function applyHail(world: World, peerId: string | undefined,
             tgt.target = undefined;
         }
     }
+    forgetMutualAggression(player, action.target, target, found.uuid);
+}
+
+/**
+ * WHAT ELSE A PAID BRIBE HAS TO ERASE.
+ *
+ * Dropping the NPC's own attack (above) stops the bribed ship shooting, but
+ * it does NOT make it neutral, because hostility is a two-sided reading: the
+ * player's own AggressionComponent still remembers every shot that ship
+ * landed in the last AGGRESSION_WINDOW_MS, and that memory is tier 3b of the
+ * one hostility rule (hostility.ts's styleForTarget). While it stands, the
+ * ship the player just paid off keeps hostile target corners, keeps being
+ * picked by the 'r' key, keeps a red IFF blip — and, worst, keeps being shot
+ * at by the player's own POINT DEFENSE turrets, whose prey filter is exactly
+ * "hostile fighter in range" (point_defense.ts). The first PD round to land
+ * voids the reprieve (NpcDecisionSystem clears pacifiedFrom when the briber
+ * damages it), so the player paid for a truce their own turrets cancelled.
+ * Matthew's report, precisely.
+ *
+ * So the payment forgets the encounter in BOTH directions: the player forgets
+ * what the bribed ship did to them, and (for the multiplayer case where the
+ * bribed ship is itself player-controlled and so carries the component) the
+ * bribed ship forgets what the briber did to it. Only the entry naming the
+ * other party is dropped — a brawl with three pirates leaves the two
+ * unbribed ones exactly as hostile as they were.
+ *
+ * The accumulated stray damage goes with the entry rather than being zeroed
+ * in place, for the same reason sweepAggression deletes rather than
+ * un-flags: leaving 49 points of forgiven damage in wait would let one shot
+ * after the truce flip the pair hostile instantly.
+ *
+ * Deterministic: two keyed deletes on synced components, no iteration order
+ * and no clock.
+ */
+function forgetMutualAggression(player: Entity, targetUuid: string,
+    target: Entity, playerUuid: string) {
+    player.components.get(AggressionComponent)?.delete(targetUuid);
+    target.components.get(AggressionComponent)?.delete(playerUuid);
 }
 
 /** Point-and-thrust steering toward a position (assist rendezvous). */

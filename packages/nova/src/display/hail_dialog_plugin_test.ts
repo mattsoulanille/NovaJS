@@ -18,12 +18,18 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { DisabledComponent } from '../nova_plugin/disabled_component.js';
 import {
     ASSIST_GRANTED_FALLBACK, ASSIST_GRANTED_FIRST_INDEX,
-    BUSY_RESPONSE_FALLBACK, BUSY_RESPONSE_FIRST_INDEX, HAIL_RESPONSE_TABLE,
-    HOSTILE_RESPONSE_FALLBACK, HOSTILE_RESPONSE_FIRST_INDEX,
-    MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK,
-    NO_NEED_RESPONSE_FIRST_INDEX, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX,
-    STELLAR_RESPONSE_TABLE,
+    BUSY_RESPONSE_FALLBACK, BUSY_RESPONSE_FIRST_INDEX, CHANNEL_OPEN_FALLBACK,
+    CHANNEL_OPEN_FIRST_INDEX, GENERIC_GREETING_FIRST_INDEX,
+    HAIL_RESPONSE_TABLE, HOSTILE_RESPONSE_FALLBACK,
+    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK,
+    MERCY_ACCEPTED_FIRST_INDEX, MISC_STRING_TABLE, miscString,
+    NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
+    NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE,
 } from '../nova_plugin/hail.js';
+import {
+    HailContext, HailPage, HailPress, hailPress,
+} from '../spaceport/hail_dialog.js';
+import { commButtonSlots } from '../spaceport/hail_layout.js';
 import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
 import {
@@ -475,6 +481,332 @@ describe('computeContext: hostile ships answer from their own STR# 3000 set',
                     .toBe('You will regret this, captain.');
             });
     });
+
+/**
+ * OPENING A CHANNEL IS NOT A GREETING (Matthew: "when hailing, the dialog
+ * should initially just show one of the 'Channel open' messages ... instead of
+ * one of the greetings").
+ *
+ * The reference pair proves it: hail/hail.png is a freshly hailed Terrapin
+ * whose response well reads "Channel open." with Greetings still unpressed,
+ * and hail/greetings.png is the SAME frame reading "Greetings." after the
+ * button. NovaJS answered the hail itself with the government greeting, which
+ * both skipped the channel-open group and left the Greetings button with
+ * nothing of its own to say.
+ */
+describe('computeContext: a ship hail OPENS with the channel-open group', () => {
+    /** Display assets carrying STR# 3000's channel-open / greeting groups. */
+    function commAssets(): DisplayAssetDataInterface {
+        const strings: string[] = [];
+        strings[CHANNEL_OPEN_FIRST_INDEX] = 'Channel open.';
+        strings[CHANNEL_OPEN_FIRST_INDEX + 1] = 'Communications channel open.';
+        strings[CHANNEL_OPEN_FIRST_INDEX + 2] =
+            'Communications interlink established.';
+        strings[CHANNEL_OPEN_FIRST_INDEX + 3] = 'Hailing frequencies open.';
+        strings[CHANNEL_OPEN_FIRST_INDEX + 4] = 'Hailing channel ready.';
+        strings[GENERIC_GREETING_FIRST_INDEX] = 'Nice to meet you.';
+        strings[GENERIC_GREETING_FIRST_INDEX + 1] = 'Hello there.';
+        strings[GENERIC_GREETING_FIRST_INDEX + 2] = 'Greetings.';
+        strings[GENERIC_GREETING_FIRST_INDEX + 3] = 'Hi there.';
+        strings[GENERIC_GREETING_FIRST_INDEX + 4] = 'Howdy.';
+        strings[HOSTILE_RESPONSE_FIRST_INDEX] = 'What is it you want?';
+        strings[MERCY_ACCEPTED_FIRST_INDEX] = "Okay, I'll leave you alone.";
+        return {
+            data: {
+                StringTable: {
+                    get: async (id: string) => id === HAIL_RESPONSE_TABLE
+                        ? { strings } : { strings: [] },
+                },
+            },
+        } as unknown as DisplayAssetDataInterface;
+    }
+
+    const CHANNEL_OPEN_GROUP = [
+        'Channel open.', 'Communications channel open.',
+        'Communications interlink established.', 'Hailing frequencies open.',
+        'Hailing channel ready.',
+    ];
+
+    it('answers the hail itself with a channel-open line, NOT the govt '
+        + 'greeting', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(GovtComponent, { id: 'test:fed' });
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            gameData.data.Govt.map.set('test:fed', {
+                ...gameData.data.Govt.defaultValue!, id: 'test:fed',
+                commName: 'Federation',
+                commGreetings: ['Greetings from the Federation Navy.'],
+            });
+
+            const result = await computeContext(world, gameData, commAssets());
+            expect(CHANNEL_OPEN_GROUP).toContain(result!.context.body);
+            expect(result!.context.body)
+                .not.toBe('Greetings from the Federation Navy.');
+            // The greeting is held in reserve for the Greetings button.
+            expect(result!.context.greeting)
+                .toBe('Greetings from the Federation Navy.');
+        });
+
+    it('falls back to the pinned "Channel open." with no display assets',
+        async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            const result = await computeContext(world, gameData);
+            expect(result!.context.body).toBe(CHANNEL_OPEN_FALLBACK);
+            expect(CHANNEL_OPEN_FALLBACK).toBe('Channel open.');
+        });
+
+    it('picks the same opening line every time for the same ship (uuid hash, '
+        + 'never Math.random)', async () => {
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            const first = await computeContext(world, gameData, commAssets());
+            const again = await computeContext(world, gameData, commAssets());
+            expect(first!.context.body).toBe(again!.context.body);
+        });
+
+    it('gives a govt-LESS ship the stock generic greeting (the reference\'s '
+        + '"Greetings.") rather than a synthetic line', async () => {
+            // hail/greetings.png's Terrapin carries no government at all.
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            const result = await computeContext(world, gameData, commAssets());
+            expect(['Nice to meet you.', 'Hello there.', 'Greetings.',
+                'Hi there.', 'Howdy.']).toContain(result!.context.greeting!);
+            expect(result!.context.greeting).not.toContain('Fly safe');
+        });
+
+    it('still lets a përs speak their own CommQuote as the greeting',
+        async () => {
+            const pers = getDefaultPersData();
+            pers.id = 'nova:131';
+            pers.commQuote = 'Well met, captain.';
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(PersComponent,
+                    { id: 'nova:131', name: 'Captain Nemo', subtitle: '' });
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            gameData.data.Pers.map.set('nova:131', pers);
+            const result = await computeContext(world, gameData, commAssets());
+            // The channel still OPENS with the channel-open line...
+            expect(CHANNEL_OPEN_GROUP).toContain(result!.context.body);
+            // ...and the përs quote is what Greetings produces.
+            expect(result!.context.greeting).toBe('Well met, captain.');
+        });
+
+    it('leaves a HOSTILE ship answering from the hostile group, with no '
+        + 'greeting to give', async () => {
+            // hail/hail_hostile.png opens on "What is it?", not on "Channel
+            // open." — the hostile group REPLACES the channel-open line.
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(GovtComponent, { id: 'test:neutral' });
+                target.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack' });
+                target.components.set(TargetComponent, { target: PLAYER });
+            });
+            gameData.data.Govt.map.set('test:neutral', {
+                ...gameData.data.Govt.defaultValue!, id: 'test:neutral',
+                commGreetings: ['Greetings from the Federation Navy.'],
+            });
+            const result = await computeContext(world, gameData, commAssets());
+            expect(result!.context.body).toBe(HOSTILE_RESPONSE_FALLBACK);
+            expect(CHANNEL_OPEN_GROUP).not.toContain(result!.context.body);
+            expect(result!.context.greeting).toBeUndefined();
+        });
+
+    it('gives a bribe-taking hostile ship its paid-off line up front',
+        async () => {
+            // Resolved when the channel opens because the Pay handler is
+            // synchronous — the same reason the assistance replies are.
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(GovtComponent, { id: 'test:pirate' });
+                target.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack' });
+                target.components.set(TargetComponent, { target: PLAYER });
+            });
+            const pirate = {
+                ...gameData.data.Govt.defaultValue!, id: 'test:pirate',
+            };
+            pirate.flags = { ...pirate.flags, largerBribes: true };
+            gameData.data.Govt.map.set('test:pirate', pirate);
+            world.entities.get(PLAYER)!.components
+                .set(CreditsComponent, { credits: 10_000 });
+
+            const result = await computeContext(world, gameData, commAssets());
+            expect(result!.context.bribe?.purpose).toBe('mercy');
+            expect(result!.context.bribe?.accepted)
+                .toBe(MERCY_ACCEPTED_FALLBACK);
+        });
+
+    it('opens a NON-TALKATIVE govt\'s channel too, with nothing to greet '
+        + 'with', async () => {
+            // Flags2 noDistressMessages: "don't respond with greetings when
+            // hailed". The channel still opens — the ship answers the hail —
+            // but the Greetings button has no line of its own.
+            const { world, gameData } = makeWorld(target => {
+                target.components.set(GovtComponent, { id: 'test:silent' });
+                target.components.set(NpcComponent, { aiType: 3 });
+            });
+            const silent = {
+                ...gameData.data.Govt.defaultValue!, id: 'test:silent',
+            };
+            silent.flags2 = { ...silent.flags2, noDistressMessages: true };
+            gameData.data.Govt.map.set('test:silent', silent);
+
+            const result = await computeContext(world, gameData, commAssets());
+            expect(CHANNEL_OPEN_GROUP).toContain(result!.context.body);
+            expect(result!.context.greeting).toBeUndefined();
+        });
+});
+
+
+/**
+ * THE DIALOG'S PAGE BEHAVIOUR (hailPress + commButtonSlots — the pure pair
+ * HailDialog draws). Matthew's second nit: "'Request assistance' button should
+ * not disappear after requesting (same with 'beg for mercy')."
+ *
+ * hail/request_assistance.png settles it: the ship has already answered
+ * "You're not in any trouble." and the Request Assistance pill is still in the
+ * middle slot, with Greetings above and Close Channel below — the identical
+ * three-row column hail.png and greetings.png show. NovaJS dropped the offer
+ * with the answer, so the column silently collapsed to two rows and a player
+ * who asked too early could not ask again without re-opening the channel.
+ */
+describe('the comm dialog\'s button column survives its own presses', () => {
+    const SHIP: HailContext = {
+        variant: 'ship', heading: 'Class: Terrapin', image: null,
+        body: 'Channel open.', greeting: 'Greetings.',
+        assist: { free: false },
+    };
+    const HOSTILE: HailContext = {
+        variant: 'ship', heading: 'Class: Fed Destroyer\nStatus: Hostile',
+        image: null, body: 'What is it?',
+        bribe: {
+            amount: 3000, canAfford: true, purpose: 'mercy',
+            accepted: "Okay, I'll leave you alone.",
+        },
+    };
+    const PORT: HailContext = {
+        variant: 'planet', heading: 'Earth', image: null,
+        body: 'Channel open to Earth.\nLanding request denied.',
+        bribe: { amount: 1000, canAfford: true, purpose: 'landing' },
+    };
+
+    /** The page a freshly opened channel starts on. */
+    function open(context: HailContext): HailPage {
+        return { phase: 'main', context };
+    }
+
+    /** The captions the column draws for a page, top to bottom. */
+    function slots(page: HailPage): string[] {
+        return commButtonSlots(page.context.variant, page.context);
+    }
+
+    /** Applies presses in order; throws if the channel closes early. */
+    function pressAll(page: HailPage, presses: HailPress[],
+        opening: HailContext): HailPage {
+        let current = page;
+        for (const press of presses) {
+            const next = hailPress(current, press, opening);
+            if (next === 'close') {
+                throw new Error(`press ${press.kind} closed the channel`);
+            }
+            current = next;
+        }
+        return current;
+    }
+
+    it('opens on the channel-open line with hail.png\'s three rows', () => {
+        expect(open(SHIP).context.body).toBe('Channel open.');
+        expect(slots(open(SHIP)))
+            .toEqual(['greetings', 'assist', 'close']);
+    });
+
+    it('Greetings swaps in the greeting and leaves the column alone', () => {
+        const after = pressAll(open(SHIP), [{ kind: 'greetings' }], SHIP);
+        expect(after.context.body).toBe('Greetings.');
+        expect(slots(after)).toEqual(['greetings', 'assist', 'close']);
+    });
+
+    it('KEEPS Request Assistance after the ship has answered', () => {
+        const after = pressAll(open(SHIP),
+            [{ kind: 'assist', answer: "You're not in any trouble." }], SHIP);
+        expect(after.context.body).toBe("You're not in any trouble.");
+        expect(after.context.assist).toEqual({ free: false });
+        expect(slots(after)).toEqual(['greetings', 'assist', 'close']);
+    });
+
+    it('answers a SECOND request with whatever the ship says then', () => {
+        // Asking again really re-asks: the caller recomputes the answer from
+        // live state on every press (assistAnswer), so a ship that has
+        // stopped fighting, or a player who has since taken damage, gets the
+        // new answer rather than the stale one.
+        const after = pressAll(open(SHIP), [
+            { kind: 'assist', answer: "I'm busy." },
+            { kind: 'assist', answer: "All right, I'll help you." },
+        ], SHIP);
+        expect(after.context.body).toBe("All right, I'll help you.");
+        expect(slots(after)).toEqual(['greetings', 'assist', 'close']);
+    });
+
+    it('lets Greetings undo a refusal — the answer never became the line '
+        + 'the channel opened with', () => {
+            const after = pressAll(open(SHIP), [
+                { kind: 'assist', answer: "You're not in any trouble." },
+                { kind: 'greetings' },
+            ], SHIP);
+            expect(after.context.body).toBe('Greetings.');
+        });
+
+    it('KEEPS Beg For Mercy after the bribe is paid, and reports the deal '
+        + 'instead of slamming the channel shut', () => {
+            const haggling = pressAll(open(HOSTILE), [{ kind: 'beg' }],
+                HOSTILE);
+            expect(haggling.phase).toBe('haggle');
+
+            const paid = pressAll(haggling, [{ kind: 'pay' }], HOSTILE);
+            expect(paid.phase).toBe('main');
+            expect(paid.context.body).toBe("Okay, I'll leave you alone.");
+            expect(paid.context.bribe?.amount).toBe(3000);
+            expect(slots(paid)).toEqual(['greetings', 'beg', 'close']);
+        });
+
+    it('still CLOSES the channel when a PORT bribe is paid', () => {
+        // A port's clearance has to be re-derived by a fresh hail, so this
+        // one really does close — the ship path is what changed.
+        const haggling = pressAll(open(PORT), [{ kind: 'beg' }], PORT);
+        expect(hailPress(haggling, { kind: 'pay' }, PORT)).toBe('close');
+    });
+
+    it('restores the OPENING line for a party with no greeting', () => {
+        // A hostile ship has no greeting of its own (hail_hostile.png opens
+        // on "What is it?"), so Greetings puts that line back after a
+        // haggle round trip rather than inventing a hello.
+        const after = pressAll(open(HOSTILE), [
+            { kind: 'beg' }, { kind: 'cancel' }, { kind: 'greetings' },
+        ], HOSTILE);
+        expect(after.context.body).toBe('What is it?');
+        expect(slots(after)).toEqual(['greetings', 'beg', 'close']);
+    });
+
+    it('ignores an offer press the context does not carry', () => {
+        // Belt and braces: the 'r' key routes through the same slot, and a
+        // context with no offer must not move the page.
+        const bare: HailContext = {
+            variant: 'ship', heading: 'Class: Terrapin', image: null,
+            body: 'Channel open.',
+        };
+        expect(hailPress(open(bare), { kind: 'assist', answer: 'x' }, bare))
+            .toEqual(open(bare));
+        expect(hailPress(open(bare), { kind: 'beg' }, bare))
+            .toEqual(open(bare));
+        expect(slots(open(bare))).toEqual(['greetings', 'close']);
+    });
+});
 
 describe('shipIdentityBlock', () => {
     // The ship comm's LOWER well (PICT 8511's second black box). Compare

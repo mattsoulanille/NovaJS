@@ -9,6 +9,7 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
+import { AggressionComponent } from './aggression.js';
 import { DamagedEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { SourceComponent } from './fire_weapon_plugin.js';
@@ -110,6 +111,69 @@ describe('applyHail: bribe / beg for mercy', () => {
             // The pacified pirate drops its attack on the briber.
             expect(target(world).components.get(TargetComponent)!.target)
                 .toBeUndefined();
+        });
+
+    /**
+     * Matthew: "when an NPC accepts a beg-for-mercy bribe, its IFF should
+     * become neutral again so PD weapons don't shoot at it and anger it
+     * again."
+     *
+     * Dropping the pirate's own attack is not enough: hostility is a
+     * two-sided reading, and the PLAYER's AggressionComponent remembers every
+     * shot that pirate landed for another 30 seconds (tier 3b of
+     * hostility.ts's styleForTarget). That memory kept the bribed ship red —
+     * and the player's point defense shoots hostile fighters, so the truce
+     * was cancelled by the briber's own turrets.
+     */
+    it('forgets what the bribed ship did to the player (and vice versa)',
+        async () => {
+            const { world, addShip } = await makeWorld();
+            await addShip('target', 500, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack', aggressor: 'player' });
+                ship.components.set(TargetComponent, { target: 'player' });
+            });
+            // The pirate has been shooting the player, and a bystander has
+            // been shooting them too.
+            player(world).components.set(AggressionComponent, new Map([
+                ['target', { at: 0, damage: 120, hostile: true }],
+                ['bystander', { at: 0, damage: 120, hostile: true }],
+            ]));
+
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+
+            const aggression =
+                player(world).components.get(AggressionComponent)!;
+            expect(aggression.has('target')).toBeFalse();
+            // A brawl with several ships only forgives the one that was paid.
+            expect(aggression.has('bystander')).toBeTrue();
+        });
+
+    it('refuses to charge twice for a reprieve the player already owns',
+        async () => {
+            // The comm dialog keeps Beg For Mercy in its slot after a paid
+            // bribe (the reference keeps Request Assistance there too), so a
+            // second Pay press reaches applyHail — and must cost nothing.
+            const { world, addShip } = await makeWorld();
+            await addShip('target', 500, 0, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+                ship.components.set(NpcComponent,
+                    { aiType: 3, mode: 'attack', aggressor: 'player' });
+                ship.components.set(TargetComponent, { target: 'player' });
+            });
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(70_000);
+            const until =
+                target(world).components.get(NpcComponent)!.pacifiedUntil;
+
+            applyHail(world, PEER, { kind: 'bribe', target: 'target' });
+            expect(player(world).components.get(CreditsComponent)!.credits)
+                .toBe(70_000);
+            // Nor is the reprieve silently extended by the free press.
+            expect(target(world).components.get(NpcComponent)!.pacifiedUntil)
+                .toBe(until);
         });
 
     it('does nothing to a non-hostile ship the player is not fighting',

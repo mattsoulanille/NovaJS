@@ -420,6 +420,25 @@ export type NpcState = t.TypeOf<typeof NpcState>;
 export const NpcComponent = new Component<NpcState>('NpcComponent');
 
 /**
+ * Whether this NPC has been BOUGHT OFF by `uuid` and the reprieve is still
+ * running at sim time `now` — the beg-for-mercy bribe (hail_plugin's
+ * applyHail).
+ *
+ * Pure, total, and over synced state only (NpcComponent is
+ * serializer-registered), so the simulation's own decision loop, the
+ * hostility rule the target corners / 'r' key / point defense read
+ * (hostility.ts), and the radar's IFF colouring all reach the same verdict on
+ * every peer. NpcDecisionSystem's inline version of this test additionally
+ * CLEARS the lapsed fields; this one only reads, so display callers cannot
+ * mutate simulation state by asking.
+ */
+export function isPacifiedToward(npc: NpcState | undefined,
+    uuid: string | undefined, now: number): boolean {
+    return !!npc && uuid !== undefined && npc.pacifiedFrom === uuid
+        && npc.pacifiedUntil !== undefined && now < npc.pacifiedUntil;
+}
+
+/**
  * Holds an escort in a deterministic formation slot on its leader when
  * it is not engaged. Used by fleet escorts and by bay fighters that
  * have no target.

@@ -19,15 +19,17 @@ import {
     BUSY_RESPONSE_FALLBACK,
     assistIsFree,
     canRequestAssistance,
+    channelOpenText,
     CLEARED_TO_DOCK_INDEX,
     CLEARED_TO_LAND_INDEX,
     DOCKING_DENIED_INDEX,
+    genericGreetings,
     greetingText,
     HAIL_RESPONSE_TABLE,
     hashString,
     hostileResponseText,
-    HOSTILE_RESPONSE_FALLBACK,
     LANDING_DENIED_INDEX,
+    mercyAcceptedText,
     MISC_STRING_TABLE,
     miscString,
     noNeedResponseText,
@@ -240,30 +242,19 @@ export function assistAnswer(world: World, targetUuid: string | undefined,
 }
 
 /**
- * The assistance replies for a hailed ship, resolved from STR# 3000 (the
- * stock comm-response table) ahead of time. Seeded by the ship's uuid so each
- * line is stable per encounter and identical on every peer. Falls back to the
- * pinned literals if the table is unavailable, exactly as noShipsForHire does
- * (spaceport/hire_escort.ts).
+ * The assistance replies for a hailed ship, read out of the already-loaded
+ * STR# 3000 lines (the stock comm-response table) ahead of time. Seeded by
+ * the ship's uuid so each line is stable per encounter and identical on every
+ * peer; an unavailable table leaves every group falling back to its pinned
+ * literal, exactly as noShipsForHire does (spaceport/hire_escort.ts).
  */
-async function resolveAssistReplies(
-    displayAssets: DisplayAssetDataInterface | undefined,
-    targetUuid: string): Promise<AssistReplies> {
-    if (!displayAssets) {
-        return ASSIST_REPLIES_FALLBACK;
-    }
-    try {
-        const table =
-            await displayAssets.data.StringTable.get(HAIL_RESPONSE_TABLE);
-        const seed = hashString(targetUuid);
-        return {
-            granted: assistGrantedText(table.strings, seed),
-            busy: busyResponseText(table.strings, seed),
-            noNeed: noNeedResponseText(table.strings, seed),
-        };
-    } catch {
-        return ASSIST_REPLIES_FALLBACK;
-    }
+function resolveAssistReplies(strings: readonly string[] | undefined,
+    seed: number): AssistReplies {
+    return {
+        granted: assistGrantedText(strings, seed),
+        busy: busyResponseText(strings, seed),
+        noNeed: noNeedResponseText(strings, seed),
+    };
 }
 
 /**
@@ -281,27 +272,6 @@ async function loadStrings(
         return (await displayAssets.data.StringTable.get(table)).strings;
     } catch {
         return undefined;
-    }
-}
-
-/**
- * A hostile ship's response line, from STR# 3000's hostile group (indices
- * 10-14) rather than from its government's greetings — see hail.ts. Seeded by
- * the ship's uuid, so it is the same line on every peer and every re-hail
- * (which is what makes the Greetings button able to restore it).
- */
-async function resolveHostileText(
-    displayAssets: DisplayAssetDataInterface | undefined,
-    targetUuid: string): Promise<string> {
-    if (!displayAssets) {
-        return HOSTILE_RESPONSE_FALLBACK;
-    }
-    try {
-        const table =
-            await displayAssets.data.StringTable.get(HAIL_RESPONSE_TABLE);
-        return hostileResponseText(table.strings, hashString(targetUuid));
-    } catch {
-        return HOSTILE_RESPONSE_FALLBACK;
     }
 }
 
@@ -483,6 +453,15 @@ export async function computeContext(world: World,
             };
         }
 
+        // The stock ship-comm table (STR# 3000), loaded ONCE for this hail:
+        // the opening line, the hostile answer, the assistance replies and
+        // the bribe-accepted line all come out of it, all seeded by the same
+        // uuid hash so the whole conversation is stable per encounter and
+        // identical on every peer.
+        const shipStrings =
+            await loadStrings(displayAssets, HAIL_RESPONSE_TABLE);
+        const shipSeed = hashString(shipTargetUuid);
+
         const response = shipHailResponse(govt, disposition, aiType,
             attackingPlayer);
         if (response.kind === 'cantHail') {
@@ -499,34 +478,54 @@ export async function computeContext(world: World,
             const largerBribes = !!govt?.flags.largerBribes;
             const amount = bribeAmount(credits, largerBribes);
             const bribe = response.canBribe
-                ? { amount, canAfford: credits >= amount && amount > 0 }
+                ? {
+                    amount, canAfford: credits >= amount && amount > 0,
+                    purpose: 'mercy' as const,
+                    // What they say once the demand is PAID (STR# 3000
+                    // 135-139). Resolved here because the Pay handler is
+                    // synchronous, exactly like the assistance replies.
+                    accepted: mercyAcceptedText(shipStrings, shipSeed),
+                }
                 : undefined;
             // A hostile ship answers from the GLOBAL hostile group (STR# 3000
-            // 10-14, "What is it?" on hail/hail_hostile.png), not from its
-            // government's greetings — those are friendly lines only. A përs
-            // still speaks their own CommQuote.
+            // 10-14, "What is it?" on hail/hail_hostile.png) INSTEAD of the
+            // channel-open line a friendly ship opens with — that is what
+            // hail/hail_hostile.png shows in the response well — and not from
+            // its government's greetings, which are friendly lines only. A
+            // përs still speaks their own CommQuote.
             return {
                 context: {
                     variant: 'ship', heading, image,
                     body: pers?.commQuote?.trim() ? pers.commQuote
-                        : await resolveHostileText(displayAssets,
-                            shipTargetUuid),
+                        : hostileResponseText(shipStrings, shipSeed),
                     bribe,
                 },
                 target: shipTargetUuid, isEscort: false,
                 replies: ASSIST_REPLIES_FALLBACK,
             };
         }
-        // Ordinary greeting: a përs quote, else a real line from the govt's
-        // greeting STR# picked deterministically by the target's uuid (stable
-        // per encounter and across peers), else a synthetic fallback.
-        const body = greetingText({
+        // OPENING THE CHANNEL IS NOT A GREETING. hail/hail.png shows a
+        // freshly hailed ship answering "Channel open." (STR# 3000 0-4) with
+        // Greetings still unpressed; hail/greetings.png is the same frame
+        // after the button. So the body opens with the channel-open line and
+        // the greeting is held in reserve for the button — the planet dialog
+        // below has always worked this way through STR# 3002's own group.
+        const body = channelOpenText(shipStrings, shipSeed);
+        // The Greetings answer: a përs quote, else a real line from the
+        // govt's greeting STR#, else the stock generic group (STR# 3000
+        // 45-49 — "Greetings." is what the govt-less Terrapin on
+        // greetings.png says), all picked deterministically by the target's
+        // uuid so the line is stable per encounter and across peers. A
+        // non-talkative govt yields '' and gets no Greetings answer at all,
+        // leaving the channel-open line in place.
+        const greeting = greetingText({
             persCommQuote: pers?.commQuote,
             govtGreetings: govt?.commGreetings,
+            genericGreetings: genericGreetings(shipStrings),
             govtCommName: govt?.commName,
             talkative: response.talkative,
-            seed: hashString(shipTargetUuid),
-        }) || 'There is no response.';
+            seed: shipSeed,
+        }) || undefined;
         // ränk 0x0400 / 0x0800 for the hailed ship's OWN government
         // (rank_logic.ts): always-assist and free repair. Read off the same
         // synced ActiveRanksComponent the simulation reads, so the dialog and
@@ -543,17 +542,16 @@ export async function computeContext(world: World,
                 hailRanks, getHailRank, govt?.id)),
         } : undefined;
         // The OFFER is not withdrawn for a ship that happens to be fighting,
-        // nor for a player whose ship is in perfect shape: they ask, and the
-        // ship answers with a line from the response table ("I'm busy" /
+        // nor for a player whose ship is in perfect shape, NOR ONCE IT HAS
+        // BEEN USED (hail/request_assistance.png still shows the button after
+        // the ship has answered "You're not in any trouble."): they ask, and
+        // the ship answers with a line from the response table ("I'm busy" /
         // "You're not in any trouble." / "All right, I'll help you."). Only
-        // the lines are resolved here — the press decides which is used — and
-        // only when there is an offer to answer.
-        const replies = assist
-            ? await resolveAssistReplies(displayAssets, shipTargetUuid)
-            : ASSIST_REPLIES_FALLBACK;
+        // the lines are resolved here — the press decides which is used.
+        const replies = resolveAssistReplies(shipStrings, shipSeed);
         return {
             context: {
-                variant: 'ship', heading, image, body, assist,
+                variant: 'ship', heading, image, body, greeting, assist,
             },
             target: shipTargetUuid, isEscort: false, replies,
         };

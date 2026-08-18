@@ -21,11 +21,16 @@ import { completeEntity } from './entity_data_loader.js';
 import { SourceComponent } from './fire_weapon_plugin.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { GovtComponent } from './govt_component.js';
-import { selectNearestHostile, styleForTarget } from './hostility.js';
+import { applyHail } from './hail_plugin.js';
+import {
+    isHostileTarget, selectNearestHostile, styleForTarget,
+} from './hostility.js';
 import { IffComponent } from './iff_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem, SIMULATION_STEP_MS } from './make_system.js';
-import { FormationComponent } from './npc_ai_plugin.js';
+import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
+import { CreditsComponent } from './player_state_plugin.js';
+import { isPointDefenseCandidate } from './point_defense.js';
 import { applyControlEvents, ControlledByComponent } from './ship_control.js';
 import { TargetComponent } from './target_component.js';
 import { applySetTarget } from './target_plugin.js';
@@ -549,5 +554,151 @@ describe('aggression is deterministic across peers', () => {
             // ...without consuming a single draw.
             expect(shotWorld.resources.get(RandomResource)!.getState())
                 .toEqual(quietWorld.resources.get(RandomResource)!.getState());
+        });
+});
+
+/**
+ * ============================================================================
+ * A SHIP BOUGHT OFF WITH A BEG-FOR-MERCY BRIBE
+ * ============================================================================
+ *
+ * Matthew: "when an NPC accepts a beg-for-mercy bribe, its IFF should become
+ * neutral again so PD weapons don't shoot at it and anger it again."
+ *
+ * Two things kept a paid-off pirate red, and both are exercised here:
+ *
+ *  - the PLAYER's own aggression memory of what it did (30 seconds of it),
+ *    which applyHail now forgets for the ship that was paid; and
+ *  - its GOVERNMENT, which never softens — a pirate govt is hostile by its
+ *    flags forever, so only a pacification tier in the one hostility rule
+ *    (hostility.ts's styleForTarget) can clear it.
+ *
+ * Why it matters beyond the corner colour: the point defense prey filter is
+ * exactly "hostile fighter in range" (point_defense.ts), so the player's own
+ * turrets kept hosing the ship they had just bought off — and the first round
+ * to land voided the reprieve, restarting the fight.
+ */
+describe('a ship bought off with a bribe reads NEUTRAL to the briber', () => {
+    async function bribedWorld() {
+        const built = await makeStandardWorld();
+        // Let this pirate govt bargain (gövt Flags 0x0200).
+        built.gameData.data.Govt.map.get(PIRATES)!
+            .flags.warshipsTakeBribes = true;
+        const pirate = built.world.entities.get('pirate')!;
+        pirate.components.set(NpcComponent,
+            { aiType: 3, mode: 'attack', aggressor: 'player' });
+        pirate.components.set(TargetComponent, { target: 'player' });
+        built.world.entities.get('player')!.components
+            .set(CreditsComponent, { credits: 10_000 });
+        built.world.step();
+        return built;
+    }
+
+    /** Whether the player's point defense would shoot at `uuid`. */
+    function pointDefenseWouldShoot(world: World, uuid: string) {
+        const player = world.entities.get('player')!;
+        return isPointDefenseCandidate({
+            uuid,
+            kind: 'fighter',
+            distanceSquared: 100,
+            owner: uuid,
+            hostile: isHostileTarget(uuid, world.entities.get(uuid)!, {
+                viewerUuid: 'player',
+                viewerEntity: player,
+                entities: world.entities,
+                gameData: world.resources.get(SimulationGameDataResource)!,
+                now: world.resources.get(TimeResource)!.time,
+            }),
+            inFlock: false,
+        }, { owner: 'player', source: 'player', rangeSquared: 1_000_000 });
+    }
+
+    it('is hostile before the bribe — politics AND what it has done',
+        async () => {
+            const { world } = await bribedWorld();
+            hitPlayer(world, 'pirate', { shield: 99 });
+            expect(cornerStyle(world, 'pirate')).toBe('hostile');
+            expect(displaySelection(world)).toBe('pirate');
+            expect(pointDefenseWouldShoot(world, 'pirate')).toBeTrue();
+        });
+
+    it('goes NEUTRAL the moment the bribe is paid, though its government '
+        + 'is unchanged', async () => {
+            const { world } = await bribedWorld();
+            hitPlayer(world, 'pirate', { shield: 99 });
+            applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
+
+            expect(cornerStyle(world, 'pirate')).toBe('neutral');
+            // Its politics really are untouched: it is still a pirate.
+            expect(world.entities.get('pirate')!.components
+                .get(GovtComponent)!.id).toBe(PIRATES);
+        });
+
+    it('drops out of the r-key nearest-hostile scan', async () => {
+        const { world } = await bribedWorld();
+        expect(displaySelection(world)).toBe('pirate');
+        applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
+        // Nothing else in the standard cast is hostile.
+        expect(displaySelection(world)).toBeUndefined();
+    });
+
+    it('stops being POINT DEFENSE prey, so the turrets cannot re-anger it',
+        async () => {
+            const { world } = await bribedWorld();
+            hitPlayer(world, 'pirate', { shield: 99 });
+            expect(pointDefenseWouldShoot(world, 'pirate')).toBeTrue();
+            applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
+            expect(pointDefenseWouldShoot(world, 'pirate')).toBeFalse();
+        });
+
+    it('is per-briber: another pilot still sees a pirate', async () => {
+        const { world, addShip } = await bribedWorld();
+        await addShip('rival', 20, ship => {
+            ship.components.set(ControlledByComponent, { peerId: 'other' });
+        });
+        world.step();
+        applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
+
+        const rival = world.entities.get('rival')!;
+        expect(styleForTarget('pirate', world.entities.get('pirate')!,
+            'rival', rival, world.resources.get(SimulationGameDataResource)!,
+            u => world.entities.get(u),
+            world.resources.get(TimeResource)!.time)).toBe('hostile');
+    });
+
+    it('goes hostile again the instant the reprieve lapses', async () => {
+        const { world } = await bribedWorld();
+        applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
+        expect(cornerStyle(world, 'pirate')).toBe('neutral');
+
+        // The boundary is strict: at pacifiedUntil the truce is over.
+        const npc = world.entities.get('pirate')!.components
+            .get(NpcComponent)!;
+        npc.pacifiedUntil = world.resources.get(TimeResource)!.time;
+        expect(cornerStyle(world, 'pirate')).toBe('hostile');
+    });
+
+    it('goes hostile again if the PLAYER shoots it, exactly as before',
+        async () => {
+            // The truce is bought, not permanent: NpcAggressionSystem voids
+            // it the moment the briber damages the ship, and this tier is
+            // then off again — no separate un-pacify path to keep in step.
+            const { world } = await bribedWorld();
+            applyHail(world, PEER, { kind: 'bribe', target: 'pirate' });
+            expect(cornerStyle(world, 'pirate')).toBe('neutral');
+
+            const shot = new Entity('shot')
+                .addComponent(SourceComponent, 'player');
+            world.entities.set('player shot', shot);
+            world.step();
+            world.emit(DamagedEvent, {
+                damage: { ...NO_DAMAGE, shield: 99 }, damager: 'player shot',
+            }, ['pirate']);
+            world.step();
+
+            const npc = world.entities.get('pirate')!.components
+                .get(NpcComponent)!;
+            expect(npc.pacifiedFrom).toBeUndefined();
+            expect(cornerStyle(world, 'pirate')).toBe('hostile');
         });
 });

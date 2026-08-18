@@ -33,13 +33,23 @@ import { LegalRecords } from './reputation.js';
  *    (see assistIsFree).
  *  - përs CommQuote (STR# 7100) is the comms-dialog greeting for a named
  *    person; resolved into PersData.commQuote and taking precedence.
+ *  - OPENING A CHANNEL IS NOT A GREETING. hail/hail.png shows a freshly
+ *    hailed Terrapin answering "Channel open." — STR# 3000's channel-open
+ *    group (0-4) — with the Greetings button still unpressed; pressing it
+ *    is what produces the greeting (hail/greetings.png, "Greetings."). So
+ *    the dialog OPENS with channelOpenText and keeps the greeting in
+ *    reserve for the button. Planet hails already work this way through
+ *    STR# 3002's own channel-open group.
  *  - Generic (non-përs) ships greet with a random line from their
  *    government's greeting STR# (id 7000 + (govtId - 128), ten lines each;
  *    EVN Bible Appendix III), resolved at parse time into
  *    GovtData.commGreetings. greetingText picks one DETERMINISTICALLY (a hash
  *    of the encounter's stable id, never Math.random) so the client-side
  *    dialog agrees across peers and re-hails. A government with no greeting
- *    resource falls back to a synthetic govt-appropriate line.
+ *    resource falls back to the stock generic greeting group (STR# 3000
+ *    45-49, "Greetings." among them — which is exactly what the govt-less
+ *    Terrapin on hail/greetings.png answers), and only then to a synthetic
+ *    govt-appropriate line.
  *  - HOSTILE ships do not use their government's greetings at all: they
  *    answer from the global ship-comm table (STR# 3000 indices 10-14 — "What
  *    is it?" on hail/hail_hostile.png), as do the assistance answers
@@ -220,8 +230,13 @@ export function shipIsFighting(opts: {
  * original picks one at random per response. The groups this module answers
  * with, verbatim from the real Nova data:
  *
+ *   [0-4]   channel:  "Channel open." / "Communications channel open." /
+ *                     "Communications interlink established." / "Hailing
+ *                     frequencies open." / "Hailing channel ready."
  *   [10-14] hostile:  "What is it you want?" / "What do you want?" /
  *                     "What is it?" / "What is it?" / "What?"
+ *   [45-49] greeting: "Nice to meet you." / "Hello there." / "Greetings." /
+ *                     "Hi there." / "Howdy."
  *   [70-74] no need:  "You're not in any trouble." / "You're in no danger." /
  *                     "You don't have any problems." / "It looks like you're
  *                     sitting pretty from here.  Try helping yourself." /
@@ -232,6 +247,9 @@ export function shipIsFighting(opts: {
  *   [80-84] busy:     "I'm busy." / "I'm a little busy right now." / "I'm too
  *                     busy to help you." / "I have other business." / "I've
  *                     got other things to do."
+ *   [135-139] mercy:  "Okay, I'll leave you alone." / "All right, I'll leave
+ *                     you alone." (the group repeats those two) — what a ship
+ *                     says once a beg-for-mercy bribe is paid.
  *
  * (Pinned by nova_plugin/string_table_integration_test.ts against the real
  * data, so a parser regression shows up there rather than as a wrong line in
@@ -240,6 +258,45 @@ export function shipIsFighting(opts: {
  */
 export const HAIL_RESPONSE_TABLE = 'nova:3000';
 export const RESPONSE_GROUP_SIZE = 5;
+
+/**
+ * WHAT A SHIP SAYS THE MOMENT THE CHANNEL OPENS (STR# 3000 indices 0-4).
+ *
+ * hail/hail.png is the proof: a freshly hailed Terrapin's response well reads
+ * "Channel open." while the Greetings button sits unpressed beside it, and
+ * hail/greetings.png — the same ship, same frame — reads "Greetings." only
+ * after that button has been pushed. Opening a channel is not a greeting, and
+ * NovaJS used to answer the hail itself with the government greeting, leaving
+ * the Greetings button with nothing of its own to say.
+ *
+ * The planet dialog has always worked this way through STR# 3002's own
+ * channel-open group ({@link stellarChannelOpenText}); this is the ship-side
+ * twin. A HOSTILE ship is the documented exception — it answers from the
+ * hostile group instead (hail/hail_hostile.png opens on "What is it?").
+ */
+export const CHANNEL_OPEN_FIRST_INDEX = 0;
+export const CHANNEL_OPEN_COUNT = RESPONSE_GROUP_SIZE;
+export const CHANNEL_OPEN_FALLBACK = 'Channel open.';
+
+/**
+ * The stock GENERIC greeting group (STR# 3000 indices 45-49) — the greeting a
+ * ship with no government greeting table of its own answers with. The
+ * Terrapin on hail/greetings.png is govt-less and says "Greetings.", index 47
+ * of this group.
+ */
+export const GENERIC_GREETING_FIRST_INDEX = 45;
+export const GENERIC_GREETING_COUNT = RESPONSE_GROUP_SIZE;
+export const GENERIC_GREETING_FALLBACK = 'Nice to meet you.';
+
+/**
+ * What a ship says once a beg-for-mercy bribe is PAID (STR# 3000 indices
+ * 135-139, "Okay, I'll leave you alone."). The original's own wording for the
+ * outcome, so the comm dialog can report the deal instead of slamming the
+ * channel shut on the player — see the haggle page's Pay handler.
+ */
+export const MERCY_ACCEPTED_FIRST_INDEX = 135;
+export const MERCY_ACCEPTED_COUNT = RESPONSE_GROUP_SIZE;
+export const MERCY_ACCEPTED_FALLBACK = "Okay, I'll leave you alone.";
 
 /**
  * A HOSTILE ship's answer to a hail. Global, not per-government: the per-govt
@@ -293,6 +350,43 @@ function responseText(strings: readonly string[] | undefined, first: number,
         return fallback;
     }
     return group[seed % group.length];
+}
+
+/**
+ * The line a hailed ship OPENS the channel with (STR# 3000 indices 0-4), the
+ * ship-side twin of {@link stellarChannelOpenText}. Unlike the stellar group
+ * these lines are whole sentences — no name is appended.
+ */
+export function channelOpenText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, CHANNEL_OPEN_FIRST_INDEX,
+        CHANNEL_OPEN_FALLBACK, seed);
+}
+
+/**
+ * The stock generic greeting group (STR# 3000 indices 45-49) as a LIST, for
+ * greetingText to fall back on when the ship's government has no greeting
+ * STR# of its own. A list rather than one line because greetingText owns the
+ * seeded pick for every greeting source, so all of them shuffle together.
+ * Blank entries are dropped; an unavailable table yields the pinned literal.
+ */
+export function genericGreetings(strings: readonly string[] | undefined):
+    readonly string[] {
+    const group: string[] = [];
+    for (let i = 0; i < GENERIC_GREETING_COUNT; i++) {
+        const line = strings?.[GENERIC_GREETING_FIRST_INDEX + i];
+        if (line && line.trim() !== '') {
+            group.push(line);
+        }
+    }
+    return group.length > 0 ? group : [GENERIC_GREETING_FALLBACK];
+}
+
+/** A bribed ship's "Okay, I'll leave you alone." (STR# 3000 135-139). */
+export function mercyAcceptedText(strings: readonly string[] | undefined,
+    seed = 0): string {
+    return responseText(strings, MERCY_ACCEPTED_FIRST_INDEX,
+        MERCY_ACCEPTED_FALLBACK, seed);
 }
 
 /** The busy refusal line for a hailed ship (STR# 3000 indices 80-84). */
@@ -472,17 +566,24 @@ export function hashString(value: string): number {
 }
 
 /**
- * The greeting line shown in the comms dialog. Precedence: a përs ship's
- * resolved CommQuote (STR# 7100) wins; then a real line from the government's
- * greeting STR# (GovtData.commGreetings), chosen deterministically by `seed`
- * (a hash of the ship's uuid) so every peer agrees; then, only when the govt
- * has no greeting resource, a synthetic govt-appropriate line. Returns '' when
- * the govt is not talkative (noDistressMessages / noAssistOrMercy) — the caller
- * shows "no response".
+ * The greeting line the GREETINGS BUTTON produces — not what the channel
+ * opens with (that is {@link channelOpenText}). Precedence: a përs ship's
+ * resolved CommQuote (STR# 7100) wins; then a real line from the
+ * government's greeting STR# (GovtData.commGreetings), chosen
+ * deterministically by `seed` (a hash of the ship's uuid) so every peer
+ * agrees; then the stock generic greeting group (STR# 3000 45-49, see
+ * {@link genericGreetings}) for a ship whose government has no greeting
+ * resource — or which has no government at all, like the Terrapin answering
+ * "Greetings." on hail/greetings.png; and only if even that table is
+ * unavailable, a synthetic govt-appropriate line. Returns '' when the govt is
+ * not talkative (noDistressMessages / noAssistOrMercy) — the caller shows "no
+ * response".
  */
 export function greetingText(opts: {
     persCommQuote?: string,
     govtGreetings?: readonly string[],
+    /** The stock generic group (STR# 3000 45-49), when it could be loaded. */
+    genericGreetings?: readonly string[],
     govtCommName?: string,
     talkative: boolean,
     seed?: number,
@@ -493,11 +594,11 @@ export function greetingText(opts: {
     if (opts.persCommQuote && opts.persCommQuote.trim() !== '') {
         return opts.persCommQuote;
     }
-    const greetings = (opts.govtGreetings ?? [])
-        .filter(line => line.trim() !== '');
-    if (greetings.length > 0) {
-        const index = (opts.seed ?? 0) % greetings.length;
-        return greetings[index];
+    for (const source of [opts.govtGreetings, opts.genericGreetings]) {
+        const greetings = (source ?? []).filter(line => line.trim() !== '');
+        if (greetings.length > 0) {
+            return greetings[(opts.seed ?? 0) % greetings.length];
+        }
     }
     const who = opts.govtCommName && opts.govtCommName.trim() !== ''
         ? opts.govtCommName
