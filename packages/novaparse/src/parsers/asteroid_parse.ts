@@ -9,11 +9,36 @@ import { BaseParse } from "./base_parse.js";
 
 /** röid 128 uses spïn 800, röid 129 spïn 801, etc. (EVN Bible p. 13). */
 const ASTEROID_SPIN_OFFSET = 800 - 128;
-/** The cargo box sprite for standard-cargo resource-boxes. */
-const CARGO_BOX_SPIN = 500;
-/** Mini-asteroid sprites for jünk resource-boxes (spïn 501-504). */
+/**
+ * The mini-asteroid sprites for the resource-boxes an asteroid ejects
+ * (EVN Bible reserved spïn ids: "500 Cargo boxes, 501-504 Mini-asteroids
+ * for mining"). The stock spïns are named, in order, "Micro Metal", "Micro
+ * Ice", "Micro Silicates", "Micro Metal [rich]" — which is the order of
+ * the stock röid families (Metal 128-131, Ice 132-135, Dust 136-139,
+ * Crystal 140-143), so a röid family maps to a mini spïn the same way a
+ * röid maps to its own spïn (röid 128 -> spïn 800): by id, in blocks of
+ * four. spïn 500 "Boxes" is the crate a SHIP's jettisoned cargo floats
+ * in; a mined asteroid never uses it whatever it yields (Matthew: the
+ * original shows little rocks for metal asteroids, not crates — the
+ * previous "standard cargo yield -> box" rule was off by one).
+ *
+ * The röid record carries no debris-graphic field (TMPL "röid": strength,
+ * spin rate, yield type/qty, particles, fragments, explosion, mass), so
+ * the family rule is the best available reading; the Crystal family
+ * landing on "Micro Metal [rich]" is the one stock case the names do not
+ * corroborate.
+ */
 const MINERAL_SPIN_START = 501;
 const MINERAL_SPIN_COUNT = 4;
+const FIRST_ROID_ID = 128;
+const ROID_FAMILY_SIZE = 4;
+
+/** The mini-asteroid spïn for a röid's ejected resource-boxes. */
+export function debrisSpinFor(roidId: number): number {
+    const family = Math.floor((roidId - FIRST_ROID_ID) / ROID_FAMILY_SIZE);
+    const clamped = Math.max(0, Math.min(MINERAL_SPIN_COUNT - 1, family));
+    return MINERAL_SPIN_START + clamped;
+}
 
 function animationFromSpin(idSpace: NovaResources, spinId: number,
     base: BaseData, notFoundFunction: (m: string) => void): Animation {
@@ -56,17 +81,17 @@ export async function AsteroidParse(roid: RoidResource,
         roid.id + ASTEROID_SPIN_OFFSET, base, notFoundFunction);
 
     // Resolve what an ejected resource-box contains. 0-5 is a standard
-    // cargo type; 1000-1127 is jünk resource 128-255. Boxes use the
-    // engine-specified sprites: the cargo box (spïn 500) for standard
-    // cargo, a mini-asteroid (spïn 501-504) for jünk. Note the source
-    // art really is 8x8 pixels per frame — the rlëD headers (500-508)
-    // declare 8x8, matching the spïn declarations — so the display
-    // scales boxes up to be visible (see asteroid_display_plugin.ts).
+    // cargo type; 1000-1127 is jünk resource 128-255. Whatever it holds,
+    // the box is drawn as a mini-asteroid of the röid's family (see
+    // debrisSpinFor). Note the source art really is 8x8 pixels per frame
+    // — the rlëD headers (500-508) declare 8x8, matching the spïn
+    // declarations — so the display scales boxes up to be visible (see
+    // asteroid_display_plugin.ts).
     let yieldType: string | null = null;
     let debrisSpin: number | null = null;
     if (roid.yieldType >= 0 && roid.yieldType <= 5) {
         yieldType = `cargo:${roid.yieldType}`;
-        debrisSpin = CARGO_BOX_SPIN;
+        debrisSpin = debrisSpinFor(roid.id);
     } else if (roid.yieldType >= 1000) {
         const junkId = roid.yieldType - 1000 + 128;
         const junk = roid.idSpace.jünk[junkId];
@@ -76,8 +101,7 @@ export async function AsteroidParse(roid: RoidResource,
             notFoundFunction("Missing jünk " + junkId + " for röid " + base.id);
             yieldType = `junk:${junkId}`;
         }
-        debrisSpin = MINERAL_SPIN_START
-            + (roid.yieldType - 1000) % MINERAL_SPIN_COUNT;
+        debrisSpin = debrisSpinFor(roid.id);
     }
 
     let debrisAnimation: Animation | null = null;
