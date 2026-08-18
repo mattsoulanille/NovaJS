@@ -45,6 +45,27 @@ export const DEFAULT_SUB_PATHS: NovaSubPaths = {
 export const RESERVED_PLUGIN_PREFIXES: ReadonlySet<string> =
     new Set(["nova", "physical"]);
 
+/**
+ * The order data files (and plug-ins) load in: ascending by name, compared
+ * case-insensitively with the raw name as a tie-break.
+ *
+ * Case-insensitive because the original game reads its data off a
+ * case-insensitive volume, so "Zealot.rez" sorts before "zzoverride.rez"
+ * there rather than before every lowercase name. Written out rather than
+ * using localeCompare because the order decides which plug-in's override of
+ * an id wins AND the allocation of namespaced flag/control bits, both of
+ * which must come out identical on every peer of a networked game — and
+ * localeCompare depends on the host's locale and ICU build.
+ */
+export function comparePluginNames(a: string, b: string): number {
+    const lowerA = a.toLowerCase();
+    const lowerB = b.toLowerCase();
+    if (lowerA !== lowerB) {
+        return lowerA < lowerB ? -1 : 1;
+    }
+    return a === b ? 0 : a < b ? -1 : 1;
+}
+
 /** The namespace prefix for a Plug-ins entry: its name minus extensions,
  * re-keyed away from the reserved names. */
 export function pluginPrefixFor(fileName: string): string {
@@ -264,14 +285,30 @@ class IDSpaceHandler {
             console.warn("Plug-ins parser given a directory called " + path.basename(pluginsPath) + " instead of Plug-ins");
         }
 
-        // Plug-ins load in REVERSE NAME ORDER (a later-named plug-in's
-        // stock override is overwritten by an earlier-named one's). The sort
-        // is explicit rather than trusting readdir: on macOS readdir happens
-        // to come back sorted, but that is not guaranteed on every
-        // filesystem, and both which override wins and the allocation of
-        // namespaced Require/Contribute flag bits (which follows this
-        // order) must be identical on every peer of a networked game.
-        var fileNames = (await readdir(pluginsPath)).sort().reverse();
+        // Plug-ins load in NAME ORDER, so a later-named plug-in's override
+        // of an id wins over an earlier-named one's ("Any resources in an
+        // Nova plugin file automatically replace same-numbered resources in
+        // Nova's main files" — EVN Bible, Part II; within the folder, last
+        // loaded wins). That is what the original engine does: its own
+        // pilot-log "Plugins loaded:" list comes out in ascending name
+        // order, and the community naming conventions that rely on it
+        // ("ARPIATweaks.rez" patching "ARPIA2 - Data 1.rez", a
+        // "zzoverride.rez" that must beat everything) only work if the
+        // LAST name wins. Loading in reverse instead silently dropped
+        // Extra Outfits' extra Spica stellar whenever the alphabetically
+        // earlier "arpia" plug-in, which overrides the same sÿst 144, was
+        // installed alongside it.
+        //
+        // The sort is explicit rather than trusting readdir: on macOS
+        // readdir happens to come back sorted, but that is not guaranteed
+        // on every filesystem, and both which override wins and the
+        // allocation of namespaced Require/Contribute flag and control bits
+        // (which follows this order) must be identical on every peer of a
+        // networked game. It is case-insensitive, like the case-insensitive
+        // volumes the original game's data lives on, with the raw name as a
+        // tie-break so the result is still a total, locale-independent
+        // order.
+        var fileNames = (await readdir(pluginsPath)).sort(comparePluginNames);
         for (let i in fileNames) {
             var name = fileNames[i];
             var currentPath = path.join(pluginsPath, name);
@@ -313,9 +350,10 @@ class IDSpaceHandler {
 
         log("Adding Directory of plugins " + dirPath);
 
-        // Sorted for the same reason as in addNovaPluginsDirectory: which
-        // file's copy of a shared id wins must not depend on the filesystem.
-        var fileNames = (await readdir(dirPath)).sort();
+        // Sorted the same way, and for the same reason, as in
+        // addNovaPluginsDirectory: which file's copy of a shared id wins
+        // must not depend on the filesystem, and the last name wins.
+        var fileNames = (await readdir(dirPath)).sort(comparePluginNames);
         for (let i in fileNames) {
             var name = fileNames[i];
             var currentPath = path.join(dirPath, name);

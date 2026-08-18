@@ -83,10 +83,10 @@ describe('Control bit namespacing across real plug-ins', () => {
         const b = await second.controlBitMap;
         expect(a.data).toEqual(b.data);
         expect(a.report).toEqual(b.report);
-        // Reverse-sorted load order: 'e' sorts after 'a', so Extra
-        // Outfits loads, and allocates, first.
-        expect(a.namespaceOrder).toEqual(['nova', EXTRA, ARPIA]);
-        expect(a.data.pluginOrder).toEqual([EXTRA, ARPIA]);
+        // Name-sorted load order: 'a' sorts before 'e', so ARPIA loads,
+        // and allocates, first.
+        expect(a.namespaceOrder).toEqual(['nova', ARPIA, EXTRA]);
+        expect(a.data.pluginOrder).toEqual([ARPIA, EXTRA]);
         // Every private bit is in the private range, allocated densely in
         // namespace order then raw-bit order.
         let next = P0;
@@ -165,8 +165,9 @@ describe('Control bit namespacing across real plug-ins', () => {
         expect(colliding).toContain(2050);
         expect(colliding).toContain(2000);
         expect(colliding).toContain(2081);
+        // In load (= allocation) order, which is by name.
         for (const { namespaces } of report.collisions) {
-            expect(namespaces).toEqual([EXTRA, ARPIA]);
+            expect(namespaces).toEqual([ARPIA, EXTRA]);
         }
         // Extra Outfits' Opals (oütf 551) test b2081, which only ARPIA
         // sets — a cross-plug-in dependency (or a slip) that the two

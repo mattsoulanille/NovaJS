@@ -1,5 +1,5 @@
 import "jasmine";
-import { IDSpaceHandler } from "../src/id_space_handler.js";
+import { comparePluginNames, IDSpaceHandler } from "../src/id_space_handler.js";
 import { NovaParse } from "../src/nova_parse.js";
 import { NovaResources } from "../src/resource_parsers/resource_holder_base.js";
 import { resolveFixture } from "./fixtures.js";
@@ -21,13 +21,13 @@ describe("IDSpaceHandler", () => {
         expect(idSpace.wëap['nova:129'].name).toEqual("Overwritten by plugin2");
 
         expect(idSpace.wëap['Plugin 1:150'].name).toEqual("Also doesn\'t get overwritten");
-        expect(idSpace.wëap['A first plug:150'].name).toEqual("this one also not overwritten");
+        expect(idSpace.wëap['Z last plug:150'].name).toEqual("this one also not overwritten");
     });
 
     it("should assign the right global id to each resource", () => {
         expect(idSpace.wëap['nova:128'].globalID).toEqual("nova:128");
         expect(idSpace.wëap['nova:129'].globalID).toEqual("nova:129");
-        expect(idSpace.wëap['A first plug:150'].globalID).toEqual("A first plug:150");
+        expect(idSpace.wëap['Z last plug:150'].globalID).toEqual("Z last plug:150");
         expect(idSpace.wëap['Plugin 1:150'].globalID).toEqual("Plugin 1:150");
         expect(idSpace.wëap['plug pack:153'].globalID).toEqual("plug pack:153");
     });
@@ -51,25 +51,41 @@ describe("IDSpaceHandler", () => {
         expect(idSpace.wëap['nova:128'].prefix).toEqual("nova");
         expect(idSpace.wëap['nova:128'].writerPrefix).toEqual("plug pack");
         expect(idSpace.wëap['nova:129'].prefix).toEqual("nova");
-        expect(idSpace.wëap['nova:129'].writerPrefix).toEqual("A first plug");
+        expect(idSpace.wëap['nova:129'].writerPrefix).toEqual("Z last plug");
 
         expect(idSpace.wëap['Plugin 1:150'].writerPrefix).toEqual("Plugin 1");
         expect(idSpace.wëap['plug pack:153'].writerPrefix).toEqual("plug pack");
     });
 
-    it("loads plug-ins in reverse name order, explicitly sorted", async () => {
-        // The Plug-ins directory holds "A first plug.ndat", "Plugin 1.ndat"
-        // and the "plug pack" subdirectory. Reverse-sorted by name (UTF-16
-        // code units, so lowercase 'p' sorts after 'P') that is plug pack,
-        // Plugin 1, A first plug — and this order is what the flag
-        // namespace allocation follows, so it must not depend on readdir.
+    it("loads plug-ins in name order, explicitly sorted", async () => {
+        // The Plug-ins directory holds "Z last plug.ndat", "Plugin 1.ndat"
+        // and the "plug pack" subdirectory. Sorted case-insensitively by
+        // name that is plug pack, Plugin 1, Z last plug — and this order is
+        // what the flag namespace allocation follows, so it must not depend
+        // on readdir.
         const dataPath = resolveFixture("IDSpaceHandlerTestFilesystem");
         const handler = new IDSpaceHandler(dataPath);
         expect(await handler.getPluginPrefixOrder())
-            .toEqual(["plug pack", "Plugin 1", "A first plug"]);
-        // The last-loaded plug-in's override wins.
-        expect(idSpace.wëap['nova:129'].writerPrefix).toEqual("A first plug");
+            .toEqual(["plug pack", "Plugin 1", "Z last plug"]);
+        // The last-loaded plug-in's override wins: "Z last plug" and
+        // "Plugin 1" both redefine the stock wëap 129.
+        expect(idSpace.wëap['nova:129'].writerPrefix).toEqual("Z last plug");
     });
+
+    it("orders plug-in names case-insensitively, with a stable tie-break",
+        () => {
+            // Case-insensitive, so a lowercase name does not automatically
+            // sort after every uppercase one (the original game's data
+            // lives on a case-insensitive volume). Names that differ only
+            // in case still get a total order, and it does not depend on
+            // the host locale.
+            expect(["zzoverride.rez", "Zealot.rez", "arpia", "Bravo"]
+                .sort(comparePluginNames))
+                .toEqual(["arpia", "Bravo", "Zealot.rez", "zzoverride.rez"]);
+            expect(comparePluginNames("Alpha", "Alpha")).toBe(0);
+            expect(comparePluginNames("Alpha", "alpha")).toBeLessThan(0);
+            expect(comparePluginNames("alpha", "Alpha")).toBeGreaterThan(0);
+        });
 
     it("builds the flag namespace map from the loaded data", async () => {
         const dataPath = resolveFixture("IDSpaceHandlerTestFilesystem");
@@ -117,7 +133,7 @@ describe("IDSpaceHandler with plug-in loading disabled", () => {
         expect(noPlugins.wëap['plug pack:150']).toBeUndefined();
         expect(noPlugins.wëap['plug pack:153']).toBeUndefined();
         expect(noPlugins.wëap['Plugin 1:150']).toBeUndefined();
-        expect(noPlugins.wëap['A first plug:150']).toBeUndefined();
+        expect(noPlugins.wëap['Z last plug:150']).toBeUndefined();
 
         // Nothing outside the "nova:" namespace survives at all.
         expect(Object.keys(noPlugins.wëap).sort())
