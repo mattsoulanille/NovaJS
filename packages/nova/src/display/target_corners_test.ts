@@ -126,6 +126,17 @@ describe('styleForTarget (target corner selection)', () => {
             expect(style('escort', { escort })).toBe('hostile');
         });
 
+    it("keeps neutral corners for another player's escort DEFENDING "
+        + "against a THIRD party (review r15 C1)", () => {
+            const escort = new Entity('their escort')
+                .addComponent(GovtComponent, { id: 'nova:157' })
+                .addComponent(NpcComponent, { aiType: 1 })
+                .addComponent(EscortCommandComponent,
+                    { command: 'defend', target: 'some-pirate' })
+                .addComponent(TargetComponent, { target: 'some-pirate' });
+            expect(style('escort', { escort })).toBe('neutral');
+        });
+
     it("keeps neutral corners for another player's escort attacking "
         + "someone else, or merely in formation", () => {
             const busy = new Entity('their escort')

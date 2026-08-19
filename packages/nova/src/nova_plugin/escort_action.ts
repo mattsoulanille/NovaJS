@@ -32,6 +32,7 @@ import { SystemHoldComponent } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
 import { SourceComponent } from './weapon_components.js';
 import { WeaponsStateComponent } from './weapons_state.js';
+import { CargoComponent, cargoUsed } from './cargo_plugin.js';
 
 /**
  * ============================================================================
@@ -310,6 +311,31 @@ export function replaceEscortShipClass(escort: Entity, shipId: string,
     escort.components.delete(IonizationComponent);
     escort.components.delete(IsIonizedComponent);
     escort.components.delete(DisabledComponent);
+    // Fleet cargo lives in the escort's own hold (fleet_cargo.ts). A hull
+    // swap to a smaller ship would otherwise carry tons above the new
+    // capacity into the fleet manifest and the save (review r15 C3). The
+    // physics that knows the exact outfit-adjusted capacity is rebuilt
+    // asynchronously, so clamp to the new hull's BASE hold now, evicting
+    // by sorted key for determinism; the provider-derived free space can
+    // only be larger than that, never smaller (stock loadouts add hold,
+    // never remove it), so nothing legitimately aboard is dropped.
+    const cargo = escort.components.get(CargoComponent);
+    if (cargo) {
+        let over = cargoUsed(cargo) - shipData.physics.freeCargo;
+        for (const key of [...cargo.keys()].sort().reverse()) {
+            if (over <= 0) {
+                break;
+            }
+            const tons = cargo.get(key) ?? 0;
+            const drop = Math.min(tons, over);
+            over -= drop;
+            if (drop >= tons) {
+                cargo.delete(key);
+            } else {
+                cargo.set(key, tons - drop);
+            }
+        }
+    }
 }
 
 /**

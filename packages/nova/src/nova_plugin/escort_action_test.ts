@@ -15,6 +15,7 @@ import { completeEntity } from './entity_data_loader.js';
 import {
     applyEscortAction, escortUpgradeTarget, manageableEscort, releaseEscort,
 } from './escort_action.js';
+import { CargoComponent, cargoUsed } from './cargo_plugin.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
@@ -80,14 +81,16 @@ async function makeWorld() {
         escortUpgradeShip: BETTER_SHIP_ID, escortUpgradeCost: UPGRADE_COST,
         escortSellValue: 0,
         outfits: { 'test:outfitA': 1 },
-        physics: { ...base.physics, shield: 100, armor: 100 },
+        physics: { ...base.physics, shield: 100, armor: 100, freeCargo: 100 },
     });
     gameData.data.Ship.map.set(BETTER_SHIP_ID, {
         ...base, id: BETTER_SHIP_ID, name: 'Terrapin II', price: 400_000,
         escortUpgradeShip: null, escortUpgradeCost: 0,
         escortSellValue: 0,
         outfits: { 'test:outfitB': 2 },
-        physics: { ...base.physics, shield: 500, armor: 400 },
+        // A smaller hold than the Terrapin's: the upgrade path must clamp
+        // fleet cargo to it (review r15 C3).
+        physics: { ...base.physics, shield: 500, armor: 400, freeCargo: 30 },
     });
     gameData.data.Ship.map.set(PLAIN_SHIP_ID, {
         ...base, id: PLAIN_SHIP_ID, name: 'Shuttle', price: 110_000,
@@ -456,6 +459,28 @@ describe('upgrading an escort', () => {
         const armor = escort.components.get(ArmorComponent)!;
         expect(armor.max).toBe(400);
         expect(armor.current).toBe(400);
+    });
+
+    it('evicts fleet cargo above the NEW hull\'s hold, by sorted key from '
+        + 'the end, and keeps the rest', async () => {
+            const escort = await fixture.addEscort();
+            escort.components.set(CargoComponent, new Map([
+                ['cargo:0', 40], ['cargo:4', 30], ['junk:nova:134', 10]]));
+            upgrade();
+            const cargo = escort.components.get(CargoComponent)!;
+            // 80 aboard, 30 fits: junk (last key) goes, then cargo:4 down
+            // to what is left; cargo:0 untouched.
+            expect(cargo.get('junk:nova:134')).toBeUndefined();
+            expect(cargo.get('cargo:4')).toBeUndefined();
+            expect(cargo.get('cargo:0')).toBe(30);
+            expect(cargoUsed(cargo)).toBe(30);
+        });
+
+    it('leaves fleet cargo alone when the new hull holds it', async () => {
+        const escort = await fixture.addEscort();
+        escort.components.set(CargoComponent, new Map([['cargo:0', 20]]));
+        upgrade();
+        expect(escort.components.get(CargoComponent)!.get('cargo:0')).toBe(20);
     });
 
     it('makes the DAILY FEE and the RESALE follow the new class',

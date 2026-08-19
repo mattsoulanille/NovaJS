@@ -35,7 +35,8 @@ export const STATE_HASH_INTERVAL = 60;
  * protocol changes -- it remains the label on incident records -- but
  * rely on the handshake, not on this, to keep builds from mixing.
  */
-export const PROTOCOL_VERSION = 2;
+// 3: escortAction input (release / sell / upgrade an escort).
+export const PROTOCOL_VERSION = 3;
 
 /**
  * One notable event in a peer's rollback machinery, for the black-box
