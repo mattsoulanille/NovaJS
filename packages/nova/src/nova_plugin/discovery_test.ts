@@ -1,8 +1,9 @@
 import 'jasmine';
 import {
-    DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
-    drawnSystems, knownSystemProperties, linkKnown, MapOutfitSystem,
-    mapOutfitSystems, SystemAdjacency, toDiscoveryLevel,
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryAccess,
+    DiscoveryLevel, discoveryNCBOperators, drawnSystems, knownSystemProperties,
+    linkKnown, MapOutfitSystem, mapOutfitSystems, resetDiscoveryNCBWarnings,
+    SystemAdjacency, toDiscoveryLevel,
 } from './discovery.js';
 
 /**
@@ -179,4 +180,105 @@ describe('mapOutfitSystems (oütf ModType 16)', () => {
         expect(mapOutfitSystems(-1002, 'a', systems, ADJ, classesOf))
             .toEqual([]);
     });
+});
+
+/**
+ * The two NCB operators the EVN Bible gives plug-in authors over this
+ * record: `Exxx` "Returns 1 if the player has explored system ID xxx, 0 if
+ * not" (:157) and `Xxxx` "make system ID xxx be explored" (:263).
+ */
+describe('the Exxx / Xxxx NCB operators', () => {
+    /** A record backed by a plain map, and the map, so tests can inspect it. */
+    function record(initial: [string, DiscoveryLevel][] = []) {
+        const levels = new Map<string, DiscoveryLevel>(initial);
+        const access: DiscoveryAccess = {
+            level: id => levels.get(id) ?? DISCOVERY_UNKNOWN,
+            // Raises only, exactly as discovery_store's markDiscovered does.
+            markVisited: id => {
+                if ((levels.get(id) ?? DISCOVERY_UNKNOWN) < DISCOVERY_ENTERED) {
+                    levels.set(id, DISCOVERY_ENTERED);
+                }
+            },
+        };
+        return { levels, access };
+    }
+
+    /** Every number resolves to "nova:<n>"; nothing is unknown. */
+    const stock = (id: number) => `nova:${id}`;
+
+    beforeEach(() => resetDiscoveryNCBWarnings());
+
+    it('Exxx is true at "visited" and at "visited and landed within"', () => {
+        // "Explored" is the pilot file's level >= 1: FLYING IN explores a
+        // system, and landing (level 2) obviously does not un-explore it.
+        const { access } = record([
+            ['nova:128', DISCOVERY_ENTERED],
+            ['nova:129', DISCOVERY_LANDED],
+        ]);
+        const ops = discoveryNCBOperators(access, stock);
+        expect(ops.hasExplored(128)).toBeTrue();
+        expect(ops.hasExplored(129)).toBeTrue();
+    });
+
+    it('Exxx is false for a system the pilot has never entered', () => {
+        const { access } = record();
+        expect(discoveryNCBOperators(access, stock).hasExplored(130))
+            .toBeFalse();
+    });
+
+    it('Xxxx raises an unknown system to "visited", not to "landed"', () => {
+        // The Bible's wording is "make system ID xxx be explored"; the
+        // stock uses are the tutorial revealing its next destination on the
+        // map (mïsn 630's OnAccept is exactly "X128"), which is what flying
+        // there would have taught you — not what landing there would.
+        const { levels, access } = record();
+        discoveryNCBOperators(access, stock).exploreSystem(128);
+        expect(levels.get('nova:128')).toBe(DISCOVERY_ENTERED);
+    });
+
+    it('Xxxx never knocks a landed-in system back down', () => {
+        // The store only ever raises (discovery_store's markDiscovered), so
+        // a mission handing you a map you have already used keeps what the
+        // landing taught you.
+        const { levels, access } = record([['nova:130', DISCOVERY_LANDED]]);
+        discoveryNCBOperators(access, stock).exploreSystem(130);
+        expect(levels.get('nova:130')).toBe(DISCOVERY_LANDED);
+    });
+
+    it('resolves the bare number stock-first, then the writing plug-in',
+        () => {
+            // Same id-space rule every other numbered reference follows: a
+            // plug-in's E130 means the STOCK system 130 when stock has one,
+            // and its own 130 only when stock does not.
+            const seen: string[] = [];
+            const access: DiscoveryAccess = {
+                level: id => {
+                    seen.push(id);
+                    return DISCOVERY_UNKNOWN;
+                },
+                markVisited: id => { seen.push(id); },
+            };
+            const resolve = (id: number) =>
+                id === 130 ? 'nova:130' : 'arpia:400';
+            const ops = discoveryNCBOperators(access, resolve);
+            ops.hasExplored(130);
+            ops.exploreSystem(400);
+            expect(seen).toEqual(['nova:130', 'arpia:400']);
+        });
+
+    it('ignores a sÿst id no loaded data set defines, with one warning',
+        () => {
+            // A phantom id would sit in the pilot's PERSISTED record
+            // forever, so X9999 writes nothing and E9999 reads false.
+            const warn = spyOn(console, 'warn');
+            const { levels, access } = record();
+            const ops = discoveryNCBOperators(access, () => undefined);
+            expect(ops.hasExplored(9999)).toBeFalse();
+            ops.exploreSystem(9999);
+            ops.exploreSystem(9999);
+            expect(levels.size).toBe(0);
+            // Once per spelling: E9999 and X9999. A looping crön must not
+            // fill the console with the same complaint every day.
+            expect(warn.calls.count()).toBe(2);
+        });
 });

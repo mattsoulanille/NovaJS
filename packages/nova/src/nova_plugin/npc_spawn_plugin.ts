@@ -366,7 +366,16 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     }
 
     // AppearOn: empty bit set (per-player bits cannot drive shared
-    // spawns; see the module comment).
+    // spawns; see the module comment). `Exxx` ("has the player explored
+    // system xxx") is left unwired for the same reason and reads false:
+    // discovery is per-CLIENT, per-pilot state that lives in the browser
+    // (discovery_store.ts), and this table is genesis state every peer
+    // must compute identically. Threading the local pilot's record in
+    // here would make one player's map knowledge decide what spawns for
+    // everybody, and would desync a multiplayer system the moment two
+    // pilots with different maps met in it. (Moot in practice: no flët
+    // AppearOn in stock or in any installed plug-in uses `Exxx` — see
+    // ncb.ts's hasExplored — but the ruling is what keeps it that way.)
     const emptyBits = { getBit: () => false };
     const appears = (fleet: FleetData) => {
         try {
@@ -480,7 +489,8 @@ export async function buildPersSpawnTable(world: World, systemId: string,
     }
 
     // ActiveOn under an empty bit set (per-player bits cannot drive
-    // shared spawns).
+    // shared spawns; nor can `Exxx`, per-player map knowledge — see
+    // buildFleetSpawnTable's emptyBits).
     const active = (pers: PersData) => {
         try {
             return !pers.activeOn || evaluateNCBTest(pers.activeOn,

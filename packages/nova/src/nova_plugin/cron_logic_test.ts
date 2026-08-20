@@ -2,6 +2,10 @@ import 'jasmine';
 import { CronData, getDefaultCronData } from 'novadatainterface/cron_data';
 import { getDefaultRankData } from 'novadatainterface/rank_data';
 import { dayNumber } from './calendar.js';
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryAccess,
+    DiscoveryLevel, resetDiscoveryNCBWarnings,
+} from './discovery.js';
 import { runCronsForDays } from './cron_logic.js';
 import { CronStates } from './player_state_plugin.js';
 
@@ -335,6 +339,114 @@ describe('runCronsForDays', () => {
                 const bits = new Set<number>();
                 expect(() => runCronsForDays(
                     [bay({ enableOn: '', onStart: 'b10 D535', onEnd: '' })],
+                    new Map(), bits, DAY, DAY + 1, () => 0)).not.toThrow();
+                expect(bits.has(10)).toBe(true);
+            });
+    });
+
+    /**
+     * `Exxx` in EnableOn and `Xxxx` in the set strings, over the pilot's
+     * per-system discovery record — the same read/write relationship the
+     * outfits map has with `Oxxx` and `Gxxx`/`Dxxx`, and scoped to the
+     * cron's own plug-in the same way.
+     */
+    describe('Exxx / Xxxx discovery operators', () => {
+        /** A record over a plain map, raising only (as the store does). */
+        function access(levels: Map<string, DiscoveryLevel>): DiscoveryAccess {
+            return {
+                level: id => levels.get(id) ?? DISCOVERY_UNKNOWN,
+                markVisited: id => {
+                    if ((levels.get(id) ?? DISCOVERY_UNKNOWN)
+                        < DISCOVERY_ENTERED) {
+                        levels.set(id, DISCOVERY_ENTERED);
+                    }
+                },
+            };
+        }
+
+        it('gates EnableOn on where the pilot has been', () => {
+            // The Bible's intended pattern: a cron that waits until the
+            // pilot has explored somewhere.
+            const cron = makeCron({ enableOn: 'E130', onStart: 'b10' });
+            const run = (levels: Map<string, DiscoveryLevel>) => {
+                const bits = new Set<number>();
+                runCronsForDays([cron], new Map(), bits, DAY, DAY + 1,
+                    () => 0, 0n, {
+                        discovery: access(levels),
+                        systemExists: id => id === 'nova:130',
+                    });
+                return bits.has(10);
+            };
+            expect(run(new Map())).toBe(false);
+            expect(run(new Map([['nova:130', DISCOVERY_ENTERED]]))).toBe(true);
+            expect(run(new Map([['nova:130', DISCOVERY_LANDED]]))).toBe(true);
+        });
+
+        it('scopes EnableOn\'s Exxx to the cron\'s own plug-in, stock first',
+            () => {
+                // Same id-space rule as the cron's Oxxx: stock's 130 when
+                // stock defines one, else the plug-in's own.
+                const cron = makeCron({ id: 'arpia:300', enableOn: 'E130',
+                    onStart: 'b10' });
+                const run = (stockHas130: boolean, explored: string) => {
+                    const bits = new Set<number>();
+                    runCronsForDays([cron], new Map(), bits, DAY, DAY + 1,
+                        () => 0, 0n, {
+                            discovery: access(new Map(
+                                [[explored, DISCOVERY_ENTERED]])),
+                            systemExists: id => id === 'arpia:130'
+                                || (stockHas130 && id === 'nova:130'),
+                        });
+                    return bits.has(10);
+                };
+                expect(run(true, 'nova:130')).toBe(true);
+                expect(run(true, 'arpia:130')).toBe(false);
+                expect(run(false, 'arpia:130')).toBe(true);
+            });
+
+        it('OnStart\'s Xxxx hands the pilot a piece of the map', () => {
+            const levels = new Map<string, DiscoveryLevel>();
+            runCronsForDays([makeCron({ onStart: 'X130' })], new Map(),
+                new Set(), DAY, DAY + 1, () => 0, 0n, {
+                    discovery: access(levels),
+                    systemExists: id => id === 'nova:130',
+                });
+            expect(levels.get('nova:130')).toBe(DISCOVERY_ENTERED);
+        });
+
+        it('never lowers a system the pilot has landed in', () => {
+            const levels = new Map<string, DiscoveryLevel>(
+                [['nova:130', DISCOVERY_LANDED]]);
+            runCronsForDays([makeCron({ onStart: 'X130' })], new Map(),
+                new Set(), DAY, DAY + 1, () => 0, 0n, {
+                    discovery: access(levels),
+                    systemExists: id => id === 'nova:130',
+                });
+            expect(levels.get('nova:130')).toBe(DISCOVERY_LANDED);
+        });
+
+        it('writes nothing, and warns once, for an unknown sÿst id', () => {
+            // A looping cron must not fill the console, and must never put
+            // a phantom system id in the pilot's persisted record.
+            resetDiscoveryNCBWarnings();
+            const warn = spyOn(console, 'warn');
+            const levels = new Map<string, DiscoveryLevel>();
+            runCronsForDays(
+                [makeCron({ onStart: 'X9999', loopOnStart: true })],
+                new Map(), new Set(), DAY, DAY + 5, () => 0, 0n, {
+                    discovery: access(levels),
+                    systemExists: () => false,
+                });
+            expect(levels.size).toBe(0);
+            expect(warn.calls.count()).toBe(1);
+        });
+
+        it('leaves both operators unwired when given no discovery record',
+            () => {
+                // Exxx false, Xxxx ignored — the pre-existing behaviour.
+                const bits = new Set<number>();
+                expect(() => runCronsForDays(
+                    [makeCron({ enableOn: '!E130', onStart: 'b10 X130' })],
                     new Map(), bits, DAY, DAY + 1, () => 0)).not.toThrow();
                 expect(bits.has(10)).toBe(true);
             });

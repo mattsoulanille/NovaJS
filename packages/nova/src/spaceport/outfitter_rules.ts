@@ -13,6 +13,8 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
+import { DiscoveryAccess } from '../nova_plugin/discovery.js';
+import { systemDiscoveryOperators } from '../nova_plugin/mission_logic.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
 
 export interface OutfitterContext {
@@ -28,6 +30,21 @@ export interface OutfitterContext {
     credits: number;
     /** Maps resource ids in NCB expressions (e.g. O142) to global ids. */
     resolveId?(id: number): string;
+    /**
+     * `Exxx` in an outfit's Availability: the player's per-system discovery
+     * record (discovery.ts). Absent leaves every `Exxx` false. The shop is a
+     * player-local screen, so this is only ever the LOCAL pilot's record —
+     * an outfit gated on where you have been is on sale for you alone, which
+     * is fine because nobody else is looking at your outfitter.
+     */
+    discovery?: DiscoveryAccess;
+    /**
+     * Whether a sÿst with this global id exists, so an `Exxx` term resolves
+     * its bare number stock-first exactly as `Oxxx` does (see
+     * resolveOutfitReference). Absent means "assume the writing plug-in's
+     * own", the pre-existing behaviour for every numbered reference.
+     */
+    systemExists?(globalId: string): boolean;
     /**
      * Outfit id -> units the player owns that are NOT installed on the
      * docked ship: today, bay fighters still flying after the carrier
@@ -600,15 +617,24 @@ function resolveOutfitReference(id: number, from: OutfitData,
  * Oxxx operator also considers any carried fighters that are deployed
  * when it examines the player's current list of outfits" — hence
  * ownedCount rather than a bare lookup.
+ *
+ * `Exxx` ("has the player explored system xxx") reads the local pilot's
+ * discovery record when the caller supplied one, with the sÿst number
+ * scoped to the outfit's OWN writing plug-in — the same id-space rule
+ * resolveOutfitReference applies to `Oxxx`, and for the same reason.
  */
 export function availabilityTest(outfit: OutfitData,
     context: OutfitterContext): boolean {
     const resolveId = context.resolveId
         ?? (id => resolveOutfitReference(id, outfit, context));
+    const discovery = systemDiscoveryOperators(context.discovery,
+        outfit.writerPrefix || resourcePrefix(outfit.id),
+        context.systemExists);
     try {
         return evaluateNCBTest(outfit.availability ?? '', {
             getBit: bit => context.bits.has(bit),
             hasOutfit: id => ownedCount(resolveId(id), context) > 0,
+            ...(discovery ? { hasExplored: discovery.hasExplored } : {}),
         });
     } catch (error) {
         if (error instanceof NCBParseError) {

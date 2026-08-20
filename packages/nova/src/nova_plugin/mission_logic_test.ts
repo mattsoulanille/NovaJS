@@ -21,6 +21,9 @@ import {
     StellarInfo,
     stellarVisible,
 } from './mission_logic.js';
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
+} from './discovery.js';
 import { ActiveMission, MAX_ACTIVE_MISSIONS, Missions } from './player_state_plugin.js';
 
 function makeStellar(partial: Partial<StellarInfo> = {}): StellarInfo {
@@ -277,6 +280,80 @@ describe('missionMatchesLocation', () => {
         const mission = makeMission({ availBits: 'b13 &&& !!!' });
         expect(missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
             makeContext({ bits: new Set([13]) }))).toBe(false);
+    });
+
+    // Exxx in AvailBits: "Returns 1 if the player has explored system ID
+    // xxx" (Bible :157) — a mission that only turns up once the pilot has
+    // been somewhere.
+    describe('Exxx in AvailBits', () => {
+        const mission = makeMission({ availBits: 'E130 & !E162' });
+        /** A context whose record holds exactly `explored`. */
+        const ctx = (explored: string[], systems = ['nova:130', 'nova:162']) =>
+            makeContext({
+                discovery: {
+                    level: id => explored.includes(id)
+                        ? DISCOVERY_ENTERED : DISCOVERY_UNKNOWN,
+                    markVisited: () => { },
+                },
+                systemExists: id => systems.includes(id),
+            });
+        const offers = (c: MissionContext) =>
+            missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER, c);
+
+        it('reads the pilot\'s discovery record', () => {
+            expect(offers(ctx(['nova:130']))).toBe(true);
+            expect(offers(ctx([]))).toBe(false);
+            expect(offers(ctx(['nova:130', 'nova:162']))).toBe(false);
+        });
+
+        it('is true at "landed within" too, not just "visited"', () => {
+            expect(offers(makeContext({
+                discovery: {
+                    level: id => id === 'nova:130'
+                        ? DISCOVERY_LANDED : DISCOVERY_UNKNOWN,
+                    markVisited: () => { },
+                },
+                systemExists: () => true,
+            }))).toBe(true);
+        });
+
+        it('scopes the sÿst number stock-first, then the mission\'s own '
+            + 'plug-in', () => {
+                // A plug-in mission's E130 means stock's 130 when stock has
+                // one, and the plug-in's own 130 only when it does not.
+                const pluginMission = makeMission({
+                    id: 'arpia:900', availBits: 'E130',
+                });
+                const asks: string[] = [];
+                const context = (stockHas130: boolean) => makeContext({
+                    discovery: {
+                        level: id => {
+                            asks.push(id);
+                            return DISCOVERY_ENTERED;
+                        },
+                        markVisited: () => { },
+                    },
+                    systemExists: id =>
+                        id === 'arpia:130' || (stockHas130 && id === 'nova:130'),
+                });
+                missionMatchesLocation(pluginMission,
+                    LOCATION_MISSION_COMPUTER, context(true));
+                missionMatchesLocation(pluginMission,
+                    LOCATION_MISSION_COMPUTER, context(false));
+                expect(asks).toEqual(['nova:130', 'arpia:130']);
+            });
+
+        it('is false for a sÿst id no loaded data set defines', () => {
+            spyOn(console, 'warn');
+            const missing = makeMission({ availBits: 'E9999' });
+            expect(missionMatchesLocation(missing, LOCATION_MISSION_COMPUTER,
+                ctx(['nova:9999'], []))).toBe(false);
+        });
+
+        it('is false when the caller has no discovery record at all', () => {
+            // The unwired default; see ncb.ts's hasExplored.
+            expect(offers(makeContext())).toBe(false);
+        });
     });
 
     it('never offers a mission that is already active', () => {
@@ -1171,6 +1248,74 @@ describe('mission set-string hooks (Sxxx/Axxx/Fxxx)', () => {
         expect(state.missions.size).toBe(0);
         expect(state.bits.has(1)).toBe(true);
         expect(state.bits.has(2)).toBe(true);
+    });
+
+    // Xxxx, "make system ID xxx be explored" (Bible :263). The whole of
+    // the stock game's use of it is the tutorial revealing where to go
+    // next: mïsn 630's OnAccept is "X128" (Kania, holding Port Kane),
+    // 631's is "X162", 633's "X166", 757's and 758's "X187", and 251's is
+    // "b8339 X130" — Sol, on the way to Earth.
+    describe('Xxxx in a mission set string', () => {
+        function machineryWithDiscovery(levels: Map<string, DiscoveryLevel>,
+            systems: string[]) {
+            const state = makeState();
+            const machinery: MissionMachineryContext = {
+                ...makeMachinery(state, []),
+                discovery: {
+                    level: id => levels.get(id) ?? DISCOVERY_UNKNOWN,
+                    markVisited: id => {
+                        if ((levels.get(id) ?? DISCOVERY_UNKNOWN)
+                            < DISCOVERY_ENTERED) {
+                            levels.set(id, DISCOVERY_ENTERED);
+                        }
+                    },
+                },
+                systemExists: id => systems.includes(id),
+            };
+            return { state, machinery };
+        }
+
+        it('marks the named system visited', () => {
+            const levels = new Map<string, DiscoveryLevel>();
+            const { machinery } = machineryWithDiscovery(levels,
+                ['nova:128', 'nova:130']);
+            // Stock mïsn 251's OnAccept, verbatim.
+            runMissionSetString(machinery, 'b8339 X130', 'nova');
+            expect(levels.get('nova:130')).toBe(DISCOVERY_ENTERED);
+        });
+
+        it('leaves a system the pilot has landed in at "landed"', () => {
+            const levels = new Map<string, DiscoveryLevel>(
+                [['nova:128', DISCOVERY_LANDED]]);
+            const { machinery } = machineryWithDiscovery(levels, ['nova:128']);
+            runMissionSetString(machinery, 'X128', 'nova');
+            expect(levels.get('nova:128')).toBe(DISCOVERY_LANDED);
+        });
+
+        it('scopes the sÿst number to the plug-in that wrote the string',
+            () => {
+                // A plug-in's X400, where stock has no 400: its own system.
+                const levels = new Map<string, DiscoveryLevel>();
+                const { machinery } = machineryWithDiscovery(levels,
+                    ['arpia:400']);
+                runMissionSetString(machinery, 'X400', 'arpia');
+                expect([...levels.keys()]).toEqual(['arpia:400']);
+            });
+
+        it('writes nothing for a sÿst id no data set defines', () => {
+            spyOn(console, 'warn');
+            const levels = new Map<string, DiscoveryLevel>();
+            const { machinery } = machineryWithDiscovery(levels, []);
+            runMissionSetString(machinery, 'X9999', 'nova');
+            expect(levels.size).toBe(0);
+        });
+
+        it('is a no-op when the caller has no discovery record', () => {
+            // The pre-existing behaviour: reported as an unimplemented hook.
+            const state = makeState();
+            expect(() => runMissionSetString(
+                makeMachinery(state, []), 'X130', 'nova')).not.toThrow();
+        });
     });
 
     it('guards against self-referential Sxxx recursion', () => {

@@ -11,6 +11,7 @@ import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
 import { makeControlBitHooks, NCBParseError, runNCBSet } from "../nova_plugin/ncb.js";
 import { ControlBits, ControlBitsComponent } from "../nova_plugin/ncb_plugin.js";
+import { playerDiscovery } from "../nova_plugin/discovery_store.js";
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
 import { OutfitsStateComponent } from "../nova_plugin/outfit_plugin.js";
@@ -18,7 +19,9 @@ import { CreditsComponent } from "../nova_plugin/player_state_plugin.js";
 import { cleanRecords, LegalRecords } from "../nova_plugin/reputation.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ShipComponent } from "../nova_plugin/ship_plugin.js";
-import { idPrefix, resolveNumberedResource } from "../nova_plugin/mission_logic.js";
+import {
+    idPrefix, resolveNumberedResource, systemDiscoveryOperators,
+} from "../nova_plugin/mission_logic.js";
 import { Button, ButtonClick } from "./button.js";
 import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
@@ -534,7 +537,28 @@ export class Outfitter extends Menu<Entity> {
             deployedCounts: this.deployedOutfitCounts?.(this.outfits.keys()),
             planet: this.stellar(),
             ammoSellStrings: this.ammoSellStrings,
+            // `Exxx` in an Availability: the local pilot's map knowledge,
+            // read straight from the store (the shop is a player-local
+            // screen; see OutfitterContext.discovery).
+            discovery: playerDiscovery,
+            systemExists: this.systemExists(),
         };
+    }
+
+    /**
+     * The sÿst existence lookup the `Exxx` / `Xxxx` operators resolve
+     * their bare numbers through, or undefined while the shared universe
+     * has not loaded — which is exactly the situation the bit-only
+     * fallback in runSetString exists for. Undefined means "assume the
+     * writing plug-in's own id", the documented no-id-space behaviour;
+     * answering "no system exists" instead would silently drop every
+     * `Xxxx` and leave the pilot without the map the mission granted.
+     */
+    private systemExists(): ((globalId: string) => boolean) | undefined {
+        const universe = MissionUniverse.shared(this.simulationData);
+        return universe.systemsLoaded
+            ? (globalId: string) => universe.hasSystem(globalId)
+            : undefined;
     }
 
     /**
@@ -595,7 +619,13 @@ export class Outfitter extends Menu<Entity> {
                 resolveId: id => resolveNumberedResource(id, resourcePrefix,
                     globalId => MissionUniverse.shared(this.simulationData)
                         .hasOutfit(globalId)),
-            }), Math.random);
+                // Xxxx ("make system xxx be explored"), against the same
+                // player-local record the star map draws from. Wired on
+                // this fallback path too, so an outfit whose mission
+                // session failed to build still reveals its map.
+            }, undefined, systemDiscoveryOperators(
+                playerDiscovery, resourcePrefix, this.systemExists())),
+                Math.random);
         } catch (error) {
             if (error instanceof NCBParseError) {
                 console.warn('Bad control bit set string:', error);

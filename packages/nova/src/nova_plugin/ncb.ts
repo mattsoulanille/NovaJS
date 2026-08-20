@@ -80,7 +80,44 @@ export interface NCBTestContext {
     getBit(bit: number): boolean;
     /** Oxxx: whether the player owns at least one of outfit ID xxx. */
     hasOutfit?(id: number): boolean;
-    /** Exxx: whether the player has explored system ID xxx. */
+    /**
+     * Exxx: whether the player has explored sÿst ID xxx — discovery level
+     * >= 1 ("visited"), see discovery.ts's discoveryNCBOperators, which is
+     * what callers build this from.
+     *
+     * ABSENT MEANS FALSE, and that is the right answer for the one family
+     * of evaluations that has no player to ask: the shared NPC spawn tables
+     * (npc_spawn_plugin's flët AppearOn / përs ActiveOn) are genesis state
+     * computed identically on every peer, so they evaluate under a context
+     * whose bits are all clear too. One player's private map knowledge must
+     * not decide what spawns for everybody, exactly as their control bits
+     * do not.
+     *
+     * SUPPLIED at the player-local test sites the scenario data drives:
+     * a mïsn's AvailBits (mission_logic's testBits), a crön's EnableOn
+     * (cron_logic's enableOnPasses) and an oütf's Availability
+     * (outfitter_rules' availabilityTest). The other player-local tests —
+     * shïp Availability (shipyard_stock_rules), sÿst Visibility
+     * (mission_universe / starmap / mission_logic's stellarVisible), jünk
+     * BuyOn/SellOn (trade_logic) and öops ActivateOn (price_events) — leave
+     * it at its default. Wire them the same way (a DiscoveryAccess plus a
+     * systemExists lookup, through mission_logic's
+     * systemDiscoveryOperators) if that ever becomes worth doing.
+     *
+     * WHAT THE DATA ACTUALLY CONTAINS: nothing. A sweep of every NCB test
+     * field of every resource in stock "Nova Files" plus all 26 installed
+     * plug-ins (9,979 non-empty expressions; the operator census by letter
+     * is b 4152, p 320, o 286, bare-number 4) finds ZERO `Exxx` terms —
+     * not in AvailBits, not in Availability, not in any Visibility, not in
+     * a dësc conditional (which cannot even spell one: desc_text's
+     * tryParseConditional accepts only b/p/g). So the wired sites above
+     * are wired on the Bible's word, and the unwired ones cost nothing.
+     *
+     * BEWARE `E` IN A SET STRING, which is a DIFFERENT operator: the
+     * changeShip form (see parseNCBSet's 'e'). Arpia's oütf 511-516/518
+     * OnPurchase strings carry `E455`-`E460`, which are shïp ids, and a
+     * naive /[EX]\d+/ grep over NCB fields reports them as explored terms.
+     */
     hasExplored?(id: number): boolean;
     /** G: the player's gender. True if male. */
     isMale?: boolean;
@@ -662,22 +699,66 @@ export interface RankHookOptions {
 }
 
 /**
+ * The `Xxxx` half of `makeControlBitHooks`: the already-resolved
+ * "make system xxx be explored" operation, built by the caller from the
+ * player's discovery record and the running resource's plug-in prefix (see
+ * discovery.ts's discoveryNCBOperators). Supplying it wires `Xxxx` at every
+ * set-string site that can reach the owner's discovery store.
+ *
+ * NEVER SUPPLIED FROM INSIDE THE SIMULATION, and there is nowhere it could
+ * be: no ECS system runs an NCB set string. Every set-string site is
+ * player-local, and all four are wired — the mission machinery
+ * (mission_logic's makeMissionSetHooks), the crons at a date advance
+ * (cron_logic), the outfitter's OnPurchase/OnSell fallback path, and the
+ * chär OnStart of a new pilot (browser.ts). That is exactly what a
+ * per-client, per-pilot record like discovery requires.
+ *
+ * EVERY REAL USE IN THE DATA IS A MISSION ONACCEPT. The same sweep that
+ * found no `Exxx` at all found exactly SIX `Xxxx`, all in stock, all in
+ * mïsn OnAccept, all in the tutorial chain, and each naming the system
+ * that holds that mission's own return stellar — the tutorial drawing the
+ * next leg on your map before sending you there:
+ *
+ *     mïsn nova:251 "Head to Sol;Tutorial 001"          "b8339 X130"
+ *     mïsn nova:630 "Trade between Earth and Port Kane" "X128"
+ *     mïsn nova:631 "...Port Kane and New England"      "X162"
+ *     mïsn nova:633 "Head to Rauther;Tutorial 005"      "X166"
+ *     mïsn nova:757 "Ferry Barry to <RST>"              "X187"
+ *     mïsn nova:758 "Take Barry to <RST>"               "X187"
+ *
+ * (Tutorial 004, mïsn 632, sends you back to Earth and has an EMPTY
+ * OnAccept — Sol was already revealed by Tutorial 001. The pattern is
+ * deliberate.) No plug-in uses `Xxxx` at all, and no plug-in defines a
+ * sÿst at any of local ids 128/130/162/166/187, so stock-first resolution
+ * lands on the intended system whoever runs the string.
+ */
+export interface DiscoverySetHookOptions {
+    /** Xxxx: make the sÿst with this resource id be explored. */
+    exploreSystem(id: number): void;
+}
+
+/**
  * Hooks that mutate a `Set<number>` of control bits and optionally
- * grant/remove outfits in an `id -> count` map, and activate/deactivate
- * ränks in a set of global rank ids. This is what outfit
- * OnPurchase/OnSell strings use; the outfit-count and rank maps are
- * keyed by global ids, so numeric resource ids pass through `resolveId`.
+ * grant/remove outfits in an `id -> count` map, activate/deactivate
+ * ränks in a set of global rank ids, and mark systems explored. This is
+ * what outfit OnPurchase/OnSell strings use; the outfit-count and rank maps
+ * are keyed by global ids, so numeric resource ids pass through
+ * `resolveId`.
  */
 export function makeControlBitHooks(bits: Set<number>, outfitCounts?: {
     outfits: Map<string, number>,
     /** Maps a resource id like 142 to a global id like "nova:142". */
     resolveId(id: number): string,
-}, ranks?: RankHookOptions): NCBSetHooks {
+}, ranks?: RankHookOptions,
+    discovery?: DiscoverySetHookOptions): NCBSetHooks {
     const hooks: NCBSetHooks = {
         setBit: bit => bits.add(bit),
         clearBit: bit => bits.delete(bit),
         toggleBit: bit => bits.has(bit) ? bits.delete(bit) : bits.add(bit),
     };
+    if (discovery) {
+        hooks.exploreSystem = id => discovery.exploreSystem(id);
+    }
     if (ranks) {
         const { active, resolveId, getRank } = ranks;
         hooks.activateRank = id =>

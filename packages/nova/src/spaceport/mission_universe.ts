@@ -230,6 +230,32 @@ export class MissionUniverse {
     }
 
     /**
+     * Whether a sÿst with this global id exists, so the `Exxx` / `Xxxx`
+     * discovery operators can resolve their bare numbers stock-first and
+     * ignore a number no loaded data set defines (mission_logic's
+     * resolveExistingNumberedResource).
+     */
+    hasSystem(id: string): boolean {
+        return this.systemsById.has(id);
+    }
+
+    /**
+     * Whether {@link hasSystem} can answer at all — false until `load()`
+     * has populated the systems.
+     *
+     * A caller resolving a bare sÿst number must pass NO lookup rather
+     * than one that answers "nothing exists" while the universe is still
+     * (or permanently) unloaded: no-lookup falls back to the writing
+     * plug-in's own id, which is right for every stock `Xxxx` there is,
+     * whereas "nothing exists" drops the operator entirely and the pilot
+     * never gets the piece of map the mission promised. See
+     * mission_logic's resolveExistingNumberedResource.
+     */
+    get systemsLoaded(): boolean {
+        return this.systemsById.size > 0;
+    }
+
+    /**
      * The display name of a shïp type (its resource name, "; comment"
      * suffix hidden), for the <PST>/<PSN> identity wildcards. Undefined
      * when the ship can't be loaded — the wildcard falls back to its

@@ -44,6 +44,10 @@ import { DockedShipResource } from "./docked_ship.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { SingletonComponent } from "nova_ecs/world";
 import { ControlAction } from "../nova_plugin/controls.js";
+import {
+    DISCOVERY_ENTERED, DiscoveryLevel,
+} from "../nova_plugin/discovery.js";
+import { discoveryLevel } from "../nova_plugin/discovery_store.js";
 import { displayName, govtTargetName } from "../nova_plugin/display_name.js";
 import { STANDARD_CARGO_NAMES } from "../nova_plugin/mission_logic.js";
 import { ShipComponent, ShipPhysicsComponent } from "../nova_plugin/ship_plugin.js";
@@ -925,6 +929,25 @@ class StatusBar {
 }
 
 export const StatusBarResource = new Resource<StatusBar>('StatusBar');
+
+/**
+ * How much the pilot knows about a system, for the navigation readout's
+ * unexplored-destination gate. This is THE SAME display-side handle the
+ * star map and the gate map are built with — `id => discoveryLevel(id)`
+ * over the per-pilot record in discovery_store.ts — passed as a resource
+ * because the readout lives in a System rather than in a constructed
+ * object. REQUIRED, not Optional: a world that installs the readout without
+ * a discovery record would silently name every system, which is the exact
+ * leak this gate exists to close — better a loud "Missing resource" the
+ * first step than a quiet one nobody notices. StatusBarPlugin sets it.
+ *
+ * Reading the store on every step is what makes the name appear LIVE on
+ * arrival: entering a system calls markDiscovered, and the very next
+ * display step sees level >= 1 and swaps the placeholder for the name.
+ */
+export const DiscoveryLevelResource =
+    new Resource<(systemId: string) => DiscoveryLevel>('DiscoveryLevel');
+
 export const AddEnemyEvent = new EcsEvent<{ shipId: string }>('AddEnemyEvent');
 /**
  * A debug-button cheat (status_bar.ts), forwarded by browser.ts to the
@@ -1230,9 +1253,10 @@ export const DrawStatusBarNavigation = new System({
         Optional(PlanetTargetComponent), Optional(JumpComponent),
         Optional(MovementStateComponent), Optional(ShipPhysicsComponent),
         Optional(FuelComponent), Optional(DisabledComponent), RunQuery,
-        SimulationGameDataResource, PlayerShipSelector] as const,
+        SimulationGameDataResource, DiscoveryLevelResource,
+        PlayerShipSelector] as const,
     step(statusBar, jumpRoute, planetTarget, jump, movement, shipPhysics,
-        fuel, disabled, runQuery, gameData) {
+        fuel, disabled, runQuery, gameData, discoveryOf) {
         // WHERE THE SHIP IS ACTUALLY HEADED. A jump in progress shows ITS
         // destination, not the route's new head: beginJump (jump_plugin)
         // shifts the hop off the route the instant the sequence starts, so
@@ -1253,6 +1277,16 @@ export const DrawStatusBarNavigation = new System({
             destinationName =
                 gameData.data.System.getCached(nextSystem)?.name ?? null;
         }
+
+        // A DESTINATION THE PILOT HAS NEVER BEEN TO IS NOT NAMED. The star
+        // map draws the ring of systems one jump out as unlabeled dim dots
+        // and reads "<Unknown>" for their properties (discovery.ts), and a
+        // route can be set to any of them — so printing the name here
+        // would be a free lookup for exactly the systems the map hides.
+        // Shows UNEXPLORED_SYSTEM instead, and the real name the step
+        // after arrival marks the system discovered.
+        const destinationExplored = nextSystem === undefined
+            || discoveryOf(nextSystem) >= DISCOVERY_ENTERED;
 
         // Otherwise the selected stellar's name, read off the planet entity.
         let stellarName: string | null = null;
@@ -1288,8 +1322,8 @@ export const DrawStatusBarNavigation = new System({
                 })
                 : true);
 
-        statusBar.drawNavigation(
-            navReadout(destinationName, stellarName, jumpReady));
+        statusBar.drawNavigation(navReadout(
+            destinationName, stellarName, jumpReady, destinationExplored));
     }
 });
 
@@ -1643,6 +1677,9 @@ export const StatusBarPlugin: Plugin = {
         });
 
         world.resources.set(StatusBarResource, statusBar);
+        // The navigation readout's unexplored-destination gate, over the
+        // same per-pilot record the star map and gate map read.
+        world.resources.set(DiscoveryLevelResource, id => discoveryLevel(id));
         // The docked-ship holder is created here if the spaceport plugin
         // hasn't already; both plugins set-if-absent so build order is moot.
         if (!world.resources.get(DockedShipResource)) {

@@ -1,5 +1,6 @@
 import {
-    DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, DiscoveryLevel, toDiscoveryLevel,
+    DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, DiscoveryAccess, DiscoveryLevel,
+    toDiscoveryLevel,
 } from './discovery.js';
 
 /**
@@ -258,6 +259,27 @@ export function loadDiscoveryEntries(
         persist(storage);
     }
 }
+
+/**
+ * The active pilot's record as the NCB `Exxx` / `Xxxx` operators see it
+ * (discovery.ts's DiscoveryAccess). This is the ONE binding between the
+ * store and the expression evaluators: mission_logic and cron_logic take
+ * the interface, never this module, so the pure logic stays free of a
+ * per-client, browser-storage-backed record.
+ *
+ * NOT A WORKING COPY, unlike everything else a MissionSession edits. The
+ * store IS the durable record — it writes through to localStorage on every
+ * change and rides the pilot save — precisely so that learning a system
+ * survives a crash between autosaves (see the module header). A set
+ * string's `X130` is the same kind of event as flying into Sol, and
+ * neither waits for a commit.
+ */
+export const playerDiscovery: DiscoveryAccess = {
+    level: id => discoveryLevel(id),
+    markVisited: id => {
+        markDiscovered(id, DISCOVERY_ENTERED);
+    },
+};
 
 /** Forgets everything — a new pilot starts undiscovered (see resetSave). */
 export function resetDiscovery(storage?: DiscoveryStorage) {

@@ -68,8 +68,9 @@ import {
     DISCOVERY_LANDED,
 } from "./nova_plugin/discovery.js";
 import {
-    markDiscovered, resetDiscovery,
+    markDiscovered, playerDiscovery, resetDiscovery,
 } from "./nova_plugin/discovery_store.js";
+import { systemDiscoveryOperators } from "./nova_plugin/mission_logic.js";
 import {
     ControlBitPair, ControlBitResolver,
 } from './nova_plugin/control_bit_namespaces.js';
@@ -1944,12 +1945,21 @@ async function startGame() {
             // fine for R(a b) here (see the outfitter's runSetString).
             // A chär OnStart may grant a rank (Kxxx); the cascades need
             // rank data, which is fetched on demand from the cache.
+            // It may also hand the pilot a piece of the map (Xxxx). This
+            // branch only runs when there is no save to restore — a BRAND
+            // NEW pilot — and the store is already pointed at that pilot's
+            // own key (discovery_store's setDiscoveryStorageKey, which
+            // save_game drives), so writing straight through is the whole
+            // of the effect and it lands on the right pilot.
+            const startSystemIds = new Set(ids.System);
             runNCBSet(playerStart.onStart,
                 makeControlBitHooks(bits, undefined, {
                     active: startRanks,
                     resolveId: id => `${playerStart.prefix}:${id}`,
                     getRank: id => simulationGameData.data.Rank.getCached(id),
-                }), Math.random);
+                }, systemDiscoveryOperators(playerDiscovery,
+                    playerStart.prefix, id => startSystemIds.has(id))),
+                Math.random);
         } catch (e) {
             if (e instanceof NCBParseError) {
                 console.warn('Bad chär OnStart string:', e);

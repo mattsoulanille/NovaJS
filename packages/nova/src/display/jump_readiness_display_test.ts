@@ -25,7 +25,10 @@ import {
 } from '../nova_plugin/ship_plugin.js';
 import { ShipPhysicsDisplayPlugin } from './ship_physics_display_plugin.js';
 import { SoundPlugin } from './sound_plugin.js';
-import { DrawStatusBarNavigation, StatusBarResource } from './status_bar.js';
+import { DISCOVERY_ENTERED } from '../nova_plugin/discovery.js';
+import {
+    DiscoveryLevelResource, DrawStatusBarNavigation, StatusBarResource,
+} from './status_bar.js';
 import { NavReadout } from './status_bar_content.js';
 import { BEEP_CANT_DO } from './ui_sound.js';
 import { UiSoundTriggersPlugin } from './ui_sound_triggers_plugin.js';
@@ -129,6 +132,10 @@ describe('jump readiness in the display world', () => {
         world.resources.set(StatusBarResource, {
             drawNavigation: (readout: NavReadout) => { drawn.push(readout); },
         } as never);
+        // The readout withholds an unexplored destination's name, so it
+        // needs the pilot's record; this suite is about the DIM rule, so
+        // the destination is a system the pilot has been to.
+        world.resources.set(DiscoveryLevelResource, () => DISCOVERY_ENTERED);
         // The Display plugin adds this to the real display world for
         // exactly this reason (display/display_plugin.ts).
         await world.addPlugin(ShipPhysicsDisplayPlugin);
