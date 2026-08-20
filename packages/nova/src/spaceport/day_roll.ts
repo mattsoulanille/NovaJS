@@ -98,10 +98,15 @@ export function dayRoll(shop: DayRollShop, resourceNumber: number,
  */
 export function passesDayRoll(percent: number, shop: DayRollShop,
     resourceNumber: number, context: DayRollContext): boolean {
-    if (percent <= 0) {
+    // Strictly zero, matching neverOnSale: the Bible's "values less than
+    // 1 ... interpreted as 100" is overridden by the data-derived
+    // BuyRandom-0 ruling for 0 ONLY; a negative percent stays on the
+    // Bible's side and is always offered (review r16 LOW — no stock
+    // resource has one; nova:348 is hidden by its other gates).
+    if (percent === 0) {
         return false;
     }
-    if (percent >= 100) {
+    if (percent < 0 || percent >= 100) {
         return true;
     }
     if (!BUY_RANDOM_DAY_ROLL_ENABLED || context.day === undefined) {

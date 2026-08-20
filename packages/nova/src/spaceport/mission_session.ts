@@ -106,7 +106,8 @@ export class MissionSession {
             getRank: id => universe.getRank(id),
             outfitExists: id => universe.hasOutfit(id),
             discovery: playerDiscovery,
-            systemExists: id => universe.hasSystem(id),
+            systemExists: universe.systemsLoaded
+                ? (id: string) => universe.hasSystem(id) : undefined,
         };
     }
 
@@ -147,7 +148,8 @@ export class MissionSession {
             systemIdOfStellar: id =>
                 this.universe.systemIdOfPlanet(id, this.state.bits),
             discovery: playerDiscovery,
-            systemExists: id => this.universe.hasSystem(id),
+            systemExists: this.universe.systemsLoaded
+                ? (id: string) => this.universe.hasSystem(id) : undefined,
         };
     }
 
@@ -528,7 +530,8 @@ export async function advanceEntityDate(entity: Entity, days: number,
             // set strings extend it (Xxxx). Written straight through, like
             // every other discovery event (see playerDiscovery).
             discovery: playerDiscovery,
-            systemExists: id => universe.hasSystem(id),
+            systemExists: universe.systemsLoaded
+                ? (id: string) => universe.hasSystem(id) : undefined,
         });
         entity.components.set(ControlBitsComponent, bits);
         entity.components.set(ActiveRanksComponent, ranks);

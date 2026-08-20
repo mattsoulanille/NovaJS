@@ -732,12 +732,18 @@ async function settleDockedEscortDeals(player: string, entity: Entity):
         .map(id => simulationGameData.data.Ship.get(id)
             .catch(() => undefined)));
     const credits = entity.components.get(CreditsComponent);
-    const settled = settleEscortDeals(landedEscorts, player,
-        credits?.credits ?? 0,
-        id => simulationGameData.data.Ship.getCached(id));
-    if (credits) {
-        credits.credits += settled.credits;
+    if (!credits) {
+        // No balance, no trades: settling here would still SELL queued
+        // escorts (they leave the roster) while the proceeds vanish with
+        // no component to receive them (review r16 MEDIUM). Every real
+        // player entity has CreditsComponent; if one ever doesn't, the
+        // deals just wait.
+        return;
     }
+    const settled = settleEscortDeals(landedEscorts, player,
+        credits.credits,
+        id => simulationGameData.data.Ship.getCached(id));
+    credits.credits += settled.credits;
     for (const sale of settled.sold) {
         console.log(`Escort ${sale.uuid} sold off for `
             + `${sale.value} credits at the shipyard.`);

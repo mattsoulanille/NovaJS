@@ -66,8 +66,14 @@ describe('day roll', () => {
     describe('passesDayRoll', () => {
         it('refuses a zero percentage whatever the switch says', () => {
             expect(passesDayRoll(0, 'outfit', 506, at(430000))).toBe(false);
-            expect(passesDayRoll(-1, 'outfit', 506, at(430000))).toBe(false);
         });
+
+        it('offers a NEGATIVE percentage: only 0 means never-on-sale; '
+            + 'below zero stays on the Bible\'s "less than 1 ... as 100" '
+            + 'side (review r16)', () => {
+                expect(passesDayRoll(-1, 'outfit', 506, at(430000)))
+                    .toBe(true);
+            });
 
         it('always offers 100 or more ("greater than 100 ... as 100")', () => {
             expect(passesDayRoll(100, 'outfit', 506, at(430000))).toBe(true);
