@@ -92,6 +92,21 @@ describe('original pilot import', () => {
             .toBeDefined();
     });
 
+    it('imports the exploration map at its original three levels', () => {
+        // The file's `exploration` array is indexed by sÿst id - 128 and
+        // holds "<= 0 unexplored, 1 visited, 2 visited and landed within"
+        // — the same three levels NovaJS's discovery record uses, so it
+        // crosses over unchanged. The synthetic pilot sets exactly one
+        // entry: exploration[5] = 2, i.e. sÿst nova:133, landed in.
+        const { save } = convertOriginalPilotBytes(
+            buildPltPilotFile('Ring of Glory'), 'Cade Connelly.plt', CTX);
+        expect(save.discovery)
+            .toEqual([[`nova:${S.exploredSystem + 128}`, 2]]);
+        // And it is still a save this build accepts (additive field).
+        expect(decodeSave(JSON.stringify({ version: 2, data: save })))
+            .toBeDefined();
+    });
+
     it('imports an active mission without special ships from a Mac pilot',
         () => {
             // The Mac builder fills mission slot 0 (mïsn 474, no special

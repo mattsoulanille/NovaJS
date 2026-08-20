@@ -292,6 +292,11 @@ export class MissionUniverse {
         return fallback;
     }
 
+    /** A system's spöb ids in resource order (empty for an unknown id). */
+    systemPlanets(systemId: string): readonly string[] {
+        return this.systemsById.get(systemId)?.planets ?? [];
+    }
+
     getGovt(id: string): GovtData | undefined {
         return this.govtsById.get(id);
     }

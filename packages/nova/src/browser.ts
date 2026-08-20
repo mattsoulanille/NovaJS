@@ -64,14 +64,20 @@ import { PlayerShipSelector } from "./nova_plugin/player_ship_plugin.js";
 import { CreditsComponent, GameDateComponent } from "./nova_plugin/player_state_plugin.js";
 import { initialRecordsFromGovtStatuses } from "./nova_plugin/reputation.js";
 import { CombatRatingComponent, LegalRecordsComponent } from "./nova_plugin/reputation_plugin.js";
-import { resetExplored } from "./nova_plugin/explored_store.js";
+import {
+    DISCOVERY_LANDED,
+} from "./nova_plugin/discovery.js";
+import {
+    markDiscovered, resetDiscovery,
+} from "./nova_plugin/discovery_store.js";
 import {
     ControlBitPair, ControlBitResolver,
 } from './nova_plugin/control_bit_namespaces.js';
 import {
     EscortToSave, SavedEscort, collectEscortsToSave, decodeSave, encodeSave,
     extractSaveData, extractSavedEscorts, getActiveSaveKey, loadSave,
-    resetSave, restorePlayerState, restoreSavedEscorts, SaveData, writeSave,
+    resetSave, restoreClientSaveState, restorePlayerState,
+    restoreSavedEscorts, SaveData, writeSave,
 } from "./nova_plugin/save_game.js";
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
@@ -1784,6 +1790,11 @@ async function startGame() {
     // override it. A corrupt or old-version save is quarantined by
     // loadSave and we fall back to defaults.
     const save = loadSave();
+    if (save) {
+        // Client-local state the save carries but no component holds:
+        // the star-system discovery record (discovery_store.ts).
+        restoreClientSaveState(save);
+    }
     // The pilot's checkpoint history: baseline for the in-flight change
     // detector, and the recorder for the landed venues' requests.
     loadCheckpointBaseline();
@@ -2215,6 +2226,13 @@ async function startGame() {
             if (pendingDockedShip && !dockedShip) {
                 await currentBridge.removeEntity(pendingDockedShip.uuid);
                 clearTargetsOnLanding(pendingDockedShip.entity);
+                // Landing is how a system reaches discovery level 2: you
+                // learn what the ports sell and what they trade in, which
+                // is the pilot file's "visited and landed within" (see
+                // discovery.ts). Entering the system already set level 1.
+                if (activeSystemId) {
+                    markDiscovered(activeSystemId, DISCOVERY_LANDED);
+                }
                 currentDisplayWorld.emit(OpenSpaceportEvent, {
                     planetId: pendingDockedShip.planetId,
                     ship: pendingDockedShip.entity,
@@ -2929,10 +2947,11 @@ async function runTitle() {
                     // to clear, and a reset here could only ever delete a
                     // save belonging to somebody else — the legacy
                     // `novajs:save` that migration adopts in place, above
-                    // all. Only the exploration record needs clearing: it
-                    // is still client-global, and a new pilot starts with
-                    // an unexplored galaxy.
-                    resetExplored();
+                    // all. Only the discovery record needs clearing, and
+                    // createPilot has already pointed it at the new
+                    // pilot's own key (setActiveSaveKey), so this clears
+                    // that empty slot and nobody else's.
+                    resetDiscovery();
                     savePilotProfile(withShip);
                     // A fresh pilot has no rebindings: back to defaults.
                     await applyControls();

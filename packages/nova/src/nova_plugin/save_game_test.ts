@@ -45,7 +45,9 @@ import {
     extractSavedEscorts,
     loadSave,
     resetSave,
+    restoreClientSaveState,
     restorePlayerState,
+    setActiveSaveKey,
     restoreSavedEscorts,
     RosterEscort,
     SaveData,
@@ -57,6 +59,9 @@ import {
     SAVE_VERSION,
     writeSave,
 } from './save_game.js';
+import {
+    discoveryLevel, markDiscovered, resetDiscovery,
+} from './discovery_store.js';
 import { ShipComponent } from './ship_plugin.js';
 import {
     ControlBitNamespaces, FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
@@ -898,5 +903,73 @@ describe('save_game escort version skew', () => {
         }];
         writeSave({ ...SAMPLE, escorts }, storage);
         expect(loadSave(storage)?.escorts).toEqual(escorts);
+    });
+});
+
+/**
+ * ============================================================================
+ * Star-system discovery in the save
+ * ============================================================================
+ *
+ * Discovery is client-local state with no component behind it (see
+ * discovery_store.ts): the save carries it so a pilot is complete in one
+ * payload, and the store is what actually answers at runtime.
+ */
+describe('save_game discovery', () => {
+    let storage: FakeStorage;
+
+    beforeEach(() => {
+        storage = new FakeStorage();
+        setActiveSaveKey(SAVE_KEY);
+        resetDiscovery(storage);
+    });
+
+    afterEach(() => {
+        setActiveSaveKey(SAVE_KEY);
+        resetDiscovery(storage);
+    });
+
+    it('round-trips the discovery field', () => {
+        const withDiscovery: SaveData = {
+            ...SAMPLE,
+            discovery: [['nova:130', 1], ['nova:131', 2]],
+        };
+        expect(decodeSave(encodeSave(withDiscovery))).toEqual(withDiscovery);
+    });
+
+    it('reads a save written before discovery existed', () => {
+        // Purely additive: the field's absence is a pilot who knows
+        // nothing, which is exactly what a pre-discovery save meant.
+        const decoded = decodeSave(JSON.stringify({
+            version: MIN_READABLE_SAVE_VERSION, data: SAMPLE,
+        }));
+        expect(decoded).toBeDefined();
+        expect(decoded!.discovery).toBeUndefined();
+    });
+
+    it('restores a save\'s discovery into the live store', () => {
+        restoreClientSaveState(
+            { ...SAMPLE, discovery: [['nova:130', 2]] }, storage);
+        expect(discoveryLevel('nova:130', storage)).toBe(2);
+    });
+
+    it('never lowers what the store already knows', () => {
+        markDiscovered('nova:130', 2, storage);
+        // Rolling back to an older checkpoint must not un-learn a system.
+        restoreClientSaveState(
+            { ...SAMPLE, discovery: [['nova:130', 1]] }, storage);
+        expect(discoveryLevel('nova:130', storage)).toBe(2);
+    });
+
+    it('gives each pilot their own record when the save key moves', () => {
+        markDiscovered('nova:130', 1, storage);
+        setActiveSaveKey('novajs:save:pilot2');
+        expect(discoveryLevel('nova:130', storage)).toBe(0);
+    });
+
+    it('clears the record with the save', () => {
+        markDiscovered('nova:130', 2, storage);
+        resetSave(storage);
+        expect(discoveryLevel('nova:130', storage)).toBe(0);
     });
 });

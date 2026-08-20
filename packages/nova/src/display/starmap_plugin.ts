@@ -4,9 +4,17 @@ import { World } from 'nova_ecs/world';
 import { EcsEvent } from 'nova_ecs/events';
 import { Subscription } from 'rxjs';
 import { Component } from 'nova_ecs/component';
+import { OutfitData } from 'novadatainterface/outfit_data';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { isExplored, markExplored } from '../nova_plugin/explored_store.js';
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
+} from '../nova_plugin/discovery.js';
+import {
+    discoveryLevel, markDiscovered, markManyDiscovered,
+} from '../nova_plugin/discovery_store.js';
+import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
 import { missionMapMarks } from '../nova_plugin/mission_logic.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
@@ -92,9 +100,11 @@ export const StarmapPlugin: Plugin = {
             throw new Error('Expected ScreenSize to exist');
         }
 
-        // Being here explores this system: a display world only exists for
-        // the system the player is in (including the starting one).
-        markExplored(systemId);
+        // Being here discovers this system: a display world only exists for
+        // the system the player is in (including the starting one). Level 1
+        // — you see what is inhabited, not what the ports sell; landing is
+        // what raises it to 2 (browser.ts, discovery.ts).
+        markDiscovered(systemId, DISCOVERY_ENTERED);
 
         // NCB system visibility uses the player's real control bits.
         const getPlayerBits = (): ReadonlySet<number> =>
@@ -105,6 +115,34 @@ export const StarmapPlugin: Plugin = {
         // stellar->system index. Universe load is idempotent and shared.
         const universe = MissionUniverse.shared(simulationData);
         void universe.load();
+
+        // A map outfit still ABOARD on arrival maps the area around the
+        // system just entered. In the stock data the only way to be
+        // carrying one is a set string that granted it — the Vell-os Area
+        // Map ability (crön nova:381 -> oütf nova:342) — because buying a
+        // map consumes it in the outfitter. See spaceport/map_outfit.ts.
+        void universe.load().then(async () => {
+            const outfits = playerComponent(world, OutfitsStateComponent);
+            if (!outfits) {
+                return;
+            }
+            const mapOutfits = new Map<string, OutfitData>();
+            for (const [id, { count }] of outfits) {
+                if (count <= 0) {
+                    continue;
+                }
+                try {
+                    const outfit = await simulationData.data.Outfit.get(id);
+                    if (outfit.map !== null) {
+                        mapOutfits.set(id, outfit);
+                    }
+                } catch {
+                    // An id this data set doesn't have: nothing to apply.
+                }
+            }
+            applyOwnedMapOutfits(mapOutfits.keys(), systemId, universe,
+                id => mapOutfits.get(id));
+        }).catch(e => console.warn('Failed to apply map outfits:', e));
         const getMissionMarks = () => {
             const missions = playerComponent(world, MissionsComponent);
             if (!missions) {
@@ -117,7 +155,7 @@ export const StarmapPlugin: Plugin = {
 
         const starmap = new Starmap(displayAssets, simulationData, systemId,
             controls, getPlayerBits, getMissionMarks, persistentRouteStore,
-            isExplored,
+            id => discoveryLevel(id),
             () => playerComponent(world, GameDateComponent),
             () => playerComponent(world, LegalRecordsComponent));
         let opening = false;
@@ -131,6 +169,19 @@ export const StarmapPlugin: Plugin = {
         if (typeof window !== 'undefined') {
             (window as unknown as { novaStarmap: Starmap }).novaStarmap =
                 starmap;
+            // The discovery record, for the visual-comparison harness and
+            // for debugging: there is no in-game way to hand a pilot a
+            // galaxy, and the map's chrome scenarios need one to compare
+            // against the reference captures' mid-game pilot.
+            (window as unknown as { novaDiscovery: unknown }).novaDiscovery = {
+                level: (id: string) => discoveryLevel(id),
+                mark: (ids: string[], level: DiscoveryLevel) =>
+                    markManyDiscovered(ids, level),
+                markAll: async (level: DiscoveryLevel = DISCOVERY_LANDED) => {
+                    const ids = (await simulationData.ids).System;
+                    markManyDiscovered(ids, level);
+                },
+            };
         }
         const openStarmap = async (
             options?: OpenStarmapOptions): Promise<string[]> => {

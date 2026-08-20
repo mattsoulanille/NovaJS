@@ -5,6 +5,10 @@ import { Observable, Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, drawnSystems,
+    knownSystemProperties, linkKnown,
+} from "../nova_plugin/discovery.js";
 import { displayName } from "../nova_plugin/display_name.js";
 import { MissionMapMark, STANDARD_CARGO_NAMES } from "../nova_plugin/mission_logic.js";
 import { isPort, systemIsInhabited } from "../nova_plugin/landable.js";
@@ -275,9 +279,18 @@ export interface SystemGraphOptions {
     /**
      * Systems to mark for the player's active missions (mission_logic
      * missionMapMarks): orange destination arrows plus optional yellow
-     * special-ship-system arrows. Purely decorative — an additive overlay
-     * that never affects clicking, linking, or routing. Marks on systems the
-     * player hasn't explored still render (mission_bbs/notes.txt).
+     * special-ship-system arrows.
+     *
+     * A mark FORCES ITS SYSTEM ONTO THE MAP. An active mission tells you
+     * where to go even when the destination is nowhere near anything you
+     * have discovered: the reference capture
+     * (map_zoomed_out_showing_far_away_mission.png) has one lone #424242
+     * dot far from the known galaxy, unlabeled, joined to no lanes at all,
+     * with the orange arrow beside it. The dot is the mission's, so it goes
+     * away with the mission — abort or finish it and, unless something else
+     * points there, the system stops being drawn again. Marks never affect
+     * routing, and a mark on a system the player HAS discovered changes
+     * nothing about how that system draws.
      */
     missionMarks?: MissionMapMark[];
     /**
@@ -310,12 +323,15 @@ export interface SystemGraphOptions {
      */
     isSystemInhabited?: (system: SystemData) => boolean;
     /**
-     * Whether the player has explored (entered) a system; unexplored ones
-     * draw dim (see drawSystem). Defaults to "explored", which is what the
-     * maps that have no exploration record of their own (the rollback
-     * screen's replay map) want.
+     * How much the player knows about a system (discovery.ts): 0 unknown,
+     * 1 entered, 2 landed within. Drives THREE things — whether the system
+     * is drawn at all, whether its dot is dim, and whether it is labeled.
+     *
+     * Defaults to "landed", which is what the maps with no discovery record
+     * of their own (the rollback screen's replay map, the hypergate transit
+     * map) want: everything drawn, nothing dim.
      */
-    isSystemExplored?: (systemId: string) => boolean;
+    discoveryOf?: (systemId: string) => DiscoveryLevel;
 }
 
 export class SystemGraph {
@@ -383,7 +399,14 @@ export class SystemGraph {
     // The two questions drawSystem asks about each dot. Injected; see
     // SystemGraphOptions.
     private readonly isSystemInhabited: (system: SystemData) => boolean;
-    private readonly isSystemExplored: (systemId: string) => boolean;
+    private readonly discoveryOf: (systemId: string) => DiscoveryLevel;
+    /**
+     * The systems this map draws at all: everything the player has entered,
+     * their immediate neighbours (the dim unlabeled ring), every active
+     * mission's destination however far away it is, and the system the
+     * player is standing in. See discovery.ts drawnSystems for the evidence.
+     */
+    private readonly drawn: Set<string>;
 
     constructor(systems: SystemData[], private currentSystem: string,
         options: SystemGraphOptions = {}) {
@@ -394,7 +417,7 @@ export class SystemGraph {
         this.viewedMarks = options.viewedMarks ?? [];
         this.missionMarkTextures = options.missionMarkTextures;
         this.isSystemInhabited = options.isSystemInhabited ?? (() => false);
-        this.isSystemExplored = options.isSystemExplored ?? (() => true);
+        this.discoveryOf = options.discoveryOf ?? (() => DISCOVERY_LANDED);
         const size = this.size = options.size ?? { x: 456, y: 419 };
         // NCB-hidden systems don't exist for the player: they aren't drawn,
         // clicked, linked, or routed through. The current system is always
@@ -411,7 +434,30 @@ export class SystemGraph {
             s => [s.id, `${s.name}@${placeKey(s.position)}`]));
         this.adj = buildAdjacency(visibleSystems);
         this.routes = this.computeShortestPaths();
-        this.clickTargets = this.pickRepresentativeSystems(visibleSystems);
+        // What the map is allowed to show. Route planning deliberately
+        // still runs over the WHOLE visible graph (this.adj / this.routes):
+        // the drawing rules below are a display filter on the player's
+        // knowledge, not a restriction on the ship's navigation computer,
+        // and keeping the router unfiltered is what lets a mission's
+        // faraway destination — drawn as a bare dot with no links — still
+        // be plotted to.
+        this.drawn = drawnSystems(
+            visibleSystems.map(s => s.id).filter(
+                id => this.discoveryOf(id) >= DISCOVERY_ENTERED),
+            this.adj,
+            [
+                ...this.missionMarks.map(m => m.systemId),
+                ...this.viewedMarks.map(m => m.systemId),
+                // Somewhere this map exists to let the player PICK is
+                // always drawn: a hypergate's destinations, and the
+                // endpoints of the lanes the transit map is showing. The
+                // gate's own network is knowledge the gate hands you.
+                ...(this.selectable ?? []),
+                ...gateLinks.flat(),
+            ],
+            currentSystem);
+        this.clickTargets = this.pickRepresentativeSystems(
+            visibleSystems.filter(s => this.drawn.has(s.id)));
 
         this.linkGraphics = new PIXI.Graphics();
         this.routeGraphics = new PIXI.Graphics();
@@ -487,14 +533,14 @@ export class SystemGraph {
         const circleGraphics = new PIXI.Graphics();
         const labelContainer = new PIXI.Container();
         for (const { system, x, y } of this.clickTargets) {
-            drawSystem(system, circleGraphics, x, y,
-                this.isSystemExplored(system.id),
+            const discovered = this.discoveryOf(system.id) >= DISCOVERY_ENTERED;
+            drawSystem(system, circleGraphics, x, y, discovered,
                 this.isSystemInhabited(system));
-            // NOTE: the original also hides a system's NAME until it has been
-            // explored (in the reference screenshot exactly the 18 labeled
-            // systems are the non-dim ones). Labels are still drawn for
-            // everything here; only the dot color follows exploration so far.
-            if (fontReady) {
+            // The original labels only the systems the player has entered:
+            // in map_zoomed_out_showing_far_away_mission.png every dim
+            // #424242 dot is nameless, and every named one is blue or
+            // #c6c6c6. A name is knowledge, like the dot's color.
+            if (fontReady && discovered) {
                 const label = new PIXI.BitmapText(displayName(system.name), {
                     fontName: LABEL_FONT_NAME,
                     fontSize: LABEL_FONT_SIZE,
@@ -641,6 +687,12 @@ export class SystemGraph {
      * Selects (and centers on) a system by name for the Find button.
      * Exact match first, then a unique prefix match. Returns the id, or
      * undefined if no match.
+     *
+     * Searches only systems the player has ENTERED. The map draws a dim
+     * ring of neighbours and any active mission's destination without
+     * naming them (they have no label), so a name is not something the
+     * pilot could have to type — Find would otherwise answer questions the
+     * map is deliberately not answering.
      */
     findByName(name: string): string | undefined {
         const wanted = name.trim().toLowerCase();
@@ -650,6 +702,9 @@ export class SystemGraph {
         let prefixMatch: SystemData | undefined;
         let prefixMatches = 0;
         for (const { system } of this.clickTargets) {
+            if (this.discoveryOf(system.id) < DISCOVERY_ENTERED) {
+                continue;
+            }
             const candidate = displayName(system.name).toLowerCase();
             if (candidate === wanted) {
                 this.selectForInfo(system.id);
@@ -841,12 +896,20 @@ export class SystemGraph {
         }
     }
 
+    /**
+     * The hyperspace lanes to draw. A lane is knowledge the player only has
+     * once they have BEEN to one of its ends (discovery.ts linkKnown): that
+     * is exactly what the reference capture shows — lanes fan out from every
+     * named system to its dim unnamed neighbours, and the lone faraway
+     * mission dot sits connected to nothing.
+     */
     private getUniqueLinks() {
         const linksMap = new Map<string, [SystemData, SystemData]>();
         for (const [source, sourceSystem] of this.systems) {
             for (const dest of sourceSystem.links) {
                 const linkEntry = [source, dest].sort().join('<->');
-                if (this.systems.has(dest)) {
+                if (this.systems.has(dest)
+                    && linkKnown(source, dest, id => this.discoveryOf(id))) {
                     linksMap.set(linkEntry, [sourceSystem, this.systems.get(dest)!]);
                 }
             }
@@ -890,6 +953,11 @@ export class SystemGraph {
             | (((color >> 8 & 0xff) * 0.55) & 0xff) << 8
             | ((color & 0xff) * 0.55) & 0xff;
         for (const { system, x, y } of this.clickTargets) {
+            // Who owns a system is something you learn by going there: the
+            // dim ring around the known galaxy contributes no territory.
+            if (this.discoveryOf(system.id) < DISCOVERY_ENTERED) {
+                continue;
+            }
             const color = govtColorOf(system);
             if (color === null) {
                 continue;
@@ -1237,9 +1305,11 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         private getMissionMarks: () => MissionMapMark[] = () => [],
         /** Persistent route state (see RouteStateStore). */
         private routeStore: RouteStateStore = { state: { pinned: [] } },
-        /** Whether the player has explored (entered) a system; unexplored
-         * systems' properties read "<Unknown>". */
-        private isSystemExplored: (systemId: string) => boolean = () => true,
+        /** How much the player knows about a system (discovery.ts). Gates
+         * both what the map draws and how much of the properties column is
+         * filled in; see showProperties. */
+        private discoveryOf: (systemId: string) => DiscoveryLevel =
+            () => DISCOVERY_LANDED,
         /** The player's calendar date (in flight). Landed callers pass it
          * through OpenStarmapOptions instead. */
         private getDate: () => GameDate | undefined = () => undefined,
@@ -1340,7 +1410,15 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             '#viewed',
             ...viewedMarks.map(m => m.systemId).sort(),
         ].join('|');
-        const key = [...bits].sort((a, b) => a - b).join(',') + '#' + marksKey;
+        // Discovery moves while the map is CLOSED (entering a system,
+        // landing, buying a map outfit), and it decides which dots exist at
+        // all — so it has to be part of the cache key, or a stale graph
+        // would keep hiding a system the player has just flown into. One
+        // digit per system: cheap to build, exactly precise.
+        const discoveryKey = this.allSystems
+            .map(s => this.discoveryOf(s.id)).join('');
+        const key = [...bits].sort((a, b) => a - b).join(',')
+            + '#' + marksKey + '#' + discoveryKey;
         if (this.systemGraph && key === this.graphBitsKey) {
             return;
         }
@@ -1360,7 +1438,7 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             govtColorOf: system => this.govtColorOf(system),
             isSystemInhabited: system => systemIsInhabited(system.planets,
                 id => this.universe.getPlanet(id)),
-            isSystemExplored: id => this.isSystemExplored(id),
+            discoveryOf: id => this.discoveryOf(id),
         });
         this.systemGraph.container.position.set(MAP_POS.x, MAP_POS.y);
         // Keep the graph under the buttons/readouts (they were added to the
@@ -1413,8 +1491,13 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
     /**
      * Fills the properties panel for a system: the right-hand column
      * (Current/Destination System, Government, Legal Status, Goods Traded,
-     * Services) and the Ports / Navigation Hazards readouts. Everything but
-     * the title reads "<Unknown>" until the player has explored the system.
+     * Services) and the Ports / Navigation Hazards readouts.
+     *
+     * Gated on discovery (discovery.ts) in two steps: an UNDISCOVERED system
+     * reads "<Unknown>" throughout, including its name; a system that has
+     * been entered but never LANDED IN fills in everything a fly-through
+     * teaches (name, government, legal status, ports, hazards) and leaves
+     * Goods Traded / Services "<Unknown>".
      */
     private showProperties(systemId: string) {
         this.propContainer.removeChildren();
@@ -1438,10 +1521,9 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         const isCurrent = systemId === this.systemId;
         const title = isCurrent ? 'Current System:' : 'Destination System:';
         const system = this.allSystems?.find(s => s.id === systemId);
-        const explored = this.isSystemExplored(systemId);
-        if (!system || !explored) {
-            addLine(PropSlot.System, title,
-                [explored && system ? displayName(system.name) : '<Unknown>']);
+        const known = knownSystemProperties(this.discoveryOf(systemId));
+        if (!system || !known.identity) {
+            addLine(PropSlot.System, title, ['<Unknown>']);
             this.portsValue.text = '<Unknown>';
             this.hazardsValue.text = '<Unknown>';
             return;
@@ -1471,29 +1553,42 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             .filter(<T>(p: T): p is NonNullable<T> => p != null);
         const ports = planets.filter(p => isPort(p.flags));
 
-        const goods = new Set<number>();
-        let trading = false, outfitting = false, shipyard = false;
-        for (const port of ports) {
-            port.tradeTiers.forEach((tier, i) => {
-                if (tier !== null) {
-                    goods.add(i);
-                }
-            });
-            trading ||= port.flags.hasCommodityExchange;
-            outfitting ||= port.flags.hasOutfitter;
-            shipyard ||= port.flags.hasShipyard;
+        // WHAT A FLY-THROUGH DOES NOT TELL YOU. Flying into a system shows
+        // you which of its stellars are inhabited ports, what government
+        // flies there, and what the navigation hazards are — but not what
+        // the ports sell or what they trade in. You learn that by LANDING,
+        // which is the pilot file's own distinction between "visited" and
+        // "visited and landed within" (discovery.ts). Until then both lines
+        // read "<Unknown>" rather than being omitted, so the column keeps
+        // its five fixed slots.
+        if (!known.commerce) {
+            addLine(PropSlot.Goods, 'Goods Traded:', ['<Unknown>']);
+            addLine(PropSlot.Services, 'Services:', ['<Unknown>']);
+        } else {
+            const goods = new Set<number>();
+            let trading = false, outfitting = false, shipyard = false;
+            for (const port of ports) {
+                port.tradeTiers.forEach((tier, i) => {
+                    if (tier !== null) {
+                        goods.add(i);
+                    }
+                });
+                trading ||= port.flags.hasCommodityExchange;
+                outfitting ||= port.flags.hasOutfitter;
+                shipyard ||= port.flags.hasShipyard;
+            }
+            addLine(PropSlot.Goods, 'Goods Traded:', goods.size > 0
+                ? [...goods].sort((a, b) => a - b)
+                    .map(i => STANDARD_CARGO_NAMES[i] ?? `Cargo ${i}`)
+                : ['None']);
+            const services = [
+                ...(trading ? ['Trading'] : []),
+                ...(outfitting ? ['Outfitting'] : []),
+                ...(shipyard ? ['Shipyard'] : []),
+            ];
+            addLine(PropSlot.Services, 'Services:',
+                services.length > 0 ? services : ['None']);
         }
-        addLine(PropSlot.Goods, 'Goods Traded:', goods.size > 0
-            ? [...goods].sort((a, b) => a - b)
-                .map(i => STANDARD_CARGO_NAMES[i] ?? `Cargo ${i}`)
-            : ['None']);
-        const services = [
-            ...(trading ? ['Trading'] : []),
-            ...(outfitting ? ['Outfitting'] : []),
-            ...(shipyard ? ['Shipyard'] : []),
-        ];
-        addLine(PropSlot.Services, 'Services:',
-            services.length > 0 ? services : ['None']);
 
         this.portsValue.text = ports.length > 0
             ? ports.map(p => displayName(p.name)).join(', ') : 'None';

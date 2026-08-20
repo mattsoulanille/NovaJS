@@ -4,6 +4,9 @@ import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
+import {
+    DISCOVERY_LANDED, DiscoveryLevel,
+} from "../nova_plugin/discovery.js";
 import { isPort, landable } from "../nova_plugin/landable.js";
 import { MissionMapMark } from "../nova_plugin/mission_logic.js";
 import { Button } from "./button.js";
@@ -94,11 +97,18 @@ export function gateMapGraphOptions(gateLinks: [string, string][],
     missionMarkTexture?: PIXI.Texture,
     /** Spöb global ids that are PORTS (landable.ts isPort), for the blue
      * system dots. Omitted in tests, where the galaxy then draws grey. */
-    portSpobs?: ReadonlySet<string>): SystemGraphOptions {
+    portSpobs?: ReadonlySet<string>,
+    /** How much the player knows about each system (discovery.ts). The
+     * transit map obeys the same visibility rule as the star map, except
+     * that the gate's own destinations and lanes are always drawn — you
+     * cannot pick what you cannot see. Omitted in tests, which then get
+     * the fully-known galaxy the map used to draw. */
+    discoveryOf?: (systemId: string) => DiscoveryLevel): SystemGraphOptions {
     return {
         gateLinks,
         selectable,
         missionMarks,
+        ...(discoveryOf ? { discoveryOf } : {}),
         ...(portSpobs
             ? {
                 isSystemInhabited: (system: SystemData) =>
@@ -165,7 +175,12 @@ export class GateMap extends Menu<GateMapResult> {
 
     constructor(displayAssets: DisplayAssetDataInterface,
         simulationData: SimulationGameDataInterface,
-        controlEvents: Observable<ControlEvent>) {
+        controlEvents: Observable<ControlEvent>,
+        /** How much the player knows about each system (discovery.ts).
+         * Defaults to "landed", i.e. the fully-drawn galaxy this map
+         * showed before discovery existed. */
+        private discoveryOf: (systemId: string) => DiscoveryLevel =
+            () => DISCOVERY_LANDED) {
         super(displayAssets, simulationData, "nova:8509", controlEvents);
         this.container.name = "GateMap";
         const buttons = {
@@ -264,7 +279,8 @@ export class GateMap extends Menu<GateMapResult> {
         this.systemGraph = new SystemGraph(this.systems, input.systemId,
             gateMapGraphOptions(this.gateLinks,
                 new Set(this.selectableSpobs.keys()), input.missionMarks,
-                this.missionMarkTexture, this.portSpobs));
+                this.missionMarkTexture, this.portSpobs,
+                id => this.discoveryOf(id)));
         this.systemGraph.container.position.set(-290, -248);
         this.container.addChild(this.systemGraph.container);
         this.systemGraph.center();

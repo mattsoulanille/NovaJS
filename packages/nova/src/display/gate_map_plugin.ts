@@ -6,6 +6,7 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
 import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
+import { discoveryLevel } from '../nova_plugin/discovery_store.js';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js';
 import { MissionsComponent } from '../nova_plugin/player_state_plugin.js';
@@ -92,7 +93,8 @@ export const GateMapPlugin: Plugin = {
             throw new Error('Expected display assets, game data, controls, '
                 + 'and stage resources for the gate map');
         }
-        const gateMap = new GateMap(displayAssets, simulationData, controls);
+        const gateMap = new GateMap(displayAssets, simulationData, controls,
+            id => discoveryLevel(id));
         stage.addChild(gateMap.container);
         world.resources.set(GateMapResource, gateMap);
         // Idempotent and shared with the starmap / mission board; kicked

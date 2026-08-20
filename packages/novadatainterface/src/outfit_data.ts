@@ -187,10 +187,15 @@ export interface OutfitData extends BaseData {
     /**
      * How many jumps out from the purchase system this map outfit reveals
      * (ModType 16, "map"): >=1 is that many jumps away, -1 reveals all
-     * inhabited independent systems, <= -1000 reveals a whole govt class. null
-     * for non-map outfits. Revealing systems needs per-player explored-system
-     * state (mission/NCB save data) that does not exist yet, so this is
-     * plumbed but unconsumed.
+     * inhabited independent systems, <= -1000 reveals a whole govt class.
+     * null for non-map outfits.
+     *
+     * Consumed by nova's spaceport/map_outfit.ts, which walks the real link
+     * graph and raises the revealed systems to discovery level 2 ("landed
+     * within" — the stock dësc promises the "location and contents"). Buying
+     * one applies it and takes the item back off the ship; one granted by a
+     * set string (the Vell-os ability) stays aboard and re-applies on every
+     * system entry.
      */
     map: number | null,
     /**

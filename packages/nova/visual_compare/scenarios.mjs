@@ -265,7 +265,10 @@ export const scenarios = [
             + 'map_single_jump_route.png.',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
-        setup: async (page, driver) => { await driver.openStarmap(page); },
+        setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
+            await driver.openStarmap(page);
+        },
         references: [
             { name: 'map', file: 'map/map_single_jump_route.png' },
         ],
@@ -284,6 +287,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.openStarmap(page);
             // Pin a waypoint a few hops out; expandRoute fills the gap from
             // Sol with the shortest path, drawing the strong multi-jump line.
@@ -313,6 +317,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.openStarmap(page);
             // Pin a multi-jump waypoint AND set a single-jump adjacent pick.
             await driver.plotRoute(page, { hops: 3, alsoSingle: true });
@@ -341,6 +346,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.openStarmap(page);
             await driver.clickStarmapButton(page, 'Find');
             await driver.waitForContainer(page, 'FindDialog');
@@ -363,11 +369,17 @@ export const scenarios = [
         title: 'Star map — borders off (baseline)',
         description: 'The map with government borders OFF (the default). The '
             + 'left button reads "Show Borders". Compare the dialog chrome '
-            + 'against map/borders_off.png. The info panel / route legitimately '
-            + 'differ (fresh unexplored pilot vs the reference capture).',
+            + 'against map/borders_off.png. The harness pilot is given a '
+            + 'fully-discovered galaxy first (driver.discoverAllSystems), '
+            + 'because the map only draws systems the player has discovered '
+            + '(discovery.ts) and the reference is a mid-game pilot. The '
+            + 'route / selected system still legitimately differ.',
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
-        setup: async (page, driver) => { await driver.openStarmap(page); },
+        setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
+            await driver.openStarmap(page);
+        },
         references: [
             { name: 'borders_off', file: 'map/borders_off.png' },
         ],
@@ -385,6 +397,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.openStarmap(page);
             await driver.clickStarmapButton(page, 'Show Borders');
             await driver.sleep(500);
@@ -414,6 +427,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.openStarmap(page);
             await driver.clickStarmapButton(page, '-');
             await driver.clickStarmapButton(page, '-');
@@ -443,6 +457,7 @@ export const scenarios = [
             // and would swallow the map key (the scenario used to time out
             // waiting for a StarMap that never opened).
             await driver.dismissOfferPopup(page);
+            await driver.discoverAllSystems(page);
             await driver.openStarmap(page);
         },
         references: [
@@ -466,6 +481,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.landAt(page, 'planet nova:128');
             await driver.clickContainer(page, 'Button:Mission BBS');
             await driver.waitForContainer(page, 'MissionBoard-Mission BBS');
@@ -497,6 +513,7 @@ export const scenarios = [
         params: { ship: 'nova:164', system: 'nova:130' },
         hideDebug: true,
         setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
             await driver.landAt(page, 'planet nova:128');
             await driver.clickContainer(page, 'Button:Mission BBS');
             await driver.waitForContainer(page, 'MissionBoard-Mission BBS');

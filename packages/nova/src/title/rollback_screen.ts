@@ -479,6 +479,13 @@ export class RollbackScreen {
             if (this.graph) {
                 this.mapHolder.removeChild(this.graph.container);
             }
+            // DELIBERATELY NOT discovery-filtered (SystemGraph then
+            // defaults to "everything known"). This is a history browser,
+            // not the pilot's own map: the route overlay below traces where
+            // they were at each checkpoint, and the discovery record is a
+            // single LIVE set with no per-checkpoint version, so filtering
+            // by today's knowledge would hide parts of a path the pilot
+            // demonstrably flew.
             this.graph = new SystemGraph(this.allSystems, system, {
                 playerBits: bits,
                 size: { x: MAP.width, y: MAP.height },

@@ -350,6 +350,27 @@ export async function openPlayerInfo(page) {
 }
 
 /** Open the starmap (control 'map' = KeyM) and wait for it to be visible. */
+/**
+ * Gives the pilot a fully-known galaxy before the map is opened.
+ *
+ * The star map only draws systems the player has discovered (plus a
+ * one-jump ring and active-mission destinations — see discovery.ts), and
+ * the reference captures are all of a mid-game pilot with most of known
+ * space explored. A harness pilot is brand new, so without this the map
+ * scenarios would compare a nearly-empty frame against a full one and every
+ * dot-and-label region would read as a difference that isn't one. The map
+ * CHROME scenarios are about the dialog, not about discovery.
+ *
+ * Goes through the game's own discovery store (window.novaDiscovery, set up
+ * by starmap_plugin) rather than localStorage, because the store is already
+ * loaded in memory by the time the page is drivable.
+ */
+export async function discoverAllSystems(page) {
+    await page.evaluate(async () => {
+        await window.novaDiscovery?.markAll();
+    });
+}
+
 export async function openStarmap(page) {
     await pressKey(page, 'KeyM');
     await page.waitForFunction(() => {

@@ -237,7 +237,10 @@ export const hudScenarios = [
             + 'did not, so the systems themselves differ) and is excluded.',
         params: { ship: 'nova:133', system: 'nova:130' },
         hideDebug: true,
-        setup: async (page, driver) => { await driver.openStarmap(page); },
+        setup: async (page, driver) => {
+            await driver.discoverAllSystems(page);
+            await driver.openStarmap(page);
+        },
         references: [
             { name: 'borders_off', file: 'map/borders_off.png' },
             { name: 'single_jump', file: 'map/map_single_jump_route.png' },

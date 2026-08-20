@@ -25,10 +25,12 @@
  *   acceptedAt are not stored either, so the current day / last stellar
  *   stand in.
  *
+ *   Exploration: the file's 2048-entry per-system map imports as-is —
+ *   its three states are the ones NovaJS uses (see discovery.ts).
+ *
  *   NOT importable: escorts and deployed fighters (no NovaJS entities to
  *   build them from — noted with a count), fuel and shield (not part of
- *   SaveData), the exploration map (client-global in NovaJS, not
- *   per-pilot), stellar domination / defense fleets / përs liveness /
+ *   SaveData), stellar domination / defense fleets / përs liveness /
  *   disasters / cröns (no NovaJS state for them yet).
  *
  * WHAT A BROWSER CAN READ. The file picker yields the DATA FORK. A Windows
@@ -42,6 +44,9 @@
 import { PilotData } from 'novaparse/pilot/pilot_data';
 import { parsePilotBytes } from 'novaparse/pilot/pilot_parse';
 import { dayNumber } from '../nova_plugin/calendar.js';
+import {
+    DISCOVERY_UNKNOWN, toDiscoveryLevel,
+} from '../nova_plugin/discovery.js';
 import { ActiveMission } from '../nova_plugin/player_state_plugin.js';
 import { SaveData } from '../nova_plugin/save_game.js';
 import { PilotProfile } from './client_prefs.js';
@@ -233,6 +238,19 @@ export function convertOriginalPilot(pilot: PilotData,
             + `${player.fighters.length} deployed fighter(s) were not imported.`);
     }
 
+    // The exploration map imports 1:1: the file's per-system value uses the
+    // SAME three states NovaJS does ("<= 0 unexplored, 1 visited, 2 visited
+    // and landed within" — novaparse pilot_data.ts, and discovery.ts).
+    // Unexplored entries are simply left out; an id this data set has no
+    // sÿst for is harmless, since nothing ever looks it up.
+    const discovery: [string, number][] = [];
+    player.exploration.forEach((value, index) => {
+        const level = toDiscoveryLevel(value);
+        if (level > DISCOVERY_UNKNOWN) {
+            discovery.push([globalId(index), level]);
+        }
+    });
+
     const save: SaveData = {
         ship: shipId,
         outfits,
@@ -245,6 +263,7 @@ export function convertOriginalPilot(pilot: PilotData,
         cargo,
         reputations: [...records],
         combatRatings: [['kills', player.rating]],
+        ...(discovery.length > 0 ? { discovery } : {}),
     };
 
     const baseName = fileName.replace(/\.[^.]*$/, '').trim();

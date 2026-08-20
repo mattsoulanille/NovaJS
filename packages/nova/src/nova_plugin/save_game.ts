@@ -8,6 +8,10 @@ import { CargoComponent } from './cargo_plugin.js';
 import {
     ControlBitPair, ControlBitResolver, sortControlBitPairs,
 } from './control_bit_namespaces.js';
+import {
+    discoveryEntries, loadDiscoveryEntries, resetDiscovery,
+    setDiscoveryStorageKey,
+} from './discovery_store.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import {
@@ -216,6 +220,18 @@ export const SaveData = t.intersection([
         // while docked, or riding a jump. Absent in a v1 save and in any
         // save written by a pilot with no escorts; both read as "none".
         escorts: t.array(SavedEscort),
+            // How much the player knows about each star system, as
+        // `[systemId, level]` pairs: 1 = entered, 2 = landed within (see
+        // discovery.ts, which mirrors the original pilot file's own
+        // three-state `exploration` array). Systems the player knows
+        // nothing about are simply absent.
+        //
+        // ADDITIVE and optional, like `ranks`: a save written before
+        // discovery existed has no entry, and the live store (its own
+        // localStorage key, discovery_store.ts) keeps answering — which
+        // is where a pre-discovery pilot's explored set was migrated to.
+        // SAVE_VERSION deliberately does NOT move; see `ranks`.
+        discovery: t.array(t.tuple([t.string, t.number])),
         // The uuid the PLAYER SHIP itself had when the save was written,
         // written only when `escorts` is.
         //
@@ -332,6 +348,14 @@ export function extractSaveData(entity: Entity, systemId: string,
     const rating = entity.components.get(CombatRatingComponent);
     if (rating) {
         save.combatRatings = [['kills', rating.kills]];
+    }
+    // Star-system discovery is client-local UI state, not a component, so
+    // it comes from its own store rather than off the entity. Left absent
+    // when the pilot knows nothing yet, so a brand-new pilot's save is
+    // exactly the payload a pre-discovery build wrote.
+    const discovery = discoveryEntries();
+    if (discovery.length > 0) {
+        save.discovery = discovery;
     }
     return save;
 }
@@ -639,6 +663,8 @@ let activeSaveKey: string = SAVE_KEY;
 /** Points the save functions at `key` (falsy resets to the legacy slot). */
 export function setActiveSaveKey(key: string | null | undefined): void {
     activeSaveKey = key || SAVE_KEY;
+    // Discovery is per-pilot too, in its own key beside this one.
+    setDiscoveryStorageKey(activeSaveKey);
 }
 
 /** The save key currently in use. */
@@ -724,10 +750,21 @@ export function resetSave(storage?: SaveStorage): void {
     } catch {
         // Ignore.
     }
-    // A new pilot starts with nothing explored. The exploration record is
-    // client-local UI state kept beside the save (explored_store.ts); a
-    // dynamic import avoids a static save_game <-> explored_store cycle.
-    void import('./explored_store.js').then(
-        ({ resetExplored }) => resetExplored(storage),
-        () => { /* ignore */ });
+    // A new pilot starts knowing nothing. The discovery record is
+    // client-local UI state kept beside the save (discovery_store.ts).
+    resetDiscovery(storage);
+}
+
+/**
+ * Applies a loaded save's client-local state — today just the star-system
+ * discovery record, which lives outside the entity (discovery_store.ts).
+ * Separate from restorePlayerState because it takes no entity: the title
+ * screen and the pilot importer both want it.
+ *
+ * Merges rather than replaces (levels only rise), so restoring an older
+ * rollback checkpoint never un-learns a system.
+ */
+export function restoreClientSaveState(save: SaveData,
+    storage?: SaveStorage): void {
+    loadDiscoveryEntries(save.discovery, storage);
 }

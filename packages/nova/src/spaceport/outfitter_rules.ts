@@ -1000,7 +1000,11 @@ export function maxBuyCount(outfit: OutfitData, context: OutfitterContext,
  * (ammo, plain equipment) can be applied as one count bump.
  */
 export function hasPurchaseSideEffects(outfit: OutfitData): boolean {
-    return Boolean(outfit.onPurchase) || outfit.cleanLegalRecord !== null;
+    // ModType 16 maps count: buying one reveals systems and then removes
+    // itself from the ship (outfitter.ts applyBuy), which the batched
+    // side-effect-free path would get wrong.
+    return Boolean(outfit.onPurchase) || outfit.cleanLegalRecord !== null
+        || outfit.map !== null;
 }
 
 /**

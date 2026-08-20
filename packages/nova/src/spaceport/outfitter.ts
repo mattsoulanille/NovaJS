@@ -25,6 +25,7 @@ import { formatPrice } from "./format_price.js";
 import { ItemGrid, ItemTile } from "./item_grid.js";
 import { Menu } from "./menu.js";
 import { MissionSession } from "./mission_session.js";
+import { applyMapOutfit } from "./map_outfit.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { rankContribute, rankPriceMod } from "../nova_plugin/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
@@ -642,7 +643,35 @@ export class Outfitter extends Menu<Entity> {
                     this.govts);
             }
         }
+        // ModType 16: a map is information, not equipment. Buying it
+        // reveals everything within ModVal jumps of the system being
+        // shopped in and then comes straight back off the ship, so the
+        // player is charged once and can buy it again later somewhere
+        // else. See map_outfit.ts for the whole rule and its evidence.
+        if (outfit.map !== null) {
+            this.applyMapPurchase(outfit.map);
+            this.outfits.set(outfit.id,
+                Math.max(0, this.outfits.get(outfit.id) - units));
+            this.visitPurchases.set(outfit.id,
+                Math.max(0, this.visitPurchases.get(outfit.id) - units));
+        }
         this.runSetString(outfit.onPurchase, setStringPrefix(outfit));
+    }
+
+    /**
+     * Reveals the systems a just-bought map covers, measured from the
+     * system this outfitter is in. No-op without a stellar context (a
+     * headless test outfitter), which has no system to measure from.
+     */
+    private applyMapPurchase(modVal: number) {
+        const universe = MissionUniverse.shared(this.simulationData);
+        const planetId = this.planetData?.id;
+        const systemId = planetId === undefined
+            ? undefined : universe.systemIdOfPlanet(planetId, this.controlBits);
+        if (systemId === undefined) {
+            return;
+        }
+        applyMapOutfit(modVal, systemId, universe);
     }
 
     /**
