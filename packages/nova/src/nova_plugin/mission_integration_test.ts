@@ -327,6 +327,112 @@ describe('missions against real Nova data', () => {
         });
 
     /**
+     * Playtest report (Auroran main storyline): "I'm not being offered
+     * 'Auroran 11 (665): Cause Havoc for Dani'. I have bit 213 and not
+     * 214."
+     *
+     * Investigated against the reporter's pilot and found NOT to be a
+     * bug: every gate passes, and the only thing standing between the
+     * player and the offer is AvailRandom 40 — a fresh 40% roll each
+     * time the Heraan BAR is entered. The mission's gates, verbatim
+     * from the stock mïsn:
+     *
+     *   AvailStel 360 (Heraan)   AvailLoc 1 (bar, NOT the mission
+     *   computer where the Auroran ActionMan patrols come from, and
+     *   NOT the main spaceport where off-shoot 734 is offered)
+     *   AvailRecord 0 (ignored)  AvailRating 700 (kill points)
+     *   AvailRandom 40           AvailBits "b213 & !b214"
+     *   AvailShipType 127 (out of every Bible range -> unrestricted)
+     *   Require 0                OnSuccess "b214 A792"
+     *
+     * b213 is set by exactly one thing, nova:664's OnSuccess (Auroran
+     * 010), and b214 by 665's own. Pinned here so a regression that
+     * silently hides it — a combat-rating comparison, the `b213 &
+     * !b214` test-expression tokenizer, the AvailStel plain-id match,
+     * or treating the out-of-range AvailShipType 127 as a real ship
+     * restriction — fails loudly instead of looking like bad luck.
+     */
+    it('offers "Cause Havoc for Dani" (nova:665) in the Heraan bar at '
+        + 'b213 & !b214, subject only to its 40% AvailRandom roll',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+
+            const misn = await gameData.data.Mission.get('nova:665');
+            expect(misn.name).toContain('Cause Havoc for Dani');
+            expect(misn.availStel).toBe(360);
+            expect(misn.availStelId).toBe('nova:360');
+            expect(misn.availLoc).toBe(LOCATION_BAR);
+            expect(misn.availRecord).toBe(0);
+            expect(misn.availRating).toBe(700);
+            expect(misn.availRandom).toBe(40);
+            expect(misn.availBits).toBe('b213 & !b214');
+            expect(misn.availShipType).toBe(127);
+            expect(misn.require).toBe('0');
+            expect(misn.onSuccess).toBe('b214 A792');
+            // Its predecessor is the only source of b213.
+            const predecessor = await gameData.data.Mission.get('nova:664');
+            expect(predecessor.name).toContain('Find and Destroy Supply Fleet');
+            expect(predecessor.availBits).toBe('b212 & !b213');
+            expect(predecessor.onSuccess).toBe('b213');
+            // The off-shoot the reporter had already run is a separate
+            // branch off the same b213 and sets none of b214.
+            const offshoot = await gameData.data.Mission.get('nova:734');
+            expect(offshoot.availBits).toBe('b213 & !(b220 | b154)');
+            expect(offshoot.availLoc).toBe(LOCATION_MAIN_SPACEPORT);
+            expect(offshoot.onSuccess).toBe('b154 b155');
+
+            const start = await gameData.data.PlayerStart.get('nova:128');
+            const shipData = await gameData.data.Ship.get(start.ship);
+            const pilot = async (bits: number[], kills: number) => {
+                const entity = makeShip(shipData);
+                entity.components.set(GameDateComponent, { ...start.date });
+                entity.components.set(CreditsComponent, { credits: 0 });
+                entity.components.set(ControlBitsComponent, new Set(bits));
+                entity.components.set(CombatRatingComponent, { kills });
+                return MissionSession.create(
+                    entity, gameData, universe, 'nova:360');
+            };
+
+            const mission = universe.getMission('nova:665')!;
+            const session = await pilot([213], 700);
+            const ctx = session.machinery.offerContext();
+            expect(missionMatchesLocation(mission, LOCATION_BAR, ctx))
+                .toBe(true);
+            expect(makeMissionOffer(mission, ctx)!.acceptable).toBe(true);
+            // Bar only: it is not on the mission computer or in the
+            // main spaceport dialog, which is where the rest of the
+            // Auroran offers at Heraan come from.
+            expect(missionMatchesLocation(mission,
+                LOCATION_MISSION_COMPUTER, ctx)).toBe(false);
+            expect(missionMatchesLocation(mission,
+                LOCATION_MAIN_SPACEPORT, ctx)).toBe(false);
+
+            // Each gate, checked one at a time.
+            expect(missionMatchesLocation(mission, LOCATION_BAR,
+                (await pilot([213], 699)).machinery.offerContext()))
+                .toBe(false);                      // AvailRating 700
+            expect(missionMatchesLocation(mission, LOCATION_BAR,
+                (await pilot([213, 214], 700)).machinery.offerContext()))
+                .toBe(false);                      // !b214
+            expect(missionMatchesLocation(mission, LOCATION_BAR,
+                (await pilot([], 700)).machinery.offerContext()))
+                .toBe(false);                      // b213
+
+            // AvailRandom 40: a fresh roll per bar entry, so the offer
+            // appears on 40% of visits and never on the other 60% —
+            // exactly the reported symptom, and not a bug.
+            const random = spyOn(Math, 'random');
+            random.and.returnValue(0.39);
+            expect(rollOffers(session, universe, LOCATION_BAR)
+                .some(o => o.data.id === 'nova:665')).toBe(true);
+            random.and.returnValue(0.40);
+            expect(rollOffers(session, universe, LOCATION_BAR)
+                .some(o => o.data.id === 'nova:665')).toBe(false);
+        });
+
+    /**
      * The <SN> wildcard against real data. mïsn nova:140 ("25000 Credit
      * Bounty") is the plain bounty-hunter exemplar: a përs-offered
      * bounty (AvailLoc 2, "offered from a ship") with one special ship
