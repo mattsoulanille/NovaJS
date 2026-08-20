@@ -72,6 +72,34 @@ describe("rewriteControlBits", () => {
         expect(rewriteControlBits(s, "test", map)).toBe(s);
         expect(rewriteControlBits("", "set", map)).toBe("");
     });
+
+    it("leaves the sÿst ids of Exxx and Xxxx alone, like Sxxx and Gxxx",
+        () => {
+            // `Exxx` ("has the player explored system xxx") and `Xxxx`
+            // ("make system xxx be explored") name sÿst RESOURCE IDS, not
+            // control bits: the game resolves them under the ordinary
+            // id-space rule (stock first, then the writing plug-in), so
+            // this module must not touch their digits — exactly as it does
+            // not touch Sxxx's mïsn id or Gxxx's oütf id.
+            //
+            // The trap is that the numbers collide with real bit numbers:
+            // 22 and 45 are private bits of this namespace, and rewriting
+            // E22 to E<physical> would point the operator at some other
+            // plug-in's system, or at no system at all.
+            const identity = (bit: number) => bit;
+            expect(bitsOf("E22 & b22 & !e45", "test")).toEqual([22]);
+            expect(rewriteControlBits("E22 & b22 & !e45", "test", map))
+                .toBe(`E22 & b${P0} & !e45`);
+            expect(bitsOf("X22 b22 x45", "set")).toEqual([22]);
+            expect(rewriteControlBits("X22 b22 x45", "set", map))
+                .toBe(`X22 b${P0} x45`);
+            // ...and an expression made only of them is byte-identical.
+            const stock = "b8339 X130";
+            expect(rewriteControlBits(stock, "set", identity)).toBe(stock);
+            expect(rewriteControlBits("X128", "set", map)).toBe("X128");
+            expect(rewriteControlBits("E130 & !E162", "test", map))
+                .toBe("E130 & !E162");
+        });
 });
 
 /** A hand-made raw resource holding the given NCB fields. */

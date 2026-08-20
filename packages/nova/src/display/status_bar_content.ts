@@ -22,6 +22,21 @@ export interface NavReadout {
 }
 
 /**
+ * What the readout names a hyperspace destination the pilot has never been
+ * to. The star map draws those systems as an unlabeled dim dot and reads
+ * "<Unknown>" throughout its properties column (discovery.ts), so naming
+ * them here would hand the player, for free, exactly the knowledge the map
+ * withholds — pick a dim neighbour, read its name off the status bar.
+ *
+ * The wording is Matthew's (2026-08-19): the original's status bar says
+ * "Unexplored System". None of the sanctioned reference captures
+ * (ui_screenshots/original_macos_screenshots/status_text.txt, statusbar/,
+ * map/) show the string, so it is pinned by the spec rather than by a
+ * screenshot.
+ */
+export const UNEXPLORED_SYSTEM = 'Unexplored System';
+
+/**
  * The navigation readout: a set jump route shows "Hyperspace" + the next
  * system; otherwise a selected stellar shows "Stellar Navigation" + its name;
  * with neither, the dim "No Destination" placeholder (matching the original's
@@ -34,12 +49,27 @@ export interface NavReadout {
  * the key would work. It defaults to true so callers that cannot see the
  * ship's state (and the stellar/no-destination cases, where jump readiness is
  * irrelevant) keep their previous appearance.
+ *
+ * `destinationExplored` is the pilot's discovery level for that destination
+ * (>= 1, discovery.ts); false replaces the NAME with
+ * {@link UNEXPLORED_SYSTEM} and nothing else. The route is still set and
+ * still jumpable, so the header stays "Hyperspace" and the dim rule stays
+ * the jump-readiness one — the pilot is told where they are going in the
+ * only terms they have earned. Defaults to true so callers with no
+ * discovery record keep the pre-discovery appearance.
+ *
+ * The SELECTED STELLAR branch needs no such gate: a planet target is always
+ * a stellar of the system the ship is flying in, which the pilot is standing
+ * in and has therefore entered (level >= 1).
  */
 export function navReadout(destinationSystem: string | null,
-    selectedStellar: string | null, jumpReady = true): NavReadout {
+    selectedStellar: string | null, jumpReady = true,
+    destinationExplored = true): NavReadout {
     if (destinationSystem) {
         return {
-            header: 'Hyperspace', value: destinationSystem, dim: !jumpReady,
+            header: 'Hyperspace',
+            value: destinationExplored ? destinationSystem : UNEXPLORED_SYSTEM,
+            dim: !jumpReady,
         };
     }
     if (selectedStellar) {

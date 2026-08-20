@@ -4,7 +4,7 @@ import {
     formatCredits, navReadout, abbreviateCargoName, specialCargoSummary,
     standardCargoIndex, ordinal, formatLongDate, jumpArrivalMessage,
     landingBlockedMessage, bayCaptureMessage, targetGovtLabel,
-    clearanceDeniedMessage, ESCORT_GOVT_LABEL,
+    clearanceDeniedMessage, ESCORT_GOVT_LABEL, UNEXPLORED_SYSTEM,
 } from './status_bar_content.js';
 
 describe('formatCredits', () => {
@@ -51,6 +51,36 @@ describe('navReadout', () => {
     it('keeps the "No Destination" placeholder dim either way', () => {
         expect(navReadout(null, null, true).dim).toBeTrue();
         expect(navReadout(null, null, false).dim).toBeTrue();
+    });
+
+    // A system the pilot has never entered is an unlabeled dim dot on the
+    // star map; the status bar must not hand out its name.
+    it('withholds an unexplored destination\'s name', () => {
+        expect(navReadout('Sanddown', null, true, false))
+            .toEqual({
+                header: 'Hyperspace', value: 'Unexplored System', dim: false,
+            });
+    });
+    it('spells the placeholder "Unexplored System"', () => {
+        // Matthew, 2026-08-19: the original's exact wording. Pinned here
+        // because no sanctioned reference capture shows the string.
+        expect(UNEXPLORED_SYSTEM).toBe('Unexplored System');
+    });
+    it('still dims an unexplored destination until the ship can jump', () => {
+        expect(navReadout('Sanddown', null, false, false))
+            .toEqual({
+                header: 'Hyperspace', value: 'Unexplored System', dim: true,
+            });
+    });
+    it('never applies the gate to a selected stellar', () => {
+        // A planet target is always in the system the ship is flying in.
+        expect(navReadout(null, 'Europa', true, false))
+            .toEqual({
+                header: 'Stellar Navigation', value: 'Europa', dim: false,
+            });
+    });
+    it('defaults to naming the destination when no record is supplied', () => {
+        expect(navReadout('Sanddown', null).value).toBe('Sanddown');
     });
 });
 

@@ -4,6 +4,7 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { addDays, dayNumber } from '../nova_plugin/calendar.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { runCronsForDays } from '../nova_plugin/cron_logic.js';
+import { playerDiscovery } from '../nova_plugin/discovery_store.js';
 import {
     failExpiredMissions,
     MissionContext,
@@ -104,6 +105,8 @@ export class MissionSession {
             sameStellar: (a, b) => universe.sameStellar(a, b),
             getRank: id => universe.getRank(id),
             outfitExists: id => universe.hasOutfit(id),
+            discovery: playerDiscovery,
+            systemExists: id => universe.hasSystem(id),
         };
     }
 
@@ -143,6 +146,8 @@ export class MissionSession {
             systems: this.universe.systemInfos,
             systemIdOfStellar: id =>
                 this.universe.systemIdOfPlanet(id, this.state.bits),
+            discovery: playerDiscovery,
+            systemExists: id => this.universe.hasSystem(id),
         };
     }
 
@@ -519,6 +524,11 @@ export async function advanceEntityDate(entity: Entity, days: number,
             },
             ownedOutfits,
             outfitExists: id => universe.hasOutfit(id),
+            // Crön EnableOn tests the pilot's map knowledge (Exxx) and its
+            // set strings extend it (Xxxx). Written straight through, like
+            // every other discovery event (see playerDiscovery).
+            discovery: playerDiscovery,
+            systemExists: id => universe.hasSystem(id),
         });
         entity.components.set(ControlBitsComponent, bits);
         entity.components.set(ActiveRanksComponent, ranks);

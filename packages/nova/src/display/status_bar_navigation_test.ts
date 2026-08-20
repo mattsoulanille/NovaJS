@@ -10,16 +10,28 @@ import { FuelComponent, FUEL_PER_JUMP } from '../nova_plugin/health_plugin.js';
 import {
     JumpComponent, JumpRouteComponent, JUMP_DISTANCE,
 } from '../nova_plugin/jump_plugin.js';
+import {
+    PlanetDataComponent, PlanetTargetComponent,
+} from '../nova_plugin/planet_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
-import { DrawStatusBarNavigation, StatusBarResource } from './status_bar.js';
-import { NavReadout } from './status_bar_content.js';
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
+} from '../nova_plugin/discovery.js';
+import {
+    DiscoveryLevelResource, DrawStatusBarNavigation, StatusBarResource,
+} from './status_bar.js';
+import { NavReadout, UNEXPLORED_SYSTEM } from './status_bar_content.js';
 
 /**
  * The status bar's Hyperspace readout: WHICH destination it names, and
  * whether it is drawn dim. Both were playtest complaints — the readout
  * advanced to the next hop the instant a jump started, and it never dimmed
  * to show the player they could not jump yet.
+ *
+ * ...and WHETHER it names it at all: a system the pilot has never entered
+ * is a dim, unlabeled dot on the star map, so the readout must not print
+ * its name (see UNEXPLORED_SYSTEM).
  */
 
 /** System names keyed by uuid, as the real System.getCached provides. */
@@ -35,13 +47,23 @@ function fakeGameData(names: Record<string, string>):
     } as unknown as SimulationGameDataInterface;
 }
 
-function makeWorld(names: Record<string, string> = { 'nova:129': 'Sanddown' }) {
+/**
+ * A world with the readout's system in it. `discovery` is the pilot's
+ * per-system record; the default marks every named system entered, which is
+ * the state the pre-discovery expectations below were written against.
+ */
+function makeWorld(names: Record<string, string> = { 'nova:129': 'Sanddown' },
+    discovery?: Map<string, DiscoveryLevel>) {
     const world = new World('status bar navigation test');
     const drawn: NavReadout[] = [];
     world.resources.set(StatusBarResource, {
         drawNavigation: (readout: NavReadout) => { drawn.push(readout); },
     } as never);
     world.resources.set(SimulationGameDataResource, fakeGameData(names));
+    const levels = discovery ?? new Map<string, DiscoveryLevel>(
+        Object.keys(names).map(id => [id, DISCOVERY_ENTERED]));
+    world.resources.set(DiscoveryLevelResource,
+        (id: string) => levels.get(id) ?? DISCOVERY_UNKNOWN);
     world.addSystem(DrawStatusBarNavigation);
 
     const player = new Entity('player');
@@ -55,7 +77,7 @@ function makeWorld(names: Record<string, string> = { 'nova:129': 'Sanddown' }) {
     world.entities.set('player', player);
 
     const last = () => drawn[drawn.length - 1];
-    return { world, player, drawn, last };
+    return { world, player, drawn, last, levels };
 }
 
 describe('status bar navigation: dim until jump-ready', () => {
@@ -176,3 +198,118 @@ describe('status bar navigation: the destination being jumped to', () => {
             });
         });
 });
+
+describe('status bar navigation: an unexplored destination is not named',
+    () => {
+        const unknown = () => new Map<string, DiscoveryLevel>();
+
+        it('shows the placeholder instead of the system\'s name', () => {
+            const { world, last } = makeWorld(
+                { 'nova:129': 'Sanddown' }, unknown());
+            world.step();
+            expect(last().value).toBe('Unexplored System');
+            expect(last().value).toBe(UNEXPLORED_SYSTEM);
+        });
+
+        it('still reads "Hyperspace" and still obeys the dim rule', () => {
+            // The route IS set and IS jumpable; only the name is withheld.
+            const { world, player, last } = makeWorld(
+                { 'nova:129': 'Sanddown' }, unknown());
+            world.step();
+            expect(last()).toEqual({
+                header: 'Hyperspace', value: UNEXPLORED_SYSTEM, dim: false,
+            });
+            player.components.set(MovementStateComponent,
+                { position: new Position(JUMP_DISTANCE - 1, 0) } as never);
+            world.step();
+            expect(last()).toEqual({
+                header: 'Hyperspace', value: UNEXPLORED_SYSTEM, dim: true,
+            });
+        });
+
+        it('names a system the pilot has merely entered (level 1)', () => {
+            // "Explored" is level >= 1, the same threshold Exxx reads:
+            // flying through is what teaches you the name.
+            const { world, last } = makeWorld({ 'nova:129': 'Sanddown' },
+                new Map([['nova:129', DISCOVERY_ENTERED]]));
+            world.step();
+            expect(last().value).toBe('Sanddown');
+        });
+
+        it('names a system the pilot has landed in (level 2)', () => {
+            const { world, last } = makeWorld({ 'nova:129': 'Sanddown' },
+                new Map([['nova:129', DISCOVERY_LANDED]]));
+            world.step();
+            expect(last().value).toBe('Sanddown');
+        });
+
+        it('swaps the placeholder for the name as soon as the pilot '
+            + 'arrives', () => {
+                // Live: entering the system calls markDiscovered, and the
+                // next display step reads the raised level.
+                const { world, levels, last } = makeWorld(
+                    { 'nova:129': 'Sanddown' }, unknown());
+                world.step();
+                expect(last().value).toBe(UNEXPLORED_SYSTEM);
+                levels.set('nova:129', DISCOVERY_ENTERED);
+                world.step();
+                expect(last().value).toBe('Sanddown');
+            });
+
+        it('withholds the name of the destination being jumped TO, not the '
+            + 'route head behind it', () => {
+                // Mid-jump the readout names the jump's own `to`; the gate
+                // has to follow it, not route[0].
+                const { world, player, last } = makeWorld(
+                    { 'nova:129': 'Sanddown', 'nova:130': 'Kania' },
+                    new Map([['nova:130', DISCOVERY_ENTERED]]));
+                player.components.set(JumpRouteComponent, { route: ['nova:130'] });
+                player.components.set(JumpComponent,
+                    { stage: 'stopping', direction: 0, to: 'nova:129' });
+                world.step();
+                expect(last().value).toBe(UNEXPLORED_SYSTEM);
+
+                // Arrival: the jump ends, the known route head takes over.
+                player.components.delete(JumpComponent);
+                world.step();
+                expect(last().value).toBe('Kania');
+            });
+
+        it('leaves the selected stellar alone: it is in the system the '
+            + 'pilot is standing in', () => {
+                const { world, player, last } = makeWorld(
+                    { 'nova:129': 'Sanddown' }, unknown());
+                player.components.set(JumpRouteComponent, { route: [] });
+                const planet = new Entity('planet');
+                planet.components.set(PlanetDataComponent,
+                    { name: 'Europa' } as never);
+                world.entities.set('planet', planet);
+                player.components.set(PlanetTargetComponent,
+                    { target: 'planet' } as never);
+                world.step();
+                expect(last()).toEqual({
+                    header: 'Stellar Navigation', value: 'Europa', dim: false,
+                });
+            });
+
+        it('refuses to be installed at all without a discovery record', () => {
+            // The gate is REQUIRED, not optional: a world that forgot the
+            // resource must fail loudly rather than quietly name every
+            // system in the galaxy again. The ECS enforces it at install
+            // time, and refuses to remove the resource afterwards, so once
+            // the readout is wired the gate cannot come off.
+            const world = new World('no discovery record');
+            world.resources.set(StatusBarResource,
+                { drawNavigation: () => { } } as never);
+            world.resources.set(SimulationGameDataResource,
+                fakeGameData({ 'nova:129': 'Sanddown' }));
+            expect(() => world.addSystem(DrawStatusBarNavigation))
+                .toThrowError(/missing Resource\(DiscoveryLevel\)/);
+        });
+
+        it('will not let the gate be removed once installed', () => {
+            const { world } = makeWorld({ 'nova:129': 'Sanddown' }, unknown());
+            expect(() => world.resources.delete(DiscoveryLevelResource))
+                .toThrowError(/Cannot remove resource DiscoveryLevel/);
+        });
+    });

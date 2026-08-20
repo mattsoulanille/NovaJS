@@ -3,6 +3,9 @@ import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data'
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getDefaultProjectileWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import {
+    DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, DiscoveryAccess,
+} from '../nova_plugin/discovery.js';
+import {
     ammoCapacity,
     availableForSale,
     BULK_BUY_LIMIT,
@@ -57,7 +60,7 @@ function makeWeapon(id: string, weapon: Partial<WeaponData> = {}): WeaponData {
 }
 
 function makeContext({ ship, outfits, weapons, owned, bits, credits,
-    deployed }: {
+    deployed, discovery, systemExists }: {
         ship?: ShipData,
         outfits?: OutfitData[],
         weapons?: WeaponData[],
@@ -66,6 +69,9 @@ function makeContext({ ship, outfits, weapons, owned, bits, credits,
         credits?: number,
         /** Owned but not aboard — bay fighters still in flight. */
         deployed?: [string, number][],
+        /** The pilot's map knowledge, for an Availability's Exxx. */
+        discovery?: DiscoveryAccess,
+        systemExists?: (globalId: string) => boolean,
     } = {}): OutfitterContext {
     const outfitMap = new Map((outfits ?? []).map(o => [o.id, o]));
     const weaponMap = new Map((weapons ?? []).map(w => [w.id, w]));
@@ -79,6 +85,8 @@ function makeContext({ ship, outfits, weapons, owned, bits, credits,
         // money aren't gated by it (stock default outfit price is 0).
         credits: credits ?? Infinity,
         ...(deployed ? { deployedCounts: new Map(deployed) } : {}),
+        ...(discovery ? { discovery } : {}),
+        ...(systemExists ? { systemExists } : {}),
     };
 }
 
@@ -308,6 +316,38 @@ describe('canBuyOutfit', () => {
         const outfit = makeOutfit('nova:200', { availability: 'b13 &' });
         expect(canBuyOutfit(outfit, makeContext()))
             .toEqual({ allowed: true });
+    });
+
+    it('lets availability check where the pilot has been with Exxx', () => {
+        // Bible :157, "Returns 1 if the player has explored system ID xxx".
+        // The shop is a player-local screen, so this is the local pilot's
+        // record; the sÿst number is scoped to the OUTFIT's own plug-in,
+        // stock first, exactly as its Oxxx is.
+        const gated = makeOutfit('nova:200', { availability: 'E130' });
+        const explored = (ids: string[]) => makeContext({
+            discovery: {
+                level: id => ids.includes(id)
+                    ? DISCOVERY_ENTERED : DISCOVERY_UNKNOWN,
+                markVisited: () => { },
+            },
+            systemExists: id => id === 'nova:130' || id === 'plug:130',
+        });
+        expect(canBuyOutfit(gated, explored(['nova:130'])))
+            .toEqual({ allowed: true });
+        expect(canBuyOutfit(gated, explored([]))).toEqual(
+            jasmine.objectContaining(
+                { allowed: false, reason: 'availability' }));
+        // A plug-in outfit's E130 still means stock's 130 when stock has
+        // one; the plug-in's own only when it does not.
+        const pluginOutfit = makeOutfit('plug:200', { availability: 'E130' });
+        expect(canBuyOutfit(pluginOutfit, explored(['plug:130']))).toEqual(
+            jasmine.objectContaining(
+                { allowed: false, reason: 'availability' }));
+        // With no discovery record at all, Exxx is false (the unwired
+        // default) — the pre-existing behaviour.
+        expect(canBuyOutfit(gated, makeContext())).toEqual(
+            jasmine.objectContaining(
+                { allowed: false, reason: 'availability' }));
     });
 
     it('requires the player contribute bits to cover the require bits', () => {

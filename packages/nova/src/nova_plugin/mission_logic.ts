@@ -5,6 +5,9 @@ import { PlanetData } from 'novadatainterface/planet_data';
 import { DEFAULT_CARGO_NAMES } from 'novadatainterface/player_start_data';
 import { evaluateNCBTest, makeControlBitHooks, NCBParseError, NCBSetHooks, runNCBSet } from './ncb.js';
 import { Cargo, cargoUsed } from './cargo_plugin.js';
+import {
+    DiscoveryAccess, discoveryNCBOperators, DiscoveryNCBOperators,
+} from './discovery.js';
 import { isInhabited, isPort, landable } from './landable.js';
 import { resolveShipObjective, shipGoalOfferable } from './mission_ship_logic.js';
 import type { SystemInfo } from './mission_ship_logic.js';
@@ -156,6 +159,18 @@ export interface MissionContext {
     systems?: SystemInfo[];
     /** Maps a planet id to its containing system id. */
     systemIdOfStellar?(planetId: string): string | undefined;
+    /**
+     * `Exxx` in AvailBits: the player's per-system discovery record
+     * (discovery.ts). Optional — absent leaves every `Exxx` false, which is
+     * how the term behaved before this was threaded through.
+     */
+    discovery?: DiscoveryAccess;
+    /**
+     * Whether a sÿst with this global id exists, so `Exxx`'s bare number
+     * resolves stock-first like every other numeric reference. Without it a
+     * plug-in's number always means that plug-in's own system.
+     */
+    systemExists?(globalId: string): boolean;
 }
 
 function intersects(a: number[], b: number[]): boolean {
@@ -292,10 +307,24 @@ export function stellarAdjacencyOf(ctx: MissionContext):
     };
 }
 
-/** Safe NCB test evaluation: malformed expressions fail closed. */
-function testBits(expression: string, bits: Set<number>): boolean {
+/**
+ * Safe NCB test evaluation for a mïsn's AvailBits: malformed expressions
+ * fail closed.
+ *
+ * `Exxx` sees the player's discovery record when the caller supplied one,
+ * with the mission's own plug-in prefix scoping the sÿst number — the same
+ * rule every other numeric reference in a mission follows.
+ */
+function testBits(expression: string, ctx: MissionContext,
+    missionPrefix: string): boolean {
+    const bits = ctx.bits;
+    const discovery = systemDiscoveryOperators(
+        ctx.discovery, missionPrefix, ctx.systemExists);
     try {
-        return evaluateNCBTest(expression, { getBit: bit => bits.has(bit) });
+        return evaluateNCBTest(expression, {
+            getBit: bit => bits.has(bit),
+            ...(discovery ? { hasExplored: discovery.hasExplored } : {}),
+        });
     } catch (e) {
         if (e instanceof NCBParseError) {
             console.warn('Bad mission NCB test:', e.message);
@@ -405,7 +434,7 @@ export function missionMatchesLocation(mission: MissionData,
         idPrefix(mission.id))) {
         return false;
     }
-    if (!testBits(mission.availBits, ctx.bits)) {
+    if (!testBits(mission.availBits, ctx, idPrefix(mission.id))) {
         return false;
     }
     return true;
@@ -500,6 +529,54 @@ export function resolveNumberedResource(n: number, prefix: string,
         return `nova:${n}`;
     }
     return `${prefix}:${n}`;
+}
+
+/**
+ * {@link resolveNumberedResource} for references that must name a resource
+ * that actually EXISTS: undefined when neither stock nor `prefix`'s own
+ * data defines `n`.
+ *
+ * The `Exxx` / `Xxxx` system operators need this because their id space is
+ * sparse where the outfit one is dense. `Gxxx` naming a missing outfit
+ * grants a count of an id nothing can look up, which the shops simply skip;
+ * `Xxxx` naming a missing sÿst would write a phantom system id into the
+ * pilot's PERSISTED discovery record, where it would sit forever. Same
+ * stock-first rule, one extra question.
+ *
+ * Without an id space to consult the plug-in's own is assumed, exactly as
+ * its twin does — a caller that cannot answer "does this exist" gets the
+ * pre-existing behaviour rather than silently dropping every reference.
+ */
+export function resolveExistingNumberedResource(n: number, prefix: string,
+    existingId?: (globalId: string) => boolean): string | undefined {
+    if (!existingId) {
+        return `${prefix}:${n}`;
+    }
+    if (existingId(`nova:${n}`)) {
+        return `nova:${n}`;
+    }
+    return existingId(`${prefix}:${n}`) ? `${prefix}:${n}` : undefined;
+}
+
+/**
+ * The `Exxx` / `Xxxx` operators for an expression written by plug-in
+ * `prefix`, or undefined when the caller has no discovery record to offer
+ * (the operators then fall back to their unimplemented defaults: `Exxx`
+ * false, `Xxxx` ignored with a warning).
+ *
+ * Rebuilt per resource, like every other numeric-id wiring here, because
+ * the sÿst number in `X130` means whatever the plug-in that WROTE that
+ * expression means by 130.
+ */
+export function systemDiscoveryOperators(
+    discovery: DiscoveryAccess | undefined, prefix: string,
+    systemExists?: (globalId: string) => boolean):
+    DiscoveryNCBOperators | undefined {
+    if (!discovery) {
+        return undefined;
+    }
+    return discoveryNCBOperators(discovery, id =>
+        resolveExistingNumberedResource(id, prefix, systemExists));
 }
 
 /**
@@ -844,6 +921,19 @@ export interface MissionMachineryContext {
      * number always means that plug-in's own outfit.
      */
     outfitExists?(globalId: string): boolean;
+    /**
+     * `Xxxx` ("make system ID xxx be explored"): the player's per-system
+     * discovery record. Player-local display/save state, threaded in like
+     * the outfits map rather than imported (see discovery.ts's
+     * DiscoveryAccess). Optional; without it `Xxxx` is reported as an
+     * unimplemented hook, as it was before this existed.
+     */
+    discovery?: DiscoveryAccess;
+    /**
+     * Whether a sÿst with this global id exists, so `Xxxx` resolves its
+     * bare number stock-first and ignores a number no data set defines.
+     */
+    systemExists?(globalId: string): boolean;
 }
 
 /**
@@ -897,7 +987,8 @@ function unloadMissionCargo(state: MissionWorkingState,
  * plug-in that defined the running expression.
  *
  * Outfit granting (Gxxx/Dxxx) is only wired when the caller supplies
- * an outfits map (the mission board does; landing processing does).
+ * an outfits map (the mission board does; landing processing does), and
+ * system exploration (Xxxx) only when it supplies a discovery record.
  */
 export function makeMissionSetHooks(machinery: MissionMachineryContext,
     runningMissionPrefix: string,
@@ -911,7 +1002,8 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
         active: state.ranks,
         resolveId: id => `${runningMissionPrefix}:${id}`,
         getRank: id => machinery.getRank?.(id),
-    } : undefined);
+    } : undefined, systemDiscoveryOperators(machinery.discovery,
+        runningMissionPrefix, machinery.systemExists));
 
     if (depth > 4) {
         // Guard against Sxxx/Axxx/Fxxx cycles in scripting.

@@ -5,7 +5,10 @@ import {
     evaluateNCBTest,
 } from './ncb.js';
 import { CronState, CronStates } from './player_state_plugin.js';
-import { resolveNumberedResource, sameNumberedResource } from './mission_logic.js';
+import {
+    resolveNumberedResource, sameNumberedResource, systemDiscoveryOperators,
+} from './mission_logic.js';
+import { DiscoveryAccess, DiscoveryNCBOperators } from './discovery.js';
 
 /**
  * Per-player crön evaluation, run for each day the player's calendar
@@ -37,6 +40,13 @@ import { resolveNumberedResource, sameNumberedResource } from './mission_logic.j
  * OnEnd, and stock Nova's "knock-off" crons (nova:288-292) turn a bought
  * knock-off part into the real outfit the same way.
  *
+ * The player's map knowledge is wired the same way: EnableOn's `Exxx`
+ * ("has the player explored system xxx") reads the discovery record and the
+ * set strings' `Xxxx` ("make system xxx be explored") writes it, both in the
+ * cron's own plug-in namespace. That is what lets the Bible's intended
+ * pattern work — a cron that waits until the pilot has been somewhere, or
+ * one that hands them a piece of the map.
+ *
  * Remaining simplifications (documented gaps): the news strings are not
  * shown, and the mission/ship/stellar operators (Sxxx, Cxxx, Yxxx, ...)
  * are still ignored with a console warning. The player's Contribute mask
@@ -65,6 +75,19 @@ export interface CronEvaluationOptions {
      * which is wrong whenever stock defines that number.
      */
     outfitExists?(globalId: string): boolean;
+    /**
+     * The player's per-system discovery record (discovery.ts), read by
+     * `Exxx` in EnableOn and written by `Xxxx` in the set strings — the
+     * same read/write relationship the outfits map has with `Oxxx` and
+     * `Gxxx`/`Dxxx`. Absent means "nothing explored" and an ignored `Xxxx`.
+     */
+    discovery?: DiscoveryAccess;
+    /**
+     * Whether a global sÿst id exists, so `Exxx` / `Xxxx` resolve their
+     * bare numbers stock-first (see mission_logic's
+     * resolveExistingNumberedResource) and ignore ids nothing defines.
+     */
+    systemExists?(globalId: string): boolean;
 }
 
 function inDateRange(cron: CronData, day: number): boolean {
@@ -95,6 +118,8 @@ function inDateRange(cron: CronData, day: number): boolean {
 interface CronSetContext {
     ranks?: RankHookOptions;
     outfits?: { outfits: Map<string, number>, resolveId(id: number): string };
+    /** Exxx (EnableOn) and Xxxx (the set strings) for THIS cron's plug-in. */
+    discovery?: DiscoveryNCBOperators;
 }
 
 function runCronSetString(expression: string, bits: Set<number>,
@@ -103,8 +128,8 @@ function runCronSetString(expression: string, bits: Set<number>,
         return;
     }
     try {
-        runNCBSet(expression,
-            makeControlBitHooks(bits, context.outfits, context.ranks), random);
+        runNCBSet(expression, makeControlBitHooks(
+            bits, context.outfits, context.ranks, context.discovery), random);
     } catch (e) {
         if (e instanceof NCBParseError) {
             console.warn('Bad crön set string:', e.message);
@@ -115,13 +140,16 @@ function runCronSetString(expression: string, bits: Set<number>,
 }
 
 function enableOnPasses(cron: CronData, bits: Set<number>,
-    ownedOutfits?: ReadonlyMap<string, number>): boolean {
+    ownedOutfits?: ReadonlyMap<string, number>,
+    discovery?: DiscoveryNCBOperators): boolean {
     try {
         return evaluateNCBTest(cron.enableOn, {
             getBit: bit => bits.has(bit),
             // A cron's Oxxx names the stock outfit xxx if there is one,
             // else the cron's own plug-in's; never a third plug-in's.
             hasOutfit: id => ownsOutfit(ownedOutfits, id, cronPrefix(cron)),
+            // Exxx, scoped to this cron's plug-in the same way.
+            ...(discovery ? { hasExplored: discovery.hasExplored } : {}),
         });
     } catch (e) {
         if (e instanceof NCBParseError) {
@@ -169,8 +197,9 @@ function ownsOutfit(owned: ReadonlyMap<string, number> | undefined,
  * its Require mask is covered.
  */
 function conditionsHold(cron: CronData, bits: Set<number>,
-    contribute: bigint, ownedOutfits?: ReadonlyMap<string, number>): boolean {
-    return enableOnPasses(cron, bits, ownedOutfits)
+    contribute: bigint, ownedOutfits?: ReadonlyMap<string, number>,
+    discovery?: DiscoveryNCBOperators): boolean {
+    return enableOnPasses(cron, bits, ownedOutfits, discovery)
         && requireMet(cron, contribute);
 }
 
@@ -188,7 +217,8 @@ function stepCron(cron: CronData, state: CronState, day: number,
         // loopOnEnd: while inside the postHoldoff window after ending,
         // keep re-running OnEnd each day its conditions still hold.
         if (day < state.nextEligible) {
-            if (cron.loopOnEnd && conditionsHold(cron, bits, contribute, ownedOutfits)) {
+            if (cron.loopOnEnd && conditionsHold(cron, bits, contribute,
+                ownedOutfits, setContext.discovery)) {
                 runCronSetString(cron.onEnd, bits, random, setContext);
             }
             return;
@@ -196,7 +226,8 @@ function stepCron(cron: CronData, state: CronState, day: number,
         if (!inDateRange(cron, day)) {
             return;
         }
-        if (!conditionsHold(cron, bits, contribute, ownedOutfits)) {
+        if (!conditionsHold(cron, bits, contribute, ownedOutfits,
+            setContext.discovery)) {
             return;
         }
         const chance = cron.random >= 100 ? 100 : Math.max(0, cron.random);
@@ -217,7 +248,8 @@ function stepCron(cron: CronData, state: CronState, day: number,
         // Fall through so duration 0 ends today.
     } else if (state.phase === 'active' && cron.loopOnStart
         && day > state.phaseStart
-        && conditionsHold(cron, bits, contribute, ownedOutfits)) {
+        && conditionsHold(cron, bits, contribute, ownedOutfits,
+            setContext.discovery)) {
         // loopOnStart: re-run OnStart each subsequent active day while
         // its conditions still hold (the entry day already ran it above).
         runCronSetString(cron.onStart, bits, random, setContext);
@@ -270,7 +302,9 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
     options: CronEvaluationOptions | RankHookOptions = {}): void {
     // Older callers passed the rank hooks bare; tell the two apart by the
     // rank options' required `active` set.
-    const { ranks, ownedOutfits, outfitExists }: CronEvaluationOptions =
+    const {
+        ranks, ownedOutfits, outfitExists, discovery, systemExists,
+    }: CronEvaluationOptions =
         'active' in options ? { ranks: options } : options;
     // Every numeric id in a cron's set string is scoped to the plug-in that
     // wrote that cron, exactly as a mission's are, so the hook wiring is
@@ -288,6 +322,9 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
                     resolveId: id =>
                         resolveNumberedResource(id, prefix, outfitExists),
                 },
+                // Exxx / Xxxx, in this cron's own plug-in namespace.
+                discovery: systemDiscoveryOperators(
+                    discovery, prefix, systemExists),
             }];
         }));
     for (let day = fromDay + 1; day <= toDay; day++) {

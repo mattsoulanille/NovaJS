@@ -58,6 +58,90 @@ export function toDiscoveryLevel(value: unknown): DiscoveryLevel {
 export type SystemAdjacency = ReadonlyMap<string, readonly string[]>;
 
 /**
+ * What the NCB `Exxx` / `Xxxx` operators need of the player's discovery
+ * record — the read/write half of discovery_store.ts, threaded in as an
+ * interface exactly as the player's owned outfits are threaded into crön
+ * EnableOn.
+ *
+ * IT IS THREADED, NOT IMPORTED, for the reason the store's own header
+ * gives: discovery is display/save-side, per-CLIENT state, and the modules
+ * that evaluate NCB expressions (mission_logic, cron_logic) are pure logic
+ * the simulation package also holds. Handing them an interface keeps the
+ * store out of them and keeps them unit-testable without a browser.
+ */
+export interface DiscoveryAccess {
+    /** How much the player knows about `systemId` (0 when unknown). */
+    level(systemId: string): DiscoveryLevel;
+    /** Raises `systemId` to at least {@link DISCOVERY_ENTERED}. */
+    markVisited(systemId: string): void;
+}
+
+/** The two NCB operators, with their sÿst ids already resolvable. */
+export interface DiscoveryNCBOperators {
+    /** `Exxx`: has the player explored sÿst xxx? */
+    hasExplored(id: number): boolean;
+    /** `Xxxx`: make sÿst xxx be explored. */
+    exploreSystem(id: number): void;
+}
+
+/** Operator spellings already warned about, so a cron cannot spam the log. */
+const warnedUnknownSystems = new Set<string>();
+
+/**
+ * The `Exxx` / `Xxxx` operators over a discovery record.
+ *
+ * SEMANTICS, from the EVN Bible. `Exxx` "Returns 1 if the player has
+ * explored system ID xxx, 0 if not" (:157) and `Xxxx` "make system ID xxx
+ * be explored" (:263). "Explored" is the pilot file's level 1 — the nëbu
+ * OnExplore note (:1751) says a nebula's explored state "is recalculated
+ * every time based on the systems the player has explored", which is the
+ * set of systems the pilot has BEEN to, not the subset they also landed
+ * in. So `Exxx` is `level >= 1` and `Xxxx` raises to 1; a system already at
+ * level 2 ("visited and landed within") is never knocked back down, since
+ * the store only ever raises (discovery_store.ts markDiscovered).
+ *
+ * `resolveSystem` turns the bare resource number into a global sÿst id
+ * under the ordinary id-space rule (stock first, then the writing plug-in's
+ * own — mission_logic's resolveExistingNumberedResource), and returns
+ * undefined when NO loaded sÿst has that number. An unresolvable id is
+ * ignored with a one-time warning rather than inventing a system: `X9999`
+ * would otherwise plant a phantom id in the pilot's save forever.
+ */
+export function discoveryNCBOperators(access: DiscoveryAccess,
+    resolveSystem: (id: number) => string | undefined): DiscoveryNCBOperators {
+    const warnUnknown = (id: number, operator: string) => {
+        if (!warnedUnknownSystems.has(operator)) {
+            warnedUnknownSystems.add(operator);
+            console.warn(`NCB ${operator} names sÿst ${id}, which no loaded`
+                + ` data set defines; ignoring.`);
+        }
+    };
+    return {
+        hasExplored: id => {
+            const systemId = resolveSystem(id);
+            if (systemId === undefined) {
+                warnUnknown(id, `E${id}`);
+                return false;
+            }
+            return access.level(systemId) >= DISCOVERY_ENTERED;
+        },
+        exploreSystem: id => {
+            const systemId = resolveSystem(id);
+            if (systemId === undefined) {
+                warnUnknown(id, `X${id}`);
+                return;
+            }
+            access.markVisited(systemId);
+        },
+    };
+}
+
+/** Test seam: forget which unknown sÿst ids have already been warned about. */
+export function resetDiscoveryNCBWarnings(): void {
+    warnedUnknownSystems.clear();
+}
+
+/**
  * Which systems the star map draws at all, given what the player knows.
  *
  * The union of:
