@@ -38,21 +38,12 @@
 import { ShipData } from 'novadatainterface/ship_data';
 import { meetsTechLevel } from './outfitter_rules.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
+import {
+    BUY_RANDOM_DAY_ROLL_ENABLED, dayRoll as sharedDayRoll, DayRollShop,
+    passesDayRoll, resourceNumber,
+} from './day_roll.js';
 
-/**
- * Master switch for the per-day BuyRandom roll (Matthew, 2026-08-14:
- * disabled for now). While off, any ship with a NONZERO BuyRandom is for
- * sale every day; BuyRandom 0 keeps its Bible meaning ("never be made
- * available for purchase") regardless of the switch, since that's a
- * permanent property, not the randomized daily part.
- *
- * DESIGN RULING (Matthew, 2026-08-14) for when this is re-enabled: the
- * daily roll applies to BOTH the shipyard and the outfitter, and a failed
- * roll HIDES the item from the grid entirely (move the roll into
- * buyVisible) — not the current grey "isn't for sale today" treatment,
- * which exists only as the purchase-side backstop.
- */
-export const BUY_RANDOM_DAY_ROLL_ENABLED = false;
+export { BUY_RANDOM_DAY_ROLL_ENABLED };
 
 export interface ShipyardStellar {
     /** Everything with techLevel <= this is stocked (spöb TechLevel). */
@@ -154,46 +145,16 @@ export function shipAvailabilityPasses(ship: ShipData,
 }
 
 /**
- * A deterministic percent roll against the Bible's "percent chance this ship
- * is available for purchase on a given day".
- *
- * BuyRandom in the original is a per-day random availability. NovaJS's
- * shipyard runs on every peer, and the stock ships' day pools must agree
- * across clients AND across a reload of the same day, so Math.random /
- * Date.now are forbidden here. The roll is a pure function of the three
- * inputs that distinguish "this ship at this shipyard on this day":
- *
- *     hash = FNV-1a 32-bit over "day|stellarId|shipId"
- *     available = (hash % 100) < buyRandom
- *
- * FNV-1a was chosen over a crypto hash because it is a single trivial
- * integer loop (no allocations, deterministic across every JS engine) and its
- * 32-bit output spreads a ship's daily availability across the buyRandom
- * percent bands evenly enough for the stock 0-100 values. Every peer
- * computes the SAME hash for the same (day, stellar, ship), so the day's
- * pool is identical everywhere and stable across reloads.
- *
- * JUDGMENT CALL — the hash deliberately does NOT include the player (their id
- * or anything player-specific): the Bible's "available for purchase on a given
- * day" is a property of the SHIP and the DAY at a shipyard, shared by all
- * players visiting it, not a per-player roll. Including the player would also
- * make the grid differ between two players docked at the same stellar on the
- * same day, which nothing in the original suggests.
+ * Whether the shipyard has one of these on the lot today: the Bible's
+ * "percent chance that a ship of this type will be available for purchase
+ * on a given day", rolled deterministically (day_roll.ts, which documents
+ * the hash and the master switch). BuyRandom 0 is the permanent "never
+ * made available for purchase" and is refused whatever the switch says.
  */
 export function shipBuyRandomPasses(ship: ShipData,
     ctx: ShipyardContext): boolean {
-    if (ship.buyRandom >= 100) {
-        return true;
-    }
-    if (ship.buyRandom <= 0) {
-        // "A BuyRandom of 0 means this ship will never be made available
-        // for purchase."
-        return false;
-    }
-    if (!BUY_RANDOM_DAY_ROLL_ENABLED) {
-        return true;
-    }
-    return buyRandomDayRoll(ship, ctx) < ship.buyRandom;
+    return passesDayRoll(ship.buyRandom, 'buy',
+        resourceNumber(ship.id) ?? 0, ctx);
 }
 
 /**
@@ -214,15 +175,7 @@ export function buyRandomDayRoll(ship: ShipData,
  */
 export function shipHireRandomPasses(ship: ShipData,
     ctx: ShipyardContext): boolean {
-    if (ship.hireRandom <= 0) {
-        // "A HireRandom of 0 means this ship will never be made
-        // available for hire."
-        return false;
-    }
-    if (ship.hireRandom >= 100) {
-        return true;
-    }
-    return hireRandomDayRoll(ship, ctx) < ship.hireRandom;
+    return passesDayRollLive(ship.hireRandom, 'hire', ship, ctx);
 }
 
 /**
@@ -238,22 +191,27 @@ export function hireRandomDayRoll(ship: ShipData,
 
 /**
  * The shared "this ship at this stellar on this day" roll. Salted per
- * shop so the bar and the shipyard draw independently.
+ * shop so the bar and the shipyard draw independently (day_roll.ts).
  */
-function dayRoll(salt: string, ship: ShipData, ctx: ShipyardContext): number {
-    const shipNum = resourceNumber(ship.id) ?? 0;
-    return fnv1a(`${salt}|${ctx.day}|${ctx.stellarId ?? 0}|${shipNum}`) % 100;
+function dayRoll(salt: DayRollShop, ship: ShipData,
+    ctx: ShipyardContext): number {
+    return sharedDayRoll(salt, resourceNumber(ship.id) ?? 0, ctx);
 }
 
-/** FNV-1a 32-bit hash of a string (offset basis 2166136261, prime
- * 16777619). Deterministic, allocation-light, identical across engines. */
-function fnv1a(input: string): number {
-    let hash = 0x811c9dc5;
-    for (let i = 0; i < input.length; i++) {
-        hash ^= input.charCodeAt(i);
-        hash = Math.imul(hash, 0x01000193);
+/**
+ * The hire pool's roll, which is LIVE: it has always rolled, and there is
+ * no equivalent of the shipyard's master switch to turn it off. Zero and
+ * >= 100 keep their Bible meanings.
+ */
+function passesDayRollLive(percent: number, salt: DayRollShop,
+    ship: ShipData, ctx: ShipyardContext): boolean {
+    if (percent <= 0) {
+        return false;
     }
-    return hash >>> 0;
+    if (percent >= 100) {
+        return true;
+    }
+    return dayRoll(salt, ship, ctx) < percent;
 }
 
 export type ShipyardDenialReason =
@@ -366,16 +324,6 @@ export function canBuyShip(ship: ShipData,
 }
 
 /**
- * The numeric resource id inside a global id like "nova:128" (128), or
- * null. Mirrors outfitter_rules.resourceNumber; kept local so these rules
- * stay self-contained.
- */
-function resourceNumber(globalId: string): number | null {
-    const parsed = parseInt(globalId.slice(globalId.lastIndexOf(':') + 1), 10);
-    return Number.isNaN(parsed) ? null : parsed;
-}
-
-/**
  * A total order on ship global ids matching what the Flags3 0x4000 rule
  * means by "higher-numbered": the numeric resource id. Mirrors
  * outfitter_rules.compareOutfitIds — the original's shïp space is a single
@@ -429,12 +377,12 @@ function buyVisible(ship: ShipData, ctx: ShipyardContext): boolean {
  *
  * BuyRandom and visibility: the day roll is currently DISABLED
  * ({@link BUY_RANDOM_DAY_ROLL_ENABLED}), so only BuyRandom 0 ("never
- * sold") affects the shop at all, and even that only as a purchase
- * refusal. Matthew's ruling for the eventual re-enable: a failed day
- * roll HIDES the ship from this list (and the outfitter gets the same
- * mechanism) — see the switch's comment. The Flags3 0x4000 exclusion
- * below keys on "available for sale today", which includes the
- * BuyRandom gate.
+ * sold") affects the shop at all. Per Matthew's ruling a failed day roll
+ * HIDES the ship from this list rather than greying it, which is what
+ * buyVisible below does; the outfitter now shares both the mechanism and
+ * that treatment (day_roll.ts, outfitter_rules' buyVisible). The Flags3
+ * 0x4000 exclusion below keys on "available for sale today", which
+ * includes the BuyRandom gate.
  */
 export function visibleShips(ships: Iterable<ShipData>,
     ctx: ShipyardContext): ShipData[] {

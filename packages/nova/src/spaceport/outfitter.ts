@@ -14,11 +14,14 @@ import { ControlBits, ControlBitsComponent } from "../nova_plugin/ncb_plugin.js"
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
 import { OutfitsStateComponent } from "../nova_plugin/outfit_plugin.js";
-import { CreditsComponent } from "../nova_plugin/player_state_plugin.js";
 import { cleanRecords, LegalRecords } from "../nova_plugin/reputation.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ShipComponent } from "../nova_plugin/ship_plugin.js";
-import { idPrefix, resolveNumberedResource } from "../nova_plugin/mission_logic.js";
+import { idPrefix, numericId, resolveNumberedResource } from "../nova_plugin/mission_logic.js";
+import { dayNumber } from "../nova_plugin/calendar.js";
+import {
+    CreditsComponent, GameDateComponent,
+} from "../nova_plugin/player_state_plugin.js";
 import { Button, ButtonClick } from "./button.js";
 import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
@@ -542,7 +545,24 @@ export class Outfitter extends Menu<Entity> {
             deployedCounts: this.deployedOutfitCounts?.(this.outfits.keys()),
             planet: this.stellar(),
             ammoSellStrings: this.ammoSellStrings,
+            // The oütf BuyRandom day roll (day_roll.ts), the outfitter's
+            // half of the same per-day shop stock the shipyard and the
+            // bar's hire pool run on. Same two inputs the shipyard reads
+            // (ship_gate_context.ts): the landed player's date and the
+            // docked stellar.
+            day: this.gameDay(),
+            stellarId: this.planetData ? numericId(this.planetData.id) : null,
         };
+    }
+
+    /**
+     * The absolute game day (calendar.ts dayNumber), or undefined before
+     * the visit's date is known — which day_roll reads as "no roll", so a
+     * missing date can never make the shop look empty.
+     */
+    private gameDay(): number | undefined {
+        const date = this.input?.components.get(GameDateComponent);
+        return date ? dayNumber(date) : undefined;
     }
 
     /**
@@ -725,6 +745,14 @@ export class Outfitter extends Menu<Entity> {
                     : "Can't have any of this item!";
             case 'maxCount':
                 return "Can't have any more!";
+            // A failed BuyRandom day roll hides the item outright
+            // (day_roll.ts), so this caption is the backstop for a stale
+            // selection; the references show no wording of its own, and
+            // "can't have any of this item" is what the shop is saying.
+            case 'notAvailableToday':
+                return owned > 0
+                    ? "Can't have any more!"
+                    : "Can't have any of this item!";
             case 'mass':
             case 'cargo':
                 return owned > 0
