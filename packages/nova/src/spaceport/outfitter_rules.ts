@@ -3,7 +3,8 @@
  * EVN Bible's oütf documentation: free mass, gun/turret hardpoints,
  * the Max count (as multiplied by increase-maximum items), the
  * Availability control bit test, Contribute/Require flag coverage,
- * and launcher-restricted ammunition.
+ * launcher-restricted ammunition, and the BuyRandom chance that the shop
+ * has one today (day_roll.ts, shared with the two ship shops).
  *
  * Pure logic; the Outfitter menu supplies the context. Note that Gxxx
  * control-bit grants intentionally bypass all of these checks (see
@@ -16,6 +17,9 @@ import { WeaponData } from 'novadatainterface/weapon_data';
 import { DiscoveryAccess } from '../nova_plugin/discovery.js';
 import { systemDiscoveryOperators } from '../nova_plugin/mission_logic.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
+import {
+    dayRoll, passesDayRoll, resourceNumber as resourceNumberOf,
+} from './day_roll.js';
 
 export interface OutfitterContext {
     shipData: ShipData;
@@ -89,6 +93,21 @@ export interface OutfitterContext {
      * outfitter_rules_stock_test.ts pins against the real table).
      */
     ammoSellStrings?: AmmoSellStrings;
+    /**
+     * The absolute game day number (calendar.ts dayNumber) and the numeric
+     * local id of the docked stellar, which together decide the oütf
+     * BuyRandom day roll (day_roll.ts) — "the percent chance that an item
+     * of this type will be available for purchase on a given day".
+     *
+     * Both optional, and an absent `day` means NO roll: the item is
+     * offered, exactly as it is with the roll's master switch off. That is
+     * what keeps a headless purchase check (which has no calendar and no
+     * stellar) free of shop-inventory boilerplate, matching how an absent
+     * `planet` means "everything is stocked here".
+     */
+    day?: number;
+    /** See `day`. */
+    stellarId?: number | null;
 }
 
 /**
@@ -235,6 +254,46 @@ export function neverOnSale(outfit: OutfitData): boolean {
 }
 
 /**
+ * THE OTHER HALF OF BuyRandom — whether the shop has one of these TODAY.
+ *
+ * neverOnSale above reads the zero case ("never put on a shelf at all");
+ * this reads the rest of the Bible's sentence, "the percent chance that an
+ * item of this type will be available for purchase on a given day, from
+ * 1-100" (~:2034). The roll itself, its determinism and its master switch
+ * live in day_roll.ts, shared with the two ship shops so an outfit, a hull
+ * and a hireable pilot are all decided the same way.
+ *
+ * WHY IT MATTERS BEYOND SHOP FLAVOUR. A plug-in uses it to offer a CHOICE
+ * between mutually exclusive items. Extra Outfits' bridge officers are the
+ * case in point: each of its six posts (oütf 504-521) has three candidates
+ * whose Availability excludes the other two — `b9010 & !O<other> &
+ * !O<other>` — and they carry BuyRandom 50 / 25 / 15, so on most days at
+ * most one candidate for a post has turned up. With no roll all three sit
+ * on the shelf at once and the outfitter looks like it will sell three
+ * First Officers; the `!Oxxx` exclusions still stop the player from ever
+ * OWNING two (see canBuyOutfit's availability denial), but only after one
+ * has been bought.
+ *
+ * A day of 0 percent chance is not a refusal to sell something already
+ * owned: nothing here is consulted by canSellOutfit or buysBackOutfit.
+ */
+export function offeredToday(outfit: OutfitData,
+    context: Pick<OutfitterContext, 'day' | 'stellarId'>): boolean {
+    return passesDayRoll(outfit.buyRandom, 'outfit',
+        resourceNumberOf(outfit.id) ?? 0, context);
+}
+
+/**
+ * The day's 0-99 roll for this outfit at this stellar — compared against
+ * BuyRandom by {@link offeredToday}. Exported so the roll mechanism stays
+ * under test while day_roll's master switch is off.
+ */
+export function outfitBuyRandomDayRoll(outfit: OutfitData,
+    context: Pick<OutfitterContext, 'day' | 'stellarId'>): number {
+    return dayRoll('outfit', resourceNumberOf(outfit.id) ?? 0, context);
+}
+
+/**
  * Whether a stellar puts this item on its shelves at all: it must be
  * offerable (see neverOnSale) and within the stellar's tech reach.
  */
@@ -263,6 +322,7 @@ export function stellarOf(planet: PlanetData): OutfitterStellar {
 
 export type BuyDenialReason =
     | 'notStocked'
+    | 'notAvailableToday'
     | 'availability'
     | 'require'
     | 'maxCount'
@@ -670,6 +730,14 @@ export function canBuyOutfit(outfit: OutfitData,
         return denied('notStocked', 'They don\'t sell these here.');
     }
 
+    // The oütf BuyRandom day roll. A failed roll HIDES the item from the
+    // grid (see buyVisible), so this is the purchase-side backstop for a
+    // selection that survived from before the day turned over.
+    if (!offeredToday(outfit, context)) {
+        return denied('notAvailableToday',
+            'They don\'t have any of these today.');
+    }
+
     if (!availabilityTest(outfit, context)) {
         return denied('availability', 'Not available.');
     }
@@ -1061,19 +1129,10 @@ export function maxSellCount(outfit: OutfitData,
 }
 
 /**
- * The numeric resource id inside a global id like "nova:128" (128), or
- * null when there isn't one. Mirrors mission_logic's numericId; kept local
- * so these rules stay a dependency-free pure module.
- */
-function resourceNumber(globalId: string): number | null {
-    const parsed = parseInt(globalId.slice(globalId.lastIndexOf(':') + 1), 10);
-    return Number.isNaN(parsed) ? null : parsed;
-}
-
-/**
  * The plug-in prefix in a global id like "extra-outfits:471" ("nova" when
  * there isn't one). Mirrors mission_logic's idPrefix; kept local so these
- * rules stay a dependency-free pure module, as resourceNumber above is.
+ * rules stay a dependency-free pure module (the id NUMBER's counterpart is
+ * day_roll's resourceNumber, shared with the ship shops).
  */
 function resourcePrefix(globalId: string): string {
     const colon = globalId.lastIndexOf(':');
@@ -1092,7 +1151,7 @@ function resourcePrefix(globalId: string): string {
  * purely to keep the order total and the output deterministic.
  */
 export function compareOutfitIds(a: string, b: string): number {
-    const [numA, numB] = [resourceNumber(a), resourceNumber(b)];
+    const [numA, numB] = [resourceNumberOf(a), resourceNumberOf(b)];
     if (numA !== numB) {
         if (numA === null) return 1;
         if (numB === null) return -1;
@@ -1116,7 +1175,7 @@ export function compareOutfitIds(a: string, b: string): number {
  */
 export function availableForSale(outfit: OutfitData,
     context: OutfitterContext): boolean {
-    if (neverOnSale(outfit)
+    if (neverOnSale(outfit) || !offeredToday(outfit, context)
         || (context.planet
             && !meetsTechLevel(outfit.techLevel, context.planet))) {
         return false;
@@ -1134,7 +1193,11 @@ export function availableForSale(outfit: OutfitData,
  * canBuyOutfit's 'availability' denial.
  */
 function buyVisible(outfit: OutfitData, context: OutfitterContext): boolean {
-    if (neverOnSale(outfit)
+    // A failed BuyRandom day roll HIDES the item rather than greying it
+    // (Matthew's ruling, day_roll.ts), which is what the shipyard does
+    // with its own roll. An owned unit still shows, so it can be sold:
+    // visibleOutfits admits that case before ever reaching here.
+    if (neverOnSale(outfit) || !offeredToday(outfit, context)
         || (context.planet
             && !meetsTechLevel(outfit.techLevel, context.planet))) {
         return false;
