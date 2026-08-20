@@ -166,10 +166,13 @@ export interface ShipPurchaseContext {
  *    on docking without a refund. The graceful-loss path is the fallback,
  *    not the plan.
  *
- * 9. ränk PriceMod SCALES THE NEW HULL, NOT THE TRADE-IN. The Bible's
- *    PriceMod "modif[ies] the prices of items and ships at planets owned by
- *    the affiliated government", and the price of a ship is what the shipyard
- *    asks for it. The trade-in is not a price but a valuation of the player's
+ * 9. ränk PriceMod SCALES THE NEW HULL, NOT THE TRADE-IN. PriceMod modifies
+ *    ship prices at planets owned by the affiliated government (ships and not
+ *    outfitter items, per Matthew's ruling -- price_mod.ts has the evidence),
+ *    and the price of a ship is what the shipyard asks for it. THIS is the
+ *    shop PriceMod is for: the whole point of Extra Outfits' four PriceMod-1
+ *    Spica ranks is that the hulls you commissioned come free from your own
+ *    yard. The trade-in is not a price but a valuation of the player's
  *    own property, and the Bible pins it to "25% of the ORIGINAL cost of your
  *    current ship and upgrades" -- so a discount rank must not also devalue
  *    what the player brings in. Nothing can be farmed either way: the

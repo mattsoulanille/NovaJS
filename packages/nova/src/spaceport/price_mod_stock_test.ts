@@ -23,12 +23,24 @@ import { shipListPrice, ShipPurchaseContext } from './shipyard_rules.js';
  * The stock rank that exercises it hardest is ränk nova:138 "Knight of Red
  * Branch; Wild Geese 1": AffilGovt nova:144 (the Wild Geese), Weight 20,
  * Salary 750, PriceMod 50 — the richest rank the shipped game contains, and
- * the only stock discount steep enough to be unmistakable on screen.
+ * one of the steepest stock discounts. Twelve stock ränks carry a real
+ * PriceMod in all (pinned below); the rest sit at 100 or at 0 ("unused", see
+ * rank_logic.ts).
  *
  * The Bible scopes it to "planets OWNED BY the affiliated government", so the
  * spec's whole point is the two-stellar comparison: the Wild Geese's own New
  * Ireland (spöb nova:139, gövt nova:144, shipyard + outfitter) halves, and a
  * Federation world does not, for the same player on the same day.
+ *
+ * And it halves the SHIPYARD only. Per Matthew's ruling — "while ships should
+ * be free, building materials and outfits should NOT be" — the outfitter
+ * charges the oütf Cost as written no matter which ranks are active. No stock
+ * text contradicts that: the in-game lines granting these ranks say only "a
+ * slight discount at all Rebel ports" (dësc nova:4210), "a bigger discount at
+ * Federation ports" (nova:5066) and "a discount when purchasing our goods"
+ * (nova:9011), none of them naming ships or items, and the Knight's own
+ * knighting scene (nova:9817) never mentions money. price_mod.ts writes up the
+ * plug-in data that does distinguish the two readings.
  */
 describe('ränk PriceMod at real stock stellars', () => {
     /** ränk nova:138, PriceMod 50, AffilGovt nova:144 (Wild Geese). */
@@ -101,6 +113,34 @@ describe('ränk PriceMod at real stock stellars', () => {
         expect(federationWorld.govt).toBe('nova:128');
     });
 
+    it('pins every stock ränk that carries a real PriceMod', async () => {
+        const gameData = await getIntegrationGameData();
+        const real: [string, number][] = [];
+        for (const id of (await gameData.ids).Rank) {
+            const rank = universe.getRank(id)!;
+            if (rank.priceMod !== 0 && rank.priceMod !== 100) {
+                real.push([id, rank.priceMod]);
+            }
+        }
+        // Twelve of them, spread across five governments -- so PriceMod is
+        // not an obscure corner of the data, and applying it to outfitters
+        // as well would reprice a large part of the shipped galaxy.
+        expect(real).toEqual([
+            ['nova:128', 85],   // Fed 1, Commander
+            ['nova:129', 60],   // Fed 2, Ambassador
+            ['nova:130', 80],   // Polaris 1
+            ['nova:137', 80],   // Rebel 1, Ory-Hara
+            ['nova:138', 50],   // Wild Geese 1, Knight of Red Branch
+            ['nova:139', 95],   // Auroran 1
+            ['nova:140', 80],   // Auroran 2
+            ['nova:141', 50],   // Auroran 3
+            ['nova:142', 50],   // Auroran 4
+            ['nova:143', 50],   // Pirate 1
+            ['nova:144', 75],   // Pirate 1b
+            ['nova:149', 10],   // Director of the Bureau
+        ]);
+    });
+
     it('halves prices at the affiliated govt\'s stellar only', async () => {
         expect(await priceModAt(newIreland, [KNIGHT])).toBe(50);
         expect(await priceModAt(newIreland, [])).toBe(100);
@@ -138,27 +178,32 @@ describe('ränk PriceMod at real stock stellars', () => {
                 .toBe(starbridge.price);
         });
 
-    it('halves an outfit\'s price and its resale in New Ireland\'s '
-        + 'outfitter, and neither elsewhere', async () => {
+    it('leaves New Ireland\'s OUTFITTER at full price for the same knight',
+        async () => {
             const gameData = await getIntegrationGameData();
             const outfit = await gameData.data.Outfit.get(OUTFIT);
             expect(outfit.price).toBeGreaterThan(0);
-            // stellarOf carries the govt into the outfitter's stock rules.
-            expect(stellarOf(newIreland).govt).toBe('nova:144');
 
-            const knighted = { priceMod: await priceModAt(newIreland, [KNIGHT]) };
-            const plain = { priceMod: await priceModAt(newIreland, []) };
-            const fed = { priceMod: await priceModAt(federationWorld, [KNIGHT]) };
-
-            expect(outfitPrice(outfit, plain)).toBe(outfit.price);
-            expect(outfitPrice(outfit, knighted))
+            // The rank is in force here — the shipyard next door halves.
+            expect(await priceModAt(newIreland, [KNIGHT])).toBe(50);
+            // ... and the outfitter charges the oütf Cost regardless. Per
+            // Matthew's ruling PriceMod is a SHIP discount; price_mod.ts has
+            // the Spica Shipyard data behind it.
+            expect(outfitPrice(outfit)).toBe(outfit.price);
+            expect(outfitResaleValue(outfit))
                 .toBe(Math.floor(outfit.price / 2));
-            expect(outfitPrice(outfit, fed)).toBe(outfit.price);
-            // Resale follows the same modifier, so a buy-and-sell round
-            // trip at the discount still loses the usual 50%.
-            expect(outfitResaleValue(outfit, knighted))
-                .toBe(Math.floor(Math.floor(outfit.price / 2) / 2));
-            expect(outfitResaleValue(outfit, knighted))
-                .toBeLessThanOrEqual(outfitPrice(outfit, knighted));
+            expect(outfitResaleValue(outfit))
+                .toBeLessThanOrEqual(outfitPrice(outfit));
+
+            // The outfitter's view of a stellar does not even carry the
+            // owning govt any more: there is nothing in the shop for a rank
+            // to match against.
+            expect(newIreland.govt).toBe('nova:144');
+            expect(stellarOf(newIreland))
+                .toEqual({
+                    techLevel: newIreland.techLevel,
+                    specialTech: newIreland.specialTech,
+                    buysAnyOutfit: newIreland.flags.buysAnyOutfit,
+                });
         });
 });
