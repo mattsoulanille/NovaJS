@@ -314,6 +314,13 @@ export function raiseToTop<C>(container: LayerContainer<C>, child: C): void {
     container.addChild(child);
 }
 
+/**
+ * The name every grid's root container carries, so the shop menus' display
+ * lists can be inspected by name the way the Button:<label> containers are
+ * (see shipyard_grid_build_test.ts, which counts them).
+ */
+export const ITEM_GRID_NAME = 'ItemGrid';
+
 export class ItemGrid<I extends Item> {
     public activeTile = new BehaviorSubject<ItemTile<I> | undefined>(undefined);
     public container = new PIXI.Container();
@@ -324,6 +331,7 @@ export class ItemGrid<I extends Item> {
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         private items: I[]) {
+        this.container.name = ITEM_GRID_NAME;
         this.tiles = items.map(item => this.tileFor(item));
     }
 

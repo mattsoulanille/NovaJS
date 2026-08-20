@@ -14,6 +14,54 @@ class TestMenu extends Menu<string[]> {
     }
 }
 
+/** A subclass that follows the convention, counting its own builds. */
+class CountingMenu extends Menu<string[]> {
+    builds = 0;
+    protected override async build() {
+        await super.build();
+        this.builds++;
+    }
+    /** Stands in for a subclass constructor that also calls build(). */
+    buildAgain() {
+        return this.build();
+    }
+}
+
+function displayAssets() {
+    return {
+        spriteFromPict: () => new PIXI.Sprite(),
+    } as unknown as DisplayAssetDataInterface;
+}
+
+/**
+ * A menu builds itself exactly once, from Menu's own constructor.
+ *
+ * The shipyard's constructor used to end with an extra `this.build()` on
+ * top of the one Menu already starts, which ran the whole build twice and
+ * left two ItemGrids stacked in the display list (see
+ * shipyard_grid_build_test.ts). A second build is always a bug, so it
+ * fails loudly instead of silently doubling the menu's contents.
+ */
+describe('Menu.build', () => {
+    it('runs the subclass hook once', async () => {
+        const menu = new CountingMenu(displayAssets(),
+            {} as SimulationGameDataInterface, 'nova:0', new Subject());
+        await menu.buildPromise;
+        expect(menu.builds).toBe(1);
+        expect(menu.built).toBeTrue();
+    });
+
+    it('rejects a second build rather than doubling the contents',
+        async () => {
+            const menu = new CountingMenu(displayAssets(),
+                {} as SimulationGameDataInterface, 'nova:0', new Subject());
+            await menu.buildPromise;
+            await expectAsync(menu.buildAgain()).toBeRejectedWithError(
+                /CountingMenu\.build\(\) ran twice/);
+            expect(menu.builds).toBe(1);
+        });
+});
+
 describe('Menu.dismiss', () => {
     let events: Subject<ControlEvent>;
     let menu: TestMenu;

@@ -14,6 +14,8 @@ export abstract class Menu<T> {
     container = new PIXI.Container();
     readonly buildPromise: Promise<void>;
     built = false;
+    /** Guards {@link build} against being run a second time. */
+    private buildEntered = false;
     protected controls: MenuControls;
     private results = new Subject<T>();
     protected input!: T;
@@ -45,7 +47,28 @@ export abstract class Menu<T> {
         }
     }
 
-    protected async build() { }
+    /**
+     * Subclass hook for filling in the menu's contents. Menu's constructor
+     * already runs it exactly once, through {@link buildPromise} — a
+     * subclass must NEVER call build() itself.
+     *
+     * Overrides start with `await super.build()`, both because the first
+     * await is what lets the subclass's field initialisers run before the
+     * body sees `this` (see the class doc) and because that is what arms
+     * this guard. The shipyard's constructor used to end with an extra
+     * `this.build()`, which added a second ItemGrid on top of the first and
+     * left half the menu's state pointing at a grid nobody could see; a
+     * duplicate build is always a bug, so say so loudly rather than
+     * silently double up whatever the subclass adds.
+     */
+    protected async build() {
+        if (this.buildEntered) {
+            throw new Error(`${this.constructor.name}.build() ran twice. `
+                + 'Menu builds itself once from its constructor; do not '
+                + 'call build() again.');
+        }
+        this.buildEntered = true;
+    }
 
     protected setInput(input: T) {
         this.input = input;

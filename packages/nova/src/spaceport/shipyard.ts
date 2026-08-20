@@ -147,7 +147,12 @@ export class Shipyard extends Menu<Entity> {
         this.pictContainer.position.x = 175;
         this.pictContainer.position.y = -152.5;
         this.container.addChild(this.pictContainer);
-        this.build();
+        // NO this.build() here: Menu's constructor already started it (see
+        // Menu.buildPromise). Calling it again ran the whole of build()
+        // twice and left TWO ItemGrids stacked in the display list, only
+        // one of which `this.itemGrid` — and so every later refreshGrid —
+        // pointed at; the other kept showing its stale, differently-gated
+        // ship list underneath. See shipyard_grid_build_test.ts.
     }
 
     protected override async build() {

@@ -9,8 +9,11 @@ import { infoDialogName } from './ship_info.js';
  * The shipyard/outfitter tile caption, the More Info dialog's name strip
  * and the outfitter's tonnage readout are all STRING rules read off the
  * original's own screenshots (ui_screenshots/original_macos_screenshots/
- * shipyard/ and outfitter/). They are pinned here because the widgets
- * themselves need a DOM (PIXI.Text) and so cannot be built headlessly.
+ * shipyard/ and outfitter/). They are pinned here as pure rules because
+ * measuring them needs a DOM (PIXI.Text). (headless_pixi_fixture.ts can
+ * stand a whole menu up under node, but only far enough to inspect WHICH
+ * objects it puts on screen — its text metrics are invented, so layout
+ * facts still have to be pinned against the screenshots, here.)
  */
 describe('tile caption (shïp ShortName)', () => {
     it('splits on the literal backslash-n the resource stores', () => {

@@ -375,6 +375,7 @@ export class Outfitter extends Menu<Entity> {
     }
 
     protected override async build() {
+        await super.build();
         // ModType 21 (clean legal record) needs govt data: ModVal -1
         // cleans every govt, and cleaning consults InitialRec.
         const govtIds = [...(await this.simulationData.ids).Govt].sort();
