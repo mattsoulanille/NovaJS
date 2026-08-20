@@ -15,11 +15,15 @@ import { shipListPrice, ShipPurchaseContext } from './shipyard_rules.js';
 
 /**
  * ============================================================================
- * Extra Outfits' Spica Shipyard: the ships you built are free
+ * Extra Outfits' Spica Shipyard: the ships are free, the materials are not
  * ============================================================================
  *
- * The plug-in's biggest NCB/crön feature. The player buys oütf
- * extra-outfits:552 "Buy Station" for 10,000,000 cr; its OnPurchase is
+ * The plug-in's biggest NCB/crön feature, and the case Matthew ruled on after
+ * playtesting it: "while ships should be free, building materials and outfits
+ * should NOT be."
+ *
+ * The player buys oütf extra-outfits:552 "Buy Station" for 10,000,000 cr; its
+ * OnPurchase is
  *
  *     b20001 N800 K167 K168 K169 K170 K171
  *
@@ -38,9 +42,27 @@ import { shipListPrice, ShipPurchaseContext } from './shipyard_rules.js';
  *
  * Four compounding 1% modifiers is 1e-6 percent, which floors every hull in
  * the plug-in (up to the 12,000,000 cr Leviathan) to 0 cr and every hire fee
- * with it. That is the whole feature: you already paid to construct these
- * ships. See rank_logic.ts's rankPriceMod for why compounding is the reading
+ * with it. See rank_logic.ts's rankPriceMod for why compounding is the reading
  * the data forces.
+ *
+ * WHY THE OUTFITTER IS EXEMPT. The station's shop (SpecialTech 10003) sells
+ * two kinds of thing. The BUILD ORDERS are already 0 cr in the resource —
+ * oütf 562 "Build Cargo Drone", 564 "Build Shuttle", 590 "Build Leviathan",
+ * 638 "Build Corvette" and the rest. What they cost is MATERIALS, consumed by
+ * their set strings: "Build Leviathan" is OnPurchase `D561`, eating one oütf
+ * 561 "Building Materials °10000 tons°" at 7,000,000 cr, and yielding a hull
+ * (shïp extra-outfits:815) worth 12,000,000. "Build Corvette" is `D637 D558
+ * D557` — 2,250,000 + 200,000 + 100,000 = 2,550,000 cr of materials for a
+ * 2,750,000 cr hull.
+ *
+ * So the four ranks exist to zero the SHIPYARD, and only the shipyard: the
+ * hull Costs have to stay real (that is what the built ship later SELLS for,
+ * and what the bar's hire fee is 10% of), and PriceMod at the owning govt is
+ * the only lever in the engine that makes the same hull free to its builder.
+ * The author needed no such lever for the free items — those are literally
+ * 0 cr. Discounting the outfitter as well would hand over every materials
+ * tier for nothing, turn a tuned 200,000 cr margin into an unbounded credit
+ * press, and make every price typed into oütf 554-561 and 637 dead data.
  */
 describe('Extra Outfits\' Spica Shipyard prices', () => {
     const EXTRA = 'extra-outfits';
@@ -58,6 +80,23 @@ describe('Extra Outfits\' Spica Shipyard prices', () => {
     /** The four empty PriceMod-1 ranks, and the expenses rank with them. */
     const PRICE_RANKS = [168, 169, 170, 171].map(n => `${EXTRA}:${n}`);
     const EXPENSES_RANK = `${EXTRA}:167`;
+    /**
+     * The raw materials the station's outfitter sells, priced by the ton.
+     * These are the "building materials" of Matthew's ruling: every one of
+     * them would floor to 0 if the four PriceMod-1 ranks reached this shop.
+     */
+    const MATERIALS: [number, string, number][] = [
+        [554, 'Building Materials °5 tons°', 2_500],
+        [555, 'Building Materials °10 tons°', 7_500],
+        [556, 'Building Materials °20 tons°', 15_000],
+        [557, 'Building Materials °50 tons°', 100_000],
+        [558, 'Building Materials °100 tons°', 200_000],
+        [559, 'Building Materials °500 tons°', 300_000],
+        [560, 'Building Materials °2000 tons°', 1_200_000],
+        [561, 'Building Materials °10000 tons°', 7_000_000],
+        [637, 'Exotic Building Materials', 2_250_000],
+        [553, 'Building Crew', 27_000],
+    ];
 
     interface Bench {
         gameData: GameDataAggregator;
@@ -168,8 +207,8 @@ describe('Extra Outfits\' Spica Shipyard prices', () => {
             .toEqual([EXPENSES_RANK, ...PRICE_RANKS].sort());
     });
 
-    it('compounds the granted ranks to a free shipyard, free outfitter and '
-        + 'a zero hire fee at the station', () => {
+    it('compounds the granted ranks to a free shipyard and a zero hire fee '
+        + 'at the station', () => {
             if (!bench) {
                 pending('Extra Outfits plug-in not installed');
                 return;
@@ -187,11 +226,47 @@ describe('Extra Outfits\' Spica Shipyard prices', () => {
                 expect(hirePrice(ship, mod))
                     .withContext(`${ship.id} ${ship.name}`).toBe(0);
             }
-            // The outfitter there is free too — and so is selling back, which
-            // is what stops "buy for nothing, sell for half" (price_mod.ts).
-            expect(outfitPrice(bench.buyStation, { priceMod: mod })).toBe(0);
-            expect(outfitResaleValue(bench.buyStation, { priceMod: mod }))
-                .toBe(0);
+        });
+
+    it('still charges full price for the BUILDING MATERIALS the free hulls '
+        + 'are made of', async () => {
+            if (!bench) {
+                pending('Extra Outfits plug-in not installed');
+                return;
+            }
+            // The ranks are active and the shipyard is free (above); the
+            // shop is unmoved. Matthew's ruling, and the only reading under
+            // which the plug-in's economy loop exists at all.
+            for (const [id, name, price] of MATERIALS) {
+                const outfit = await bench.gameData.data.Outfit
+                    .get(`${EXTRA}:${id}`);
+                expect(outfit.name).withContext(`${id}`).toBe(name);
+                expect(outfit.price).withContext(name).toBe(price);
+                expect(outfitPrice(outfit)).withContext(name).toBe(price);
+                // Sell-back stays the plain 50%, so buying and immediately
+                // reselling still loses half — nothing mints credits.
+                expect(outfitResaleValue(outfit)).withContext(name)
+                    .toBe(Math.floor(price / 2));
+                expect(outfitResaleValue(outfit))
+                    .toBeLessThanOrEqual(outfitPrice(outfit));
+            }
+
+            // The build orders, by contrast, are free in the DATA — the
+            // author never needed a PriceMod for them. "Build Leviathan"
+            // eats one 7,000,000 cr materials package (D561) and yields the
+            // 12,000,000 cr hull the shipyard hands over for nothing.
+            const buildLeviathan = await bench.gameData.data.Outfit
+                .get(`${EXTRA}:590`);
+            expect(buildLeviathan.name).toBe('Build Leviathan');
+            expect(buildLeviathan.price).toBe(0);
+            expect(buildLeviathan.onPurchase).toBe('D561');
+            expect(outfitPrice(buildLeviathan)).toBe(0);
+            const leviathan = bench.ships.find(s => s.name === 'Leviathan')!;
+            expect(leviathan.price).toBe(12_000_000);
+
+            // And the station outfit itself still quotes its own 10M price
+            // while standing in the shop it bought.
+            expect(outfitPrice(bench.buyStation)).toBe(10_000_000);
         });
 
     it('leaves the same ships at full price without the ranks', () => {

@@ -13,9 +13,11 @@ import {
 } from './shipyard_rules.js';
 
 /**
- * The ränk PriceMod as the three shops see it: one price function
- * (price_mod.ts's modifiedPrice) behind the shipyard's ship price, the
- * outfitter's item price and resale, and the bar's hire fee.
+ * The ränk PriceMod as the shops see it: one price function (price_mod.ts's
+ * modifiedPrice) behind the shipyard's ship price and the bar's hire fee —
+ * and NOT behind the outfitter, per Matthew's ruling that at Extra Outfits'
+ * Spica Shipyard "while ships should be free, building materials and outfits
+ * should NOT be". price_mod.ts writes up the plug-in data that settles it.
  */
 
 function ship(price: number, id = 'nova:200'): ShipData {
@@ -93,36 +95,48 @@ describe('the shipyard ship price', () => {
 });
 
 describe('the outfitter item price', () => {
-    it('scales the purchase price by the PriceMod', () => {
+    it('is the oütf Cost as written, with NO PriceMod applied', () => {
         const item = outfit(5_000);
-        expect(outfitPrice(item, {})).toBe(5_000);
-        expect(outfitPrice(item, { priceMod: 50 })).toBe(2_500);
-        expect(outfitPrice(item, { priceMod: 1e-6 })).toBe(0);
+        expect(outfitPrice(item)).toBe(5_000);
+        // outfitPrice takes no modifier at all: there is no argument a
+        // caller could pass to bend an outfit's price. That is the ruling
+        // expressed in the type, not just in the arithmetic.
+        expect(outfitPrice.length).toBe(1);
+        expect(outfitResaleValue.length).toBe(1);
+        expect(sellRefund.length).toBe(2);
     });
 
-    it('scales the sell-back too, so a buy-then-sell round trip never '
-        + 'profits', () => {
-            const item = outfit(5_000);
-            expect(outfitResaleValue(item)).toBe(2_500);
-            expect(outfitResaleValue(item, { priceMod: 50 })).toBe(1_250);
-            // The pathological case: buying is free, so selling must be too.
-            const free = { priceMod: 1e-6 };
-            expect(outfitPrice(item, free)).toBe(0);
-            expect(outfitResaleValue(item, free)).toBe(0);
-            for (const mod of [undefined, 200, 100, 50, 1, 1e-6]) {
-                const context = { priceMod: mod };
-                expect(outfitResaleValue(item, context))
-                    .toBeLessThanOrEqual(outfitPrice(item, context));
+    it('is unaffected by the ranks that make Spica\'s SHIPS free', () => {
+        // Same modifier, same session: the hull goes to zero, the item in
+        // the shop next door does not budge. A 7,000,000 cr "Building
+        // Materials °10000 tons°" package is exactly the case Matthew ruled
+        // on — free materials would break the plug-in's economy loop.
+        const spica = 1e-6;
+        expect(shipListPrice(ship(12_000_000), purchaseContext(spica)))
+            .toBe(0);
+        expect(outfitPrice(outfit(7_000_000))).toBe(7_000_000);
+        expect(outfitPrice(outfit(2_500))).toBe(2_500);
+        expect(outfitPrice(outfit(2_250_000))).toBe(2_250_000);
+    });
+
+    it('keeps buy and sell-back symmetric, so a round trip never profits',
+        () => {
+            // Both ends quote the same unmodified Cost, which is what makes
+            // the no-minting invariant hold by construction rather than by
+            // two modifiers happening to agree.
+            for (const price of [0, 1, 99, 5_000, 7_000_000]) {
+                const item = outfit(price);
+                expect(outfitResaleValue(item))
+                    .toBeLessThanOrEqual(outfitPrice(item));
             }
+            expect(outfitResaleValue(outfit(5_000))).toBe(2_500);
+            expect(outfitResaleValue(outfit(4_001))).toBe(2_000); // floored
         });
 
     it('refunds a same-visit purchase at exactly what was paid', () => {
         const item = outfit(5_000);
-        const context = { priceMod: 50 };
-        expect(sellRefund(item, 1, context).credited)
-            .toBe(outfitPrice(item, context));
-        expect(sellRefund(item, 0, context).credited)
-            .toBe(outfitResaleValue(item, context));
+        expect(sellRefund(item, 1).credited).toBe(outfitPrice(item));
+        expect(sellRefund(item, 0).credited).toBe(outfitResaleValue(item));
     });
 });
 

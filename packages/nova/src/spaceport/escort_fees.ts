@@ -76,8 +76,9 @@ import { modifiedPrice } from './price_mod.js';
  * WHERE ränk PriceMod APPLIES, AND WHERE IT DOES NOT
  * ---------------------------------------------------------------------------
  *
- * PriceMod is, in the Bible's own words, about "the prices of items and
- * ships at planets owned by the affiliated government" (price_mod.ts). So:
+ * PriceMod discounts SHIPS at planets owned by the affiliated government —
+ * ships and not outfitter items, per Matthew's ruling; price_mod.ts has the
+ * evidence. Hiring is buying a ship's services, so:
  *
  *  - HIRING is a purchase made at a stellar, in the bar, with a stellar's
  *    owner to be favoured by — it takes the modifier, and always has

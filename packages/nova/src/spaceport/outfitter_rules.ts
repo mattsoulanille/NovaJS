@@ -14,7 +14,6 @@ import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
-import { modifiedPrice } from './price_mod.js';
 
 export interface OutfitterContext {
     shipData: ShipData;
@@ -66,13 +65,6 @@ export interface OutfitterContext {
      * Require test. Absent means "no ranks", the pre-rank behaviour.
      */
     rankContribute?: bigint;
-    /**
-     * The ränk PriceMod percentage in force at this stellar (price_mod.ts).
-     * Absent means 100 -- prices unchanged. It scales both the purchase price
-     * and the sell-back refund, so buying and immediately reselling can never
-     * profit no matter how steep the discount.
-     */
-    priceMod?: number;
     /**
      * The five STR# 2002 fragments the launcher sell refusal is composed
      * from, read out of the loaded game data by the Outfitter menu.
@@ -169,13 +161,6 @@ export interface OutfitterStellar extends TechStellar {
      * owns, regardless of tech level (EVN Bible ~:2862).
      */
     buysAnyOutfit: boolean;
-    /**
-     * The global id of the gövt that OWNS this stellar (spöb Govt), or null.
-     * Not a stock gate -- it is what a ränk PriceMod is matched against
-     * (price_mod.ts). Optional so headless contexts that only care about tech
-     * levels need not name it.
-     */
-    govt?: string | null;
 }
 
 /**
@@ -245,13 +230,17 @@ export function stellarStocks(outfit: OutfitData,
  * The stock rules of the stellar the player is docked at. The
  * buys-anything bit is a spöb Flags2 bit that planet_parse decodes into
  * the named flags, so it is read from there rather than from a raw field.
+ *
+ * The stellar's OWNING gövt is deliberately absent: the only thing the
+ * outfitter would have wanted it for is the ränk PriceMod, and PriceMod does
+ * not reach outfit prices (price_mod.ts). Tech reach and the buys-anything
+ * bit are the whole of what a shop's stock depends on.
  */
 export function stellarOf(planet: PlanetData): OutfitterStellar {
     return {
         techLevel: planet.techLevel,
         specialTech: planet.specialTech,
         buysAnyOutfit: planet.flags.buysAnyOutfit,
-        govt: planet.govt,
     };
 }
 
@@ -288,32 +277,35 @@ export type SellDenialReason =
 export const OUTFIT_RESALE_FRACTION = 0.5;
 
 /**
- * What this outfitter charges for one unit of `outfit`: its oütf Cost after
- * the stellar's ränk PriceMod (price_mod.ts). Everything that quotes or
- * charges an outfit price goes through here -- the Outfitter's "Item Price:"
- * line, the credits deducted on Buy, canBuyOutfit's affordability test and
- * maxBuyCount's credit bound -- so the shown and charged figures are the same
- * number by construction.
+ * What this outfitter charges for one unit of `outfit`: its oütf Cost, as
+ * written. Everything that quotes or charges an outfit price goes through
+ * here -- the Outfitter's "Item Price:" line, the credits deducted on Buy,
+ * canBuyOutfit's affordability test and maxBuyCount's credit bound -- so the
+ * shown and charged figures are the same number by construction.
+ *
+ * NO ränk PriceMod. Per Matthew's ruling a rank discount bends SHIP prices
+ * (and the hire fee taken off them) but never the outfitter: at Extra
+ * Outfits' Spica Shipyard the same ranks that make the hulls free would
+ * otherwise hand over the building materials those hulls are built from, and
+ * the plug-in prices those materials from 2,500 to 7,000,000 cr precisely
+ * because you are meant to pay for them. price_mod.ts has the full evidence.
  */
-export function outfitPrice(outfit: OutfitData,
-    context: Pick<OutfitterContext, 'priceMod'>): number {
-    return modifiedPrice(outfit.price, context.priceMod);
+export function outfitPrice(outfit: OutfitData): number {
+    return outfit.price;
 }
 
 /**
  * Credits recovered for selling one pre-owned unit: 50% of what this shop
  * would charge for it.
  *
- * The PriceMod is applied BEFORE the 50%, not skipped: were resale left on
- * the unmodified list price, a shop where buying costs ~nothing (Extra
- * Outfits' Spica Shipyard, whose four compounding PriceMod-1 ranks land at
- * 1e-6 percent) would pay out half the list price for an item it just gave
- * away, i.e. mint credits without limit. Scaling both ends keeps the
- * invariant that buying and immediately selling never profits.
+ * Buy and sell-back are quoted off the same unmodified oütf Cost, which is
+ * what keeps the invariant that matters: within one shop, buying and
+ * immediately selling can never profit. Discounting one end and not the other
+ * would mint credits, so the two must always move together -- today that
+ * means neither moves at all.
  */
-export function outfitResaleValue(outfit: OutfitData,
-    context: Pick<OutfitterContext, 'priceMod'> = {}): number {
-    return Math.floor(outfitPrice(outfit, context) * OUTFIT_RESALE_FRACTION);
+export function outfitResaleValue(outfit: OutfitData): number {
+    return Math.floor(outfitPrice(outfit) * OUTFIT_RESALE_FRACTION);
 }
 
 /**
@@ -326,17 +318,16 @@ export function outfitResaleValue(outfit: OutfitData,
  * unit in a bulk sell and the full/half split falls out naturally (buy 3
  * this visit, sell 5 -> 3 full + 2 half).
  */
-export function sellRefund(outfit: OutfitData, boughtThisVisit: number,
-    context: Pick<OutfitterContext, 'priceMod'> = {}):
+export function sellRefund(outfit: OutfitData, boughtThisVisit: number):
     { credited: number, boughtThisVisit: number } {
     if (boughtThisVisit > 0) {
         return {
-            credited: outfitPrice(outfit, context),
+            credited: outfitPrice(outfit),
             boughtThisVisit: boughtThisVisit - 1,
         };
     }
     return {
-        credited: outfitResaleValue(outfit, context), boughtThisVisit,
+        credited: outfitResaleValue(outfit), boughtThisVisit,
     };
 }
 
@@ -704,7 +695,7 @@ export function canBuyOutfit(outfit: OutfitData,
 
     // Checked last: structural denials (mass, hardpoints, Max) are
     // permanent, but "can't afford" just means come back with money.
-    if (outfitPrice(outfit, context) > context.credits) {
+    if (outfitPrice(outfit) > context.credits) {
         return denied('credits', 'You can\'t afford this item.');
     }
 
@@ -973,7 +964,7 @@ export function maxBuyCount(outfit: OutfitData, context: OutfitterContext,
         working.set(outfit.id, (working.get(outfit.id) ?? 0) + (n - 1));
         return canBuyOutfit(outfit, {
             ...context, outfits: working,
-            credits: context.credits - (n - 1) * outfitPrice(outfit, context),
+            credits: context.credits - (n - 1) * outfitPrice(outfit),
         }).allowed;
     };
     if (limit <= 0 || !canBuyN(1)) {
