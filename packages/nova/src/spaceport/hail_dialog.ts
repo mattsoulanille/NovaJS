@@ -36,7 +36,15 @@ import { MenuControls } from './menu_controls.js';
  * (Sell Escort for a HIRED escort, whose ship the player never owned). All
  * three functions are live: they price themselves off the escort's current
  * ship class (spaceport/escort_fees.ts) and dispatch through the deterministic
- * input path (nova_plugin/escort_action.ts), which re-derives every number.
+ * input path (nova_plugin/escort_action.ts).
+ *
+ * UPGRADE AND SELL ARE TOGGLES, not deals struck on the spot: they QUEUE the
+ * deal for the next shipyard, the channel stays open, and the pressed button
+ * becomes its "Cancel ..." twin (hail/hail_escort_upgrading.png,
+ * hail/sell_captured_escort.png). The readout's price line for the queued
+ * side is replaced by the original's own dim status line — "Will be upgraded
+ * at next shipyard" / "Will be sold off at next shipyard". Only Release
+ * happens over the channel, and only Release closes it.
  */
 
 /** Comms-dialog background PICT ids (see novajs-spaceport-ui memory map). */
@@ -117,49 +125,109 @@ export interface EscortManagement {
      */
     provenance: 'hired' | 'captured';
     /**
-     * The shïp UpgradeTo offer, absent when this class cannot be upgraded.
+     * The upgrade ON OFFER, absent when there is none — either the class
+     * has no shïp UpgradeTo at all, or the player does not meet the target
+     * class's own Require / Availability gates (hail_dialog_plugin's
+     * escortUpgradeOffer). Both cases read as
+     * {@link CANNOT_UPGRADE_TEXT} in the readout, and grey the button.
+     *
      * `toShip` is the target class's global id, carried so the press can
-     * name (and stage) it; the simulation verifies it against the escort's
-     * own class before honouring anything.
+     * name it; the simulation verifies it against the escort's own class
+     * before recording anything.
      */
     upgrade?: { toShip: string, cost: number, canAfford: boolean };
     /** What selling the hull pays. CAPTURED escorts only. */
     sell?: { value: number };
     /** The daily wage. HIRED escorts only — a captured hull draws none. */
     dailyFee?: number;
+    /**
+     * An upgrade is QUEUED for the next shipyard (PlayerEscort.
+     * pendingUpgrade). The upgrade row's price line becomes
+     * {@link UPGRADE_QUEUED_TEXT} and its button becomes Cancel Upgrade.
+     *
+     * The WAGE is unaffected, deliberately: the escort is still flying its
+     * old hull until the deal settles, so it still draws its old hull's
+     * pay (escort_fees.ts prices everything off the CURRENT class).
+     */
+    pendingUpgrade?: boolean;
+    /** A sale is queued for the next shipyard. See above. */
+    pendingSale?: boolean;
 }
+
+/**
+ * The original's own status lines for the escort box's readout, verbatim
+ * from STR# 2002 ("misc strings") — verified against the real Nova data,
+ * and each pinned by a spec against it:
+ *
+ *   291  "Will be upgraded at next shipyard"
+ *   292  "Upgrade Cost:"
+ *   293  "This ship class cannot be upgraded."
+ *   294  "Will be sold off at next shipyard"
+ *   295  "Sell Price:"
+ *   296  "Pay:"
+ *
+ * (The table keeps them in exactly the readout's row order, which is one
+ * more confirmation of the three-slot layout below.)
+ */
+export const UPGRADE_QUEUED_TEXT = 'Will be upgraded at next shipyard';
+export const SALE_QUEUED_TEXT = 'Will be sold off at next shipyard';
+export const CANNOT_UPGRADE_TEXT = 'This ship class cannot be upgraded.';
+
+/**
+ * The readout lines that are STATUS rather than label-and-figure, and are
+ * drawn dim. See {@link COMM_DEFERRED_COLOR}.
+ */
+const DIM_READOUT_LINES: ReadonlySet<string> = new Set([
+    UPGRADE_QUEUED_TEXT, SALE_QUEUED_TEXT, CANNOT_UPGRADE_TEXT,
+]);
 
 /**
  * The escort box's UPPER well: a fixed three-slot block, exactly as the
  * references lay it out —
  *
- *   1. the upgrade price   "Upgrade Cost: 50,000 credits"
- *   2. the resale price    "Sell Price:   11,000 credits"  (captured only)
+ *   1. the upgrade line    "Upgrade Cost: 50,000 credits"
+ *   2. the resale line     "Sell Price:   11,000 credits"  (captured only)
  *   3. the daily wage      "Pay:  1,100 credits per day"   (hired only)
  *
  * That fixed order is what explains the BLANK LINE on hail/hail_escort.png:
  * the hired Terrapin's "Upgrade Cost" and "Pay" lines sit 30px apart (two
  * 15px rows) because slot 2, the resale line, is empty for a hire — while
  * hail/hail_captured_escort.png's "Upgrade Cost" and "Sell Price" are
- * adjacent, 15px apart, because for a capture it is slot 3 that is empty.
- * One layout, two fillings.
+ * adjacent because for a capture it is slot 3 that is empty. One layout,
+ * two fillings; hail/hail_escort_upgrading.png and
+ * hail/sell_captured_escort.png are the same two fillings again with one
+ * price line replaced by its queued-deal status line.
  *
- * Empty slots at the ENDS are trimmed (a captured escort's block is two
- * lines, not three); an empty slot BETWEEN two filled ones is kept, because
- * that gap is the thing the reference shows. So a hired escort whose class
- * cannot be upgraded gets a one-line block rather than two blank rows and a
- * wage.
+ * EACH OF THE FIRST TWO SLOTS HAS THREE STATES, in this order:
+ *
+ *   QUEUED   the deal is waiting for a shipyard: the original's own dim
+ *            status line (UPGRADE_QUEUED_TEXT / SALE_QUEUED_TEXT) replaces
+ *            the price, because the price is no longer the news.
+ *   PRICED   the ordinary "Upgrade Cost:" / "Sell Price:" figure.
+ *   NEITHER  slot 1 says CANNOT_UPGRADE_TEXT (the class is a dead end, or
+ *            the player is not allowed the target hull); slot 2 is simply
+ *            blank, since a HIRED escort has no sale to talk about.
+ *
+ * So slot 1 is never empty and slot 2 never carries a "cannot": the
+ * original has a sentence for an unupgradeable class and nothing at all to
+ * say about a hire it was never going to sell.
+ *
+ * Empty slots at the ENDS are trimmed; an empty slot BETWEEN two filled
+ * ones is kept, because that gap is the thing the reference shows.
  *
  * Pure, so the wording is pinned by specs rather than by a screenshot.
  */
 export function escortReadout(escort: EscortManagement): string {
     const rows = [
-        escort.upgrade
-            ? `Upgrade Cost: ${escort.upgrade.cost.toLocaleString()} credits`
-            : '',
-        escort.sell
-            ? `Sell Price: ${escort.sell.value.toLocaleString()} credits`
-            : '',
+        escort.pendingUpgrade ? UPGRADE_QUEUED_TEXT
+            : escort.upgrade
+                ? `Upgrade Cost: ${escort.upgrade.cost.toLocaleString()}`
+                + ` credits`
+                : CANNOT_UPGRADE_TEXT,
+        escort.pendingSale ? SALE_QUEUED_TEXT
+            : escort.sell
+                ? `Sell Price: ${escort.sell.value.toLocaleString()} credits`
+                : '',
         escort.dailyFee !== undefined
             ? `Pay: ${escort.dailyFee.toLocaleString()} credits per day`
             : '',
@@ -191,14 +259,58 @@ export interface HailCallbacks {
     requestAssistance(): string;
     bribe(): void;
     /**
-     * An escort-management press (Upgrade Escort / Sell Escort / Release).
-     * Routes to the deterministic input path exactly as `bribe` does — the
-     * plugin turns it into an `escortAction` SimulationInput, and the
-     * simulation re-derives the price and the eligibility. The channel
-     * closes straight after (see {@link hailPress}), so nothing comes back.
+     * An escort-management press, already resolved to WHICH of the five
+     * escort actions it is (see {@link escortPressAction} — the two deal
+     * rows are toggles, so the same physical button queues or cancels
+     * depending on what is pending). Routes to the deterministic input
+     * path exactly as `bribe` does; the plugin turns it into an
+     * `escortAction` SimulationInput and the simulation re-checks the
+     * eligibility. Nothing comes back — a queue or a cancel is reflected
+     * by the dialog's own page machine, and a release closes the channel.
      */
-    escortAction(action: 'upgrade' | 'sell' | 'release'): void;
+    escortAction(action: EscortPressAction): void;
     playSound(id: string): void;
+}
+
+/**
+ * The escort actions a press can resolve to — the wire-side vocabulary of
+ * nova_plugin/escort_action.ts, minus the record's target/toShip fields
+ * (which the plugin fills in).
+ */
+export type EscortPressAction =
+    'queueUpgrade' | 'cancelUpgrade' | 'queueSale' | 'cancelSale' | 'release';
+
+/**
+ * WHICH action a press on one of the escort column's three live rows means,
+ * or undefined when that row is not offering anything.
+ *
+ * The upgrade and sale rows are TOGGLES — one button per deal, reading
+ * "Upgrade Escort" or "Cancel Upgrade" depending on what is queued — so
+ * this is the one place that decides queue-versus-cancel, shared by the
+ * button captions, the dispatch, and {@link hailPress}. Splitting them
+ * would let the caption say Cancel while the press queued.
+ *
+ * A row with nothing to offer (no upgrade on offer or an unaffordable one,
+ * a hired escort's sale) yields undefined and dispatches nothing: the same
+ * rule the assist and bribe slots follow, and the reason the dialog greys
+ * those buttons rather than hiding them.
+ */
+export function escortPressAction(escort: EscortManagement,
+    row: 'upgrade' | 'sell' | 'release'): EscortPressAction | undefined {
+    switch (row) {
+        case 'release':
+            return 'release';
+        case 'upgrade':
+            if (escort.pendingUpgrade) {
+                return 'cancelUpgrade';
+            }
+            return escort.upgrade?.canAfford ? 'queueUpgrade' : undefined;
+        case 'sell':
+            if (escort.pendingSale) {
+                return 'cancelSale';
+            }
+            return escort.sell ? 'queueSale' : undefined;
+    }
 }
 
 /**
@@ -212,6 +324,23 @@ export interface HailCallbacks {
 export const COMM_LABEL_COLOR = 0x808080;
 export const COMM_VALUE_COLOR = 0xffffff;
 export const COMM_HOSTILE_COLOR = 0xdd0806;
+
+/**
+ * The escort readout's QUEUED-DEAL lines are their own shade — 0xc0c0c0,
+ * dimmer than a white value but lighter than a 0x808080 label. Measured
+ * off the original-hardware captures the same way the three colours above
+ * were: on hail/hail_escort_upgrading.png the "Will be upgraded at next
+ * shipyard" glyphs are exactly 192,192,192 while the "Pay:" label beneath
+ * them is 128,128,128 and its figure is 255,255,255;
+ * hail/sell_captured_escort.png agrees for "Will be sold off at next
+ * shipyard" against its live "Upgrade Cost:" line.
+ *
+ * {@link CANNOT_UPGRADE_TEXT} is drawn in it too. That one has no
+ * reference capture — it is the same KIND of line (a whole-sentence
+ * status where a price would be), and painting it white would make an
+ * escort with no upgrade path shout louder than one with a price.
+ */
+export const COMM_DEFERRED_COLOR = 0xc0c0c0;
 
 /** A stretch of identity text drawn in one colour. */
 export interface CommTextRun {
@@ -227,6 +356,8 @@ export interface CommTextRun {
  *   "Status: Hostile"      -> grey "Status: " + RED "Hostile"
  *   "(Federation)"         -> white, whole
  *   "Hired Escort:"        -> grey, whole (a label with nothing after it)
+ *   "Will be upgraded at
+ *    next shipyard"        -> 0xc0c0c0, whole (a queued-deal status line)
  *
  * Pure and total, and it never alters the text: concatenating the runs back
  * together reproduces the block exactly. Only the Status line is red, and
@@ -234,6 +365,13 @@ export interface CommTextRun {
  */
 export function identityRuns(block: string): CommTextRun[][] {
     return block.split('\n').map(line => {
+        // The escort readout's whole-sentence status lines are checked
+        // FIRST: "This ship class cannot be upgraded." would otherwise be
+        // split on nothing (it has no colon) and drawn white, and a
+        // plug-in's wording could in principle contain one.
+        if (DIM_READOUT_LINES.has(line)) {
+            return [{ text: line, color: COMM_DEFERRED_COLOR }];
+        }
         const colon = line.indexOf(':');
         if (colon < 0) {
             return [{ text: line, color: COMM_VALUE_COLOR }];
@@ -338,12 +476,22 @@ export type HailPress =
     /** Back out of the haggle page. */
     | { kind: 'cancel' }
     /**
-     * The escort box's three management functions. Each ends the
+     * The escort box's three management rows. The first two TOGGLE a
+     * queued deal and leave the channel open; only Release ends the
      * conversation (see the state machine below).
      */
     | { kind: 'upgradeEscort' }
     | { kind: 'sellEscort' }
     | { kind: 'releaseEscort' };
+
+/**
+ * The escort context after a toggle press, with the readout re-rendered
+ * from it — the two must move together, since the body IS the readout.
+ */
+function withEscort(context: HailContext,
+    escort: EscortManagement): HailContext {
+    return { ...context, escort, body: escortReadout(escort) };
+}
 
 /**
  * THE COMM DIALOG'S PAGE STATE MACHINE — pure, so the behaviour the
@@ -398,26 +546,58 @@ export function hailPress(state: HailPage, press: HailPress,
             // already granted this player.
             return { phase: 'main', context: { ...context, body: accepted } };
         }
-        // THE THREE ESCORT FUNCTIONS ALL CLOSE THE CHANNEL, for the same
-        // reason a paid PORT bribe does: what the box was reporting is no
-        // longer true the instant the press lands. A released or sold
-        // escort is not the player's any more and there is nothing left to
-        // manage; an upgraded one is flying a DIFFERENT CLASS, so its wage,
-        // its next upgrade price and its resale value have all changed, and
-        // a fresh hail is what re-derives them. (The original defers both
-        // deals to the next shipyard and keeps the channel open showing a
-        // Cancel button — see the divergence note in escort_action.ts.)
+        // THE TWO DEAL ROWS TOGGLE AND THE CHANNEL STAYS OPEN. That is the
+        // original's behaviour, and the reference captures are the whole
+        // specification: hail/hail_escort_upgrading.png is
+        // hail/hail_escort.png after one press of Upgrade Escort — same
+        // channel, same identity block, the readout's price line replaced
+        // by "Will be upgraded at next shipyard" and the button now reading
+        // "Cancel Upgrade". Pressing again un-queues it, as many times as
+        // the player likes; nothing is charged either way, because the deal
+        // is settled at the next shipyard (spaceport/escort_deals.ts).
         //
-        // Each is ignored unless the context actually offers it, the same
-        // rule the assist and bribe slots follow: a press cannot conjure a
-        // function the box did not draw a live button for.
+        // QUEUEING ONE CANCELS THE OTHER. An escort cannot be both sold off
+        // and refitted at the same visit, and the original does not grey
+        // the other button to say so — hail/sell_captured_escort.png keeps
+        // "Upgrade Escort" live beside a queued sale — so pressing it must
+        // mean something, and what it means is "that one instead".
+        //
+        // Each row is ignored unless the context actually offers it, the
+        // same rule the assist and bribe slots follow: a press cannot
+        // conjure a function the box did not draw a live button for.
         case 'upgradeEscort':
-            return context.escort?.upgrade ? 'close' : state;
-        case 'sellEscort':
-            return context.escort?.sell ? 'close' : state;
+        case 'sellEscort': {
+            const escort = context.escort;
+            const row = press.kind === 'upgradeEscort' ? 'upgrade' : 'sell';
+            const action = escort && escortPressAction(escort, row);
+            if (!escort || !action) {
+                return state;
+            }
+            switch (action) {
+                case 'queueUpgrade':
+                    return { phase, context: withEscort(context,
+                        { ...escort, pendingUpgrade: true,
+                            pendingSale: false }) };
+                case 'cancelUpgrade':
+                    return { phase, context: withEscort(context,
+                        { ...escort, pendingUpgrade: false }) };
+                case 'queueSale':
+                    return { phase, context: withEscort(context,
+                        { ...escort, pendingSale: true,
+                            pendingUpgrade: false }) };
+                case 'cancelSale':
+                    return { phase, context: withEscort(context,
+                        { ...escort, pendingSale: false }) };
+                default:
+                    return state;
+            }
+        }
         case 'releaseEscort':
-            // Release needs nothing but an escort: it is live on both
-            // reference captures, hired and captured alike.
+            // Release is the one escort function that happens over the
+            // channel, so it is the one that CLOSES it: the ship is not
+            // the player's any more and there is nothing left to manage.
+            // It needs nothing but an escort — live on both reference
+            // captures, hired and captured alike, queued deal or not.
             return context.escort ? 'close' : state;
     }
 }
@@ -778,8 +958,13 @@ export class HailDialog {
      * hail/hail_escort.png and hail/hail_captured_escort.png the column
      * reads, top to bottom: Upgrade Escort / Sell Escort / Release / Close
      * Channel — four fixed rows, with the ones that do not apply GREYED
-     * rather than dropped. Which is which is {@link escortButtonSlots}; the
-     * captions are the original's own, STR# 150 indices 51 / 53 / 31 / 20.
+     * rather than dropped. Which is which is {@link escortButtonSlots}.
+     *
+     * ALL SIX CAPTIONS ARE THE ORIGINAL'S OWN, STR# 150 ("button labels"):
+     * 51 "Upgrade Escort", 52 "Cancel Upgrade", 53 "Sell Escort", 54
+     * "Cancel Sale", 31 "Release", 20 "Close Channel". The two Cancel
+     * captions are what the first two rows read while their deal is queued
+     * (hail/hail_escort_upgrading.png, hail/sell_captured_escort.png).
      */
     private renderEscortButtons(escort: EscortManagement,
         frame: CommFrameLayout, originX: number, originY: number) {
@@ -788,12 +973,16 @@ export class HailDialog {
             let onPress: (() => void) | undefined;
             switch (slot) {
                 case 'upgradeEscort':
-                    label = 'Upgrade Escort';
+                case 'cancelUpgrade':
+                    label = slot === 'cancelUpgrade'
+                        ? 'Cancel Upgrade' : 'Upgrade Escort';
                     onPress = () => this.pressEscort('upgrade',
                         { kind: 'upgradeEscort' });
                     break;
                 case 'sellEscort':
-                    label = 'Sell Escort';
+                case 'cancelSale':
+                    label = slot === 'cancelSale'
+                        ? 'Cancel Sale' : 'Sell Escort';
                     onPress = () => this.pressEscort('sell',
                         { kind: 'sellEscort' });
                     break;
@@ -819,16 +1008,27 @@ export class HailDialog {
     }
 
     /**
-     * One escort-management press: dispatch it to the simulation, then run
-     * it through the page machine, which closes the channel (see
-     * {@link hailPress}). Dispatching FIRST, and only for a press the
-     * context actually offers, keeps the two in step — the callback is what
-     * reaches the sim, and it must not fire for a button the box would have
-     * refused.
+     * One escort-management press: work out WHICH action this row means
+     * right now (the two deal rows are toggles — {@link escortPressAction}),
+     * dispatch it to the simulation, then run the press through the page
+     * machine, which re-renders the box around the new pending state (or
+     * closes the channel, for Release).
+     *
+     * Dispatching FIRST, and only for a press the context actually offers,
+     * keeps the two in step — the callback is what reaches the sim, and it
+     * must not fire for a button the box would have refused. Both halves
+     * read the SAME live `this.context.escort`, which hailPress has already
+     * updated for any earlier toggle, so the caption the player pressed and
+     * the record that leaves cannot disagree.
      */
-    private pressEscort(action: 'upgrade' | 'sell' | 'release',
+    private pressEscort(row: 'upgrade' | 'sell' | 'release',
         press: HailPress) {
-        if (!this.context?.escort) {
+        const escort = this.context?.escort;
+        if (!escort) {
+            return;
+        }
+        const action = escortPressAction(escort, row);
+        if (!action) {
             return;
         }
         this.beep();

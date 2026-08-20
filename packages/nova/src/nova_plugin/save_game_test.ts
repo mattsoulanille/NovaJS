@@ -638,6 +638,37 @@ describe('save_game escorts', () => {
             .toEqual([['hire', 'hired'], ['prize', 'captured']]);
     });
 
+    it('round-trips the QUEUED DEALS — an upgrade\'s target class and a '
+        + 'pending sale', async () => {
+        // Upgrading and selling an escort are deferred to the next
+        // shipyard (nova_plugin/escort_action.ts), so a player can queue a
+        // deal, quit, and come back days later expecting it to be waiting.
+        // Both flags ride the durable ownership marker for exactly that
+        // reason; this is the spec that keeps them in the save.
+        const { serializer, makeEscort } = fixture;
+        const upgrading = await makeEscort(ship => ship.components.set(
+            PlayerEscortComponent, {
+                player: PLAYER, parent: PLAYER, provenance: 'hired',
+                pendingUpgrade: 'nova:137',
+            }));
+        const selling = await makeEscort(ship => ship.components.set(
+            PlayerEscortComponent, {
+                player: PLAYER, parent: PLAYER, provenance: 'captured',
+                pendingSale: true,
+            }));
+
+        const toSave = collectEscortsToSave(PLAYER,
+            [['upgrading', upgrading], ['selling', selling]], []);
+        const restored = saveAndLoad(
+            extractSavedEscorts(toSave, serializer), serializer);
+        const markers = new Map(restored.map(({ uuid, entity }) =>
+            [uuid, entity.components.get(PlayerEscortComponent)]));
+        expect(markers.get('upgrading')?.pendingUpgrade).toBe('nova:137');
+        expect(markers.get('upgrading')?.pendingSale).toBeUndefined();
+        expect(markers.get('selling')?.pendingSale).toBeTrue();
+        expect(markers.get('selling')?.pendingUpgrade).toBeUndefined();
+    });
+
     it('restores an escort saved BEFORE provenance existed, and reads it '
         + 'as hired', async () => {
             // The field is additive on a component that older saves

@@ -14,8 +14,6 @@ import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
 import { applyInputRecords, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { HailAction } from "../nova_plugin/hail_plugin.js";
 import { EscortAction } from "../nova_plugin/escort_action.js";
-import { loadShipGameData } from "../nova_plugin/entity_data_loader.js";
-import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 import { AcceptedMission } from "../nova_plugin/mission_accept.js";
 import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, PROTOCOL_VERSION, RollbackLogEntry, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 import { makeNpc } from "../nova_plugin/npc_plugin.js";
@@ -571,12 +569,13 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * rollback correction.
      */
     private integrateStaged(record: InputRecord) {
+        // (An escort action needs no staging: none of them builds a ship on
+        // the tick it lands. Queueing an upgrade only records the target
+        // class on the escort's marker; the class itself is loaded by the
+        // client that settles the deal at a shipyard — see
+        // spaceport/escort_deals.ts.)
         if (record.inputs.some(input => input.kind === 'addEntity'
-            || input.kind === 'acceptMission'
-            // An escort upgrade names a ship CLASS that must be buildable
-            // synchronously on this peer too (see loadInputRecordsGameData).
-            || (input.kind === 'escortAction'
-                && input.action.kind === 'upgradeEscort'))) {
+            || input.kind === 'acceptMission')) {
             // If the buffer is cleared while staging (a catch-up log
             // arrived, which contains this record), drop it: pushing
             // after the clear would apply it twice.
@@ -983,19 +982,16 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
 
     /**
      * An escort-management action from the comm dialog (escort_action.ts).
-     * An UPGRADE stages the target ship class's game-data closure BEFORE
-     * scheduling, exactly as acceptMission stages its ships: applying (and
-     * replaying) the record has to be synchronous, and applyEscortAction
-     * refuses an upgrade whose class is not cached.
+     *
+     * NOTHING IS STAGED, unlike acceptMission or addEntity: no escort
+     * action builds a ship on the tick its record lands. A release only
+     * drops components, and queueing an upgrade only writes the target
+     * class's id onto the escort's ownership marker — the class is loaded
+     * (and the hull actually swapped) by the client that settles the deal
+     * at a shipyard, spaceport/escort_deals.ts. Kept async so the bridge
+     * interface, and every caller's `await`, are unchanged.
      */
     async escortAction(action: EscortAction) {
-        if (action.kind === 'upgradeEscort') {
-            const gameData = this.world.resources
-                .get(SimulationGameDataResource);
-            if (gameData) {
-                await loadShipGameData(gameData, action.toShip);
-            }
-        }
         this.schedule({ kind: 'escortAction', action });
     }
 

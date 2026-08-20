@@ -81,6 +81,36 @@ export const PlayerEscort = t.intersection([t.type({
      * fleet the game has no provenance record for. See `escortProvenance`.
      */
     provenance: t.union([t.literal('hired'), t.literal('captured')]),
+    /**
+     * A QUEUED UPGRADE: the global ship id this escort will be swapped to
+     * the next time its player lands on a stellar with a shipyard
+     * (spaceport/escort_deals.ts). Absent means nothing is queued.
+     *
+     * The TARGET IS RESOLVED AT QUEUE TIME — it is the class's own shïp
+     * UpgradeTo as of the press, stored rather than re-derived — so the
+     * settlement can tell a deal that is still the deal it was struck for
+     * from one whose escort has changed class some other way since. A
+     * stored target that no longer matches the escort's current
+     * UpgradeTo is dropped rather than honoured (see settleEscortDeals).
+     *
+     * NOT a price: EscUpgrdCost is re-read from the escort's class when
+     * the deal settles, exactly as every other escort figure is
+     * (escort_fees.ts).
+     *
+     * MUTUALLY EXCLUSIVE with `pendingSale` — queueing either clears the
+     * other, so an escort is never both being upgraded and being sold.
+     */
+    pendingUpgrade: t.string,
+    /**
+     * A QUEUED SALE: this escort will be sold off (and will NOT lift off
+     * with the player) the next time its player lands on a stellar with a
+     * shipyard. CAPTURED escorts only — a hired pilot's hull was never the
+     * player's to sell — and the settlement re-checks that rather than
+     * trusting the flag.
+     *
+     * Mutually exclusive with `pendingUpgrade`; see above.
+     */
+    pendingSale: t.boolean,
 })]);
 export type PlayerEscort = t.TypeOf<typeof PlayerEscort>;
 
@@ -107,6 +137,82 @@ export const PlayerEscortComponent =
  */
 export function escortProvenance(escort: Entity): EscortProvenance {
     return escort.components.get(PlayerEscortComponent)?.provenance ?? 'hired';
+}
+
+/**
+ * The class a QUEUED upgrade would swap this escort to, or undefined when
+ * none is queued. See PlayerEscort.pendingUpgrade — the value is the target
+ * resolved when the player pressed the button, not a live re-derivation.
+ */
+export function pendingEscortUpgrade(escort: Entity): string | undefined {
+    return escort.components.get(PlayerEscortComponent)?.pendingUpgrade;
+}
+
+/** Whether a sale is queued for this escort. See PlayerEscort.pendingSale. */
+export function escortSaleQueued(escort: Entity): boolean {
+    return escort.components.get(PlayerEscortComponent)?.pendingSale === true;
+}
+
+/**
+ * The DURABLE FACTS on an existing ownership marker — the ones that say
+ * something the live escort chain cannot, and so must survive every
+ * rebuild of that marker:
+ *
+ *   `provenance`      how the escort was acquired (hired / captured);
+ *   `pendingUpgrade`  a queued upgrade's target class;
+ *   `pendingSale`     a queued sale.
+ *
+ * All three are facts about the PLAYER'S RELATIONSHIP with this ship — how
+ * they got it, and what they have decided to do with it at the next
+ * shipyard — not about which ship it is currently keeping formation on.
+ * Every site that rebuilds the marker goes through this or through
+ * {@link carriedEscortFields}, so none of them can quietly drop one.
+ *
+ * `detached` is deliberately NOT here: it is a fact about the live
+ * lifecycle (the player is currently out of the world), so it belongs only
+ * to the re-stamps that are not themselves a re-attachment.
+ *
+ * Returns a partial that is spread over the new link, so an absent field
+ * stays absent rather than being written as undefined (which would change
+ * the component's encoded shape, and with it the desync hash).
+ */
+export function durableEscortFields(existing: PlayerEscort | undefined):
+    Partial<PlayerEscort> {
+    const carried: Partial<PlayerEscort> = {};
+    if (existing?.provenance !== undefined) {
+        carried.provenance = existing.provenance;
+    }
+    if (existing?.pendingUpgrade !== undefined) {
+        carried.pendingUpgrade = existing.pendingUpgrade;
+    }
+    if (existing?.pendingSale) {
+        carried.pendingSale = true;
+    }
+    return carried;
+}
+
+/**
+ * {@link durableEscortFields} plus `detached` — everything an IN-PLACE
+ * re-stamp of the marker must carry over.
+ *
+ * Used where the marker is rebuilt from a freshly walked chain while the
+ * escort stays exactly where it is: MarkPlayerEscortsSystem, and the
+ * pre-departure back-fill in sweepableEscorts. Such a re-stamp says
+ * nothing about whether the player is present, so a `detached` flag set by
+ * the player's departure has to ride through it — otherwise the escort's
+ * command reset on the next re-attachment would be skipped.
+ *
+ * The re-insertion of a CARRIED escort (spaceport/landed_escorts) uses
+ * {@link durableEscortFields} instead, because that re-stamp IS the
+ * re-attachment: the flag has just served its purpose and must clear.
+ */
+export function carriedEscortFields(existing: PlayerEscort | undefined):
+    Partial<PlayerEscort> {
+    const carried = durableEscortFields(existing);
+    if (existing?.detached) {
+        carried.detached = true;
+    }
+    return carried;
 }
 
 /**

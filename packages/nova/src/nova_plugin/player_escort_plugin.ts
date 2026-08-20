@@ -41,8 +41,9 @@ import {
 } from './npc_ai_plugin.js';
 import { LandEvent, PlanetDataComponent } from './planet_plugin.js';
 import {
-    EscortLanding, EscortLandingComponent, EscortPayrollComponent,
-    escortProvenance, PlayerEscort, PlayerEscortComponent,
+    carriedEscortFields, EscortLanding, EscortLandingComponent,
+    EscortPayrollComponent, escortProvenance, PlayerEscort,
+    PlayerEscortComponent,
 } from './player_escort.js';
 import { ControlledByComponent } from './ship_control.js';
 import { ShipComponent, ShipPhysicsComponent } from './ship_plugin.js';
@@ -220,26 +221,10 @@ export const ESCORT_APPROACH_RCS_SPEED = 60;
  */
 /**
  * The fields of an existing ownership marker that a RE-STAMP must carry
- * over, because they say something the live chain cannot: whether the
- * player is currently away (`detached`) and how the escort was acquired
- * (`provenance`). Both sites that re-stamp the marker from a freshly walked
- * chain go through this, so neither can quietly drop one of them.
- *
- * Returns a partial that is spread over the new link, so an absent field
- * stays absent rather than being written as undefined (which would change
- * the component's encoded shape, and with it the desync hash).
+ * over — `detached`, `provenance` and the queued deals. Shared with the
+ * carried-roster re-insertion; see {@link carriedEscortFields}.
  */
-function carriedFields(existing: PlayerEscort | undefined):
-    Partial<PlayerEscort> {
-    const carried: Partial<PlayerEscort> = {};
-    if (existing?.detached) {
-        carried.detached = true;
-    }
-    if (existing?.provenance !== undefined) {
-        carried.provenance = existing.provenance;
-    }
-    return carried;
-}
+const carriedFields = carriedEscortFields;
 
 export function playerEscortLink(uuid: string,
     getEntity: (uuid: string) => Entity | undefined):

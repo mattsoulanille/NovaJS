@@ -12,8 +12,6 @@ import { applySetPlanetTarget } from "../nova_plugin/planet_plugin.js";
 import { applyHail, HailAction } from "../nova_plugin/hail_plugin.js";
 import { AcceptedMission, applyAcceptMission } from "../nova_plugin/mission_accept.js";
 import { applyEscortAction, EscortAction } from "../nova_plugin/escort_action.js";
-import { loadShipGameData } from "../nova_plugin/entity_data_loader.js";
-import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 
 /**
  * Everything that changes the simulation from outside is an input,
@@ -50,10 +48,13 @@ export type SimulationInput =
     | { kind: 'acceptMission', accepted: AcceptedMission }
     /**
      * A hail-dialog ESCORT MANAGEMENT action against one of the player's
-     * own escorts: release, sell, or upgrade (escort_action.ts). Prices,
-     * provenance and eligibility are all recomputed sim-side; the record
-     * carries only which escort and (for an upgrade) which class the
-     * client staged, which the sim verifies against the escort's own.
+     * own escorts: release it, or queue/cancel an upgrade or a sale
+     * (escort_action.ts). Provenance and eligibility are recomputed
+     * sim-side; the record carries only which escort and (for an upgrade)
+     * which class the client resolved, which the sim verifies against the
+     * escort's own shïp UpgradeTo. No PRICE is involved either way — the
+     * two deals are deferred to the next shipyard, where the money moves
+     * (spaceport/escort_deals.ts).
      */
     | { kind: 'escortAction', action: EscortAction }
     | { kind: 'addEntity', uuid: string, entity: EncodedEntity }
@@ -114,21 +115,11 @@ export async function loadInputRecordsGameData(
     }
     for (const record of records) {
         for (const input of record.inputs) {
-            // An escort UPGRADE carries no entity, but it does name a ship
-            // CLASS the simulation must be able to build synchronously the
-            // tick the record lands (escort_action's replaceEscortShipClass
-            // reads it out of the cache). Stage its closure exactly as an
-            // inserted entity's is staged; applyEscortAction refuses the
-            // upgrade outright if it is still cold, so a peer that skipped
-            // this diverges by refusing rather than by deriving late.
-            if (input.kind === 'escortAction'
-                && input.action.kind === 'upgradeEscort') {
-                const gameData =
-                    world.resources.get(SimulationGameDataResource);
-                if (gameData) {
-                    await loadShipGameData(gameData, input.action.toShip);
-                }
-            }
+            // (An escortAction stages NOTHING. Queueing an upgrade records
+            // the target class's id on the escort's ownership marker and
+            // builds no ship; the class is loaded by the client that
+            // settles the deal at a shipyard — spaceport/escort_deals.ts.)
+            //
             // Every input that carries an ENTITY must stage it, or a peer
             // that did not originate the record derives against unloaded
             // game data and diverges. acceptMission carries a BATCH of

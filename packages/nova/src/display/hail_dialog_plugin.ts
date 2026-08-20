@@ -75,13 +75,21 @@ import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
-    EscortManagement, escortReadout, HailContext, HailDialog,
+    EscortManagement, EscortPressAction, escortReadout, HailContext,
+    HailDialog,
 } from '../spaceport/hail_dialog.js';
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
 } from '../spaceport/escort_fees.js';
-import { escortProvenance } from '../nova_plugin/player_escort.js';
+import {
+    escortProvenance, escortSaleQueued, pendingEscortUpgrade,
+} from '../nova_plugin/player_escort.js';
 import { EscortAction } from '../nova_plugin/escort_action.js';
+import { shipGateContext } from '../spaceport/ship_gate_context.js';
+import {
+    ShipyardContext, shipStockGatesPass,
+} from '../spaceport/shipyard_stock_rules.js';
+import { ShipData } from 'novadatainterface/ship_data';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { displayName } from '../nova_plugin/display_name.js';
@@ -113,10 +121,18 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  * hail/hail_captured_escort.png), not a fleet-command panel — commanding
  * escorts is the keyboard escort-controls' job. All three functions are live.
  * Their prices come off the escort's CURRENT ship class through
- * spaceport/escort_fees.ts — the same module nova_plugin/escort_action.ts
- * re-derives them from sim-side — and each press leaves as an
- * EscortActionEvent, so the escort dialog's effects ride the same
- * input-record path every other simulation effect does.
+ * spaceport/escort_fees.ts — the same module the settlement at the pad
+ * re-derives them from — and each press leaves as an EscortActionEvent, so
+ * the escort dialog's effects ride the same input-record path every other
+ * simulation effect does.
+ *
+ * Upgrade and Sell QUEUE their deal for the next shipyard rather than
+ * striking it here (nova_plugin/escort_action.ts). This module's job for
+ * them is the OFFER: what each would cost, whether the player can pay it
+ * today, whether the target hull is one they are allowed at all
+ * ({@link escortUpgradeOffer}), and which deals are already queued — all
+ * read off the same synced state the simulation writes, so the box a
+ * second peer draws is the same box.
  */
 
 const HailDialogResource = new Resource<HailDialog>('HailDialog');
@@ -340,6 +356,44 @@ export function shipIdentityBlock({ persName, shipClass, govtName, hostile }: {
     return lines.join('\n');
 }
 
+/**
+ * Whether the player may be OFFERED an upgrade to `toShip`, and its
+ * ShipData when they may.
+ *
+ * The class has to be one the player would be allowed to have. The original
+ * gates hulls on two things that have nothing to do with a shop's stock —
+ * the shïp's own Require flags and its Availability control-bit expression
+ * (EVN Bible ~:2588/~:2620) — and an escort upgrade hands the player one of
+ * those hulls, so the same two gates apply. This calls the SHIPYARD's own
+ * {@link shipStockGatesPass} with NO planet context, which is exactly:
+ *
+ *   Require    met by the player's Contribute (hull + outfits + ranks);
+ *   Availability   its control-bit test passes;
+ *   TechLevel  NOT applied — `ctx.planet` undefined means "no shipyard",
+ *              which stocks everything.
+ *
+ * Tech level and the BuyRandom day roll are deliberately left out: they say
+ * what a PARTICULAR shipyard has on the lot today, and an escort upgrade is
+ * arranged over a comm channel in deep space with no stellar involved. What
+ * is left is the two gates that are about the PLAYER rather than the shop.
+ *
+ * A class the data set cannot produce is refused for the same reason a
+ * shop skips an unloadable hull — better to offer nothing than to promise
+ * a ship that cannot be built.
+ */
+export async function escortUpgradeOffer(toShip: string | null,
+    ctx: ShipyardContext, gameData: SimulationGameDataInterface):
+    Promise<ShipData | undefined> {
+    if (toShip === null) {
+        return undefined;
+    }
+    const upgraded = await gameData.data.Ship.get(toShip).catch(() => undefined);
+    if (!upgraded) {
+        return undefined;
+    }
+    return shipStockGatesPass(upgraded, ctx) ? upgraded : undefined;
+}
+
 export async function computeContext(world: World,
     gameData: SimulationGameDataInterface,
     displayAssets?: DisplayAssetDataInterface):
@@ -474,9 +528,23 @@ export async function computeContext(world: World,
             const provenance = escortProvenance(shipTarget);
             const upgradeTo = shipData?.escortUpgradeShip ?? null;
             const upgradeCost = shipData ? escortUpgradeCost(shipData) : 0;
+            // Is the target class one this player may be offered at all?
+            // Its shïp Require / Availability gates are the player's
+            // business wherever the hull comes from — see
+            // escortUpgradeOffer, which reads them off the SAME context
+            // the shipyard and the bar's hire pool read.
+            const upgradeOffered = shipData
+                ? await escortUpgradeOffer(upgradeTo, shipGateContext(
+                    player.entity, {
+                        currentShipData:
+                            player.entity.components.get(ShipDataComponent),
+                        getOutfit: id => gameData.data.Outfit.getCached(id),
+                        getRank: id => gameData.data.Rank.getCached(id),
+                    }), gameData)
+                : undefined;
             const escort: EscortManagement = {
                 provenance,
-                upgrade: shipData && upgradeTo !== null
+                upgrade: upgradeOffered && upgradeTo !== null
                     ? {
                         toShip: upgradeTo, cost: upgradeCost,
                         canAfford: credits >= upgradeCost,
@@ -486,9 +554,19 @@ export async function computeContext(world: World,
                 // pilot's ship never was (the reference greys the button).
                 sell: shipData && provenance === 'captured'
                     ? { value: escortSellValue(shipData) } : undefined,
-                // ...and only a HIRED pilot draws a wage.
+                // ...and only a HIRED pilot draws a wage. Priced off the
+                // escort's CURRENT class even with an upgrade queued: it
+                // is still flying that hull until the deal settles at a
+                // shipyard, and it is paid for flying that hull.
                 dailyFee: shipData && provenance === 'hired'
                     ? escortDailyFee(shipData) : undefined,
+                // The deals already queued against this escort, read off
+                // the same synced marker the simulation writes them to
+                // (player_escort.ts) — so re-opening the channel, or
+                // opening it on another peer, shows the same box.
+                pendingUpgrade:
+                    pendingEscortUpgrade(shipTarget) !== undefined,
+                pendingSale: escortSaleQueued(shipTarget),
             };
             const label = provenance === 'captured'
                 ? 'Captured Escort:' : 'Hired Escort:';
@@ -775,35 +853,51 @@ export const HailDialogPlugin: Plugin = {
                         { action: { kind: 'bribe', target: currentTarget } });
                 }
             },
-            // The escort box's three management functions. Each becomes one
-            // EscortActionEvent naming the escort; an UPGRADE also names the
-            // class the box priced, so the bridge can stage that class's
-            // game data before the record is scheduled (an upgrade must be
-            // applied synchronously on every peer). The simulation checks
-            // the named class against the escort's own shïp UpgradeTo, so
-            // this can only ever confirm what the escort already says.
+            // The escort box's management functions. Each becomes one
+            // EscortActionEvent naming the escort; QUEUEING AN UPGRADE also
+            // names the class the box priced, which the simulation checks
+            // against the escort's own shïp UpgradeTo — so this can only
+            // ever confirm what the escort already says — and then STORES,
+            // so the settlement at the pad can tell a stale deal from a
+            // live one (spaceport/escort_deals.ts).
             //
-            // An action the OPEN CONTEXT does not offer is dropped here as
-            // well as in the sim: no upgrade without an upgrade offer, no
-            // sale without a sale offer. The dialog greys those buttons, so
-            // this is belt and braces against a keyboard route or a stale
-            // context — never the only guard.
-            escortAction: (action: 'upgrade' | 'sell' | 'release') => {
+            // The dialog has already decided queue-versus-cancel from its
+            // own live context (hail_dialog's escortPressAction); this end
+            // only re-checks that a QUEUE has something to queue, which is
+            // belt and braces against a keyboard route or a stale context
+            // — never the only guard. A CANCEL is never refused here for
+            // the same reason the sim never refuses one: un-queueing must
+            // always work.
+            escortAction: (action: EscortPressAction) => {
                 const target = currentTarget;
                 const escort = currentEscort;
                 if (!target || !escort) {
                     return;
                 }
                 let record: EscortAction | undefined;
-                if (action === 'release') {
-                    record = { kind: 'releaseEscort', target };
-                } else if (action === 'sell' && escort.sell) {
-                    record = { kind: 'sellEscort', target };
-                } else if (action === 'upgrade' && escort.upgrade) {
-                    record = {
-                        kind: 'upgradeEscort', target,
-                        toShip: escort.upgrade.toShip,
-                    };
+                switch (action) {
+                    case 'release':
+                        record = { kind: 'releaseEscort', target };
+                        break;
+                    case 'cancelUpgrade':
+                        record = { kind: 'cancelUpgrade', target };
+                        break;
+                    case 'cancelSale':
+                        record = { kind: 'cancelSale', target };
+                        break;
+                    case 'queueSale':
+                        if (escort.sell) {
+                            record = { kind: 'queueSale', target };
+                        }
+                        break;
+                    case 'queueUpgrade':
+                        if (escort.upgrade) {
+                            record = {
+                                kind: 'queueUpgrade', target,
+                                toShip: escort.upgrade.toShip,
+                            };
+                        }
+                        break;
                 }
                 if (record) {
                     world.emit(EscortActionEvent, { action: record });
