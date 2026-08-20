@@ -27,9 +27,16 @@ import {
     NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE,
 } from '../nova_plugin/hail.js';
 import {
-    HailContext, HailPage, HailPress, hailPress,
+    CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress,
+    hailPress, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
 } from '../spaceport/hail_dialog.js';
-import { commButtonSlots } from '../spaceport/hail_layout.js';
+import {
+    commButtonSlots, escortButtonSlots,
+} from '../spaceport/hail_layout.js';
+import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
+import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
 import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
 import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
 import {
@@ -145,6 +152,190 @@ describe('computeContext: bay fighters vs hired escorts (SourceComponent)',
                 expect(result?.context.escort).toBeFalsy();
             });
     });
+
+/**
+ * ============================================================================
+ * The escort box's OFFER — what the dialog puts in front of the player
+ * ============================================================================
+ *
+ * The prices come off the escort's CURRENT class (escort_fees.ts), the
+ * queued deals off its synced ownership marker, and the UPGRADE OFFER off
+ * the target class's own shïp gates. Those gates are the part worth pinning:
+ * an escort upgrade hands the player a hull, so the hull's Require flags
+ * and its Availability control-bit test apply exactly as they would in a
+ * shipyard — while the SHOP-side gates (tech level, BuyRandom) do not,
+ * because the deal is struck over a comm channel with no stellar involved.
+ */
+describe('computeContext: the escort management offer', () => {
+    const UPGRADE = 'nova:200';
+
+    /** A player with a hired escort of a class that upgrades to UPGRADE. */
+    function escortWorld(configure: (target: Entity) => void = () => { },
+        upgradeOverrides: Partial<ReturnType<typeof getDefaultShipData>> = {}) {
+        const { world, gameData } = makeWorld(target => {
+            target.components.set(FormationComponent,
+                { leader: PLAYER, slot: 0 });
+            configure(target);
+        });
+        gameData.data.Ship.map.set('nova:128', shipData({
+            id: 'nova:128', name: 'Target Class', pict: 'nova:3001',
+            price: 150_000, escortUpgradeShip: UPGRADE,
+            escortUpgradeCost: 50_000,
+        }));
+        world.entities.get(TARGET)!.components.set(ShipDataComponent,
+            gameData.data.Ship.map.get('nova:128')!);
+        gameData.data.Ship.map.set(UPGRADE, shipData({
+            id: UPGRADE, name: 'Better Class', price: 400_000,
+            ...upgradeOverrides,
+        }));
+        world.entities.get(PLAYER)!.components.set(CreditsComponent,
+            { credits: 1_000_000 });
+        return { world, gameData };
+    }
+
+    it('offers the upgrade at its EscUpgrdCost when the target class is '
+        + 'ungated', async () => {
+            const { world, gameData } = escortWorld();
+            const escort = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(escort?.upgrade)
+                .toEqual({ toShip: UPGRADE, cost: 50_000, canAfford: true });
+            expect(escort?.pendingUpgrade).toBeFalse();
+            expect(escort?.pendingSale).toBeFalse();
+        });
+
+    it('withdraws the offer — "This ship class cannot be upgraded." — when '
+        + 'the player lacks the target hull\'s REQUIRE bits, and brings it '
+        + 'back when they are granted', async () => {
+            // shïp Require (Bible ~:2620): "If for each 1 bit in the
+            // Require fields there is a matching 1 bit in one or more of
+            // the Contribute fields, the ship can be purchased." The escort
+            // upgrade hands the player that hull, so the same rule holds.
+            const { world, gameData } =
+                escortWorld(() => { }, { require: '0x4' });
+            const player = world.entities.get(PLAYER)!;
+            const before = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(before?.upgrade).toBeUndefined();
+            expect(before && escortReadout(before).split('\n')[0])
+                .toBe(CANNOT_UPGRADE_TEXT);
+
+            // Grant it — through an OUTFIT's Contribute, the way the
+            // shipyard's own playerContributeOf reads it — and the price
+            // appears, with a live button.
+            gameData.data.Outfit.map.set('nova:300',
+                { ...getDefaultOutfitData(), id: 'nova:300',
+                    contribute: '0x4' });
+            await gameData.data.Outfit.get('nova:300');
+            player.components.set(OutfitsStateComponent,
+                new Map([['nova:300', { count: 1 }]]) as never);
+
+            const after = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(after?.upgrade)
+                .toEqual({ toShip: UPGRADE, cost: 50_000, canAfford: true });
+            expect(escortButtonSlots(after!)[0])
+                .toEqual({ slot: 'upgradeEscort', enabled: true });
+        });
+
+    it('withdraws the offer when the target hull\'s AVAILABILITY test '
+        + 'fails, and brings it back when the bit is set', async () => {
+            const { world, gameData } =
+                escortWorld(() => { }, { availability: 'b900' });
+            const player = world.entities.get(PLAYER)!;
+            expect((await computeContext(world, gameData))
+                ?.context.escort?.upgrade).toBeUndefined();
+
+            player.components.set(ControlBitsComponent,
+                new Set([900]) as never);
+            expect((await computeContext(world, gameData))
+                ?.context.escort?.upgrade?.toShip).toBe(UPGRADE);
+        });
+
+    it('does NOT apply the shop-side gates: a target class no stellar '
+        + 'stocks is still upgradeable', async () => {
+            // Tech level and BuyRandom say what a particular shipyard has
+            // on the lot; an escort upgrade is arranged in deep space.
+            const { world, gameData } = escortWorld(() => { },
+                { techLevel: 999, buyRandom: 0 });
+            expect((await computeContext(world, gameData))
+                ?.context.escort?.upgrade?.toShip).toBe(UPGRADE);
+        });
+
+    it('says the class cannot be upgraded when it has no UpgradeTo at all',
+        async () => {
+            const { world, gameData } = escortWorld();
+            gameData.data.Ship.map.get('nova:128')!.escortUpgradeShip = null;
+            const escort = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(escort?.upgrade).toBeUndefined();
+            expect(escort && escortReadout(escort).split('\n')[0])
+                .toBe(CANNOT_UPGRADE_TEXT);
+        });
+
+    it('greys — but still prices — an upgrade the player cannot afford',
+        async () => {
+            const { world, gameData } = escortWorld();
+            world.entities.get(PLAYER)!.components
+                .set(CreditsComponent, { credits: 10 });
+            const escort = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(escort?.upgrade?.canAfford).toBeFalse();
+            expect(escortReadout(escort!).split('\n')[0])
+                .toBe('Upgrade Cost: 50,000 credits');
+            expect(escortButtonSlots(escort!)[0])
+                .toEqual({ slot: 'upgradeEscort', enabled: false });
+        });
+
+    it('reports the deals already QUEUED against the escort, so re-opening '
+        + 'the channel shows the same box', async () => {
+            const { world, gameData } = escortWorld(target => {
+                target.components.set(PlayerEscortComponent, {
+                    player: PLAYER, parent: PLAYER, provenance: 'captured',
+                    pendingUpgrade: UPGRADE,
+                });
+            });
+            const escort = (await computeContext(world, gameData))
+                ?.context.escort;
+            expect(escort?.pendingUpgrade).toBeTrue();
+            expect(escort?.pendingSale).toBeFalse();
+            expect(escortReadout(escort!).split('\n')[0])
+                .toBe(UPGRADE_QUEUED_TEXT);
+            expect(escortButtonSlots(escort!)[0])
+                .toEqual({ slot: 'cancelUpgrade', enabled: true });
+        });
+
+    it('reports a queued SALE the same way', async () => {
+        const { world, gameData } = escortWorld(target => {
+            target.components.set(PlayerEscortComponent, {
+                player: PLAYER, parent: PLAYER, provenance: 'captured',
+                pendingSale: true,
+            });
+        });
+        const escort = (await computeContext(world, gameData))
+            ?.context.escort;
+        expect(escort?.pendingSale).toBeTrue();
+        expect(escortReadout(escort!).split('\n')[1]).toBe(SALE_QUEUED_TEXT);
+        expect(escortButtonSlots(escort!)[1])
+            .toEqual({ slot: 'cancelSale', enabled: true });
+    });
+
+    it('keeps the WAGE on the escort\'s CURRENT class while an upgrade is '
+        + 'queued', async () => {
+            // The escort is still flying the old hull until the deal
+            // settles at a shipyard, so it is still paid for the old hull.
+            const { world, gameData } = escortWorld(target => {
+                target.components.set(PlayerEscortComponent, {
+                    player: PLAYER, parent: PLAYER, provenance: 'hired',
+                    pendingUpgrade: UPGRADE,
+                });
+            });
+            const escort = (await computeContext(world, gameData))
+                ?.context.escort;
+            // 1% of the CURRENT 150,000 cr hull, not the 400,000 cr one.
+            expect(escort?.dailyFee).toBe(1_500);
+        });
+});
 
 /**
  * mïsn ShipNameID: "Tells Nova how to name the special ships". The name

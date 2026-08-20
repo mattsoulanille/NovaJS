@@ -233,6 +233,52 @@ describe('carried escort round trip', () => {
             expect(restored!.components.has(ShipPhysicsComponent)).toBeTrue();
         });
 
+    it('carries the DURABLE marker fields through the re-attachment — the '
+        + 'provenance and any queued deal', async () => {
+            // The re-insertion REBUILDS PlayerEscortComponent (fresh uuid,
+            // fresh leader), and it used to write `{ player, parent }` flat
+            // — which silently turned every captured prize into a hire the
+            // first time it landed with its player, and would cancel any
+            // deal a landing carried. `detached` is still dropped: this IS
+            // the re-attachment it was waiting for.
+            const { makeEscort } = await makeFixture();
+            const escort = await makeEscort(ship => {
+                ship.components.set(PlayerEscortComponent, {
+                    player: PLAYER, parent: PLAYER, detached: true,
+                    provenance: 'captured', pendingUpgrade: 'test:better',
+                });
+            });
+            const leader = new Entity();
+            leader.components.set(MovementStateComponent, movement(0, 0));
+            prepareCarriedEscort(
+                { player: PLAYER, uuid: 'escort', entity: escort },
+                PLAYER, leader, 0);
+            expect(escort.components.get(PlayerEscortComponent)).toEqual({
+                player: PLAYER, parent: PLAYER, provenance: 'captured',
+                pendingUpgrade: 'test:better',
+            });
+        });
+
+    it('carries a queued SALE through a landing at a stellar with no '
+        + 'shipyard', async () => {
+            // Nothing settles it there, so it must still be queued when the
+            // escort lifts off again.
+            const { makeEscort } = await makeFixture();
+            const escort = await makeEscort(ship => {
+                ship.components.set(PlayerEscortComponent, {
+                    player: PLAYER, parent: PLAYER, provenance: 'captured',
+                    pendingSale: true,
+                });
+            });
+            const leader = new Entity();
+            leader.components.set(MovementStateComponent, movement(0, 0));
+            prepareCarriedEscort(
+                { player: PLAYER, uuid: 'escort', entity: escort },
+                PLAYER, leader, 0);
+            expect(escort.components.get(PlayerEscortComponent)?.pendingSale)
+                .toBeTrue();
+        });
+
     it('keeps a carrier escort and its fighters together in a batch',
         async () => {
             const { makeEscort } = await makeFixture();

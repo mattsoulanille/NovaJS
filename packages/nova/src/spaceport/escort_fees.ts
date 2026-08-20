@@ -20,13 +20,20 @@ import { modifiedPrice } from './price_mod.js';
  * the player would be shown one number and charged another.
  *
  * "CURRENT ship class" is the load-bearing part. Upgrading an escort
- * replaces its class in place (nova_plugin/escort_action.ts), and because
- * every one of these is a pure function of the class the escort is flying
- * right now, an upgrade automatically raises the wage, changes what a
- * further upgrade costs, and changes what the hull would sell for. Nothing
- * has to remember the price the escort was hired at — and the payroll
- * mirror (player_escort.ts's EscortPayrollComponent) stores ship-class ids
- * rather than a precomputed total for exactly the same reason.
+ * replaces its class in place (escort_deals.ts, at the shipyard), and
+ * because every one of these is a pure function of the class the escort is
+ * flying right now, an upgrade automatically raises the wage, changes what
+ * a further upgrade costs, and changes what the hull would sell for.
+ * Nothing has to remember the price the escort was hired at — and the
+ * payroll mirror (player_escort.ts's EscortPayrollComponent) stores
+ * ship-class ids rather than a precomputed total for exactly the same
+ * reason.
+ *
+ * It is also what makes the DEFERRAL cost nothing to model. An escort with
+ * an upgrade queued is still flying its old hull, so it still draws its old
+ * hull's wage and still quotes its old hull's upgrade price, with no
+ * "pending" arithmetic anywhere: the day the deal settles, the class moves
+ * and every figure moves with it.
  *
  * ---------------------------------------------------------------------------
  * THE BIBLE'S RULES, AND THE TWO ASSUMPTIONS
@@ -86,14 +93,21 @@ import { modifiedPrice } from './price_mod.js';
  *    deep space where no stellar's rules apply; bending it by whatever rock
  *    the player last docked at would make the same escort cost different
  *    amounts on different days with nothing about the escort having changed.
- *  - UPGRADING and SELLING are struck over a comm channel in deep space.
- *    There is no planet and no owning government, so there is no modifier to
- *    apply: they take the LIST price.
+ *  - UPGRADING and SELLING are AGREED over a comm channel in deep space and
+ *    SETTLED at the next shipyard (escort_deals.ts), so there are two
+ *    stellars one could argue for and neither was involved when the price
+ *    was quoted. They take the LIST price. The deciding reason is that the
+ *    comm box shows the player a figure ("Upgrade Cost: 50,000 credits")
+ *    before they commit, and bending it afterwards by whichever rock they
+ *    happened to put down on would charge them something other than what
+ *    they agreed to. OPEN: if the original is ever shown to apply the
+ *    settling stellar's PriceMod, the fix is to pass one here and to quote
+ *    the same number in the dialog.
  *
  * Passing a modifier is still possible (every function takes the same
- * optional argument) so that a future "upgrade at the shipyard" flow, or a
- * different ruling on the wage, is one argument away rather than a rewrite —
- * but the default, and what the comm dialog uses, is unmodified.
+ * optional argument) so that a different ruling on either is one argument
+ * away rather than a rewrite — but the default, and what the comm dialog
+ * and the settlement both use, is unmodified.
  *
  * Every function here is pure, total, and free of clocks and randomness,
  * so the display dialog quotes exactly what the simulation charges.

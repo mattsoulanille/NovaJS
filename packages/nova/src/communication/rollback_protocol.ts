@@ -36,7 +36,12 @@ export const STATE_HASH_INTERVAL = 60;
  * rely on the handshake, not on this, to keep builds from mixing.
  */
 // 3: escortAction input (release / sell / upgrade an escort).
-export const PROTOCOL_VERSION = 3;
+// 4: escortAction's sell/upgrade became DEFERRED — the immediate
+//    'sellEscort' / 'upgradeEscort' kinds were replaced by the queue
+//    toggles 'queueSale' / 'cancelSale' / 'queueUpgrade' / 'cancelUpgrade'
+//    (nova_plugin/escort_action.ts), and PlayerEscort gained the
+//    pendingUpgrade / pendingSale fields the toggles write.
+export const PROTOCOL_VERSION = 4;
 
 /**
  * One notable event in a peer's rollback machinery, for the black-box

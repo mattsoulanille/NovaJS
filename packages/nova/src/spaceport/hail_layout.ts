@@ -238,9 +238,15 @@ export function commButtonSlots(variant: 'ship' | 'planet' | 'escort',
         : ['greetings', 'close'];
 }
 
-/** The buttons the ESCORT management column holds, top to bottom. */
+/**
+ * The buttons the ESCORT management column holds, top to bottom. The first
+ * two rows are TOGGLES: each becomes its "Cancel ..." twin while that deal
+ * is queued (STR# 150 51/52 and 53/54).
+ */
 export type EscortButton =
-    'upgradeEscort' | 'sellEscort' | 'release' | 'close';
+    'upgradeEscort' | 'cancelUpgrade'
+    | 'sellEscort' | 'cancelSale'
+    | 'release' | 'close';
 
 /** One row of the escort column: which button, and whether it is live. */
 export interface EscortButtonSlot {
@@ -251,13 +257,19 @@ export interface EscortButtonSlot {
 /**
  * The ESCORT comm's button column (PICT 8513).
  *
- * FOUR FIXED ROWS in every reference — Upgrade Escort / Sell Escort /
- * Release / Close Channel — and the difference between a hired and a
- * captured escort is which of them are GREYED, never which are drawn:
+ * FOUR FIXED ROWS in every reference — an upgrade row, a sale row, Release
+ * and Close Channel — and the difference between a hired and a captured
+ * escort is which of them are GREYED, never which are drawn:
  *
- *   hail/hail_escort.png          a hired Terrapin: Sell Escort greyed,
- *                                 Upgrade Escort and Release live.
- *   hail/hail_captured_escort.png a captured Pirate Viper: all four live.
+ *   hail/hail_escort.png           a hired Terrapin: Sell Escort greyed,
+ *                                  Upgrade Escort and Release live.
+ *   hail/hail_captured_escort.png  a captured Pirate Viper: all four live.
+ *   hail/hail_escort_upgrading.png the same hired Terrapin with an upgrade
+ *                                  QUEUED: row 1 now reads "Cancel
+ *                                  Upgrade", everything else unchanged.
+ *   hail/sell_captured_escort.png  the Viper with a sale queued: row 2
+ *                                  reads "Cancel Sale" — and row 1 is
+ *                                  still a LIVE "Upgrade Escort".
  *
  * Greying rather than omitting is the same convention the planet column
  * already uses for Demand Tribute, and here it is the original's own
@@ -267,26 +279,44 @@ export interface EscortButtonSlot {
  * The rules, in one place so the buttons and the simulation's
  * applyEscortAction cannot disagree:
  *
- *  - UPGRADE is offered when the escort's class has a shïp UpgradeTo at all
- *    AND the player can afford its EscUpgrdCost. An unaffordable upgrade is
- *    greyed rather than hidden, so the price in the readout above still has
- *    a button to belong to.
- *  - SELL is offered only for a CAPTURED escort. A hired pilot's ship was
- *    never the player's to sell (player_escort.ts's provenance).
+ *  - The UPGRADE row is "Cancel Upgrade", always live, while an upgrade is
+ *    queued. Un-queueing must never be refusable — a player who has since
+ *    gone broke would otherwise be stuck with a deal they cannot cancel.
+ *    Otherwise it is "Upgrade Escort", offered when the class HAS an
+ *    upgrade on offer (a shïp UpgradeTo whose class the player is allowed
+ *    — see hail_dialog_plugin's escortUpgradeOffer) AND the player can
+ *    afford its EscUpgrdCost today. An unaffordable upgrade is greyed
+ *    rather than hidden, so the price in the readout above still has a
+ *    button to belong to; affordability is re-checked when the deal
+ *    actually settles at a shipyard.
+ *  - The SALE row is "Cancel Sale" (always live) while a sale is queued,
+ *    and otherwise "Sell Escort", offered only for a CAPTURED escort. A
+ *    hired pilot's ship was never the player's to sell (player_escort.ts's
+ *    provenance).
+ *  - MUTUAL EXCLUSION is NOT enforced by greying: the reference above
+ *    keeps Upgrade Escort live beside a queued sale. Pressing one CANCELS
+ *    the other (applyEscortAction), which is what the live button means.
  *  - RELEASE and CLOSE CHANNEL are always live: letting a ship go costs
- *    nothing and needs nothing.
+ *    nothing and needs nothing, queued deal or not — a released escort
+ *    takes its unsettled deal with it, since it is no longer the player's.
  */
 export function escortButtonSlots(escort: {
     provenance: 'hired' | 'captured',
     upgrade?: { canAfford: boolean },
     sell?: unknown,
+    pendingUpgrade?: boolean,
+    pendingSale?: boolean,
 }): EscortButtonSlot[] {
     return [
-        {
-            slot: 'upgradeEscort',
-            enabled: !!escort.upgrade && escort.upgrade.canAfford,
-        },
-        { slot: 'sellEscort', enabled: !!escort.sell },
+        escort.pendingUpgrade
+            ? { slot: 'cancelUpgrade', enabled: true }
+            : {
+                slot: 'upgradeEscort',
+                enabled: !!escort.upgrade && escort.upgrade.canAfford,
+            },
+        escort.pendingSale
+            ? { slot: 'cancelSale', enabled: true }
+            : { slot: 'sellEscort', enabled: !!escort.sell },
         { slot: 'release', enabled: true },
         { slot: 'close', enabled: true },
     ];

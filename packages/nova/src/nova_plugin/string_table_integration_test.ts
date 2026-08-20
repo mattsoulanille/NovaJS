@@ -18,6 +18,9 @@ import {
     NO_NEED_RESPONSE_COUNT, NO_NEED_RESPONSE_FALLBACK,
     NO_NEED_RESPONSE_FIRST_INDEX, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX,
 } from './hail.js';
+import {
+    CANNOT_UPGRADE_TEXT, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
+} from '../spaceport/hail_dialog.js';
 
 // These assertions run against the real Nova game data (Nova_Data). They
 // pin the STR# and dësc resources the title screen and the bar read their
@@ -299,6 +302,72 @@ describe('StringTable against real Nova data', () => {
             expect(table.strings[1])
                 .toBe('Greetings from the government of the Federation.');
             expect(table.strings).not.toContain('What is it?');
+        });
+
+    it('pins the ESCORT BOX\'s readout lines (STR# 2002, 291-296)',
+        async () => {
+            // The escort management box's upper well (PICT 8513) is built
+            // out of six consecutive misc strings, and the table keeps them
+            // in exactly the row order the references draw them in:
+            // the upgrade slot (a price, or one of the two status lines),
+            // then the sale slot, then the wage.
+            //
+            // The two "Will be ..." lines are what replace a price when the
+            // player queues that deal — hail/hail_escort_upgrading.png and
+            // hail/sell_captured_escort.png — and 293 is what the upgrade
+            // slot says for a class that has nowhere to go. All three are
+            // reproduced VERBATIM by spaceport/hail_dialog.ts; this is the
+            // spec that keeps them in step with the data.
+            const gameData = await getIntegrationGameData();
+            const table = await gameData.data.StringTable.get(
+                MISC_STRING_TABLE);
+            expect(table.strings.slice(291, 297)).toEqual([
+                'Will be upgraded at next shipyard',
+                'Upgrade Cost:',
+                'This ship class cannot be upgraded.',
+                'Will be sold off at next shipyard',
+                'Sell Price:',
+                'Pay:',
+            ]);
+            expect(table.strings[291]).toBe(UPGRADE_QUEUED_TEXT);
+            expect(table.strings[293]).toBe(CANNOT_UPGRADE_TEXT);
+            expect(table.strings[294]).toBe(SALE_QUEUED_TEXT);
+        });
+
+    it('pins the escort box\'s BUTTON CAPTIONS, including the two Cancel '
+        + 'twins (STR# 150, 51-54)', async () => {
+            // The toggle is the original's: 51/52 are the same button
+            // before and after the deal is queued, and 53/54 likewise.
+            const gameData = await getIntegrationGameData();
+            const table = await gameData.data.StringTable.get('nova:150');
+            expect(table.name).toBe('button labels');
+            expect(table.strings.slice(51, 55)).toEqual([
+                'Upgrade Escort',
+                'Cancel Upgrade',
+                'Sell Escort',
+                'Cancel Sale',
+            ]);
+            // ...and the other two rows of the column.
+            expect(table.strings[31]).toBe('Release');
+            expect(table.strings[20]).toBe('Close Channel');
+        });
+
+    it('keeps the DEFERRED settlement\'s own messages in the table, which '
+        + 'is where the sums are named (STR# 2002, 297-300)', async () => {
+            // The evidence that the money moves at the SHIPYARD rather than
+            // over the comm channel: the original's report of a settled
+            // deal is assembled from these, and it is printed when the
+            // player lands, not when they press the button. See
+            // spaceport/escort_deals.ts.
+            const gameData = await getIntegrationGameData();
+            const table = await gameData.data.StringTable.get(
+                MISC_STRING_TABLE);
+            expect(table.strings.slice(297, 301)).toEqual([
+                'escort was',
+                'escorts were',
+                'sold for a profit of',
+                'upgraded at a cost of',
+            ]);
         });
 
     it('exposes string tables in the id list', async () => {

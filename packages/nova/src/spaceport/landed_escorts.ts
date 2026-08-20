@@ -20,7 +20,7 @@ import {
     FormationComponent, formationSlotPosition, NpcComponent,
 } from '../nova_plugin/npc_ai_plugin.js';
 import {
-    EscortLandingComponent, PlayerEscortComponent,
+    durableEscortFields, EscortLandingComponent, PlayerEscortComponent,
 } from '../nova_plugin/player_escort.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
 
@@ -444,8 +444,20 @@ function placeCarriedEscort(escort: CarriedEscort, player: string,
     // The firing group is the flock ROOT, so it stays the player even for
     // a fighter that re-attaches to its carrier.
     escort.entity.components.set(FiringGroupComponent, { group: player });
-    escort.entity.components.set(PlayerEscortComponent,
-        { player, parent: attachTo });
+    // The marker is REBUILT (the escort comes back under a fresh uuid, on a
+    // fresh leader), but the DURABLE facts have to ride through it: how the
+    // escort was acquired, and any deal the player queued against it.
+    // durableEscortFields is the whitelist every re-stamp site shares —
+    // before it, this wrote `{ player, parent }` flat and a captured prize
+    // silently became a hire the first time it landed with its player.
+    //
+    // `detached` is deliberately dropped rather than carried: this IS the
+    // re-attachment the flag was waiting for.
+    escort.entity.components.set(PlayerEscortComponent, {
+        player, parent: attachTo,
+        ...durableEscortFields(
+            escort.entity.components.get(PlayerEscortComponent)),
+    });
     escort.entity.components.delete(EscortLandingComponent);
     // Belt and braces against a warp-out sequence riding back into the
     // world with the escort. The sweep that took it already dropped the

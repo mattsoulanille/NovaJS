@@ -209,6 +209,43 @@ describe('player escort ownership', () => {
         expect(playerEscortLink('escort', uuid => world.entities.get(uuid)))
             .toBeUndefined();
     });
+
+    it('carries the DURABLE fields through a re-parenting: provenance and '
+        + 'the queued deals', async () => {
+            // MarkPlayerEscortsSystem re-stamps the marker whenever the
+            // live chain moves — a wing re-attaching to its carrier, a
+            // fighter promoted to a direct escort. The facts that are about
+            // the PLAYER'S RELATIONSHIP with the ship rather than about the
+            // chain have to survive that, or ordering an escort into a
+            // different formation would silently cancel the upgrade the
+            // player queued at the last hail.
+            const { world, addEscort } = await makeWorld();
+            const escort = await addEscort('escort');
+            world.step();
+            escort.components.set(PlayerEscortComponent, {
+                // A deliberately WRONG parent, so the system must re-stamp.
+                player: PLAYER, parent: 'stale', provenance: 'captured',
+                pendingUpgrade: 'test:better', pendingSale: false,
+            });
+            world.step();
+            const marker = escort.components.get(PlayerEscortComponent);
+            expect(marker?.parent).toBe(PLAYER);
+            expect(marker?.provenance).toBe('captured');
+            expect(marker?.pendingUpgrade).toBe('test:better');
+        });
+
+    it('carries a queued SALE through a re-parenting too', async () => {
+        const { world, addEscort } = await makeWorld();
+        const escort = await addEscort('escort');
+        world.step();
+        escort.components.set(PlayerEscortComponent, {
+            player: PLAYER, parent: 'stale', provenance: 'captured',
+            pendingSale: true,
+        });
+        world.step();
+        expect(escort.components.get(PlayerEscortComponent)?.pendingSale)
+            .toBeTrue();
+    });
 });
 
 describe('escort re-attachment', () => {

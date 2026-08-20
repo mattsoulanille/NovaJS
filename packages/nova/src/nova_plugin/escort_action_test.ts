@@ -14,6 +14,7 @@ import { DisabledComponent } from './disabled_component.js';
 import { completeEntity } from './entity_data_loader.js';
 import {
     applyEscortAction, escortUpgradeTarget, manageableEscort, releaseEscort,
+    replaceEscortShipClass,
 } from './escort_action.js';
 import { CargoComponent, cargoUsed } from './cargo_plugin.js';
 import { EscortCommandComponent } from './escort_command.js';
@@ -26,7 +27,8 @@ import { makeSystem, SIMULATION_STEP_MS } from './make_system.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import {
-    EscortLandingComponent, PlayerEscortComponent,
+    escortSaleQueued, EscortLandingComponent, pendingEscortUpgrade,
+    PlayerEscortComponent,
 } from './player_escort.js';
 import { CreditsComponent } from './player_state_plugin.js';
 import { ControlledByComponent } from './ship_control.js';
@@ -47,14 +49,20 @@ import { WeaponsStateComponent } from './weapons_state.js';
  * The three functions of hail/hail_escort.png's box, as
  * nova_plugin/escort_action.ts applies them on every peer:
  *
- *   RELEASE   the escort stops being the player's in every way that could
- *             re-recruit it, sheds its government, loses any hold that
- *             would pin it here, and LEAVES the system under its own power.
- *   SELL      captured hulls only; pays shïp EscSellValue and then departs
- *             exactly like a release.
- *   UPGRADE   swaps the escort's class for its shïp UpgradeTo class for
- *             EscUpgrdCost, in place — same uuid, same formation slot, same
- *             ownership — and everything derived from the class is rebuilt.
+ *   RELEASE   IMMEDIATE. The escort stops being the player's in every way
+ *             that could re-recruit it, sheds its government, loses any
+ *             hold that would pin it here, and LEAVES the system under its
+ *             own power.
+ *   SELL      DEFERRED. Captured hulls only; queueing sets a flag and
+ *             nothing else, and the money moves at the next shipyard
+ *             (spaceport/escort_deals.ts, and escort_deals_test.ts).
+ *   UPGRADE   DEFERRED. Queueing records the TARGET CLASS on the escort;
+ *             the refit itself is replaceEscortShipClass, run by the same
+ *             settlement — and exercised directly here, since it is this
+ *             module's function.
+ *
+ * Both deals are TOGGLES with no price attached: pressing again un-queues,
+ * and queueing either cancels the other.
  *
  * Everything is re-derived from synced state inside applyEscortAction, so
  * these specs drive it the way an input record does (peer id + intent) and
@@ -333,45 +341,68 @@ describe('releasing an escort', () => {
     });
 });
 
-describe('selling a captured escort', () => {
+describe('queueing a sale of a captured escort', () => {
     let fixture: Awaited<ReturnType<typeof makeWorld>>;
     beforeEach(async () => {
         fixture = await makeWorld();
     });
 
-    function sell(target = ESCORT, peer: string | undefined = PEER) {
-        applyEscortAction(fixture.world, peer,
-            { kind: 'sellEscort', target });
+    function queueSale(target = ESCORT, peer: string | undefined = PEER) {
+        applyEscortAction(fixture.world, peer, { kind: 'queueSale', target });
+    }
+    function cancelSale(target = ESCORT, peer: string | undefined = PEER) {
+        applyEscortAction(fixture.world, peer, { kind: 'cancelSale', target });
     }
 
-    it('pays the Bible\'s 10%-of-cost default and lets the hull go',
+    it('only FLAGS the escort — nothing is paid and it does not leave',
         async () => {
-            // SHIP_ID: price 150,000, EscSellValue 0 -> 15,000.
+            // The original defers the sale to the next shipyard
+            // (hail/sell_captured_escort.png: "Will be sold off at next
+            // shipyard"). Nothing moves over the comm channel.
             const escort = await fixture.addEscort(ESCORT, 'captured');
             const before = creditsOf(fixture.world);
-            sell();
-            expect(creditsOf(fixture.world)).toBe(before + 15_000);
-            expect(escort.components.has(PlayerEscortComponent)).toBeFalse();
-            expect(escort.components.get(NpcComponent)?.mode).toBe('depart');
+            queueSale();
+            expect(creditsOf(fixture.world)).toBe(before);
+            expect(escortSaleQueued(escort)).toBeTrue();
+            // Still the player's, still in formation, still flying.
+            expect(escort.components.get(PlayerEscortComponent)?.player)
+                .toBe(PLAYER);
+            expect(escort.components.has(FormationComponent)).toBeTrue();
+            expect(escort.components.get(NpcComponent)?.mode).not.toBe(
+                'depart');
         });
 
-    it('pays the class\'s own EscSellValue when it has one', async () => {
-        fixture.gameData.data.Ship.map.get(SHIP_ID)!.escortSellValue = 25_000;
-        const escort = await fixture.addEscort(ESCORT, 'captured');
-        const before = creditsOf(fixture.world);
-        sell();
-        expect(creditsOf(fixture.world)).toBe(before + 25_000);
-        expect(escort.components.has(PlayerEscortComponent)).toBeFalse();
-    });
-
-    it('REFUSES to sell a HIRED escort — the player never owned the hull',
+    it('cancels again, as many times as the player likes, for free',
         async () => {
-            const escort = await fixture.addEscort(ESCORT, 'hired');
+            const escort = await fixture.addEscort(ESCORT, 'captured');
             const before = creditsOf(fixture.world);
-            sell();
+            for (let i = 0; i < 3; i++) {
+                queueSale();
+                expect(escortSaleQueued(escort)).toBeTrue();
+                cancelSale();
+                expect(escortSaleQueued(escort)).toBeFalse();
+            }
             expect(creditsOf(fixture.world)).toBe(before);
-            expect(escort.components.get(PlayerEscortComponent)?.provenance)
-                .toBe('hired');
+        });
+
+    it('leaves the marker\'s ENCODED SHAPE unchanged after a cancel, so a '
+        + 'peer that never queued anything hashes the same', async () => {
+            const escort = await fixture.addEscort(ESCORT, 'captured');
+            const before = { ...escort.components
+                .get(PlayerEscortComponent)! };
+            queueSale();
+            cancelSale();
+            const after = escort.components.get(PlayerEscortComponent)!;
+            expect(after).toEqual(before);
+            expect(Object.keys(after).sort())
+                .toEqual(Object.keys(before).sort());
+        });
+
+    it('REFUSES to queue a sale of a HIRED escort — the player never owned '
+        + 'the hull', async () => {
+            const escort = await fixture.addEscort(ESCORT, 'hired');
+            queueSale();
+            expect(escortSaleQueued(escort)).toBeFalse();
         });
 
     it('refuses an escort with NO recorded provenance (an old save), '
@@ -379,170 +410,104 @@ describe('selling a captured escort', () => {
             const escort = await fixture.addEscort(ESCORT, 'captured');
             escort.components.set(PlayerEscortComponent,
                 { player: PLAYER, parent: PLAYER });
-            const before = creditsOf(fixture.world);
-            sell();
-            expect(creditsOf(fixture.world)).toBe(before);
-            expect(escort.components.has(PlayerEscortComponent)).toBeTrue();
+            queueSale();
+            expect(escortSaleQueued(escort)).toBeFalse();
         });
 
     it('refuses a record from a peer who does not own the escort',
         async () => {
             const escort = await fixture.addEscort(ESCORT, 'captured');
-            const before = creditsOf(fixture.world);
-            sell(ESCORT, OTHER_PEER);
-            expect(creditsOf(fixture.world)).toBe(before);
-            expect(escort.components.has(PlayerEscortComponent)).toBeTrue();
+            queueSale(ESCORT, OTHER_PEER);
+            expect(escortSaleQueued(escort)).toBeFalse();
         });
 });
 
-describe('upgrading an escort', () => {
+describe('queueing an escort upgrade', () => {
     let fixture: Awaited<ReturnType<typeof makeWorld>>;
     beforeEach(async () => {
         fixture = await makeWorld();
     });
 
-    function upgrade(toShip = BETTER_SHIP_ID, target = ESCORT,
+    function queueUpgrade(toShip = BETTER_SHIP_ID, target = ESCORT,
         peer: string | undefined = PEER) {
         applyEscortAction(fixture.world, peer,
-            { kind: 'upgradeEscort', target, toShip });
+            { kind: 'queueUpgrade', target, toShip });
+    }
+    function cancelUpgrade(target = ESCORT, peer: string | undefined = PEER) {
+        applyEscortAction(fixture.world, peer,
+            { kind: 'cancelUpgrade', target });
     }
 
-    it('charges EscUpgrdCost and replaces the class IN PLACE', async () => {
-        const escort = await fixture.addEscort();
-        const before = creditsOf(fixture.world);
-        upgrade();
-        expect(creditsOf(fixture.world)).toBe(before - UPGRADE_COST);
-        expect(escort.components.get(ShipComponent)?.id).toBe(BETTER_SHIP_ID);
-        // Same escort, same slot, same ownership: only the hull changed.
-        expect(escort.components.get(PlayerEscortComponent))
-            .toEqual({ player: PLAYER, parent: PLAYER, provenance: 'hired' });
-        expect(escort.components.get(FormationComponent))
-            .toEqual({ leader: PLAYER, slot: 0 });
-        expect(escort.components.get(EscortCommandComponent)?.command)
-            .toBe('formation');
-    });
-
-    it('writes the new class\'s STOCK LOADOUT, not the old one', async () => {
-        const escort = await fixture.addEscort();
-        upgrade();
-        expect([...escort.components.get(OutfitsStateComponent)!.keys()])
-            .toEqual(['test:outfitB']);
-    });
-
-    it('rebuilds every DERIVED component from the new class', async () => {
-        const escort = await fixture.addEscort();
-        // The stats are attached by shipStatSystem from the physics, so
-        // give it the tick that does that before damaging them.
-        fixture.world.step();
-        // Battle damage on the old hull, and a disable with it.
-        escort.components.set(ShieldComponent, new Stat({
-            current: 1, max: 100, min: 0, recharge: 0,
-        }));
-        escort.components.set(ArmorComponent, new Stat({
-            current: 5, max: 100, min: 0, recharge: 0,
-        }));
-        escort.components.set(DisabledComponent, { repairAt: null });
-
-        upgrade();
-        // Gone on the tick of the swap...
-        expect(escort.components.has(ShipPhysicsComponent)).toBeFalse();
-        expect(escort.components.has(WeaponsStateComponent)).toBeFalse();
-        expect(escort.components.has(DisabledComponent)).toBeFalse();
-
-        // ...and back from the NEW class, at full strength: this is a new
-        // ship, not a repair, so the old hull's damage cannot leak in.
-        fixture.world.step();
-        expect(escort.components.get(ShipPhysicsComponent)?.shield).toBe(500);
-        const shield = escort.components.get(ShieldComponent)!;
-        expect(shield.max).toBe(500);
-        expect(shield.current).toBe(500);
-        const armor = escort.components.get(ArmorComponent)!;
-        expect(armor.max).toBe(400);
-        expect(armor.current).toBe(400);
-    });
-
-    it('evicts fleet cargo above the NEW hull\'s hold, by sorted key from '
-        + 'the end, and keeps the rest', async () => {
+    it('only FLAGS the escort with its TARGET CLASS — nothing is charged '
+        + 'and the hull does not change', async () => {
             const escort = await fixture.addEscort();
-            escort.components.set(CargoComponent, new Map([
-                ['cargo:0', 40], ['cargo:4', 30], ['junk:nova:134', 10]]));
-            upgrade();
-            const cargo = escort.components.get(CargoComponent)!;
-            // 80 aboard, 30 fits: junk (last key) goes, then cargo:4 down
-            // to what is left; cargo:0 untouched.
-            expect(cargo.get('junk:nova:134')).toBeUndefined();
-            expect(cargo.get('cargo:4')).toBeUndefined();
-            expect(cargo.get('cargo:0')).toBe(30);
-            expect(cargoUsed(cargo)).toBe(30);
+            const before = creditsOf(fixture.world);
+            queueUpgrade();
+            expect(creditsOf(fixture.world)).toBe(before);
+            expect(pendingEscortUpgrade(escort)).toBe(BETTER_SHIP_ID);
+            expect(escort.components.get(ShipComponent)?.id).toBe(SHIP_ID);
+            // Everything derived from the class is untouched too: the
+            // escort is still flying the ship it was flying.
+            expect([...escort.components.get(OutfitsStateComponent)!.keys()])
+                .toEqual(['test:outfitA']);
         });
 
-    it('leaves fleet cargo alone when the new hull holds it', async () => {
-        const escort = await fixture.addEscort();
-        escort.components.set(CargoComponent, new Map([['cargo:0', 20]]));
-        upgrade();
-        expect(escort.components.get(CargoComponent)!.get('cargo:0')).toBe(20);
-    });
-
-    it('makes the DAILY FEE and the RESALE follow the new class',
+    it('keeps the DAILY FEE on the CURRENT class until the deal settles',
         async () => {
-            // Every escort price is a pure function of the CURRENT class,
-            // which is the whole reason an upgrade needs nothing else
-            // updated: replacing ShipDataComponent moves the wage from
-            // 1,500/day (150,000 cr hull) to 4,000/day (400,000 cr) and
-            // the resale from 15,000 to 40,000, by itself.
-            const escort = await fixture.addEscort(ESCORT, 'captured');
-            const before = escort.components.get(ShipDataComponent)!;
-            expect(escortDailyFee(before)).toBe(1_500);
-            expect(escortSellValue(before)).toBe(15_000);
+            // A queued upgrade changes nothing about what the escort is
+            // flying, so it changes nothing about what it is paid.
+            const escort = await fixture.addEscort();
+            queueUpgrade();
+            const data = escort.components.get(ShipDataComponent)!;
+            expect(data.id).toBe(SHIP_ID);
+            expect(escortDailyFee(data)).toBe(1_500);
+            expect(escortSellValue(data)).toBe(15_000);
+            expect(escortUpgradeCost(data)).toBe(UPGRADE_COST);
+        });
 
-            upgrade();
-            const after = escort.components.get(ShipDataComponent)!;
-            expect(after.id).toBe(BETTER_SHIP_ID);
-            expect(escortDailyFee(after)).toBe(4_000);
-            expect(escortSellValue(after)).toBe(40_000);
-            // ...and the upgraded hull is a dead end, so there is no
-            // second upgrade to offer.
-            expect(escortUpgradeTarget(escort)).toBeUndefined();
-            expect(escortUpgradeCost(after)).toBe(0);
+    it('cancels again, for free, as many times as the player likes',
+        async () => {
+            const escort = await fixture.addEscort();
+            const before = creditsOf(fixture.world);
+            for (let i = 0; i < 3; i++) {
+                queueUpgrade();
+                expect(pendingEscortUpgrade(escort)).toBe(BETTER_SHIP_ID);
+                cancelUpgrade();
+                expect(pendingEscortUpgrade(escort)).toBeUndefined();
+            }
+            expect(creditsOf(fixture.world)).toBe(before);
+        });
+
+    it('QUEUES EVEN WHEN THE PLAYER CANNOT AFFORD IT TODAY — the money is '
+        + 'checked when it is taken', async () => {
+            const escort = await fixture.addEscort();
+            fixture.player.components.get(CreditsComponent)!.credits = 0;
+            queueUpgrade();
+            expect(pendingEscortUpgrade(escort)).toBe(BETTER_SHIP_ID);
+            expect(creditsOf(fixture.world)).toBe(0);
         });
 
     it('refuses a class the escort\'s own shïp UpgradeTo does not name',
         async () => {
             // The record is intent, not authority: a tampered client
-            // cannot upgrade to an arbitrary hull.
+            // cannot queue an upgrade to an arbitrary hull.
             const escort = await fixture.addEscort();
-            const before = creditsOf(fixture.world);
-            upgrade(PLAIN_SHIP_ID);
-            expect(creditsOf(fixture.world)).toBe(before);
-            expect(escort.components.get(ShipComponent)?.id).toBe(SHIP_ID);
+            queueUpgrade(PLAIN_SHIP_ID);
+            expect(pendingEscortUpgrade(escort)).toBeUndefined();
         });
 
     it('refuses a class that cannot be upgraded at all', async () => {
         const escort = await fixture.addEscort(ESCORT, 'hired',
             PLAIN_SHIP_ID);
-        const before = creditsOf(fixture.world);
-        upgrade(BETTER_SHIP_ID);
-        expect(creditsOf(fixture.world)).toBe(before);
-        expect(escort.components.get(ShipComponent)?.id).toBe(PLAIN_SHIP_ID);
+        queueUpgrade(BETTER_SHIP_ID);
+        expect(pendingEscortUpgrade(escort)).toBeUndefined();
     });
 
-    it('refuses an upgrade the player cannot afford, and charges nothing',
-        async () => {
-            const escort = await fixture.addEscort();
-            fixture.player.components.get(CreditsComponent)!.credits =
-                UPGRADE_COST - 1;
-            upgrade();
-            expect(creditsOf(fixture.world)).toBe(UPGRADE_COST - 1);
-            expect(escort.components.get(ShipComponent)?.id).toBe(SHIP_ID);
-        });
-
-    it('upgrades a CAPTURED escort too — both kinds can be upgraded',
+    it('queues on a CAPTURED escort too — both kinds can be upgraded',
         async () => {
             const escort = await fixture.addEscort(ESCORT, 'captured');
-            upgrade();
-            expect(escort.components.get(ShipComponent)?.id)
-                .toBe(BETTER_SHIP_ID);
-            // ...and it is still a capture afterwards, so it stays sellable.
+            queueUpgrade();
+            expect(pendingEscortUpgrade(escort)).toBe(BETTER_SHIP_ID);
             expect(escort.components.get(PlayerEscortComponent)?.provenance)
                 .toBe('captured');
         });
@@ -550,9 +515,170 @@ describe('upgrading an escort', () => {
     it('refuses a record from a peer who does not own the escort',
         async () => {
             const escort = await fixture.addEscort();
-            const before = creditsOf(fixture.world);
-            upgrade(BETTER_SHIP_ID, ESCORT, OTHER_PEER);
-            expect(creditsOf(fixture.world)).toBe(before);
-            expect(escort.components.get(ShipComponent)?.id).toBe(SHIP_ID);
+            queueUpgrade(BETTER_SHIP_ID, ESCORT, OTHER_PEER);
+            expect(pendingEscortUpgrade(escort)).toBeUndefined();
         });
 });
+
+describe('the two queued deals are MUTUALLY EXCLUSIVE', () => {
+    let fixture: Awaited<ReturnType<typeof makeWorld>>;
+    beforeEach(async () => {
+        fixture = await makeWorld();
+    });
+
+    it('queueing a SALE cancels a queued upgrade', async () => {
+        const escort = await fixture.addEscort(ESCORT, 'captured');
+        applyEscortAction(fixture.world, PEER, {
+            kind: 'queueUpgrade', target: ESCORT, toShip: BETTER_SHIP_ID,
+        });
+        applyEscortAction(fixture.world, PEER,
+            { kind: 'queueSale', target: ESCORT });
+        expect(escortSaleQueued(escort)).toBeTrue();
+        expect(pendingEscortUpgrade(escort)).toBeUndefined();
+    });
+
+    it('queueing an UPGRADE cancels a queued sale', async () => {
+        // The original keeps "Upgrade Escort" LIVE beside a queued sale
+        // (hail/sell_captured_escort.png), so pressing it has to mean
+        // something — and what it means is "that one instead".
+        const escort = await fixture.addEscort(ESCORT, 'captured');
+        applyEscortAction(fixture.world, PEER,
+            { kind: 'queueSale', target: ESCORT });
+        applyEscortAction(fixture.world, PEER, {
+            kind: 'queueUpgrade', target: ESCORT, toShip: BETTER_SHIP_ID,
+        });
+        expect(pendingEscortUpgrade(escort)).toBe(BETTER_SHIP_ID);
+        expect(escortSaleQueued(escort)).toBeFalse();
+    });
+
+    it('a REFUSED queue does not cancel the other deal', async () => {
+        // Queueing an upgrade to a class the escort does not name is
+        // refused outright, so the sale it would have replaced stands.
+        const escort = await fixture.addEscort(ESCORT, 'captured');
+        applyEscortAction(fixture.world, PEER,
+            { kind: 'queueSale', target: ESCORT });
+        applyEscortAction(fixture.world, PEER, {
+            kind: 'queueUpgrade', target: ESCORT, toShip: PLAIN_SHIP_ID,
+        });
+        expect(escortSaleQueued(escort)).toBeTrue();
+    });
+});
+
+describe('replaceEscortShipClass (the refit itself, run at the shipyard)',
+    () => {
+        let fixture: Awaited<ReturnType<typeof makeWorld>>;
+        beforeEach(async () => {
+            fixture = await makeWorld();
+        });
+
+        /** What escort_deals.ts does to the hull once the deal settles. */
+        function refit(escort: Entity) {
+            replaceEscortShipClass(escort, BETTER_SHIP_ID,
+                fixture.gameData.data.Ship.map.get(BETTER_SHIP_ID)!);
+        }
+
+        it('replaces the class IN PLACE, leaving the escort itself alone',
+            async () => {
+                const escort = await fixture.addEscort();
+                refit(escort);
+                expect(escort.components.get(ShipComponent)?.id)
+                    .toBe(BETTER_SHIP_ID);
+                // Same escort, same slot, same ownership: only the hull.
+                expect(escort.components.get(PlayerEscortComponent))
+                    .toEqual({
+                        player: PLAYER, parent: PLAYER, provenance: 'hired',
+                    });
+                expect(escort.components.get(FormationComponent))
+                    .toEqual({ leader: PLAYER, slot: 0 });
+                expect(escort.components.get(EscortCommandComponent)?.command)
+                    .toBe('formation');
+            });
+
+        it('writes the new class\'s STOCK LOADOUT, not the old one',
+            async () => {
+                const escort = await fixture.addEscort();
+                refit(escort);
+                expect([...escort.components
+                    .get(OutfitsStateComponent)!.keys()])
+                    .toEqual(['test:outfitB']);
+            });
+
+        it('rebuilds every DERIVED component from the new class', async () => {
+            const escort = await fixture.addEscort();
+            // The stats are attached by shipStatSystem from the physics, so
+            // give it the tick that does that before damaging them.
+            fixture.world.step();
+            // Battle damage on the old hull, and a disable with it.
+            escort.components.set(ShieldComponent, new Stat({
+                current: 1, max: 100, min: 0, recharge: 0,
+            }));
+            escort.components.set(ArmorComponent, new Stat({
+                current: 5, max: 100, min: 0, recharge: 0,
+            }));
+            escort.components.set(DisabledComponent, { repairAt: null });
+
+            refit(escort);
+            // Gone on the tick of the swap...
+            expect(escort.components.has(ShipPhysicsComponent)).toBeFalse();
+            expect(escort.components.has(WeaponsStateComponent)).toBeFalse();
+            expect(escort.components.has(DisabledComponent)).toBeFalse();
+
+            // ...and back from the NEW class, at full strength: this is a
+            // new ship, not a repair, so the old hull's damage cannot leak.
+            fixture.world.step();
+            expect(escort.components.get(ShipPhysicsComponent)?.shield)
+                .toBe(500);
+            const shield = escort.components.get(ShieldComponent)!;
+            expect(shield.max).toBe(500);
+            expect(shield.current).toBe(500);
+            const armor = escort.components.get(ArmorComponent)!;
+            expect(armor.max).toBe(400);
+            expect(armor.current).toBe(400);
+        });
+
+        it('evicts fleet cargo above the NEW hull\'s hold, by sorted key '
+            + 'from the end, and keeps the rest', async () => {
+                const escort = await fixture.addEscort();
+                escort.components.set(CargoComponent, new Map([
+                    ['cargo:0', 40], ['cargo:4', 30], ['junk:nova:134', 10]]));
+                refit(escort);
+                const cargo = escort.components.get(CargoComponent)!;
+                // 80 aboard, 30 fits: junk (last key) goes, then cargo:4
+                // down to what is left; cargo:0 untouched.
+                expect(cargo.get('junk:nova:134')).toBeUndefined();
+                expect(cargo.get('cargo:4')).toBeUndefined();
+                expect(cargo.get('cargo:0')).toBe(30);
+                expect(cargoUsed(cargo)).toBe(30);
+            });
+
+        it('leaves fleet cargo alone when the new hull holds it', async () => {
+            const escort = await fixture.addEscort();
+            escort.components.set(CargoComponent, new Map([['cargo:0', 20]]));
+            refit(escort);
+            expect(escort.components.get(CargoComponent)!.get('cargo:0'))
+                .toBe(20);
+        });
+
+        it('makes the DAILY FEE and the RESALE follow the new class',
+            async () => {
+                // Every escort price is a pure function of the CURRENT
+                // class, which is the whole reason an upgrade needs nothing
+                // else updated: replacing ShipDataComponent moves the wage
+                // from 1,500/day (150,000 cr hull) to 4,000/day (400,000
+                // cr) and the resale from 15,000 to 40,000, by itself.
+                const escort = await fixture.addEscort(ESCORT, 'captured');
+                const before = escort.components.get(ShipDataComponent)!;
+                expect(escortDailyFee(before)).toBe(1_500);
+                expect(escortSellValue(before)).toBe(15_000);
+
+                refit(escort);
+                const after = escort.components.get(ShipDataComponent)!;
+                expect(after.id).toBe(BETTER_SHIP_ID);
+                expect(escortDailyFee(after)).toBe(4_000);
+                expect(escortSellValue(after)).toBe(40_000);
+                // ...and the upgraded hull is a dead end, so there is no
+                // second upgrade to offer.
+                expect(escortUpgradeTarget(escort)).toBeUndefined();
+                expect(escortUpgradeCost(after)).toBe(0);
+            });
+    });

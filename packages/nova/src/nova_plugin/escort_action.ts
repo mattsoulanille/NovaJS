@@ -2,16 +2,13 @@ import * as t from 'io-ts';
 import { ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import {
-    escortUpgradeCost, escortSellValue,
-} from '../spaceport/escort_fees.js';
 import { DisabledComponent } from './disabled_component.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { escortParent } from './escort_command_plugin.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { flockParent } from './flock.js';
-import { SimulationGameDataResource } from './game_data_resource.js';
 import { GovtComponent } from './govt_component.js';
+import { PlayerEscort } from './player_escort.js';
 import {
     ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
 } from './health_plugin.js';
@@ -22,7 +19,6 @@ import { OutfitsStateComponent } from './outfit_plugin.js';
 import {
     EscortLandingComponent, escortProvenance, PlayerEscortComponent,
 } from './player_escort.js';
-import { CreditsComponent } from './player_state_plugin.js';
 import { ControlledByComponent, findControlledEntity } from './ship_control.js';
 import {
     deriveShipOutfits, ShipComponent, ShipDataComponent,
@@ -44,13 +40,16 @@ import { CargoComponent, cargoUsed } from './cargo_plugin.js';
  * hail/hail_captured_escort.png). Its three functions are:
  *
  *   RELEASE  (both kinds)      let the ship go; it stops being yours.
+ *                              IMMEDIATE — it happens over the channel.
  *   SELL     (captured only)   cash the hull in for its shïp EscSellValue.
+ *                              DEFERRED to the next shipyard.
  *   UPGRADE  (both kinds)      swap the escort's class for its shïp
  *                              UpgradeTo class, for EscUpgrdCost.
+ *                              DEFERRED to the next shipyard.
  *
  * The DIALOG is client-side (display/hail_dialog_plugin.ts), like every
- * other comm dialog; each of these three has a simulation effect, and every
- * one of them flows through the deterministic input path as an
+ * other comm dialog; each of these has a simulation effect, and every one
+ * of them flows through the deterministic input path as an
  * `{ kind: 'escortAction' }` SimulationInput (communication/
  * simulation_input.ts), applied by {@link applyEscortAction} on every peer
  * at the same tick — exactly as a hail bribe is. That is what keeps every
@@ -59,62 +58,97 @@ import { CargoComponent, cargoUsed } from './cargo_plugin.js';
  *
  * THE RECORD CARRIES INTENT, NOT PRICES. Which escort, and (for an upgrade)
  * which class it claims to be upgrading to; nothing else. Costs, payouts,
- * eligibility and provenance are all recomputed here from synced state, so
- * a tampered client cannot sell a hired escort, upgrade to an arbitrary
- * hull, or name its own price. The one field that is not pure intent —
- * `toShip` — exists only so the target class's game data can be STAGED
- * before the record is applied (an upgrade must be synchronous, like every
- * other input), and it is verified against the escort's own class here
- * before anything happens.
+ * eligibility and provenance are all recomputed — here for the ones this
+ * module settles, and at the pad by spaceport/escort_deals.ts for the two
+ * that are deferred — so a tampered client cannot sell a hired escort,
+ * upgrade to an arbitrary hull, or name its own price.
  *
  * ---------------------------------------------------------------------------
- * ONE DELIBERATE DIVERGENCE FROM THE ORIGINAL: THESE APPLY IMMEDIATELY
+ * UPGRADE AND SELL ARE DEFERRED, AS IN THE ORIGINAL
  * ---------------------------------------------------------------------------
  *
- * In the original, Upgrade and Sell are DEFERRED. The reference captures
- * show it plainly: pressing Upgrade Escort turns the readout into "Will be
- * upgraded at next shipyard" and the button into "Cancel Upgrade"
- * (hail/hail_escort_upgrading.png), and pressing Sell Escort gives "Will be
- * sold off at next shipyard" and "Cancel Sale"
- * (hail/sell_captured_escort.png) — STR# 150 indices 52 and 54 are those
- * two captions verbatim. Only Release happens on the spot.
+ * Pressing Upgrade Escort does not refit anything: it QUEUES the deal. The
+ * reference captures show the whole flow —
  *
- * NovaJS applies all three IMMEDIATELY, per Matthew's spec ("Upgrade ...
- * replaces the escort's ship class in place"; "sell ... pay the credits").
- * The trade is a real one and is recorded rather than hidden: the player
- * does not have to find a shipyard, and there is no pending-deal state to
- * persist, carry through a landing, or cancel — but a player who presses
- * Upgrade in the middle of a fight gets a brand-new hull immediately, which
- * the original would not have given them until they next put down. If the
- * deferred flow is wanted later, THIS MODULE is where it goes: the two
- * actions become flags on the escort and the settlement moves to the
- * spaceport (spaceport/escort_restock.ts is the landed-roster hook), with
- * the captions above already in the string table.
+ *   hail/hail_escort_upgrading.png   the readout's "Upgrade Cost:" line has
+ *                                    become "Will be upgraded at next
+ *                                    shipyard" (STR# 2002 index 291), the
+ *                                    channel is still OPEN, and the top
+ *                                    button now reads "Cancel Upgrade"
+ *                                    (STR# 150 index 52).
+ *   hail/sell_captured_escort.png    the same for a sale: "Will be sold off
+ *                                    at next shipyard" (STR# 2002 294) in
+ *                                    the "Sell Price:" slot, and "Cancel
+ *                                    Sale" (STR# 150 54) on the button. The
+ *                                    Upgrade Escort button beside it is
+ *                                    still LIVE.
+ *
+ * So the two flags this module writes are the whole of an upgrade's and a
+ * sale's simulation effect. They live on the escort's own durable ownership
+ * marker (player_escort.ts's PlayerEscort.pendingUpgrade / pendingSale),
+ * which is serializer-registered — so they cross the wire, ride rollback
+ * snapshots, survive a landing and a jump, and go into the save.
+ *
+ * WHERE THE MONEY MOVES: at the pad, not here. spaceport/escort_deals.ts
+ * settles a queued deal the next time the player lands on a stellar with a
+ * shipyard (spöb hasShipyard) — charging EscUpgrdCost and swapping the
+ * class, or paying EscSellValue and dropping the escort from the roster
+ * that would otherwise lift off with the player. Nothing is charged or
+ * paid at queue time, and cancelling costs nothing. That reading is the
+ * original's: STR# 2002 keeps "escort was" / "escorts were" / "sold for a
+ * profit of" / "upgraded at a cost of" (297-300) as the message it prints
+ * when the deal SETTLES, which is where it names the sum.
+ *
+ * WHY QUEUEING IS NOT GATED ON CREDITS. The button greys when the player
+ * cannot afford the upgrade today, but this module accepts the record
+ * anyway: a queue is a statement of intent that costs nothing, the money
+ * is re-checked when it is actually taken, and a wallet that dips below
+ * the price for one tick (a rollback reordering a purchase, say) must not
+ * be able to refuse a queue on one peer and accept it on another.
+ *
+ * RELEASE STAYS IMMEDIATE. There is nothing to settle: the ship simply
+ * stops being the player's and flies away.
  */
 
 /**
  * What the player can do to one of their own escorts. `target` is the
  * escort's uuid.
+ *
+ * Four of the five are TOGGLES of the two queued deals, because the
+ * original's buttons are toggles: Upgrade Escort becomes Cancel Upgrade
+ * and back, as many times as the player likes, with nothing charged either
+ * way.
  */
 export type EscortAction =
     /** Let the escort go: it is nobody's, and it leaves the system. */
     | { kind: 'releaseEscort', target: string }
-    /** Sell a CAPTURED escort's hull; it leaves like a released one. */
-    | { kind: 'sellEscort', target: string }
     /**
-     * Refit the escort to its shïp UpgradeTo class. `toShip` is the global
-     * ship id the client resolved and STAGED; it is re-derived and checked
-     * here, so it can only ever confirm what the escort's own class says.
+     * Queue a sale of a CAPTURED escort's hull, to be settled at the next
+     * shipyard. Cancels any queued upgrade — an escort is never both.
      */
-    | { kind: 'upgradeEscort', target: string, toShip: string };
+    | { kind: 'queueSale', target: string }
+    /** Un-queue a sale. Nothing was charged, so nothing is refunded. */
+    | { kind: 'cancelSale', target: string }
+    /**
+     * Queue a refit to the escort's shïp UpgradeTo class. `toShip` is the
+     * global ship id the client resolved; it is re-derived and checked
+     * here, so it can only ever confirm what the escort's own class says,
+     * and it is STORED so the settlement can spot a deal whose escort has
+     * since changed class some other way. Cancels any queued sale.
+     */
+    | { kind: 'queueUpgrade', target: string, toShip: string }
+    /** Un-queue an upgrade. Nothing was charged, so nothing is refunded. */
+    | { kind: 'cancelUpgrade', target: string };
 
 export const EscortActionType: t.Type<EscortAction> = t.union([
     t.type({ kind: t.literal('releaseEscort'), target: t.string }),
-    t.type({ kind: t.literal('sellEscort'), target: t.string }),
+    t.type({ kind: t.literal('queueSale'), target: t.string }),
+    t.type({ kind: t.literal('cancelSale'), target: t.string }),
     t.type({
-        kind: t.literal('upgradeEscort'), target: t.string,
+        kind: t.literal('queueUpgrade'), target: t.string,
         toShip: t.string,
     }),
+    t.type({ kind: t.literal('cancelUpgrade'), target: t.string }),
 ]);
 
 /**
@@ -339,11 +373,42 @@ export function replaceEscortShipClass(escort: Entity, shipId: string,
 }
 
 /**
+ * Rewrites the escort's ownership marker with `changes` applied, leaving
+ * every other field alone.
+ *
+ * `set(...)` rather than a field assignment: the marker is a plain
+ * serialized object, and writing a whole new value is what the delta maker
+ * and the desync hash see. A field set to `undefined` is DELETED rather
+ * than written, so cancelling a deal restores exactly the encoded shape the
+ * marker had before it was queued — an undefined-valued key would hash
+ * differently on a peer that had never queued anything.
+ */
+function setEscortDeal(escort: Entity,
+    changes: { pendingUpgrade?: string, pendingSale?: boolean }): void {
+    const existing = escort.components.get(PlayerEscortComponent);
+    if (!existing) {
+        return;
+    }
+    const next: PlayerEscort = { ...existing, ...changes };
+    if (next.pendingUpgrade === undefined) {
+        delete next.pendingUpgrade;
+    }
+    if (!next.pendingSale) {
+        delete next.pendingSale;
+    }
+    escort.components.set(PlayerEscortComponent, next);
+}
+
+/**
  * Applies an escort-management action deterministically on every peer.
  * Resolves the acting player from `peerId` and the escort from the record,
  * then re-checks EVERYTHING against synced state before mutating anything:
- * ownership, provenance, the upgrade target, the price and the player's
- * ability to pay.
+ * ownership, provenance, and the upgrade target.
+ *
+ * Only RELEASE has an effect on the world here. The other four write (or
+ * clear) the two queued-deal flags on the escort's ownership marker; the
+ * money and the hull swap happen at the next shipyard, in
+ * spaceport/escort_deals.ts. See the module comment.
  */
 export function applyEscortAction(world: World, peerId: string | undefined,
     action: EscortAction): void {
@@ -351,7 +416,6 @@ export function applyEscortAction(world: World, peerId: string | undefined,
     if (!found) {
         return;
     }
-    const player = found.entity;
     const escort = world.entities.get(action.target);
     if (!escort || !manageableEscort(escort, found.uuid)) {
         return;
@@ -366,58 +430,56 @@ export function applyEscortAction(world: World, peerId: string | undefined,
         return;
     }
 
-    if (action.kind === 'releaseEscort') {
-        releaseEscort(action.target, world.entities);
-        return;
-    }
-
-    const shipData = escort.components.get(ShipDataComponent);
-    if (!shipData) {
-        return; // Not fully built yet; the player can press again.
-    }
-    const credits = player.components.get(CreditsComponent);
-    if (!credits) {
-        return;
-    }
-
-    if (action.kind === 'sellEscort') {
-        // ONLY A CAPTURED HULL IS THE PLAYER'S TO SELL. A hired pilot's
-        // ship was never the player's property — the original greys "Sell
-        // Escort" on hail/hail_escort.png for exactly this reason — so a
-        // record naming a hired escort is refused rather than honoured.
-        if (escortProvenance(escort) !== 'captured') {
+    switch (action.kind) {
+        case 'releaseEscort':
+            releaseEscort(action.target, world.entities);
+            return;
+        case 'cancelUpgrade':
+            // Always honoured: un-queueing must never be refusable, or a
+            // player whose circumstances changed (they sold the outfit that
+            // unlocked the target class, they went broke) would be stuck
+            // with a deal they cannot cancel.
+            setEscortDeal(escort, { pendingUpgrade: undefined });
+            return;
+        case 'cancelSale':
+            setEscortDeal(escort, { pendingSale: false });
+            return;
+        case 'queueSale': {
+            // ONLY A CAPTURED HULL IS THE PLAYER'S TO SELL. A hired pilot's
+            // ship was never the player's property — the original greys
+            // "Sell Escort" on hail/hail_escort.png for exactly this reason
+            // — so a record naming a hired escort is refused rather than
+            // honoured. The price is NOT computed here; escort_deals.ts
+            // re-derives shïp EscSellValue when the sale settles.
+            if (escortProvenance(escort) !== 'captured') {
+                return;
+            }
+            // Mutually exclusive with an upgrade: an escort cannot be both
+            // sold off and refitted at the same visit, and the original
+            // keeps the other button LIVE rather than greying it
+            // (hail/sell_captured_escort.png still offers Upgrade Escort),
+            // so pressing one CANCELS the other rather than being refused.
+            setEscortDeal(escort,
+                { pendingSale: true, pendingUpgrade: undefined });
             return;
         }
-        // The Bible's rule, via the one module that owns escort prices:
-        // shïp EscSellValue, defaulting to 10% of the hull's cost.
-        credits.credits += escortSellValue(shipData);
-        // A sold escort LEAVES exactly like a released one. The Bible is
-        // silent on where it goes; the original simply drops it from your
-        // fleet, and flying off under its own power is the only departure
-        // this engine has that does not make the ship vanish mid-frame.
-        releaseEscort(action.target, world.entities);
-        return;
+        case 'queueUpgrade': {
+            const shipData = escort.components.get(ShipDataComponent);
+            if (!shipData) {
+                return; // Not fully built yet; the player can press again.
+            }
+            // The class comes from the escort's OWN shïp UpgradeTo, never
+            // from the record: `toShip` is only allowed to confirm it.
+            const upgradeTo = shipData.escortUpgradeShip;
+            if (upgradeTo === null || upgradeTo !== action.toShip) {
+                return;
+            }
+            // NOT gated on credits, and nothing is staged: no ship is built
+            // on this tick. The target class is loaded (and the money
+            // checked) by the client that settles the deal at the pad.
+            setEscortDeal(escort,
+                { pendingUpgrade: upgradeTo, pendingSale: false });
+            return;
+        }
     }
-
-    // Upgrade. The class comes from the escort's OWN shïp UpgradeTo, never
-    // from the record: `toShip` is only allowed to confirm it.
-    const upgradeTo = shipData.escortUpgradeShip;
-    if (upgradeTo === null || upgradeTo !== action.toShip) {
-        return;
-    }
-    const gameData = world.resources.get(SimulationGameDataResource);
-    const upgraded = gameData?.data.Ship.getCached(upgradeTo);
-    if (!upgraded) {
-        // The class was not staged (a peer that never saw the staging, or a
-        // data set that cannot produce it). Refusing is the deterministic
-        // answer: deriving against a cold cache would give this peer a
-        // different ship — or a different TICK — from everyone else's.
-        return;
-    }
-    const cost = escortUpgradeCost(shipData);
-    if (credits.credits < cost) {
-        return;
-    }
-    credits.credits -= cost;
-    replaceEscortShipClass(escort, upgradeTo, upgraded);
 }

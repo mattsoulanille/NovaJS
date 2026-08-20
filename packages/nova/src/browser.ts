@@ -98,6 +98,9 @@ import {
 } from "./spaceport/landed_escorts.js";
 import { restockCarriedEscorts } from "./spaceport/escort_restock.js";
 import {
+    queuedUpgradeTargets, settleEscortDeals,
+} from "./spaceport/escort_deals.js";
+import {
     EscortJumpEvent, EscortLandedEvent,
 } from "./nova_plugin/player_escort_plugin.js";
 import { PlayerEscortComponent } from "./nova_plugin/player_escort.js";
@@ -696,6 +699,51 @@ async function insertCarriedEscorts(
         } catch (e) {
             console.warn(`Failed to re-insert carried escort ${uuid}:`, e);
         }
+    }
+}
+
+/**
+ * Settles the escort deals the player queued over the comm channel —
+ * upgrades and sales, which the original defers to the next SHIPYARD
+ * (spaceport/escort_deals.ts explains the whole model).
+ *
+ * Called on every frame the player is docked at a stellar with a shipyard,
+ * not just as the spaceport opens, because escorts keep flying down and
+ * joining the roster while the player shops: one that touches down halfway
+ * through a visit gets its deal settled then. `settleEscortDeals` clears
+ * each flag as it acts, so the repeat calls are no-ops.
+ *
+ * Nothing happens at a stellar WITHOUT a shipyard: the caller's flag check
+ * is the whole of that rule, and every queued deal simply rides on to the
+ * next landing.
+ *
+ * The credits move on the DOCKED PLAYER'S OWN ENTITY, which is where they
+ * live while the player is out of the world, and reach the other peers with
+ * the `addEntity` record that puts that entity back at lift-off — exactly
+ * as every purchase made in the spaceport does.
+ */
+async function settleDockedEscortDeals(player: string, entity: Entity):
+    Promise<void> {
+    // The target classes have to be BUILT to refit against, and the
+    // settlement itself is synchronous (it mutates the roster the frame
+    // loop owns), so they are loaded first.
+    await Promise.all(queuedUpgradeTargets(landedEscorts, player)
+        .map(id => simulationGameData.data.Ship.get(id)
+            .catch(() => undefined)));
+    const credits = entity.components.get(CreditsComponent);
+    const settled = settleEscortDeals(landedEscorts, player,
+        credits?.credits ?? 0,
+        id => simulationGameData.data.Ship.getCached(id));
+    if (credits) {
+        credits.credits += settled.credits;
+    }
+    for (const sale of settled.sold) {
+        console.log(`Escort ${sale.uuid} sold off for `
+            + `${sale.value} credits at the shipyard.`);
+    }
+    for (const upgrade of settled.upgraded) {
+        console.log(`Escort ${upgrade.uuid} upgraded to `
+            + `${upgrade.toShip} at a cost of ${upgrade.cost} credits.`);
     }
 }
 
@@ -2249,6 +2297,18 @@ async function startGame() {
                 document.body.classList.add('nova-docked');
                 dockedShip = pendingDockedShip;
                 pendingDockedShip = undefined;
+            }
+            // Queued escort deals settle at a SHIPYARD, and only there
+            // (spöb hasShipyard). Checked every docked frame rather than
+            // once at the dock: escorts keep flying down and joining the
+            // roster while the player shops, and one that touches down
+            // mid-visit has its deal settled then. A no-op once every flag
+            // is cleared, and a no-op at any stellar without a shipyard.
+            if (dockedShip && landedEscorts.length > 0
+                && simulationGameData.data.Planet
+                    .getCached(dockedShip.planetId)?.flags.hasShipyard) {
+                await settleDockedEscortDeals(dockedShip.uuid,
+                    dockedShip.entity);
             }
             if (pendingLaunchedShip && dockedShip) {
                 // A ship bought at the shipyard is a fresh entity: it
