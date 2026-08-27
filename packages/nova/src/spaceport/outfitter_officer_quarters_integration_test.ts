@@ -17,6 +17,7 @@ import {
 import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
 } from '../nova_plugin/save_game.js';
+import { resetDiscovery } from '../nova_plugin/discovery_store.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import { advanceEntityDate, MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -44,6 +45,13 @@ import { canBuyOutfit, OutfitterContext } from './outfitter_rules.js';
  * MissionSession.runMissionSet for the OnPurchase string.
  */
 describe('Extra Outfits Officer Quarters against real plug-in data', () => {
+    // extractSaveData below reads the module-global discovery cache and
+    // restorePlayerState writes it, so this describe starts (and leaves)
+    // the store clean — see save_game_test's 'save_game schema' note on
+    // the seed-dependent failure that leak causes.
+    beforeEach(() => resetDiscovery());
+    afterEach(() => resetDiscovery());
+
     const PLUGIN = 'extra-outfits';
     /** Terrapin. */
     const SHIP = 'nova:136';
@@ -171,6 +179,9 @@ describe('Extra Outfits Officer Quarters against real plug-in data', () => {
  * must load and round-trip idempotently under a namespaced build.
  */
 describe('Pilot file Shane_Merrol_cant_hire_officers.plt', () => {
+    beforeEach(() => resetDiscovery());
+    afterEach(() => resetDiscovery());
+
     const FIXTURE = path.join(process.cwd(), 'test_fixtures', 'pilots',
         'Shane_Merrol_cant_hire_officers.plt');
     const PLUGINS = ['arpia', 'extra-outfits', 'singularity', 'Planet Rico'];

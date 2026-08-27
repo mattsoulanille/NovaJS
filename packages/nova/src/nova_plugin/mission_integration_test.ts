@@ -29,6 +29,7 @@ import {
     CreditsComponent,
     GameDateComponent,
     MissionsComponent,
+    PendingMissionNoticesComponent,
 } from './player_state_plugin.js';
 
 /**
@@ -972,5 +973,68 @@ describe('missions against real Nova data', () => {
             // Capacity never goes negative.
             session.setCargoCapacity(-5);
             expect(session.machinery.offerContext().freeCargoSpace).toBe(0);
+        });
+});
+
+/**
+ * Notices queued while the player was in FLIGHT (a deadline that expired
+ * between jumps, a deferred auto-abort the sim fired) live on the entity
+ * in PendingMissionNoticesComponent until the next spaceport screen shows
+ * them. processEntityLanding is what hands them over, and it used to
+ * DRAIN them — clearing the component — before the work that can throw,
+ * with spaceport.ts's show() swallowing the throw. The notice was then
+ * gone from the entity and never shown to anybody.
+ */
+describe('processEntityLanding and the in-flight notice queue', () => {
+    const NOTICE = {
+        missionId: 'nova:128', missionName: 'Delivery to Earth',
+        type: 'failed', text: 'You were too slow.',
+    };
+
+    async function pilotWithPendingNotice() {
+        const gameData = await getIntegrationGameData();
+        const universe = MissionUniverse.shared(gameData);
+        await universe.load();
+        const start = await gameData.data.PlayerStart.get('nova:128');
+        const shipData = await gameData.data.Ship.get(start.ship);
+        const entity = makeShip(shipData);
+        entity.components.set(GameDateComponent, { ...start.date });
+        entity.components.set(CreditsComponent, { credits: start.credits });
+        entity.components.set(ControlBitsComponent, new Set());
+        entity.components.set(PendingMissionNoticesComponent, [{ ...NOTICE }]);
+        return { gameData, universe, entity };
+    }
+
+    it('hands a queued notice to the spaceport and clears it', async () => {
+        const { gameData, universe, entity } = await pilotWithPendingNotice();
+        const events = await processEntityLanding(
+            entity, gameData, universe, 'nova:128');
+        expect(events.map(e => e.type)).toEqual(['failed']);
+        expect(events[0].text).toBe(NOTICE.text);
+        expect(entity.components.get(PendingMissionNoticesComponent))
+            .toEqual([]);
+    });
+
+    it('KEEPS the notice queued when the landing processing throws',
+        async () => {
+            const { gameData, universe, entity } =
+                await pilotWithPendingNotice();
+            // MissionSession.create awaits universe.load() outside any
+            // catch, so a universe that fails to load is the throw this
+            // seam is about. advanceEntityDate, which runs first, catches
+            // its own load failure — so the date still moves and the queue
+            // is the only thing at risk.
+            const broken = Object.create(universe) as MissionUniverse;
+            broken.load = () => Promise.reject(new Error('data gone'));
+
+            await expectAsync(processEntityLanding(
+                entity, gameData, broken, 'nova:128')).toBeRejected();
+            expect(entity.components.get(PendingMissionNoticesComponent))
+                .toEqual([NOTICE]);
+
+            // ...and the next (working) landing still shows it.
+            const events = await processEntityLanding(
+                entity, gameData, universe, 'nova:128');
+            expect(events.map(e => e.type)).toEqual(['failed']);
         });
 });

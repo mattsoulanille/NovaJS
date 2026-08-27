@@ -90,25 +90,76 @@ export interface CronEvaluationOptions {
     systemExists?(globalId: string): boolean;
 }
 
+/** An ordinal for a (month, day) pair, months normalised to 31 days. */
+function monthDayValue(month: number, day: number): number {
+    return (month - 1) * 31 + (day - 1);
+}
+
+/**
+ * Whether `day` falls inside a crön's First / Last date window.
+ *
+ * THE BIBLE MAKES EVERY FIELD SEPARATELY IGNORABLE: FirstDay is "the first
+ * day of the month (1-31) on which the cron event can be activated. If you
+ * set this to 0 or -1, this field will be ignored and only FirstMonth and
+ * FirstYear will be considered", and each of the other five says the same
+ * of itself. So the window is a conjunction of independently-droppable
+ * constraints, NOT one absolute instant with defaults filled in — and that
+ * distinction is the whole bug this function used to have.
+ *
+ * The old code substituted ±Infinity for a wildcarded year into a single
+ * scalar `((year * 12 + month) * 31 + day)` comparison. An infinite year
+ * swamps the month and day terms outright, so ANY cron with a wildcarded
+ * year was in range on every day of the game. Stock crön nova:156, the
+ * "Auroran Drop Bear Mating Season" (First 1/9/-1, Last 30/12/-1), is
+ * exactly that shape: a September-to-December season that fired — and set
+ * its news bit b42 — in March.
+ *
+ * TWO REGIMES, told apart by whether the window names a YEAR at all:
+ *
+ *  - BOTH years wildcarded: a RECURRING SEASON. Only the (month, day) pair
+ *    is compared, so the window comes round again every year. A window
+ *    whose end falls before its start (First 15/11, Last 10/2) WRAPS
+ *    through New Year rather than matching nothing, which is the only
+ *    reading under which such a window means anything. Fully wildcarded
+ *    degenerates to 1 January - 31 December, i.e. always: unchanged, and
+ *    that is 122 of the 125 stock cröns.
+ *  - EITHER year set: one ABSOLUTE span, compared as whole dates the way
+ *    it always was, with a missing year left open-ended and a missing
+ *    month/day filled in at its permissive extreme. Stock nova:128
+ *    (1/1/1183 - 31/12/1200) and nova:129 (1/1/1178 - 1/1/1179) are this
+ *    shape, and both keep their existing behaviour exactly.
+ *
+ * The mixed case — one year set beside a month/day season, which no stock
+ * crön uses — reads as the absolute span, since a named year is the clearer
+ * evidence that a specific instant was meant.
+ */
 function inDateRange(cron: CronData, day: number): boolean {
     const date = dateFromDayNumber(day);
-    const first = { day: cron.firstDay, month: cron.firstMonth, year: cron.firstYear };
-    const last = { day: cron.lastDay, month: cron.lastMonth, year: cron.lastYear };
-    // 0/-1 fields are wildcards. Compare as full dates with the
-    // wildcarded components substituted from the current date.
-    const fromParts = {
-        day: first.day > 0 ? first.day : 1,
-        month: first.month > 0 ? first.month : 1,
-        year: first.year > 0 ? first.year : -Infinity,
-    };
-    const toParts = {
-        day: last.day > 0 ? last.day : 31,
-        month: last.month > 0 ? last.month : 12,
-        year: last.year > 0 ? last.year : Infinity,
-    };
+    // 0/-1 fields are wildcards.
+    const fromDay = cron.firstDay > 0 ? cron.firstDay : 1;
+    const fromMonth = cron.firstMonth > 0 ? cron.firstMonth : 1;
+    const toDay = cron.lastDay > 0 ? cron.lastDay : 31;
+    const toMonth = cron.lastMonth > 0 ? cron.lastMonth : 12;
+
+    if (cron.firstYear <= 0 && cron.lastYear <= 0) {
+        const from = monthDayValue(fromMonth, fromDay);
+        const to = monthDayValue(toMonth, toDay);
+        const here = monthDayValue(date.month, date.day);
+        return from <= to
+            ? here >= from && here <= to
+            // Wraps through New Year: inside means past the start OR
+            // before the end.
+            : here >= from || here <= to;
+    }
+
     const value = (d: { day: number, month: number, year: number }) =>
-        (d.year * 12 + (d.month - 1)) * 31 + (d.day - 1);
-    return value(date) >= value(fromParts) && value(date) <= value(toParts);
+        d.year * 12 * 31 + monthDayValue(d.month, d.day);
+    const fromYear = cron.firstYear > 0 ? cron.firstYear : -Infinity;
+    const toYear = cron.lastYear > 0 ? cron.lastYear : Infinity;
+    return value(date) >= value(
+        { day: fromDay, month: fromMonth, year: fromYear })
+        && value(date) <= value(
+            { day: toDay, month: toMonth, year: toYear });
 }
 
 /**

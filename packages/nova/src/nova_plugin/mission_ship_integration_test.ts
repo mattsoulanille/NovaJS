@@ -455,6 +455,33 @@ describe('mission ships in the shared simulation', () => {
                     .get(MISSION_ID)!.autoAbortPending).toBeTrue();
             }, 30_000);
 
+        it('TAKES on a deferred auto-abort whose PayVal is negative',
+            async () => {
+                // mïsn Flags2 0x0002's Pay is the whole PayVal, and the
+                // stock scenario uses the bit to take (nova:609/610/731)
+                // far more than to pay. -40002 decodes to "2% of the
+                // player's cash", frozen at accept as autoAbortTakePercent
+                // because the simulation cannot decode a mïsn itself.
+                const { world, shipUuid, missionShipUuid } =
+                    await makeWorldWithMissionShip(GOAL_RESCUE);
+                const owner = world.entities.get(shipUuid)!;
+                const active = owner.components.get(MissionsComponent)!
+                    .get(MISSION_ID)!;
+                active.autoAbortOnBoard = true;
+                active.autoAbortTakePercent = 2;
+                owner.components.set(CreditsComponent, { credits: 25000 });
+
+                world.entities.get(missionShipUuid)!.components
+                    .set(BoardedComponent,
+                        { boarder: shipUuid, plundered: true });
+                for (let i = 0; i < 60; i++) {
+                    world.step();
+                }
+                // Taken once, on the first boarding only.
+                expect(owner.components.get(CreditsComponent)!.credits)
+                    .toEqual(24500);
+            }, 30_000);
+
         it('pays the deferred auto-abort exactly once', async () => {
             const { world, shipUuid, missionShipUuid } =
                 await makeWorldWithMissionShip(GOAL_RESCUE);

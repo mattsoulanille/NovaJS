@@ -484,8 +484,30 @@ export class Spaceport extends Menu<Entity> {
         if (offers.length === 0) {
             return;
         }
-        await presentOffers(this.offerPopup, session, this.universe, offers);
-        session.commit();
+        try {
+            await presentOffers(this.offerPopup, session, this.universe,
+                offers);
+        } finally {
+            // COMMITTED WHATEVER HAPPENS. presentOffers awaits a popup per
+            // offer, and every accept has already mutated the session's
+            // working copy by the time the NEXT offer's text is expanded —
+            // so a throw anywhere down that loop (a missing dësc, a PIXI
+            // failure) used to drop the whole visit on the floor, mission
+            // and all, with show()'s outer catch swallowing the error. The
+            // player had accepted; the mission simply vanished.
+            //
+            // Committing early is harmless in the other direction: a throw
+            // BEFORE any acceptance leaves the working copy identical to
+            // the entity (presentOffers reaches its first await before it
+            // touches anything, and only acceptOffer/refuseOffer write),
+            // so the commit writes back equal values and advances no date.
+            // A throw from INSIDE acceptOffer's own set string is the one
+            // genuinely half-mutated case, and there committing is still
+            // right — it is the same "the session is the unit of work"
+            // rule the bar follows, where the session commits at Leave
+            // however the offer sequence ended.
+            session.commit();
+        }
     }
 
     /**

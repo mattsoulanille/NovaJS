@@ -13,6 +13,15 @@ import {
     recordHostile,
 } from './reputation.js';
 import { GovtData } from 'novadatainterface/govt_data';
+import { MissionSession } from '../spaceport/mission_session.js';
+import { MissionUniverse } from '../spaceport/mission_universe.js';
+import { acceptOffer } from './mission_logic.js';
+import { makeShip } from './make_ship.js';
+import { dayNumber } from './calendar.js';
+import {
+    CreditsComponent, GameDateComponent, MissionsComponent,
+} from './player_state_plugin.js';
+import { ControlBitsComponent } from './ncb_plugin.js';
 
 /**
  * Reputation against the REAL Nova game data: pins the stock govts'
@@ -175,5 +184,76 @@ describe('reputation against real Nova data', () => {
             expect(decodePayVal(mission.payVal)).toEqual({
                 type: 'cleanRecord', govtResourceId: 131, scope: 'allies',
             });
+        });
+
+    /**
+     * The "Drop Bear" trap, and the reason auto-abort had to stop testing
+     * `payVal > 0`: EVERY stock mission that sets mïsn Flags2 0x0002
+     * ("Apply mission Pay on auto-abort") uses it to TAKE, not to pay.
+     * There are exactly four, all AvailLoc 3 (main spaceport), all
+     * ShipCount 0 so all of them the IMMEDIATE auto-abort:
+     *
+     *   nova:609/610  "GOTCHA!! Auroran Drop Bear scores again..."
+     *                 PayVal -40002 / -40005 — 2% and 5% of your cash,
+     *                 plus DatePostInc 14 in hospital.
+     *   nova:731      "Exotic Licence Forgery"      PayVal -40050 (50%)
+     *   nova:896      "Clean Fed Record"            PayVal -10128
+     *
+     * Under the old `payVal > 0` test all four took nothing whatsoever.
+     */
+    it("pins the 'Drop Bear' trap (nova:609): auto-abort takes 2% of cash",
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const mission = await gameData.data.Mission.get('nova:609');
+            expect(mission.payVal).toBe(-40002);
+            expect(mission.flags.autoAbort).toBe(true);
+            expect(mission.flags.applyPayOnAutoAbort).toBe(true);
+            // ShipCount 0, so it is the IMMEDIATE auto-abort: everything
+            // it does happens the moment it is accepted.
+            expect(mission.shipCount).toBe(0);
+            expect(mission.datePostInc).toBe(14);
+            expect(decodePayVal(mission.payVal))
+                .toEqual({ type: 'takePercent', percent: 2 });
+
+            const bigger = await gameData.data.Mission.get('nova:610');
+            expect(bigger.payVal).toBe(-40005);
+            expect(decodePayVal(bigger.payVal))
+                .toEqual({ type: 'takePercent', percent: 5 });
+        });
+
+    it('accepting nova:609 really costs the pilot 2% of their credits',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+
+            const start = await gameData.data.PlayerStart.get('nova:128');
+            const shipData = await gameData.data.Ship.get(start.ship);
+            const entity = makeShip(shipData);
+            entity.components.set(GameDateComponent, { ...start.date });
+            entity.components.set(CreditsComponent, { credits: 25000 });
+            entity.components.set(ControlBitsComponent, new Set());
+
+            const session = await MissionSession.create(
+                entity, gameData, universe, 'nova:128');
+            const mission = universe.getMission('nova:609')!;
+            const result = acceptOffer(session.machinery, {
+                data: mission, travelPlanet: null, returnPlanet: null,
+                cargoType: -1, cargoQty: 0, acceptable: true,
+            }, session.outfits);
+            expect(result.accepted).toBe(true);
+            const events = session.commit();
+
+            // 2% of 25000, and the mission never joins the list.
+            expect(entity.components.get(CreditsComponent)!.credits)
+                .toBe(24500);
+            expect(entity.components.get(MissionsComponent)!.size).toBe(0);
+            // Nothing was PAID, so the notice carries no payment...
+            const notice = events.find(e => e.type === 'autoAborted');
+            expect(notice).toBeDefined();
+            expect(notice!.payment).toBeUndefined();
+            // ...and DatePostInc 14 still put the pilot in hospital.
+            expect(dayNumber(entity.components.get(GameDateComponent)!)
+                - dayNumber(start.date)).toBe(14);
         });
 });

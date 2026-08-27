@@ -5,7 +5,8 @@ import { EncodedEntity, SerializerResource } from 'nova_ecs/plugins/serializer_p
 import { World } from 'nova_ecs/world';
 import { CargoComponent } from './cargo_plugin.js';
 import { deriveEntityComponents } from './entity_factory.js';
-import { ActiveMissionType, CreditsComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
+import { addDays } from './calendar.js';
+import { ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import { NpcComponent } from './npc_ai_plugin.js';
@@ -167,6 +168,23 @@ export const AcceptedMissionType = t.intersection([t.type({
     offeredByFate: t.union([t.literal('replace'), t.literal('leave')]),
     /** Signed credit change from the accept (PayVal, OnAccept's Pxxx). */
     creditsDelta: t.number,
+    /**
+     * Days the accept pushed the player's calendar forward: an immediate
+     * auto-abort's mïsn DatePostInc, "the number of days by which to
+     * increment the date when the mission is completed" — which for an
+     * auto-abort mission is the moment it is accepted.
+     *
+     * A DELTA, like every other field here, so it composes with whatever
+     * else moved the clock in between, and applied as a plain `addDays`
+     * because that is exactly what the docked path does
+     * (MissionSession.commit's dateAdvance): no crons are run and no
+     * deadlines are swept for these days on either path, and the two must
+     * not disagree. Absent (and omitted from older records) when the
+     * accept left the date alone, which is every stock ship-offered
+     * mission — mïsn nova:609/610 are the only stock autoAbort missions
+     * with a DatePostInc and they are AvailLoc 3, main-spaceport.
+     */
+    dateDelta: t.number,
     /** Control bits the OnAccept set string set / cleared. */
     bitsSet: t.array(t.number),
     bitsCleared: t.array(t.number),
@@ -291,6 +309,15 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
             // has, but EV Nova has no debt.
             credits.credits =
                 Math.max(0, credits.credits + accepted.creditsDelta);
+        }
+    }
+    // mïsn DatePostInc on an auto-abort accept. Forward only, and pure
+    // arithmetic on a synced component, so it replays identically.
+    if (accepted.dateDelta && accepted.dateDelta > 0) {
+        const date = player.components.get(GameDateComponent);
+        if (date) {
+            player.components.set(GameDateComponent,
+                addDays(date, accepted.dateDelta));
         }
     }
     const bits = player.components.get(ControlBitsComponent);

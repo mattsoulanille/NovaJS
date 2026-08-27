@@ -324,6 +324,39 @@ describe('buildShipMissionAccept (the input record)', () => {
             }
         });
 
+    it('carries an auto-abort\'s DatePostInc and its NEGATIVE PayVal '
+        + 'across the wire', async () => {
+            // PLUG-IN REACHABILITY, pinned with stock data: mïsn nova:609
+            // (the "Drop Bear" trap) is autoAbort + applyPayOnAutoAbort
+            // with PayVal -40002 and DatePostInc 14, but AvailLoc 3, so
+            // no stock përs offers it. A plug-in that pointed a përs's
+            // LinkMission at a mission of this shape used to lose BOTH
+            // effects on the in-flight path: the record diffed credits,
+            // bits, ranks, cargo and outfits but not the calendar, and
+            // acceptOffer discarded every negative PayVal outright.
+            const { gameData, universe } = await universeFor();
+            const player = await makePlayer();
+            expect(player.components.get(CreditsComponent)!.credits)
+                .toEqual(25000);
+            const accept = await buildShipMissionAccept(player, {
+                data: universe.getMission('nova:609')!,
+                travelPlanet: null, returnPlanet: null,
+                cargoType: -1, cargoQty: 0, acceptable: true,
+            }, gameData, universe,
+                { offeredBy: 'npc:drop-bear', systemId: HERE });
+            expect(accept).not.toBeNull();
+            expect(accept!.record.autoAborted).toBeTrue();
+            // 2% of the chär's 25000 credits.
+            expect(accept!.record.creditsDelta).toEqual(-500);
+            expect(accept!.record.dateDelta).toEqual(14);
+            // The display's mirror is still a mirror.
+            expect(player.components.get(CreditsComponent)!.credits)
+                .toEqual(25000);
+            expect(player.components.get(GameDateComponent))
+                .toEqual((await gameData.data.PlayerStart.get('nova:128'))
+                    .date);
+        });
+
     it('refuses an accept the machinery itself refuses', async () => {
         // The 16-mission cap, re-checked at accept time against the
         // CURRENT state rather than the frozen offer.

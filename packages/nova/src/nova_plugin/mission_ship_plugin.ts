@@ -243,6 +243,17 @@ function rescueBoarded(active: ActiveMission, owner: Entity,
             credits.credits += active.autoAbortPay;
         }
     }
+    // The same flag's other arithmetic reading: PayVal -40001..-40099
+    // takes that percent of the player's cash instead of paying them
+    // (mission_logic's autoAbortPayEffects froze the decoded percent).
+    // Truncated and clamped exactly as completion's takePercent is.
+    if (active.autoAbortTakePercent) {
+        const credits = owner.components.get(CreditsComponent);
+        if (credits) {
+            credits.credits = Math.max(0, credits.credits - Math.trunc(
+                credits.credits * active.autoAbortTakePercent / 100));
+        }
+    }
     if (active.autoAbortFuel) {
         const fuel = owner.components.get(FuelComponent);
         if (fuel) {

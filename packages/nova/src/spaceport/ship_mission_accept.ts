@@ -21,6 +21,7 @@ import {
     CombatRatingComponent, LegalRecordsComponent,
 } from '../nova_plugin/reputation_plugin.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+import { dayNumber } from '../nova_plugin/calendar.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
@@ -299,6 +300,14 @@ export async function buildShipMissionAccept(player: Entity,
 
     const creditsBefore = before.components.get(CreditsComponent)!.credits;
     const creditsAfter = copy.components.get(CreditsComponent)!.credits;
+    // mïsn DatePostInc: an immediate auto-abort settles at accept, so
+    // MissionSession.commit has already pushed the copy's calendar. Diffed
+    // like everything else here rather than read off the mïsn, so whatever
+    // else learns to move the date is carried for free.
+    const dateBefore = before.components.get(GameDateComponent);
+    const dateAfter = copy.components.get(GameDateComponent);
+    const dateDelta = dateBefore && dateAfter
+        ? dayNumber(dateAfter) - dayNumber(dateBefore) : 0;
     const bits = diffSet(before.components.get(ControlBitsComponent)!,
         copy.components.get(ControlBitsComponent)!);
     const ranks = diffSet(before.components.get(ActiveRanksComponent)!,
@@ -350,6 +359,7 @@ export async function buildShipMissionAccept(player: Entity,
             ...(offeredBy && offeredByFate ? { offeredByFate } : {}),
             ...(creditsAfter !== creditsBefore
                 ? { creditsDelta: creditsAfter - creditsBefore } : {}),
+            ...(dateDelta > 0 ? { dateDelta } : {}),
             ...(bits.added.length ? { bitsSet: bits.added } : {}),
             ...(bits.removed.length ? { bitsCleared: bits.removed } : {}),
             ...(ranks.added.length ? { ranksGranted: ranks.added } : {}),

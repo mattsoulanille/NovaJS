@@ -89,6 +89,16 @@ const SAMPLE: SaveData = {
 };
 
 describe('save_game schema', () => {
+    // extractSaveData reads the MODULE-GLOBAL discovery cache
+    // (discovery_store.ts), so a spec elsewhere that marked a system
+    // discovered leaks `save.discovery` into these whole-object
+    // comparisons. Jasmine runs with random: true, so whether it does is
+    // a function of the seed: seed 22715 put discovery_store_test first
+    // and failed the two `toEqual(SAMPLE)` specs below with a stray
+    // `discovery: [['nova:130', 1]]`. Every describe that extracts a save
+    // starts from a clean store.
+    beforeEach(() => resetDiscovery());
+
     it('round-trips a save through encode and decode', () => {
         const decoded = decodeSave(encodeSave(SAMPLE));
         expect(decoded).toEqual(SAMPLE);

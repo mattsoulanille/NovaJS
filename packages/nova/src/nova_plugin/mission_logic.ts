@@ -26,6 +26,7 @@ import {
     compRewardDelta,
     decodePayVal,
     LegalRecords,
+    PayValEffect,
     recordWith,
 } from './reputation.js';
 
@@ -1138,6 +1139,88 @@ export function deferredAutoAbort(mission: MissionData): boolean {
             || mission.shipGoal === GOAL_RESCUE);
 }
 
+/**
+ * The DECODED mïsn Flags2 0x0002 ("Apply mission Pay on auto-abort")
+ * effects a DEFERRED auto-abort freezes onto its ActiveMission, for the
+ * simulation to apply the tick the special ship is boarded.
+ *
+ * The decoded effect is frozen, never the raw PayVal, for the same reason
+ * `failIfPlayerDisabledOrDestroyed` is frozen: the simulation never reads
+ * mission game data, so it cannot decode a PayVal itself — and the old
+ * `payVal > 0 ? payVal : undefined` threw away every negative encoding on
+ * the way past. Both fields here are pure arithmetic on the synced
+ * CreditsComponent, which is why they are the sim's half at all.
+ *
+ * NOT frozen, deliberately: `cleanRecord` (PayVal -10128 and friends),
+ * which needs the government table, and `takeCredits`, which the Bible
+ * applies at mission START — a deferred auto-abort mission really does
+ * start, so acceptOffer's normal takeCredits already spent it. See
+ * runPendingAutoAborts for the record-cleaning half.
+ */
+function autoAbortPayEffects(mission: MissionData):
+    { autoAbortPay?: number, autoAbortTakePercent?: number } {
+    if (!mission.flags.applyPayOnAutoAbort) {
+        return {};
+    }
+    const pay = decodePayVal(mission.payVal);
+    if (pay.type === 'credits') {
+        return { autoAbortPay: pay.amount };
+    }
+    if (pay.type === 'takePercent') {
+        return { autoAbortTakePercent: pay.percent };
+    }
+    return {};
+}
+
+/**
+ * Applies one decoded mïsn PayVal to the working state, and returns the
+ * credits PAID (for the notice's <PAY> and the popup's "payment" line) —
+ * `undefined` for every encoding that pays nothing.
+ *
+ * THE ONE PLACE THE FOUR ENCODINGS ARE SPENT. The Bible gives PayVal five
+ * readings (see decodePayVal) and only one of them is "hand the player
+ * money"; the other three take money or clean a record. Completion, the
+ * immediate auto-abort, and the deferred auto-abort's player-local half all
+ * route through here so a mission that costs 2% of your cash costs it
+ * wherever it is settled. Splitting the arithmetic out is what fixed the
+ * auto-abort paths, which used to test `payVal > 0` and so silently
+ * discarded every negative encoding — including the stock "Drop Bear" trap
+ * (mïsn nova:609/610, PayVal -40002/-40005) and mïsn nova:731's 50% fine.
+ *
+ * `takeCredits` is the odd one out in WHEN it applies (mission start, not
+ * completion), not in HOW, so callers decide whether it is theirs to spend;
+ * the arithmetic still lives here. Both takes clamp at zero: EV Nova has no
+ * debt.
+ */
+function applyPayVal(machinery: MissionMachineryContext,
+    mission: MissionData, pay: PayValEffect): number | undefined {
+    const { state } = machinery;
+    switch (pay.type) {
+        case 'credits':
+            state.credits.credits += pay.amount;
+            return pay.amount;
+        case 'takePercent':
+            state.credits.credits -= Math.trunc(
+                state.credits.credits * pay.percent / 100);
+            return undefined;
+        case 'takeCredits':
+            state.credits.credits = Math.max(0,
+                state.credits.credits - pay.amount);
+            return undefined;
+        case 'cleanRecord':
+            if (state.records) {
+                const govtId =
+                    `${idPrefix(mission.id)}:${pay.govtResourceId}`;
+                cleanRecords(state.records, pay.scope,
+                    machinery.offerContext().getGovt(govtId),
+                    machinery.allGovts?.() ?? []);
+            }
+            return undefined;
+        case 'none':
+            return undefined;
+    }
+}
+
 /** The result of an accept attempt (see acceptOffer). */
 export type AcceptResult =
     | { accepted: true }
@@ -1169,10 +1252,20 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // flagged), never becoming active.
         runMissionSetString(machinery, mission.onAccept, prefix,
             outfits, depth);
+        // mïsn Flags2 0x0002, "Apply mission Pay on auto-abort". The Pay
+        // is the WHOLE PayVal, not just a positive one: the stock traps
+        // that use this bit are the ones that TAKE — nova:609/610 take 2%
+        // and 5% of the player's cash ("GOTCHA!! Auroran Drop Bear scores
+        // again..."), nova:731 takes 50%, and nova:896 cleans the player's
+        // Federation record. Everything the flag covers is settled here,
+        // `takeCredits` included: this mission never becomes active, so
+        // accept IS its start and its end, and the start-time encoding has
+        // nowhere else to fire. Without the flag no PayVal effect applies
+        // at all, which is what the bit means.
         let payment: number | undefined;
-        if (mission.flags.applyPayOnAutoAbort && mission.payVal > 0) {
-            state.credits.credits += mission.payVal;
-            payment = mission.payVal;
+        if (mission.flags.applyPayOnAutoAbort) {
+            payment = applyPayVal(machinery, mission,
+                decodePayVal(mission.payVal));
         }
         state.dateAdvance += Math.max(0, mission.datePostInc);
         state.events.push({
@@ -1241,8 +1334,7 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // fuel upon auto-abort".
         ...(deferredAutoAbort(mission) ? {
             autoAbortOnBoard: true,
-            autoAbortPay: mission.flags.applyPayOnAutoAbort
-                && mission.payVal > 0 ? mission.payVal : undefined,
+            ...autoAbortPayEffects(mission),
             autoAbortFuel: mission.flags.remove100FuelOnAutoAbort
                 ? AUTO_ABORT_FUEL_COST : undefined,
         } : {}),
@@ -1257,8 +1349,7 @@ export function acceptOffer(machinery: MissionMachineryContext,
     // EV Nova has no debt.
     const pay = decodePayVal(mission.payVal);
     if (pay.type === 'takeCredits') {
-        state.credits.credits = Math.max(0,
-            state.credits.credits - pay.amount);
+        applyPayVal(machinery, mission, pay);
     }
     runMissionSetString(machinery, mission.onAccept, prefix, outfits, depth);
     state.events.push({
@@ -1378,22 +1469,12 @@ function completeMission(machinery: MissionMachineryContext,
         });
     }
     unloadMissionCargo(state, active);
-    let payment: number | undefined;
     // PayVal: credits, record cleaning, or cash removal (the Bible's
-    // negative encodings; takeCredits already applied at accept).
+    // negative encodings; takeCredits already applied at accept, so it is
+    // the one encoding completion does NOT spend).
     const pay = decodePayVal(mission.payVal);
-    if (pay.type === 'credits') {
-        state.credits.credits += pay.amount;
-        payment = pay.amount;
-    } else if (pay.type === 'takePercent') {
-        state.credits.credits -= Math.trunc(
-            state.credits.credits * pay.percent / 100);
-    } else if (pay.type === 'cleanRecord' && state.records) {
-        const govtId = `${idPrefix(mission.id)}:${pay.govtResourceId}`;
-        cleanRecords(state.records, pay.scope,
-            machinery.offerContext().getGovt(govtId),
-            machinery.allGovts?.() ?? []);
-    }
+    const payment = pay.type === 'takeCredits' ? undefined
+        : applyPayVal(machinery, mission, pay);
     applyOutcomeReputation(machinery, mission, 'complete');
     state.dateAdvance += Math.max(0, mission.datePostInc);
     runMissionSetString(machinery, mission.onSuccess,
@@ -1511,6 +1592,19 @@ export function runPendingAutoAborts(machinery: MissionMachineryContext,
         // (the same hazard runPendingShipDone documents).
         if (!state.missions.has(active.id) || !active.autoAbortPending) {
             continue;
+        }
+        // The half of mïsn Flags2 0x0002's Pay that needs the government
+        // table: PayVal's record-cleaning encodings. The sim already
+        // settled the two arithmetic ones from the frozen
+        // autoAbortPay/autoAbortTakePercent (autoAbortPayEffects); this
+        // one is re-decoded from the mission data, which is exactly what
+        // this side of the split has and the sim does not.
+        const mission = machinery.getMission(active.id);
+        if (mission?.flags.applyPayOnAutoAbort) {
+            const pay = decodePayVal(mission.payVal);
+            if (pay.type === 'cleanRecord') {
+                applyPayVal(machinery, mission, pay);
+            }
         }
         abortMission(machinery, active.id, outfits);
         ran++;

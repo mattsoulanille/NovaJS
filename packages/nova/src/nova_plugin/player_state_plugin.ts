@@ -86,6 +86,14 @@ export const ActiveMissionType = t.intersection([t.type({
     /** mïsn Flags2 0x0002, "Apply mission Pay on auto-abort": the credits
      * to hand over when the deferred auto-abort fires. */
     autoAbortPay: t.number,
+    /**
+     * The same flag's NEGATIVE PayVal sibling: the percent of the player's
+     * cash to take when the deferred auto-abort fires (PayVal -40001..
+     * -40099). Decoded at accept — the simulation cannot read a mïsn — and
+     * absent both when the mission pays instead and in saves written before
+     * this field existed, which decode unchanged.
+     */
+    autoAbortTakePercent: t.number,
     /** mïsn Flags 0x0008, "Mission takes away 100 units of fuel upon
      * auto-abort": the fuel to deduct when it fires. */
     autoAbortFuel: t.number,

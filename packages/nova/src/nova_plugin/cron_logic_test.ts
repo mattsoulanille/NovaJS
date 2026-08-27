@@ -139,6 +139,144 @@ describe('runCronsForDays', () => {
         expect(bits.has(10)).toBe(true);
     });
 
+    /**
+     * A crön's six date fields are each "ignored" independently when set
+     * to 0 or -1 (Bible), so a window that names months and days but no
+     * YEAR is a season that comes round every year — not, as the old
+     * ±Infinity-into-one-scalar comparison made it, every day forever.
+     */
+    describe('the date window with a wildcarded year', () => {
+        /** Whether the cron would activate on `date`. */
+        function firesOn(cron: CronData,
+            date: { day: number, month: number, year: number }): boolean {
+            const bits = new Set<number>();
+            const day = dayNumber(date);
+            runCronsForDays([cron], new Map(), bits, day - 1, day,
+                () => 0);
+            return bits.has(10);
+        }
+
+        it('keeps stock crön nova:156 (the Auroran Drop Bear Mating '
+            + 'Season) inside September-December', () => {
+                // First 1/9/-1, Last 30/12/-1, Random 100, EnableOn !b42,
+                // OnStart b42 — verbatim from the stock Nova Files. It
+                // used to fire on any day of any year, so a pilot in March
+                // had b42 set and the mating-season news running.
+                const cron = makeCron({
+                    id: 'nova:156',
+                    firstDay: 1, firstMonth: 9, firstYear: -1,
+                    lastDay: 30, lastMonth: 12, lastYear: -1,
+                    onStart: 'b10',
+                });
+                expect(firesOn(cron, { day: 15, month: 3, year: 1177 }))
+                    .toBe(false);
+                expect(firesOn(cron, { day: 31, month: 8, year: 1177 }))
+                    .toBe(false);
+                expect(firesOn(cron, { day: 1, month: 9, year: 1177 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 30, month: 12, year: 1177 }))
+                    .toBe(true);
+                // LastDay 30: New Year's Eve is outside.
+                expect(firesOn(cron, { day: 31, month: 12, year: 1177 }))
+                    .toBe(false);
+                // And it comes round again the following year.
+                expect(firesOn(cron, { day: 15, month: 10, year: 1183 }))
+                    .toBe(true);
+            });
+
+        it('wraps a season through New Year when Last precedes First',
+            () => {
+                // 15 Nov - 10 Feb: the only reading under which such a
+                // window means anything at all.
+                const cron = makeCron({
+                    firstDay: 15, firstMonth: 11, firstYear: -1,
+                    lastDay: 10, lastMonth: 2, lastYear: -1,
+                    onStart: 'b10',
+                });
+                expect(firesOn(cron, { day: 20, month: 11, year: 1177 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 31, month: 12, year: 1177 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 5, month: 2, year: 1178 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 11, month: 2, year: 1178 }))
+                    .toBe(false);
+                expect(firesOn(cron, { day: 14, month: 11, year: 1177 }))
+                    .toBe(false);
+                expect(firesOn(cron, { day: 1, month: 6, year: 1177 }))
+                    .toBe(false);
+            });
+
+        it('leaves a fully wildcarded window always open (122 of the 125 '
+            + 'stock cröns)', () => {
+                const cron = makeCron({
+                    firstDay: -1, firstMonth: -1, firstYear: -1,
+                    lastDay: -1, lastMonth: -1, lastYear: -1,
+                    onStart: 'b10',
+                });
+                expect(firesOn(cron, { day: 1, month: 1, year: 1177 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 15, month: 3, year: 1177 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 31, month: 12, year: 1200 }))
+                    .toBe(true);
+                // getDefaultCronData leaves the fields at 0, the other
+                // wildcard spelling.
+                expect(firesOn(makeCron({ onStart: 'b10' }),
+                    { day: 15, month: 3, year: 1177 })).toBe(true);
+            });
+
+        it('still reads a window that names a YEAR as one absolute span',
+            () => {
+                // Stock nova:128 "Wraith Change": 1/1/1183 - 31/12/1200.
+                // A season reading would exclude, say, 1 June 1190; the
+                // absolute reading (unchanged from before) includes it.
+                const cron = makeCron({
+                    firstDay: 1, firstMonth: 1, firstYear: 1183,
+                    lastDay: 31, lastMonth: 12, lastYear: 1200,
+                    onStart: 'b10',
+                });
+                expect(firesOn(cron, { day: 31, month: 12, year: 1182 }))
+                    .toBe(false);
+                expect(firesOn(cron, { day: 1, month: 1, year: 1183 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 1, month: 6, year: 1190 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 31, month: 12, year: 1200 }))
+                    .toBe(true);
+                expect(firesOn(cron, { day: 1, month: 1, year: 1201 }))
+                    .toBe(false);
+
+                // Stock nova:129 "Terraforming Start": 1/1/1178 - 1/1/1179,
+                // a span that ends on the SECOND of its two January 1sts.
+                const terraform = makeCron({
+                    firstDay: 1, firstMonth: 1, firstYear: 1178,
+                    lastDay: 1, lastMonth: 1, lastYear: 1179,
+                    onStart: 'b10',
+                });
+                expect(firesOn(terraform, { day: 30, month: 6, year: 1178 }))
+                    .toBe(true);
+                expect(firesOn(terraform, { day: 1, month: 1, year: 1179 }))
+                    .toBe(true);
+                expect(firesOn(terraform, { day: 2, month: 1, year: 1179 }))
+                    .toBe(false);
+            });
+
+        it('leaves a one-sided window open on the wildcarded side', () => {
+            const from = makeCron({
+                firstDay: 1, firstMonth: 1, firstYear: 1183,
+                lastDay: -1, lastMonth: -1, lastYear: -1,
+                onStart: 'b10',
+            });
+            expect(firesOn(from, { day: 31, month: 12, year: 1182 }))
+                .toBe(false);
+            expect(firesOn(from, { day: 1, month: 1, year: 1183 }))
+                .toBe(true);
+            expect(firesOn(from, { day: 1, month: 6, year: 1250 }))
+                .toBe(true);
+        });
+    });
+
     it('holds off re-activation for PostHoldoff days', () => {
         const cron = makeCron({ postHoldoff: 10, onStart: '^b10' });
         const bits = new Set<number>();

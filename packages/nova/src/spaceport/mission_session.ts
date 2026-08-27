@@ -441,14 +441,22 @@ export async function processEntityLanding(entity: Entity,
     // any crons that fire on it, and fails any now-expired missions).
     await advanceEntityDate(entity, 1, universe, gameData);
 
-    // Notices queued while the player was in flight surface here first.
-    const pending = drainPendingMissionNotices(entity);
-
     const session = await MissionSession.create(
         entity, gameData, universe, planetId);
     processLanding(session.machinery, planetId, session.currentDay,
         session.outfits);
-    return [...pending, ...session.commit()];
+    const events = session.commit();
+
+    // Notices queued while the player was in flight surface here first —
+    // but they are only DRAINED once the landing above has gone through.
+    // Draining first was a lost-notice seam: MissionSession.create awaits
+    // game data and can throw, and the caller (spaceport.ts's show)
+    // catches, so a failure between the drain and the return took the
+    // queued deadline/auto-abort notices with it and the player never saw
+    // them. Nothing between here and the drain writes the queue —
+    // advanceEntityDate, which does, already ran above — so deferring it
+    // reorders nothing.
+    return [...drainPendingMissionNotices(entity), ...events];
 }
 
 /**

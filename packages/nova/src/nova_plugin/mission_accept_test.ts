@@ -4,7 +4,7 @@ import { World } from 'nova_ecs/world';
 import { SerializerPlugin, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { CargoComponent } from './cargo_plugin.js';
 import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from './mission_accept.js';
-import { ActiveMission, ActiveMissionType, CreditsComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
+import { ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { ControlledByComponent } from './ship_control.js';
@@ -126,6 +126,34 @@ describe('applyAcceptMission', () => {
             expect(player.components.get(CreditsComponent)!.credits)
                 .toEqual(750);
         });
+
+        it('advances the calendar by an auto-abort\'s DatePostInc', () => {
+            // mïsn DatePostInc on an accept that settles immediately. A
+            // plain addDays, exactly as MissionSession.commit's dateAdvance
+            // does it docked: no crons run for these days on either path.
+            const { world, player } = makeWorld();
+            player.components.set(GameDateComponent,
+                { day: 23, month: 6, year: 1177 });
+            applyAcceptMission(world, PEER, accepted({ dateDelta: 14 }));
+            expect(player.components.get(GameDateComponent))
+                .toEqual({ day: 7, month: 7, year: 1177 });
+        });
+
+        it('leaves the calendar alone without a dateDelta, and is '
+            + 'idempotent with one', () => {
+                const { world, player } = makeWorld();
+                const date = { day: 23, month: 6, year: 1177 };
+                player.components.set(GameDateComponent, { ...date });
+                applyAcceptMission(world, PEER, accepted());
+                expect(player.components.get(GameDateComponent))
+                    .toEqual(date);
+
+                // The mission is already active now, so a replayed record
+                // carrying a dateDelta must not advance the clock again.
+                applyAcceptMission(world, PEER, accepted({ dateDelta: 14 }));
+                expect(player.components.get(GameDateComponent))
+                    .toEqual(date);
+            });
 
         it('clamps credits at zero: EV Nova has no debt', () => {
             const { world, player } = makeWorld();

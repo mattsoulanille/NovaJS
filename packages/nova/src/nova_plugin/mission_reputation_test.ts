@@ -279,3 +279,116 @@ describe('PayVal negative encodings', () => {
             ?.payment).toBe(5000);
     });
 });
+
+/**
+ * mïsn Flags2 0x0002, "Apply mission Pay on auto-abort", on an IMMEDIATE
+ * auto-abort (Flags 0x0001 without a board/rescue ship goal): the mission
+ * never becomes active, so accepting it is the only moment its Pay can be
+ * settled.
+ *
+ * The Pay is the whole PayVal. This used to read `payVal > 0` and so paid
+ * only the positive encoding, silently discarding all four negative ones —
+ * which is what the stock scenario actually uses the bit FOR (see the
+ * nova:609 spec at the end).
+ */
+describe('PayVal on an immediate auto-abort (mïsn Flags2 0x0002)', () => {
+    function autoAbortMission(partial: Partial<MissionData> = {},
+        applyPay = true): MissionData {
+        const mission = makeMission({ id: 'nova:609', ...partial });
+        mission.flags = {
+            ...mission.flags,
+            autoAbort: true,
+            applyPayOnAutoAbort: applyPay,
+        };
+        return mission;
+    }
+
+    /** Accepts the mission; an auto-abort settles entirely at accept. */
+    function accept(mission: MissionData, state: MissionWorkingState) {
+        const machinery = makeMachinery(state, [mission]);
+        acceptOffer(machinery,
+            makeMissionOffer(mission, machinery.offerContext())!);
+        expect(state.missions.size).toBe(0);
+        return machinery;
+    }
+
+    it('takes a percentage of cash (-40xxx)', () => {
+        const state = makeState({ credits: { credits: 1000 } });
+        accept(autoAbortMission({ payVal: -40002 }), state);
+        expect(state.credits.credits).toBe(980);
+    });
+
+    it('takes flat credits (-50xxx), clamped at 0', () => {
+        const state = makeState({ credits: { credits: 1000 } });
+        accept(autoAbortMission({ payVal: -50300 }), state);
+        expect(state.credits.credits).toBe(700);
+
+        const broke = makeState({ credits: { credits: 100 } });
+        accept(autoAbortMission({ payVal: -50300 }), broke);
+        expect(broke.credits.credits).toBe(0);
+    });
+
+    it('cleans the record with the encoded govt (-10xxx)', () => {
+        const state = makeState({
+            records: new Map([['nova:128', -40], ['nova:129', -40]]),
+        });
+        accept(autoAbortMission({ payVal: -10128 }), state);
+        expect(state.records!.get('nova:128')).toBe(0);
+        expect(state.records!.get('nova:129')).toBe(-40);
+    });
+
+    it('still pays a positive PayVal, and reports it on the notice', () => {
+        const state = makeState({ credits: { credits: 0 } });
+        const machinery = accept(autoAbortMission({ payVal: 500 }), state);
+        expect(state.credits.credits).toBe(500);
+        expect(machinery.state.events.find(e => e.type === 'autoAborted')
+            ?.payment).toBe(500);
+    });
+
+    it('reports no payment for the encodings that take', () => {
+        const state = makeState({ credits: { credits: 1000 } });
+        const machinery = accept(autoAbortMission({ payVal: -40002 }), state);
+        expect(machinery.state.events.find(e => e.type === 'autoAborted')
+            ?.payment).toBeUndefined();
+    });
+
+    it('freezes the DECODED effect on a DEFERRED auto-abort, for the sim',
+        () => {
+            // Flags 0x0001 with a board/rescue ship goal defers the abort
+            // to the boarding, so the mission DOES become active and the
+            // simulation settles the arithmetic there. It cannot decode a
+            // PayVal (it never reads mission data), so the decoded effect
+            // rides on the ActiveMission — which is why freezing the raw
+            // `payVal > 0` lost every negative encoding.
+            const deferred = (payVal: number) => {
+                const mission = autoAbortMission({
+                    payVal, shipCount: 1, shipGoal: 2 /* board */,
+                });
+                const state = makeState({ credits: { credits: 25000 } });
+                const machinery = makeMachinery(state, [mission]);
+                acceptOffer(machinery,
+                    makeMissionOffer(mission, machinery.offerContext())!);
+                return state.missions.get('nova:609')!;
+            };
+
+            const takes = deferred(-40002);
+            expect(takes.autoAbortOnBoard).toBeTrue();
+            expect(takes.autoAbortTakePercent).toBe(2);
+            expect(takes.autoAbortPay).toBeUndefined();
+
+            const pays = deferred(2000);
+            expect(pays.autoAbortPay).toBe(2000);
+            expect(pays.autoAbortTakePercent).toBeUndefined();
+        });
+
+    it('applies nothing at all without the 0x0002 flag', () => {
+        const state = makeState({
+            credits: { credits: 1000 },
+            records: new Map([['nova:128', -40]]),
+        });
+        accept(autoAbortMission({ payVal: -40002 }, false), state);
+        expect(state.credits.credits).toBe(1000);
+        accept(autoAbortMission({ payVal: -10128 }, false), state);
+        expect(state.records!.get('nova:128')).toBe(-40);
+    });
+});
