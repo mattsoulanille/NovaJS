@@ -1,6 +1,9 @@
 import 'jasmine';
 import { immerable } from 'immer';
-import { cloneEncoded } from './snapshot_plugin.js';
+import { Entity } from '../entity.js';
+import { World } from '../world.js';
+import { cloneEncoded, SnapshotPolicies, SnapshotPoliciesResource, snapshotWorld } from './snapshot_plugin.js';
+import { TimePlugin } from './time_plugin.js';
 
 class Point {
     [immerable] = true;
@@ -180,5 +183,50 @@ describe('cloneEncoded', () => {
         expect(() => cloneEncoded({ f: () => 1 })).toThrowError(/could not be cloned|DataCloneError/i);
         expect(() => cloneEncoded(Symbol('s') as unknown))
             .toThrowError(/could not be cloned|DataCloneError/i);
+    });
+});
+
+describe('snapshotWorld queued-event invariant', () => {
+    function makeWorld(): World {
+        const world = new World('snapshot invariant test');
+        world.addPlugin(TimePlugin);
+        world.resources.set(SnapshotPoliciesResource, new SnapshotPolicies());
+        return world;
+    }
+
+    it('warns when a stepped world has queued events', () => {
+        const world = makeWorld();
+        world.step();
+        // Inserting an entity queues an AddEvent the next step flushes;
+        // a snapshot here would silently lose it across a restore.
+        world.entities.set('e', new Entity());
+        const warn = spyOn(console, 'warn');
+        snapshotWorld(world);
+        expect(warn).toHaveBeenCalledWith(
+            jasmine.stringMatching(/queued event/));
+        // Once per world, so the check never spams.
+        warn.calls.reset();
+        snapshotWorld(world);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('does not warn between steps, when the queue is empty', () => {
+        const world = makeWorld();
+        world.entities.set('e', new Entity());
+        world.step();
+        const warn = spyOn(console, 'warn');
+        snapshotWorld(world);
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('does not warn for the genesis snapshot of a never-stepped world', () => {
+        // World-build entity insertion queues AddEvents that the first
+        // step will flush; the genesis snapshot (taken before any step)
+        // is the documented exception to the empty-queue invariant.
+        const world = makeWorld();
+        world.entities.set('e', new Entity());
+        const warn = spyOn(console, 'warn');
+        snapshotWorld(world);
+        expect(warn).not.toHaveBeenCalled();
     });
 });

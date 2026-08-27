@@ -194,6 +194,25 @@ interface SentEntityRecord {
 
 export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private queuedEvents: EncodedSimulationBridgeEvent[] = [];
+    /**
+     * The tick the rollback driver is currently stepping (its settle
+     * tick), set by the driver's beforeStep hook; undefined between
+     * steps and after every snapshot flush. Stamps queued events with
+     * the tick they belong to — unambiguously, unlike reading
+     * TimeResource mid-step (TimeSystem advances it partway through).
+     */
+    private steppingTick?: number;
+    /**
+     * Events for step ticks at or below this have been flushed to the
+     * display (snapshot() advances it). An emission during the
+     * RE-execution of such a tick — rollback resimulation — would be a
+     * duplicate of an event the display already received, so it is
+     * dropped. Forward execution only ever steps ticks above this
+     * (snapshot() sets it to the tick already stepped and flushed), so
+     * nothing is ever dropped on the live path and forward behaviour
+     * is unchanged.
+     */
+    private eventsForwardedThrough = -1;
     private lastSent = new Map<string, SentEntityRecord>();
     private rollback: RollbackSimulation<InputRecord[]>;
     /** Inputs that apply at the next stepped tick. */
@@ -283,6 +302,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         }
         this.genesis = snapshotWorld(world);
         this.rollback = this.makeRollback();
+        this.eventsForwardedThrough = this.rollback.tick;
         // Receive relayed rollback-protocol messages from the room.
         const communicator = world.resources.get(CommunicatorResource);
         communicator?.messages.subscribe(({ message }) => {
@@ -318,12 +338,24 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         });
         for (const registration of getRegisteredSimulationBridgeEvents()) {
             world.events.get(registration.event).subscribe(({ data, entities }) => {
+                const tick = this.steppingTick;
+                if (tick !== undefined && tick <= this.eventsForwardedThrough) {
+                    // Rollback resimulation re-executing a tick whose
+                    // events the display already received: forwarding
+                    // this re-emission would deliver it twice (the
+                    // double-explosion / double-sound class of bug).
+                    // Corrections to already-displayed ticks reach the
+                    // display as state (the delta stream snaps), never
+                    // as replayed events.
+                    return;
+                }
                 const entityUuids = registration.includeEntityUuids
                     ? entities?.map(entity => typeof entity === "string" ? entity : entity.uuid)
                     : undefined;
                 this.queuedEvents.push({
                     name: registration.name,
                     data: this.serializer.encodeEvent(registration.event, data),
+                    ...(tick !== undefined ? { tick } : {}),
                     ...(entityUuids ? { entityUuids } : {}),
                 });
             });
@@ -334,6 +366,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         return new RollbackSimulation<InputRecord[]>(this.world, {
             applyInputs: applyInputRecords,
             complete: deriveEntityComponents,
+            // Stamps queued bridge events with the tick being stepped
+            // (fires for live, resimulated and fast-forwarded ticks
+            // alike, before the tick's inputs are applied, so input-
+            // application emissions are stamped too).
+            beforeStep: tick => { this.steppingTick = tick; },
             // Two seconds of history: enough for netcode rollback
             // margins and short novaSim.rewind time travel.
             capacity: 120,
@@ -547,6 +584,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // the desync, and a fresh join should not open on 30 seconds
         // of stale explosions. Drop them rather than deliver a burst.
         this.queuedEvents = [];
+        // The replayed history counts as delivered (dropped, above):
+        // only ticks stepped from here on forward events.
+        this.eventsForwardedThrough = this.rollback.tick;
+        this.steppingTick = undefined;
         // The local tick just jumped; stale smoothed drift would slew
         // against the new position.
         this.smoothedDrift = undefined;
@@ -721,11 +762,29 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 depth,
                 records: records.length,
             });
+            // Queued-but-unflushed events from the ticks about to be
+            // re-simulated describe the abandoned timeline; the
+            // resimulation re-emits the corrected versions (their ticks
+            // sit above the forwarded horizon, so they queue normally).
+            // Keeping the originals would forward each such tick's
+            // events twice.
+            const heldEvents = this.queuedEvents;
+            this.queuedEvents = heldEvents.filter(
+                event => event.tick === undefined || event.tick <= toTick);
             if (!this.rollback.rollbackTo(toTick)) {
                 // The target tick is behind the ring-buffer horizon, so
                 // the rollback did not happen and the corrected inputs
-                // apply late. Log it so desync forensics can see why.
+                // apply late. Nothing was re-simulated, so the held
+                // events are still the only copies: put them back.
+                this.queuedEvents = heldEvents;
+                // Log it so desync forensics can see why — and resync
+                // (cooldown-gated), like the sibling too-old paths
+                // (retimeTooOld, lateRecord): inputs applied at the
+                // wrong tick are a known fork, and waiting for
+                // checkpoint conviction costs seconds on a divergence
+                // we already know about.
                 this.logRollbackEvent('rollbackTooOld', { toTick, depth });
+                void this.resync();
             }
         }
     }
@@ -889,6 +948,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 restoreWorld(this.world, this.genesis,
                     deriveEntityComponents);
                 this.rollback = this.makeRollback();
+                // The clock just jumped back to genesis; a horizon from
+                // the abandoned timeline would silently swallow every
+                // event if the rejoin fails and play continues offline.
+                // (A successful joinRoom re-advances it.)
+                this.eventsForwardedThrough = this.rollback.tick;
+                this.steppingTick = undefined;
                 this.remoteInputs = [];
                 this.remoteInputsGeneration++;
                 this.checkpointHashes.clear();
@@ -940,6 +1005,15 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         const rewound = this.rollback.rewindTo(this.rollback.tick - ticks);
         if (rewound) {
             this.logRollbackEvent('rewind', { ticks });
+            // Queued events from the discarded future name ticks that
+            // no longer exist; and the re-lived timeline's events
+            // should fire afresh (time travel re-lives them), so the
+            // forwarded horizon comes back with the clock.
+            this.queuedEvents = this.queuedEvents.filter(event =>
+                event.tick === undefined || event.tick <= this.rollback.tick);
+            this.eventsForwardedThrough = Math.min(
+                this.eventsForwardedThrough, this.rollback.tick);
+            this.steppingTick = undefined;
             // Checkpoint hashes and pinned states from the discarded
             // future would report a timeline that no longer exists.
             for (const tick of this.checkpointHashes.keys()) {
@@ -1057,6 +1131,13 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         }
         const events = this.queuedEvents;
         this.queuedEvents = [];
+        // Everything stepped so far is now in the display's hands: any
+        // re-execution of these ticks (rollback resimulation) must not
+        // queue its events again. steppingTick is cleared so a stray
+        // between-steps emission is never stamped with — and dropped
+        // for — a tick it did not belong to.
+        this.eventsForwardedThrough = this.rollback.tick;
+        this.steppingTick = undefined;
         const serializer = this.serializer;
 
         const added: [string, EncodedEntity][] = [];

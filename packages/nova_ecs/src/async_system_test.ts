@@ -9,6 +9,7 @@ import { Vector } from './datatypes/vector.js';
 import { Entity } from './entity.js';
 import { EcsEvent, StepEvent } from './events.js';
 import { Optional } from './optional.js';
+import { restoreWorld, SnapshotPolicies, SnapshotPoliciesResource, snapshotWorld } from './plugins/snapshot_plugin.js';
 import { Query } from './query.js';
 import { System } from './system.js';
 import { World } from './world.js';
@@ -652,5 +653,47 @@ describe('async system', () => {
         // run twice and x will be 2.
         expect(entity.components.get(FOO_COMPONENT)?.x)
             .toEqual(1);
+    });
+
+    it('does not apply patches from before a snapshot restore', async () => {
+        // Rollback safety: a snapshot is taken, an in-flight async run
+        // then lands its patches, and the snapshot is restored. The
+        // landed patches were computed against the abandoned timeline's
+        // base, at a tick the restored timeline never reaches — they
+        // must not apply to the restored world.
+        const asyncSystem = new AsyncSystem({
+            name: 'AsyncSystem',
+            args: [FOO_COMPONENT],
+            step: async (foo) => {
+                await sleep(10);
+                foo.x = 123;
+            }
+        });
+        world.addSystem(asyncSystem);
+
+        const policies = new SnapshotPolicies();
+        policies.set(FOO_COMPONENT, {
+            policy: 'clone',
+            clone: data => ({ ...data }),
+        });
+        world.resources.set(SnapshotPoliciesResource, policies);
+
+        world.entities.set('test entity', new Entity()
+            .addComponent(FOO_COMPONENT, { x: 1 }));
+
+        world.step(); // Starts the async run against the pre-snapshot base.
+        const snapshot = snapshotWorld(world);
+
+        // The run completes and pushes its patches AFTER the snapshot.
+        clock.tick(11);
+        await world.resources.get(AsyncSystemResource)?.done;
+
+        restoreWorld(world, snapshot);
+        // Without the restore-time async reset, this step applies the
+        // abandoned timeline's patches onto the restored base (x = 123
+        // immediately; the step's own fresh run is still in flight).
+        world.step();
+        expect(world.entities.get('test entity')?.components
+            .get(FOO_COMPONENT)).toEqual({ x: 1 });
     });
 });

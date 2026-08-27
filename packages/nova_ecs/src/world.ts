@@ -480,6 +480,15 @@ export class World {
     }
 
     /**
+     * How many events are waiting in the queue (drained by the next
+     * step). Exposed so snapshotting can check the "snapshots are taken
+     * between steps, when the queue is empty" invariant.
+     */
+    get queuedEventCount(): number {
+        return this.eventQueue.length;
+    }
+
+    /**
      * Flush the event queue.
      */
     /**

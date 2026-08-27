@@ -1,14 +1,17 @@
 import 'jasmine';
 import * as t from 'io-ts';
+import { Emit } from 'nova_ecs/arg_types';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { CommunicatorResource } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { EncodedEntity, SerializerPlugin, SerializerResource, markerType } from 'nova_ecs/plugins/serializer_plugin';
-import { TimePlugin } from 'nova_ecs/plugins/time_plugin';
+import { SnapshotPolicies, SnapshotPoliciesResource } from 'nova_ecs/plugins/snapshot_plugin';
+import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { Position } from 'nova_ecs/datatypes/position';
+import { applySimulationFrame, syncedComponents, warnedUnsyncableEntities } from './apply_simulation_frame.js';
 import { FinishJumpEvent, FinishJumpEventType, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
 import { LandEvent, LandEventType } from '../nova_plugin/planet_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
@@ -302,6 +305,124 @@ describe('SimulationBridge', () => {
         }));
         expect((lastCollision as { position: Position }).position.x).toBe(12);
         expect((lastCollision as { position: Position }).position.y).toBe(34);
+    });
+
+    it('delivers events targeting an entity removed in the same frame to display subscribers', async () => {
+        syncedComponents.clear();
+        warnedUnsyncableEntities.clear();
+        const serializer = client.getSerializer();
+        const displayWorld = new World('display test world');
+
+        const entity = new Entity('foo').addComponent(FooComponent, { x: 3 });
+        await client.addEntity('foo-uuid', entity);
+        client.step();
+        applySimulationFrame(client.snapshot(), serializer, displayWorld,
+            { emitEvents: true });
+        expect(displayWorld.entities.get('foo-uuid')).toBeDefined();
+
+        // A subscriber that looks the event's target up in the display
+        // world — the pattern browser.ts's event subscribers use.
+        let sawEntity: boolean | undefined;
+        displayWorld.events.get(LandEvent).subscribe(({ entities }) => {
+            const ref = entities?.[0];
+            const uuid = typeof ref === 'string' ? ref : ref?.uuid;
+            sawEntity = uuid !== undefined
+                && displayWorld.entities.get(uuid) !== undefined;
+        });
+
+        // Sim side: the event fires during the same tick that removes
+        // its target, so the frame carries both the event and the
+        // removal.
+        world.emit(LandEvent, { id: 'planet-id', uuid: 'planet-uuid' },
+            ['foo-uuid']);
+        client.removeEntity('foo-uuid');
+        client.step();
+        const frame = client.snapshot();
+        expect(frame.removed).toEqual(['foo-uuid']);
+        expect(frame.events.length).toBe(1);
+
+        // Events are emitted BEFORE removals are applied, matching the
+        // sim, where the event fired while the entity still existed.
+        applySimulationFrame(frame, serializer, displayWorld,
+            { emitEvents: true });
+        expect(sawEntity).toBeTrue();
+        expect(displayWorld.entities.get('foo-uuid')).toBeUndefined();
+    });
+
+    describe('rollback event forwarding', () => {
+        let communicator: MockCommunicator;
+        let rollbackClient: SimulationBridgeClient;
+
+        beforeEach(() => {
+            communicator = new MockCommunicator('client');
+            world.resources.set(CommunicatorResource, communicator);
+            // Rollback needs the clock in its snapshots, or restoring
+            // a past tick leaves time at the present and resimulation
+            // never runs.
+            const policies = new SnapshotPolicies();
+            const time = world.resources.get(TimeResource)!;
+            policies.addResource({
+                name: 'time',
+                save: () => ({ ...time }),
+                restore: saved => Object.assign(time, saved as object),
+            });
+            world.resources.set(SnapshotPoliciesResource, policies);
+            // A bridged event every tick, tagged with the tick.
+            world.addSystem(new System({
+                name: 'SoundEachTick',
+                args: [Emit, TimeResource, SingletonComponent] as const,
+                step: (emit, time) => {
+                    emit(SoundEvent, { id: `tick-${time.frame}` });
+                },
+            }));
+            const host = new SimulationBridgeHost(
+                world, makeFakeSimulationData());
+            rollbackClient = new SimulationBridgeClient(
+                host, world.resources.get(SerializerResource)!);
+        });
+
+        /** Relays another peer's (harmless) input record for a tick. */
+        function relayRecord(tick: number) {
+            communicator.messages.next({
+                source: 'server',
+                message: wrapRollbackMessage({
+                    kind: 'inputs',
+                    record: {
+                        peerId: 'other peer',
+                        tick,
+                        inputs: [{ kind: 'setTarget', target: null }],
+                    },
+                }),
+            });
+        }
+
+        it('does not re-forward already-forwarded events on a rollback correction', () => {
+            rollbackClient.step(3);
+            const first = rollbackClient.snapshot();
+            expect(first.events.map(event => event.tick)).toEqual([1, 2, 3]);
+
+            // A correction for tick 2 arrives after those ticks'
+            // events were already handed to the display: the next step
+            // rolls back to tick 1 and re-simulates ticks 2-3, whose
+            // re-emissions must not be forwarded a second time.
+            relayRecord(2);
+            rollbackClient.step();
+            const second = rollbackClient.snapshot();
+            expect(second.events.map(event => event.tick)).toEqual([4]);
+        });
+
+        it('forwards each tick\'s events exactly once when rolling back unflushed ticks', () => {
+            // Three ticks' events queued but NOT yet flushed by a
+            // snapshot when the correction arrives: the originals from
+            // the re-simulated ticks are superseded by the corrected
+            // timeline's re-emissions — each tick's events must reach
+            // the display exactly once.
+            rollbackClient.step(3);
+            relayRecord(2);
+            rollbackClient.step();
+            const frame = rollbackClient.snapshot();
+            expect(frame.events.map(event => event.tick)).toEqual([1, 2, 3, 4]);
+        });
     });
 
     describe('tick pacing', () => {
