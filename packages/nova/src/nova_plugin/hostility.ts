@@ -13,7 +13,7 @@ import { isPacifiedToward, NpcComponent } from './npc_ai_plugin.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
 import { LegalRecordsComponent } from './reputation_plugin.js';
-import { ActiveRanksComponent } from './ncb_plugin.js';
+import { AggressionSuppressGovtsComponent } from './ncb_plugin.js';
 import { ranksSuppressAggression } from './rank_logic.js';
 import { ShipComponent } from './ship_plugin.js';
 import { TargetComponent } from './target_component.js';
@@ -44,9 +44,15 @@ import { TargetComponent } from './target_component.js';
  *
  * Everything it reads is synced, serializer-registered simulation state
  * (GovtComponent, NpcComponent, TargetComponent, LegalRecordsComponent,
- * AggressionComponent, the Formation/Owner/FiringGroup chain the flock
- * walk follows, the legacy ShootAllWeapons marker), so the display world
- * and every peer's simulation reach the same verdict.
+ * AggressionComponent, AggressionSuppressGovtsComponent, the
+ * Formation/Owner/FiringGroup chain the flock walk follows, the legacy
+ * ShootAllWeapons marker), so the display world and every peer's
+ * simulation reach the same verdict.
+ *
+ * The one game-data read left is Govt, which entity staging warms on
+ * every peer before the entity is inserted (entity_data_loader.ts). Rank
+ * is NOT staged, which is exactly why the 0x0100 privilege is baked into
+ * a synced component instead of being looked up here.
  */
 
 /**
@@ -166,9 +172,11 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     const playerRecords = playerEntity.components.get(LegalRecordsComponent);
     return targetCornerStyle(
         shipDisposition(targetGovt, playerGovt, playerRecords,
-            ranksSuppressAggression(
-                playerEntity.components.get(ActiveRanksComponent),
-                id => gameData.data.Rank.getCached(id), targetGovt?.id)),
+            // ränk 0x0100, read off the BAKED synced set rather than the
+            // ränk table: the simulation shares this predicate and its
+            // worker never loads Rank data (see rank_logic.ts).
+            ranksSuppressAggression(playerEntity.components
+                .get(AggressionSuppressGovtsComponent), targetGovt?.id)),
         attackingPlayer);
 }
 

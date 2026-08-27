@@ -14,7 +14,8 @@ import {
     GameDateComponent, MissionsComponent,
 } from '../nova_plugin/player_state_plugin.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent,
+    ActiveRanksComponent, AggressionSuppressGovtsComponent,
+    ControlBitsComponent,
 } from '../nova_plugin/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import {
@@ -86,6 +87,11 @@ function detachPlayerState(player: Entity): Entity {
         new Set(player.components.get(ControlBitsComponent) ?? []));
     copy.components.set(ActiveRanksComponent,
         new Set(player.components.get(ActiveRanksComponent) ?? []));
+    // The baked ränk 0x0100 set travels with the ranks it was derived
+    // from; MissionSession.commit re-derives it if the accept moves a
+    // rank, and the diff below carries the change to the simulation.
+    copy.components.set(AggressionSuppressGovtsComponent, new Set(
+        player.components.get(AggressionSuppressGovtsComponent) ?? []));
     copy.components.set(LegalRecordsComponent,
         new Map(player.components.get(LegalRecordsComponent) ?? []));
     const rating = player.components.get(CombatRatingComponent);
@@ -312,6 +318,14 @@ export async function buildShipMissionAccept(player: Entity,
         copy.components.get(ControlBitsComponent)!);
     const ranks = diffSet(before.components.get(ActiveRanksComponent)!,
         copy.components.get(ActiveRanksComponent)!);
+    // The ränk 0x0100 suppression set the sim reads. Diffed like the ranks
+    // themselves rather than re-derived on the far side, because the
+    // simulation has no ränk data to derive it from (rank_logic.ts).
+    const suppressGovts = diffSet(
+        before.components.get(AggressionSuppressGovtsComponent)
+        ?? new Set<string>(),
+        copy.components.get(AggressionSuppressGovtsComponent)
+        ?? new Set<string>());
     const cargo = diffCounts(before.components.get(CargoComponent)!,
         copy.components.get(CargoComponent)!);
     const outfitCounts = (entity: Entity) => new Map(
@@ -364,6 +378,10 @@ export async function buildShipMissionAccept(player: Entity,
             ...(bits.removed.length ? { bitsCleared: bits.removed } : {}),
             ...(ranks.added.length ? { ranksGranted: ranks.added } : {}),
             ...(ranks.removed.length ? { ranksRevoked: ranks.removed } : {}),
+            ...(suppressGovts.added.length
+                ? { suppressGovtsAdded: suppressGovts.added } : {}),
+            ...(suppressGovts.removed.length
+                ? { suppressGovtsRemoved: suppressGovts.removed } : {}),
             ...(cargo.length ? { cargoDelta: cargo } : {}),
             ...(outfits.length ? { outfitsDelta: outfits } : {}),
             ...(ships.length ? { ships: ships as never } : {}),

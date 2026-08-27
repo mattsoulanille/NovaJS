@@ -45,12 +45,37 @@ import { Entity } from 'nova_ecs/entity';
  * point of it being state rather than a permanent property:
  *
  *   'shipOffer'  the përs still has an unspent LinkMission of the rescue
- *                kind. Released by ShipOfferHoldReleaseSystem the moment
- *                the hull is marked ShipOfferSpentComponent (somebody
- *                accepted), after which the person may go about their
- *                business — and for the stock missions the hull is
+ *                kind (ShipGoal 5 — npc_spawn_plugin resolves that at
+ *                spawn-staging time and sets `holdsForOffer`, so in stock
+ *                data this is the four Refuel Traders and nothing else).
+ *                Released by `applyAcceptMission` (mission_accept.ts) the
+ *                moment the hull is marked ShipOfferSpentComponent —
+ *                somebody accepted — after which the person may go about
+ *                their business, and for the stock missions the hull is
  *                usually removed outright on the same tick anyway (përs
  *                Flags 0x0040 replaces it with the mission's own hulk).
+ *                Capture releases it too (boarding_plugin): a prize
+ *                belongs to the player, not to its old errand.
+ *
+ *                REFUSING DOES NOT RELEASE IT, and must not. The original
+ *                re-offers a refused mission on the next hail and so does
+ *                this (see ship_mission_offer_plugin's module note:
+ *                refusing leaves no state behind), so a released hold
+ *                would let the ship warp out between one "no" and the
+ *                player changing their mind. Nor does an offer that is
+ *                UNAVAILABLE right now — the 16-mission hold is full, or
+ *                the player already carries this very mïsn from another
+ *                Refuel Trader, or the përs quote gates do not match the
+ *                encounter — because none of those is permanent: an
+ *                active mission can complete or fail in flight, and the
+ *                gates move with the fight.
+ *
+ *                So the hold cannot outlive its usefulness. Its ceiling is
+ *                the SYSTEM WORLD's own lifetime: every system is a
+ *                separate world and leaving one destroys it and every NPC
+ *                in it, so the worst case is a Refuel Trader that circles
+ *                the system for the rest of one visit instead of warping
+ *                out — which is the ruling above, not a leak.
  *   'rescue'     the ship IS the rescue target of an active mission
  *                (mïsn ShipGoal 5). Released by mission_ship_plugin's
  *                rescueBoarded, alongside the disable it lifts, so the

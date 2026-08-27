@@ -15,6 +15,7 @@ import {
     ranksAllowLanding,
     ranksGiveFreeRepair,
     ranksSuppressAggression,
+    suppressAggressionGovts,
 } from './rank_logic.js';
 
 /**
@@ -251,9 +252,11 @@ describe('rank privileges', () => {
             rank('nova:301', { flags: 0x0400 }),
             rank('nova:302', { flags: 0x0800 }));
         expect(ranksSuppressAggression(
-            new Set(['nova:300']), get, 'nova:128')).toBeTrue();
+            suppressAggressionGovts(new Set(['nova:300']), get),
+            'nova:128')).toBeTrue();
         expect(ranksSuppressAggression(
-            new Set(['nova:301']), get, 'nova:128')).toBeFalse();
+            suppressAggressionGovts(new Set(['nova:301']), get),
+            'nova:128')).toBeFalse();
         expect(ranksAllowAssistance(
             new Set(['nova:301']), get, 'nova:128')).toBeTrue();
         expect(ranksGiveFreeRepair(

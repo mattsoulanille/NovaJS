@@ -25,7 +25,8 @@ import {
 } from './player_escort.js';
 import { Stat } from './stat.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent,
+    ActiveRanksComponent, AggressionSuppressGovtsComponent,
+    ControlBitsComponent,
 } from './ncb_plugin.js';
 import { OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { CombatRatingComponent, LegalRecordsComponent } from './reputation_plugin.js';
@@ -67,6 +68,7 @@ import {
     ControlBitNamespaces, FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
 } from 'novadatainterface/control_bit_namespaces';
 import { ControlBitResolver } from './control_bit_namespaces.js';
+import { getDefaultRankData, RankData } from 'novadatainterface/rank_data';
 
 /** An in-memory SaveStorage for tests. */
 class FakeStorage implements SaveStorage {
@@ -273,6 +275,57 @@ describe('save_game schema', () => {
             restorePlayerState(ranked, withRanks);
             expect(ranked.components.get(ActiveRanksComponent))
                 .toEqual(new Set(['nova:147']));
+        });
+
+    it('re-bakes the ränk 0x0100 suppression facts the simulation reads, '
+        + 'from the ranks it restored', () => {
+            // Only the rank IDS are persisted. The privileges are DERIVED
+            // state, so they are recomputed on load — which is what keeps a
+            // save right across a change of plug-in set that redefines a
+            // rank, and what puts the fact in front of the simulation, which
+            // cannot resolve a ränk itself (see rank_logic.ts).
+            const save = decodeSave(encodeSave({
+                ...SAMPLE, ranks: ['test:guild', 'test:honour'],
+            }))!;
+            const guild = {
+                ...getDefaultRankData(), id: 'test:guild',
+                affilGovt: 'test:pirates',
+                rankFlags: {
+                    ...getDefaultRankData().rankFlags,
+                    govtShipsWontAttack: true,
+                },
+            };
+            // 0x0100 with no AffilGovt: a pure honour, nobody to suppress.
+            const honour = {
+                ...getDefaultRankData(), id: 'test:honour', affilGovt: null,
+                rankFlags: {
+                    ...getDefaultRankData().rankFlags,
+                    govtShipsWontAttack: true,
+                },
+            };
+            const table = new Map<string, RankData>([
+                ['test:guild', guild], ['test:honour', honour],
+            ]);
+
+            const entity = new Entity('restored');
+            restorePlayerState(entity, save, new ControlBitResolver(),
+                id => table.get(id));
+            expect(entity.components.get(ActiveRanksComponent))
+                .toEqual(new Set(['test:guild', 'test:honour']));
+            expect(entity.components.get(AggressionSuppressGovtsComponent))
+                .toEqual(new Set(['test:pirates']));
+        });
+
+    it('leaves the baked suppression set empty when the loader has no ränk '
+        + 'table', () => {
+            // The bare callers (tooling, specs). Empty is the pre-rank
+            // behaviour and never claims a privilege the player lacks.
+            const save = decodeSave(encodeSave(
+                { ...SAMPLE, ranks: ['nova:147'] }))!;
+            const entity = new Entity('restored');
+            restorePlayerState(entity, save);
+            expect(entity.components.get(AggressionSuppressGovtsComponent))
+                .toEqual(new Set());
         });
 
     describe('namespaced control bits', () => {

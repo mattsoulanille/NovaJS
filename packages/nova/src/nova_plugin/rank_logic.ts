@@ -181,12 +181,68 @@ export function ranksAllowLanding(active: Iterable<string> | undefined,
 
 /**
  * 0x0100: "Ships of the affiliated government will not automatically attack
- * the player when he has this rank."
+ * the player when he has this rank." — RESOLVED AT GRANT TIME.
+ *
+ * The set of governments whose ships will not attack the holder of `active`.
+ *
+ * 0x0100 is read in a PER-TICK CROSS-ENTITY SWEEP — NpcDecisionSystem scores
+ * every other ship in the system against every NPC's government — and it is
+ * the one rank privilege on such a path, so it is resolved once, at grant
+ * time, and carried in synced state (ncb_plugin's
+ * AggressionSuppressGovtsComponent). The sweep then costs no game-data
+ * lookup at all and cannot be wrong on a peer whose cache is behind. Same
+ * precedent as WeaponState.fireGroup and suicideReach: take the data read
+ * out of the hot path rather than teach the hot path to wait.
+ *
+ * It also used to be WRONG, not merely at risk. The simulation runs in its
+ * own worker — its own server archive, its own node worker — each with its
+ * own game-data cache, and nothing put a ränk in any of them: the preload
+ * bundle carries Outfit, Ship and System, and entity staging adds a ship's
+ * Govt. So the sim's `getCached` was cold ALWAYS, and 0x0100 never
+ * suppressed anything, while the display world's corner brackets — on the
+ * main thread, where a spaceport visit had loaded the table — said it did.
+ * makeSystem now stages the whole (tiny) ränk table at world genesis, which
+ * is what fixes the sibling privileges read synchronously by landing
+ * clearance (0x0200) and applyHail (0x0400); this bake is what additionally
+ * keeps 0x0100 off the data path entirely.
+ *
+ * The grant points are all PLAYER-LOCAL and asynchronous, exactly like the
+ * ränk cascades themselves, so the data is available there.
+ *
+ * A rank with no AffilGovt (-1) contributes nothing: "the affiliated
+ * government" is nobody, which is exactly how ranksForGovt reads it too.
  */
-export function ranksSuppressAggression(active: Iterable<string> | undefined,
-    getRank: RankLookup, govtId: string | null | undefined): boolean {
-    return ranksForGovt(active, getRank, govtId)
-        .some(rank => rank.rankFlags.govtShipsWontAttack);
+export function suppressAggressionGovts(active: Iterable<string> | undefined,
+    getRank: RankLookup): Set<string> {
+    const govts = new Set<string>();
+    for (const rank of activeRankData(active, getRank)) {
+        if (rank.rankFlags.govtShipsWontAttack && rank.affilGovt) {
+            govts.add(rank.affilGovt);
+        }
+    }
+    return govts;
+}
+
+/**
+ * The simulation-side reading of 0x0100: does the player hold a rank that
+ * stops `govtId`'s ships attacking them? Pure over the BAKED set above, so
+ * it touches no game data and every peer — cold cache or warm — agrees.
+ */
+export function ranksSuppressAggression(
+    suppressedGovts: Iterable<string> | undefined,
+    govtId: string | null | undefined): boolean {
+    if (!govtId || !suppressedGovts) {
+        return false;
+    }
+    if (suppressedGovts instanceof Set) {
+        return suppressedGovts.has(govtId);
+    }
+    for (const id of suppressedGovts) {
+        if (id === govtId) {
+            return true;
+        }
+    }
+    return false;
 }
 
 /**
