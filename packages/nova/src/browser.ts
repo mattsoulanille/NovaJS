@@ -50,6 +50,7 @@ import { LeaveGateMapEvent, OpenGateMapEvent } from "./display/gate_map_plugin.j
 import { GateArrivalAnticipationEvent } from "./display/gate_animation_plugin.js";
 import { makeShip } from "./nova_plugin/make_ship.js";
 import { makeSystem, SIMULATION_STEP_MS } from "./nova_plugin/make_system.js";
+import { clearCarriedAggression } from "./nova_plugin/aggression.js";
 import { makeControlBitHooks, NCBParseError, runNCBSet } from "./nova_plugin/ncb.js";
 import {
     ActiveRanksComponent, ControlBitsComponent,
@@ -96,6 +97,7 @@ import {
     takeCarriedEscorts, takeEscortsForTransition,
 } from "./spaceport/landed_escorts.js";
 import { restockCarriedEscorts } from "./spaceport/escort_restock.js";
+import { fleetHoldOpen } from "./spaceport/fleet_cargo.js";
 import {
     queuedUpgradeTargets, settleEscortDeals,
 } from "./spaceport/escort_deals.js";
@@ -613,6 +615,13 @@ async function insertCarriedEscorts(
  * live while the player is out of the world, and reach the other peers with
  * the `addEntity` record that puts that entity back at lift-off — exactly
  * as every purchase made in the spaceport does.
+ *
+ * THAT MAKES THIS A CONCURRENT WRITER of the docked entity's credits, since
+ * an open venue is holding a working copy of the same balance. Both halves
+ * of composing with it are documented in spaceport/credit_commit.ts: the
+ * venues commit a DELTA rather than the absolute they snapshotted, and an
+ * escort whose HOLD is checked out by the open exchange has its deals frozen
+ * until Done (fleet_cargo's fleetHoldOpen, passed below).
  */
 async function settleDockedEscortDeals(player: string, entity: Entity):
     Promise<void> {
@@ -633,7 +642,8 @@ async function settleDockedEscortDeals(player: string, entity: Entity):
     }
     const settled = settleEscortDeals(landedEscorts, player,
         credits.credits,
-        id => simulationGameData.data.Ship.getCached(id));
+        id => simulationGameData.data.Ship.getCached(id),
+        fleetHoldOpen);
     credits.credits += settled.credits;
     for (const sale of settled.sold) {
         console.log(`Escort ${sale.uuid} sold off for `
@@ -1185,6 +1195,23 @@ async function jumpTo(args: { entity: Entity, to: string, uuid: string }) {
     // (takeLandedEscortsRestocked). See takeEscortsForTransition.
     const { batch: jumpEscorts, fromLanded } = takeEscortsForTransition(
         carriedJumpEscorts, landedEscorts, args.uuid);
+    // THE CARRIED-ENTITY PREPARATION FOR A FRESH WORLD, player and escorts
+    // alike. Behavioral aggression is stamped with the ORIGIN world's clock,
+    // and every per-system world's clock restarts at zero, so an entry
+    // carried across would outlive its 30-second window by the whole of the
+    // old world's runtime — and it names aggressor uuids that do not exist
+    // at the destination anyway. See clearCarriedAggression.
+    //
+    // Done here rather than in each sweep because this is the ONE gate into
+    // a fresh world: hyperspace jumps, hypergate and wormhole transits, and
+    // the startup jumpTo that restores a save all come through it, carrying
+    // the player entity and the escort batch that travels with it. A landing
+    // is deliberately NOT here — the player lifts off back into the SAME
+    // world, whose clock never restarted.
+    clearCarriedAggression(args.entity);
+    for (const escort of jumpEscorts) {
+        clearCarriedAggression(escort.entity);
+    }
     try {
         await enterSystem(args, jumpEscorts);
     } catch (e) {
@@ -1384,9 +1411,13 @@ async function enterSystem({ entity, to, uuid }:
     });
     // The escort comm dialog's MANAGEMENT functions (release / sell /
     // upgrade — nova_plugin/escort_action.ts) take the same road, on their
-    // own bridge call because an upgrade must STAGE its target ship class's
-    // game data before the record is scheduled, exactly as an accepted
-    // mission stages its ships. (Commanding escorts is still the keyboard
+    // own bridge call for the shape of the record rather than for any
+    // staging: NOTHING is staged here (see SimulationBridgeClient's
+    // escortAction). A release only drops components, and queueing an
+    // upgrade only writes the target class's id onto the escort's ownership
+    // marker — the class is loaded, and the hull actually swapped, much
+    // later, by the client that settles the deal at a shipyard
+    // (spaceport/escort_deals.ts). (Commanding escorts is still the keyboard
     // escort-controls' job; this dialog does not issue fleet orders.)
     newDisplayWorld.events.get(EscortActionEvent).subscribe(({ data }) => {
         void newSimulationBridge.escortAction(data.action);

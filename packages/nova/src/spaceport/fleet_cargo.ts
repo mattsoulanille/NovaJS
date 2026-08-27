@@ -476,6 +476,71 @@ export async function collectFleetHolds(
     return holds;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Which escorts have a hold OPEN in a venue right now
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * The hold sets currently checked out by an open venue, keyed by the venue
+ * that opened them (so re-opening replaces rather than stacks).
+ *
+ * WHY THIS EXISTS. The exchange snapshots the landed roster's holds when it
+ * opens and writes them back at Done, but the roster keeps CHANGING
+ * underneath it: browser.ts settles the escort deals the player queued over
+ * the comm channel on every docked frame at a shipyard, and a settled SALE
+ * splices its escort out of the roster (spaceport/escort_deals.ts). Nothing
+ * stopped that from happening to an escort whose hold was open — the exchange
+ * would then commit a hold onto an entity that is not on any roster, so the
+ * goods evaporated while the credits stayed spent.
+ *
+ * The fix is to make an open hold a LEASE on its escort: while a venue holds
+ * it, that escort's queued deals are frozen and simply retried on the next
+ * docked frame (which is a frame the settlement was going to run on anyway —
+ * it runs on all of them). An exchange visit is seconds long and the deals
+ * are already deferred to "the next shipyard", so waiting until Done costs
+ * the player nothing; the alternative (re-running the whole buy allocation
+ * against the shrunken fleet at commit time and refunding the overflow)
+ * charges the player for goods and then takes some back, which is a worse
+ * thing to have happen while they are looking at the screen.
+ *
+ * It is a module-level registry rather than plumbing because the settlement
+ * runs in browser.ts's frame loop, which has no handle on the open dialog;
+ * this is the same shape as the landed roster itself, which is a module-level
+ * array in browser.ts. At most one venue is ever open, so the map holds at
+ * most one entry, and {@link openFleetHolds} replaces a stale entry from the
+ * same venue rather than leaking it.
+ */
+const openHolds = new Map<object, readonly FleetHold[]>();
+
+/**
+ * Registers `holds` as checked out by `venue`, freezing escort deals for
+ * every escort in them ({@link fleetHoldOpen}). Call from show(); call
+ * {@link closeFleetHolds} from done().
+ */
+export function openFleetHolds(venue: object, holds: readonly FleetHold[]) {
+    openHolds.set(venue, holds);
+}
+
+/** Releases `venue`'s hold lease. Safe to call when it holds none. */
+export function closeFleetHolds(venue: object) {
+    openHolds.delete(venue);
+}
+
+/**
+ * Whether some open venue is currently editing this escort's hold, in which
+ * case its queued deals must not settle yet. See {@link openFleetHolds}.
+ */
+export function fleetHoldOpen(uuid: string): boolean {
+    for (const holds of openHolds.values()) {
+        for (const hold of holds) {
+            if (hold.uuid === uuid) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 /**
  * Commits each hold's working cargo back onto its roster entity, so the
  * escort lifts off (and is saved) carrying it. Mission cargo is dropped

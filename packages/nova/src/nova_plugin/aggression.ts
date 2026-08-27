@@ -240,3 +240,35 @@ export function sweepAggression(state: AggressionState, now: number): boolean {
     }
     return state.size > 0;
 }
+
+/**
+ * Drops an entity's whole aggression memory as it is CARRIED INTO A FRESH
+ * WORLD — a hyperspace jump, a hypergate or wormhole transit, or a save
+ * being restored.
+ *
+ * WHY THE SWEEP CANNOT DO IT. `at` is a SIM timestamp, and every per-system
+ * simulation world runs on its own fixed-timestep clock that starts at ZERO
+ * (nova_ecs's useFixedTimestep). An entry stamped at t=500,000 in the system
+ * being left is compared, in the system being entered, against a clock that
+ * has just restarted — so `now - entry.at` is NEGATIVE and
+ * {@link sweepAggression} keeps the entry until the new world has run for as
+ * long as the old one did. Until then the player arrives already holding a
+ * grudge against uuids that mean nothing in this system (uuids are re-minted
+ * across the transition), which shows up as target corners drawn hostile and
+ * as `r` retargeting to the wrong ship.
+ *
+ * Rebasing the timestamps instead was rejected: an aggression entry names an
+ * AGGRESSOR BY UUID, and none of those uuids exist in the destination world,
+ * so there is nothing left worth keeping. Dropping it is also the same
+ * forgiveness rule the lapse already implements — leaving a system by a route
+ * you can come back from ends the encounter, exactly as it ends the plunder
+ * life segment (boarding_component's clearPlunderRecord).
+ *
+ * Called from ONE place, browser.ts's `jumpTo`, which is the single gate into
+ * a fresh world for the player and for the escort batch travelling with them.
+ * Idempotent, and free for the overwhelming majority of ships, which carry no
+ * component at all.
+ */
+export function clearCarriedAggression(entity: Entity): void {
+    entity.components.delete(AggressionComponent);
+}

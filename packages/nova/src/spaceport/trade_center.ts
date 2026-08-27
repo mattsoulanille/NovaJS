@@ -21,12 +21,13 @@ import {
     TradeWorkingState,
 } from '../nova_plugin/trade_logic.js';
 import { Button, ButtonClick } from './button.js';
+import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import {
-    collectFleetHolds, commitFleetHolds, FleetCargoState, FleetEscortEntry,
-    FleetHold, fleetBuy, fleetBuyQuantity, fleetCargo, fleetFreeSpace,
-    fleetHeld, fleetSell, fleetSellQuantity, freeSpaceLines,
-    maxFleetBuyQuantity, maxFleetSellQuantity, quantityColumnHeader,
-    sumFleetCargo,
+    closeFleetHolds, collectFleetHolds, commitFleetHolds, FleetCargoState,
+    FleetEscortEntry, FleetHold, fleetBuy, fleetBuyQuantity, fleetCargo,
+    fleetFreeSpace, fleetHeld, fleetSell, fleetSellQuantity, freeSpaceLines,
+    maxFleetBuyQuantity, maxFleetSellQuantity, openFleetHolds,
+    quantityColumnHeader, sumFleetCargo,
 } from './fleet_cargo.js';
 import {
     LINE_HEIGHT, ROW_HEIGHT, SELECTION_COLOR, TRADE, TRADE_ROW_TEXT_DY,
@@ -135,6 +136,13 @@ export class TradeCenter extends Menu<Entity> {
      * why it is a snapshot and not a live getter).
      */
     private holds: FleetHold[] = [];
+    /**
+     * The balance `state.credits` was seeded from at show(). done() commits
+     * the DIFFERENCE from it rather than the absolute, so an escort deal
+     * settling mid-visit is not erased — see credit_commit.ts, which
+     * documents the whole seam.
+     */
+    private creditsBaseline = 0;
     /**
      * The client's landed-escort roster and the docked ship's uuid, set
      * per-landing by the Spaceport. Unset (single-ship testing, or a
@@ -285,11 +293,10 @@ export class TradeCenter extends Menu<Entity> {
             console.warn('Trade center failed to load:', e);
             return input;
         }
+        this.creditsBaseline = creditBalance(input);
         this.state = {
             cargo: new Map(input.components.get(CargoComponent) ?? []),
-            credits: {
-                credits: input.components.get(CreditsComponent)?.credits ?? 0,
-            },
+            credits: { credits: this.creditsBaseline },
             cargoCapacity: await computeCargoCapacity(
                 input, this.simulationData),
         };
@@ -300,6 +307,11 @@ export class TradeCenter extends Menu<Entity> {
             ? await collectFleetHolds(this.landedEscorts(), this.playerUuid,
                 this.simulationData)
             : [];
+        // These escorts' holds are now checked out: freeze their queued
+        // upgrade/sale deals until Done writes the holds back, so a sale
+        // cannot splice an escort off the roster while this dialog is still
+        // filling its hold (see fleet_cargo.ts's openFleetHolds).
+        openFleetHolds(this, this.holds);
         const bits = input.components.get(ControlBitsComponent)
             ?? new Set<number>();
         this.goods = this.planet
@@ -566,12 +578,23 @@ export class TradeCenter extends Menu<Entity> {
      * escort hold back onto its roster entity — so the escorts lift off
      * carrying what was bought, and a save taken later records it inside
      * their own serialized entities.
+     *
+     * The credits go back as a DELTA against the balance this visit opened
+     * with, not as the absolute the working copy holds: an escort deal that
+     * settled while the exchange was open wrote the live component directly,
+     * and an absolute write would erase it (credit_commit.ts).
+     *
+     * The hold lease is released LAST, so a deal for one of these escorts
+     * cannot settle between the commit and the release.
      */
     protected override done() {
         this.input.components.set(CargoComponent, this.state.cargo);
-        this.input.components.set(CreditsComponent,
-            { credits: this.state.credits.credits });
+        this.creditsBaseline = commitVenueCredits(
+            this.input, this.creditsBaseline,
+            () => this.input.components.set(CreditsComponent,
+                { credits: this.state.credits.credits }));
         commitFleetHolds(this.holds);
+        closeFleetHolds(this);
         super.done();
     }
 }

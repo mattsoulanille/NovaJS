@@ -92,12 +92,26 @@ describe('save_game schema', () => {
     // extractSaveData reads the MODULE-GLOBAL discovery cache
     // (discovery_store.ts), so a spec elsewhere that marked a system
     // discovered leaks `save.discovery` into these whole-object
-    // comparisons. Jasmine runs with random: true, so whether it does is
-    // a function of the seed: seed 22715 put discovery_store_test first
-    // and failed the two `toEqual(SAMPLE)` specs below with a stray
-    // `discovery: [['nova:130', 1]]`. Every describe that extracts a save
-    // starts from a clean store.
-    beforeEach(() => resetDiscovery());
+    // comparisons — purely a function of jasmine's random seed (22715
+    // put discovery_store_test first and failed two `toEqual(SAMPLE)`
+    // specs with a stray `discovery: [['nova:130', 1]]`). Both fix-wave
+    // branches added this guard independently; kept is the fuller form
+    // that also pins the save key and storage, like the sibling
+    // `save_game discovery` describe always has.
+    // extractSaveData reads the process-global discovery store, so these
+    // specs have to own it: without this, a system another spec file left
+    // in the store (levels only ever rise, and the store outlives a spec)
+    // showed up as an unexpected `discovery` field here, depending purely
+    // on the order jasmine happened to shuffle the suite into. The sibling
+    // `save_game discovery` describe below has always done this.
+    beforeEach(() => {
+        setActiveSaveKey(SAVE_KEY);
+        resetDiscovery(new FakeStorage());
+    });
+    afterEach(() => {
+        setActiveSaveKey(SAVE_KEY);
+        resetDiscovery(new FakeStorage());
+    });
 
     it('round-trips a save through encode and decode', () => {
         const decoded = decodeSave(encodeSave(SAMPLE));

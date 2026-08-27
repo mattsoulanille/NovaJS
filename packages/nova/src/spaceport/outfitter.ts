@@ -26,6 +26,7 @@ import {
     CreditsComponent, GameDateComponent,
 } from "../nova_plugin/player_state_plugin.js";
 import { Button, ButtonClick } from "./button.js";
+import { commitVenueCredits, creditBalance } from "./credit_commit.js";
 import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
 import { ItemGrid, ItemTile } from "./item_grid.js";
@@ -193,9 +194,18 @@ export class Outfitter extends Menu<Entity> {
      * session path this is the SAME object as the session's working
      * credits, so session.commit() persists it (and a mission set string
      * that pays out is reflected here); in the fallback path done()
-     * writes it to the entity's CreditsComponent directly.
+     * writes it to the entity's CreditsComponent itself. EITHER WAY the
+     * write is rebased into a delta over {@link creditsBaseline} before it
+     * lands, so a concurrent writer is not erased (credit_commit.ts).
      */
     private credits: { credits: number } = { credits: 0 };
+    /**
+     * The balance {@link credits} was seeded from in setInput. done()
+     * commits the DIFFERENCE from it rather than the absolute, so an escort
+     * deal settling mid-visit (or the spaceport's refuel button) is not
+     * erased — see credit_commit.ts, which documents the whole seam.
+     */
+    private creditsBaseline = 0;
     /** Every govt, sorted by id, loaded in build() for ModType 21. */
     private govts: (readonly [string, GovtData])[] = [];
     private shipData?: ShipData;
@@ -1095,6 +1105,13 @@ export class Outfitter extends Menu<Entity> {
             // mission-set payout mutate the same balance session.commit()
             // persists (mirrors the outfits/bits sharing above).
             this.credits = session.state.credits;
+            // The balance the working copy was seeded from, whichever path
+            // seeded it: done() commits the difference from THIS, not the
+            // absolute (credit_commit.ts). Read off the working copy rather
+            // than the entity, because the session snapshotted it in show()
+            // — a frame (and an escort-deal settlement) may have passed
+            // between the two.
+            this.creditsBaseline = this.credits.credits;
             this.updateCreditsText();
             this.shipData = undefined;
             const shipId = input.components.get(ShipComponent)?.id;
@@ -1120,9 +1137,8 @@ export class Outfitter extends Menu<Entity> {
             input.components.get(ControlBitsComponent) ?? []);
         this.records = new Map(
             input.components.get(LegalRecordsComponent) ?? []);
-        this.credits = {
-            credits: input.components.get(CreditsComponent)?.credits ?? 0,
-        };
+        this.creditsBaseline = creditBalance(input);
+        this.credits = { credits: this.creditsBaseline };
         this.updateCreditsText();
         this.text.status.text = "";
 
@@ -1152,18 +1168,28 @@ export class Outfitter extends Menu<Entity> {
         return { credits: this.credits.credits };
     }
 
+    /**
+     * Commits the visit. Both paths route the credit write through
+     * {@link commitVenueCredits}, so what lands on the entity is what this
+     * visit SPENT or EARNED applied over whatever the balance is now —
+     * never the stale absolute the working copy started from. An escort
+     * deal that settled while the outfitter was open wrote the live
+     * component directly; credit_commit.ts documents the whole seam.
+     */
     protected override done() {
         if (this.missionSession) {
             // Push the final outfit counts into the session, then commit
             // it — that writes outfits, bits, records, and any mission /
             // cargo / credits / date changes an Sxxx/Axxx/Fxxx caused.
-            this.missionSession.outfits.clear();
+            const session = this.missionSession;
+            session.outfits.clear();
             for (const [id, count] of this.outfits) {
                 if (count > 0) {
-                    this.missionSession.outfits.set(id, count);
+                    session.outfits.set(id, count);
                 }
             }
-            this.missionSession.commit();
+            this.creditsBaseline = commitVenueCredits(
+                this.input, this.creditsBaseline, () => session.commit());
             super.done();
             return;
         }
@@ -1173,8 +1199,10 @@ export class Outfitter extends Menu<Entity> {
                 .map(([id, count]) => [id, { count }])));
         this.input.components.set(ControlBitsComponent, this.controlBits);
         this.input.components.set(LegalRecordsComponent, this.records);
-        this.input.components.set(CreditsComponent,
-            { credits: this.credits.credits });
+        this.creditsBaseline = commitVenueCredits(
+            this.input, this.creditsBaseline,
+            () => this.input.components.set(CreditsComponent,
+                { credits: this.credits.credits }));
         super.done();
     }
 }
