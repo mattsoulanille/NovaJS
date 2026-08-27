@@ -246,6 +246,15 @@ describe('auxShipsMatchSystem', () => {
             SYSTEMS[3], systemOf, getGovt)).toBe(false);
     });
 
+    it('resolves a PLUG-IN mission\'s 5000-range target stock-first', () => {
+        // A plug-in mïsn naming stock system 128: the reference means
+        // nova:128 (the id-space rule, resolveNumberedResource), not a
+        // phantom 'arpia:128' that matches nothing.
+        expect(auxShipsMatchSystem(
+            makeAux({ id: 'arpia:500', auxShipSyst: 5000 }), noDest,
+            system, systemOf, getGovt)).toBe(true);
+    });
+
     it('matches the govt-ranged references', () => {
         // 10000 + (200 - 128) = 10072: govt nova:200's systems.
         expect(auxShipsMatchSystem(makeAux({ auxShipSyst: 10072 }), noDest,

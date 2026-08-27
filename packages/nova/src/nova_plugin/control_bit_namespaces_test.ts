@@ -107,6 +107,25 @@ describe('ControlBitResolver', () => {
             const { physical } = resolver.migrateLegacy([P0 + 2, 5]);
             expect([...physical].sort((a, b) => a - b)).toEqual([5, P0 + 2]);
         });
+
+        it('parks a number in the dead gap between the stock and private '
+            + 'ranges instead of installing it', () => {
+                // No build ever wrote [10000, 20000): such a number can
+                // only come from a corrupt or hand-edited save. It used to
+                // be installed as a live physical bit that
+                // isPhysicalControlBit rejects and no expression could
+                // legally name; it parks (and so round-trips through the
+                // save unchanged) instead.
+                const { physical, parked } = resolver.migrateLegacy([15000, 42]);
+                expect(physical).toEqual(new Set([42]));
+                expect(parked).toEqual([['nova', 15000]]);
+            });
+    });
+
+    it('parks a base-namespace pair whose number is in the dead gap', () => {
+        const { physical, parked } = resolver.fromPairs([['nova', 15000]]);
+        expect(physical).toEqual(new Set());
+        expect(parked).toEqual([['nova', 15000]]);
     });
 
     it('with no namespace data, keeps stock numbers and parks plug-in pairs', () => {

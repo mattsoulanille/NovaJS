@@ -6,7 +6,8 @@ import {
 } from './ncb.js';
 import { CronState, CronStates } from './player_state_plugin.js';
 import {
-    resolveNumberedResource, sameNumberedResource, systemDiscoveryOperators,
+    resolveNumberedResource, sameNumberedResource, setStringPrefix,
+    systemDiscoveryOperators,
 } from './mission_logic.js';
 import { DiscoveryAccess, DiscoveryNCBOperators } from './discovery.js';
 
@@ -333,10 +334,13 @@ function activeCronContribute(crons: CronData[], states: CronStates,
     return contribute;
 }
 
-/** The plug-in prefix of a cron's global id ("nova:512" -> "nova"). */
+/**
+ * The namespace a bare resource number inside this crön's own scripting is
+ * scoped to: the plug-in that WROTE it (mission_logic's setStringPrefix),
+ * which is not its id's prefix when the crön overrides a stock one.
+ */
 function cronPrefix(cron: CronData): string {
-    const colon = cron.id.lastIndexOf(':');
-    return colon === -1 ? 'nova' : cron.id.slice(0, colon);
+    return setStringPrefix(cron);
 }
 
 /**
@@ -364,7 +368,17 @@ export function runCronsForDays(crons: CronData[], states: CronStates,
         crons.map(cron => {
             const prefix = cronPrefix(cron);
             return [cron, {
-                ranks: ranks && { ...ranks, resolveId: id => `${prefix}:${id}` },
+                // Kxxx/Lxxx resolve stock-first like every sibling
+                // operator (mission_logic's resolveNumberedResource,
+                // through the rank data the hooks already carry): stock's
+                // rank n when stock defines it, else this cron's own
+                // plug-in's — which is also the id recorded when neither
+                // defines n (rank_logic keeps unknown ids).
+                ranks: ranks && {
+                    ...ranks,
+                    resolveId: id => resolveNumberedResource(id, prefix,
+                        globalId => ranks.getRank(globalId) !== undefined),
+                },
                 // Gxxx/Dxxx are wired only when the caller handed over an
                 // outfits map to mutate; without one they stay unimplemented
                 // and ncb.ts warns, as every other missing hook does.

@@ -1,9 +1,39 @@
 import "jasmine";
-import { comparePluginNames, IDSpaceHandler } from "../src/id_space_handler.js";
+import {
+    comparePluginNames, IDSpaceHandler, pluginPrefixFor,
+} from "../src/id_space_handler.js";
 import { NovaParse } from "../src/nova_parse.js";
 import { NovaResources } from "../src/resource_parsers/resource_holder_base.js";
 import { resolveFixture } from "./fixtures.js";
 
+
+describe("pluginPrefixFor", () => {
+    it("keeps a non-reserved name, minus extensions", () => {
+        expect(pluginPrefixFor("ARPIA2 - Data 1.rez")).toEqual("ARPIA2 - Data 1");
+        expect(pluginPrefixFor("nova-plugin.rez")).toEqual("nova-plugin");
+    });
+
+    it("re-keys the reserved names", () => {
+        spyOn(console, "warn");
+        expect(pluginPrefixFor("nova.rez")).toEqual("nova-plugin");
+        expect(pluginPrefixFor("physical.rez")).toEqual("physical-plugin");
+    });
+
+    it("re-keys past a REAL plug-in that claims the re-keyed name", () => {
+        spyOn(console, "warn");
+        // A directory holding both "nova.rez" and a genuine plug-in
+        // called "nova-plugin.rez": the reserved name keeps stepping
+        // until it collides with neither a reserved nor a claimed name.
+        expect(pluginPrefixFor("nova.rez", new Set(["nova-plugin"])))
+            .toEqual("nova-plugin-plugin");
+        expect(pluginPrefixFor("nova.rez",
+            new Set(["nova-plugin", "nova-plugin-plugin"])))
+            .toEqual("nova-plugin-plugin-plugin");
+        // The claimed set does not disturb non-reserved names.
+        expect(pluginPrefixFor("Zealot.rez", new Set(["nova-plugin"])))
+            .toEqual("Zealot");
+    });
+});
 
 describe("IDSpaceHandler", () => {
     let idSpace: NovaResources;

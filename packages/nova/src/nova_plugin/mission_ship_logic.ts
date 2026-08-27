@@ -1,8 +1,8 @@
 import { MissionData } from 'novadatainterface/mission_data';
 import {
-    idPrefix,
     matchesStellarRef,
     MissionContext,
+    setStringPrefix,
     StellarInfo,
 } from './mission_logic.js';
 import { goalSupported, ShipObjective } from './mission_ship_state.js';
@@ -105,7 +105,7 @@ export function resolveShipSystem(mission: MissionData, ctx: MissionContext,
     }
     // The gövt-relative ranges: freeze one matching system.
     const matches = systems.filter(system => matchesStellarRef(ref, null,
-        asStellar(system), idPrefix(mission.id), ctx.getGovt));
+        asStellar(system), setStringPrefix(mission), ctx.getGovt));
     return pick(matches, ctx.random)?.id;
 }
 
@@ -174,10 +174,19 @@ export function auxShipsMatchSystem(mission: MissionData,
         return mission.auxShipSystId === system.id;
     }
     if (ref >= 5000 && ref <= 7047) {
-        // That system or any adjacent to it.
-        const base = `${idPrefix(mission.id)}:${ref - 5000 + 128}`;
-        return system.id === base || system.links.includes(base);
+        // That system or any adjacent to it. The bare sÿst number
+        // resolves stock-first like every numeric reference
+        // (mission_logic's resolveNumberedResource); with no exists
+        // lookup threaded here, BOTH candidate ids are tested instead —
+        // at most one of nova:n / writer:n can exist (an override keeps
+        // the stock id), so membership against real system ids is
+        // equivalent.
+        const n = ref - 5000 + 128;
+        const candidates =
+            new Set([`nova:${n}`, `${setStringPrefix(mission)}:${n}`]);
+        return candidates.has(system.id)
+            || system.links.some(link => candidates.has(link));
     }
     return matchesStellarRef(ref, null, asStellar(system),
-        idPrefix(mission.id), getGovt);
+        setStringPrefix(mission), getGovt);
 }

@@ -69,7 +69,9 @@ import {
 import {
     markDiscovered, playerDiscovery, resetDiscovery,
 } from "./nova_plugin/discovery_store.js";
-import { systemDiscoveryOperators } from "./nova_plugin/mission_logic.js";
+import {
+    resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
+} from "./nova_plugin/mission_logic.js";
 import {
     ControlBitPair, ControlBitResolver,
 } from './nova_plugin/control_bit_namespaces.js';
@@ -1880,13 +1882,23 @@ async function startGame() {
             // save_game drives), so writing straight through is the whole
             // of the effect and it lands on the right pilot.
             const startSystemIds = new Set(ids.System);
+            const startRankIds = new Set(ids.Rank);
+            // Bare numbers in the OnStart string are scoped to the
+            // plug-in that WROTE the chär (setStringPrefix — its
+            // writerPrefix, not its id's prefix) and resolve stock-first
+            // like every other numeric reference
+            // (resolveNumberedResource). The id lists stand in as the
+            // exists lookups so the resolution cannot depend on cache
+            // warmth.
+            const charPrefix = setStringPrefix(playerStart);
             runNCBSet(playerStart.onStart,
                 makeControlBitHooks(bits, undefined, {
                     active: startRanks,
-                    resolveId: id => `${playerStart.prefix}:${id}`,
+                    resolveId: id => resolveNumberedResource(id, charPrefix,
+                        globalId => startRankIds.has(globalId)),
                     getRank: id => simulationGameData.data.Rank.getCached(id),
                 }, systemDiscoveryOperators(playerDiscovery,
-                    playerStart.prefix, id => startSystemIds.has(id))),
+                    charPrefix, id => startSystemIds.has(id))),
                 Math.random);
         } catch (e) {
             if (e instanceof NCBParseError) {

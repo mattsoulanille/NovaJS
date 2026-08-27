@@ -39,6 +39,22 @@ describe('runCronsForDays', () => {
             expect([...active]).toEqual(['arpia:147']);
         });
 
+    it('activates the STOCK rank for a plug-in cron\'s K<stock-n>', () => {
+        // The other half of the id-space rule the test above pins: stock
+        // wins when stock DOES define that rank number
+        // (mission_logic's resolveNumberedResource, stock-first).
+        const cron = makeCron({ id: 'arpia:300', onStart: 'K147' });
+        const active = new Set<string>();
+        runCronsForDays([cron], new Map(), new Set(), DAY, DAY + 1,
+            () => 0, 0n, {
+                active,
+                resolveId: id => `nova:${id}`,
+                getRank: id => id === 'nova:147'
+                    ? { ...getDefaultRankData(), id } : undefined,
+            });
+        expect([...active]).toEqual(['nova:147']);
+    });
+
     it('reads Oxxx in EnableOn against the owned outfits, in the cron\'s '
         + 'own plug-in namespace', () => {
             // Extra Outfits crön 604 "Take Away Officers": EnableOn !O533,

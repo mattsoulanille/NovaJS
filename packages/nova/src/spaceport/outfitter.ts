@@ -19,7 +19,8 @@ import { cleanRecords, LegalRecords } from "../nova_plugin/reputation.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ShipComponent } from "../nova_plugin/ship_plugin.js";
 import {
-    idPrefix, numericId, resolveNumberedResource, systemDiscoveryOperators,
+    numericId, resolveNumberedResource, setStringPrefix,
+    systemDiscoveryOperators,
 } from "../nova_plugin/mission_logic.js";
 import { dayNumber } from "../nova_plugin/calendar.js";
 import {
@@ -539,6 +540,17 @@ export class Outfitter extends Menu<Entity> {
         return {
             shipData: this.shipData,
             outfits: this.outfits,
+            // WARMTH PRECONDITION: getCached answers only for ids already
+            // fetched, and resolveOutfitReference (outfitter_rules) reads
+            // a MISS as "no stock outfit n exists" when it probes
+            // `nova:n` stock-first. That is only sound because
+            // makeOutfitsGrid fetches EVERY outfit id (and every weapon
+            // those outfits name) before the grid — and so any context
+            // consumer — can run. Anyone rewiring getOutfit/getWeapon, or
+            // using a context before the grid load completes, must keep
+            // an exhaustive warm-up or swap in a real existence lookup
+            // (MissionUniverse.hasOutfit), or plug-in overrides of stock
+            // outfits silently mis-resolve their Oxxx exclusions.
             getOutfit: id => this.simulationData.data.Outfit.getCached(id),
             getWeapon: id => this.simulationData.data.Weapon.getCached(id),
             bits: this.controlBits,
@@ -1205,17 +1217,6 @@ export class Outfitter extends Menu<Entity> {
                 { credits: this.credits.credits }));
         super.done();
     }
-}
-
-/**
- * The namespace a bare resource number inside an outfit's own OnPurchase /
- * OnSell set string is scoped to: the plug-in that WROTE the oütf, which is
- * not the prefix of its id when that plug-in overrode a stock resource (see
- * BaseData.writerPrefix, and resolveOutfitReference for the read-side twin).
- * Falls back to the id's own prefix for hand-made data with no writer.
- */
-function setStringPrefix(outfit: OutfitData): string {
-    return outfit.writerPrefix || idPrefix(outfit.id);
 }
 
 /**

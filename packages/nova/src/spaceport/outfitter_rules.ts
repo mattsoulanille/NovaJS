@@ -15,7 +15,9 @@ import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { DiscoveryAccess } from '../nova_plugin/discovery.js';
-import { systemDiscoveryOperators } from '../nova_plugin/mission_logic.js';
+import {
+    setStringPrefix, systemDiscoveryOperators,
+} from '../nova_plugin/mission_logic.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
 import {
     dayRoll, passesDayRoll, resourceNumber as resourceNumberOf,
@@ -665,7 +667,7 @@ function resolveOutfitReference(id: number, from: OutfitData,
     if (context.getOutfit(`nova:${id}`)) {
         return `nova:${id}`;
     }
-    return `${from.writerPrefix || resourcePrefix(from.id)}:${id}`;
+    return `${setStringPrefix(from)}:${id}`;
 }
 
 /**
@@ -688,8 +690,7 @@ export function availabilityTest(outfit: OutfitData,
     const resolveId = context.resolveId
         ?? (id => resolveOutfitReference(id, outfit, context));
     const discovery = systemDiscoveryOperators(context.discovery,
-        outfit.writerPrefix || resourcePrefix(outfit.id),
-        context.systemExists);
+        setStringPrefix(outfit), context.systemExists);
     try {
         return evaluateNCBTest(outfit.availability ?? '', {
             getBit: bit => context.bits.has(bit),
@@ -1126,17 +1127,6 @@ export function maxSellCount(outfit: OutfitData,
         }
     }
     return lo;
-}
-
-/**
- * The plug-in prefix in a global id like "extra-outfits:471" ("nova" when
- * there isn't one). Mirrors mission_logic's idPrefix; kept local so these
- * rules stay a dependency-free pure module (the id NUMBER's counterpart is
- * day_roll's resourceNumber, shared with the ship shops).
- */
-function resourcePrefix(globalId: string): string {
-    const colon = globalId.lastIndexOf(':');
-    return colon < 0 ? 'nova' : globalId.slice(0, colon);
 }
 
 /**

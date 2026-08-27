@@ -117,6 +117,27 @@ export function idPrefix(globalId: string): string {
     return colon === -1 ? 'nova' : globalId.slice(0, colon);
 }
 
+/**
+ * THE ONE RULE for which namespace a bare resource NUMBER written inside a
+ * resource's own data — set strings, availability expressions, AvailStel /
+ * CompGovt-style numeric fields — is scoped to: the plug-in that WROTE the
+ * resource (BaseData.writerPrefix), which is NOT the prefix of its id
+ * whenever the plug-in overrides a stock resource, because the override
+ * keeps the stock id. Every site that resolves such a number keys it on
+ * this prefix and resolves it stock-first through
+ * {@link resolveNumberedResource} (or its exists-requiring twin
+ * {@link resolveExistingNumberedResource}).
+ *
+ * Falls back to the id's own prefix for hand-made data that never set a
+ * writer — getDefaultBaseData()'s "default" placeholder included, which is
+ * what every test fixture that spreads the defaults carries.
+ */
+export function setStringPrefix(
+    resource: { id: string, writerPrefix?: string }): string {
+    const writer = resource.writerPrefix;
+    return writer && writer !== 'default' ? writer : idPrefix(resource.id);
+}
+
 export interface MissionContext {
     /** The stellar the player is landed on. */
     stellar: StellarInfo;
@@ -217,7 +238,8 @@ export interface StellarAdjacency {
 export function matchesStellarRef(ref: number, refId: string | null,
     stellar: StellarInfo, missionPrefix: string,
     getGovt: (id: string) => GovtData | undefined,
-    adjacency?: StellarAdjacency): boolean {
+    adjacency?: StellarAdjacency,
+    systemExists?: (globalId: string) => boolean): boolean {
     if (ref === -1) {
         // "Any inhabited stellar" — the spöb 0x0020 bit alone (landable.ts
         // isInhabited). Landability is not part of it: the candidate here is
@@ -235,7 +257,12 @@ export function matchesStellarRef(ref: number, refId: string | null,
         if (!adjacency) {
             return false;
         }
-        const targetSystem = `${missionPrefix}:${ref - 5000 + 128}`;
+        // The sÿst number resolves stock-first like every other numeric
+        // reference (resolveNumberedResource, via `systemExists`): a
+        // plug-in mission's 5000+n naming a STOCK system means nova:n,
+        // not a phantom id under the plug-in's own prefix.
+        const targetSystem = resolveNumberedResource(
+            ref - 5000 + 128, missionPrefix, systemExists);
         const stellarSystem = adjacency.systemOfStellar(stellar.id);
         return stellarSystem !== undefined
             && adjacency.systemsAdjacentOrEqual(stellarSystem, targetSystem);
@@ -398,10 +425,13 @@ export function missionMatchesLocation(mission: MissionData,
     // AvailStel -1 ("any inhabited stellar") mission in it, the Refuel
     // Traders included. All 13 stock AvailLoc 2 missions are AvailStel
     // -1, so nothing is lost by not asking.
+    // Numeric references in the mïsn's own fields are scoped to the
+    // plug-in that WROTE it (setStringPrefix), not to its id's prefix.
+    const prefix = setStringPrefix(mission);
     if (location !== LOCATION_SHIP
         && !matchesStellarRef(mission.availStel, mission.availStelId,
-            ctx.stellar, idPrefix(mission.id), ctx.getGovt,
-            stellarAdjacencyOf(ctx))) {
+            ctx.stellar, prefix, ctx.getGovt,
+            stellarAdjacencyOf(ctx), ctx.systemExists)) {
         return false;
     }
     // Domination is not implemented; missions gated on it never show.
@@ -414,7 +444,7 @@ export function missionMatchesLocation(mission: MissionData,
     // independent systems).
     if (!availRecordOk(mission.availRecord,
         stellarRecord(ctx.stellar, ctx.records ?? new Map(),
-            idPrefix(mission.id), ctx.getGovt))) {
+            prefix, ctx.getGovt))) {
         return false;
     }
     if (!availRatingOk(mission.availRating, ctx.combatRating ?? 0)) {
@@ -432,10 +462,10 @@ export function missionMatchesLocation(mission: MissionData,
         return false;
     }
     if (!shipTypeMatches(mission.availShipType, ctx.shipId, ctx.shipGovt,
-        idPrefix(mission.id))) {
+        prefix)) {
         return false;
     }
-    if (!testBits(mission.availBits, ctx, idPrefix(mission.id))) {
+    if (!testBits(mission.availBits, ctx, prefix)) {
         return false;
     }
     return true;
@@ -614,7 +644,7 @@ function resolveStellarRef(ref: number, refId: string | null,
     } else {
         candidates = ctx.stellarCandidates.filter(s => s.canLand
             && stellarVisible(s, ctx.bits)
-            && matchesStellarRef(ref, null, s, idPrefix(mission.id),
+            && matchesStellarRef(ref, null, s, setStringPrefix(mission),
                 ctx.getGovt));
     }
     // Don't send the player to the planet they're standing on.
@@ -887,7 +917,13 @@ export interface MissionWorkingState {
 
 export interface MissionMachineryContext {
     state: MissionWorkingState;
-    /** Cached mission data lookup (warm the cache first). */
+    /**
+     * Cached mission data lookup (warm the cache first). Doubles as the
+     * missions-exists lookup the Sxxx/Axxx/Fxxx operators resolve their
+     * bare numbers through (resolveNumberedResource, stock-first), so it
+     * must answer for every loaded mission — MissionUniverse's
+     * missionsById does.
+     */
     getMission(id: string): MissionData | undefined;
     /** Context for resolving Sxxx-started missions' destinations. */
     offerContext(): MissionContext;
@@ -910,9 +946,13 @@ export interface MissionMachineryContext {
     sameStellar?(a: string, b: string): boolean;
     /**
      * Resolves a global rank id to its data, so the Kxxx/Lxxx operators can
-     * run the Bible's deactivation cascades. Optional; without it a rank is
-     * still activated/deactivated, just with no cascade (rank_logic.ts
-     * records unresolvable ranks rather than dropping player state).
+     * run the Bible's deactivation cascades. Doubles as the ranks-exists
+     * lookup those operators resolve their bare numbers through
+     * (resolveNumberedResource, stock-first), so it must answer for every
+     * loaded rank — MissionUniverse's ranksById does. Optional; without it
+     * a rank is still activated/deactivated under the writer's own prefix,
+     * just with no cascade (rank_logic.ts records unresolvable ranks
+     * rather than dropping player state).
      */
     getRank?(id: string): RankData | undefined;
     /**
@@ -953,7 +993,7 @@ function applyOutcomeReputation(machinery: MissionMachineryContext,
     if (delta === 0) {
         return;
     }
-    const govtId = `${idPrefix(mission.id)}:${mission.compGovt}`;
+    const govtId = `${setStringPrefix(mission)}:${mission.compGovt}`;
     addRecord(state.records, govtId,
         machinery.offerContext().getGovt(govtId), delta);
 }
@@ -995,13 +1035,22 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
     runningMissionPrefix: string,
     outfits?: Map<string, number>, depth = 0): NCBSetHooks {
     const { state } = machinery;
+    // Kxxx/Lxxx resolve their ränk number stock-first, exactly like every
+    // sibling operator (resolveNumberedResource, keyed on the WRITING
+    // plug-in's prefix): stock's rank n when stock defines it, else the
+    // writer's own — which is also the id recorded when NEITHER defines n
+    // (activateRank keeps unknown ids so a not-loaded plug-in's rank
+    // survives a save; the writer's id is the one it would come back to).
+    const rankExists = machinery.getRank
+        && ((globalId: string) => machinery.getRank!(globalId) !== undefined);
     const hooks = makeControlBitHooks(state.bits, outfits ? {
         outfits,
         resolveId: id => resolveNumberedResource(
             id, runningMissionPrefix, machinery.outfitExists),
     } : undefined, state.ranks ? {
         active: state.ranks,
-        resolveId: id => `${runningMissionPrefix}:${id}`,
+        resolveId: id => resolveNumberedResource(
+            id, runningMissionPrefix, rankExists),
         getRank: id => machinery.getRank?.(id),
     } : undefined, systemDiscoveryOperators(machinery.discovery,
         runningMissionPrefix, machinery.systemExists));
@@ -1011,18 +1060,24 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
         return hooks;
     }
 
+    // Sxxx/Axxx/Fxxx resolve their mïsn number the same stock-first way
+    // (getMission doubles as the missions-exists lookup; MissionUniverse
+    // keeps missionsById). A plug-in's S<stock-n> starts nova:n rather
+    // than warning about a phantom id under the plug-in's own prefix.
+    const resolveMissionId = (id: number) => resolveNumberedResource(
+        id, runningMissionPrefix,
+        globalId => machinery.getMission(globalId) !== undefined);
     hooks.startMission = id => {
-        startMissionById(machinery,
-            `${runningMissionPrefix}:${id}`, outfits, depth + 1);
+        startMissionById(machinery, resolveMissionId(id), outfits, depth + 1);
     };
     hooks.abortMission = id => {
-        const globalId = `${runningMissionPrefix}:${id}`;
+        const globalId = resolveMissionId(id);
         if (state.missions.has(globalId)) {
             abortMission(machinery, globalId, outfits, depth + 1);
         }
     };
     hooks.failMission = id => {
-        const globalId = `${runningMissionPrefix}:${id}`;
+        const globalId = resolveMissionId(id);
         if (state.missions.has(globalId)) {
             failMission(machinery, globalId, outfits, depth + 1);
         }
@@ -1210,7 +1265,7 @@ function applyPayVal(machinery: MissionMachineryContext,
         case 'cleanRecord':
             if (state.records) {
                 const govtId =
-                    `${idPrefix(mission.id)}:${pay.govtResourceId}`;
+                    `${setStringPrefix(mission)}:${pay.govtResourceId}`;
                 cleanRecords(state.records, pay.scope,
                     machinery.offerContext().getGovt(govtId),
                     machinery.allGovts?.() ?? []);
@@ -1244,7 +1299,7 @@ export function acceptOffer(machinery: MissionMachineryContext,
     skipAcceptabilityCheck = false): AcceptResult {
     const { state } = machinery;
     const mission = offer.data;
-    const prefix = idPrefix(mission.id);
+    const prefix = setStringPrefix(mission);
     const ctx = machinery.offerContext();
 
     if (mission.flags.autoAbort && !deferredAutoAbort(mission)) {
@@ -1366,7 +1421,7 @@ export function acceptOffer(machinery: MissionMachineryContext,
 export function refuseOffer(machinery: MissionMachineryContext,
     offer: MissionOffer, outfits?: Map<string, number>): void {
     runMissionSetString(machinery, offer.data.onRefuse,
-        idPrefix(offer.data.id), outfits);
+        setStringPrefix(offer.data), outfits);
 }
 
 /** Sxxx: start a mission by id, ignoring availability. */
@@ -1407,7 +1462,7 @@ export function abortMission(machinery: MissionMachineryContext,
     if (mission) {
         applyOutcomeReputation(machinery, mission, 'abort');
         runMissionSetString(machinery, mission.onAbort,
-            idPrefix(missionId), outfits, depth);
+            setStringPrefix(mission), outfits, depth);
     }
     state.events.push({
         missionId,
@@ -1431,7 +1486,7 @@ export function failMission(machinery: MissionMachineryContext,
     if (mission) {
         applyOutcomeReputation(machinery, mission, 'fail');
         runMissionSetString(machinery, mission.onFailure,
-            idPrefix(missionId), outfits, depth);
+            setStringPrefix(mission), outfits, depth);
     }
     state.events.push({
         missionId,
@@ -1478,7 +1533,7 @@ function completeMission(machinery: MissionMachineryContext,
     applyOutcomeReputation(machinery, mission, 'complete');
     state.dateAdvance += Math.max(0, mission.datePostInc);
     runMissionSetString(machinery, mission.onSuccess,
-        idPrefix(mission.id), outfits);
+        setStringPrefix(mission), outfits);
     state.events.push({
         missionId: mission.id,
         missionName: mission.name,
@@ -1516,7 +1571,7 @@ function runShipDoneIfPending(machinery: MissionMachineryContext,
     }
     objective.shipDonePending = false;
     runMissionSetString(machinery, mission.onShipDone,
-        idPrefix(mission.id), outfits);
+        setStringPrefix(mission), outfits);
     if (mission.shipDoneText) {
         machinery.state.events.push({
             missionId: mission.id,

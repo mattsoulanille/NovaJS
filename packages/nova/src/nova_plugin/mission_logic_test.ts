@@ -1,5 +1,6 @@
 import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
+import { getDefaultRankData } from 'novadatainterface/rank_data';
 import { getDefaultMissionData, MissionData } from 'novadatainterface/mission_data';
 import {
     abortMission,
@@ -241,6 +242,23 @@ describe('matchesStellarRef', () => {
             expect(matchesStellarRef(refFor200, null,
                 makeStellar({ id: 'nova:300' }), 'nova', getGovt))
                 .toBe(false);
+        });
+
+        it('resolves a plug-in mission\'s target system stock-first', () => {
+            // A plug-in mïsn with AvailStel 5000+n where n is a STOCK
+            // system offers adjacent to that system — the reference means
+            // nova:200, not a phantom 'arpia:200'
+            // (resolveNumberedResource, via the systemExists lookup).
+            const systemExists = (id: string) =>
+                ['nova:200', 'nova:201', 'nova:202'].includes(id);
+            expect(matchesStellarRef(refFor200, null,
+                makeStellar({ id: 'nova:301' }), 'arpia', getGovt,
+                adjacency, systemExists)).toBe(true);
+            // The plug-in's own private system number still resolves to
+            // the plug-in when stock does not define it.
+            expect(matchesStellarRef(refFor200, null,
+                makeStellar({ id: 'nova:301' }), 'arpia', getGovt,
+                adjacency, id => id === 'arpia:200')).toBe(false);
         });
     });
 });
@@ -1315,6 +1333,87 @@ describe('mission set-string hooks (Sxxx/Axxx/Fxxx)', () => {
             const state = makeState();
             expect(() => runMissionSetString(
                 makeMachinery(state, []), 'X130', 'nova')).not.toThrow();
+        });
+    });
+
+    // Sxxx/Axxx/Fxxx and Kxxx/Lxxx resolve their bare numbers exactly as
+    // every sibling operator does (resolveNumberedResource): stock's n
+    // when stock defines it, else the writing plug-in's own.
+    describe('stock-first numeric resolution', () => {
+        it('starts the STOCK mission for a plug-in\'s S<stock-n>', () => {
+            const stock = makeMission({ id: 'nova:210' });
+            const state = makeState();
+            const machinery = makeMachinery(state, [stock]);
+            runMissionSetString(machinery, 's210', 'arpia');
+            expect(state.missions.has('nova:210')).toBe(true);
+            expect(state.missions.has('arpia:210')).toBe(false);
+        });
+
+        it('starts the plug-in\'s own mission for its private number', () => {
+            const own = makeMission({ id: 'arpia:400' });
+            const state = makeState();
+            const machinery = makeMachinery(state, [own]);
+            runMissionSetString(machinery, 's400', 'arpia');
+            expect(state.missions.has('arpia:400')).toBe(true);
+        });
+
+        it('aborts and fails STOCK missions from a plug-in\'s Axxx/Fxxx',
+            () => {
+                const a = makeMission({ id: 'nova:211', onAbort: 'b1' });
+                const f = makeMission({ id: 'nova:212', onFailure: 'b2' });
+                const state = makeState();
+                const machinery = makeMachinery(state, [a, f]);
+                acceptOffer(machinery,
+                    makeMissionOffer(a, machinery.offerContext())!);
+                acceptOffer(machinery,
+                    makeMissionOffer(f, machinery.offerContext())!);
+                expect(state.missions.size).toBe(2);
+                runMissionSetString(machinery, 'a211 f212', 'arpia');
+                expect(state.missions.size).toBe(0);
+                expect(state.bits.has(1)).toBe(true);
+                expect(state.bits.has(2)).toBe(true);
+            });
+
+        function rankMachinery(ranks: Set<string>, known: string[]) {
+            const state = makeState({ ranks });
+            const machinery: MissionMachineryContext = {
+                ...makeMachinery(state, []),
+                getRank: id => known.includes(id)
+                    ? { ...getDefaultRankData(), id } : undefined,
+            };
+            return machinery;
+        }
+
+        it('activates the STOCK rank for a plug-in\'s K<stock-n>', () => {
+            const ranks = new Set<string>();
+            runMissionSetString(rankMachinery(ranks, ['nova:147']),
+                'k147', 'arpia');
+            expect([...ranks]).toEqual(['nova:147']);
+        });
+
+        it('activates the plug-in\'s own rank for its private number', () => {
+            const ranks = new Set<string>();
+            runMissionSetString(rankMachinery(ranks, ['arpia:400']),
+                'k400', 'arpia');
+            expect([...ranks]).toEqual(['arpia:400']);
+        });
+
+        it('still records the writer\'s id for a rank NEITHER data set '
+            + 'defines (player state is never dropped)', () => {
+                // rank_logic.ts records unknown ids so a not-loaded
+                // plug-in's rank survives a save; the writer's own id is
+                // the one it would come back under.
+                const ranks = new Set<string>();
+                runMissionSetString(rankMachinery(ranks, []),
+                    'k999', 'arpia');
+                expect([...ranks]).toEqual(['arpia:999']);
+            });
+
+        it('deactivates the STOCK rank for a plug-in\'s L<stock-n>', () => {
+            const ranks = new Set<string>(['nova:147']);
+            runMissionSetString(rankMachinery(ranks, ['nova:147']),
+                'l147', 'arpia');
+            expect(ranks.size).toBe(0);
         });
     });
 

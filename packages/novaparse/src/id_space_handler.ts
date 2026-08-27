@@ -66,17 +66,32 @@ export function comparePluginNames(a: string, b: string): number {
     return a === b ? 0 : a < b ? -1 : 1;
 }
 
-/** The namespace prefix for a Plug-ins entry: its name minus extensions,
- * re-keyed away from the reserved names. */
-export function pluginPrefixFor(fileName: string): string {
+/**
+ * The namespace prefix for a Plug-ins entry: its name minus extensions,
+ * re-keyed away from the reserved names.
+ *
+ * `claimedPrefixes` holds the prefixes the OTHER entries in the same
+ * Plug-ins directory claim outright (their non-reserved base names), so a
+ * re-key can never collide with a REAL plug-in that happens to be called
+ * e.g. "nova-plugin": the suffix is appended again until the name is
+ * neither reserved nor claimed. Deterministic — a pure function of the
+ * directory's name list — so every peer of a networked game re-keys
+ * identically.
+ */
+export function pluginPrefixFor(fileName: string,
+    claimedPrefixes: ReadonlySet<string> = new Set()): string {
     const prefix = fileName.split(".")[0]; // Cut off extensions
-    if (RESERVED_PLUGIN_PREFIXES.has(prefix)) {
-        const rekeyed = prefix + "-plugin";
-        console.warn(`Plug-in "${fileName}" uses the reserved namespace `
-            + `"${prefix}"; it is loaded as "${rekeyed}".`);
-        return rekeyed;
+    if (!RESERVED_PLUGIN_PREFIXES.has(prefix)) {
+        return prefix;
     }
-    return prefix;
+    let rekeyed = prefix;
+    do {
+        rekeyed += "-plugin";
+    } while (RESERVED_PLUGIN_PREFIXES.has(rekeyed)
+        || claimedPrefixes.has(rekeyed));
+    console.warn(`Plug-in "${fileName}" uses the reserved namespace `
+        + `"${prefix}"; it is loaded as "${rekeyed}".`);
+    return rekeyed;
 }
 
 class IDSpaceHandler {
@@ -309,10 +324,18 @@ class IDSpaceHandler {
         // tie-break so the result is still a total, locale-independent
         // order.
         var fileNames = (await readdir(pluginsPath)).sort(comparePluginNames);
+        // The prefixes claimed outright by entries whose names are NOT
+        // reserved, so pluginPrefixFor can re-key a reserved name without
+        // colliding with a real plug-in called e.g. "nova-plugin".
+        // (Entries sharing a base name deliberately share one prefix, so
+        // only non-reserved names claim.)
+        const claimedPrefixes = new Set(fileNames
+            .map(n => n.split(".")[0])
+            .filter(p => !RESERVED_PLUGIN_PREFIXES.has(p)));
         for (let i in fileNames) {
             var name = fileNames[i];
             var currentPath = path.join(pluginsPath, name);
-            var prefix = pluginPrefixFor(name);
+            var prefix = pluginPrefixFor(name, claimedPrefixes);
             if (!this.pluginPrefixOrder.includes(prefix)) {
                 this.pluginPrefixOrder.push(prefix);
             }
