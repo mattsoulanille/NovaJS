@@ -16,6 +16,7 @@ import { makeDescTextContext, playerGender } from '../nova_plugin/desc_text.js';
 import { ActiveMission } from '../nova_plugin/player_state_plugin.js';
 import { PlayerIdentitySubs, playerIdentitySubs } from './player_identity.js';
 import { Button } from './button.js';
+import { commitVenueCredits } from './credit_commit.js';
 import { Menu } from './menu.js';
 import { activeAsOffer, offerSubstitutions, rollOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
@@ -89,6 +90,11 @@ type Row =
  */
 export class MissionBoard extends Menu<Entity> {
     private session?: MissionSession;
+    /**
+     * The balance the session's working credits were seeded from at show().
+     * done() commits the DIFFERENCE from it (credit_commit.ts).
+     */
+    private creditsBaseline = 0;
     private offers: MissionOffer[] = [];
     /** <PN>/<PSN>-style identity values for this docked visit. */
     private identity: PlayerIdentitySubs = {};
@@ -264,6 +270,10 @@ export class MissionBoard extends Menu<Entity> {
             console.warn('Mission board failed to load:', e);
             return input;
         }
+        // The balance the session's working copy was seeded from: done()
+        // commits the difference from THIS, not the absolute, so a
+        // concurrent writer survives the commit (credit_commit.ts).
+        this.creditsBaseline = this.session.state.credits.credits;
         await this.loadStrings();
         this.offers = rollOffers(this.session, this.universe,
             this.location);
@@ -531,7 +541,11 @@ export class MissionBoard extends Menu<Entity> {
     }
 
     protected override done() {
-        this.session?.commit();
+        const session = this.session;
+        if (session) {
+            this.creditsBaseline = commitVenueCredits(
+                this.input, this.creditsBaseline, () => session.commit());
+        }
         super.done();
     }
 }

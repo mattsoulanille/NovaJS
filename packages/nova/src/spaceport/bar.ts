@@ -9,6 +9,7 @@ import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
 import { LOCATION_BAR } from '../nova_plugin/mission_logic.js';
 import { Button } from './button.js';
+import { commitVenueCredits } from './credit_commit.js';
 import { BAR, LINE_HEIGHT } from './dialog_layout.js';
 import { GambleDialog } from './gamble.js';
 import { HireEscortDialog, noShipsForHire } from './hire_escort.js';
@@ -50,6 +51,11 @@ const FALLBACK_DESC = 'The bar is quiet tonight. A tired bartender '
  */
 export class Bar extends Menu<Entity> {
     private session?: MissionSession;
+    /**
+     * The balance the session's working credits were seeded from at show().
+     * done() commits the DIFFERENCE from it (credit_commit.ts).
+     */
+    private creditsBaseline = 0;
     private hired: string[] = [];
     private description = new PIXI.Text('', DESC_FONT);
     private news: NewsDialog;
@@ -130,6 +136,11 @@ export class Bar extends Menu<Entity> {
             console.warn('Bar failed to load:', e);
             return input;
         }
+        // The balance the session's working copy was seeded from: done()
+        // commits the difference from THIS rather than the absolute, so a
+        // concurrent writer (an escort deal settling mid-visit, the refuel
+        // button) survives the commit. See credit_commit.ts.
+        this.creditsBaseline = this.session.state.credits.credits;
         this.hired = [];
         try {
             const planet = await this.simulationData.data.Planet
@@ -258,7 +269,11 @@ export class Bar extends Menu<Entity> {
     }
 
     protected override done() {
-        this.session?.commit();
+        const session = this.session;
+        if (session) {
+            this.creditsBaseline = commitVenueCredits(
+                this.input, this.creditsBaseline, () => session.commit());
+        }
         if (this.hired.length > 0) {
             const pending =
                 this.input.components.get(PendingEscortsComponent) ?? [];

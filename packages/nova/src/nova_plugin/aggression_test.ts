@@ -2,8 +2,8 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import {
     AGGRESSION_DAMAGE_THRESHOLD, AGGRESSION_WINDOW_MS, AggressionComponent,
-    AggressionState, applyAggression, isRecentAggressor, recordAggression,
-    sweepAggression,
+    AggressionState, applyAggression, clearCarriedAggression,
+    isRecentAggressor, recordAggression, sweepAggression,
 } from './aggression.js';
 import { provokeGuidedLock } from './flock.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
@@ -216,5 +216,53 @@ describe('guided-missile lock (trigger a)', () => {
         provokeGuidedLock('trader', 'shooter', 'shooter',
             lookup({ trader, shooter }), 0);
         expect(trader.components.get(NpcComponent)!.aggressor).toBe('shooter');
+    });
+});
+
+/**
+ * Crossing into a FRESH world (a jump, a hypergate or wormhole transit, a
+ * restored save) carries the entity but not the clock: every per-system
+ * simulation world starts its fixed timestep at zero. An entry stamped late
+ * in the system being left is therefore compared, at the destination,
+ * against a clock that has just restarted — so the lapse never fires and the
+ * player arrives holding a grudge against uuids that do not exist there.
+ * browser.ts's jumpTo strips the whole memory instead, for the player and
+ * for the escort batch travelling with them.
+ */
+describe('aggression carried into a fresh world', () => {
+    /** An entity as it leaves a world whose clock ran for 500 seconds. */
+    function carriedShip(): Entity {
+        const entity = new Entity('player')
+            .addComponent(ControlledByComponent, { peerId: 'peer' });
+        applyAggression(entity, 'attacker', 500_000, DELIBERATE);
+        expect(entity.components.has(AggressionComponent)).toBeTrue();
+        return entity;
+    }
+
+    it('the fresh clock would NOT lapse a carried entry on its own', () => {
+        // Why the strip has to exist: at the destination `now` restarts at
+        // 0, `now - entry.at` is negative, and the sweep keeps the entry
+        // until the new world has run as long as the old one did.
+        const state = carriedShip().components.get(AggressionComponent)!;
+        expect(sweepAggression(state, 0)).toBeTrue();
+        expect(isRecentAggressor(state, 'attacker', 0)).toBeTrue();
+        expect(sweepAggression(state, AGGRESSION_WINDOW_MS)).toBeTrue();
+    });
+
+    it('a carried entity re-inserted into a fresh world carries no '
+        + 'aggression entries', () => {
+            const entity = carriedShip();
+            clearCarriedAggression(entity);
+            expect(entity.components.has(AggressionComponent)).toBeFalse();
+            expect(isRecentAggressor(
+                entity.components.get(AggressionComponent), 'attacker', 0))
+                .toBeFalse();
+        });
+
+    it('is idempotent and free for a ship nobody has shot at', () => {
+        const entity = new Entity('escort');
+        clearCarriedAggression(entity);
+        clearCarriedAggression(entity);
+        expect(entity.components.has(AggressionComponent)).toBeFalse();
     });
 });

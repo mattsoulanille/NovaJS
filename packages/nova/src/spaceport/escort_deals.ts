@@ -73,6 +73,19 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  *    a capture that was later re-classified, or a hand-edited save, but the
  *    rule is re-checked here rather than trusted from the flag — the same
  *    policy applyEscortAction follows.
+ *  - AN ESCORT WHOSE HOLD IS OPEN IN A VENUE IS SKIPPED ENTIRELY, flags and
+ *    all, and retried on the next docked frame. The trade center checks out
+ *    working copies of the landed escorts' holds when it opens and writes
+ *    them back at Done (fleet_cargo.ts); settling a SALE in between would
+ *    splice the escort off the roster while the exchange was still filling
+ *    its hold, and the exchange would then commit that cargo onto an entity
+ *    nothing will ever lift off — goods gone, credits spent. An UPGRADE is
+ *    frozen for the same reason: it rewrites the escort's own cargo (the
+ *    class swap clamps it to the new hull) and its capacity, both of which
+ *    the open hold would overwrite from a copy taken before the swap.
+ *    Freezing costs nothing: the settlement runs on EVERY docked frame, so
+ *    "retry next frame" means the deal lands the moment Done releases the
+ *    hold, and these deals have already waited since the last shipyard.
  *
  * TWO THINGS ARE DELIBERATELY NOT RE-CHECKED HERE.
  *
@@ -230,7 +243,16 @@ function wingOf(roster: readonly EscortDealEntry[], uuid: string): Set<string> {
  */
 export function settleEscortDeals(roster: EscortDealEntry[], player: string,
     credits: number,
-    getShip: (id: string) => ShipData | undefined): EscortDealSettlement {
+    getShip: (id: string) => ShipData | undefined,
+    /**
+     * Whether an escort's hold is checked out by an open venue right now, in
+     * which case its deals are left QUEUED and retried on the next docked
+     * frame (see the module comment's rule, and fleet_cargo's fleetHoldOpen).
+     * Omitted — every unit test, and any caller with no venue — freezes
+     * nothing.
+     */
+    holdOpen: (uuid: string) => boolean = () => false):
+    EscortDealSettlement {
     const settlement: EscortDealSettlement =
         { sold: [], upgraded: [], credits: 0 };
     let balance = credits;
@@ -240,6 +262,13 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         const marker = entry.entity.components.get(PlayerEscortComponent);
         if (entry.player !== player || !marker?.pendingSale) {
             continue;
+        }
+        // The sale takes the escort's whole WING with it, so any open hold
+        // anywhere in that subtree freezes the sale — the exchange would
+        // otherwise commit a hold onto an entity this splice removed.
+        if (holdOpen(entry.uuid)
+            || [...wingOf(roster, entry.uuid)].some(holdOpen)) {
+            continue; // Frozen: stays queued, retried next frame.
         }
         clearDeals(entry.entity, marker);
         if (escortProvenance(entry.entity) !== 'captured') {
@@ -269,6 +298,12 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
         const marker = entry.entity.components.get(PlayerEscortComponent);
         const pending = marker?.pendingUpgrade;
         if (entry.player !== player || !marker || pending === undefined) {
+            continue;
+        }
+        if (holdOpen(entry.uuid)) {
+            // The class swap rewrites this escort's cargo and capacity; an
+            // open hold would overwrite both from a pre-swap copy. Stays
+            // queued until Done releases it.
             continue;
         }
         const shipData = entry.entity.components.get(ShipDataComponent);

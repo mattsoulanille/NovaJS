@@ -89,6 +89,21 @@ const SAMPLE: SaveData = {
 };
 
 describe('save_game schema', () => {
+    // extractSaveData reads the process-global discovery store, so these
+    // specs have to own it: without this, a system another spec file left
+    // in the store (levels only ever rise, and the store outlives a spec)
+    // showed up as an unexpected `discovery` field here, depending purely
+    // on the order jasmine happened to shuffle the suite into. The sibling
+    // `save_game discovery` describe below has always done this.
+    beforeEach(() => {
+        setActiveSaveKey(SAVE_KEY);
+        resetDiscovery(new FakeStorage());
+    });
+    afterEach(() => {
+        setActiveSaveKey(SAVE_KEY);
+        resetDiscovery(new FakeStorage());
+    });
+
     it('round-trips a save through encode and decode', () => {
         const decoded = decodeSave(encodeSave(SAMPLE));
         expect(decoded).toEqual(SAMPLE);
