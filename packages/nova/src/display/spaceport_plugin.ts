@@ -54,11 +54,21 @@ const SpaceportQuery = new Query([SpaceportComponent, PlanetComponent] as const)
  * slots; and the trade center, because a cargo-carrying escort's hold is
  * part of the fleet's cargo space (spaceport/fleet_cargo.ts). A getter
  * because escorts keep touching down while the player shops.
+ *
+ * `onShipSwap` is how a ship BOUGHT at the shipyard reaches the client
+ * before lift-off. A purchase builds a brand-new entity, so the handle
+ * browser.ts is holding (`dockedShip.entity` — what the frame loop settles
+ * escort deals into, and what every save is written from) would otherwise
+ * still be the traded-in hull for the rest of the visit. The spaceport
+ * publishes the swap through DockedShip.swapEntity as it happens, and this
+ * callback carries it back out to the client. Optional: a client that keeps
+ * no handle of its own needs nothing here.
  */
 export const OpenSpaceportEvent = new EcsEvent<{
     planetId: string, ship: Entity, uuid?: string,
     landedEscorts?: () =>
         readonly { player: string, uuid: string, entity: Entity }[],
+    onShipSwap?: (ship: Entity) => void,
 }>('OpenSpaceportEvent');
 export const LeaveSpaceportEvent = new EcsEvent<Entity>('LeaveSpaceportEvent');
 
@@ -68,8 +78,8 @@ const OpenSpaceportSystem = new System({
     args: [OpenSpaceportEvent, RunQuery, ScreenSize, Emit,
         DockedShipResource, Entities, SimulationGameDataResource,
         SingletonComponent] as const,
-    step({ planetId, ship, uuid, landedEscorts }, runQuery, { x, y }, emit,
-        dockedHolder, entities, gameData) {
+    step({ planetId, ship, uuid, landedEscorts, onShipSwap }, runQuery,
+        { x, y }, emit, dockedHolder, entities, gameData) {
         const spaceport = runQuery(SpaceportQuery)
             .find(([, { id }]) => id === planetId)?.[0];
         if (!spaceport) {
@@ -97,7 +107,10 @@ const OpenSpaceportSystem = new System({
         // Publish the held ship so the status bar (out-of-world while docked)
         // keeps drawing its credits/fuel/cargo, and let the spaceport push
         // each venue's live working state through it per-transaction.
-        const dockedShip = new DockedShip(ship);
+        // The swap hook rides along: a shipyard purchase replaces the held
+        // hull mid-visit, and the client's own docked handle has to follow
+        // it (see OpenSpaceportEvent's doc).
+        const dockedShip = new DockedShip(ship, onShipSwap);
         // ...and the roster, so the bar's fleet-wide cargo readout can
         // see the escorts' holds while they are out of every world.
         dockedShip.landedEscorts = landedEscorts;

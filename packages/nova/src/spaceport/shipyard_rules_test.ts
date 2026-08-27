@@ -5,7 +5,9 @@ import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import {
+    ActiveRanksComponent, ControlBitsComponent,
+} from '../nova_plugin/ncb_plugin.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import {
@@ -390,6 +392,8 @@ describe('shipyard purchase rules', () => {
             entity.components.set(GameDateComponent,
                 { day: 4, month: 5, year: 1177 });
             entity.components.set(CombatRatingComponent, { kills: 12 });
+            entity.components.set(ActiveRanksComponent,
+                new Set(['nova:150', 'nova:151']));
             entity.components.set(MultiplayerData, { owner: 'peer-1' });
             return entity;
         }
@@ -449,6 +453,17 @@ describe('shipyard purchase rules', () => {
             expect(bought.components.get(CombatRatingComponent)).toEqual({ kills: 12 });
             expect(bought.components.get(MultiplayerData)).toEqual({ owner: 'peer-1' });
             expect(bought.components.get(CargoComponent)).toEqual(new Map([['cargo:1', 3]]));
+        });
+
+        it('carries the pilot\'s ränks across the hull swap', () => {
+            // They were not on CARRIED_COMPONENTS, so a trade handed the
+            // new hull to ensurePlayerStateComponents, which seeded an
+            // EMPTY rank set: every rank the pilot had earned was gone the
+            // instant they bought a ship — losing plot state, the shipyard's
+            // own rank Contribute gates, and any ränk PriceMod discount.
+            const { bought } = purchase();
+            expect(bought.components.get(ActiveRanksComponent))
+                .toEqual(new Set(['nova:150', 'nova:151']));
         });
 
         it('keeps the persistent outfit and drops the mundane one', () => {

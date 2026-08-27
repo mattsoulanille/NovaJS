@@ -72,13 +72,17 @@ import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
  *    priced and charged from the LIVE entity at the instant the Buy button is
  *    pressed (shipyard_rules' `purchaseContextFrom` / `buildPurchasedShip`),
  *    so there is no stale snapshot to erase.
- *  - THE SHIPYARD'S ENTITY SWAP is an OPEN SEAM of the same family, left for
- *    a change that can plumb it. `buildPurchasedShip` returns a NEW entity,
- *    and the spaceport only hands it to browser.ts at LeaveSpaceportEvent —
- *    so for the rest of the visit `dockedShip.entity` is the hull that was
- *    traded in, and an escort deal that settles after a ship purchase pays
- *    into an entity nobody will fly. Closing it means the spaceport
- *    publishing the swap as it happens.
+ *  - THE SHIPYARD'S ENTITY SWAP was an open seam of the same family and is
+ *    now CLOSED. `buildPurchasedShip` still returns a NEW entity, but the
+ *    spaceport no longer waits for LeaveSpaceportEvent to hand it over: it
+ *    adopts the hull at the instant the Buy button is pressed and publishes
+ *    the swap through `DockedShip.swapEntity`, which moves the client's own
+ *    `dockedShip.entity` with it (Spaceport.adoptPurchasedShip ->
+ *    OpenSpaceportEvent's `onShipSwap` -> browser.ts). An escort deal that
+ *    settles after a ship purchase therefore pays the hull that lifts off,
+ *    and a venue opened afterwards seeds its baseline from that same hull,
+ *    so the delta rule above composes across a trade exactly as it does
+ *    across a refuel.
  */
 
 /** The balance the entity is holding right now; 0 when it has none. */

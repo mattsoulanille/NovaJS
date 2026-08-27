@@ -58,7 +58,49 @@ export class DockedShip {
      */
     landedEscorts?: () => readonly { player: string, entity: Entity }[];
     playerUuid?: string;
-    constructor(public readonly entity: Entity) { }
+
+    private ship: Entity;
+
+    constructor(entity: Entity,
+        /**
+         * Told whenever {@link swapEntity} replaces the held hull, so the
+         * game client's own docked handle (browser.ts's `dockedShip`, which
+         * the frame loop settles escort deals against and which every save
+         * is built from) follows the swap. Wired from the OpenSpaceportEvent
+         * payload; absent in tests and anywhere the client does not care.
+         */
+        private readonly onSwap?: (entity: Entity) => void) {
+        this.ship = entity;
+    }
+
+    /** The hull the player is docked in RIGHT NOW (see swapEntity). */
+    get entity(): Entity {
+        return this.ship;
+    }
+
+    /**
+     * THE DOCKED HULL CHANGED MID-VISIT — the player traded up at the
+     * shipyard, which builds a whole new entity (shipyard_rules'
+     * `buildPurchasedShip`) rather than mutating the old one.
+     *
+     * Every docked consumer reads the ship through this handle, so this one
+     * assignment is what moves them all onto the hull the player will
+     * actually fly: the status bar's docked readouts, the client's
+     * escort-deal settlement (which pays credits into the held entity on
+     * every docked frame), and the save/checkpoint writer. Publishing it at
+     * the instant of purchase — rather than at lift-off, where the new
+     * entity used to first surface — is what keeps a deal that settles
+     * later in the same visit out of the traded-in hull's pocket.
+     *
+     * Idempotent: swapping in the hull already held does nothing.
+     */
+    swapEntity(next: Entity): void {
+        if (next === this.ship) {
+            return;
+        }
+        this.ship = next;
+        this.onSwap?.(next);
+    }
 }
 
 /**

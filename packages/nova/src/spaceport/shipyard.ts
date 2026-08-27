@@ -70,6 +70,19 @@ export class Shipyard extends Menu<Entity> {
      * still be shot down or touch down mid-visit.
      */
     private deployedOutfitCounts?: DeployedOutfitCounts;
+    /**
+     * Told the moment a purchase completes, with the NEW entity — set by
+     * the Spaceport (which forwards it to the docked seam, see
+     * spaceport.ts's `adoptPurchasedShip`).
+     *
+     * The menu's returned `show()` promise is NOT enough on its own: it
+     * only resolves when the player presses Done, and the docked frame loop
+     * keeps writing to the held entity in between (escort deals settle on
+     * every docked frame at a shipyard). Anything paid into the traded-in
+     * hull after the trade is money the player never sees again, so the
+     * swap is announced at the click, not at the exit.
+     */
+    onShipPurchased?: (ship: Entity) => void;
     private text = {
         description: new PIXI.Text("", FONT.normal),
         // The price pane under the ship picture. Labels and values in
@@ -421,7 +434,17 @@ export class Shipyard extends Menu<Entity> {
 
         this.text.status.text = "";
         this.refreshTradeState();
-        // For convenience
-        (window as any).myShip = this.input;
+        // Publish the swap NOW, while the shipyard is still open: the
+        // docked frame loop is still writing to whatever entity the client
+        // is holding, and from this instant that must be the hull just
+        // bought (see onShipPurchased). Announced BEFORE the debug
+        // convenience below, so nothing the console hook does can come
+        // between the trade and the money moving with it.
+        this.onShipPurchased?.(this.input);
+        // For convenience. Guarded: the menus are driven headlessly by
+        // their specs, where there is no window to hang it on.
+        if (typeof window !== 'undefined') {
+            (window as any).myShip = this.input;
+        }
     }
 }

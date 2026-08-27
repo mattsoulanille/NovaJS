@@ -2230,6 +2230,19 @@ async function startGame() {
                     // into the roster while the player shops, and each
                     // one still counts against the outfitter's buy caps.
                     landedEscorts: () => landedEscorts,
+                    // A ship bought at the shipyard is a NEW entity, and
+                    // the frame loop below keeps writing to whichever one
+                    // this handle names — escort deals settle into its
+                    // credits on every docked frame, and every save is
+                    // built from it. The spaceport publishes the trade as
+                    // it happens so both follow the hull that will
+                    // actually lift off (see Spaceport.adoptPurchasedShip).
+                    onShipSwap: (ship: Entity) => {
+                        const docked = dockedShip ?? pendingDockedShip;
+                        if (docked) {
+                            docked.entity = ship;
+                        }
+                    },
                 });
                 // Hide the touch controls under the spaceport UI.
                 document.body.classList.add('nova-docked');

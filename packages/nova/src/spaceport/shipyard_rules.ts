@@ -24,7 +24,9 @@ import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Cargo, CargoComponent, cargoUsed } from '../nova_plugin/cargo_plugin.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import {
+    ActiveRanksComponent, ControlBitsComponent,
+} from '../nova_plugin/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import {
@@ -369,6 +371,13 @@ export function cargoForNewShip(cargo: Cargo, newCapacity: number): Cargo {
 export const CARRIED_COMPONENTS: readonly Component<any>[] = [
     ControlledByComponent,
     ControlBitsComponent,
+    // The player's ränks. Not carrying them wiped every rank the pilot
+    // held the moment they traded hulls (ensurePlayerStateComponents seeds
+    // the new entity with an empty set), which is plot state, a shipyard
+    // gate (rank Contribute) and a price discount (ränk PriceMod) all at
+    // once — a second purchase in the same visit would have re-quoted at
+    // full price against a grid that had just lost its rank-gated hulls.
+    ActiveRanksComponent,
     GameDateComponent,
     MissionsComponent,
     CronStatesComponent,

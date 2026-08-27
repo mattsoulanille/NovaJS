@@ -242,38 +242,26 @@ export class Spaceport extends Menu<Entity> {
         buttons.tradeCenter.click.subscribe(showTradeCenter);
 
         this.shipyard = new Shipyard(displayAssets, simulationData, controlEvents);
+        // A purchase announces itself AT THE CLICK, not at the shipyard's
+        // exit — see adoptPurchasedShip.
+        this.shipyard.onShipPurchased = ship => this.adoptPurchasedShip(ship);
 
         const showShipyard = async () => {
             if (this.data && !this.data.flags.hasShipyard) {
                 return;
             }
             this.controls.unbind();
-            const newInput = await this.shipyard.show(this.input);
-            if (newInput !== this.input) {
-                // Construct a fake system and run providers so that outfits
-                // of the new ship are provided (see ship_build_world.ts —
-                // extracted so a spec pins that the scratch world's resource
-                // set stays sufficient for SystemPlugin).
-                await runShipBuildWorld(newInput, simulationData,
-                    displayAssets);
-            }
-            const boughtShip = newInput !== this.input;
-            this.input = newInput;
-            if (boughtShip) {
-                // A ship purchase is a checkpoint (pilot_history.ts). The
-                // NEW entity is passed explicitly: the client's docked
-                // handle still points at the traded-in one until depart.
-                const shipId = newInput.components.get(ShipComponent)?.id;
-                const name = shipId
-                    ? simulationData.data.Ship.getCached(shipId)?.name
-                        ?.split(';')[0].trim() ?? shipId
-                    : 'a ship';
-                requestCheckpoint({
-                    label: `Bought ${name}`, kind: 'purchase',
-                    entity: newInput, stellar: this.id,
-                });
-            }
-
+            // Any purchase inside the visit has already been adopted (and
+            // has already set this.input); this just picks up the entity the
+            // menu closes on, which is the same one.
+            this.input = await this.shipyard.show(this.input);
+            // The new hull's stat providers are still running: hold the
+            // spaceport's controls until they finish, exactly as awaiting
+            // runShipBuildWorld here used to.
+            await this.shipBuild;
+            // A traded-in hull's tank is not the new one's: the Refuel
+            // button has to be re-judged against the ship now docked.
+            this.refreshRefuelButton();
             this.controls.bind();
         };
         buttons.shipyard.click.subscribe(showShipyard);
@@ -527,6 +515,89 @@ export class Spaceport extends Menu<Entity> {
             });
         }
     }
+
+    /**
+     * ADOPTS A SHIP BOUGHT AT THE SHIPYARD, the moment the Buy button is
+     * pressed — the one place the docked hull is replaced.
+     *
+     * A purchase does not mutate the docked entity: `buildPurchasedShip`
+     * charges the trade-up price and returns a WHOLE NEW entity carrying
+     * the player's credits, cargo, missions, ranks, records and pending
+     * escorts across. Until this ran at Leave, the client kept holding the
+     * traded-in hull for the rest of the visit, and everything that writes
+     * to the docked entity between the trade and the lift-off wrote into a
+     * ship nobody would ever fly:
+     *
+     *  - AN ESCORT DEAL SETTLING AFTER THE TRADE. browser.ts settles queued
+     *    upgrades and sales into the held entity's CreditsComponent on
+     *    EVERY docked frame at a shipyard (spaceport/escort_deals.ts), and
+     *    escorts keep touching down while the player shops. A 40,000-credit
+     *    sale that landed after the trade was paid into the old hull and
+     *    vanished at lift-off — the escort was gone from the roster all the
+     *    same.
+     *  - EVERY OTHER DOCKED READER. The status bar's docked readouts, the
+     *    player-info 'p' dialog, the mission-info dialog, the periodic save
+     *    and the checkpoint writer all resolve the docked ship through the
+     *    same handles this updates, and so all showed the traded-in ship's
+     *    credits, cargo and stats.
+     *  - THE NEXT VENUE'S CREDIT BASELINE. A venue seeds its working
+     *    balance from the entity it is shown with and commits the DELTA back
+     *    (credit_commit.ts); shown the dead hull, the delta would land there
+     *    too. The shipyard cannot be open at the same time as another venue,
+     *    so pointing `this.input` at the new hull here is enough for every
+     *    venue opened afterwards to compose with the frame loop as before.
+     *
+     * NOTHING IS COPIED HERE: buildPurchasedShip has already moved the
+     * player-scoped state onto the new entity (see CARRIED_COMPONENTS), so
+     * the swap really is just the reference. The one thing that is still
+     * catching up is the new hull's DERIVED stats — physics, weapons,
+     * shield/armor/fuel — which the outfit providers fill in through
+     * `runShipBuildWorld`. That is deliberately not awaited before the
+     * publish: the money must move to the new hull at the instant of the
+     * trade, whereas a stats readout that lags by one build is cosmetic.
+     * `shipBuild` is what the shipyard visit awaits before handing control
+     * back, so the spaceport is never interactive over a half-built ship.
+     *
+     * Multiplayer/determinism: all of this is client-local. The docked
+     * entity is out of every world (the sim removed it at landing) and
+     * re-enters only as the lift-off's `addEntity` record, so no peer sees
+     * either hull until then.
+     */
+    private adoptPurchasedShip(ship: Entity) {
+        this.input = ship;
+        // The client's handle on the docked ship — the status bar, the
+        // escort-deal settlement and the save writer all read it.
+        this.dockedShip?.swapEntity(ship);
+        // A ship purchase is a checkpoint (pilot_history.ts). The NEW
+        // entity is passed explicitly rather than left to the recorder's
+        // own lookup, so the snapshot is the ship just bought even if the
+        // client keeps no docked handle at all.
+        const shipId = ship.components.get(ShipComponent)?.id;
+        const name = shipId
+            ? this.simulationData.data.Ship.getCached(shipId)?.name
+                ?.split(';')[0].trim() ?? shipId
+            : 'a ship';
+        requestCheckpoint({
+            label: `Bought ${name}`, kind: 'purchase',
+            entity: ship, stellar: this.id,
+        });
+        // Construct a fake system and run providers so that outfits of the
+        // new ship are provided (see ship_build_world.ts — extracted so a
+        // spec pins that the scratch world's resource set stays sufficient
+        // for SystemPlugin). Kept as a promise the shipyard visit awaits:
+        // a rejection must not strand the spaceport with its controls
+        // unbound, which is what an unguarded throw here used to do.
+        this.shipBuild = runShipBuildWorld(ship, this.simulationData,
+            this.displayAssets).catch(e =>
+                console.warn('Failed to build the purchased ship:', e));
+    }
+
+    /**
+     * The in-flight stat rebuild for the most recently purchased hull (see
+     * adoptPurchasedShip). Awaited before the spaceport takes its controls
+     * back, so a second purchase in the same visit simply replaces it.
+     */
+    private shipBuild?: Promise<void>;
 
     /** Points the status bar at the docked ship for this landing. */
     setDockedShip(dockedShip: DockedShip) {
