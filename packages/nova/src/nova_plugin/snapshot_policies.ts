@@ -80,6 +80,12 @@ export function configureSnapshotPolicies(world: World) {
     policies.set(ExplosionDataComponent, { policy: 'share' });
     policies.set(BlastDamageComponent, { policy: 'share' });
     policies.set(SourceComponent, { policy: 'share' });
+    // CreateTime's data is a primitive number (CreateTimeProvider stamps
+    // time.time at creation, not a reference to the TimeResource
+    // object), so 'share' stores it by value and a pinned checkpoint
+    // cannot drift with the live clock. The clock itself is detached
+    // too: the 'time' resource policy below saves a shallow copy of the
+    // flat Time object.
     policies.set(CreateTime, { policy: 'share' });
 
     // Hulls carry per-step scratch state (position, frame), but it is

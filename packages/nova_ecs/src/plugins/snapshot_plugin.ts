@@ -1,9 +1,12 @@
 import { isLeft } from 'fp-ts/lib/Either.js';
+import { AsyncSystemResource } from '../async_system.js';
 import { Component, UnknownComponent } from '../component.js';
 import { Entity } from '../entity.js';
+import { AsyncProviderResource } from '../provide_async.js';
 import { Resource } from '../resource.js';
 import { World } from '../world.js';
 import { SerializerResource } from './serializer_plugin.js';
+import { TimeResource } from './time_plugin.js';
 
 /**
  * How a component's data is captured in a snapshot:
@@ -237,6 +240,38 @@ function restoreComponents(world: World, entity: Entity,
     }
 }
 
+/** Worlds already warned about a snapshot taken with queued events. */
+const warnedQueuedEventWorlds = new WeakSet<World>();
+
+/**
+ * Dev check for the invariant snapshots (and restores) rely on:
+ * snapshots are taken between steps, when the event queue is empty.
+ * Queued events are NOT captured, and restore discards whatever the
+ * restore itself queued (see restoreWorld) — so a snapshot taken with
+ * events pending silently loses them across a restore.
+ *
+ * The one accepted exception is the genesis snapshot of a world that
+ * has never stepped (frame 0): entity insertion at world-build time
+ * queues AddEvents that the first step will flush. Warning there would
+ * fire on every world build and train readers to ignore the check, so
+ * the never-stepped case is exempt. Everything else warns, once per
+ * world.
+ */
+function checkEventQueueEmpty(world: World) {
+    if (world.queuedEventCount === 0 || warnedQueuedEventWorlds.has(world)) {
+        return;
+    }
+    const frame = world.resources.get(TimeResource)?.frame ?? 0;
+    if (frame === 0) {
+        return;
+    }
+    warnedQueuedEventWorlds.add(world);
+    console.warn(`Snapshot of ${world} taken with `
+        + `${world.queuedEventCount} queued event(s); snapshots should be `
+        + `taken between steps (queued events are not captured, and a `
+        + `restore discards them)`);
+}
+
 /**
  * Captures the simulation state of a world: every entity's components
  * (per the registered policies), the singleton's components, and the
@@ -248,6 +283,7 @@ export function snapshotWorld(world: World): WorldSnapshot {
     if (!policies) {
         throw new Error('Expected SnapshotPoliciesResource to exist');
     }
+    checkEventQueueEmpty(world);
 
     const entities: SnapshotEntity[] = [];
     let singleton: StoredComponent[] = [];
@@ -282,6 +318,33 @@ function checkResourceCount(snapshotCount: number, policyCount: number) {
             + `world has ${policyCount} resource snapshot policies; `
             + `refusing to restore a mismatched snapshot`);
     }
+}
+
+/**
+ * Discards the async machinery's in-flight state on restore. AsyncSystem
+ * patches, promises and `running` flags — and ProvideAsync's running
+ * markers — describe work started on the timeline being abandoned, and
+ * none of it is covered by snapshots: left in place, a completion landing
+ * after the restore would apply patches computed against the abandoned
+ * base onto the restored one, at a tick a forward execution of the
+ * restored state would never produce. Clearing the maps orphans the
+ * entries the in-flight completion callbacks captured, so when those
+ * promises settle they write into unreachable objects and the restored
+ * world never sees them; async systems then restart from scratch,
+ * exactly as a fresh execution of the restored state would.
+ *
+ * (Deterministic simulation worlds have no async systems today — the
+ * base AsyncSystemPlugin's resource is empty there, making this a no-op
+ * on the rollback hot path — but a world that does use one is now safe
+ * to snapshot and restore by construction.)
+ */
+function resetAsyncState(world: World) {
+    const asyncSystems = world.resources.get(AsyncSystemResource);
+    if (asyncSystems) {
+        asyncSystems.systems.clear();
+        asyncSystems.done = Promise.resolve();
+    }
+    world.resources.get(AsyncProviderResource)?.clear();
 }
 
 /**
@@ -323,6 +386,7 @@ export function restoreWorld(world: World, snapshot: WorldSnapshot,
     // did not happen in the restored timeline. Snapshots are taken
     // between steps (empty queue), so restore that invariant.
     world.clearEventQueue();
+    resetAsyncState(world);
 }
 
 /**
@@ -439,6 +503,7 @@ export function wireSnapshotWorld(world: World): WireWorldSnapshot {
     if (!policies) {
         throw new Error('Expected SnapshotPoliciesResource to exist');
     }
+    checkEventQueueEmpty(world);
 
     const entities: WireEntity[] = [];
     let singleton: WireComponent[] = [];
@@ -603,6 +668,8 @@ export function restoreWireWorldSnapshot(world: World,
     });
 
     // Same invariant as restoreWorld: snapshots are taken between
-    // steps, when the event queue is empty.
+    // steps, when the event queue is empty. And the same async reset:
+    // in-flight async work belongs to the replaced timeline.
     world.clearEventQueue();
+    resetAsyncState(world);
 }

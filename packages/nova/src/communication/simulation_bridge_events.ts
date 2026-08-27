@@ -7,6 +7,17 @@ export interface EncodedSimulationBridgeEvent {
     name: string;
     data: unknown;
     entityUuids?: string[];
+    /**
+     * The simulation tick during whose step the event was emitted.
+     * Absent when the emission happened outside a rollback-driven step
+     * (tests emitting directly, emissions between steps). Additive
+     * field: the display side ignores it, and bridge frames flow only
+     * host -> display — they never cross the room's rollback protocol,
+     * so no PROTOCOL_VERSION bump is needed. The host uses it to drop
+     * rollback re-emissions of already-forwarded ticks (see
+     * SimulationBridgeHost).
+     */
+    tick?: number;
 }
 
 interface SimulationBridgeEventRegistration<Data, Encoded = Data> {

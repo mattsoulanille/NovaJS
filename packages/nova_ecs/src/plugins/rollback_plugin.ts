@@ -15,6 +15,17 @@ export interface RollbackOptions<Inputs> {
     /** Completes restored entities (e.g. reattaches derived components). */
     complete?: (world: World, entity: Entity) => void;
     /**
+     * Called immediately before each stepped tick — before that tick's
+     * inputs are applied, during normal stepping, rollback
+     * resimulation, and fastForward alike — with the tick number the
+     * step will settle at. Lets the owner attribute work done during
+     * the step (e.g. events emitted by systems) to its tick
+     * unambiguously: reading the world's TimeResource mid-step is
+     * ambiguous, because TimeSystem advances it partway through the
+     * step. Bookkeeping only; must not touch simulation state.
+     */
+    beforeStep?: (tick: number) => void;
+    /**
      * Called after every stepped tick — including ticks re-stepped
      * during rollback resimulation, whose state supersedes the
      * abandoned timeline's. Lets the owner observe the settled state
@@ -85,6 +96,7 @@ export class RollbackSimulation<Inputs> {
 
     /** Advances one tick, applying that tick's recorded inputs. */
     step() {
+        this.options.beforeStep?.(this.tick + 1);
         const inputs = this.inputs.get(this.tick + 1);
         if (inputs !== undefined) {
             this.options.applyInputs(this.world, inputs);
@@ -156,6 +168,7 @@ export class RollbackSimulation<Inputs> {
     async fastForward(tick: number, yieldEvery?: number) {
         let sinceYield = 0;
         while (this.tick < tick) {
+            this.options.beforeStep?.(this.tick + 1);
             const inputs = this.inputs.get(this.tick + 1);
             if (inputs !== undefined) {
                 this.options.applyInputs(this.world, inputs);
