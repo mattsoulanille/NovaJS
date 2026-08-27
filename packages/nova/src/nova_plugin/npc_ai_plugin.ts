@@ -42,7 +42,7 @@ import { ShipPhysics } from 'novadatainterface/ship_data';
 import { PlanetComponent, PlanetDataComponent } from './planet_plugin.js';
 import { EscortLandingComponent } from './player_escort.js';
 import { LegalRecordsComponent } from './reputation_plugin.js';
-import { ActiveRanksComponent } from './ncb_plugin.js';
+import { AggressionSuppressGovtsComponent } from './ncb_plugin.js';
 import { ranksSuppressAggression } from './rank_logic.js';
 import { SourceComponent } from './weapon_components.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from './ship_plugin.js';
@@ -681,7 +681,10 @@ const PlanetsQuery = new Query(
 const NpcTargetsQuery = new Query([UUID, MovementStateComponent, ShipComponent,
     ShipDataComponent, Optional(GovtComponent), Optional(ShieldComponent),
     Optional(CloakActiveComponent), Optional(DisabledComponent),
-    Optional(LegalRecordsComponent), Optional(ActiveRanksComponent)] as const);
+    Optional(LegalRecordsComponent),
+    // The ränk 0x0100 suppression set, baked at grant time: the sim
+    // worker never loads Rank data, so the flag cannot be read here.
+    Optional(AggressionSuppressGovtsComponent)] as const);
 
 function lookupGovt(gameData: SimulationGameDataInterface,
     govt: { id: string } | undefined) {
@@ -868,7 +871,7 @@ const NpcDecisionSystem = new System({
         let aggressorEntry: readonly [string, number, number] | undefined;
         for (const [otherUuid, otherMovement, , otherData, otherGovt,
             otherShield, cloak, otherDisabled, otherRecords,
-            otherRanks] of ships) {
+            otherSuppressGovts] of ships) {
             if (otherUuid === uuid || !isTargetable(cloak)) {
                 continue;
             }
@@ -883,8 +886,7 @@ const NpcDecisionSystem = new System({
                     <= NPC_PLUNDER_SEEK_RANGE * NPC_PLUNDER_SEEK_RANGE
                     && govtDispositionTo(govtData,
                         lookupGovt(gameData, otherGovt), otherRecords,
-                        ranksSuppressAggression(otherRanks,
-                            id => gameData.data.Rank.getCached(id),
+                        ranksSuppressAggression(otherSuppressGovts,
                             govtData?.id)) === 'enemy') {
                     const hulk = entities.get(otherUuid);
                     if (hulk && npcPlunderEligible({
@@ -916,8 +918,7 @@ const NpcDecisionSystem = new System({
                 lookupGovt(gameData, otherGovt), otherRecords,
                 // ränk 0x0100 for THIS ship's government: its holder is not
                 // attacked on sight.
-                ranksSuppressAggression(otherRanks,
-                    id => gameData.data.Rank.getCached(id), govtData?.id));
+                ranksSuppressAggression(otherSuppressGovts, govtData?.id));
             if (disposition === 'enemy') {
                 hostiles.push([otherUuid, distanceSquared] as const);
             }

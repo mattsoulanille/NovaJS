@@ -86,6 +86,45 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     const govtEntries = await Promise.all([...allIds.Govt].sort().map(
         async id => [id, await gameData.data.Govt.get(id)] as const));
     world.resources.set(GovtsResource, new Map(govtEntries));
+    // Stage EVERY ränk, for exactly the govts' reason: they are tiny (31
+    // in stock data) and the SIMULATION reads them synchronously through
+    // `getCached`.
+    //
+    // Nothing else stages them. The preload bundle carries Outfit, Ship
+    // and System; entity staging (entity_data_loader) adds a ship's Govt.
+    // A simulation world runs in its own worker — and its own server
+    // archive, and its own node worker — each with its own game-data
+    // cache, and a ränk resource had never been fetched into any of them.
+    // Three privileges were therefore dead in the simulation while the
+    // MAIN THREAD's display world, which loads the ränk table for the
+    // spaceport dialogs, believed they were live:
+    //
+    //   0x0200 "all planets of the affiliated government will let the
+    //          player land regardless of their MinStatus field" —
+    //          AttemptLandingSystem's clearance (planet_plugin's
+    //          stellarClearanceFor) and applyHail's. This is the stock
+    //          HYPERGATE NETWORK's only key: ränk nova:147 opens the 19
+    //          MinStatus-32767 gates, and with the read cold they stayed
+    //          shut however the mission ended.
+    //   0x0400 "player can always request battle assistance" — applyHail,
+    //          an input-apply path replayed on every peer, so a warm peer
+    //          set AssistingComponent and a cold one did not: a straight
+    //          state fork.
+    //   0x0100 "ships of the affiliated government will not automatically
+    //          attack the player" — the NPC dispositions. That one is
+    //          additionally BAKED into synced state at grant time
+    //          (rank_logic.ts's suppressAggressionGovts), because it is
+    //          read in a per-tick cross-entity sweep and should cost no
+    //          data lookup at all; this staging is what makes the bake's
+    //          own inputs, and the two remaining readers, warm.
+    //
+    // Staging the WHOLE table rather than the ranks an entity happens to
+    // hold is what makes it complete: a rank granted mid-flight (a përs
+    // ship offer's OnAccept `Kxxx`) reaches other peers as a state delta
+    // that carries no game data with it, so per-entity staging would warm
+    // the granting peer's cache and nobody else's.
+    await Promise.all([...allIds.Rank].sort().map(
+        id => gameData.data.Rank.get(id)));
     // Stage the linked systems' metadata too: starting a hyperspace
     // jump reads the destination's map position synchronously
     // (getCached) to compute the travel heading, and every peer builds

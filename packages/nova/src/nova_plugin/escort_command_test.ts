@@ -10,7 +10,15 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
+import { TimeResource } from 'nova_ecs/plugins/time_plugin';
+import {
+    AGGRESSION_DAMAGE_THRESHOLD, AGGRESSION_WINDOW_MS,
+    AggressionComponent,
+} from './aggression.js';
 import { DisabledComponent } from './disabled_component.js';
+import { SimulationGameDataResource } from './game_data_resource.js';
+import { styleForTarget } from './hostility.js';
+import { AggressionSuppressGovtsComponent } from './ncb_plugin.js';
 import { completeEntity } from './entity_data_loader.js';
 import { ArmorComponent } from './health_plugin.js';
 import { EscortCommandComponent, EscortOrdersComponent } from './escort_command.js';
@@ -616,4 +624,168 @@ describe('inFrontQuadrant', () => {
         expect(inFrontQuadrant(movement, { x: -100, y: 0 })).toBeFalse();
         expect(inFrontQuadrant(movement, { x: 100, y: 110 })).toBeFalse();
     });
+});
+
+/**
+ * ============================================================================
+ * The escort's hostility question IS its owner's
+ * ============================================================================
+ *
+ * An escort has no politics, no reputation and no grudges of its own: it
+ * fights whoever its OWNER would call hostile. That answer already exists —
+ * `styleForTarget` in hostility.ts, the one rule behind the target corners,
+ * the 'r' key and the point-defense prey filter — and the escort brain used
+ * to reproduce only two of its tiers (politics, and "is currently attacking
+ * us"). The two it was missing are the two that matter most in a fight:
+ *
+ *  - PACIFICATION. A pirate the player bribed reads neutral to the player,
+ *    but the player's escorts kept shooting it. The first round to land
+ *    voids the reprieve (NpcDecisionSystem clears pacifiedFrom on damage
+ *    from the briber), so the money bought nothing at all — the same
+ *    failure the point-defense prey filter was fixed for.
+ *  - RECENT AGGRESSION. A ship that just emptied its guns into the owner
+ *    and looked away was not "attacking" by the posture test, so a
+ *    'defend' escort stood and watched. This is also the only tier that
+ *    can reach another PLAYER's ship, which has no government and no NPC
+ *    brain to read a posture off.
+ *
+ * Each spec below checks the escort AND the corner bracket the owner sees,
+ * so the two can never drift apart again.
+ */
+describe("an escort's hostility matches its owner's target corners", () => {
+    /** The corner style the PLAYER's HUD paints on `uuid`. */
+    function cornerStyle(world: World, uuid: string) {
+        const player = world.entities.get('player')!;
+        return styleForTarget(uuid, world.entities.get(uuid)!, 'player',
+            player, world.resources.get(SimulationGameDataResource)!,
+            u => world.entities.get(u),
+            world.resources.get(TimeResource)!.time);
+    }
+
+    /** Marks `uuid` as having taken the player's bribe. */
+    function bribe(world: World, uuid: string) {
+        const npc = world.entities.get(uuid)!.components.get(NpcComponent)
+            ?? { aiType: 3 };
+        world.entities.get(uuid)!.components.set(NpcComponent, {
+            ...npc,
+            pacifiedFrom: 'player',
+            pacifiedUntil:
+                world.resources.get(TimeResource)!.time + 60_000,
+        });
+    }
+
+    /** Records `uuid` as having just shot the player. */
+    function shotThePlayer(world: World, uuid: string) {
+        world.entities.get('player')!.components.set(AggressionComponent,
+            new Map([[uuid, {
+                at: world.resources.get(TimeResource)!.time,
+                damage: AGGRESSION_DAMAGE_THRESHOLD + 1,
+                hostile: true,
+            }]]));
+    }
+
+    it('defend does NOT engage a pirate its owner has bribed', async () => {
+        const { world, addShip } = await makeWorld();
+        await addShip('pirate', 400, 200, ship => {
+            ship.components.set(GovtComponent, { id: 'test:pirate' });
+        });
+        press(world, 'defend');
+        world.step();
+        world.step();
+        // Politics alone: an intruder, and red on the HUD.
+        expect(command(world).target).toBe('pirate');
+        expect(cornerStyle(world, 'pirate')).toBe('hostile');
+
+        bribe(world, 'pirate');
+        world.step();
+        world.step();
+        // The money bought indifference from the escort too.
+        expect(cornerStyle(world, 'pirate')).toBe('neutral');
+        expect(command(world).target).toBeUndefined();
+    });
+
+    it("a formation escort's opportunistic turrets leave a bribed ship "
+        + 'alone', async () => {
+            const { world, addShip } = await makeWorld();
+            // Straight ahead of the escort (which faces +x from (0, 200))
+            // and inside the front-quadrant turret's reach.
+            await addShip('pirate', 400, 200, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+            });
+            // Formation is the default command; front-quadrant turrets
+            // still shoot opportunistically at anything hostile in reach.
+            expect(command(world).command).toBe('formation');
+            world.step();
+            const weapons = world.entities.get('escort')!.components
+                .get(WeaponsStateComponent)!;
+            expect([...weapons.values()].some(w => w.firing)).toBeTrue();
+
+            bribe(world, 'pirate');
+            world.step();
+            expect([...weapons.values()].every(w => !w.firing)).toBeTrue();
+        });
+
+    it('defend DOES engage a ship that just shot its owner, even after '
+        + 'that ship has looked away', async () => {
+            const { world, addShip } = await makeWorld();
+            // Politically neutral, targeting nobody: invisible to the
+            // posture tier.
+            await addShip('brawler', 400, 200, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+            });
+            press(world, 'defend');
+            world.step();
+            world.step();
+            expect(command(world).target).toBeUndefined();
+            expect(cornerStyle(world, 'brawler')).toBe('neutral');
+
+            shotThePlayer(world, 'brawler');
+            world.step();
+            world.step();
+            expect(cornerStyle(world, 'brawler')).toBe('hostile');
+            expect(command(world).target).toBe('brawler');
+        });
+
+    it('drops the engagement when the aggression window lapses, exactly '
+        + 'as the corners do', async () => {
+            const { world, addShip } = await makeWorld();
+            await addShip('brawler', 400, 200, ship => {
+                ship.components.set(GovtComponent, { id: 'test:meek' });
+            });
+            press(world, 'defend');
+            shotThePlayer(world, 'brawler');
+            world.step();
+            world.step();
+            expect(command(world).target).toBe('brawler');
+
+            // Age the record past the window.
+            const aggression = world.entities.get('player')!.components
+                .get(AggressionComponent)!;
+            aggression.get('brawler')!.at =
+                world.resources.get(TimeResource)!.time
+                - AGGRESSION_WINDOW_MS - 1;
+            world.step();
+            world.step();
+            expect(cornerStyle(world, 'brawler')).toBe('neutral');
+            expect(command(world).target).toBeUndefined();
+        });
+
+    it("honours the owner's ränk 0x0100 suppression, read from the same "
+        + 'baked component the corners read', async () => {
+            const { world, addShip } = await makeWorld();
+            await addShip('pirate', 400, 200, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+            });
+            press(world, 'defend');
+            world.step();
+            world.step();
+            expect(command(world).target).toBe('pirate');
+
+            world.entities.get('player')!.components.set(
+                AggressionSuppressGovtsComponent, new Set(['test:pirate']));
+            world.step();
+            world.step();
+            expect(cornerStyle(world, 'pirate')).toBe('neutral');
+            expect(command(world).target).toBeUndefined();
+        });
 });

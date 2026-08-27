@@ -18,7 +18,8 @@ import {
     stellarInfoOf,
 } from '../nova_plugin/mission_logic.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent,
+    ActiveRanksComponent, AggressionSuppressGovtsComponent,
+    commitActiveRanks, ControlBitsComponent,
 } from '../nova_plugin/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import {
@@ -214,7 +215,11 @@ export class MissionSession {
             { credits: this.state.credits.credits });
         entity.components.set(ControlBitsComponent, this.state.bits);
         if (this.state.ranks) {
-            entity.components.set(ActiveRanksComponent, this.state.ranks);
+            // Both halves together: ActiveRanksComponent and the ränk
+            // 0x0100 suppression facts the simulation reads off it (the
+            // sim cannot resolve a ränk itself — see rank_logic.ts).
+            commitActiveRanks(entity, this.state.ranks,
+                id => this.universe.getRank(id));
         }
         if (this.state.records) {
             entity.components.set(LegalRecordsComponent, this.state.records);
@@ -542,7 +547,9 @@ export async function advanceEntityDate(entity: Entity, days: number,
                 ? (id: string) => universe.hasSystem(id) : undefined,
         });
         entity.components.set(ControlBitsComponent, bits);
-        entity.components.set(ActiveRanksComponent, ranks);
+        // A crön set string may have granted or dropped a rank (Kxxx /
+        // Lxxx), so the baked suppression set is re-derived with it.
+        commitActiveRanks(entity, ranks, id => universe.getRank(id));
         entity.components.set(CronStatesComponent, cronStates);
         commitCronOutfits(entity, ownedOutfits);
         // Escort wages need the hull prices, so the payroll's ship classes
@@ -694,6 +701,12 @@ export function ensurePlayerStateComponents(entity: Entity): void {
     }
     if (!entity.components.get(ActiveRanksComponent)) {
         entity.components.set(ActiveRanksComponent, new Set());
+    }
+    if (!entity.components.get(AggressionSuppressGovtsComponent)) {
+        // Seeded, never derived here: this function has no ränk lookup.
+        // The real value is written by commitActiveRanks at every point a
+        // rank is granted, loaded or migrated.
+        entity.components.set(AggressionSuppressGovtsComponent, new Set());
     }
     if (!entity.components.get(CronStatesComponent)) {
         entity.components.set(CronStatesComponent, new Map());

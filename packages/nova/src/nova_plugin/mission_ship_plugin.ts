@@ -340,8 +340,8 @@ const MissionShipTrackSystem = new System({
         // collected, the goal has become unachievable — it is an ordinary
         // ship again and may fly off. The other hold reasons are released
         // by their own owners ('rescue' by rescueBoarded above,
-        // 'shipOffer' by ShipOfferHoldReleaseSystem), so only ours is
-        // touched here. See system_hold.ts.
+        // 'shipOffer' by applyAcceptMission in mission_accept.ts), so only
+        // ours is touched here. See system_hold.ts.
         if ((objective.complete || objective.failed)
             && shipEntity.components.get(SystemHoldComponent)?.reason
             === 'missionGoal') {

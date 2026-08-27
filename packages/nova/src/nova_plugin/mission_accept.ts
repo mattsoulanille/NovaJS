@@ -7,7 +7,10 @@ import { CargoComponent } from './cargo_plugin.js';
 import { deriveEntityComponents } from './entity_factory.js';
 import { addDays } from './calendar.js';
 import { ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
-import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
+import {
+    ActiveRanksComponent, AggressionSuppressGovtsComponent,
+    ControlBitsComponent,
+} from './ncb_plugin.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import { NpcComponent } from './npc_ai_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
@@ -191,6 +194,21 @@ export const AcceptedMissionType = t.intersection([t.type({
     /** Ranks the OnAccept set string granted / revoked (Kxxx). */
     ranksGranted: t.array(t.string),
     ranksRevoked: t.array(t.string),
+    /**
+     * The change those ranks made to the BAKED ränk 0x0100 suppression set
+     * (AggressionSuppressGovtsComponent) — the governments whose ships will
+     * not attack the player.
+     *
+     * Carried explicitly rather than re-derived from `ranksGranted` on the
+     * far side because the simulation cannot read ränk data at all: its
+     * worker's game-data cache is never warmed with Rank, so a `getCached`
+     * there would be cold on one peer and warm on another and fork the NPC
+     * dispositions that read it (see rank_logic.ts). The client resolving
+     * the accept has the ränk table loaded and does the resolving, exactly
+     * as it already does for the mission itself.
+     */
+    suppressGovtsAdded: t.array(t.string),
+    suppressGovtsRemoved: t.array(t.string),
     /** Signed per-outfit change (Gxxx/Dxxx grants and removals). */
     outfitsDelta: t.array(t.tuple([t.string, t.number])),
     /** Signed per-commodity change, including the mission cargo loaded at
@@ -337,6 +355,23 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
         for (const rank of accepted.ranksRevoked ?? []) {
             ranks.delete(rank);
         }
+    }
+    // ... and the baked privileges those ranks carry, applied as the same
+    // kind of delta so the two can never disagree about what the player
+    // holds. Seeded when absent: an entity from a build before this
+    // component existed still gains the rank it was just granted.
+    if ((accepted.suppressGovtsAdded?.length ?? 0) > 0
+        || (accepted.suppressGovtsRemoved?.length ?? 0) > 0) {
+        const suppressGovts = player.components
+            .get(AggressionSuppressGovtsComponent) ?? new Set<string>();
+        for (const govt of accepted.suppressGovtsAdded ?? []) {
+            suppressGovts.add(govt);
+        }
+        for (const govt of accepted.suppressGovtsRemoved ?? []) {
+            suppressGovts.delete(govt);
+        }
+        player.components.set(
+            AggressionSuppressGovtsComponent, suppressGovts);
     }
     const cargo = player.components.get(CargoComponent);
     if (cargo) {

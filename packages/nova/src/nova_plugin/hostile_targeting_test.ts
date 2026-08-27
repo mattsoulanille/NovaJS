@@ -27,6 +27,9 @@ import {
 } from './hostility.js';
 import { IffComponent } from './iff_plugin.js';
 import { makeShip } from './make_ship.js';
+import {
+    ActiveRanksComponent, AggressionSuppressGovtsComponent,
+} from './ncb_plugin.js';
 import { makeSystem, SIMULATION_STEP_MS } from './make_system.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
 import { CreditsComponent } from './player_state_plugin.js';
@@ -702,3 +705,89 @@ describe('a ship bought off with a bribe reads NEUTRAL to the briber', () => {
             expect(cornerStyle(world, 'pirate')).toBe('hostile');
         });
 });
+
+/**
+ * ränk Flags 0x0100 — "Ships of the affiliated government will not
+ * automatically attack the player when he has this rank" — as the
+ * SIMULATION sees it.
+ *
+ * The privilege used to be read here by resolving the player's
+ * ActiveRanksComponent through `gameData.data.Rank.getCached`. That read is
+ * never warm in a simulation world: the preload bundle carries Outfit, Ship
+ * and System, and entity staging (entity_data_loader) adds only Govt —
+ * nothing anywhere stages Rank. The sim runs in its own worker (and its own
+ * server archive) with its own cache, so the read was cold there while the
+ * MAIN THREAD's display world, which had loaded the ränk table for a
+ * spaceport dialog, read it warm: the corner brackets said "this government
+ * leaves you alone" while the NPCs kept shooting, and two peers that had
+ * opened different dialogs could fork npc.mode and npc target outright.
+ *
+ * The fact is now baked at grant time into AggressionSuppressGovtsComponent
+ * (rank_logic.ts's suppressAggressionGovts) and the hot path reads only
+ * that. These specs therefore run against a completely EMPTY ränk table,
+ * which is exactly what a simulation world has.
+ */
+describe('ränk 0x0100 suppression is read from synced state, not game data',
+    () => {
+        it('turns an automatically hostile govt neutral with a stone-cold '
+            + 'ränk cache', async () => {
+                const { world, gameData } = await makeStandardWorld();
+                // The sim worker's reality: no ränk resource has ever been
+                // fetched into this world's cache.
+                expect(gameData.data.Rank.getCached('nova:143'))
+                    .toBeUndefined();
+                expect(cornerStyle(world, 'pirate')).toBe('hostile');
+
+                world.entities.get('player')!.components.set(
+                    AggressionSuppressGovtsComponent, new Set([PIRATES]));
+                world.step();
+                expect(cornerStyle(world, 'pirate')).toBe('neutral');
+                // ... and the 'r' key, which quotes the same rule, now finds
+                // nothing hostile at all.
+                expect(displaySelection(world)).toBeUndefined();
+            });
+
+        it('suppresses only the government the rank names', async () => {
+            const { world } = await makeStandardWorld();
+            world.entities.get('player')!.components.set(
+                AggressionSuppressGovtsComponent,
+                new Set(['test:some other govt']));
+            world.step();
+            expect(cornerStyle(world, 'pirate')).toBe('hostile');
+            expect(displaySelection(world)).toBe('pirate');
+        });
+
+        it('does NOT fall back to the ränk table when the baked set is '
+            + 'absent — the simulation never reads rank data', async () => {
+                const { world, gameData } = await makeStandardWorld();
+                // A fully WARM ränk table carrying the privilege, and the
+                // player holding that rank the old way. Before the bake this
+                // was enough; now it deliberately is not, because the same
+                // state on a peer whose cache was cold would have said the
+                // opposite.
+                gameData.data.Rank.map.set('test:rank', {
+                    id: 'test:rank', name: 'Pirate Guild-Master',
+                    prefix: 'test', affilGovt: PIRATES, weight: 1,
+                    contribute: '0', priceMod: 100, salary: 0, salaryCap: 0,
+                    convName: '', shortName: '', flags: 0x0100,
+                    rankFlags: {
+                        dropOtherRanksWhenActivated: false,
+                        dropOtherRanksWhenDeactivated: false,
+                        permanent: false,
+                        dropLowerRanksWhenActivated: false,
+                        dropLowerRanksWhenDeactivated: false,
+                        govtShipsWontAttack: true,
+                        canAlwaysLandOnGovtStellars: false,
+                        canRequestBattleAssistance: false,
+                        freeRefuelAndRepair: false,
+                    },
+                } as never);
+                await gameData.data.Rank.get('test:rank');
+                expect(gameData.data.Rank.getCached('test:rank'))
+                    .toBeDefined();
+                world.entities.get('player')!.components.set(
+                    ActiveRanksComponent, new Set(['test:rank']));
+                world.step();
+                expect(cornerStyle(world, 'pirate')).toBe('hostile');
+            });
+    });

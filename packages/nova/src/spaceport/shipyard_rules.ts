@@ -25,7 +25,8 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { Cargo, CargoComponent, cargoUsed } from '../nova_plugin/cargo_plugin.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent,
+    ActiveRanksComponent, AggressionSuppressGovtsComponent,
+    ControlBitsComponent,
 } from '../nova_plugin/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
@@ -378,6 +379,11 @@ export const CARRIED_COMPONENTS: readonly Component<any>[] = [
     // once — a second purchase in the same visit would have re-quoted at
     // full price against a grid that had just lost its rank-gated hulls.
     ActiveRanksComponent,
+    // ... and the ränk privileges baked off them for the simulation
+    // (ncb_plugin's AggressionSuppressGovtsComponent). Carried in the same
+    // breath as the ranks: leaving it behind would hand the new hull a
+    // pilot whose 0x0100 rank had silently stopped working.
+    AggressionSuppressGovtsComponent,
     GameDateComponent,
     MissionsComponent,
     CronStatesComponent,

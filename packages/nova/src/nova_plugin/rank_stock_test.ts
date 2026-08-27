@@ -2,6 +2,9 @@ import 'jasmine';
 import { RankData } from 'novadatainterface/rank_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { parseNCBSet } from './ncb.js';
+import {
+    ranksSuppressAggression, suppressAggressionGovts,
+} from './rank_logic.js';
 
 /**
  * The ränk resources against the REAL Nova game data — the mechanism behind
@@ -139,6 +142,61 @@ describe('ränk resources against real Nova data', () => {
         expect(unaffiliated.map(r => r.id).sort())
             .toEqual(['nova:151', 'nova:152']);
     });
+
+    it('pins the stock 0x0100 ranks the simulation bakes into synced state',
+        () => {
+            // ränk Flags 0x0100: "Ships of the affiliated government will
+            // not automatically attack the player when he has this rank."
+            // This is the ONE rank privilege the simulation itself reads,
+            // and it cannot read ränk data (the sim worker's cache is never
+            // warmed with Rank), so it is resolved at grant time into
+            // AggressionSuppressGovtsComponent — see rank_logic.ts's
+            // suppressAggressionGovts, which is exercised here against the
+            // real resources.
+            const suppressing = ranks
+                .filter(r => r.rankFlags.govtShipsWontAttack)
+                .map(r => r.id).sort();
+            // Twenty-eight of the thirty-one stock ranks carry it: the six
+            // duel protectors, the two pirate guild-masterships, and every
+            // faction-string rank that makes its government stop shooting.
+            // The three that do NOT are nova:147 (hypergate access, landing
+            // rights only) and the two unaffiliated honours nova:151/152.
+            expect(suppressing.length).toBe(28);
+            expect(ranks.filter(r => !r.rankFlags.govtShipsWontAttack)
+                .map(r => r.id).sort())
+                .toEqual(['nova:147', 'nova:151', 'nova:152']);
+
+            // The six "Duel protector" ranks are the purest case — Flags
+            // 0x0140 is 0x0100 plus 0x0040, and nothing else.
+            const auroranDuel = byId.get('nova:153')!;
+            expect(auroranDuel.name).toBe('; Auroran Duel protector');
+            expect(auroranDuel.flags).toBe(0x0140);
+            expect(auroranDuel.affilGovt).toBe('nova:129');
+            expect(auroranDuel.rankFlags.govtShipsWontAttack).toBeTrue();
+            expect(auroranDuel.rankFlags.canAlwaysLandOnGovtStellars)
+                .toBeFalse();
+
+            // The classic: hold the Pirate Guild-Mastership and the pirates
+            // leave you alone (gövt nova:176).
+            const guildMaster = byId.get('nova:143')!;
+            expect(guildMaster.name).toBe('Pirate Guild-Master; Pirate 1');
+            expect(guildMaster.affilGovt).toBe('nova:176');
+            expect(guildMaster.rankFlags.govtShipsWontAttack).toBeTrue();
+
+            // The bake, end to end, over the real table: holding both gives
+            // exactly those two governments and nothing else.
+            const get = (id: string) => byId.get(id);
+            const govts = suppressAggressionGovts(
+                new Set(['nova:143', 'nova:153']), get);
+            expect([...govts].sort()).toEqual(['nova:129', 'nova:176']);
+            expect(ranksSuppressAggression(govts, 'nova:176')).toBeTrue();
+            expect(ranksSuppressAggression(govts, 'nova:128')).toBeFalse();
+
+            // nova:147, the hypergate rank, is landing rights only: holding
+            // it must not stop anybody's warships.
+            expect([...suppressAggressionGovts(new Set(['nova:147']), get)])
+                .toEqual([]);
+        });
 
     it('carries the rank Contribute the Bible describes, as a decimal '
         + 'string', () => {

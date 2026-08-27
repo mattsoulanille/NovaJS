@@ -12,7 +12,10 @@ import {
     discoveryEntries, loadDiscoveryEntries, resetDiscovery,
     setDiscoveryStorageKey,
 } from './discovery_store.js';
-import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
+import {
+    ActiveRanksComponent, commitActiveRanks, ControlBitsComponent,
+} from './ncb_plugin.js';
+import { RankLookup } from './rank_logic.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import {
     ActiveMissionType,
@@ -380,9 +383,19 @@ export interface RestoredPlayerState {
  * plug-ins, when none is given — stock bits still map, plug-in bits park).
  * A save with only the legacy `novaControlBits` numbers goes through the
  * best-effort migration.
+ *
+ * Ranks: the saved ids are restored as they were written, and `getRank`
+ * (when the caller has the ränk table loaded — browser.ts warms it before
+ * calling) re-bakes the 0x0100 suppression facts the SIMULATION reads off
+ * them. Only the ids are persisted: the baked set is derived state, so
+ * re-deriving it on load is what keeps a save correct across a change of
+ * plug-in set that redefines a rank. Without a lookup the set is left
+ * empty, which is the pre-rank behaviour and what the bare-entity callers
+ * (specs, tooling) already saw.
  */
 export function restorePlayerState(entity: Entity, save: SaveData,
-    resolver: ControlBitResolver = new ControlBitResolver()):
+    resolver: ControlBitResolver = new ControlBitResolver(),
+    getRank?: RankLookup):
     RestoredPlayerState {
     const restored: RestoredPlayerState = { parkedControlBits: [] };
     if (save.credits !== undefined) {
@@ -448,7 +461,8 @@ export function restorePlayerState(entity: Entity, save: SaveData,
             + 'plug-ins that are no longer loaded are kept for when they are.');
     }
     if (save.ranks) {
-        entity.components.set(ActiveRanksComponent, new Set(save.ranks));
+        commitActiveRanks(entity, new Set(save.ranks),
+            getRank ?? (() => undefined));
     }
     if (save.cargo) {
         entity.components.set(CargoComponent, new Map(save.cargo));

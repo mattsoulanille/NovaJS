@@ -12,6 +12,7 @@ import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { BayFighterComponent, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
+import { AggressionComponent, isRecentAggressor } from './aggression.js';
 import { blindSpotBlocksFiring } from './blind_spots.js';
 import { DisabledComponent } from './disabled_component.js';
 import { EscortCommandComponent, EscortCommandState, EscortOrders, EscortOrdersComponent } from './escort_command.js';
@@ -19,9 +20,11 @@ import { OwnerComponent } from './weapon_components.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { ExplodingComponent } from './death_plugin.js';
 import { GovtComponent } from './govt_component.js';
+import { AggressionSuppressGovtsComponent } from './ncb_plugin.js';
+import { ranksSuppressAggression } from './rank_logic.js';
 import { shipDisposition } from './iff_plugin.js';
 import { JumpComponent } from './jump_plugin.js';
-import { chooseNearest, FormationComponent, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from './npc_ai_plugin.js';
+import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from './npc_ai_plugin.js';
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
 import { LegalRecordsComponent, LegalRecordsState } from './reputation_plugin.js';
 import { EscortLandingComponent, PlayerEscortComponent } from './player_escort.js';
@@ -298,28 +301,79 @@ function lookupGovt(gameData: SimulationGameDataInterface,
 }
 
 /**
- * Whether `other` is iff-hostile toward the escort's owner root:
- * politically hostile toward the root's government, or currently
- * attacking the root or the escort itself. The same disposition brain
- * as the radar/corners (shipDisposition), evaluated sim-side from
- * staged govt data.
+ * Everything the escort's hostility question needs about its OWNER, read
+ * once per tick in EscortCommandBehaviorSystem and handed to every
+ * candidate test. The owner is the point of view: an escort has no
+ * politics, no reputation and no grudges of its own — it fights whoever
+ * its owner would call hostile.
  */
-function isHostileTo(other: Entity, rootUuid: string, escortUuid: string,
-    rootGovt: ReturnType<typeof lookupGovt>,
-    gameData: SimulationGameDataInterface,
-    rootRecords?: LegalRecordsState): boolean {
-    const disposition = shipDisposition(
-        lookupGovt(gameData, other.components.get(GovtComponent)), rootGovt,
-        rootRecords);
+interface EscortHostilityContext {
+    /** The owner root's government (already staged; see lookupGovt). */
+    rootGovt: ReturnType<typeof lookupGovt>;
+    gameData: SimulationGameDataInterface;
+    /** The owner root, when it is still in this system. */
+    rootEntity?: Entity;
+    /** The owner's legal records. */
+    rootRecords?: LegalRecordsState;
+    /** The SIMULATION clock, in milliseconds (TimeResource.time). */
+    now: number;
+}
+
+/**
+ * Whether `other` is iff-hostile toward the escort's owner root — THE SAME
+ * ANSWER the target corners give that owner (hostility.ts's
+ * `styleForTarget`), tier for tier, so a ship painted red by the HUD is a
+ * ship the owner's escorts engage and a ship painted neutral is one they
+ * leave alone:
+ *
+ *  - BOUGHT OFF (tier 2b): a ship the OWNER bribed to leave them alone
+ *    (beg for mercy; NpcComponent.pacifiedFrom/pacifiedUntil) is not
+ *    hostile to their escorts either, ahead of everything else. Without
+ *    this a defending escort — or an opportunistic turret on a formation
+ *    one — kept shooting the pirate the player had just paid off, which
+ *    voids the reprieve the moment the damage lands (NpcDecisionSystem
+ *    drops pacifiedFrom when the briber hurts it) and restarts the fight
+ *    the money had ended. Exactly the failure the point-defense prey
+ *    filter was fixed for.
+ *  - POLITICS (tier 4): shipDisposition over the owner's govt and legal
+ *    records, with the owner's ränk 0x0100 suppression set folded in the
+ *    way the corners fold it (the baked synced component; the sim cannot
+ *    read ränk data — see rank_logic.ts).
+ *  - POSTURE (tier 3a): currently attacking the root or the escort itself.
+ *  - RECENT AGGRESSION (tier 3b): it shot the OWNER, or locked a guided
+ *    missile on them, inside the aggression window. This is the tier that
+ *    reaches another PLAYER's ship, which has neither a government nor an
+ *    NPC brain: without it, 'defend' would stand and watch a rival player
+ *    empty their guns into its owner because the attacker's
+ *    TargetComponent had already moved on.
+ *
+ * Pure over synced state and the simulation clock, so every peer agrees.
+ */
+function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
+    escortUuid: string, ctx: EscortHostilityContext): boolean {
+    // Bought off by the owner: not a target, whatever the politics say.
+    if (isPacifiedToward(other.components.get(NpcComponent), rootUuid,
+        ctx.now)) {
+        return false;
+    }
+    const otherGovt =
+        lookupGovt(ctx.gameData, other.components.get(GovtComponent));
+    const disposition = shipDisposition(otherGovt, ctx.rootGovt,
+        ctx.rootRecords,
+        ranksSuppressAggression(ctx.rootEntity?.components
+            .get(AggressionSuppressGovtsComponent), otherGovt?.id));
     if (disposition === 'hostile') {
         return true;
     }
     const theirTarget = other.components.get(TargetComponent)?.target;
-    if (theirTarget !== rootUuid && theirTarget !== escortUuid) {
-        return false;
-    }
-    return other.components.get(NpcComponent)?.mode === 'attack'
-        || other.components.has(ShootAllWeaponsComponent);
+    const attackingUs = (theirTarget === rootUuid
+        || theirTarget === escortUuid)
+        && (other.components.get(NpcComponent)?.mode === 'attack'
+            || other.components.has(ShootAllWeaponsComponent));
+    return attackingUs
+        || isRecentAggressor(
+            ctx.rootEntity?.components.get(AggressionComponent),
+            otherUuid, ctx.now);
 }
 
 const HostileCandidatesQuery = new Query(
@@ -517,6 +571,9 @@ export const EscortCommandBehaviorSystem = new System({
         // are hostile to the escort's defend/patrol brain too.
         const rootRecords =
             rootEntity?.components.get(LegalRecordsComponent);
+        const hostility: EscortHostilityContext = {
+            rootGovt, gameData, rootEntity, rootRecords, now: time.time,
+        };
 
         switch (command.command) {
             case 'attack': {
@@ -548,8 +605,8 @@ export const EscortCommandBehaviorSystem = new System({
                 let engaged = command.target !== undefined
                     ? entities.get(command.target) : undefined;
                 if (engaged && (engaged.components.has(DisabledComponent)
-                    || !isHostileTo(engaged, root ?? uuid, uuid,
-                        rootGovt, gameData, rootRecords))) {
+                    || !isHostileTo(engaged, command.target!, root ?? uuid,
+                        uuid, hostility))) {
                     engaged = undefined;
                 }
                 if (!engaged) {
@@ -568,8 +625,8 @@ export const EscortCommandBehaviorSystem = new System({
                             > DEFEND_RADIUS * DEFEND_RADIUS) {
                             continue;
                         }
-                        if (isHostileTo(other, root ?? uuid, uuid,
-                            rootGovt, gameData, rootRecords)) {
+                        if (isHostileTo(other, otherUuid, root ?? uuid,
+                            uuid, hostility)) {
                             nearby.push([otherUuid, distanceSquared]);
                         }
                     }
@@ -679,8 +736,8 @@ export const EscortCommandBehaviorSystem = new System({
                 })) {
                     continue;
                 }
-                if (isHostileTo(other, root ?? uuid, uuid, rootGovt,
-                    gameData, rootRecords)) {
+                if (isHostileTo(other, otherUuid, root ?? uuid, uuid,
+                    hostility)) {
                     inReach.push([otherUuid, distanceSquared]);
                 }
             }

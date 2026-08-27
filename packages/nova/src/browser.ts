@@ -44,6 +44,9 @@ import { ControlEvent, ControlsSubject, EcsControlEvent } from "./nova_plugin/co
 import { ControlAction, Controls, getActions, SavedControls } from "./nova_plugin/controls.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "./nova_plugin/game_data_resource.js";
 import { FinishJumpEvent, JumpComponent, JumpRouteComponent, reconcileRouteOnArrival } from "./nova_plugin/jump_plugin.js";
+import {
+    planGateTransitRecovery, planHyperspaceJumpRecovery,
+} from "./nova_plugin/transit_recovery.js";
 import { GateArrivalComponent, GateTransitEvent } from "./nova_plugin/gate_transit_plugin.js";
 import { GateDestinationResolver } from "./nova_plugin/gate_destination_resolver.js";
 import { LeaveGateMapEvent, OpenGateMapEvent } from "./display/gate_map_plugin.js";
@@ -53,7 +56,7 @@ import { makeSystem, SIMULATION_STEP_MS } from "./nova_plugin/make_system.js";
 import { clearCarriedAggression } from "./nova_plugin/aggression.js";
 import { makeControlBitHooks, NCBParseError, runNCBSet } from "./nova_plugin/ncb.js";
 import {
-    ActiveRanksComponent, ControlBitsComponent,
+    commitActiveRanks, ControlBitsComponent,
 } from "./nova_plugin/ncb_plugin.js";
 import { MultiRoomResource, NovaPlugin } from "./nova_plugin/nova_plugin.js";
 import { OutfitsStateComponent } from "./nova_plugin/outfit_plugin.js";
@@ -1514,6 +1517,9 @@ async function enterSystem({ entity, to, uuid }:
         if (!data.entity.components.has(PlayerShipSelector)) {
             return;
         }
+        // The system being LEFT, captured before the transition clears it.
+        // A failed jumpTo has nowhere else to put the ship back.
+        const origin = activeSystemId;
         void (async () => {
             // A jump takes days (by ship mass, adjusted by any
             // "hyperspace speed mod" outfits); advance the player's
@@ -1541,9 +1547,28 @@ async function enterSystem({ entity, to, uuid }:
                     MissionUniverse.shared(simulationGameData),
                     simulationGameData);
             } catch (e) {
-                console.warn('Failed to advance the date on jump:', e);
+                // THE DATE COST IS FORFEIT, DELIBERATELY, and the jump
+                // still happens. advanceEntityDate is a player-local
+                // bookkeeping pass (crons, salaries, mission deadlines);
+                // its own cron evaluation already swallows failures
+                // internally, so reaching here means something outside
+                // that — and refusing the jump over it would strand a ship
+                // the simulation has already deleted, which is a far worse
+                // outcome than a jump that cost no days. Logged so the
+                // discrepancy is visible rather than silent.
+                console.warn('Failed to advance the date on jump; jumping '
+                    + 'anyway without the date cost:', e);
             }
-            await jumpTo(data);
+            // A rejection here used to be unobserved: the ship (already
+            // deleted sim-side) was simply gone. Recover it into the system
+            // it left, the way a failed gate transit recovers to its gate.
+            try {
+                await jumpTo(data);
+            } catch (e) {
+                console.warn('Hyperspace jump failed:', e);
+                await abortHyperspaceJump(data, origin,
+                    'Hyperspace jump failed.');
+            }
         })();
     });
     newDisplayWorld.events.get(GateTransitEvent).subscribe(({ data }) => {
@@ -1574,6 +1599,13 @@ async function enterSystem({ entity, to, uuid }:
             return;
         }
         const docked = gateDockedShip;
+        // Same recovery as a wormhole transit: the pump's gate-dock block
+        // has already removed this ship from the simulation, so a rejection
+        // anywhere below would lose it. `fromSpob` is the gate it is docked
+        // at, which is exactly where abortGateTransit puts it back.
+        const abortTo = {
+            entity: ship, uuid: docked.uuid, fromSpob: docked.planetId,
+        };
         void (async () => {
             const to = await gateDestinationResolver.systemOf(destinationSpob);
             if (!to) {
@@ -1595,7 +1627,10 @@ async function enterSystem({ entity, to, uuid }:
             });
             pendingGateArrivalSpob = destinationSpob;
             await jumpTo({ entity: ship, to, uuid: docked.uuid });
-        })();
+        })().catch(e => {
+            console.warn('Hypergate transit failed:', e);
+            abortGateTransit(abortTo, 'Hypergate transit failed.');
+        });
     });
 
     // Wait until the current peer set includes the server, without racing
@@ -1676,11 +1711,73 @@ async function enterSystem({ entity, to, uuid }:
 function abortGateTransit(
     data: { entity: Entity, uuid: string, fromSpob: string }, reason: string) {
     console.warn(`${reason} Returning the ship to the origin gate.`);
-    data.entity.components.delete(GateArrivalComponent);
+    const plan = planGateTransitRecovery(data.entity, data.fromSpob);
+    // The arrival announcement goes with the arrival marker the plan just
+    // stripped. `pendingGateArrivalSpob` is set just before the transit's
+    // jumpTo and consumed by the NEXT display world that gets built; an
+    // abort after it was set (a jumpTo that threw partway through) would
+    // otherwise leave a destination gate's name primed to fire
+    // GateArrivalAnticipationEvent at whatever system the player next
+    // entered, opening an unrelated gate for a ship that is not coming
+    // through it.
+    pendingGateArrivalSpob = undefined;
+    if (plan.kind !== 'gate') {
+        return;
+    }
     gateDockedShip = {
-        uuid: data.uuid, entity: data.entity, planetId: data.fromSpob,
+        uuid: data.uuid, entity: data.entity, planetId: plan.planetId,
     };
     pendingGateLaunch = data.entity;
+}
+
+/**
+ * THE HYPERSPACE ANALOGUE OF abortGateTransit: a jump whose destination
+ * transition failed.
+ *
+ * By the time the FinishJumpEvent handler runs, JumpFromSystem has already
+ * deleted the player's ship (and EscortFollowJumpBeginSystem its flock)
+ * from the origin simulation, and the entity exists only as the object the
+ * event carried. `jumpTo` hands the ESCORT batch back to the carried
+ * rosters when it fails, but nothing put the SHIP anywhere: the rejection
+ * went unobserved and the player's own hull was gone from the game with no
+ * way back short of reloading.
+ *
+ * There is no gate to lift off from here, so recovery is the honest one:
+ * re-enter the system the ship left. The entity already carries the arrival
+ * kinematics the sequence stamped on it at departure (JumpSequenceSystem
+ * teleports it to the rim, coasting inward at top speed, stage 'arriving'),
+ * so it comes back out of hyperspace at the origin system's rim exactly as
+ * it would have at the destination's — the jump "didn't take", which is
+ * both a sane fiction and the least surprising thing to a pilot. The escort
+ * batch is picked up again by the retry's own takeEscortsForTransition, so
+ * the flock arrives beside it.
+ *
+ * The fuel is NOT refunded: it was spent at departure, in the simulation,
+ * on every peer, and refunding it here would be a client-local rewrite of
+ * synced state.
+ *
+ * If the re-entry ALSO fails there is nothing further to try — a second
+ * recursion would only spin — so it is logged and the pump is left to run
+ * shipless rather than throwing into a ticker callback.
+ */
+async function abortHyperspaceJump(
+    data: { entity: Entity, uuid: string }, origin: string | undefined,
+    reason: string) {
+    // The plan also strips the arrival marker: the ship never got anywhere,
+    // so the origin world must not try to position it at a gate.
+    const plan = planHyperspaceJumpRecovery(data.entity, origin);
+    if (plan.kind !== 'reenter') {
+        console.error(`${reason} The player ship cannot be restored: `
+            + `${plan.kind === 'lost' ? plan.reason : plan.kind}.`);
+        return;
+    }
+    console.warn(`${reason} Returning the ship to ${plan.to}.`);
+    try {
+        await jumpTo({ entity: data.entity, to: plan.to, uuid: data.uuid });
+    } catch (e) {
+        console.error('Failed to return the player ship to its origin '
+            + 'system:', e);
+    }
 }
 
 /**
@@ -1844,9 +1941,23 @@ async function startGame() {
     // Player state: restore it from the save, or start a fresh pilot
     // from the chär (credits, date, OnStart control bits, starting
     // legal statuses and combat rating).
+    // THE RÄNK TABLE, warmed before either branch. Both of them resolve
+    // ränk data synchronously through `getCached` — the chär OnStart's
+    // Kxxx cascades, and the 0x0100 suppression facts baked into synced
+    // state for the simulation (rank_logic.ts) — and a cold read there
+    // would silently skip a cascade or bake an empty privilege set. The
+    // table is tiny (a few dozen resources, batched into one POST), and
+    // this is the one place in a session that can afford to wait for it.
+    try {
+        await Promise.all(ids.Rank.map(id =>
+            simulationGameData.data.Rank.get(id)));
+    } catch (e) {
+        console.warn('Failed to load the rank table:', e);
+    }
+    const getRank = (id: string) => simulationGameData.data.Rank.getCached(id);
     if (save) {
         parkedControlBits = restorePlayerState(shipEntity, save,
-            controlBitResolver).parkedControlBits;
+            controlBitResolver, getRank).parkedControlBits;
     } else if (playerStart) {
         // chär Govt1-4/Status1-4: the status applies to the govt and
         // its allies, negated for its enemies (reputation.ts). The
@@ -1894,9 +2005,12 @@ async function startGame() {
             runNCBSet(playerStart.onStart,
                 makeControlBitHooks(bits, undefined, {
                     active: startRanks,
+                    // Stock-first resolution (the namespacing fix wave)
+                    // over the pre-warmed rank table (the staging fix
+                    // wave): both halves compose here.
                     resolveId: id => resolveNumberedResource(id, charPrefix,
                         globalId => startRankIds.has(globalId)),
-                    getRank: id => simulationGameData.data.Rank.getCached(id),
+                    getRank,
                 }, systemDiscoveryOperators(playerDiscovery,
                     charPrefix, id => startSystemIds.has(id))),
                 Math.random);
@@ -1908,7 +2022,7 @@ async function startGame() {
             }
         }
         shipEntity.components.set(ControlBitsComponent, bits);
-        shipEntity.components.set(ActiveRanksComponent, startRanks);
+        commitActiveRanks(shipEntity, startRanks, getRank);
     }
     ensurePlayerStateComponents(shipEntity);
     (window as any).myShip = shipEntity;
