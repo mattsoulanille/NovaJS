@@ -56,6 +56,34 @@ import { TargetComponent } from './target_component.js';
  *  - 2 (destroy enemy stellars): planet bombardment isn't modeled;
  *    standard AI (documented gap).
  *
+ * ONE LIVE BATCH PER SYSTEM — mïsn ShipSyst -6, "Whatever system the
+ * player is in (i.e. follow him around)". The parenthetical describes the
+ * EFFECT, not the mechanism: ShipSyst is a spawn-system SELECTOR, and every
+ * other value of it names where the ships appear (-1 the initial system, -3
+ * TravelStel's, a specific id, a govt's). -6 names "here, wherever here is"
+ * — so the ships keep turning up wherever the player goes because they are
+ * SPAWNED THERE, not because they flew there. They are despawned with the
+ * system the player leaves (MissionShipCleanupSystem's owner-absence rule)
+ * and a fresh batch appears in the one they enter.
+ *
+ * Two rules keep that to ONE batch, and both are needed because a
+ * ShipBehav 1 ship is indistinguishable from a hired escort by every
+ * structural test — it flies in formation on the player and shares their
+ * firing group, so the escort chain genuinely tops out at the player:
+ *
+ *  1. A mission ship NEVER RIDES a transition. MarkPlayerEscortsSystem
+ *     will not mark one, and sweepableEscorts will not sweep one whatever
+ *     markers it wears (player_escort_plugin.ts).
+ *  2. The respawn only builds the SHORTFALL against what the system
+ *     already holds (LiveMissionShips below), so the entry that does NOT
+ *     rebuild the world — a lift-off back into the system just landed in —
+ *     cannot lay a second batch on top of the first either.
+ *
+ * Without them the batch grows by its ShipCount at every hop, which is
+ * Matthew's playtest report against "Cause Havoc for Dani" (stock mïsn
+ * 665, whose OnAccept `S792` starts the invisible mïsn 792: ShipCount 1,
+ * ShipSyst -6, ShipBehav 1 — Karrod's flagship).
+ *
  * SPECIAL SHIPS WITH AN OUTSTANDING GOAL DO NOT LEAVE THE SYSTEM. The
  * Bible does not say so in as many words, but ShipGoal 6 does: "Chase
  * them off (either kill them or scare them into jumping out of the
@@ -306,17 +334,67 @@ async function buildShip(ctx: SpawnContext, missionId: string,
 }
 
 /**
+ * The mission ships of `ownerUuid` that are STILL IN THE WORLD the player
+ * is (re)entering, counted per mission. Empty for a hyperspace jump or a
+ * gate transit, where the destination world is built from scratch; not
+ * empty on a lift-off, where the player returns to the very world they
+ * landed in and the owner-absence cleanup may not have swept the previous
+ * batch out of it yet.
+ *
+ * THIS IS WHAT MAKES THE RESPAWN IDEMPOTENT, and it is the second half of
+ * "one live batch per system" (the first is that mission ships never ride a
+ * transition — see sweepableEscorts). Spawning a full ShipCount into a
+ * system that already holds the batch is how a mission's escort turns into
+ * a fleet: Matthew's "I gain more escorts every time I change systems".
+ * Counting what is already there and building only the difference closes
+ * that for every route into a system at once, rather than trusting each of
+ * them to have emptied the world first.
+ */
+export interface LiveMissionShips {
+    /** Live special (non-aux) ship uuids, per mission id. */
+    special: Map<string, Set<string>>;
+    /** Live aux ship count, per mission id. */
+    aux: Map<string, number>;
+}
+
+export function liveMissionShips(entities: Iterable<[string, Entity]>,
+    ownerUuid: string): LiveMissionShips {
+    const live: LiveMissionShips = { special: new Map(), aux: new Map() };
+    for (const [uuid, entity] of entities) {
+        const missionShip = entity.components.get(MissionShipComponent);
+        if (!missionShip || missionShip.owner !== ownerUuid) {
+            continue;
+        }
+        if (missionShip.aux) {
+            live.aux.set(missionShip.mission,
+                (live.aux.get(missionShip.mission) ?? 0) + 1);
+        } else {
+            const uuids = live.special.get(missionShip.mission)
+                ?? new Set<string>();
+            uuids.add(uuid);
+            live.special.set(missionShip.mission, uuids);
+        }
+    }
+    return live;
+}
+
+/**
  * Prepares the mission ships to insert alongside the player entering
- * `systemId`: clears stale rosters on the player entity's missions
+ * `systemId`: reconciles the rosters on the player entity's missions
  * (call BEFORE the player entity is encoded into its insertion
  * record) and builds the special/aux ships whose spawn triggers
  * match. `firstSlot` continues the owner's formation slot numbering
  * (after hired escorts).
+ *
+ * `live` is the batch the world ALREADY holds (see liveMissionShips);
+ * omitting it means "a fresh world", which is what a jump or a gate
+ * transit hands us.
  */
 export async function buildMissionShipSpawns(playerEntity: Entity,
     ownerUuid: string, systemId: string,
     gameData: SimulationGameDataInterface, universe: MissionShipUniverse,
-    firstSlot = 0, random: () => number = Math.random): Promise<Entity[]> {
+    firstSlot = 0, random: () => number = Math.random,
+    live?: LiveMissionShips): Promise<Entity[]> {
     const missions = playerEntity.components.get(MissionsComponent);
     if (!missions || missions.size === 0) {
         return [];
@@ -330,14 +408,22 @@ export async function buildMissionShipSpawns(playerEntity: Entity,
 
     for (const [missionId, active] of missions) {
         const objective = active.shipObjective;
+        const stillHere = live?.special.get(missionId) ?? new Set<string>();
         if (objective) {
             // The previous system's ships are gone (the owner-absence
             // cleanup deleted them); forget their uuids so they are
-            // not misread as departures.
-            objective.live = new Map();
+            // not misread as departures. Ships that are demonstrably
+            // still in this world KEEP their entries — with them the
+            // per-ship progress flags (observed / disabled / boarded)
+            // the goal has already banked against those very hulls.
+            objective.live = new Map([...objective.live]
+                .filter(([uuid]) => stillHere.has(uuid)));
         }
         ships.push(...await buildShipsForMission(ctx, missionId, active,
-            systemId, system));
+            systemId, system, undefined, {
+            special: stillHere.size,
+            aux: live?.aux.get(missionId) ?? 0,
+        }));
     }
     return ships;
 }
@@ -357,7 +443,10 @@ export async function buildMissionShipSpawns(playerEntity: Entity,
 async function buildShipsForMission(ctx: SpawnContext, missionId: string,
     active: MissionShipSource,
     systemId: string, system: SystemInfo | undefined,
-    replace?: ReplacementPlacement): Promise<Entity[]> {
+    replace?: ReplacementPlacement,
+    /** What this system already holds of this mission's batch. */
+    alreadyHere: { special: number, aux: number }
+        = { special: 0, aux: 0 }): Promise<Entity[]> {
     const { universe, random } = ctx;
     const mission = universe.getMission(missionId);
     const objective = active.shipObjective;
@@ -380,7 +469,10 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
                 : undefined);
         // The ShipSubtitle sibling, frozen at accept the same way.
         const subtitle = active.shipSubtitle;
-        const count = shipsToSpawn(objective);
+        // Only the SHORTFALL: whatever of this batch is already flying
+        // here counts towards ShipCount (see LiveMissionShips).
+        const count = Math.max(0,
+            shipsToSpawn(objective) - alreadyHere.special);
         for (let i = count; i > 0; i--) {
             const ship = await buildShip(ctx, missionId, objective.dudeId, {
                 aux: false,
@@ -406,7 +498,9 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
     if (mission && system && auxShipsMatchSystem(mission, active,
         system, id => universe.systemIdOfPlanet(id, ctx.bits),
         id => universe.getGovt(id))) {
-        for (let i = 0; i < mission.auxShipCount; i++) {
+        const auxWanted =
+            Math.max(0, mission.auxShipCount - alreadyHere.aux);
+        for (let i = 0; i < auxWanted; i++) {
             const ship = await buildShip(ctx, missionId,
                 mission.auxShipDudeId!, {
                 aux: true, shipStart: 1, behavior: -1, goal: -1,

@@ -317,7 +317,8 @@ export function escortFollows(kind: EscortTransition, escort: Entity):
  * ordered before the system that removes it), so the chain always resolves
  * here. The same two exclusions MarkPlayerEscortsSystem applies are
  * repeated: player ships are not their own escorts, and mission ships have
- * their own respawn-with-the-player flow.
+ * their own respawn-with-the-player flow — the latter ahead of the marker
+ * check, so no marker can defeat it (see the note in the loop).
  *
  * Sorted for the same reason EscortReattachSystem sorts: the sweep order
  * becomes the client roster's order, which becomes the order
@@ -339,10 +340,27 @@ export function sweepableEscorts(entities: EscortSweepEntities,
     player: string, kind: EscortTransition): string[] {
     const following: string[] = [];
     for (const [escortUuid, escort] of entities) {
+        // A MISSION SHIP IS NEVER SWEPT, whatever markers it happens to be
+        // wearing. The exclusion is checked BEFORE the ownership marker, not
+        // inside the "not marked yet" branch below, so that it matches
+        // MarkPlayerEscortsSystem's — which is unconditional — exactly.
+        // Otherwise a special ship that acquired a marker by any route at all
+        // would ride the jump AND be respawned at the far end by
+        // buildMissionShipSpawns, and the mission's batch would grow by its
+        // ShipCount at every hop (Matthew: "I gain more escorts every time I
+        // change systems"). mïsn ShipBehav 1 ships make that a live risk: they
+        // fly in FORMATION on the player sharing their firing group, so the
+        // escort chain genuinely does top out at the player.
+        //
+        // A CAPTURED mission ship is not affected: capturing one strips the
+        // MissionShipComponent (boarding_plugin.ts), which is what turns a
+        // prize into an ordinary escort, so it is swept here like any other.
+        if (escort.components.has(MissionShipComponent)) {
+            continue;
+        }
         if (escort.components.get(PlayerEscortComponent)?.player !== player) {
             if (!escort.components.has(ShipComponent)
-                || escort.components.has(ControlledByComponent)
-                || escort.components.has(MissionShipComponent)) {
+                || escort.components.has(ControlledByComponent)) {
                 continue;
             }
             const link = playerEscortLink(escortUuid,
@@ -568,6 +586,16 @@ export function escortsOnPayroll(
     const ships: string[] = [];
     for (const [, escort] of entities) {
         if (escort.components.get(PlayerEscortComponent)?.player !== player) {
+            continue;
+        }
+        // MISSION SHIPS ARE NOT EMPLOYEES. A mïsn ShipBehav 1 special ship
+        // flies in formation on the player like a hire, but nobody engaged
+        // it and nobody pays it; it belongs to the mission, and it goes when
+        // the mission does. Checked here rather than trusted to the marker's
+        // absence, for the same reason the sweep checks it: the two must
+        // agree about what is the player's, or the player is billed for a
+        // ship they cannot dismiss, sell, or keep.
+        if (escort.components.has(MissionShipComponent)) {
             continue;
         }
         if (escort.components.has(BayFighterComponent)) {

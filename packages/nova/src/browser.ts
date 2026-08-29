@@ -92,7 +92,9 @@ import { EscortCommandComponent } from "./nova_plugin/escort_command.js";
 import { FiringGroupComponent } from "./nova_plugin/firing_group.js";
 import { FormationComponent, formationSlotPosition } from "./nova_plugin/npc_ai_plugin.js";
 import { makeNpcShip } from "./nova_plugin/npc_spawn_plugin.js";
-import { buildMissionShipSpawns } from "./nova_plugin/mission_ship_spawn.js";
+import {
+    buildMissionShipSpawns, liveMissionShips,
+} from "./nova_plugin/mission_ship_spawn.js";
 import { advanceEntityDate, ensurePlayerStateComponents } from "./spaceport/mission_session.js";
 import { clearShipDoneTextShown } from "./spaceport/ship_done_shown.js";
 import { PendingEscortsComponent } from "./spaceport/pending_escorts.js";
@@ -805,20 +807,29 @@ async function flushCarriedJumpEscorts(bridge: AsyncSimulationBridgeClient,
  * Mission special/aux ships entering with the player — the owning
  * client's half of the multiplayer design in mission_ship_plugin.ts.
  * `prepareMissionShips` must run BEFORE the player entity is encoded
- * into its own insertion record: it clears the stale mission-ship
- * rosters on the entity (so the cleared state rides that record) and
+ * into its own insertion record: it reconciles the mission-ship
+ * rosters on the entity (so the reconciled state rides that record) and
  * builds the ships whose spawn system matches. `insertMissionShips`
  * then pushes them through the same input-record addEntity path as
  * hired escorts, after the owner is in (the goal systems track ships
  * against their owner's mission state).
+ *
+ * `world` is the world the player is entering, when it is one that can
+ * ALREADY HOLD this mission's ships: a LIFT-OFF puts the player back into
+ * the very system they landed in, whose previous batch is swept by the
+ * owner-absence cleanup but need not have been swept yet. Only the
+ * shortfall is then built, so a batch is never doubled (see
+ * liveMissionShips). A jump or a gate transit passes nothing: that
+ * destination world is built from scratch and holds none of them.
  */
 async function prepareMissionShips(playerEntity: Entity, playerUuid: string,
-    systemId: string, firstSlot: number): Promise<Entity[]> {
+    systemId: string, firstSlot: number, world?: World): Promise<Entity[]> {
     try {
         const universe = MissionUniverse.shared(simulationGameData);
         await universe.load();
         return await buildMissionShipSpawns(playerEntity, playerUuid,
-            systemId, simulationGameData, universe, firstSlot);
+            systemId, simulationGameData, universe, firstSlot, Math.random,
+            world ? liveMissionShips(world.entities, playerUuid) : undefined);
     } catch (e) {
         console.warn('Failed to prepare mission ships:', e);
         return [];
@@ -2423,7 +2434,8 @@ async function startGame() {
                 const missionShips = await prepareMissionShips(
                     pendingLaunchedShip, dockedShip.uuid,
                     activeSystemId ?? '',
-                    hireBaseSlot + (pendingEscorts?.length ?? 0));
+                    hireBaseSlot + (pendingEscorts?.length ?? 0),
+                    currentDisplayWorld);
                 await currentBridge.addEntity(dockedShip.uuid, pendingLaunchedShip);
                 if (returningEscorts.length > 0) {
                     await insertCarriedEscorts(currentBridge,
@@ -2476,7 +2488,8 @@ async function startGame() {
                 const gateMissionShips = await prepareMissionShips(
                     pendingGateLaunch, gateDockedShip.uuid,
                     activeSystemId ?? '',
-                    gateBaseSlot + gateEscorts.length);
+                    gateBaseSlot + gateEscorts.length,
+                    currentDisplayWorld);
                 await currentBridge.addEntity(
                     gateDockedShip.uuid, pendingGateLaunch);
                 if (gateEscorts.length > 0) {
