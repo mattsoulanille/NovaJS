@@ -1503,21 +1503,34 @@ async function enterSystem({ entity, to, uuid }:
     // launch that consumes them runs later (see carriedJumpEscorts and
     // flushLandedEscorts). Entries for other peers' players are dropped
     // when a batch is consumed — only the owning client respawns them.
-    newDisplayWorld.events.get(EscortJumpEvent).subscribe(({ data }) => {
+    // DEDUPED BY UUID: the bridge's rollback dedup (settle-tick stamps)
+    // keeps a correction from re-forwarding these, but a duplicate here
+    // would silently CLONE an escort at the next transition — cheap
+    // insurance at the seam that turns events into roster rows (deep
+    // audit follow-up, 2026-08-29).
+    const pushCarried = (rows: CarriedEscort[],
+        data: { player: string, uuid: string, entity: Entity }) => {
         if (!isLocalCarriedEscort(newDisplayWorld, data.player)) {
             return;
         }
-        carriedJumpEscorts.push({
+        const existing = rows.findIndex(r => r.uuid === data.uuid);
+        if (existing >= 0) {
+            // The newest handover wins: the sim serialized the entity at
+            // the moment it left the world.
+            rows[existing] = {
+                player: data.player, uuid: data.uuid, entity: data.entity,
+            };
+            return;
+        }
+        rows.push({
             player: data.player, uuid: data.uuid, entity: data.entity,
         });
+    };
+    newDisplayWorld.events.get(EscortJumpEvent).subscribe(({ data }) => {
+        pushCarried(carriedJumpEscorts, data);
     });
     newDisplayWorld.events.get(EscortLandedEvent).subscribe(({ data }) => {
-        if (!isLocalCarriedEscort(newDisplayWorld, data.player)) {
-            return;
-        }
-        landedEscorts.push({
-            player: data.player, uuid: data.uuid, entity: data.entity,
-        });
+        pushCarried(landedEscorts, data);
     });
     newDisplayWorld.events.get(FinishJumpEvent).subscribe(({ data }) => {
         // Every peer simulates every ship's jump; only follow it to
