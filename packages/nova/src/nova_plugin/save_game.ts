@@ -1,9 +1,11 @@
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 import { Entity } from 'nova_ecs/entity';
+import { OutfitData } from 'novadatainterface/outfit_data';
 import {
     EncodedEntity, Serializer,
 } from 'nova_ecs/plugins/serializer_plugin';
+import { BayFighterComponent } from './bay_plugin.js';
 import { CargoComponent } from './cargo_plugin.js';
 import {
     ControlBitPair, ControlBitResolver, sortControlBitPairs,
@@ -29,6 +31,7 @@ import {
 import { PlayerEscortComponent } from './player_escort.js';
 import { CombatRatingComponent, LegalRecordsComponent } from './reputation_plugin.js';
 import { ShipComponent } from './ship_plugin.js';
+import { OwnerComponent, SourceComponent } from './weapon_components.js';
 import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bit_namespaces';
 
 /**
@@ -580,6 +583,151 @@ export function extractSavedEscorts(escorts: Iterable<EscortToSave>,
 }
 
 /**
+ * ---------------------------------------------------------------------------
+ * PHANTOM BAY FIGHTERS: cleaning a save polluted by the mission-carrier bug
+ * ---------------------------------------------------------------------------
+ *
+ * Until the mission-ship boundary was added to `playerEscortLink`
+ * (player_escort_plugin.ts), a mïsn ShipBehav 1 special ship's bay
+ * fighters were marked as the PLAYER's escorts, swept through every jump,
+ * and re-parented directly onto the player on arrival — permanently, and
+ * a fresh wing on top at every system change. Those fighters went into the
+ * save's `escorts` array, so fixing the sim does not fix a pilot who
+ * already has thirty of them. This is the load-time cleanup for such a
+ * save; it never runs against a live world.
+ *
+ * THE CRITERION, in full. A saved escort is dropped as pollution when ALL
+ * THREE of the following hold, and kept otherwise:
+ *
+ *   1. It carries `BayFighterComponent` — it is a deployed bay fighter,
+ *      not a hired escort or a captured prize.
+ *   2. Its recorded `PlayerEscort.parent` is the save's own `playerUuid`:
+ *      the save files it as a DIRECT fighter of the player's ship, which
+ *      is exactly the flattening insertCarriedEscorts performed.
+ *   3. Neither of the two facts that would make that claim true holds:
+ *        a. the carrier it names — `SourceComponent`, else
+ *           `OwnerComponent.owner` — is neither the save's `playerUuid`
+ *           nor the uuid of another escort in the same save, AND
+ *        b. the pilot's saved `outfits` mount no bay weapon and supply no
+ *           ammo for the bay weapon this fighter records
+ *           (`BayFighterComponent.bayWeaponId`).
+ *
+ * WHY A LEGITIMATE FIGHTER CANNOT BE DROPPED. Landing does not stow a
+ * deployed fighter (landed_escorts.ts), so a player's own launched
+ * fighters DO legitimately appear in the save under parent = the player —
+ * (1) and (2) alone would take them. Each of (3a) and (3b) refuses them on
+ * its own: such a fighter's SourceComponent names the player's ship (it
+ * came out of the player's bay, and `priorPlayer` remapping keeps that
+ * reference pointing at the player across the save), and the player must
+ * own the bay outfit that launched it. A fighter of a carrier ESCORT is
+ * refused twice over: its parent is the carrier, not the player (2), and
+ * that carrier is saved beside it (3a). Both halves of (3) must fail
+ * before anything is dropped, so either one being unavailable or wrong is
+ * enough to keep the escort.
+ *
+ * THE ONE OTHER SHAPE THIS TAKES, deliberately. A fighter launched from a
+ * player's CARRIER ESCORT that then died is orphaned but still marked, and
+ * the next carry flattens it onto the player too (prepareCarriedEscorts
+ * cannot find its carrier in the batch either). It fails all three tests
+ * and is dropped with the phantoms. That is the right outcome: with its
+ * carrier gone it can never dock, never refund its round, never be
+ * commanded home, and it draws no wage — it is the same orphan state, just
+ * reached honestly. The player's OWN fighters, whose carrier is the player
+ * and cannot die without ending the game, are untouched.
+ *
+ * FAIL-SAFE BY CONSTRUCTION. `SavedFleetOwner` is optional everywhere: a
+ * caller that cannot establish the pilot's own uuid, or cannot resolve the
+ * pilot's outfits against game data, passes nothing and no escort is
+ * dropped at all. Losing a real escort is a far worse outcome than
+ * carrying a phantom one for another session.
+ */
+export interface SavedFleetOwner {
+    /**
+     * The uuid the PLAYER SHIP had when the save was written
+     * (`SaveData.playerUuid`). Every reference inside a saved escort is in
+     * that old namespace, so this is what "the player" means to them.
+     */
+    player: string;
+    /**
+     * Every weapon id the pilot's own outfits mount or feed, as of the
+     * save: the union of each owned oütf's `weapons` keys and its
+     * `ammoFor`. A bay the pilot owns is in here under both, because a
+     * stock fighter bay is a PAIR of outfits — "Firebird Bay" mounts wëap
+     * nova:151, "Firebird" is ammo for it — and `consumeAmmo` leaves a
+     * spent ammo entry at zero rather than deleting it, so a carrier with
+     * its whole wing in the air still lists both.
+     *
+     * Undefined means "could not be resolved" — a missing plug-in, a game
+     * data failure — and disables the drop entirely (see the criterion).
+     */
+    armament?: ReadonlySet<string>;
+}
+
+/**
+ * The weapon ids `outfits` mount or supply ammo for — `SavedFleetOwner.
+ * armament`, resolved against game data.
+ *
+ * Returns undefined if ANY owned outfit id cannot be resolved: an
+ * unresolvable outfit is one whose bay we cannot see, and the drop rule
+ * must never fire on an incomplete picture of the pilot's hangar (a save
+ * written with a plug-in that is not loaded today is the ordinary way to
+ * get here).
+ */
+export async function savedFleetArmament(outfits: readonly SavedOutfit[],
+    getOutfit: (id: string) => Promise<OutfitData>):
+    Promise<Set<string> | undefined> {
+    const armament = new Set<string>();
+    for (const [id] of outfits) {
+        let outfit: OutfitData;
+        try {
+            outfit = await getOutfit(id);
+        } catch (e) {
+            console.warn(`Not cleaning the save's escorts: outfit ${id} `
+                + `could not be resolved:`, e);
+            return undefined;
+        }
+        for (const weaponId of Object.keys(outfit.weapons ?? {})) {
+            armament.add(weaponId);
+        }
+        if (outfit.ammoFor !== null && outfit.ammoFor !== undefined) {
+            armament.add(outfit.ammoFor);
+        }
+    }
+    return armament;
+}
+
+/**
+ * Whether this restored escort is a phantom bay fighter — a wing that was
+ * never the player's. The criterion is documented in full on
+ * {@link SavedFleetOwner}; `saved` is every uuid in the same save, which is
+ * what makes "its carrier came back with it" answerable.
+ */
+function phantomBayFighter(entity: Entity, owner: SavedFleetOwner,
+    saved: ReadonlySet<string>): boolean {
+    const bayFighter = entity.components.get(BayFighterComponent);
+    if (!bayFighter) {
+        return false; // (1) Not a deployed fighter at all.
+    }
+    if (entity.components.get(PlayerEscortComponent)?.parent
+        !== owner.player) {
+        return false; // (2) Not filed as a direct fighter of the player.
+    }
+    // (3a) A carrier the save can account for makes the claim true.
+    const carrier = entity.components.get(SourceComponent)
+        ?? entity.components.get(OwnerComponent)?.owner;
+    if (carrier === undefined || carrier === owner.player
+        || saved.has(carrier)) {
+        return false;
+    }
+    // (3b) So does a bay the pilot actually owns. Unresolved armament, or
+    // a fighter that records no bay, keeps the escort.
+    if (!owner.armament) {
+        return false;
+    }
+    return !owner.armament.has(bayFighter.bayWeaponId);
+}
+
+/**
  * Decodes a save's escorts back into entities, ready to be handed to
  * prepareCarriedEscorts under their OLD uuids (which is what makes the
  * intra-batch carrier remapping work — see SavedEscort).
@@ -590,9 +738,15 @@ export function extractSavedEscorts(escorts: Iterable<EscortToSave>,
  * the save, still load. A save whose `escorts` field is structurally wrong
  * never reaches here at all — `decodeSave` rejects it and `loadSave`
  * quarantines the file.
+ *
+ * `owner`, when given, also drops the PHANTOM BAY FIGHTERS an older build
+ * could write into the array (see {@link SavedFleetOwner} for the exact
+ * criterion). Omitting it restores the array verbatim, which is what every
+ * caller that cannot identify the pilot must do.
  */
 export function restoreSavedEscorts(
-    escorts: readonly SavedEscort[] | undefined, serializer: Serializer):
+    escorts: readonly SavedEscort[] | undefined, serializer: Serializer,
+    owner?: SavedFleetOwner):
     Array<{ uuid: string, entity: Entity }> {
     const restored: Array<{ uuid: string, entity: Entity }> = [];
     for (const { uuid, entity } of escorts ?? []) {
@@ -605,7 +759,23 @@ export function restoreSavedEscorts(
         }
         restored.push({ uuid, entity: decoded.right });
     }
-    return restored;
+    if (!owner) {
+        return restored;
+    }
+    // The whole batch's uuids first: "its carrier came back with it" is a
+    // question about the save as a set, not about the entry in hand, and a
+    // fighter can be listed before its carrier.
+    const saved = new Set(restored.map(({ uuid }) => uuid));
+    const kept = restored.filter(({ uuid, entity }) => {
+        if (!phantomBayFighter(entity, owner, saved)) {
+            return true;
+        }
+        console.warn(`Dropping saved escort ${uuid}: it is a bay fighter `
+            + `launched from a carrier this pilot never owned (the mission-`
+            + `carrier escort bug). It was never able to dock or be paid.`);
+        return false;
+    });
+    return kept;
 }
 
 /** Wraps a payload in the current versioned envelope. */

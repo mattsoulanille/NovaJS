@@ -1,5 +1,8 @@
 import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
+import {
+    getDefaultOutfitData, OutfitData,
+} from 'novadatainterface/outfit_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -50,6 +53,7 @@ import {
     restorePlayerState,
     setActiveSaveKey,
     restoreSavedEscorts,
+    savedFleetArmament,
     RosterEscort,
     SaveData,
     SavedEscort,
@@ -948,6 +952,163 @@ describe('save_game escorts', () => {
         const decoded = decodeSave(encodeSave(SAMPLE))!;
         expect(decoded.escorts).toBeUndefined();
         expect(restoreSavedEscorts(decoded.escorts, serializer)).toEqual([]);
+    });
+});
+
+/**
+ * ============================================================================
+ * Cleaning a save polluted by the mission-carrier escort bug
+ * ============================================================================
+ *
+ * Before playerEscortLink stopped its walk at a mission ship, a mïsn
+ * ShipBehav 1 carrier's bay fighters were marked as the PLAYER's, swept
+ * through every jump, and flattened onto the player at the far end — and
+ * they went into the save. Fixing the simulation does nothing for a pilot
+ * who already has thirty of them, so the load path drops them, on the
+ * three-part criterion documented on SavedFleetOwner.
+ *
+ * The specs below are the two sides of that criterion: the phantom goes,
+ * and every shape of LEGITIMATE deployed fighter stays. A player's own
+ * launched fighters really are in the save under parent = the player
+ * (landing does not stow a deployed fighter), so "drop bay fighters
+ * parented to the player" on its own would take the pilot's real wing.
+ */
+const OWN_BAY = 'test:ownBay';
+const FOREIGN_BAY = 'test:foreignBay';
+
+describe('save_game phantom bay fighters', () => {
+    let fixture: Awaited<ReturnType<typeof makeEscortFixture>>;
+    beforeAll(async () => {
+        fixture = await makeEscortFixture();
+    });
+
+    /** A deployed bay fighter, as the save holds one. */
+    async function fighter(parent: string, carrier: string, bay: string) {
+        return fixture.makeEscort(ship => {
+            ship.components.set(PlayerEscortComponent,
+                { player: PLAYER, parent });
+            ship.components.set(BayFighterComponent, { bayWeaponId: bay });
+            ship.components.set(ReturnWhenTargetRemovedComponent, undefined);
+            ship.components.set(SourceComponent, carrier);
+            ship.components.set(OwnerComponent, { owner: carrier });
+        });
+    }
+
+    function roundTrip(escorts: Array<[string, Entity]>,
+        owner?: { player: string, armament?: ReadonlySet<string> }) {
+        const { serializer } = fixture;
+        const saved = extractSavedEscorts(
+            escorts.map(([uuid, entity]) => ({ uuid, entity })), serializer);
+        const stored = encodeSave({ ...SAMPLE, escorts: saved });
+        return restoreSavedEscorts(decodeSave(stored)!.escorts, serializer,
+            owner)
+            .map(({ uuid }) => uuid);
+    }
+
+    it('drops a mission carrier\'s fighter that was flattened onto the '
+        + 'player', async () => {
+            // Exactly the shape insertCarriedEscorts produced: parented to
+            // the player, but launched from a carrier that is in no save
+            // (mission ships are never marked and never saved), out of a
+            // bay this pilot does not own.
+            const phantom = await fighter(PLAYER, 'dead mission carrier',
+                FOREIGN_BAY);
+            expect(roundTrip([['phantom', phantom]],
+                { player: PLAYER, armament: new Set([OWN_BAY]) }))
+                .toEqual([]);
+        });
+
+    it('keeps the player\'s OWN deployed fighter', async () => {
+        // A fighter out of the player's own bay: parented to the player
+        // too, and legitimately in the save (landing does not stow a
+        // deployed fighter — see landed_escorts.ts). Both halves of the
+        // third test refuse it: its carrier IS the player, and the player
+        // owns the bay.
+        const mine = await fighter(PLAYER, PLAYER, OWN_BAY);
+        expect(roundTrip([['mine', mine]],
+            { player: PLAYER, armament: new Set([OWN_BAY]) }))
+            .toEqual(['mine']);
+    });
+
+    it('keeps a CARRIER ESCORT\'s fighter, carrier and all', async () => {
+        const carrier = await fixture.makeEscort(ship => ship.components.set(
+            PlayerEscortComponent, { player: PLAYER, parent: PLAYER }));
+        // Parented to its carrier, and its carrier is saved beside it.
+        const wing = await fighter('carrier', 'carrier', FOREIGN_BAY);
+        expect(roundTrip([['carrier', carrier], ['wing', wing]],
+            { player: PLAYER, armament: new Set([OWN_BAY]) }).sort())
+            .toEqual(['carrier', 'wing']);
+    });
+
+    it('keeps a fighter whose bay the pilot actually owns, whatever it '
+        + 'was launched from', async () => {
+            // The bay-outfit half of the criterion on its own: a fighter
+            // out of a bay this pilot mounts is a fighter this pilot could
+            // have launched, so it is not evidence of anything.
+            const doubtful = await fighter(PLAYER, 'some other ship',
+                OWN_BAY);
+            expect(roundTrip([['doubtful', doubtful]],
+                { player: PLAYER, armament: new Set([OWN_BAY]) }))
+                .toEqual(['doubtful']);
+        });
+
+    it('keeps ordinary escorts, which are not fighters at all', async () => {
+        const hire = await fixture.makeEscort(ship => ship.components.set(
+            PlayerEscortComponent,
+            { player: PLAYER, parent: PLAYER, provenance: 'hired' }));
+        expect(roundTrip([['hire', hire]],
+            { player: PLAYER, armament: new Set() }))
+            .toEqual(['hire']);
+    });
+
+    it('drops nothing when the pilot\'s armament could not be resolved',
+        async () => {
+            // A save written with a plug-in that is not loaded today: we
+            // cannot see the pilot's hangar, so we keep everything.
+            const phantom = await fighter(PLAYER, 'dead mission carrier',
+                FOREIGN_BAY);
+            expect(roundTrip([['phantom', phantom]], { player: PLAYER }))
+                .toEqual(['phantom']);
+        });
+
+    it('drops nothing when the save records no player uuid', async () => {
+        // Every reference inside a saved escort is in the PRE-SAVE uuid
+        // namespace; without the pilot's own uuid none of them can be
+        // read, so the array is restored verbatim (which is also what a
+        // save written before `playerUuid` existed gets).
+        const phantom = await fighter(PLAYER, 'dead mission carrier',
+            FOREIGN_BAY);
+        expect(roundTrip([['phantom', phantom]])).toEqual(['phantom']);
+    });
+});
+
+describe('savedFleetArmament', () => {
+    const outfitData = (id: string, extra: Partial<OutfitData>) =>
+        ({ ...getDefaultOutfitData(), id, ...extra } as OutfitData);
+
+    it('collects both halves of a fighter bay — the launcher and its '
+        + 'ammo', async () => {
+            // A stock bay is a PAIR of outfits: "Firebird Bay" mounts wëap
+            // nova:151, "Firebird" is ammo for it (verified against the
+            // real data). Either one on its own proves the pilot owns the
+            // bay, so both are collected.
+            const outfits: Record<string, OutfitData> = {
+                'bay': outfitData('bay', { weapons: { 'weap:1': 1 } }),
+                'ammo': outfitData('ammo', { ammoFor: 'weap:1' }),
+                'plate': outfitData('plate', {}),
+            };
+            const armament = await savedFleetArmament(
+                [['bay', 1], ['ammo', 0], ['plate', 3]],
+                async id => outfits[id]);
+            expect(armament).toEqual(new Set(['weap:1']));
+        });
+
+    it('gives up entirely when an outfit cannot be resolved', async () => {
+        // An incomplete picture of the hangar must not be used to drop
+        // anything: undefined disables the cleanup.
+        const armament = await savedFleetArmament([['gone', 1]],
+            async () => { throw new Error('no such outfit'); });
+        expect(armament).toBeUndefined();
     });
 });
 

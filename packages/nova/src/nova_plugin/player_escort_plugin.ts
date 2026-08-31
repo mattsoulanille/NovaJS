@@ -210,6 +210,13 @@ export const ESCORT_APPROACH_GAIN = 1.2;
 export const ESCORT_APPROACH_RCS_SPEED = 60;
 
 /**
+ * The fields of an existing ownership marker that a RE-STAMP must carry
+ * over — `detached`, `provenance` and the queued deals. Shared with the
+ * carried-roster re-insertion; see {@link carriedEscortFields}.
+ */
+const carriedFields = carriedEscortFields;
+
+/**
  * The player ship at the top of `uuid`'s escort chain, plus the escort's
  * immediate leader. Walks the same chain isInFlock does (formation leader
  * -> bay owner -> firing group) and stops at the first ancestor that is a
@@ -218,14 +225,65 @@ export const ESCORT_APPROACH_RCS_SPEED = 60;
  * simply not in the world right now (landed or jumping), which is why
  * callers must treat undefined as "no new information" rather than "not
  * owned".
+ *
+ * ---------------------------------------------------------------------------
+ * THE MISSION-SHIP BOUNDARY: A BAY FIGHTER BELONGS TO ITS CARRIER
+ * ---------------------------------------------------------------------------
+ *
+ * The walk STOPS at any ancestor wearing a MissionShipComponent, and
+ * reports no owner. A ship whose chain passes through a mission ship on
+ * its way to the player is not the player's escort — it is the MISSION
+ * SHIP'S OWN WING, and it belongs to the mission exactly as its carrier
+ * does.
+ *
+ * WHY IT IS NEEDED (Matthew's playtest, 2026-08: "I gain more escorts
+ * every time I change systems", still growing after the one-batch-per-
+ * system fix, 2a565960). mïsn 792's ShipBehav 1 special ship is düde
+ * nova:241 — always shïp nova:302, an Aurora Carrier with eight fighter
+ * bays — and mïsn 792 spawns TWO of them (ShipCount 1 plus one AuxShip)
+ * in whatever system the player is in. ShipBehav 1 puts each one in
+ * FORMATION on the player, sharing the player's firing group, so a
+ * fighter it launches in a fight has the chain
+ *
+ *     fighter --Owner/Formation--> carrier --Formation--> player
+ *
+ * and the walk topped out at the PLAYER. The mission-ship exclusions in
+ * MarkPlayerEscortsSystem and sweepableEscorts did not catch the
+ * fighters, because the FIGHTERS are not mission ships: they were stamped
+ * PlayerEscort{player, parent: carrier}, swept through the jump, and
+ * re-parented straight onto the player by insertCarriedEscorts (their
+ * carrier is not in the batch, so prepareCarriedEscorts falls back to the
+ * player). They could then never return to a bay, they persisted into the
+ * save's `escorts` array, and every new system's fresh pair of carriers
+ * launched a fresh wing: measured 0 -> 10 -> 18 across two systems.
+ *
+ * WHY IT IS THE RIGHT RULE, not just a patch. The two exclusions already
+ * in this module say a mission ship is not the player's: it is not swept,
+ * not paid, not manageable, and it despawns and respawns with the mission.
+ * Ownership is TRANSITIVE (see flock.ts), so a wing that belongs to a ship
+ * that is not the player's cannot itself be the player's. The consequences
+ * follow from that one sentence: such fighters are never marked, so they
+ * are never swept through a jump or a gate, never on the payroll, never in
+ * fleet cargo or escort hail management; and when the mission carrier
+ * despawns they orphan like any NPC carrier's wing and depart the system
+ * under OrphanedBayFighterSystem (bay_plugin.ts), which exempts only
+ * PlayerEscort-marked fighters — precisely the mark they no longer carry.
+ *
+ * SCOPE: THIS IS THE ESCORT-MARKING INTERPRETATION OF THE CHAIN, and only
+ * that. flock.ts's flockParent and isInFlock are DELIBERATELY unchanged:
+ * combat, point defense, friendly fire, IFF and the target cycle must all
+ * keep reading a mission carrier's wing as part of the player's flock (it
+ * flies with the player and shares its firing group, so shooting it would
+ * be as wrong as shooting a hired escort's fighter). Only the question
+ * "is this ship MINE, to carry and to pay for?" is answered differently
+ * here. Both callers of this function are that question:
+ * MarkPlayerEscortsSystem and sweepableEscorts.
+ *
+ * A CAPTURED mission ship is unaffected, for the same reason the sweep's
+ * own exclusion is: capturing strips MissionShipComponent
+ * (boarding_plugin), so a prize's wing tops out at the player like any
+ * other escort's.
  */
-/**
- * The fields of an existing ownership marker that a RE-STAMP must carry
- * over — `detached`, `provenance` and the queued deals. Shared with the
- * carried-roster re-insertion; see {@link carriedEscortFields}.
- */
-const carriedFields = carriedEscortFields;
-
 export function playerEscortLink(uuid: string,
     getEntity: (uuid: string) => Entity | undefined):
     PlayerEscort | undefined {
@@ -247,6 +305,13 @@ export function playerEscortLink(uuid: string,
         const entity = getEntity(current);
         if (!entity) {
             return undefined; // The chain ends at a ship that isn't here.
+        }
+        if (entity.components.has(MissionShipComponent)) {
+            // The mission-ship boundary (see the doc comment above): this
+            // candidate is the mission ship's own wing, not the player's.
+            // Checked BEFORE the player test, so nothing beyond a mission
+            // ship can be reached however the chain continues.
+            return undefined;
         }
         if (entity.components.has(ControlledByComponent)) {
             return { player: current, parent };
@@ -355,6 +420,13 @@ export function sweepableEscorts(entities: EscortSweepEntities,
         // A CAPTURED mission ship is not affected: capturing one strips the
         // MissionShipComponent (boarding_plugin.ts), which is what turns a
         // prize into an ordinary escort, so it is swept here like any other.
+        //
+        // A mission ship's own BAY FIGHTERS are excluded too, one level
+        // down: they are not mission ships, so this check does not see
+        // them, but playerEscortLink stops at their carrier and reports no
+        // owner, so they never acquire the marker the branch below tests
+        // and never back-fill one here. See THE MISSION-SHIP BOUNDARY on
+        // playerEscortLink.
         if (escort.components.has(MissionShipComponent)) {
             continue;
         }
@@ -519,7 +591,12 @@ registerSimulationBridgeEvent({ event: EscortLandedEvent });
  *  - player ships themselves (ControlledByComponent),
  *  - mission ships (MissionShipComponent), which already have their own
  *    respawn-with-the-player flow (mission_ship_spawn) and would be
- *    double-spawned if this module carried them too.
+ *    double-spawned if this module carried them too,
+ *  - anything whose chain PASSES THROUGH a mission ship — a mission
+ *    carrier's bay fighters. That exclusion is not written here: it is
+ *    inside playerEscortLink, which stops the walk at a mission ship (see
+ *    THE MISSION-SHIP BOUNDARY there), so the marking sweep and the
+ *    departure sweeps cannot disagree about it.
  *
  * Deterministic: per entity the answer is a pure function of the synced
  * chain components, with no accumulation over entity-map iteration order.

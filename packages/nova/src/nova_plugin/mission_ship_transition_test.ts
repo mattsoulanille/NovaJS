@@ -5,10 +5,13 @@ import {
     getIntegrationGameData,
 } from '../communication/simulation_test_fixture.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
+import { BayFighterComponent } from './bay_plugin.js';
 import { completeEntity } from './entity_data_loader.js';
+import { FiringGroupComponent } from './firing_group.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
+import { OwnerComponent, SourceComponent } from './weapon_components.js';
 import {
     buildMissionShipSpawns, liveMissionShips,
 } from './mission_ship_spawn.js';
@@ -326,6 +329,67 @@ describe('mïsn 792 (Karrod\'s flagship) across system changes', () => {
                 !ship.components.get(MissionShipComponent)!.aux);
             expect(newSpecial.length).toBe(1);
         });
+
+    /**
+     * ITS BAY FIGHTERS ARE ITS OWN, TOO. düde nova:241 is always shïp
+     * nova:302, an Aurora Carrier with eight fighter bays, and mïsn 792
+     * puts TWO of them (ShipCount 1 plus one AuxShip) beside the player in
+     * every system. A fighter one of them launches chains
+     * fighter -> carrier -> player, so before the mission-ship boundary in
+     * playerEscortLink the ownership walk topped out at the PLAYER: the
+     * wing was marked, swept through the jump, flattened onto the player at
+     * the far end, and joined by a fresh wing from the fresh pair of
+     * carriers. Matthew measured 0 -> 10 -> 18 escorts across two systems.
+     *
+     * The fighter is attached here exactly as BayWeaponEntry.fire attaches
+     * one — owner and source naming the carrier, a formation slot on it,
+     * and the firing group it inherits from the carrier, which is the
+     * PLAYER's — so the spec pins the rule against the real resources
+     * without needing the carrier's AI to pick a fight.
+     */
+    it('does not lend its bay fighters to the player', async () => {
+        const { objective } = await karrodObjective();
+        const player = await makeTraveller(objective);
+        const { world } = await enterSystem('nova:130', player);
+        const carriers = missionShipsIn(world);
+        expect(carriers.length).toBeGreaterThan(0);
+        const gameData = await getIntegrationGameData();
+        const fighterData = await gameData.data.Ship.get('nova:128');
+        const launched: string[] = [];
+        for (const [carrierUuid] of carriers) {
+            const fighter = makeShip(fighterData);
+            fighter.components.set(MultiplayerData, { owner: PEER });
+            fighter.components.set(OwnerComponent, { owner: carrierUuid });
+            fighter.components.set(SourceComponent, carrierUuid);
+            fighter.components.set(BayFighterComponent,
+                { bayWeaponId: 'nova:151' });
+            fighter.components.set(FormationComponent,
+                { leader: carrierUuid, slot: 0 });
+            // stampFiringGroup copies the FIRER's group, and a ShipBehav 1
+            // carrier's group is the player's — which is the shortcut that
+            // made the walk find a player at all.
+            fighter.components.set(FiringGroupComponent, { group: PLAYER });
+            const uuid = `fighter of ${carrierUuid}`;
+            await completeEntity(world, fighter);
+            world.entities.set(uuid, fighter);
+            launched.push(uuid);
+        }
+        for (let i = 0; i < 5; i++) {
+            world.step();
+        }
+        for (const uuid of launched) {
+            expect(world.entities.get(uuid)!.components
+                .has(PlayerEscortComponent))
+                .withContext(`${uuid} marked as a player escort`)
+                .toBeFalse();
+        }
+        for (const kind of ['jump', 'gate'] as const) {
+            expect(sweepableEscorts(world.entities, PLAYER, kind))
+                .withContext(`${kind} sweep`)
+                .toEqual([]);
+        }
+        expect(escortsOnPayroll(world.entities, PLAYER)).toEqual([]);
+    });
 
     it('keeps the objective\'s own progress state across the hop', async () => {
         const { objective } = await karrodObjective();

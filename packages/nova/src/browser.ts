@@ -82,7 +82,7 @@ import {
     EscortToSave, SavedEscort, collectEscortsToSave, decodeSave, encodeSave,
     extractSaveData, extractSavedEscorts, getActiveSaveKey, loadSave,
     resetSave, restoreClientSaveState, restorePlayerState,
-    restoreSavedEscorts, SaveData, writeSave,
+    restoreSavedEscorts, savedFleetArmament, SaveData, writeSave,
 } from "./nova_plugin/save_game.js";
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
@@ -296,6 +296,16 @@ let restoredSaveEscorts: SavedEscort[] | undefined;
  * OwnerComponent/SourceComponent onto the live player.
  */
 let restoredSavePlayerUuid: string | undefined;
+/**
+ * The weapon ids the loaded save's OWN outfits mount or feed
+ * (savedFleetArmament), paired with `restoredSaveEscorts` and drained with
+ * it. Used only to spot the PHANTOM BAY FIGHTERS an older build could
+ * write into a save's escort array — a mission carrier's wing, marked as
+ * the player's and carried from system to system for ever. Undefined when
+ * the pilot's outfits could not all be resolved, which disables the
+ * cleanup outright. See SavedFleetOwner in save_game.ts for the criterion.
+ */
+let restoredSaveArmament: ReadonlySet<string> | undefined;
 /**
  * The control-bit namespace resolver for the plug-in set the SERVER
  * loaded, and the saved bits it could not represent (their plug-in is not
@@ -1296,9 +1306,17 @@ async function enterSystem({ entity, to, uuid }:
     if (restoredSaveEscorts) {
         const blobs = restoredSaveEscorts;
         const priorPlayer = restoredSavePlayerUuid;
+        const armament = restoredSaveArmament;
         restoredSaveEscorts = undefined; // One-shot: the startup jump.
         restoredSavePlayerUuid = undefined;
-        const restored = restoreSavedEscorts(blobs, serializer);
+        restoredSaveArmament = undefined;
+        // The pilot's own uuid is what makes the phantom-bay-fighter
+        // cleanup possible at all (every reference inside a saved escort
+        // is in the pre-save namespace); without one the array is restored
+        // verbatim, exactly as it always was.
+        const restored = restoreSavedEscorts(blobs, serializer,
+            priorPlayer !== undefined
+                ? { player: priorPlayer, armament } : undefined);
         // `priorPlayer` rides each entry so a fighter the player had
         // launched from its own bays comes back pointing at the LIVE
         // player rather than the pre-save uuid. Absent in a save written
@@ -1906,6 +1924,16 @@ async function startGame() {
     // beside, so a ?ship= override keeps them.
     restoredSaveEscorts = save?.escorts;
     restoredSavePlayerUuid = save?.playerUuid;
+    // What bays this pilot actually owns, resolved once here (the escorts
+    // themselves decode a system entry later, where there is no chance to
+    // await game data). Read from the SAVE's outfits rather than from the
+    // hull we are about to build, because the question is what the pilot
+    // had when the fighters were written down — a ?ship= override must not
+    // change the answer. See restoredSaveArmament.
+    if (save?.escorts && save.escorts.length > 0) {
+        restoredSaveArmament = await savedFleetArmament(save.outfits,
+            id => simulationGameData.data.Outfit.get(id));
+    }
 
     // A fresh pilot starts from a chär "player start": ship, credits,
     // date, systems, and its OnStart control bits. ?char=nova:129
@@ -2705,6 +2733,7 @@ async function startGame() {
         // deal a dead save's escorts into the NEXT pilot's first system.
         restoredSaveEscorts = undefined;
         restoredSavePlayerUuid = undefined;
+        restoredSaveArmament = undefined;
         clientSlotFloor = undefined;
         simulationTickInFlight = false;
         lastPumpTime = undefined;
