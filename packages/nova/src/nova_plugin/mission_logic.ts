@@ -978,6 +978,40 @@ export interface MissionMachineryContext {
 }
 
 /**
+ * The gövt a mission's bare CompGovt / PayVal number names, resolved the
+ * same way an AvailStel govt range resolves one (`rangeGovt`, and
+ * stock-first {@link resolveNumberedResource} everywhere else): the
+ * plug-in that WROTE the mission first — its own private govts live under
+ * its prefix — then stock.
+ *
+ * THE FALLBACK IS WHAT MAKES AN OVERRIDE WORK. A plug-in that overrides a
+ * stock mïsn keeps the stock id, so {@link setStringPrefix} answers with
+ * the plug-in's writerPrefix while the gövt the number names is still
+ * `nova:n`. Keyed on the writer alone, the reputation change landed on a
+ * phantom `<plug>:n` record that no gövt backs — an entry the player-info
+ * dialog cannot name and nothing else ever reads — and PayVal's
+ * record-cleaning silently did nothing at all, because `cleanRecords`
+ * returns early when the govt does not resolve.
+ *
+ * Returns the writer-prefixed id when NEITHER resolves, which is the
+ * pre-existing behaviour for a number no loaded data set defines.
+ */
+function missionGovt(machinery: MissionMachineryContext,
+    mission: MissionData, n: number):
+    { id: string, data: GovtData | undefined } {
+    const getGovt = machinery.offerContext().getGovt;
+    const own = `${setStringPrefix(mission)}:${n}`;
+    const ownData = getGovt(own);
+    if (ownData) {
+        return { id: own, data: ownData };
+    }
+    const stock = `nova:${n}`;
+    const stockData = getGovt(stock);
+    return stockData ? { id: stock, data: stockData }
+        : { id: own, data: undefined };
+}
+
+/**
  * Applies a mission outcome's CompGovt/CompReward record change
  * (Bible: complete grants CompReward; failure costs half — "that govt
  * will take it personally"; abort costs 5x under mïsn flag 0x0040).
@@ -993,9 +1027,8 @@ function applyOutcomeReputation(machinery: MissionMachineryContext,
     if (delta === 0) {
         return;
     }
-    const govtId = `${setStringPrefix(mission)}:${mission.compGovt}`;
-    addRecord(state.records, govtId,
-        machinery.offerContext().getGovt(govtId), delta);
+    const govt = missionGovt(machinery, mission, mission.compGovt);
+    addRecord(state.records, govt.id, govt.data, delta);
 }
 
 function freeCargoSpace(state: MissionWorkingState): number {
@@ -1264,10 +1297,8 @@ function applyPayVal(machinery: MissionMachineryContext,
             return undefined;
         case 'cleanRecord':
             if (state.records) {
-                const govtId =
-                    `${setStringPrefix(mission)}:${pay.govtResourceId}`;
                 cleanRecords(state.records, pay.scope,
-                    machinery.offerContext().getGovt(govtId),
+                    missionGovt(machinery, mission, pay.govtResourceId).data,
                     machinery.allGovts?.() ?? []);
             }
             return undefined;

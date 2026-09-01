@@ -264,11 +264,36 @@ export function sweepAggression(state: AggressionState, now: number): boolean {
  * you can come back from ends the encounter, exactly as it ends the plunder
  * life segment (boarding_component's clearPlunderRecord).
  *
- * Called from ONE place, browser.ts's `jumpTo`, which is the single gate into
- * a fresh world for the player and for the escort batch travelling with them.
+ * Called from ONE place, through {@link clearCarriedAggressionForTransition}.
  * Idempotent, and free for the overwhelming majority of ships, which carry no
  * component at all.
  */
 export function clearCarriedAggression(entity: Entity): void {
     entity.components.delete(AggressionComponent);
+}
+
+/**
+ * THE GATE: {@link clearCarriedAggression} over everything crossing into a
+ * fresh world — the player, and every escort riding along.
+ *
+ * It has to run at the point where the batch is FINAL, which is NOT where
+ * the batch is taken off the client's rosters. A RESTORED SAVE's escorts are
+ * decoded later, at the first moment in a session that a serializer exists,
+ * and pushed onto the same batch (browser.ts's enterSystem); clearing at the
+ * earlier point missed every one of them, so a pilot loaded from disk
+ * arrived carrying its escorts' aggression tables — stamped against a world
+ * that ended when the game was last quit, and naming uuids that no longer
+ * exist. For the first 30 seconds of the new world's clock those escorts
+ * read as freshly shot at, which paints hostile corners and sends 'defend'
+ * after ships that never touched them.
+ *
+ * A LANDING is deliberately not a gate: the player lifts off back into the
+ * SAME world, whose clock never restarted.
+ */
+export function clearCarriedAggressionForTransition(player: Entity,
+    escorts: Iterable<{ entity: Entity }>): void {
+    clearCarriedAggression(player);
+    for (const escort of escorts) {
+        clearCarriedAggression(escort.entity);
+    }
 }

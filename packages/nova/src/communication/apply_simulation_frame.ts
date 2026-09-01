@@ -1,6 +1,7 @@
 import { isLeft } from "fp-ts/lib/Either.js";
 import { UnknownComponent } from "nova_ecs/component";
 import { Entity } from "nova_ecs/entity";
+import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { SimulationTimeResource } from "../display/simulation_time.js";
@@ -22,6 +23,27 @@ import { emitSimulationBridgeEvent } from "./simulation_bridge_events.js";
  * a new bridge's delta stream starts (see browser.ts).
  */
 export const syncedComponents = new Map<string, Set<UnknownComponent>>();
+
+/**
+ * Entities whose MovementState an applied frame has OVERWRITTEN since the
+ * display world was last stepped.
+ *
+ * The display world runs the simulation's own MovementSystem on the wall
+ * clock so motion keeps flowing across the frames that get no fresh
+ * snapshot (display/movement_extrapolation_plugin.ts). A freshly-synced
+ * entity must be left alone by that: it is already exactly where the
+ * simulation put it, and advancing it draws it one frame PAST that — which
+ * is why a projectile appeared a frame's flight clear of the muzzle it left
+ * (its first rendered position was spawn + v*dt, while the ship that fired
+ * it, being far slower, had barely moved).
+ *
+ * browser.ts's pumpTick hands this set to MovementTimeLimitResource.skipUuids
+ * and CLEARS IT immediately after the step, so it always means "synced since
+ * the last step". Module-level for the same reason `syncedComponents` is: the
+ * frame application and the display step are different call sites in the
+ * browser entry point.
+ */
+export const movementSyncedSinceStep = new Set<string>();
 /** Entities/components already warned about, so decode failures log once. */
 export const warnedUnsyncableEntities = new Set<string>();
 
@@ -52,6 +74,9 @@ function syncEntityToDisplay(uuid: string, encodedEntity: unknown, serializer: S
 
     for (const [component, data] of syncedEntity.components) {
         displayEntity.components.set(component, data);
+        if (component === (MovementStateComponent as UnknownComponent)) {
+            movementSyncedSinceStep.add(uuid);
+        }
     }
 
     for (const component of previousComponents) {
@@ -95,6 +120,9 @@ function applyEntityDelta(uuid: string, delta: EntityDelta, serializer: Serializ
         const [component, data] = decoded.right;
         displayEntity.components.set(component, data);
         synced.add(component);
+        if (component === (MovementStateComponent as UnknownComponent)) {
+            movementSyncedSinceStep.add(uuid);
+        }
     }
     for (const componentName of delta.removed) {
         const component = serializer.componentsByName.get(componentName);

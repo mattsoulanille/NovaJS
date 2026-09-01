@@ -1,5 +1,5 @@
 import * as t from 'io-ts';
-import { Entities, GetWorld } from '../arg_types.js';
+import { Entities, GetWorld, UUID } from '../arg_types.js';
 import { EntityMap } from '../entity_map.js';
 import { Component } from '../component.js';
 import { Angle, AngleType } from '../datatypes/angle.js';
@@ -85,6 +85,33 @@ export const MovementStateComponent = new Component<MovementState>('MovementStat
 export interface MovementTimeLimit {
     enabled: boolean;
     maxDeltaMs: number;
+    /**
+     * Entities whose MovementState an AUTHORITATIVE SNAPSHOT has overwritten
+     * since this world was last stepped. They are skipped: a frame renders
+     * freshly-synced state exactly as the simulation computed it, and
+     * prediction only ever shows on a frame the simulation did not reach.
+     *
+     * Extrapolating a just-synced entity draws it one frame PAST where the
+     * simulation put it, which is invisible on a ship (everything on screen
+     * leads by the same frame) but obvious on anything born at another
+     * entity's position: a projectile appeared already a frame's flight
+     * clear of the muzzle it left, every shot, because its very first
+     * rendered position was spawn + v*dt while the firing ship — moving
+     * much slower — had barely left its own. Matthew: "apply the
+     * interpolation after rendering the frame (so it applies to the next
+     * frame if it doesn't get overwritten by a sync from the engine)".
+     * Skipping the synced entities is that ordering, expressed per entity
+     * rather than per phase, and it needs no second world step.
+     *
+     * The smoothing this plugin exists for is untouched: it covers the
+     * frames that get NO fresh snapshot (a steps=0 pump, a worker reply
+     * that missed the frame — one rAF in ten on the Linux playtest trace),
+     * and on those frames nothing is in this set.
+     *
+     * Absent (or undefined) means "skip nobody", the pre-existing
+     * behaviour. Simulation worlds never set the resource at all.
+     */
+    skipUuids?: ReadonlySet<string>;
 }
 export const MovementTimeLimitResource =
     new Resource<MovementTimeLimit>('MovementTimeLimit');
@@ -92,11 +119,15 @@ export const MovementTimeLimitResource =
 export const MovementSystem = new System({
     name: 'movement',
     args: [MovementStateComponent, MovementPhysicsComponent,
-        TimeResource, Entities, GetWorld] as const,
-    step(state, physics, time, entities, world) {
+        TimeResource, Entities, GetWorld, UUID] as const,
+    step(state, physics, time, entities, world, uuid) {
         const limit = world.resources.get(MovementTimeLimitResource);
         if (limit) {
             if (!limit.enabled) {
+                return;
+            }
+            if (limit.skipUuids?.has(uuid)) {
+                // Synced this frame: render it where the simulation put it.
                 return;
             }
             if (time.delta_ms > limit.maxDeltaMs) {

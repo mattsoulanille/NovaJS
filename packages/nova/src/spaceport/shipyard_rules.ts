@@ -42,6 +42,7 @@ import {
     LegalRecordsComponent,
 } from '../nova_plugin/reputation_plugin.js';
 import { ControlledByComponent } from '../nova_plugin/ship_control.js';
+import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
@@ -395,6 +396,20 @@ export const CARRIED_COMPONENTS: readonly Component<any>[] = [
     // off must not discard them - the hire fee is already paid. (Review
     // round 6 finding; the loss predated the shipyard-economy rework.)
     PendingEscortsComponent,
+    // The PAYROLL MIRROR: the ship-class ids of the escorts drawing a daily
+    // wage (player_escort.ts's EscortPayrollComponent). It is the only
+    // record of them that exists while the player is docked — the escorts
+    // themselves are out of the world on the landed roster — so a hull
+    // traded mid-visit arrived with an EMPTY payroll and every date advance
+    // for the rest of that docked window charged no wages at all. It
+    // re-mirrors itself at liftoff (EscortPayrollSystem), which is what
+    // kept the undercharge to one window rather than making it permanent.
+    //
+    // SAFE TO SHARE BY REFERENCE, like every other entry here: the value is
+    // a plain list of ship-class ids naming the ESCORTS, with nothing in it
+    // scoped to the hull it sits on, and EscortPayrollSystem replaces the
+    // array wholesale rather than mutating it.
+    EscortPayrollComponent,
 ];
 
 /**

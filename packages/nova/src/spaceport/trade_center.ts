@@ -26,8 +26,8 @@ import {
     closeFleetHolds, collectFleetHolds, commitFleetHolds, FleetCargoState,
     FleetEscortEntry, FleetHold, fleetBuy, fleetBuyQuantity, fleetCargo,
     fleetFreeSpace, fleetHeld, fleetSell, fleetSellQuantity, freeSpaceLines,
-    maxFleetBuyQuantity, maxFleetSellQuantity, openFleetHolds,
-    quantityColumnHeader, sumFleetCargo,
+    maxFleetBuyQuantity, maxFleetSellQuantity,
+    quantityColumnHeader, sumFleetCargo, withFleetHoldLease,
 } from './fleet_cargo.js';
 import {
     LINE_HEIGHT, ROW_HEIGHT, SELECTION_COLOR, TRADE, TRADE_ROW_TEXT_DY,
@@ -311,7 +311,17 @@ export class TradeCenter extends Menu<Entity> {
         // upgrade/sale deals until Done writes the holds back, so a sale
         // cannot splice an escort off the roster while this dialog is still
         // filling its hold (see fleet_cargo.ts's openFleetHolds).
-        openFleetHolds(this, this.holds);
+        // The rest of the visit runs UNDER THE LEASE, which is released
+        // either by done() (the normal close, after the holds are committed)
+        // or by withFleetHoldLease on a throw — the lease is a module-level
+        // registry entry, so leaking one freezes those escorts' queued deals
+        // for the rest of the session.
+        return withFleetHoldLease(this, this.holds,
+            () => this.showWithHolds(input));
+    }
+
+    /** The rest of show(), with the hold lease held. See show(). */
+    private async showWithHolds(input: Entity): Promise<Entity> {
         const bits = input.components.get(ControlBitsComponent)
             ?? new Set<number>();
         this.goods = this.planet

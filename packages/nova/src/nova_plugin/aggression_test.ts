@@ -3,7 +3,8 @@ import { Entity } from 'nova_ecs/entity';
 import {
     AGGRESSION_DAMAGE_THRESHOLD, AGGRESSION_WINDOW_MS, AggressionComponent,
     AggressionState, applyAggression, clearCarriedAggression,
-    isRecentAggressor, recordAggression, sweepAggression,
+    clearCarriedAggressionForTransition, isRecentAggressor, recordAggression,
+    sweepAggression,
 } from './aggression.js';
 import { provokeGuidedLock } from './flock.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
@@ -264,5 +265,53 @@ describe('aggression carried into a fresh world', () => {
         clearCarriedAggression(entity);
         clearCarriedAggression(entity);
         expect(entity.components.has(AggressionComponent)).toBeFalse();
+    });
+
+    /**
+     * The gate has to cover the WHOLE batch as it finally stands, escorts
+     * included. browser.ts used to clear where the batch was taken off the
+     * client's rosters — but a restored save's escorts are decoded LATER,
+     * at the first moment a serializer exists, and pushed onto that same
+     * batch, so every escort a loaded pilot brought with it kept a table
+     * of grudges timestamped against the world the game was last quit in.
+     */
+    describe('the transition gate', () => {
+        it('strips the player and every escort in the batch', () => {
+            const player = carriedShip();
+            const escorts = [
+                { entity: carriedShip() }, { entity: carriedShip() },
+            ];
+            clearCarriedAggressionForTransition(player, escorts);
+            expect(player.components.has(AggressionComponent)).toBeFalse();
+            for (const escort of escorts) {
+                expect(escort.entity.components.has(AggressionComponent))
+                    .toBeFalse();
+            }
+        });
+
+        it('covers an escort appended to the batch AFTER it was taken — '
+            + 'the restored-save case', () => {
+                const player = carriedShip();
+                // The batch as jumpTo takes it off the rosters...
+                const batch: { entity: Entity }[] = [{ entity: carriedShip() }];
+                // ...and the save's escorts, decoded inside enterSystem and
+                // pushed onto the very same array.
+                const restored = { entity: carriedShip() };
+                batch.push(restored);
+                // The gate runs at the one point where the batch is final.
+                clearCarriedAggressionForTransition(player, batch);
+                expect(restored.entity.components.has(AggressionComponent))
+                    .toBeFalse();
+                expect(isRecentAggressor(restored.entity.components
+                    .get(AggressionComponent), 'attacker', 0)).toBeFalse();
+            });
+
+        it('is free for a batch of ships nobody has shot at', () => {
+            const player = new Entity('player');
+            const escorts = [{ entity: new Entity('escort') }];
+            clearCarriedAggressionForTransition(player, escorts);
+            clearCarriedAggressionForTransition(player, escorts);
+            expect(player.components.has(AggressionComponent)).toBeFalse();
+        });
     });
 });
