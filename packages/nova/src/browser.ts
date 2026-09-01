@@ -30,11 +30,19 @@ import { DebugSettings } from "./debug_settings.js";
 import { Display } from "./display/display_plugin.js";
 import { SimulationTimeResource } from "./display/simulation_time.js";
 import { PixiAppResource } from "./display/pixi_app_resource.js";
-import { ResizeEvent } from "./display/screen_size_plugin.js";
+import {
+    DisplayScaleResource, ResizeEvent,
+} from "./display/screen_size_plugin.js";
+import { showStatusMessage } from "./display/status_message_plugin.js";
+import {
+    applyRendererScale, clampScale, computeScaleLayout, describeDisplayScale,
+    refreshTextResolution, ScalableView, ScaleInputs,
+    setDefaultTextResolution, stepScale,
+} from "./display/display_scale.js";
 import { SetJumpRouteEvent } from "./display/starmap_plugin.js";
 import { EscortActionEvent, HailRequestEvent } from "./display/hail_dialog_plugin.js";
 import { LeaveSpaceportEvent, OpenSpaceportEvent } from "./display/spaceport_plugin.js";
-import { Stage } from "./display/stage_resource.js";
+import { DisplayRoot, Stage } from "./display/stage_resource.js";
 import { AddEnemyEvent, DebugActionEvent } from "./display/status_bar.js";
 import { PlunderActionEvent } from "./display/boarding_plugin.js";
 import { AcceptShipMissionEvent } from "./display/ship_mission_offer_plugin.js";
@@ -127,7 +135,8 @@ import {
 } from "./title/title_dialogs.js";
 import { OfferPopup } from "./spaceport/offer_popup.js";
 import {
-    clearPilotProfile, loadPilotProfile, mergeControls, savePilotProfile,
+    clearPilotProfile, DisplaySettings, loadDisplaySettings, loadPilotProfile,
+    mergeControls, saveDisplaySettings, savePilotProfile,
 } from "./title/client_prefs.js";
 // clearPilotProfile is wired into the ?reset path below.
 import {
@@ -164,21 +173,182 @@ const displayAssetData = new DisplayAssetData();
 (window as any).displayAssetData = displayAssetData;
 (window as any).PIXI = PIXI;
 
-const pixelRatio = window.devicePixelRatio || 1;
-PIXI.settings.RESOLUTION = pixelRatio;
+// ── Display scaling ────────────────────────────────────────────────────
+// The whole story is in display/display_scale.ts. In short: the GLOBAL
+// scale rides on the renderer's RESOLUTION (a crisp zoom rather than an
+// upsampled one), the UI scale is a transform on the UI layers only, and
+// text is rasterized at devicePixelRatio x global x ui so glyphs land one
+// texel per physical pixel at any combination. Both scales default to 1,
+// which reproduces the pre-setting rendering exactly.
+let displaySettings = loadDisplaySettings();
+
+function currentScaleInputs(): ScaleInputs {
+    return {
+        devicePixelRatio: window.devicePixelRatio || 1,
+        cssWidth: window.innerWidth,
+        cssHeight: window.innerHeight,
+        globalScale: displaySettings.globalScale,
+        uiScale: displaySettings.uiScale,
+    };
+}
+
+let scaleLayout = computeScaleLayout(currentScaleInputs());
+(window as any).novaScaleLayout = () => scaleLayout;
+
+PIXI.settings.RESOLUTION = scaleLayout.resolution;
 PIXI.settings.SCALE_MODE = PIXI.SCALE_MODES.LINEAR;
+setDefaultTextResolution(scaleLayout.textResolution);
 
 // TODO: Using WebGL 1 (instead of 2) seems to make the game smoother, but
 // this will likely change in the future.
 //PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL2;
 const app = new PIXI.Application({
-    width: window.innerWidth,
-    height: window.innerHeight,
+    width: scaleLayout.worldWidth,
+    height: scaleLayout.worldHeight,
     autoDensity: true
 });
 
 (window as any).app = app;
 document.body.appendChild(app.view as any);
+
+/**
+ * The title screen's own UI layer: the title art, the About popup and the
+ * rollback panel. The display world's UI lives in its `Stage` container
+ * (see stage_resource.ts); the title has no display world, so it gets a
+ * container of its own to carry the same UI scale.
+ *
+ * Added to `app.stage` first, so a game world's `DisplayRoot` draws over
+ * it. It is empty whenever the game is running.
+ */
+const titleUiLayer = new PIXI.Container();
+titleUiLayer.name = 'TitleUiLayer';
+app.stage.addChild(titleUiLayer);
+
+/**
+ * Things that have to re-lay-out when the window resizes or a scale
+ * changes: the title's letterboxing, the About box's centring. The game's
+ * own layers are driven by ResizeEvent instead.
+ */
+const displayScaleListeners = new Set<() => void>();
+
+/**
+ * Recomputes the layout from the window + the current preferences and
+ * pushes it everywhere: the renderer, the UI layers' transforms, every
+ * live `PIXI.Text`, and the display world's size resources.
+ *
+ * Called on window resize, on a page-zoom-driven devicePixelRatio change,
+ * and whenever the player moves either scale.
+ */
+function applyDisplayScale(target?: World): void {
+    // `target` is for the one caller that runs BEFORE the module-level
+    // `displayWorld` has been repointed at the world it just built (the
+    // system transition): everyone else means the live display world.
+    const scaled = target ?? displayWorld;
+    scaleLayout = computeScaleLayout(currentScaleInputs());
+    applyRendererScale(
+        app.renderer as unknown as ScalableView, scaleLayout);
+    setDefaultTextResolution(scaleLayout.textResolution);
+    refreshTextResolution(app.stage, scaleLayout.textResolution);
+    titleUiLayer.scale.set(scaleLayout.uiScale);
+    scaled?.resources.get(Stage)?.scale.set(scaleLayout.uiScale);
+    const scaleResource = scaled?.resources.get(DisplayScaleResource);
+    if (scaleResource) {
+        scaleResource.ui = scaleLayout.uiScale;
+        scaleResource.global = displaySettings.globalScale;
+    }
+    scaled?.emit(ResizeEvent, {
+        x: scaleLayout.uiWidth, y: scaleLayout.uiHeight,
+        worldX: scaleLayout.worldWidth, worldY: scaleLayout.worldHeight,
+    });
+    for (const listener of displayScaleListeners) {
+        try {
+            listener();
+        } catch (e) {
+            console.warn('Display scale listener failed:', e);
+        }
+    }
+}
+
+/** The live display-scale preferences (read by the preferences UI). */
+function getDisplaySettings(): DisplaySettings {
+    return { ...displaySettings };
+}
+
+/**
+ * The in-flight scale hotkeys ('[' / ']' for the UI, '-' / '=' for
+ * everything, '\' to reset), so the scale can be tuned while looking at
+ * the thing being scaled instead of from the title screen.
+ *
+ * Client-local like `fullscreen`: the actions exist in controls.ts only
+ * so they can be bound and rebound, and the simulation has no handler for
+ * them. Returns true when the event was a scale action.
+ */
+function applyScaleControl(event: ControlEvent): boolean {
+    if (event.state !== 'start') {
+        return false;
+    }
+    let next: Partial<DisplaySettings>;
+    switch (event.action) {
+        case 'uiScaleUp':
+            next = { uiScale: stepScale(displaySettings.uiScale, 1) };
+            break;
+        case 'uiScaleDown':
+            next = { uiScale: stepScale(displaySettings.uiScale, -1) };
+            break;
+        case 'globalScaleUp':
+            next = { globalScale: stepScale(displaySettings.globalScale, 1) };
+            break;
+        case 'globalScaleDown':
+            next = { globalScale: stepScale(displaySettings.globalScale, -1) };
+            break;
+        case 'resetScale':
+            next = { uiScale: 1, globalScale: 1 };
+            break;
+        default:
+            return false;
+    }
+    const applied = setDisplaySettings(next);
+    if (displayWorld) {
+        showStatusMessage(displayWorld, describeDisplayScale(applied));
+    }
+    return true;
+}
+
+/**
+ * Sets and persists the display scales, applying them immediately. The
+ * settings are machine-local (localStorage, never the pilot save), so
+ * nothing here touches the simulation or the netcode.
+ */
+function setDisplaySettings(next: Partial<DisplaySettings>): DisplaySettings {
+    displaySettings = {
+        uiScale: clampScale(next.uiScale ?? displaySettings.uiScale),
+        globalScale: clampScale(next.globalScale ?? displaySettings.globalScale),
+    };
+    saveDisplaySettings(displaySettings);
+    applyDisplayScale();
+    return { ...displaySettings };
+}
+(window as any).novaDisplayScale = {
+    get: getDisplaySettings, set: setDisplaySettings,
+};
+
+// Page zoom does not fire `resize` reliably on its own, but it always
+// moves devicePixelRatio -- a media query pinned to the CURRENT ratio
+// stops matching the moment it changes. One-shot listeners, re-armed each
+// time, since the query itself has to be rebuilt around the new ratio.
+function watchDevicePixelRatio(): void {
+    const query = window.matchMedia?.(
+        `(resolution: ${window.devicePixelRatio}dppx)`);
+    if (!query) {
+        return;
+    }
+    const onChange = () => {
+        query.removeEventListener('change', onChange);
+        applyDisplayScale();
+        watchDevicePixelRatio();
+    };
+    query.addEventListener('change', onChange);
+}
 
 // The build-version handshake. Every peer in a room must be running the
 // same build of NovaJS -- nothing in the netcode reconciles two builds, so
@@ -207,6 +377,12 @@ const multiRoom = new MultiRoom(communicator);
 
 let world: World;
 let displayWorld: World | undefined;
+// The canvas is created before `displayWorld` exists (applyDisplayScale
+// reads it), so the first layout pass and the resize/zoom watchers are
+// armed here rather than beside the function.
+applyDisplayScale();
+watchDevicePixelRatio();
+window.addEventListener('resize', () => applyDisplayScale());
 let simulationBridge: AsyncSimulationBridgeClient | undefined;
 let simulationWorker: Worker | undefined;
 let simulationSerializer: Serializer | undefined;
@@ -1172,9 +1348,9 @@ async function teardownActiveSystem(removeUuid?: string) {
     }
     roomSubscriptions = [];
     if (activeSystemId) {
-        const stage = displayWorld?.resources.get(Stage);
-        if (stage) {
-            app.stage.removeChild(stage);
+        const root = displayWorld?.resources.get(DisplayRoot);
+        if (root) {
+            app.stage.removeChild(root);
         }
         multiRoom.leave(activeSystemId);
         if (displayWorld) {
@@ -1389,12 +1565,18 @@ async function enterSystem({ entity, to, uuid }:
     // Debug switches (see debug_flags.ts): e.g. `debugFlags.tradeOverride`.
     (window as any).debugFlags = DEBUG_FLAGS;
 
-    const newStage = newDisplayWorld.resources.get(Stage);
-    if (!newStage) {
+    const newRoot = newDisplayWorld.resources.get(DisplayRoot);
+    if (!newRoot) {
         throw new Error('World did not have Pixi Stage');
     }
-    app.stage.addChild(newStage);
-    newStage.visible = true;
+    app.stage.addChild(newRoot);
+    newRoot.visible = true;
+    // Hand the fresh world the current scales and viewport sizes: the UI
+    // layer's transform, the DisplayScale resource the camera reads, and
+    // one ResizeEvent so ScreenSize / WorldScreenSize are right from the
+    // first frame rather than the window-sized values ScreenSizePlugin
+    // seeds them with.
+    applyDisplayScale(newDisplayWorld);
 
     newDisplayWorld.events.get(LeaveSpaceportEvent).subscribe(({ data }) => {
         pendingLaunchedShip = data;
@@ -2162,11 +2344,6 @@ async function startGame() {
 
     (window as any).world = world;
 
-    function resize() {
-        app.renderer.resize(window.innerWidth, window.innerHeight);
-        displayWorld?.emit(ResizeEvent, { x: window.innerWidth, y: window.innerHeight });
-    }
-    window.onresize = resize;
 
     const stats = new Stats();
     document.body.appendChild(stats.dom);
@@ -2177,6 +2354,9 @@ async function startGame() {
     function emitControlEvents(controlEvents: ControlEvent[]) {
         if (controlEvents.length === 0) {
             return;
+        }
+        for (const controlEvent of controlEvents) {
+            applyScaleControl(controlEvent);
         }
         displayWorld?.emit(EcsControlEvent, controlEvents);
         for (const controlEvent of controlEvents) {
@@ -2367,8 +2547,12 @@ async function startGame() {
             // the pointer (only UI is interactive; ships/planets are
             // picked by distance above), the tap stops here instead of
             // targeting/landing on whatever is drawn underneath.
+            // hitTest takes LOGICAL stage coordinates; a pointer event's
+            // clientX/Y are CSS pixels, which differ by the global scale.
             isBlocked: (x, y) => MenuControls.focused !== undefined
-                || app.renderer.events.rootBoundary.hitTest(x, y) !== null,
+                || app.renderer.events.rootBoundary.hitTest(
+                    x / displaySettings.globalScale,
+                    y / displaySettings.globalScale) !== null,
         });
     }
 
@@ -2783,7 +2967,6 @@ async function startGame() {
         autopilot?.cancel();
         autopilot = undefined;
         document.body.classList.remove('nova-docked');
-        window.onresize = null;
     };
 }
 
@@ -2942,11 +3125,14 @@ async function runTitle() {
     // on the wide side and shoving the re-centred art off-canvas. Resize
     // the renderer first, then re-centre the 1024x768 art within it, so
     // letterboxing stays symmetric at any aspect ratio.
+    // The renderer itself is sized by applyDisplayScale (one owner for
+    // the window resize, the page zoom and the scale settings); the title
+    // only has to re-letterbox its 1024x768 art inside the UI-logical
+    // viewport, which is the coordinate space titleUiLayer draws in.
     const onResize = () => {
-        app.renderer.resize(window.innerWidth, window.innerHeight);
-        title.resize(window.innerWidth, window.innerHeight);
+        title.resize(scaleLayout.uiWidth, scaleLayout.uiHeight);
     };
-    window.addEventListener('resize', onResize);
+    displayScaleListeners.add(onResize);
 
     // Drive the title's flame animation while the title is visible.
     let lastTitleTick = performance.now();
@@ -2975,23 +3161,26 @@ async function runTitle() {
     // HTML stand-ins by the project's standing ruling.)
     const aboutPopup = new OfferPopup(displayAssetData);
     aboutPopup.container.name = 'AboutPopup';
-    // Centre in CSS pixels (app.screen), not renderer.width/height: with
+    // Centre in UI-LOGICAL pixels, not renderer.width/height: with
     // autoDensity on a 2x display those are DEVICE pixels, and halving them
     // put the About box in the bottom-right corner (Matthew's playtest).
+    // Rounded, because a half-pixel origin resamples every glyph in the
+    // box through the LINEAR filter (see screenCentre).
     const centreAbout = () => aboutPopup.container.position.set(
-        app.screen.width / 2, app.screen.height / 2);
-    window.addEventListener('resize', centreAbout);
+        Math.round(scaleLayout.uiWidth / 2),
+        Math.round(scaleLayout.uiHeight / 2));
+    displayScaleListeners.add(centreAbout);
     const showAbout = async () => {
         const about = await loadAboutText();
         // Keep the popup above the title art, and only while it is up.
-        app.stage.addChild(aboutPopup.container);
+        titleUiLayer.addChild(aboutPopup.container);
         centreAbout();
         try {
             await aboutPopup.show(
                 fillAboutPlaceholders(about?.text ?? ABOUT_TEXT.join('\n')),
                 { accept: 'Okay' }, { pict: about?.pict ?? null });
         } finally {
-            app.stage.removeChild(aboutPopup.container);
+            titleUiLayer.removeChild(aboutPopup.container);
         }
     };
 
@@ -3018,9 +3207,9 @@ async function runTitle() {
         });
     };
     const centreRollback = () => rollbackScreen?.container.position.set(
-        Math.max(0, (app.screen.width - ROLLBACK_PANEL.width) / 2),
-        Math.max(0, (app.screen.height - ROLLBACK_PANEL.height) / 2));
-    window.addEventListener('resize', centreRollback);
+        Math.round(Math.max(0, (scaleLayout.uiWidth - ROLLBACK_PANEL.width) / 2)),
+        Math.round(Math.max(0, (scaleLayout.uiHeight - ROLLBACK_PANEL.height) / 2)));
+    displayScaleListeners.add(centreRollback);
     /**
      * Opens the rollback view for a pilot; resolves a status line for the
      * Open Pilot dialog. A rewind installs the chosen checkpoint's save as
@@ -3038,7 +3227,7 @@ async function runTitle() {
         }
         rollbackScreen ??= new RollbackScreen(displayAssetData,
             simulationGameData, rollbackControls);
-        app.stage.addChild(rollbackScreen.container);
+        titleUiLayer.addChild(rollbackScreen.container);
         centreRollback();
         document.addEventListener('keydown', onRollbackKey);
         try {
@@ -3068,7 +3257,7 @@ async function runTitle() {
             return '';
         } finally {
             document.removeEventListener('keydown', onRollbackKey);
-            app.stage.removeChild(rollbackScreen.container);
+            titleUiLayer.removeChild(rollbackScreen.container);
         }
     };
 
@@ -3081,7 +3270,7 @@ async function runTitle() {
     // (the game may have resized the renderer), and refresh the status
     // readout from the freshly saved game.
     const showTitle = () => {
-        app.stage.addChild(title.container);
+        titleUiLayer.addChild(title.container);
         app.ticker.add(titleTicker);
         lastTitleTick = performance.now();
         onResize();
@@ -3104,7 +3293,7 @@ async function runTitle() {
         // top if the player Escapes back to the title).
         music.stop();
         app.ticker.remove(titleTicker);
-        app.stage.removeChild(title.container);
+        titleUiLayer.removeChild(title.container);
         try {
             teardownGame = await startGame();
             inGame = true;
@@ -3277,7 +3466,8 @@ async function runTitle() {
                 const controlsJson =
                     await simulationGameData.getSettings?.('controls.json');
                 await showPreferencesDialog(
-                    (controlsJson as Record<string, unknown>) ?? {});
+                    (controlsJson as Record<string, unknown>) ?? {},
+                    { get: getDisplaySettings, set: setDisplaySettings });
                 // Rebindings take effect right away rather than at the
                 // next game entry.
                 await applyControls();

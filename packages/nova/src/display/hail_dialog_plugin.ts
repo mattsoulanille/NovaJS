@@ -90,7 +90,7 @@ import {
     ShipyardContext, shipStockGatesPass,
 } from '../spaceport/shipyard_stock_rules.js';
 import { ShipData } from 'novadatainterface/ship_data';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { displayName } from '../nova_plugin/display_name.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
@@ -966,7 +966,7 @@ export const HailDialogPlugin: Plugin = {
                 // Re-add to move above later-added containers (spaceport).
                 stage.addChild(dialog.container);
                 dialog.container.position.set(
-                    screenSize.x / 2, screenSize.y / 2);
+                    screenCentre(screenSize).x, screenCentre(screenSize).y);
                 await dialog.show(computed.context);
             } finally {
                 opening = false;

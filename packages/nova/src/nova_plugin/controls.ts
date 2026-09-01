@@ -110,6 +110,16 @@ const SavedControlsPartialObject = t.partial({
     'properties': ControlInputs,
     'missions': ControlInputs,
     'fullscreen': ControlInputs,
+    // Display scaling (display/display_scale.ts). Like 'fullscreen',
+    // these are CLIENT-LOCAL presentation actions: the simulation has no
+    // handler for them, and two peers at different scales stay in
+    // lockstep. They live here so they can be bound and rebound through
+    // the same controls.json / Set Prefs pipeline as everything else.
+    'uiScaleUp': ControlInputs,
+    'uiScaleDown': ControlInputs,
+    'globalScaleUp': ControlInputs,
+    'globalScaleDown': ControlInputs,
+    'resetScale': ControlInputs,
 });
 
 export const ControlAction = t.keyof(SavedControlsPartialObject.props);

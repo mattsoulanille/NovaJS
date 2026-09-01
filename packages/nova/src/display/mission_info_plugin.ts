@@ -9,7 +9,7 @@ import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionInfoDialog } from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { BEEP_MISSION_CLOSE, BEEP_MISSION_OPEN, playUiSound } from './ui_sound.js';
 
@@ -86,7 +86,7 @@ export const MissionInfoPlugin: Plugin = {
                 // after this plugin's).
                 stage.addChild(dialog.container);
                 dialog.container.position.set(
-                    screenSize.x / 2, screenSize.y / 2);
+                    screenCentre(screenSize).x, screenCentre(screenSize).y);
                 playUiSound(world, { id: BEEP_MISSION_OPEN });
                 await dialog.show(ship, planetId
                     ? { gameData: simulationData, planetId } : undefined);

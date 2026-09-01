@@ -12,7 +12,9 @@ import { MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js
 import { MissionsComponent } from '../nova_plugin/player_state_plugin.js';
 import { GateMap } from '../spaceport/gate_map.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { ResizeEvent, ScreenSize } from './screen_size_plugin.js';
+import {
+    ResizeEvent, ScreenSize, screenCentre,
+} from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 
 /**
@@ -61,9 +63,10 @@ const OpenGateMapSystem = new System({
     events: [OpenGateMapEvent],
     args: [OpenGateMapEvent, GateMapResource, GateMapUniverseResource,
         ScreenSize, Emit, SingletonComponent] as const,
-    step({ gateSpob, systemId, ship }, gateMap, universe, { x, y }, emit) {
-        gateMap.container.position.x = x / 2;
-        gateMap.container.position.y = y / 2;
+    step({ gateSpob, systemId, ship }, gateMap, universe, screen, emit) {
+        const centre = screenCentre(screen);
+        gateMap.container.position.x = centre.x;
+        gateMap.container.position.y = centre.y;
         void gateMap.show({
             gateSpob, systemId, destinationSpob: null,
             missionMarks: gateMapMissionMarks(ship, universe),
@@ -76,9 +79,10 @@ const GateMapResizeSystem = new System({
     name: 'GateMapResize',
     events: [ResizeEvent],
     args: [ResizeEvent, GateMapResource, SingletonComponent] as const,
-    step({ x, y }, gateMap) {
-        gateMap.container.position.x = x / 2;
-        gateMap.container.position.y = y / 2;
+    step(resize, gateMap) {
+        const centre = screenCentre(resize);
+        gateMap.container.position.x = centre.x;
+        gateMap.container.position.y = centre.y;
     }
 });
 

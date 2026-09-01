@@ -23,7 +23,9 @@ import { MissionInfoPlugin } from "./mission_info_plugin.js";
 import { MovementExtrapolationPlugin } from "./movement_extrapolation_plugin.js";
 import { HailDialogPlugin } from "./hail_dialog_plugin.js";
 import { PlayerInfoPlugin } from "./player_info_plugin.js";
-import { ScreenSizePlugin } from "./screen_size_plugin.js";
+import {
+    DisplayScaleResource, ScreenSizePlugin, WorldScreenSize,
+} from "./screen_size_plugin.js";
 import { ShipAnimationPlugin } from "./ship_animation_plugin.js";
 import { ShipPhysicsDisplayPlugin } from "./ship_physics_display_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
@@ -32,7 +34,7 @@ import { BoardingDisplayPlugin } from "./boarding_plugin.js";
 import { MissionShipDonePlugin } from "./mission_ship_done_plugin.js";
 import { ShipMissionOfferPlugin } from "./ship_mission_offer_plugin.js";
 import { CameraFocus, Space } from "./space_resource.js";
-import { Stage } from "./stage_resource.js";
+import { DisplayRoot, Stage, WorldLayer } from "./stage_resource.js";
 import { starfield } from "./starfield_plugin.js";
 import { SystemEnvironmentPlugin } from "./system_environment_plugin.js";
 import { StarmapPlugin } from "./starmap_plugin.js";
@@ -42,14 +44,31 @@ import { TargetCornersPlugin } from "./target_corners_plugin.js";
 import { UiSoundTriggersPlugin } from "./ui_sound_triggers_plugin.js";
 
 
+/**
+ * Where the world view's origin goes: the centre of the part of the
+ * window the status bar does not cover.
+ *
+ * `statusBarWidth` is a UI-LAYER measurement, so it is multiplied by the
+ * UI scale to become a distance in world-layer units — otherwise a
+ * scaled-up status bar would shove the camera by the wrong amount.
+ * `screen` is the WORLD-logical viewport, which the global scale shrinks.
+ */
+export function cameraCentre(screen: { x: number, y: number },
+    statusBarWidth: number, uiScale: number): { x: number, y: number } {
+    return {
+        x: (screen.x - statusBarWidth * uiScale) / 2,
+        y: screen.y / 2,
+    };
+}
+
 const CenterShipSystem = new System({
     name: 'CenterShipPlugin',
     args: [Space, CameraFocus, MovementStateComponent, Optional(StatusBarResource),
-        PlayerShipSelector] as const,
-    step(space, cameraFocus, movementState, statusBar) {
-        space.position.x = -movementState.position.x +
-            (window.innerWidth - (statusBar?.width ?? 0)) / 2;
-        space.position.y = -movementState.position.y + window.innerHeight / 2;
+        WorldScreenSize, DisplayScaleResource, PlayerShipSelector] as const,
+    step(space, cameraFocus, movementState, statusBar, screen, scale) {
+        const centre = cameraCentre(screen, statusBar?.width ?? 0, scale.ui);
+        space.position.x = -movementState.position.x + centre.x;
+        space.position.y = -movementState.position.y + centre.y;
         // Publish the camera focus so per-entity draw systems can pick the
         // toroidal copy of each position nearest the player (loop-boundary
         // rendering). Reuse the object to avoid per-frame allocation.
@@ -67,12 +86,23 @@ const starfieldPlugin = starfield();
 export const Display: Plugin = {
     name: 'Display',
     async build(world) {
+        // Two layers under one root, so the UI can be scaled on its own
+        // (display_scale.ts): the world view never moves with the UI
+        // scale, and every UI element keeps adding itself to `Stage`
+        // exactly as before.
+        const root = new PIXI.Container();
+        root.name = 'DisplayRoot';
+        const worldLayer = new PIXI.Container();
+        worldLayer.name = 'WorldLayer';
         const stage = new PIXI.Container();
         stage.name = 'Stage';
+        root.addChild(worldLayer, stage);
         const space = new PIXI.Container();
         space.name = 'Space';
         space.sortableChildren = true;
-        stage.addChild(space);
+        worldLayer.addChild(space);
+        world.resources.set(DisplayRoot, root);
+        world.resources.set(WorldLayer, worldLayer);
         world.resources.set(Stage, stage);
         world.resources.set(Space, space);
         // Seeded before AnimationGraphicPlugin/StatusBarPlugin add the draw
@@ -185,12 +215,16 @@ export const Display: Plugin = {
         await world.removePlugin(ShipPhysicsDisplayPlugin);
         await world.removePlugin(ScreenSizePlugin);
 
-        const stage = world.resources.get(Stage);
+        const worldLayer = world.resources.get(WorldLayer);
         const space = world.resources.get(Space);
-        if (stage && space) {
-            stage.removeChild(space);
+        if (worldLayer && space) {
+            worldLayer.removeChild(space);
         }
+        const root = world.resources.get(DisplayRoot);
+        root?.removeChildren();
 
+        world.resources.delete(DisplayRoot);
+        world.resources.delete(WorldLayer);
         world.resources.delete(Stage);
         world.resources.delete(Space);
         world.resources.delete(CameraFocus);

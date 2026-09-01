@@ -4,6 +4,7 @@ import {
     loadGameSettings, loadPilotProfile, mergeControls, PrefsStorage,
     saveControlsOverride, saveGameSettings, savePilotProfile, clearPilotProfile,
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, SETTINGS_OVERRIDE_KEY,
+    DISPLAY_SETTINGS_KEY, loadDisplaySettings, saveDisplaySettings,
 } from './client_prefs.js';
 
 /** An in-memory PrefsStorage for testing without a browser. */
@@ -106,6 +107,57 @@ describe('client_prefs', () => {
 
         it('returns undefined when no profile exists', () => {
             expect(loadPilotProfile(new MemoryStorage())).toBeUndefined();
+        });
+    });
+
+    /**
+     * The display scales are MACHINE-local: how big the HUD should be is
+     * a property of the screen you are sitting in front of, not of the
+     * character you are playing, so they live under their own key and
+     * never enter the pilot save.
+     */
+    describe('display settings persistence', () => {
+        it('defaults to 1x when nothing is stored', () => {
+            expect(loadDisplaySettings(new MemoryStorage()))
+                .toEqual({ uiScale: 1, globalScale: 1 });
+        });
+
+        it('round-trips both scales', () => {
+            const store = new MemoryStorage();
+            saveDisplaySettings({ uiScale: 1.5, globalScale: 1.25 }, store);
+            expect(loadDisplaySettings(store))
+                .toEqual({ uiScale: 1.5, globalScale: 1.25 });
+        });
+
+        it('writes to its own key, not the pilot settings', () => {
+            const store = new MemoryStorage();
+            saveDisplaySettings({ uiScale: 2, globalScale: 1 }, store);
+            expect(store.raw(DISPLAY_SETTINGS_KEY)).toBeDefined();
+            expect(store.raw(SETTINGS_OVERRIDE_KEY)).toBeUndefined();
+        });
+
+        it('clamps on the way out and on the way back in', () => {
+            const store = new MemoryStorage();
+            saveDisplaySettings({ uiScale: 99, globalScale: 0.01 }, store);
+            expect(loadDisplaySettings(store))
+                .toEqual({ uiScale: 3, globalScale: 0.5 });
+        });
+
+        it('falls back to 1x on a corrupt value', () => {
+            // A hand-edited or half-written entry must not leave the
+            // player with a window they cannot navigate to fix it.
+            const store = new MemoryStorage();
+            store.setItem(DISPLAY_SETTINGS_KEY,
+                '{"uiScale":"huge","globalScale":null}');
+            expect(loadDisplaySettings(store))
+                .toEqual({ uiScale: 1, globalScale: 1 });
+        });
+
+        it('falls back to 1x on unparseable JSON', () => {
+            const store = new MemoryStorage();
+            store.setItem(DISPLAY_SETTINGS_KEY, 'not json');
+            expect(loadDisplaySettings(store))
+                .toEqual({ uiScale: 1, globalScale: 1 });
         });
     });
 });

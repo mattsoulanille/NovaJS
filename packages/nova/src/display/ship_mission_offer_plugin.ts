@@ -44,7 +44,7 @@ import {
     ShipOfferGates, shipOfferConsequence, ShipOfferTrigger,
     shipOfferTrigger, showsHailQuote,
 } from '../spaceport/ship_mission_offer.js';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { showStatusMessage } from './status_message_plugin.js';
 
@@ -546,7 +546,8 @@ export const ShipMissionOfferPlugin: Plugin = {
         }
         const popup = new OfferPopup(displayAssets, controls);
         popup.container.name = 'ShipOfferPopup';
-        popup.container.position.set(screenSize.x / 2, screenSize.y / 2);
+        const centre = screenCentre(screenSize);
+        popup.container.position.set(centre.x, centre.y);
         stage.addChild(popup.container);
         world.resources.set(ShipOfferPopupResource, popup);
 

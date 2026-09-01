@@ -13,8 +13,8 @@ import seedrandom from 'seedrandom';
 const { alea } = seedrandom;
 import { DisplayAssetDataResource } from "../nova_plugin/game_data_resource.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { ResizeEvent } from "./screen_size_plugin.js";
-import { Stage } from "./stage_resource.js";
+import { ResizeEvent, WorldScreenSize } from "./screen_size_plugin.js";
+import { WorldLayer } from "./stage_resource.js";
 import { texturesFromFrames } from "./textures_from_frames.js";
 
 const STAR_ID = "nova:700";
@@ -217,9 +217,11 @@ export function starfield({ density = 0.00002,
     const StarfieldResize = new System({
         name: 'StarfieldResize',
         events: [ResizeEvent],
-        args: [StarfieldResource, ResizeEvent] as const,
-        step(starfield, { x, y }) {
-            starfield.resize(x, y);
+        args: [StarfieldResource, ResizeEvent, WorldScreenSize] as const,
+        step(starfield, _resize, world) {
+            // The starfield covers the WORLD view, so it follows the
+            // world-logical viewport, not the (UI-scaled) event payload.
+            starfield.resize(world.x, world.y);
         }
     });
 
@@ -234,10 +236,11 @@ export function starfield({ density = 0.00002,
             // if (!app) {
             //     throw new Error('Expected PixiApp resource to exist');
             // }
-            const stage = world.resources.get(Stage);
-            if (!stage) {
-                throw new Error('Expected Stage resource to exist');
+            const worldLayer = world.resources.get(WorldLayer);
+            if (!worldLayer) {
+                throw new Error('Expected WorldLayer resource to exist');
             }
+            const worldSize = world.resources.get(WorldScreenSize);
 
             const { frames } = await displayAssets.data.SpriteSheetFrames.get(STAR_ID);
             const textures = texturesFromFrames(frames);
@@ -249,8 +252,9 @@ export function starfield({ density = 0.00002,
             });
 
             //starfield.resize(app.screen.width, app.screen.height);
-            starfield.resize(window.innerWidth, window.innerHeight);
-            stage.addChildAt(starfield.container, 0);
+            starfield.resize(worldSize?.x ?? window.innerWidth,
+                worldSize?.y ?? window.innerHeight);
+            worldLayer.addChildAt(starfield.container, 0);
             world.resources.set(StarfieldResource, starfield);
             world.addSystem(StarfieldResize);
             world.addSystem(StarfieldSystem);
@@ -260,9 +264,9 @@ export function starfield({ density = 0.00002,
             world.removeSystem(StarfieldSystem);
 
             const starfield = world.resources.get(StarfieldResource);
-            const stage = world.resources.get(Stage);
-            if (starfield && stage) {
-                stage.removeChild(starfield.container);
+            const worldLayer = world.resources.get(WorldLayer);
+            if (starfield && worldLayer) {
+                worldLayer.removeChild(starfield.container);
             }
             world.resources.delete(StarfieldResource);
         }

@@ -12,6 +12,9 @@ import { DisplayAssetDataResource } from '../nova_plugin/game_data_resource.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { pickNearest } from '../tap_targeting.js';
 import { PixiAppResource } from './pixi_app_resource.js';
+import {
+    clientToUi, clientToWorld, DisplayScaleResource,
+} from './screen_size_plugin.js';
 import { Space } from './space_resource.js';
 import { Stage } from './stage_resource.js';
 import { texturesFromFrames } from './textures_from_frames.js';
@@ -163,8 +166,9 @@ function setOsCursorHidden(app: PIXI.Application | undefined, hidden: boolean) {
 const DrawCursorSystem = new System({
     name: 'DrawCursorSystem',
     args: [GameCursorResource, TimeResource, Space, Stage, Entities,
-        Optional(PixiAppResource), SingletonComponent] as const,
-    step(cursor, time, space, stage, entities, app) {
+        DisplayScaleResource, Optional(PixiAppResource),
+        SingletonComponent] as const,
+    step(cursor, time, space, stage, entities, scale, app) {
         if (cursor.movedSinceStep) {
             cursor.movedSinceStep = false;
             cursor.lastMove = time.time;
@@ -179,14 +183,19 @@ const DrawCursorSystem = new System({
         }
         setOsCursorHidden(app, true);
         cursor.container.visible = true;
-        cursor.container.position.set(cursor.mouse.x, cursor.mouse.y);
+        // The pointer arrives in CSS pixels; the cursor sprite lives in
+        // the UI layer and the entities live in the world layer, so the
+        // two conversions differ by the UI scale.
+        cursor.container.position.set(
+            clientToUi(cursor.mouse.x, scale),
+            clientToUi(cursor.mouse.y, scale));
 
         // Hovering something selectable animates the cursor through its
         // frames; idle over nothing pins the first frame. Screen -> world is
         // a subtraction because the camera only translates (see
         // tap_targeting.ts).
-        const worldX = cursor.mouse.x - space.position.x;
-        const worldY = cursor.mouse.y - space.position.y;
+        const worldX = clientToWorld(cursor.mouse.x, scale) - space.position.x;
+        const worldY = clientToWorld(cursor.mouse.y, scale) - space.position.y;
         const { bestShip, bestPlanet } = pickNearest(
             selectableEntities(entities), undefined, worldX, worldY);
         if (bestShip || bestPlanet) {

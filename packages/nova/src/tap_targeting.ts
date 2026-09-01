@@ -3,6 +3,9 @@ import { wrapNearestDelta } from 'nova_ecs/datatypes/position';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { Space } from './display/space_resource.js';
+import {
+    clientToWorld, DisplayScaleResource,
+} from './display/screen_size_plugin.js';
 import { PlanetComponent } from './nova_plugin/planet_plugin.js';
 import { ControlledByComponent } from './nova_plugin/ship_control.js';
 import { ShipComponent } from './nova_plugin/ship_plugin.js';
@@ -113,9 +116,14 @@ export function installTapTargeting(view: HTMLElement,
             return;
         }
         // The camera only translates (CenterShipSystem sets position;
-        // no zoom or rotation), so screen → world is a subtraction.
-        const worldX = event.clientX - space.position.x;
-        const worldY = event.clientY - space.position.y;
+        // no zoom or rotation), so screen → world is a subtraction — once
+        // the pointer's CSS pixels have been divided by the global scale,
+        // which the renderer's resolution carries and the DOM knows
+        // nothing about.
+        const scale = world.resources.get(DisplayScaleResource)
+            ?? { ui: 1, global: 1 };
+        const worldX = clientToWorld(event.clientX, scale) - space.position.x;
+        const worldY = clientToWorld(event.clientY, scale) - space.position.y;
         const { bestShip, bestPlanet } = pickNearest(
             world.entities, handlers.getMyPeerId(), worldX, worldY);
         if (bestShip) {

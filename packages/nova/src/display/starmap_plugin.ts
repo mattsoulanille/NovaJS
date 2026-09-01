@@ -26,7 +26,7 @@ import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { emptyRouteState } from '../spaceport/route.js';
 import { OpenStarmapOptions, RouteStateStore, Starmap } from '../spaceport/starmap.js';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { BEEP_MAP_CLOSE, BEEP_MAP_OPEN, playUiSound } from './ui_sound.js';
 
@@ -195,7 +195,8 @@ export const StarmapPlugin: Plugin = {
                 // spaceport's container is added after the starmap's,
                 // so a docked map would otherwise open underneath it.
                 stage.addChild(starmap.container);
-                starmap.container.position.set(screenSize.x / 2, screenSize.y / 2);
+                const centre = screenCentre(screenSize);
+                starmap.container.position.set(centre.x, centre.y);
                 starmap.openOptions = options ?? {};
                 const route = await starmap.show(jumpRoute?.route ?? []);
                 if (disposed) {
