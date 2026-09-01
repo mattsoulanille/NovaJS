@@ -8,6 +8,7 @@ import { makeShip } from '../nova_plugin/make_ship.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
 } from '../nova_plugin/ncb_plugin.js';
+import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import {
@@ -443,6 +444,27 @@ describe('shipyard purchase rules', () => {
                 ship('nova:101', { price: 200000 }), ctx);
             expect(bought.components.get(PendingEscortsComponent))
                 .toEqual(['nova:128', 'nova:129']);
+        });
+
+        it('carries the escort PAYROLL across the hull swap', () => {
+            // The payroll mirror is the only record of the wage-drawing
+            // escorts that exists while the player is docked (the escorts
+            // themselves are out of the world, on the landed roster). Left
+            // behind, every date advance for the rest of that docked window
+            // charged nothing at all — a free day's wages for trading hulls.
+            const old = oldPlayer();
+            old.components.set(EscortPayrollComponent,
+                ['nova:130', 'nova:134']);
+            const ctx = context({
+                currentShip: ship('nova:100', { price: 40000 }),
+                outfits: [['nova:221', 1], ['nova:200', 2]],
+                catalogue: [beam, cannon],
+                credits: 500000,
+            });
+            const bought = buildPurchasedShip(old,
+                ship('nova:101', { price: 200000 }), ctx);
+            expect(bought.components.get(EscortPayrollComponent))
+                .toEqual(['nova:130', 'nova:134']);
         });
 
         it('carries player state across the hull swap', () => {

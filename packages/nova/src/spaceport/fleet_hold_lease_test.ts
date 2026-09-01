@@ -7,7 +7,7 @@ import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js'
 import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 import {
     closeFleetHolds, commitFleetHolds, FleetHold, fleetHoldOpen,
-    openFleetHolds,
+    openFleetHolds, withFleetHoldLease,
 } from './fleet_cargo.js';
 
 /**
@@ -87,12 +87,89 @@ describe('open fleet holds', () => {
         expect(fleetHoldOpen('f')).toBe(false);
     });
 
-    it('replaces a venue\'s previous lease rather than stacking it', () => {
-        openFleetHolds(venue, [hold(entry('first'))]);
-        openFleetHolds(venue, [hold(entry('second'))]);
-        expect(fleetHoldOpen('first')).toBe(false);
-        expect(fleetHoldOpen('second')).toBe(true);
+    it('replaces a venue\'s previous lease rather than stacking it — and '
+        + 'says so, because it means a close was skipped', () => {
+            const warn = spyOn(console, 'warn');
+            openFleetHolds(venue, [hold(entry('first'))]);
+            expect(warn).not.toHaveBeenCalled();
+            openFleetHolds(venue, [hold(entry('second'))]);
+            expect(fleetHoldOpen('first')).toBe(false);
+            expect(fleetHoldOpen('second')).toBe(true);
+            // Replacing is the safe behaviour but never the expected one:
+            // the entry it absorbed had been freezing deals since.
+            expect(warn).toHaveBeenCalled();
+        });
+});
+
+/**
+ * ============================================================================
+ * The lease must not outlive a FAILED visit
+ * ============================================================================
+ *
+ * The trade centre opens the lease two awaits into show() and released it
+ * only from done(). Everything between — the price-event pass, the row
+ * layout, Menu.show itself — can throw, and Spaceport.show's catch swallows
+ * it; the lease then stayed in the module-level registry FOR THE REST OF THE
+ * SESSION with no dialog on screen. settleEscortDeals would see
+ * fleetHoldOpen and defer to the next docked frame, over and over, and the
+ * player's queued escort sale would simply never pay out.
+ *
+ * The menu classes are PIXI-bound and cannot be built headlessly (see
+ * trade_center_fleet_integration_test.ts), so the guard lives in
+ * withFleetHoldLease, which is what the trade centre now wraps its visit in.
+ */
+describe('withFleetHoldLease', () => {
+    let venue: object;
+
+    beforeEach(() => { venue = {}; });
+    afterEach(() => closeFleetHolds(venue));
+
+    it('holds the lease for the duration of the body', async () => {
+        let openDuringBody: boolean | undefined;
+        await withFleetHoldLease(venue, [hold(entry('f'))], async () => {
+            openDuringBody = fleetHoldOpen('f');
+            // done()'s normal close, which the venue does itself after
+            // committing the holds.
+            closeFleetHolds(venue);
+        });
+        expect(openDuringBody).toBeTrue();
+        expect(fleetHoldOpen('f')).toBeFalse();
     });
+
+    it('releases the lease when the body throws, and rethrows', async () => {
+        const boom = new Error('the exchange exploded mid-show');
+        await expectAsync(
+            withFleetHoldLease(venue, [hold(entry('f'))], async () => {
+                expect(fleetHoldOpen('f')).toBeTrue();
+                throw boom;
+            })).toBeRejectedWith(boom);
+
+        // THE POINT: nothing is leased afterwards, so the escort's queued
+        // deals settle on the next docked frame as they always would.
+        expect(fleetHoldOpen('f')).toBeFalse();
+
+        const sold = entry('f', { pendingSale: true });
+        const roster = [sold];
+        expect(settleEscortDeals(roster, PLAYER, 0, getShip, fleetHoldOpen)
+            .sold.map(s => s.uuid)).toEqual(['f']);
+        expect(roster).toEqual([]);
+    });
+
+    it('does not double-close: a normal return leaves done()\'s close alone',
+        () => {
+            // The body owns the normal close (it has to happen AFTER
+            // commitFleetHolds), so a successful visit must not have the
+            // lease pulled out from under a venue that reopened since.
+            const other = {};
+            return withFleetHoldLease(venue, [hold(entry('f'))], async () => {
+                closeFleetHolds(venue);
+                // A second venue leases the same escort afterwards.
+                openFleetHolds(other, [hold(entry('f'))]);
+            }).then(() => {
+                expect(fleetHoldOpen('f')).toBeTrue();
+                closeFleetHolds(other);
+            });
+        });
 });
 
 describe('escort deals frozen by an open hold', () => {

@@ -14,6 +14,7 @@ import { MovementTimeLimitResource } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import {
     MAX_EXTRAPOLATION_DELTA_MS, MovementExtrapolationPlugin,
+    shouldExtrapolate, STALE_SNAPSHOT_MS,
 } from './movement_extrapolation_plugin.js';
 
 const STEP_MS = 1000 / 60;
@@ -158,6 +159,147 @@ describe('MovementExtrapolationPlugin', () => {
         state = ship.components.get(MovementStateComponent)!;
         expect(state.position.x)
             .toBeCloseTo(60 * (STEP_MS / 1000), 5);
+    });
+
+    /**
+     * ========================================================================
+     * A FRAME THE SIMULATION REACHED IS RENDERED AS THE SIMULATION LEFT IT
+     * ========================================================================
+     *
+     * Matthew: "projectiles appear a frame farther away from the firing ship
+     * than they should. Perhaps we should apply the interpolation AFTER
+     * rendering the frame (so it applies to the next frame if it doesn't get
+     * overwritten by a sync from the engine) rather than before."
+     *
+     * The display stepped, extrapolated and THEN rendered, so an entity whose
+     * position had just arrived in a snapshot was drawn at synced + v*dt. On
+     * a ship that is invisible — everything on screen leads by the same one
+     * frame. On a projectile it is not: it is born at the muzzle of a ship
+     * moving a fraction of its speed, so its very first rendered position was
+     * already a frame of ITS flight clear of a ship that had barely moved.
+     *
+     * Expressed per entity (skipUuids) rather than per phase: an entity a
+     * snapshot placed since the last step is left exactly there, and one the
+     * snapshot did not reach still advances — which is the missed-pump
+     * smoothing this plugin exists for, untouched.
+     */
+    describe('freshly-synced entities', () => {
+        /** A mover at the origin doing 60 units/s along +x. */
+        function mover(uuid: string) {
+            const entity = new Entity(uuid)
+                .addComponent(MovementStateComponent, makeMovementState({
+                    velocity: new Vector(60, 0),
+                }))
+                .addComponent(MovementPhysicsComponent, {
+                    maxVelocity: 300,
+                    turnRate: 1,
+                    acceleration: 100,
+                    movementType: MovementType.INERTIAL,
+                });
+            world.entities.set(uuid, entity);
+            return entity;
+        }
+
+        function skip(...uuids: string[]) {
+            world.resources.get(MovementTimeLimitResource)!.skipUuids =
+                new Set(uuids);
+        }
+
+        function positionOf(entity: Entity) {
+            return entity.components.get(MovementStateComponent)!.position.x;
+        }
+
+        it('renders an entity synced THIS frame at its synced position',
+            () => {
+                // The projectile arrived in this frame's snapshot, at the
+                // muzzle. It must be drawn there, not a frame downrange.
+                const shot = mover('shot');
+                skip('shot');
+                world.step();
+                expect(positionOf(shot)).toBe(0);
+            });
+
+        it('still advances an entity the snapshot did NOT reach — the '
+            + 'missed-pump smoothing', () => {
+                const synced = mover('synced');
+                const missed = mover('missed');
+                skip('synced');
+                world.step();
+
+                expect(positionOf(synced)).toBe(0);
+                expect(positionOf(missed))
+                    .toBeCloseTo(60 * (STEP_MS / 1000), 5);
+            });
+
+        it('advances a previously-synced entity on the NEXT frame, once the '
+            + 'snapshot no longer covers it', () => {
+                // browser.ts clears the set right after each step, so the
+                // skip lasts exactly one frame — "it applies to the next
+                // frame if it doesn't get overwritten by a sync".
+                const shot = mover('shot');
+                skip('shot');
+                world.step();
+                skip(); // No snapshot reached it this time.
+                world.step();
+                expect(positionOf(shot))
+                    .toBeCloseTo(60 * (STEP_MS / 1000), 5);
+            });
+
+        it('skips nobody when the set is absent (the pre-existing rule)',
+            () => {
+                const ship = mover('ship');
+                world.step();
+                expect(positionOf(ship))
+                    .toBeCloseTo(60 * (STEP_MS / 1000), 5);
+            });
+    });
+
+    /**
+     * ========================================================================
+     * PREDICTION STOPS WHEN THERE IS NOTHING BEHIND IT
+     * ========================================================================
+     *
+     * A multiplayer RESYNC holds the whole frame stream: `step()` refuses to
+     * step a world being rebuilt from the input log, and `snapshot()` returns
+     * an EMPTY frame on purpose, for up to twenty seconds per attempt. The
+     * per-frame clamp bounds one step and says nothing about a run of them,
+     * so every ship coasted on its last known velocity for the entire hold —
+     * a turning one pirouetting — and then teleported when the first real
+     * snapshot landed.
+     */
+    describe('shouldExtrapolate', () => {
+        it('predicts across the ordinary gaps this plugin exists for', () => {
+            expect(shouldExtrapolate({
+                paused: false, now: 1_000, lastMovementSyncMs: 1_000,
+            })).toBeTrue();
+            // A steps=0 pump, or a worker reply a frame late: tens of ms.
+            expect(shouldExtrapolate({
+                paused: false, now: 1_050, lastMovementSyncMs: 1_000,
+            })).toBeTrue();
+        });
+
+        it('stops once no authoritative movement has arrived for '
+            + 'STALE_SNAPSHOT_MS — the resync hold', () => {
+                expect(shouldExtrapolate({
+                    paused: false, now: 1_000 + STALE_SNAPSHOT_MS,
+                    lastMovementSyncMs: 1_000,
+                })).toBeFalse();
+                expect(shouldExtrapolate({
+                    paused: false, now: 21_000, lastMovementSyncMs: 1_000,
+                })).toBeFalse();
+            });
+
+        it('never predicts while the simulation is paused', () => {
+            expect(shouldExtrapolate({
+                paused: true, now: 1_000, lastMovementSyncMs: 1_000,
+            })).toBeFalse();
+        });
+
+        it('never predicts before the first snapshot has landed', () => {
+            expect(shouldExtrapolate({
+                paused: false, now: 1_000, lastMovementSyncMs: undefined,
+            })).toBeFalse();
+        });
     });
 
     it('leaves display-only entities without MovementPhysics alone', () => {

@@ -11,7 +11,15 @@ import { SnapshotPolicies, SnapshotPoliciesResource } from 'nova_ecs/plugins/sna
 import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { Position } from 'nova_ecs/datatypes/position';
-import { applySimulationFrame, syncedComponents, warnedUnsyncableEntities } from './apply_simulation_frame.js';
+import {
+    applySimulationFrame, movementSyncedSinceStep, syncedComponents,
+    warnedUnsyncableEntities,
+} from './apply_simulation_frame.js';
+import {
+    MovementState, MovementStateComponent,
+} from 'nova_ecs/plugins/movement_plugin';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Vector } from 'nova_ecs/datatypes/vector';
 import { FinishJumpEvent, FinishJumpEventType, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
 import { LandEvent, LandEventType } from '../nova_plugin/planet_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
@@ -51,6 +59,7 @@ describe('SimulationBridge', () => {
             throw new Error('Expected serializer resource');
         }
         serializer.addComponent(FooComponent, t.type({ x: t.number }));
+        serializer.addComponent(MovementStateComponent, MovementState);
         serializer.addComponent(JumpRouteComponent, t.type({ route: t.array(t.string) }));
         serializer.addComponent(PlayerShipSelector, markerType);
         serializer.addEvent(SoundEvent, SoundEventType);
@@ -347,6 +356,91 @@ describe('SimulationBridge', () => {
             { emitEvents: true });
         expect(sawEntity).toBeTrue();
         expect(displayWorld.entities.get('foo-uuid')).toBeUndefined();
+    });
+
+    /**
+     * The display world runs the simulation's own MovementSystem on the wall
+     * clock to cover the frames no snapshot reaches
+     * (display/movement_extrapolation_plugin.ts). It must NOT run on an
+     * entity a snapshot has just placed — that draws it one frame past where
+     * the simulation put it, which is what made every projectile appear
+     * already clear of the muzzle it left. These specs pin the stamp the
+     * gate reads.
+     */
+    describe('the movement freshness stamp', () => {
+        function movementState(x: number): MovementState {
+            return {
+                position: new Position(x, 0),
+                velocity: new Vector(60, 0),
+                rotation: new Angle(0),
+                turning: 0,
+                turnBack: false,
+                accelerating: 0,
+            };
+        }
+
+        beforeEach(() => {
+            syncedComponents.clear();
+            warnedUnsyncableEntities.clear();
+            movementSyncedSinceStep.clear();
+        });
+
+        it('stamps an entity whose MovementState an ADDED frame carries',
+            async () => {
+                const displayWorld = new World('display test world');
+                const entity = new Entity('shot')
+                    .addComponent(MovementStateComponent, movementState(0));
+                await client.addEntity('shot-uuid', entity);
+                client.step();
+
+                applySimulationFrame(client.snapshot(), client.getSerializer(),
+                    displayWorld);
+                // A projectile's very first frame: born at the muzzle, and
+                // it has to be RENDERED at the muzzle.
+                expect(movementSyncedSinceStep.has('shot-uuid')).toBeTrue();
+            });
+
+        it('stamps an entity whose MovementState a CHANGED delta carries',
+            async () => {
+                const displayWorld = new World('display test world');
+                const entity = new Entity('ship')
+                    .addComponent(MovementStateComponent, movementState(0));
+                await client.addEntity('ship-uuid', entity);
+                client.step();
+                applySimulationFrame(client.snapshot(), client.getSerializer(),
+                    displayWorld);
+                movementSyncedSinceStep.clear();
+
+                // The simulation moves it: the bridge's own JSON diff
+                // resends the whole MovementState (positions are not
+                // omitted the way the peer-to-peer delta omits them).
+                world.entities.get('ship-uuid')!.components
+                    .set(MovementStateComponent, movementState(7));
+                client.step();
+                applySimulationFrame(client.snapshot(), client.getSerializer(),
+                    displayWorld);
+                expect(movementSyncedSinceStep.has('ship-uuid')).toBeTrue();
+            });
+
+        it('leaves an entity the frame did not move UNSTAMPED, so wall-clock '
+            + 'prediction still covers it', async () => {
+                const displayWorld = new World('display test world');
+                const entity = new Entity('ship')
+                    .addComponent(MovementStateComponent, movementState(0));
+                await client.addEntity('ship-uuid', entity);
+                client.step();
+                applySimulationFrame(client.snapshot(), client.getSerializer(),
+                    displayWorld);
+                movementSyncedSinceStep.clear();
+
+                // Nothing moved it, so the diff carries no MovementState —
+                // the missed-pump shape, where extrapolation is the whole
+                // point of the plugin.
+                client.step();
+                applySimulationFrame(client.snapshot(), client.getSerializer(),
+                    displayWorld);
+                expect(movementSyncedSinceStep.has('ship-uuid')).toBeFalse();
+            });
     });
 
     describe('rollback event forwarding', () => {

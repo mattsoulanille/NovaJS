@@ -53,6 +53,54 @@ import {
  */
 export const MAX_EXTRAPOLATION_DELTA_MS = 100;
 
+/**
+ * How long the display will go on predicting with NO authoritative movement
+ * behind it before it stops and simply holds the last known picture.
+ *
+ * The per-frame clamp above bounds ONE step; it says nothing about a run of
+ * them. A multiplayer RESYNC is exactly such a run: while
+ * `SimulationBridge.resyncing` is set, `step()` refuses to step (stepping a
+ * world being rebuilt from the input log would fork the timeline) and
+ * `snapshot()` returns an EMPTY frame on purpose, for as long as the
+ * recovery takes — up to RESYNC_JOIN_TIMEOUT_MS (20 seconds), times
+ * RESYNC_MAX_ATTEMPTS. Nothing told the display, so every ship coasted on
+ * its last known velocity for the whole hold and then teleported when the
+ * first real snapshot landed. A turning ship pirouetted the entire time. A
+ * wedged worker and a link that simply stops delivering look the same from
+ * here, and get the same treatment.
+ *
+ * Holding still is the honest picture: the client genuinely does not know
+ * where anything is. It is also what the pause path already does, for the
+ * same reason (a paused simulation sends no corrections).
+ *
+ * The threshold has to clear every LEGITIMATE gap by a wide margin, because
+ * covering those gaps is the whole point of this plugin: a steps=0 pump, a
+ * worker round trip that missed a frame — isolated single frames at 60Hz,
+ * so tens of milliseconds. Half a second is two orders of magnitude above
+ * that and two orders below the resync hold it is meant to catch.
+ */
+export const STALE_SNAPSHOT_MS = 500;
+
+/**
+ * Whether wall-clock extrapolation should run this display frame.
+ *
+ * Pure, so the rule can be pinned without a browser. `lastMovementSyncMs`
+ * is when a frame last brought authoritative MovementState — NOT merely
+ * when a frame arrived, which a resync hold also produces (empty ones).
+ * `undefined` means none ever has, which is the state a world is in before
+ * its first snapshot: nothing to predict FROM, so nothing is predicted.
+ */
+export function shouldExtrapolate(options: {
+    paused: boolean,
+    now: number,
+    lastMovementSyncMs: number | undefined,
+}): boolean {
+    if (options.paused || options.lastMovementSyncMs === undefined) {
+        return false;
+    }
+    return options.now - options.lastMovementSyncMs < STALE_SNAPSHOT_MS;
+}
+
 export const MovementExtrapolationPlugin: Plugin = {
     name: 'MovementExtrapolation',
     build(world) {

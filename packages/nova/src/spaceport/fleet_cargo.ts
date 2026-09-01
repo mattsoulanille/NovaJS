@@ -518,12 +518,52 @@ const openHolds = new Map<object, readonly FleetHold[]>();
  * {@link closeFleetHolds} from done().
  */
 export function openFleetHolds(venue: object, holds: readonly FleetHold[]) {
+    if (openHolds.has(venue)) {
+        // Replacing rather than stacking is the safe behaviour, but it is
+        // never the EXPECTED one: a venue that opens twice without a Done
+        // in between means its close path was skipped — the leak this
+        // registry is one throw away from. Say so; the stale entry it
+        // silently absorbed had been freezing escort deals since.
+        console.warn('openFleetHolds: replacing a stale lease for '
+            + `${venue.constructor?.name ?? 'a venue'} — its previous `
+            + 'visit never released one (a throw out of show()?).');
+    }
     openHolds.set(venue, holds);
 }
 
 /** Releases `venue`'s hold lease. Safe to call when it holds none. */
 export function closeFleetHolds(venue: object) {
     openHolds.delete(venue);
+}
+
+/**
+ * Leases `holds` to `venue` for the duration of `body`, RELEASING THE LEASE
+ * IF IT THROWS.
+ *
+ * A normal return deliberately leaves the lease alone: a venue's `body` is
+ * its whole visit — it resolves when the player presses Done, and done() has
+ * already committed the holds and released the lease by then, in that order,
+ * so that no deal can settle in between (see the trade centre's done()).
+ * Only the failure path is this function's business.
+ *
+ * It exists because the lease lives in a MODULE-LEVEL registry rather than
+ * on the venue: a throw anywhere between opening it and Done — a texture
+ * that would not load, a widget that would not lay out — skipped the release
+ * entirely and froze those escorts' queued deals for the REST OF THE
+ * SESSION. Nothing would report it: settleEscortDeals just defers to the
+ * next docked frame, which is a legitimate thing for it to do, and it would
+ * do it forever with no dialog on screen to explain why the player's escort
+ * sale never paid out.
+ */
+export async function withFleetHoldLease<T>(venue: object,
+    holds: readonly FleetHold[], body: () => Promise<T>): Promise<T> {
+    openFleetHolds(venue, holds);
+    try {
+        return await body();
+    } catch (e) {
+        closeFleetHolds(venue);
+        throw e;
+    }
 }
 
 /**

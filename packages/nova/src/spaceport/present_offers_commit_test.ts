@@ -6,6 +6,7 @@ import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
 } from '../nova_plugin/player_state_plugin.js';
+import { commitVenueCredits } from './credit_commit.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
@@ -119,5 +120,54 @@ describe('presentOffers and the session commit boundary', () => {
                 .toBe(creditsBefore);
             expect(entity.components.get(GameDateComponent))
                 .toEqual(dateBefore);
+        });
+
+    /**
+     * The other half of that `finally`: it must commit a DELTA, not the
+     * absolute balance the session was seeded with. The offer popups await
+     * the player for as long as they care to read, and browser.ts's
+     * settleDockedEscortDeals writes the LIVE CreditsComponent on every
+     * docked frame — so a sale that settles while an offer is on screen
+     * was erased by the session's absolute write-back the moment the
+     * player dismissed it. See spaceport/credit_commit.ts.
+     */
+    it('keeps an escort sale that settles while an offer popup is open',
+        async () => {
+            const { entity, universe, session, offers } = await bench();
+            const baseline = session.state.credits.credits;
+            const SALE = 40000;
+
+            // Accept the first offer; while the SECOND offer is on screen,
+            // an escort touches down and its deal settles against the live
+            // component — exactly what the docked frame loop does.
+            const popup = scriptedPopup(call => {
+                if (call === 0) {
+                    return 'accept';
+                }
+                const live =
+                    entity.components.get(CreditsComponent)!.credits;
+                entity.components.set(CreditsComponent,
+                    { credits: live + SALE });
+                return 'refuse';
+            });
+            await presentOffers(popup, session, universe, offers);
+
+            // The session never saw the sale: its working copy still holds
+            // whatever the visit itself spent or earned.
+            const working = session.state.credits.credits;
+            expect(entity.components.get(CreditsComponent)!.credits)
+                .toBe(baseline + SALE);
+
+            // The spaceport's commit, as it now runs.
+            commitVenueCredits(entity, baseline, () => session.commit());
+
+            // BOTH survive: the sale, and the visit's own delta.
+            expect(entity.components.get(CreditsComponent)!.credits)
+                .toBe(working + SALE);
+            expect(entity.components.get(MissionsComponent)!.has('nova:211'))
+                .toBeTrue();
+            // An absolute write-back would have stored the working balance
+            // alone; pin that this spec can tell the two apart.
+            expect(working + SALE).not.toBe(working);
         });
 });

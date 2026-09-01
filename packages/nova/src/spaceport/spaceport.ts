@@ -25,6 +25,7 @@ import { Bar } from './bar.js';
 import { Button } from './button.js';
 import { describeOutfitChanges, requestCheckpoint } from './checkpoint_requests.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
+import { commitVenueCredits } from './credit_commit.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
@@ -472,6 +473,9 @@ export class Spaceport extends Menu<Entity> {
         if (offers.length === 0) {
             return;
         }
+        // The balance the session's working copy was seeded from, for the
+        // delta commit below.
+        const creditsBaseline = session.state.credits.credits;
         try {
             await presentOffers(this.offerPopup, session, this.universe,
                 offers);
@@ -494,7 +498,15 @@ export class Spaceport extends Menu<Entity> {
             // right — it is the same "the session is the unit of work"
             // rule the bar follows, where the session commits at Leave
             // however the offer sequence ended.
-            session.commit();
+            //
+            // COMMITTED AS A DELTA, like every other venue: the offer
+            // popups above await the player, and browser.ts's
+            // settleDockedEscortDeals writes the LIVE balance on every
+            // docked frame, so an escort sale that lands while an offer
+            // is on screen would be erased by the session's absolute
+            // write-back. See spaceport/credit_commit.ts.
+            commitVenueCredits(entity, creditsBaseline,
+                () => session.commit());
         }
     }
 

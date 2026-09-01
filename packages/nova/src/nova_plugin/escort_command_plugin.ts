@@ -19,6 +19,7 @@ import { EscortCommandComponent, EscortCommandState, EscortOrders, EscortOrdersC
 import { OwnerComponent } from './weapon_components.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { ExplodingComponent } from './death_plugin.js';
+import { isInFlock } from './flock.js';
 import { GovtComponent } from './govt_component.js';
 import { AggressionSuppressGovtsComponent } from './ncb_plugin.js';
 import { ranksSuppressAggression } from './rank_logic.js';
@@ -307,7 +308,7 @@ function lookupGovt(gameData: SimulationGameDataInterface,
  * politics, no reputation and no grudges of its own — it fights whoever
  * its owner would call hostile.
  */
-interface EscortHostilityContext {
+export interface EscortHostilityContext {
     /** The owner root's government (already staged; see lookupGovt). */
     rootGovt: ReturnType<typeof lookupGovt>;
     gameData: SimulationGameDataInterface;
@@ -317,6 +318,8 @@ interface EscortHostilityContext {
     rootRecords?: LegalRecordsState;
     /** The SIMULATION clock, in milliseconds (TimeResource.time). */
     now: number;
+    /** Entity lookup, for the own-flock tier (flock.ts's isInFlock). */
+    getEntity: (uuid: string) => Entity | undefined;
 }
 
 /**
@@ -326,6 +329,21 @@ interface EscortHostilityContext {
  * ship the owner's escorts engage and a ship painted neutral is one they
  * leave alone:
  *
+ *  - OWN FLOCK (tier 2): a ship inside the owner's own flock — a sibling
+ *    escort, a bay fighter, anything transitively following them — is
+ *    never a target, ahead of everything else, exactly as the corners
+ *    paint it friendly ahead of everything else. Not reachable on the
+ *    stock paths today (every way a ship joins the player's flock sheds
+ *    its GovtComponent: makeNpcShip never sets one, convertToEscort
+ *    deletes it, a bay fighter copies a carrier that hasn't got one, and a
+ *    captured leader's wing is re-parented straight back OUT of the flock
+ *    — see boarding_plugin's reassignCapturedWing), so this is a guard
+ *    rather than a fix. It is here because the tier list below is a claim
+ *    about agreeing with styleForTarget TIER FOR TIER, and a claim with a
+ *    hole in it is worth less than the line of code that closes it; a
+ *    plug-in that hands an escort a government would otherwise have the
+ *    owner's own wing shooting each other while the HUD painted them all
+ *    friendly.
  *  - BOUGHT OFF (tier 2b): a ship the OWNER bribed to leave them alone
  *    (beg for mercy; NpcComponent.pacifiedFrom/pacifiedUntil) is not
  *    hostile to their escorts either, ahead of everything else. Without
@@ -340,6 +358,19 @@ interface EscortHostilityContext {
  *    way the corners fold it (the baked synced component; the sim cannot
  *    read ränk data — see rank_logic.ts).
  *  - POSTURE (tier 3a): currently attacking the root or the escort itself.
+ *    Two ways a ship can be flying an attack: an NPC brain in mode
+ *    'attack' (or the legacy dev-enemy ShootAllWeapons marker), and — for
+ *    a RIVAL'S ESCORT, which flies on its own owner's escort command and
+ *    never on an NpcComponent mode — an EscortCommandComponent of
+ *    'attack' or 'defend'. The corners have counted that second reading
+ *    since "when an escort is attacking another player (due to 'f' or due
+ *    to defending), it should be IFF hostile from that player's
+ *    perspective"; without it here, an escort ordered onto us painted red
+ *    on the HUD while our own defend/formation brains ignored it until its
+ *    first shot landed and tier 3b caught up. Gated on the same target
+ *    test as the rest of the posture tier — an escort defending a leader
+ *    somewhere else, with no target or another target, is not attacking
+ *    US.
  *  - RECENT AGGRESSION (tier 3b): it shot the OWNER, or locked a guided
  *    missile on them, inside the aggression window. This is the tier that
  *    reaches another PLAYER's ship, which has neither a government nor an
@@ -348,9 +379,20 @@ interface EscortHostilityContext {
  *    TargetComponent had already moved on.
  *
  * Pure over synced state and the simulation clock, so every peer agrees.
+ *
+ * EXPORTED FOR ONE REASON: escort_hostility_agreement_test.ts drives this
+ * and `styleForTarget` over the same matrix of states and asserts they
+ * agree, which is the only way the tier-for-tier claim above stays true as
+ * either side gains a tier. Nothing else outside this module should call
+ * it — the escort brains hand it the context they build per tick.
  */
-function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
+export function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
     escortUuid: string, ctx: EscortHostilityContext): boolean {
+    // The owner's own ships are the owner's, whatever their politics —
+    // the corners' tier 2, ahead of everything.
+    if (isInFlock(otherUuid, rootUuid, ctx.getEntity)) {
+        return false;
+    }
     // Bought off by the owner: not a target, whatever the politics say.
     if (isPacifiedToward(other.components.get(NpcComponent), rootUuid,
         ctx.now)) {
@@ -366,9 +408,16 @@ function isHostileTo(other: Entity, otherUuid: string, rootUuid: string,
         return true;
     }
     const theirTarget = other.components.get(TargetComponent)?.target;
+    // A rival's escort flies on ITS owner's escort command, not on an
+    // NpcComponent mode, so 'attack'/'defend' is that ship's attack
+    // posture — the same reading the corners take (hostility.ts's
+    // `escortEngaging`), under the same target gate.
+    const theirCommand = other.components
+        .get(EscortCommandComponent)?.command;
     const attackingUs = (theirTarget === rootUuid
         || theirTarget === escortUuid)
         && (other.components.get(NpcComponent)?.mode === 'attack'
+            || theirCommand === 'attack' || theirCommand === 'defend'
             || other.components.has(ShootAllWeaponsComponent));
     return attackingUs
         || isRecentAggressor(
@@ -573,6 +622,7 @@ export const EscortCommandBehaviorSystem = new System({
             rootEntity?.components.get(LegalRecordsComponent);
         const hostility: EscortHostilityContext = {
             rootGovt, gameData, rootEntity, rootRecords, now: time.time,
+            getEntity: (id: string) => entities.get(id),
         };
 
         switch (command.command) {

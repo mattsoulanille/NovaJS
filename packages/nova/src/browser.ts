@@ -18,7 +18,7 @@ import { DisplayAssetData } from "./client/gamedata/display_asset_data.js";
 import { SimulationGameData } from "./client/gamedata/simulation_game_data.js";
 import { CommunicatorClient } from "./communication/communicator_client.js";
 import { MultiRoom } from "./communication/multi_room_communicator.js";
-import { applySimulationFrame, syncedComponents, warnedUnsyncableEntities } from "./communication/apply_simulation_frame.js";
+import { applySimulationFrame, movementSyncedSinceStep, syncedComponents, warnedUnsyncableEntities } from "./communication/apply_simulation_frame.js";
 import { makeBrowserSimulationBridgeClient } from "./communication/simulation_bridge_browser_worker.js";
 import {
     AsyncSimulationBridgeClient,
@@ -53,7 +53,7 @@ import { LeaveGateMapEvent, OpenGateMapEvent } from "./display/gate_map_plugin.j
 import { GateArrivalAnticipationEvent } from "./display/gate_animation_plugin.js";
 import { makeShip } from "./nova_plugin/make_ship.js";
 import { makeSystem, SIMULATION_STEP_MS } from "./nova_plugin/make_system.js";
-import { clearCarriedAggression } from "./nova_plugin/aggression.js";
+import { clearCarriedAggressionForTransition } from "./nova_plugin/aggression.js";
 import { makeControlBitHooks, NCBParseError, runNCBSet } from "./nova_plugin/ncb.js";
 import {
     commitActiveRanks, ControlBitsComponent,
@@ -87,6 +87,7 @@ import {
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
 import { MovementStateComponent, MovementTimeLimitResource } from "nova_ecs/plugins/movement_plugin";
+import { shouldExtrapolate } from "./display/movement_extrapolation_plugin.js";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { EscortCommandComponent } from "./nova_plugin/escort_command.js";
 import { FiringGroupComponent } from "./nova_plugin/firing_group.js";
@@ -1184,6 +1185,8 @@ async function teardownActiveSystem(removeUuid?: string) {
             displayWorld?.entities.delete(uuid);
         }
         syncedComponents.clear();
+        // The freshness stamps name uuids from the world being torn down.
+        movementSyncedSinceStep.clear();
     }
 }
 
@@ -1221,23 +1224,9 @@ async function jumpTo(args: { entity: Entity, to: string, uuid: string }) {
     // (takeLandedEscortsRestocked). See takeEscortsForTransition.
     const { batch: jumpEscorts, fromLanded } = takeEscortsForTransition(
         carriedJumpEscorts, landedEscorts, args.uuid);
-    // THE CARRIED-ENTITY PREPARATION FOR A FRESH WORLD, player and escorts
-    // alike. Behavioral aggression is stamped with the ORIGIN world's clock,
-    // and every per-system world's clock restarts at zero, so an entry
-    // carried across would outlive its 30-second window by the whole of the
-    // old world's runtime — and it names aggressor uuids that do not exist
-    // at the destination anyway. See clearCarriedAggression.
-    //
-    // Done here rather than in each sweep because this is the ONE gate into
-    // a fresh world: hyperspace jumps, hypergate and wormhole transits, and
-    // the startup jumpTo that restores a save all come through it, carrying
-    // the player entity and the escort batch that travels with it. A landing
-    // is deliberately NOT here — the player lifts off back into the SAME
-    // world, whose clock never restarted.
-    clearCarriedAggression(args.entity);
-    for (const escort of jumpEscorts) {
-        clearCarriedAggression(escort.entity);
-    }
+    // The carried entities' aggression is cleared inside enterSystem, at the
+    // one point where the batch is FINAL (a restored save's escorts join it
+    // there) — see clearCarriedAggressionForTransition.
     try {
         await enterSystem(args, jumpEscorts);
     } catch (e) {
@@ -1330,6 +1319,12 @@ async function enterSystem({ entity, to, uuid }:
                 + `saved game.`);
         }
     }
+
+    // THE CARRIED-ENTITY PREPARATION FOR A FRESH WORLD, player and escorts
+    // alike. Run HERE rather than back in jumpTo because the batch is only
+    // final now: a restored save's escorts were pushed onto it just above.
+    // See clearCarriedAggressionForTransition.
+    clearCarriedAggressionForTransition(entity, jumpEscorts);
 
     const worker = new Worker("/simulation_bridge_browser_worker_bundle.js", {
         type: "module",
@@ -2640,6 +2635,15 @@ async function startGame() {
         }
     }
 
+    /**
+     * When an applied frame last carried authoritative MovementState — the
+     * freshness signal the extrapolation gate reads. Not "when a frame last
+     * arrived": a resync hold produces empty frames on purpose, which is
+     * precisely the case that used to have ships coast for twenty seconds
+     * and then snap. Undefined until the first real snapshot lands.
+     */
+    let lastMovementSyncMs: number | undefined;
+
     const pumpTick = () => {
         // Step the display world every ticker frame, decoupled from the
         // asynchronous simulation round trip below. The 2026-08-31 Linux
@@ -2657,16 +2661,32 @@ async function startGame() {
         // (bridge closed, worlds being swapped) neither stepped before.
         if (displayWorld && simulationBridge && simulationSerializer) {
             try {
-                // A paused simulation (novaSim.pause) sends no
-                // correcting snapshots, so wall-clock extrapolation must
-                // freeze with it — otherwise every ship drifts (and a
-                // turning one pirouettes) across the paused picture. The
-                // rest of the display step (animations, UI) runs as it
-                // always did while paused.
+                // WHEN prediction may run at all. A paused simulation
+                // (novaSim.pause) sends no correcting snapshots, so
+                // wall-clock extrapolation must freeze with it — otherwise
+                // every ship drifts (and a turning one pirouettes) across
+                // the paused picture. A multiplayer RESYNC is the same
+                // situation without the pause: snapshot() deliberately
+                // returns EMPTY frames for as long as the recovery runs (up
+                // to 20 seconds), so freshness is measured rather than
+                // asked for — see shouldExtrapolate. The rest of the
+                // display step (animations, UI) runs as it always did.
+                //
+                // WHICH entities it may run on: not the ones a snapshot
+                // has already placed since the last step. See
+                // movementSyncedSinceStep.
+                const now = performance.now();
+                if (movementSyncedSinceStep.size > 0) {
+                    lastMovementSyncMs = now;
+                }
                 const movementLimit =
                     displayWorld.resources.get(MovementTimeLimitResource);
                 if (movementLimit) {
-                    movementLimit.enabled = !simulationControl.paused;
+                    movementLimit.enabled = shouldExtrapolate({
+                        paused: simulationControl.paused, now,
+                        lastMovementSyncMs,
+                    });
+                    movementLimit.skipUuids = movementSyncedSinceStep;
                 }
                 displayWorld.step();
             } catch (e) {
@@ -2675,6 +2695,10 @@ async function startGame() {
                 // kill the ticker (and with it the render + sim pump).
                 console.error('Display world step error:', e);
             }
+            // Outside the catch, so a throwing display system cannot leave
+            // stamps standing: the set means "synced since the last step",
+            // and a step has been attempted.
+            movementSyncedSinceStep.clear();
         }
         void pumpSimulationFrame();
     };

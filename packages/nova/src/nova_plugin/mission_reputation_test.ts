@@ -392,3 +392,74 @@ describe('PayVal on an immediate auto-abort (mïsn Flags2 0x0002)', () => {
         expect(state.records!.get('nova:128')).toBe(-40);
     });
 });
+
+/**
+ * ============================================================================
+ * Which gövt a mission's BARE NUMBER names (CompGovt, PayVal -1xxxx/-2xxxx)
+ * ============================================================================
+ *
+ * The number is scoped to the plug-in that WROTE the mission
+ * (BaseData.writerPrefix), not to its id's prefix — and those differ exactly
+ * when a plug-in OVERRIDES a stock mïsn, because the override keeps the
+ * stock id. So the writer prefix alone is not an answer: it has to be tried
+ * FIRST (a plug-in's own private gövt lives under it) and then fall back to
+ * stock, which is what AvailStel's `rangeGovt` has always done.
+ *
+ * Without the fallback an override's reputation change landed on a phantom
+ * `<plug>:n` record no gövt backs — invisible in the player-info dialog and
+ * read by nothing — and PayVal's record-cleaning did nothing whatsoever,
+ * since `cleanRecords` returns early on a gövt it cannot resolve.
+ */
+describe('CompGovt / PayVal govt resolution across plug-in prefixes', () => {
+    /** A stock mïsn OVERRIDDEN by a plug-in: stock id, plug-in writer. */
+    function overridden(partial: Partial<MissionData> = {}): MissionData {
+        return makeMission({ id: 'nova:200', writerPrefix: 'bigplug',
+            ...partial });
+    }
+
+    it('sends an overriding plug-in\'s CompGovt to the STOCK govt', () => {
+        const state = makeState();
+        runToCompletion(overridden({ compGovt: 128, compReward: 3 }), state);
+        expect(state.records!.get('nova:128')).toBe(3);
+        expect(state.records!.has('bigplug:128')).toBeFalse();
+    });
+
+    it('still prefers the plug-in\'s OWN govt when it defines that number',
+        () => {
+            // Both `bigplug:200` and `nova:200` exist; the writer wins, the
+            // same order rangeGovt uses.
+            const mine = makeGovt('bigplug:200');
+            const stock200 = makeGovt('nova:200');
+            const state = makeState();
+            const mission = overridden({ compGovt: 200, compReward: 3 });
+            const machinery = makeMachinery(state, [mission], {
+                getGovt: (id: string) => id === mine.id ? mine
+                    : id === stock200.id ? stock200 : govts.get(id),
+            });
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            processLanding(machinery, 'nova:128', 1000);
+
+            expect(state.records!.get('bigplug:200')).toBe(3);
+            expect(state.records!.has('nova:200')).toBeFalse();
+        });
+
+    it('cleans the STOCK record for an overriding plug-in\'s PayVal', () => {
+        const state = makeState({
+            records: new Map([['nova:128', -40], ['nova:129', -40]]),
+        });
+        runToCompletion(overridden({ payVal: -10128 }), state);
+        // The whole point: a `bigplug:128` lookup resolves to nothing, and
+        // cleanRecords' early return made this a silent no-op.
+        expect(state.records!.get('nova:128')).toBe(0);
+        expect(state.records!.get('nova:129')).toBe(-40);
+    });
+
+    it('leaves a number no data set defines under the writer\'s prefix',
+        () => {
+            const state = makeState();
+            runToCompletion(
+                overridden({ compGovt: 250, compReward: 3 }), state);
+            expect(state.records!.get('bigplug:250')).toBe(3);
+        });
+});
