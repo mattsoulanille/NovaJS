@@ -18,7 +18,9 @@ import { Spaceport } from '../spaceport/spaceport.js';
 import { DockedShip, DockedShipResource } from './docked_ship.js';
 import { OpenMissionInfoResource } from './mission_info_plugin.js';
 import { OpenPlayerInfoResource } from './player_info_plugin.js';
-import { ResizeEvent, ScreenSize } from './screen_size_plugin.js';
+import {
+    ResizeEvent, ScreenSize, screenCentre,
+} from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { OpenStarmapResource } from './starmap_plugin.js';
 import { UiSoundEvent } from './ui_sound.js';
@@ -118,8 +120,9 @@ const OpenSpaceportSystem = new System({
         dockedHolder.current = dockedShip;
         spaceport.setDockedShip(dockedShip);
 
-        spaceport.container.position.x = x / 2;
-        spaceport.container.position.y = y / 2;
+        const centre = screenCentre({ x, y });
+        spaceport.container.position.x = centre.x;
+        spaceport.container.position.y = centre.y;
         spaceport.show(ship).then(newShip => emit(LeaveSpaceportEvent, newShip));
     }
 });
@@ -138,9 +141,10 @@ const SpaceportResizeSystem = new System({
     name: 'SpaceportResize',
     events: [ResizeEvent],
     args: [ResizeEvent, SpaceportComponent] as const,
-    step({ x, y }, spaceport) {
-        spaceport.container.position.x = x / 2;
-        spaceport.container.position.y = y / 2;
+    step(resize, spaceport) {
+        const centre = screenCentre(resize);
+        spaceport.container.position.x = centre.x;
+        spaceport.container.position.y = centre.y;
     }
 });
 

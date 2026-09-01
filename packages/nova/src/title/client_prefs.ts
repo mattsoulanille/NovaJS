@@ -9,6 +9,7 @@
  * This module never touches sim state: it is pure UI/config bookkeeping
  * kept beside the save (see save_game.ts).
  */
+import { clampScale } from '../display/display_scale.js';
 
 /** localStorage key: control-binding overrides (action -> event.code). */
 export const CONTROLS_OVERRIDE_KEY = 'novajs:controls';
@@ -16,6 +17,15 @@ export const CONTROLS_OVERRIDE_KEY = 'novajs:controls';
 export const SETTINGS_OVERRIDE_KEY = 'novajs:settings';
 /** localStorage key: the current pilot's profile (name, nickname, ...). */
 export const PILOT_PROFILE_KEY = 'novajs:pilot';
+/**
+ * localStorage key: display scaling (UI scale / global scale).
+ *
+ * Deliberately NOT part of the pilot's prefs and NOT in the save: how big
+ * the HUD should be is a property of the screen you are sitting in front
+ * of, not of the character you are playing. Kept machine-local so the
+ * same pilot exported to another machine picks up that machine's scale.
+ */
+export const DISPLAY_SETTINGS_KEY = 'novajs:display';
 
 /** A minimal storage surface so this is testable without a browser. */
 export interface PrefsStorage {
@@ -94,6 +104,48 @@ export function loadGameSettings(storage?: PrefsStorage): GameSettingsOverride {
 export function saveGameSettings(settings: GameSettingsOverride,
     storage?: PrefsStorage): void {
     writeJson(SETTINGS_OVERRIDE_KEY, settings, storage);
+}
+
+/**
+ * The machine-local display scaling preferences.
+ *
+ * `globalScale` magnifies the whole presentation (world view included, so
+ * less of the system fits on screen); `uiScale` magnifies only the UI
+ * layers on top of that. Both default to 1, which reproduces the
+ * pre-setting rendering exactly.
+ */
+export interface DisplaySettings {
+    uiScale: number;
+    globalScale: number;
+}
+
+/** What a player who has never touched the setting gets. */
+export const DEFAULT_DISPLAY_SETTINGS: DisplaySettings =
+    { uiScale: 1, globalScale: 1 };
+
+/**
+ * Loads the display scaling preferences, clamped and step-snapped.
+ *
+ * Anything unreadable — no storage, bad JSON, a hand-edited 500x — comes
+ * back as the default rather than throwing: a bad value here would leave
+ * the player with a window they cannot navigate to fix it.
+ */
+export function loadDisplaySettings(storage?: PrefsStorage): DisplaySettings {
+    const raw = readJson<Partial<DisplaySettings>>(
+        DISPLAY_SETTINGS_KEY, storage);
+    return {
+        uiScale: clampScale(raw?.uiScale),
+        globalScale: clampScale(raw?.globalScale),
+    };
+}
+
+/** Persists the display scaling preferences (clamped on the way out). */
+export function saveDisplaySettings(settings: DisplaySettings,
+    storage?: PrefsStorage): void {
+    writeJson(DISPLAY_SETTINGS_KEY, {
+        uiScale: clampScale(settings.uiScale),
+        globalScale: clampScale(settings.globalScale),
+    }, storage);
 }
 
 /**

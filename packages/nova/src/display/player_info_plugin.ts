@@ -9,7 +9,7 @@ import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { SystemIdResource } from '../nova_plugin/system_id_resource.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { PlayerInfoDialog } from '../spaceport/player_info.js';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 
 const PlayerInfoResource = new Resource<PlayerInfoDialog>('PlayerInfo');
@@ -80,7 +80,7 @@ export const PlayerInfoPlugin: Plugin = {
                 // added after this plugin's).
                 stage.addChild(dialog.container);
                 dialog.container.position.set(
-                    screenSize.x / 2, screenSize.y / 2);
+                    screenCentre(screenSize).x, screenCentre(screenSize).y);
                 await dialog.show(ship);
             } finally {
                 opening = false;

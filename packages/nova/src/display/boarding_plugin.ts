@@ -29,7 +29,7 @@ import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     boardShipDoneStatusOf, presentBoardShipDone, ShipDoneBoardStatus,
 } from './mission_ship_done_plugin.js';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { Stage } from './stage_resource.js';
 
@@ -699,8 +699,7 @@ class BoardingUi {
     }
 
     reposition() {
-        const x = this.screen.x / 2;
-        const y = this.screen.y / 2;
+        const { x, y } = screenCentre(this.screen);
         this.plunder.container.position.set(x, y);
         this.assignment.container.position.set(x, y);
     }

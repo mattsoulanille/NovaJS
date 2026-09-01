@@ -10,9 +10,12 @@
  */
 
 import {
-    bindControl, ControlsOverride, GameSettingsOverride, PilotProfile,
-    primaryBinding,
+    bindControl, ControlsOverride, DisplaySettings, GameSettingsOverride,
+    PilotProfile, primaryBinding,
 } from './client_prefs.js';
+import {
+    formatScale, MAX_SCALE, MIN_SCALE, SCALE_STEP,
+} from '../display/display_scale.js';
 import { keyLabel } from './key_labels.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
@@ -615,20 +618,52 @@ const CONTROL_TABS: { name: string, rows: ControlRow[] }[] = [
     },
 ];
 
+/**
+ * The display-scaling hotkeys. Not one of the original's control groups
+ * (the original had no scaling), so they live on the Display tab beside
+ * the sliders they move rather than in a tab of their own.
+ */
+const DISPLAY_CONTROL_ROWS: { name: string, rows: ControlRow[] } = {
+    name: 'Display Controls', rows: [
+        { label: 'UI Scale Up', action: 'uiScaleUp' },
+        { label: 'UI Scale Down', action: 'uiScaleDown' },
+        { label: 'Global Scale Up', action: 'globalScaleUp' },
+        { label: 'Global Scale Down', action: 'globalScaleDown' },
+        { label: 'Reset Scale', action: 'resetScale' },
+    ],
+};
+
 /** Every action the editor lets the player rebind. Binding one of these
  * to an occupied key takes that key away from the others (bindControl). */
-const REBINDABLE_ACTIONS: string[] = CONTROL_TABS
+const REBINDABLE_ACTIONS: string[] = [...CONTROL_TABS, DISPLAY_CONTROL_ROWS]
     .flatMap(tab => tab.rows)
     .map(row => row.action)
     .filter((a): a is string => typeof a === 'string');
 
 /**
- * The "Set Prefs" panel: Game Settings plus the four control-binding
- * tabs. On OK it persists the game-settings toggles and any changed
- * bindings to localStorage (see client_prefs); the game start layers
- * them over the served defaults. Resolves when the dialog closes.
+ * How the preferences dialog reaches the live display scales. The client
+ * owns them (browser.ts applies them to the renderer the moment they
+ * change), so the dialog only reads and writes through this handle --
+ * which is also what lets the sliders preview LIVE and Cancel put the
+ * old values back.
  */
-export function showPreferencesDialog(baseControls: Record<string, unknown>):
+export interface DisplayScaleHandle {
+    get(): DisplaySettings;
+    set(next: Partial<DisplaySettings>): DisplaySettings;
+}
+
+/**
+ * The "Set Prefs" panel: Game Settings, Display, plus the four
+ * control-binding tabs. On OK it persists the game-settings toggles and
+ * any changed bindings to localStorage (see client_prefs); the game start
+ * layers them over the served defaults. Resolves when the dialog closes.
+ *
+ * The display scales are the odd one out: they are MACHINE-local rather
+ * than per-pilot, they apply live rather than on OK, and they persist
+ * themselves through the handle (see DisplayScaleHandle).
+ */
+export function showPreferencesDialog(baseControls: Record<string, unknown>,
+    displayScale?: DisplayScaleHandle):
     Promise<void> {
     return new Promise((resolve) => {
         const modal = makeModal('preferences-dialog');
@@ -658,7 +693,12 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>):
         } as Partial<CSSStyleDeclaration>);
         modal.panel.appendChild(content);
 
-        const tabNames = ['Game Settings', ...CONTROL_TABS.map(t => t.name)];
+        // The scales the dialog opened with, so Cancel can undo a live
+        // preview. Untouched (and unrestored) when there is no handle.
+        const scalesOnOpen = displayScale?.get();
+
+        const tabNames = ['Game Settings', 'Display',
+            ...CONTROL_TABS.map(t => t.name)];
         const tabButtons: HTMLButtonElement[] = [];
         let activeCapture: (() => void) | undefined;
 
@@ -672,9 +712,13 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>):
             content.innerHTML = '';
             if (index === 0) {
                 content.appendChild(buildGameSettings(settings));
+            } else if (index === 1) {
+                content.appendChild(buildDisplayTab(displayScale,
+                    baseControls, controlsOverride,
+                    (release) => { activeCapture = release; }));
             } else {
                 content.appendChild(buildControlTab(
-                    CONTROL_TABS[index - 1], baseControls, controlsOverride,
+                    CONTROL_TABS[index - 2], baseControls, controlsOverride,
                     (release) => { activeCapture = release; }));
             }
         };
@@ -710,7 +754,15 @@ export function showPreferencesDialog(baseControls: Record<string, unknown>):
             // applyControls), so an edit takes effect without a reload.
             resolve();
         };
-        const abort = () => { cleanup(); resolve(); };
+        const abort = () => {
+            // Undo any live scale preview: the scales apply as the slider
+            // moves, so Cancel has to put the opening values back.
+            if (scalesOnOpen) {
+                displayScale?.set(scalesOnOpen);
+            }
+            cleanup();
+            resolve();
+        };
         const onKey = (e: KeyboardEvent) => {
             // While capturing a key, let the capture handler consume it.
             if (activeCapture) { return; }
@@ -782,6 +834,97 @@ function buildGameSettings(settings: GameSettingsOverride): HTMLElement {
     outer.appendChild(wrap);
     outer.appendChild(volRow);
     return outer;
+}
+
+/**
+ * The Display tab: the two scale sliders, then the hotkeys that move
+ * them.
+ *
+ * The sliders apply LIVE (the point of a display setting is seeing what
+ * it does), and the client persists each move; Cancel restores whatever
+ * they were when the dialog opened. Nothing here is per-pilot and nothing
+ * reaches the save.
+ */
+function buildDisplayTab(displayScale: DisplayScaleHandle | undefined,
+    baseControls: Record<string, unknown>, override: ControlsOverride,
+    setCapture: (release: (() => void) | undefined) => void): HTMLElement {
+    const wrap = document.createElement('div');
+    Object.assign(wrap.style, {
+        padding: '4px 8px',
+    } as Partial<CSSStyleDeclaration>);
+
+    if (!displayScale) {
+        const none = document.createElement('div');
+        none.textContent = 'Display scaling is unavailable.';
+        none.style.color = '#aaa';
+        wrap.appendChild(none);
+        return wrap;
+    }
+
+    const slider = (label: string, testid: string,
+        key: 'uiScale' | 'globalScale', help: string) => {
+        const row = document.createElement('div');
+        Object.assign(row.style, {
+            display: 'flex', alignItems: 'center', gap: '10px',
+            margin: '8px 0 2px',
+        } as Partial<CSSStyleDeclaration>);
+        const name = document.createElement('div');
+        name.textContent = `${label}:`;
+        name.style.width = '110px';
+        row.appendChild(name);
+
+        const input = document.createElement('input');
+        input.type = 'range';
+        input.dataset.testid = testid;
+        input.min = String(MIN_SCALE);
+        input.max = String(MAX_SCALE);
+        input.step = String(SCALE_STEP);
+        input.value = String(displayScale.get()[key]);
+        input.style.flex = '1';
+        row.appendChild(input);
+
+        const readout = document.createElement('div');
+        readout.dataset.testid = `${testid}-value`;
+        readout.style.width = '54px';
+        readout.style.textAlign = 'right';
+        readout.textContent = formatScale(displayScale.get()[key]);
+        row.appendChild(readout);
+
+        // 'input' rather than 'change' so dragging previews continuously.
+        input.addEventListener('input', () => {
+            const applied = displayScale.set(
+                { [key]: Number(input.value) } as Partial<DisplaySettings>);
+            readout.textContent = formatScale(applied[key]);
+            input.value = String(applied[key]);
+        });
+        wrap.appendChild(row);
+
+        const hint = document.createElement('div');
+        hint.textContent = help;
+        Object.assign(hint.style, {
+            color: '#777', fontSize: '11px', marginLeft: '120px',
+            marginBottom: '6px',
+        } as Partial<CSSStyleDeclaration>);
+        wrap.appendChild(hint);
+    };
+
+    slider('UI Scale', 'prefs-ui-scale', 'uiScale',
+        'Status bar, spaceport, dialogs and text only.');
+    slider('Global Scale', 'prefs-global-scale', 'globalScale',
+        'Everything, including the flight view — a bigger view shows '
+        + 'less of the system.');
+
+    const note = document.createElement('div');
+    note.textContent = 'These are saved for this browser, not for this '
+        + 'pilot, and take effect immediately.';
+    Object.assign(note.style, {
+        color: '#777', fontSize: '11px', margin: '10px 0 4px',
+    } as Partial<CSSStyleDeclaration>);
+    wrap.appendChild(note);
+
+    wrap.appendChild(buildControlTab(DISPLAY_CONTROL_ROWS, baseControls,
+        override, setCapture));
+    return wrap;
 }
 
 function buildControlTab(tab: { name: string, rows: ControlRow[] },

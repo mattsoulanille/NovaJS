@@ -1659,7 +1659,12 @@ export const StatusBarPlugin: Plugin = {
 
         await statusBar.buildPromise;
         stage.addChild(statusBar.container);
-        statusBar.container.position.x = window.innerWidth - statusBar.container.width;
+        // Anchored to the UI-logical right edge (ScreenSize), not the
+        // window's CSS width: with a global or UI scale in play those are
+        // different numbers and the bar would hang off the screen.
+        const screenSize = world.resources.get(ScreenSize);
+        statusBar.container.position.x = (screenSize?.x ?? window.innerWidth)
+            - statusBar.container.width;
         statusBar.container.position.y = 0;
         statusBar.addEnemy.subscribe(async () => {
             const randomIndex = Math.floor(Math.random() * (await simulationData.ids).Ship.length);

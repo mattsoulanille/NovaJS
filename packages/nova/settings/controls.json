@@ -83,5 +83,10 @@
   "accept": "KeyA",
   "properties": "KeyP",
   "missions": "KeyI",
-  "fullscreen": "Enter"
+  "fullscreen": "Enter",
+  "uiScaleUp": "BracketRight",
+  "uiScaleDown": "BracketLeft",
+  "globalScaleUp": "Equal",
+  "globalScaleDown": "Minus",
+  "resetScale": "Backslash"
 }

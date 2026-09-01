@@ -1,10 +1,10 @@
 import "jasmine";
-import { System } from "nova_ecs/system";
-import { Display } from "./display_plugin.js";
+import * as PIXI from "pixi.js";
+import { cameraCentre, Display } from "./display_plugin.js";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin.js";
 import { AnimationPlugin } from "../nova_plugin/animation_plugin.js";
 import { ScreenSizePlugin } from "./screen_size_plugin.js";
-import { Stage } from "./stage_resource.js";
+import { DisplayRoot, Stage, WorldLayer } from "./stage_resource.js";
 import { Space } from "./space_resource.js";
 
 describe("Display plugin", () => {
@@ -34,5 +34,84 @@ describe("Display plugin", () => {
         expect(animationPluginIndex).toBeGreaterThanOrEqual(0);
         expect(animationGraphicPluginIndex).toBeGreaterThan(animationPluginIndex);
         expect(plugins[0]).toBe(ScreenSizePlugin);
+    });
+
+    /**
+     * The UI scale needs a container it can scale that holds the UI and
+     * nothing else, so the display world's containers are three deep:
+     * `DisplayRoot` -> [`WorldLayer`, `Stage`]. `Stage` stays the name
+     * every UI plugin adds itself to (a dozen call sites unchanged); the
+     * world view moved down into `WorldLayer`, which the UI scale never
+     * touches.
+     */
+    describe('layer structure', () => {
+        async function buildLayers() {
+            const set = new Map<unknown, unknown>();
+            const fakeWorld = {
+                resources: {
+                    set: (key: unknown, value: unknown) => set.set(key, value),
+                    get: (key: unknown) => set.get(key),
+                    has: (key: unknown) => set.has(key),
+                    delete: (key: unknown) => set.delete(key),
+                },
+                addPlugin: async () => undefined,
+                removePlugin: async () => true,
+                addSystem: () => undefined,
+                removeSystem: () => undefined,
+            };
+            await Display.build(fakeWorld as never);
+            return {
+                root: set.get(DisplayRoot) as PIXI.Container,
+                worldLayer: set.get(WorldLayer) as PIXI.Container,
+                stage: set.get(Stage) as PIXI.Container,
+                space: set.get(Space) as PIXI.Container,
+            };
+        }
+
+        it('puts the world layer under the UI layer, both under the root',
+            async () => {
+                const { root, worldLayer, stage } = await buildLayers();
+                // Draw order: the world first, the UI over it. A UI layer
+                // drawn first would put the status bar under the ships.
+                expect(root.children).toEqual([worldLayer, stage]);
+            });
+
+        it('keeps Space in the world layer, not the UI layer', async () => {
+            const { worldLayer, stage, space } = await buildLayers();
+            expect(space.parent).toBe(worldLayer);
+            expect(stage.children).toEqual([]);
+        });
+
+        it('leaves both layers unscaled until the client applies a scale',
+            async () => {
+                const { worldLayer, stage } = await buildLayers();
+                expect(worldLayer.scale.x).toBe(1);
+                expect(stage.scale.x).toBe(1);
+            });
+    });
+
+    /**
+     * The camera centres the world view in the part of the window the
+     * status bar does not cover. The status bar's width is measured in
+     * UI-layer units, so at a UI scale other than 1 it has to be
+     * converted before it can be subtracted from a world-layer width.
+     */
+    describe('cameraCentre', () => {
+        it('centres in the space left of the status bar', () => {
+            expect(cameraCentre({ x: 1920, y: 1080 }, 194, 1))
+                .toEqual({ x: (1920 - 194) / 2, y: 540 });
+        });
+
+        it('scales the status bar width into world units', () => {
+            // A 2x status bar covers 388 world pixels, not 194.
+            expect(cameraCentre({ x: 1920, y: 1080 }, 194, 2))
+                .toEqual({ x: (1920 - 388) / 2, y: 540 });
+        });
+
+        it('uses the world viewport, which the global scale shrinks', () => {
+            // 3440 CSS pixels at 2x global scale is 1720 world units.
+            expect(cameraCentre({ x: 1720, y: 720 }, 194, 1))
+                .toEqual({ x: (1720 - 194) / 2, y: 360 });
+        });
     });
 });

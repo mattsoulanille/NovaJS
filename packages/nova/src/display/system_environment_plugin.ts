@@ -13,7 +13,7 @@ import { SystemIdResource } from "../nova_plugin/system_id_resource.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { PixiAppResource } from "./pixi_app_resource.js";
 import { StarfieldResource } from "./starfield_plugin.js";
-import { Stage } from "./stage_resource.js";
+import { WorldLayer } from "./stage_resource.js";
 
 /**
  * Per-system visual environment: background colour and murk.
@@ -265,17 +265,19 @@ export const SystemEnvironmentPlugin: Plugin = {
         }
 
         // The ambient haze: a subtle background-coloured sheet over the whole
-        // scene (under the status bar, which is added to the stage later). It
-        // sells the dust without hiding anything by itself.
-        const stage = world.resources.get(Stage);
-        if (stage) {
+        // scene. It goes in the WORLD layer, above the starfield and the
+        // ships and below every UI element (the UI layer draws after this
+        // one), so the status bar and the dialogs stay unhazed. It sells
+        // the dust without hiding anything by itself.
+        const worldLayer = world.resources.get(WorldLayer);
+        if (worldLayer) {
             const haze = new PIXI.Graphics();
             haze.name = 'MurkHaze';
             haze.beginFill(systemData.backgroundColor, 1);
             haze.drawRect(0, 0, HAZE_SIZE, HAZE_SIZE);
             haze.endFill();
             haze.alpha = (effectiveMurk(murkState) / 100) * AMBIENT_HAZE_MAX_ALPHA;
-            stage.addChild(haze);
+            worldLayer.addChild(haze);
             world.resources.set(MurkHazeResource, haze);
             world.addSystem(MurkAmbienceSystem);
         }
@@ -298,10 +300,10 @@ export const SystemEnvironmentPlugin: Plugin = {
             starfield.dim(() => 1);
         }
 
-        const stage = world.resources.get(Stage);
+        const worldLayer = world.resources.get(WorldLayer);
         const haze = world.resources.get(MurkHazeResource);
-        if (stage && haze) {
-            stage.removeChild(haze);
+        if (worldLayer && haze) {
+            worldLayer.removeChild(haze);
         }
         world.resources.delete(MurkHazeResource);
         world.resources.delete(MurkResource);

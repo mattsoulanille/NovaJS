@@ -29,7 +29,7 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
 import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import { markShipDoneTextShown } from '../spaceport/ship_done_shown.js';
-import { ScreenSize } from './screen_size_plugin.js';
+import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 
 /**
@@ -444,7 +444,8 @@ export const MissionShipDonePlugin: Plugin = {
         }
         const popup = new OfferPopup(displayAssets, controls);
         popup.container.name = 'ShipDonePopup';
-        popup.container.position.set(screenSize.x / 2, screenSize.y / 2);
+        const centre = screenCentre(screenSize);
+        popup.container.position.set(centre.x, centre.y);
         stage.addChild(popup.container);
         world.resources.set(ShipDonePopupResource, popup);
         world.resources.set(ShipDoneStateResource, {
