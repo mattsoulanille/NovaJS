@@ -1,11 +1,12 @@
 import * as t from 'io-ts';
-import { Entities } from '../arg_types.js';
+import { Entities, GetWorld } from '../arg_types.js';
 import { EntityMap } from '../entity_map.js';
 import { Component } from '../component.js';
 import { Angle, AngleType } from '../datatypes/angle.js';
 import { Position, PositionType } from '../datatypes/position.js';
 import { Vector, VectorLike, VectorType } from '../datatypes/vector.js';
 import { Plugin } from '../plugin.js';
+import { Resource } from '../resource.js';
 import { System } from '../system.js';
 import { applyObjectDelta } from './delta.js';
 import { DeltaPlugin, DeltaResource } from './delta_plugin.js';
@@ -67,11 +68,45 @@ export function teleport(state: MovementState, position: Position, velocity?: Ve
 // such as when a player accelerates, we send the full state.
 export const MovementStateComponent = new Component<MovementState>('MovementState');
 
+/**
+ * When set on a world, bounds how far a single MovementSystem step may
+ * integrate. Meant for DISPLAY worlds running on the wall clock (see
+ * nova's MovementExtrapolationPlugin): a stall — system suspend, a
+ * debugger pause, an occluded window before the heartbeat notices —
+ * makes one wall-clock delta huge, and integrating it would teleport
+ * every entity until the next authoritative snapshot yanks them back.
+ * `enabled: false` skips movement integration entirely (a paused
+ * simulation sends no correcting snapshots, so prediction must halt
+ * with it). Simulation worlds must NEVER set this resource: it is read
+ * through the world (like FixedTimestepResource — Optional() does not
+ * support missing resources), and when absent the behavior is exactly
+ * the unclamped original, keeping determinism untouched.
+ */
+export interface MovementTimeLimit {
+    enabled: boolean;
+    maxDeltaMs: number;
+}
+export const MovementTimeLimitResource =
+    new Resource<MovementTimeLimit>('MovementTimeLimit');
+
 export const MovementSystem = new System({
     name: 'movement',
     args: [MovementStateComponent, MovementPhysicsComponent,
-        TimeResource, Entities] as const,
-    step(state, physics, time, entities) {
+        TimeResource, Entities, GetWorld] as const,
+    step(state, physics, time, entities, world) {
+        const limit = world.resources.get(MovementTimeLimitResource);
+        if (limit) {
+            if (!limit.enabled) {
+                return;
+            }
+            if (time.delta_ms > limit.maxDeltaMs) {
+                time = {
+                    ...time,
+                    delta_ms: limit.maxDeltaMs,
+                    delta_s: limit.maxDeltaMs / 1000,
+                };
+            }
+        }
         if (physics.movementType === MovementType.INERTIAL) {
             inertialControls(state, physics, time, entities);
         } else if (physics.movementType === MovementType.INERTIALESS) {

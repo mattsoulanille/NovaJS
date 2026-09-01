@@ -86,7 +86,7 @@ import {
 } from "./nova_plugin/save_game.js";
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MovementStateComponent, MovementTimeLimitResource } from "nova_ecs/plugins/movement_plugin";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { EscortCommandComponent } from "./nova_plugin/escort_command.js";
 import { FiringGroupComponent } from "./nova_plugin/firing_group.js";
@@ -2612,7 +2612,11 @@ async function startGame() {
                 syncedPlayerJumpRoute = getDisplayPlayerJumpRoute(currentDisplayWorld)?.slice();
                 prefetchJumpDestination(currentDisplayWorld);
             }
-            currentDisplayWorld.step();
+            // The display world is NOT stepped here: pumpTick steps it
+            // every ticker frame, whether or not this round trip made
+            // it back in time, so a missed pump no longer freezes the
+            // picture (MovementExtrapolationPlugin keeps motion
+            // advancing on wall-clock time in between).
             const displayedJumpRoute = getDisplayPlayerJumpRoute(currentDisplayWorld);
             if (!routesEqual(displayedJumpRoute, syncedPlayerJumpRoute)) {
                 await currentBridge.setPlayerJumpRoute(displayedJumpRoute ?? []);
@@ -2637,6 +2641,41 @@ async function startGame() {
     }
 
     const pumpTick = () => {
+        // Step the display world every ticker frame, decoupled from the
+        // asynchronous simulation round trip below. The 2026-08-31 Linux
+        // playtest trace showed roughly one rAF in ten getting no fresh
+        // snapshot (7.6-10.9% depending on the measure — a steps=0
+        // pump, or a worker reply landing a frame late), always as an
+        // isolated single frame:
+        // when the display only stepped after a completed pump, each of
+        // those frames rendered a pixel-identical duplicate and the next
+        // double-stepped — motion that "switches between 60 and 30 fps"
+        // on a metronomic 60Hz presentation. Stepping here, with
+        // MovementExtrapolationPlugin integrating positions on the
+        // display's wall clock, keeps motion smooth across missed pumps.
+        // Same guard as pumpSimulationFrame's early return: mid-transition
+        // (bridge closed, worlds being swapped) neither stepped before.
+        if (displayWorld && simulationBridge && simulationSerializer) {
+            try {
+                // A paused simulation (novaSim.pause) sends no
+                // correcting snapshots, so wall-clock extrapolation must
+                // freeze with it — otherwise every ship drifts (and a
+                // turning one pirouettes) across the paused picture. The
+                // rest of the display step (animations, UI) runs as it
+                // always did while paused.
+                const movementLimit =
+                    displayWorld.resources.get(MovementTimeLimitResource);
+                if (movementLimit) {
+                    movementLimit.enabled = !simulationControl.paused;
+                }
+                displayWorld.step();
+            } catch (e) {
+                // The display step used to run inside the pump's
+                // try/catch; a throwing display system must still not
+                // kill the ticker (and with it the render + sim pump).
+                console.error('Display world step error:', e);
+            }
+        }
         void pumpSimulationFrame();
     };
     app.ticker.add(pumpTick);

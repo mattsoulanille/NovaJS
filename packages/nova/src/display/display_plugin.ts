@@ -1,6 +1,6 @@
 import { Optional } from "nova_ecs/optional";
 import { Plugin } from "nova_ecs/plugin";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { AnimationPlugin } from "../nova_plugin/animation_plugin.js";
@@ -20,6 +20,7 @@ import { PlanetCornersPlugin } from "./planet_corners_plugin.js";
 import { ProjectileFadePlugin } from "./projectile_fade_plugin.js";
 import { ProjectileSpinPlugin } from "./projectile_spin_plugin.js";
 import { MissionInfoPlugin } from "./mission_info_plugin.js";
+import { MovementExtrapolationPlugin } from "./movement_extrapolation_plugin.js";
 import { HailDialogPlugin } from "./hail_dialog_plugin.js";
 import { PlayerInfoPlugin } from "./player_info_plugin.js";
 import { ScreenSizePlugin } from "./screen_size_plugin.js";
@@ -54,7 +55,11 @@ const CenterShipSystem = new System({
         // rendering). Reuse the object to avoid per-frame allocation.
         cameraFocus.x = movementState.position.x;
         cameraFocus.y = movementState.position.y;
-    }
+    },
+    // The camera must read the position MovementExtrapolationPlugin
+    // integrated THIS step, or the player ship drifts off-center by one
+    // frame of motion.
+    after: [MovementSystem],
 });
 
 const starfieldPlugin = starfield();
@@ -77,6 +82,11 @@ export const Display: Plugin = {
         // Before StatusBarPlugin and UiSoundTriggersPlugin: both read the
         // derived ShipPhysicsComponent, which does not cross the bridge.
         await world.addPlugin(ShipPhysicsDisplayPlugin);
+        // Keeps motion advancing on wall-clock time between simulation
+        // snapshots; every draw system that declares `after:
+        // [MovementSystem]` (ObjectDrawSystem, CenterShipSystem) then
+        // reads the freshly integrated positions.
+        await world.addPlugin(MovementExtrapolationPlugin);
         await world.addPlugin(starfieldPlugin);
         // After the starfield so it can hide it on negative murk.
         await world.addPlugin(SystemEnvironmentPlugin);
@@ -171,6 +181,7 @@ export const Display: Plugin = {
         await world.removePlugin(StatusBarPlugin);
         await world.removePlugin(StatusMessagePlugin);
         await world.removePlugin(starfieldPlugin);
+        await world.removePlugin(MovementExtrapolationPlugin);
         await world.removePlugin(ShipPhysicsDisplayPlugin);
         await world.removePlugin(ScreenSizePlugin);
 

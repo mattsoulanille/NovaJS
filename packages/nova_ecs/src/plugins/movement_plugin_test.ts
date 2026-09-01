@@ -6,7 +6,7 @@ import { Vector, VectorLike } from '../datatypes/vector.js';
 import { Entity } from '../entity.js';
 import { System } from '../system.js';
 import { World } from '../world.js';
-import { approachVec, MovementPhysicsComponent, MovementPlugin, MovementStateComponent, MovementSystem, MovementType, teleport } from './movement_plugin.js';
+import { approachVec, MovementPhysicsComponent, MovementPlugin, MovementStateComponent, MovementSystem, MovementTimeLimitResource, MovementType, teleport } from './movement_plugin.js';
 import { DeltaResource } from './delta_plugin.js';
 import { TimePlugin } from './time_plugin.js';
 
@@ -189,6 +189,78 @@ describe('Movement Plugin', () => {
         // And the next unchanged frame is quiet again.
         state().position = new Position(-490, 300);
         expect(deltaMaker.getDelta(entity)).toBeUndefined();
+    });
+
+    // MovementTimeLimitResource exists for wall-clock display worlds
+    // (nova's MovementExtrapolationPlugin). Simulation worlds never set
+    // it; every spec above runs without it, pinning that its absence
+    // changes nothing.
+    it('clamps a single step to MovementTimeLimitResource.maxDeltaMs', () => {
+        world.resources.set(MovementTimeLimitResource, {
+            enabled: true,
+            maxDeltaMs: 100,
+        });
+        const velocity = new Vector(10, 0);
+        const uuid = v4();
+        world.entities.set(uuid, new Entity()
+            .addComponent(MovementStateComponent, {
+                position: new Position(0, 0),
+                accelerating: 0,
+                rotation: new Angle(0),
+                turnBack: false,
+                turning: 0,
+                velocity,
+            })
+            .addComponent(MovementPhysicsComponent, {
+                acceleration: 100,
+                maxVelocity: 500,
+                turnRate: 50,
+                movementType: MovementType.INERTIAL,
+            }));
+
+        world.step();
+        // A stalled clock (system suspend, debugger pause): only
+        // maxDeltaMs of it may be integrated.
+        clock.tick(10_000);
+        world.step();
+
+        const state = world.entities.get(uuid)!
+            .components.get(MovementStateComponent)!;
+        expect(state.position.x).toBeCloseTo(10 * 0.1, 5);
+        expect(state.position.y).toBeCloseTo(0, 5);
+    });
+
+    it('skips movement while MovementTimeLimitResource is disabled', () => {
+        world.resources.set(MovementTimeLimitResource, {
+            enabled: false,
+            maxDeltaMs: 100,
+        });
+        const uuid = v4();
+        world.entities.set(uuid, new Entity()
+            .addComponent(MovementStateComponent, {
+                position: new Position(5, 6),
+                accelerating: 1,
+                rotation: new Angle(0),
+                turnBack: false,
+                turning: 1,
+                velocity: new Vector(10, 0),
+            })
+            .addComponent(MovementPhysicsComponent, {
+                acceleration: 100,
+                maxVelocity: 500,
+                turnRate: 50,
+                movementType: MovementType.INERTIAL,
+            }));
+
+        world.step();
+        clock.tick(1000);
+        world.step();
+
+        const state = world.entities.get(uuid)!
+            .components.get(MovementStateComponent)!;
+        expect(state.position.x).toBe(5);
+        expect(state.position.y).toBe(6);
+        expect(state.rotation.angle).toBe(0);
     });
 
     it('approachVec approaches a target vector', () => {
