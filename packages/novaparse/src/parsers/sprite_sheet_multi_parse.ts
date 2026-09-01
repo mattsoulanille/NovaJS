@@ -7,7 +7,10 @@ import * as path from "path";
 import hull from 'hull.js';
 import { bufferToArrayBuffer } from "./buffer_to_array_buffer.js";
 import { decomposePolygon, Point } from "../hull/convex_decomposition.js";
-import { simplifyPolygon, traceOutline } from "../hull/trace_outline.js";
+import { Mask, simplifyPolygon, traceOutline } from "../hull/trace_outline.js";
+import {
+    HullOverlayMap, overlayFramesForBaseFrame,
+} from "./hull_overlay_map.js";
 
 
 export interface SpriteSheetMulti {
@@ -82,16 +85,58 @@ function buildPNG(frames: Array<PNG>): PNG {
 }
 
 
+/** A sprite frame's fully-opaque pixels, for hull tracing. */
+function pngMask(png: PNG): Mask {
+    return {
+        width: png.width,
+        height: png.height,
+        isFilled: (x, y) => x >= 0 && x < png.width && y >= 0 && y < png.height
+            && png.data[(png.width * y + x) * 4 + 3] === 255,
+    };
+}
+
+/**
+ * The opaque pixels of several sprite frames laid on top of each other,
+ * each centred in the combined canvas — the same way the display stacks a
+ * ship's layers (every sprite in an AnimationGraphic shares one container
+ * and is anchored at its own centre).
+ *
+ * Materialized into a byte array rather than composed as nested
+ * predicates because traceOutline probes every pixel several times.
+ */
+export function unionMask(masks: Mask[]): Mask {
+    const width = Math.max(...masks.map(m => m.width));
+    const height = Math.max(...masks.map(m => m.height));
+    const filled = new Uint8Array(width * height);
+    for (const mask of masks) {
+        // Integer offsets keep the union deterministic; both of stock
+        // Nova's layers are the same even size, so nothing shifts.
+        const offsetX = (width - mask.width) >> 1;
+        const offsetY = (height - mask.height) >> 1;
+        for (let y = 0; y < mask.height; y++) {
+            for (let x = 0; x < mask.width; x++) {
+                if (mask.isFilled(x, y)) {
+                    filled[(y + offsetY) * width + (x + offsetX)] = 1;
+                }
+            }
+        }
+    }
+    return {
+        width, height,
+        isFilled: (x, y) => x >= 0 && x < width && y >= 0 && y < height
+            && filled[y * width + x] === 1,
+    };
+}
+
 // Includes in its output any points that are not black
-function makeVisibleArray(png: PNG): Array<[number, number]> {
+function makeVisibleArray(mask: Mask): Array<[number, number]> {
     var visibleArray: Array<[number, number]> = [];
 
-    var origin = [png.width / 2, png.height / 2];
+    var origin = [mask.width / 2, mask.height / 2];
 
-    for (var y = 0; y < png.height; y++) {
-        for (var x = 0; x < png.width; x++) {
-            var idx = (png.width * y + x) << 2;
-            if (png.data[idx + 3] === 255) {
+    for (var y = 0; y < mask.height; y++) {
+        for (var x = 0; x < mask.width; x++) {
+            if (mask.isFilled(x, y)) {
                 visibleArray.push([x - origin[0], -(y - origin[1])]);
             }
 
@@ -100,9 +145,9 @@ function makeVisibleArray(png: PNG): Array<[number, number]> {
     return visibleArray;
 }
 
-function makeConvexHull(png: PNG): ConvexHull {
+function makeConvexHull(mask: Mask): ConvexHull {
     // No concavity. Convex hull.
-    var visibleArray = makeVisibleArray(png);
+    var visibleArray = makeVisibleArray(mask);
     // TODO: Maybe replace this with rust's fast convex hull
     var hullWithRepeat = hull(visibleArray, Infinity) as ConvexHull;
     // If the hull is empty, return the default conved hull instead.
@@ -126,31 +171,54 @@ const MAX_HULL_COMPONENTS = 8;
 // outline, so concave ships get a hull per protrusion instead of one
 // convex hull spanning their notches. Purely deterministic in the sprite
 // data; collision geometry must match across clients.
-function makeHull(png: PNG): Hull {
-    const outline = traceOutline({
-        width: png.width,
-        height: png.height,
-        isFilled: (x, y) => x >= 0 && x < png.width && y >= 0 && y < png.height
-            && png.data[(png.width * y + x) * 4 + 3] === 255,
-    });
+function makeHull(mask: Mask): Hull {
+    const outline = traceOutline(mask);
     if (outline) {
         // Same centered, y-up frame as makeVisibleArray.
         const centered = outline.map(([x, y]): Point =>
-            [x - png.width / 2, -(y - png.height / 2)]);
+            [x - mask.width / 2, -(y - mask.height / 2)]);
         const simplified = simplifyPolygon(centered, OUTLINE_SIMPLIFY_EPSILON);
         const tolerance = Math.max(MIN_CONCAVITY_TOLERANCE,
-            Math.max(png.width, png.height) * CONCAVITY_TOLERANCE_RATIO);
+            Math.max(mask.width, mask.height) * CONCAVITY_TOLERANCE_RATIO);
         const components = decomposePolygon(
             simplified, tolerance, MAX_HULL_COMPONENTS);
         if (components.length > 0) {
             return components;
         }
     }
-    return [makeConvexHull(png)];
+    return [makeConvexHull(mask)];
 }
 
-function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
-    var frames = rled.frames;
+/**
+ * One hull per frame of the base sheet, with the shän's always-drawn alt
+ * layer (if any) folded in.
+ *
+ * traceOutline keeps only the LARGEST connected region, so a ship whose
+ * base sheet is two disconnected pieces — the Aurora Thunderforge's fore
+ * and aft sections — used to get a hull around one piece and nothing
+ * else. Unioning the alt drum that visually bridges them also reconnects
+ * the silhouette, which is what makes a single traced outline correct
+ * again.
+ */
+export function makeHulls(frames: Array<PNG>,
+    overlay?: { frames: Array<PNG>, framesPer: number }): Hull[] {
+    if (!overlay || overlay.frames.length === 0) {
+        // Byte-for-byte the pre-overlay path: one mask, no compositing.
+        return frames.map(frame => makeHull(pngMask(frame)));
+    }
+    const overlayMasks = overlay.frames.map(pngMask);
+    return frames.map((frame, index) => {
+        const masks = [pngMask(frame)];
+        for (const overlayFrame of overlayFramesForBaseFrame(
+            index, overlay.framesPer, overlayMasks.length)) {
+            masks.push(overlayMasks[overlayFrame]);
+        }
+        return makeHull(unionMask(masks));
+    });
+}
+
+function buildSpriteSheetFrames(rled: RledResource,
+    frames: Array<PNG>): SpriteSheetFramesData {
     var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
 
     var imagePath = path.join(DefaultImageLocation, rled.globalID + ".png");
@@ -194,19 +262,25 @@ function buildSpriteSheetFrames(rled: RledResource): SpriteSheetFramesData {
 
 // Parses SpriteSheet, SpriteSheetImage, and SpriteSheetFrames at the same time
 // They are separated from each other due to PIXI.js peculiarities.
-export async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction: (m: string) => void): Promise<SpriteSheetMulti> {
+export async function SpriteSheetMultiParse(rled: RledResource,
+    notFoundFunction: (m: string) => void,
+    overlayFrames?: { frames: Array<PNG>, framesPer: number },
+): Promise<SpriteSheetMulti> {
     const base: BaseData = await BaseParse(rled, notFoundFunction);
 
-    const assembledPNG: PNG = buildPNG(rled.frames);
+    // `frames` is a getter that re-decodes the whole sheet on every read.
+    const frames = rled.frames;
+
+    const assembledPNG: PNG = buildPNG(frames);
     const buf = PNG.sync.write(assembledPNG);
     const spriteSheetImage = bufferToArrayBuffer(buf);
 
     const spriteSheet: SpriteSheetData = {
         ...base,
-        hulls: rled.frames.map(makeHull),
+        hulls: makeHulls(frames, overlayFrames),
     }
 
-    const spriteSheetFrames = buildSpriteSheetFrames(rled);
+    const spriteSheetFrames = buildSpriteSheetFrames(rled, frames);
 
     return {
         spriteSheet,
@@ -214,3 +288,29 @@ export async function SpriteSheetMultiParse(rled: RledResource, notFoundFunction
         spriteSheetFrames
     };
 };
+
+/**
+ * SpriteSheetMultiParse bound to the id space's base-image -> alt-image
+ * map, so a ship whose hull is split across two sprite layers (the Aurora
+ * Thunderforge) gets one collision hull covering both. See
+ * hull_overlay_map.ts.
+ */
+export function SpriteSheetMultiParseClosure(
+    overlayMap: Promise<HullOverlayMap>,
+    overlayFrames: (overlayId: string) => Promise<Array<PNG> | undefined>) {
+    return async function(rled: RledResource,
+        notFoundFunction: (m: string) => void): Promise<SpriteSheetMulti> {
+        const entry = (await overlayMap)[rled.globalID];
+        let overlay: { frames: Array<PNG>, framesPer: number } | undefined;
+        if (entry) {
+            const frames = await overlayFrames(entry.overlayId);
+            if (frames?.length) {
+                overlay = { frames, framesPer: entry.framesPer };
+            } else {
+                notFoundFunction(`rlëD id ${rled.globalID} names hull`
+                    + ` overlay ${entry.overlayId}, which is not available.`);
+            }
+        }
+        return SpriteSheetMultiParse(rled, notFoundFunction, overlay);
+    };
+}

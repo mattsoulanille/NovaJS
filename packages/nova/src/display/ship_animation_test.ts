@@ -1,5 +1,8 @@
 import 'jasmine';
-import { advanceWeaponFlash, continuousRawSet, foldSetIndex, weapDecayAlphaPerSecond } from './ship_animation_plugin.js';
+import {
+    advanceWeaponFlash, applyIonizationTint, continuousRawSet, foldSetIndex,
+    IONIZATION_TINTED_LAYERS, weapDecayAlphaPerSecond,
+} from './ship_animation_plugin.js';
 
 // The stock folding ship (Argosy nova:138 -> rlëD nova:1020) has SIX
 // base sets of 36 frames, as does the Asteroid Miner from the
@@ -131,5 +134,73 @@ describe('continuousRawSet (spin phase -> raw set index)', () => {
         const raw = continuousRawSet(1000, 6); // 6
         expect(raw % 3).toBe(0);
         expect(continuousRawSet(1167, 6) % 3).toBe(7 % 3); // 1
+    });
+});
+
+/**
+ * A ship is drawn as a stack of shän sprite layers, and the ionization
+ * colour has to reach the ones the ship's structure is actually made of.
+ * The Aurora Thunderforge (shän nova:380) is the case that exposed it:
+ * its base image is only the fore and aft sections, the whole spinning
+ * drum between them is the alt image, and tinting only the base left the
+ * middle of an ionized ship its normal colour.
+ */
+describe('applyIonizationTint (which sprite layers take the ion colour)', () => {
+    const IONIZED_GREY = 0x888888;
+    const NO_TINT = 0xffffff;
+
+    // Stand-ins for SpriteSheetSprite: only `.pixiSprite.tint` matters.
+    function fakeSprites(...layers: string[]) {
+        return new Map(layers.map(
+            layer => [layer, { pixiSprite: { tint: NO_TINT } }]));
+    }
+    const tints = (sprites: ReturnType<typeof fakeSprites>) =>
+        Object.fromEntries([...sprites].map(
+            ([layer, sprite]) => [layer, sprite.pixiSprite.tint]));
+
+    it('tints the alt image along with the base image', () => {
+        const sprites = fakeSprites('baseImage', 'altImage');
+        applyIonizationTint(sprites, true, IONIZED_GREY);
+        expect(tints(sprites))
+            .toEqual({ baseImage: IONIZED_GREY, altImage: IONIZED_GREY });
+    });
+
+    it('leaves the additive effect layers untinted', () => {
+        // glow/light/weap are BLEND_MODES.ADD overlays: light the ship
+        // emits, not a surface of it. Tinting them would dim that light.
+        const sprites = fakeSprites(
+            'baseImage', 'glowImage', 'lightImage', 'weapImage',
+            'shieldImage');
+        applyIonizationTint(sprites, true, IONIZED_GREY);
+        expect(tints(sprites)).toEqual({
+            baseImage: IONIZED_GREY,
+            glowImage: NO_TINT,
+            lightImage: NO_TINT,
+            weapImage: NO_TINT,
+            shieldImage: NO_TINT,
+        });
+    });
+
+    it('clears the tint off every structural layer when not ionized', () => {
+        const sprites = fakeSprites('baseImage', 'altImage');
+        applyIonizationTint(sprites, true, IONIZED_GREY);
+        applyIonizationTint(sprites, false, IONIZED_GREY);
+        expect(tints(sprites))
+            .toEqual({ baseImage: NO_TINT, altImage: NO_TINT });
+    });
+
+    it('drops the alpha byte of the ion colour', () => {
+        // wëap IonizeColor is stored like an HTML colour; PIXI tints are
+        // RGB only.
+        const sprites = fakeSprites('baseImage');
+        applyIonizationTint(sprites, true, 0xff112233);
+        expect(tints(sprites)).toEqual({ baseImage: 0x112233 });
+    });
+
+    it('does nothing for a layer the ship does not have', () => {
+        const sprites = fakeSprites('baseImage');
+        expect(() => applyIonizationTint(sprites, true, IONIZED_GREY))
+            .not.toThrow();
+        expect(IONIZATION_TINTED_LAYERS).toContain('altImage');
     });
 });

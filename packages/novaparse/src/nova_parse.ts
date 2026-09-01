@@ -55,7 +55,8 @@ import { PpatImageParse } from "./parsers/ppat_image_parse.js";
 import { RankParse } from "./parsers/rank_parse.js";
 import { resourceIDNotFoundStrict, resourceIDNotFoundWarn } from "./parsers/resource_id_not_found.js";
 import { AmmoOutfitMap, ShipParseClosure, ShipPictMap, WeaponOutfitMap } from "./parsers/ship_parse.js";
-import { SpriteSheetMulti, SpriteSheetMultiParse } from "./parsers/sprite_sheet_multi_parse.js";
+import { SpriteSheetMulti, SpriteSheetMultiParseClosure } from "./parsers/sprite_sheet_multi_parse.js";
+import { HullOverlayMap, makeHullOverlayMap } from "./parsers/hull_overlay_map.js";
 import { StatusBarParse } from "./parsers/status_bar_parse.js";
 import { StringTableParse } from "./parsers/string_table_parse.js";
 import { DescriptionParse } from "./parsers/description_parse.js";
@@ -120,6 +121,7 @@ export class NovaParse implements GameDataInterface {
     private spriteSheetFramesGettable: Gettable<SpriteSheetFramesData>;
     private spriteSheetImageGettable: Gettable<SpriteSheetImageData>;
     private spriteSheetMultiGettable: Gettable<SpriteSheetMulti>;
+    private hullOverlayMap: Promise<HullOverlayMap>;
 
     private shipParser: (s: ShipResource, m: (message: string) => void) => Promise<ShipData>;
 
@@ -215,7 +217,11 @@ export class NovaParse implements GameDataInterface {
 
 
         // Holds spriteSheetMulti which gets split up
-        this.spriteSheetMultiGettable = this.makeGettable<RledResource, SpriteSheetMulti>(NovaResourceType.rlëD, SpriteSheetMultiParse);
+        this.hullOverlayMap = this.makeHullOverlayMap();
+        this.spriteSheetMultiGettable = this.makeGettable<RledResource, SpriteSheetMulti>(
+            NovaResourceType.rlëD,
+            SpriteSheetMultiParseClosure(this.hullOverlayMap,
+                this.getOverlayFrames.bind(this)));
         // Since everything about a spriteSheet is parsed at once, it needs to be split up here
         this.spriteSheetDataGettable = new Gettable(this.getSpriteSheetData.bind(this));
         this.spriteSheetImageGettable = new Gettable(this.getSpriteSheetImage.bind(this));
@@ -362,6 +368,28 @@ export class NovaParse implements GameDataInterface {
 
             return await parseFunction(resource, this.resourceNotFoundFunction);
         });
+    }
+
+    /**
+     * Which alt-image sheet belongs to each base-image sheet, so a ship
+     * drawn from two structural sprite layers gets a collision hull
+     * covering both (hull_overlay_map.ts).
+     */
+    private async makeHullOverlayMap(): Promise<HullOverlayMap> {
+        const idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return {};
+        }
+        return makeHullOverlayMap(idSpace);
+    }
+
+    /** The decoded frames of an overlay rlëD, or undefined if it is gone. */
+    private async getOverlayFrames(overlayId: string) {
+        const idSpace = await this.idSpace;
+        if (idSpace instanceof Error) {
+            return undefined;
+        }
+        return idSpace.rlëD[overlayId]?.frames;
     }
 
     // shïps whose corresponding PICT does not exist

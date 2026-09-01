@@ -33,6 +33,48 @@ const CLOAKED_ALPHA_SELF = 0.25;
 const CLOAKED_ALPHA_REVEALED = 0.4;
 const UNCLOAKED_ALPHA = 1.0;
 
+/**
+ * The shän layers that take the ionization colour — the ship's own
+ * structure, as opposed to the effects drawn over it.
+ *
+ * "IonizeColor: the color that a ship hit by this weapon will appear
+ * after being sufficiently ionized" (EVN Bible, wëap) — the SHIP, so
+ * every layer the hull is actually made of. That is baseImage plus
+ * altImage, the always-drawn extra sprite set: the Aurora Thunderforge
+ * (shän nova:380) keeps its fore and aft sections in the base image and
+ * the entire spinning drum between them in the alt image, and tinting
+ * only the base left the middle of an ionized ship its normal colour.
+ *
+ * The remaining layers are deliberately left alone. glowImage,
+ * lightImage and weapImage are ADDITIVE overlays (shan_parse.ts gives
+ * them BLEND_MODES.ADD) for the engine flare, running lights and muzzle
+ * flash — light emitted by the ship rather than a surface of it, and
+ * tinting an additive sprite darkens the light it adds rather than
+ * colouring anything. shieldImage is a separate hit effect that is
+ * currently never shown at all.
+ */
+export const IONIZATION_TINTED_LAYERS: readonly string[] =
+    ['baseImage', 'altImage'];
+
+const NO_TINT = 0xffffff;
+
+/**
+ * Paints the ionization colour over every structural layer of a ship's
+ * graphic (or clears it). Takes the sprite map rather than the graphic so
+ * it stays testable without a PIXI renderer.
+ */
+export function applyIonizationTint<
+    T extends { pixiSprite: { tint: unknown } }>(
+        sprites: ReadonlyMap<string, T>, ionized: boolean, color: number) {
+    const tint = ionized ? color & 0xFFFFFF : NO_TINT;
+    for (const layer of IONIZATION_TINTED_LAYERS) {
+        const sprite = sprites.get(layer);
+        if (sprite) {
+            sprite.pixiSprite.tint = tint;
+        }
+    }
+}
+
 // The local player's cloak scanner, if any. Used to reveal other ships'
 // cloaks on screen (scanner ModVal 0x0002).
 const PlayerScannerQuery = new Query(
@@ -237,14 +279,8 @@ export const ShipAnimationSystem = new System({
             runningLights.pixiSprite.alpha = light.alpha;
         }
 
-        const sprite = animation.sprites.get('baseImage')?.pixiSprite;
-        if (sprite) {
-            if (ionized) {
-                sprite.tint = ionizationColor.color & 0xFFFFFF;
-            } else {
-                sprite.tint = 0xffffff;
-            }
-        }
+        applyIonizationTint(animation.sprites, ionized,
+            ionizationColor.color);
 
         // Cloak transparency (display-only). A cloaked ship fades toward
         // invisible; your own ship stays a faint ghost so you can fly it.
