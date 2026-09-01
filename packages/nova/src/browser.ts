@@ -239,20 +239,24 @@ const displayScaleListeners = new Set<() => void>();
  * Called on window resize, on a page-zoom-driven devicePixelRatio change,
  * and whenever the player moves either scale.
  */
-function applyDisplayScale(): void {
+function applyDisplayScale(target?: World): void {
+    // `target` is for the one caller that runs BEFORE the module-level
+    // `displayWorld` has been repointed at the world it just built (the
+    // system transition): everyone else means the live display world.
+    const scaled = target ?? displayWorld;
     scaleLayout = computeScaleLayout(currentScaleInputs());
     applyRendererScale(
         app.renderer as unknown as ScalableView, scaleLayout);
     setDefaultTextResolution(scaleLayout.textResolution);
     refreshTextResolution(app.stage, scaleLayout.textResolution);
     titleUiLayer.scale.set(scaleLayout.uiScale);
-    displayWorld?.resources.get(Stage)?.scale.set(scaleLayout.uiScale);
-    const scaleResource = displayWorld?.resources.get(DisplayScaleResource);
+    scaled?.resources.get(Stage)?.scale.set(scaleLayout.uiScale);
+    const scaleResource = scaled?.resources.get(DisplayScaleResource);
     if (scaleResource) {
         scaleResource.ui = scaleLayout.uiScale;
         scaleResource.global = displaySettings.globalScale;
     }
-    displayWorld?.emit(ResizeEvent, {
+    scaled?.emit(ResizeEvent, {
         x: scaleLayout.uiWidth, y: scaleLayout.uiHeight,
         worldX: scaleLayout.worldWidth, worldY: scaleLayout.worldHeight,
     });
@@ -1572,7 +1576,7 @@ async function enterSystem({ entity, to, uuid }:
     // one ResizeEvent so ScreenSize / WorldScreenSize are right from the
     // first frame rather than the window-sized values ScreenSizePlugin
     // seeds them with.
-    applyDisplayScale();
+    applyDisplayScale(newDisplayWorld);
 
     newDisplayWorld.events.get(LeaveSpaceportEvent).subscribe(({ data }) => {
         pendingLaunchedShip = data;
