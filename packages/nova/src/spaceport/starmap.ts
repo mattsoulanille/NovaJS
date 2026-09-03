@@ -236,6 +236,38 @@ export function representativeSystems<
  * systems (sÿst 510/521/582/593) hold a stellar that is inhabited but NOT
  * landable, and no reference screenshot covers them. They draw grey here,
  * on the reading that the map is showing ports.
+ *
+ * WHY 0x0020 AND NOT THE STELLAR'S GOVERNMENT (Matthew, 2026-09-02, "why is
+ * Heraan Hiro grey? it has a station with a mission BBS"). Every reference
+ * capture is centred on Sol or Kania, so nothing measures the Auroran half of
+ * the galaxy, and rule 2 has a rival that the screenshots alone cannot rule
+ * out: "landable AND (0x0020 clear OR the stellar has a government)". That
+ * rule would flip Heraan Hiro (sÿst 340) blue, because its lone stellar
+ * Mortosch (spöb 357, Flags 0x00000031 = land + station + uninhabited, no
+ * service bits, TechLevel -1) belongs to gövt 135 Family Heraan.
+ *
+ * The stock data refutes it anyway, in New Ireland's four-state story arc —
+ * one planet, one government, four spöbs the NCB swaps between:
+ *
+ *   Tuatha nova:185 (!b850)        New Ireland 139  0x1041224f  tech 5
+ *   Tuatha nova:762 (b850 & !b851) New Ireland 506  0x10012221  tech 0
+ *   Tuatha nova:763 (b851 & !b852) New Ireland 507  0x40201443  tech 5
+ *   Tuatha nova:764 (b852)         New Ireland 508  0x1001224f  tech 5
+ *
+ * gövt 144 throughout; what moves is 0x0020 and the service bits, as the
+ * world is devastated and then rebuilt. If a government overrode 0x0020 the
+ * depopulated state would still draw blue, and the arc would say nothing.
+ * 0x0020 IS the habitation switch, and the government is orthogonal to it.
+ *
+ * So a landable, uninhabited, serviceless station draws grey even though its
+ * spaceport still opens and its Mission BBS still lists work. That is not an
+ * inconsistency: no spöb flag governs the Mission BBS at all (the Flags word
+ * has bits for the commodity exchange, outfitter, shipyard and bar and none
+ * for the mission computer), so the BBS button is unconditional on every
+ * landable stellar, and the missions Mortosch offers reach it through
+ * AvailStel 10007, "a stellar of gövt 135" — a selector the Bible does not
+ * habitation-filter, unlike AvailStel -1 "any inhabited stellar". A BBS with
+ * missions on it is therefore no evidence of habitation.
  */
 export function systemDotColor(explored: boolean,
     inhabited: boolean): number {

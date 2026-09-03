@@ -102,6 +102,79 @@ describe('star map inhabited coloring (stock data)', () => {
                 .toBe(SYSTEM_UNEXPLORED_COLOR);
         });
 
+    /**
+     * Heraan Hiro (Matthew, 2026-09-02: "why does it show up as uninhabited?
+     * It has a station with a mission BBS"). Its lone stellar Mortosch is
+     * landable, a station, and flagged uninhabited, with no service bits at
+     * all — the same shape as the two systems MEASURED grey in the original
+     * — so grey is faithful. See starmap.ts systemDotColor for the reference
+     * measurement and for why a mission BBS is not evidence of habitation.
+     */
+    it('draws Heraan Hiro grey: Mortosch is a landable, serviceless, '
+        + 'UNINHABITED station', () => {
+            const hiro = universe.system('nova:340');
+            expect(hiro.name).toBe('Heraan Hiro');
+            expect(hiro.planets).toEqual(['nova:357']);
+            const mortosch = universe.planets.get('nova:357')!;
+            expect(mortosch.name).toBe('Mortosch');
+            // spöb Flags 0x00000031 = 0x0001 land | 0x0010 station | 0x0020
+            // uninhabited. Nothing else is set.
+            expect(mortosch.flags.canLand).toBeTrue();
+            expect(mortosch.flags.isStation).toBeTrue();
+            expect(mortosch.flags.uninhabited).toBeTrue();
+            expect(mortosch.flags.hasBar).toBeFalse();
+            expect(mortosch.flags.hasCommodityExchange).toBeFalse();
+            expect(mortosch.flags.hasOutfitter).toBeFalse();
+            expect(mortosch.flags.hasShipyard).toBeFalse();
+            expect(isPort(mortosch.flags)).toBeFalse();
+            expect(universe.inhabited(hiro)).toBeFalse();
+            expect(systemDotColor(true, universe.inhabited(hiro)))
+                .toBe(SYSTEM_UNINHABITED_COLOR);
+        });
+
+    /**
+     * The rival rule the reference screenshots cannot rule out — "a stellar
+     * with a government counts as inhabited whatever 0x0020 says", which
+     * would turn Heraan Hiro blue — is refuted by the stock data itself.
+     * New Ireland's four NCB-swapped states keep gövt 144 throughout while
+     * 0x0020 and the service bits move as the world is devastated and
+     * rebuilt: under the rival rule the depopulated state would still draw
+     * blue, and the whole arc would be invisible on the map.
+     */
+    it('refutes "a government overrides the uninhabited bit": New Ireland '
+        + 'stays gövt 144 through its devastation, and only 0x0020 moves',
+        () => {
+            const states = [
+                { system: 'nova:185', stellar: 'nova:139', uninhabited: false },
+                { system: 'nova:762', stellar: 'nova:506', uninhabited: true },
+                { system: 'nova:763', stellar: 'nova:507', uninhabited: false },
+                { system: 'nova:764', stellar: 'nova:508', uninhabited: false },
+            ];
+            for (const state of states) {
+                const tuatha = universe.system(state.system);
+                expect(tuatha.name).toBe('Tuatha');
+                expect(tuatha.planets).toEqual([state.stellar]);
+                const newIreland = universe.planets.get(state.stellar)!;
+                expect(newIreland.name).toBe('New Ireland');
+                // The constant: the same government owns every state.
+                expect(newIreland.govt).toBe('nova:144');
+                expect(newIreland.flags.canLand).toBeTrue();
+                // The variable: habitation, and with it the map dot.
+                expect(newIreland.flags.uninhabited).toBe(state.uninhabited);
+                expect(universe.inhabited(tuatha)).toBe(!state.uninhabited);
+            }
+        });
+
+    it('has no stock stellar that is landable and uninhabited yet still '
+        + 'offers a service — so no "services override 0x0020" rule is '
+        + 'measurable, let alone needed', () => {
+            const contradictions = [...universe.planets.values()].filter(p =>
+                p.flags.canLand && p.flags.uninhabited
+                && (p.flags.hasBar || p.flags.hasCommodityExchange
+                    || p.flags.hasOutfitter || p.flags.hasShipyard));
+            expect(contradictions.map(p => p.name)).toEqual([]);
+        });
+
     it('is strictly narrower than the old "has any spöb" rule', () => {
         const withSpobs = universe.systems
             .filter(s => s.planets.length > 0);
