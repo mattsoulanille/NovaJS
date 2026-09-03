@@ -1,7 +1,7 @@
 import 'jasmine';
 import {
     advanceWeaponFlash, applyIonizationTint, continuousRawSet, foldSetIndex,
-    IONIZATION_TINTED_LAYERS, weapDecayAlphaPerSecond,
+    IONIZATION_TINTED_LAYERS, LEGACY_IONIZATION_COLOR, weapDecayAlphaPerSecond,
 } from './ship_animation_plugin.js';
 
 // The stock folding ship (Argosy nova:138 -> rlëD nova:1020) has SIX
@@ -146,7 +146,8 @@ describe('continuousRawSet (spin phase -> raw set index)', () => {
  * middle of an ionized ship its normal colour.
  */
 describe('applyIonizationTint (which sprite layers take the ion colour)', () => {
-    const IONIZED_GREY = 0x888888;
+    // The stock Ion Cannon's own wëap IonizeColor (nova:142).
+    const ION_BLUE = 0x34c2ff;
     const NO_TINT = 0xffffff;
 
     // Stand-ins for SpriteSheetSprite: only `.pixiSprite.tint` matters.
@@ -160,9 +161,9 @@ describe('applyIonizationTint (which sprite layers take the ion colour)', () => 
 
     it('tints the alt image along with the base image', () => {
         const sprites = fakeSprites('baseImage', 'altImage');
-        applyIonizationTint(sprites, true, IONIZED_GREY);
+        applyIonizationTint(sprites, true, ION_BLUE);
         expect(tints(sprites))
-            .toEqual({ baseImage: IONIZED_GREY, altImage: IONIZED_GREY });
+            .toEqual({ baseImage: ION_BLUE, altImage: ION_BLUE });
     });
 
     it('leaves the additive effect layers untinted', () => {
@@ -171,9 +172,9 @@ describe('applyIonizationTint (which sprite layers take the ion colour)', () => 
         const sprites = fakeSprites(
             'baseImage', 'glowImage', 'lightImage', 'weapImage',
             'shieldImage');
-        applyIonizationTint(sprites, true, IONIZED_GREY);
+        applyIonizationTint(sprites, true, ION_BLUE);
         expect(tints(sprites)).toEqual({
-            baseImage: IONIZED_GREY,
+            baseImage: ION_BLUE,
             glowImage: NO_TINT,
             lightImage: NO_TINT,
             weapImage: NO_TINT,
@@ -183,8 +184,8 @@ describe('applyIonizationTint (which sprite layers take the ion colour)', () => 
 
     it('clears the tint off every structural layer when not ionized', () => {
         const sprites = fakeSprites('baseImage', 'altImage');
-        applyIonizationTint(sprites, true, IONIZED_GREY);
-        applyIonizationTint(sprites, false, IONIZED_GREY);
+        applyIonizationTint(sprites, true, ION_BLUE);
+        applyIonizationTint(sprites, false, ION_BLUE);
         expect(tints(sprites))
             .toEqual({ baseImage: NO_TINT, altImage: NO_TINT });
     });
@@ -197,9 +198,37 @@ describe('applyIonizationTint (which sprite layers take the ion colour)', () => 
         expect(tints(sprites)).toEqual({ baseImage: 0x112233 });
     });
 
+    it('paints the colour it is given, not one colour for everything',
+        () => {
+            // The tint IS the ionizing weapon's wëap IonizeColor, so two
+            // ships ionized by different weapons must not look alike:
+            // Ion Cannon blue (nova:142) vs Polaron Torp. magenta
+            // (nova:148) vs EMP Torp. pale cyan (nova:160).
+            const paint = (color: number) => {
+                const sprites = fakeSprites('baseImage');
+                applyIonizationTint(sprites, true, color);
+                return tints(sprites).baseImage;
+            };
+            expect(paint(0xff34c2ff)).toEqual(0x34c2ff);
+            expect(paint(0xffff00ff)).toEqual(0xff00ff);
+            expect(paint(0xffd4ffff)).toEqual(0xd4ffff);
+        });
+
+    it('keeps the historical grey as the absent-component fallback', () => {
+        // ShipAnimationSystem takes IonizationColorComponent as Optional
+        // and substitutes this when a wire snapshot or save predates the
+        // synced colour, so legacy state still reads as "ionized".
+        expect(LEGACY_IONIZATION_COLOR).toEqual(0x888888);
+        const sprites = fakeSprites('baseImage', 'altImage');
+        applyIonizationTint(sprites, true, LEGACY_IONIZATION_COLOR);
+        expect(tints(sprites)).toEqual({
+            baseImage: 0x888888, altImage: 0x888888,
+        });
+    });
+
     it('does nothing for a layer the ship does not have', () => {
         const sprites = fakeSprites('baseImage');
-        expect(() => applyIonizationTint(sprites, true, IONIZED_GREY))
+        expect(() => applyIonizationTint(sprites, true, ION_BLUE))
             .not.toThrow();
         expect(IONIZATION_TINTED_LAYERS).toContain('altImage');
     });

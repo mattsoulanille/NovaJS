@@ -2,7 +2,7 @@ import { Animation, getDefaultAnimation, getDefaultExitPoints } from "novadatain
 import { BaseData } from "novadatainterface/base_data";
 import { NovaDataType } from "novadatainterface/nova_data_interface";
 import { getDefaultShipData } from "novadatainterface/ship_data";
-import { AmmoType, BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, SubmunitionType, WeaponDamage, WeaponData } from "novadatainterface/weapon_data";
+import { AmmoType, BaseWeaponData, BayGuidanceSet, BayWeaponData, BeamGuidanceSet, BeamGuidanceType, BeamWeaponData, DamageType, NotBayWeaponData, ProjectileGuidanceSet, ProjectileGuidanceType, ProjectileWeaponData, resolveIonizeColor, SubmunitionType, WeaponDamage, WeaponData } from "novadatainterface/weapon_data";
 import { BLEND_MODES } from "novadatainterface/blend_modes";
 import { WeapResource } from "../resource_parsers/weap_resource.js";
 import { BaseParse } from "./base_parse.js";
@@ -120,7 +120,11 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
         shield: weap.shieldDamage,
         armor: weap.armorDamage,
         ionization: weap.ionization,
-        ionizationColor: weap.ionizeColor,
+        // wëap IonizeColor, zero sentinel resolved here so nothing
+        // downstream has to know about it (EVN Bible: "A value of 0 here
+        // will be interpreted as a default bluish color"). Two stock
+        // weapons need it — Polaron Massive Torp. and Solar Lance.
+        ionizationColor: resolveIonizeColor(weap.ionizeColor),
         passThroughShield: weap.passThroughShields ? 1 : 0,
         knockback: weap.impact,
         // Flags2 0x1000 "Weapon can disable but not destroy".

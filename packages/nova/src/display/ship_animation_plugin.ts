@@ -59,9 +59,36 @@ export const IONIZATION_TINTED_LAYERS: readonly string[] =
 const NO_TINT = 0xffffff;
 
 /**
+ * The tint for an ionized ship whose IonizationColorComponent never
+ * arrived — a wire snapshot or save from before the colour was synced.
+ * The grey NovaJS used to paint every ionized ship, kept so legacy state
+ * still reads as "ionized" rather than as an untinted ship.
+ */
+export const LEGACY_IONIZATION_COLOR = 0x888888;
+
+/**
  * Paints the ionization colour over every structural layer of a ship's
  * graphic (or clears it). Takes the sprite map rather than the graphic so
  * it stays testable without a PIXI renderer.
+ *
+ * The colour is applied as a PIXI multiply TINT, which is what "the ship
+ * will appear that color" means for a sprite: each hull pixel keeps its
+ * own shading and is multiplied toward the ion colour, so a hull lit by
+ * an Ion Cannon goes blue and one lit by a Polaron Torpedo goes magenta
+ * while both keep their panel detail. It is also why the Bible warns to
+ * use bright colours — a dark IonizeColor multiplies the hull toward
+ * black instead of colouring it, and a zero field would black it out
+ * entirely (see resolveIonizeColor, which never lets one through).
+ *
+ * The tint is BINARY, not a ramp. This is a choice, not a limitation:
+ * IonizationComponent is delta-registered and so its raw charge does
+ * reach the display world, and white->IonizeColor interpolated by
+ * charge/threshold would have been available. But the Bible ties the
+ * colour to the ship "being sufficiently ionized" — a threshold, which
+ * is exactly what IsIonizedComponent already is — and says nothing about
+ * fading the hull in as the charge builds. So the hull snaps to colour
+ * when the ship crosses into ionization and snaps back when it drops
+ * out. Revisit if a capture of the original ever shows a ramp.
  */
 export function applyIonizationTint<
     T extends { pixiSprite: { tint: unknown } }>(
@@ -225,7 +252,7 @@ export const ShipAnimationSystem = new System({
     name: "ShipAnimationSystem",
     args: [ShipComponent, WeaponsStateComponent, SimulationGameDataResource,
         AnimationGraphicComponent, TimeResource, IsIonizedComponent,
-        IonizationColorComponent, Optional(CloakActiveComponent),
+        Optional(IonizationColorComponent), Optional(CloakActiveComponent),
         Optional(DisabledComponent), PlayerScannerQuery, GetEntity, UUID,
         ActiveBeamsQuery] as const,
     step(ship, weaponStates, gameData, animation, time, ionized, ionizationColor,
@@ -279,8 +306,13 @@ export const ShipAnimationSystem = new System({
             runningLights.pixiSprite.alpha = light.alpha;
         }
 
+        // The tint is whatever the SIM recorded — shared, serialized
+        // state, so every peer sees the same colour on the same hull.
+        // Optional because the component may be missing from an old wire
+        // snapshot or save; that falls back to the historical grey
+        // rather than dropping the ship out of this system entirely.
         applyIonizationTint(animation.sprites, ionized,
-            ionizationColor.color);
+            ionizationColor?.color ?? LEGACY_IONIZATION_COLOR);
 
         // Cloak transparency (display-only). A cloaked ship fades toward
         // invisible; your own ship stays a faint ghost so you can fly it.

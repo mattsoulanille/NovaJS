@@ -70,7 +70,23 @@ const DamageSystem = new System({
 
         if (damage.ionization !== 0 && ionization) {
             ionization.current += damage.ionization * scale;
-            if (ionizationColor) {
+            // LAST IONIZING HIT WINS. The wëap IonizeColor of the weapon
+            // that just ionized this ship becomes the colour it shows
+            // while ionized (EVN Bible: "the color that a ship hit by
+            // this weapon will appear after being sufficiently
+            // ionized"). The Bible says nothing about two ionizing
+            // weapons of different colours landing on one ship, so we
+            // take the simplest deterministic rule: whichever ionizing
+            // hit landed most recently owns the colour. Within a tick
+            // that is the last DamagedEvent handled, which the ECS
+            // orders deterministically, so every peer paints the same
+            // hull — and a single-weapon barrage, the overwhelmingly
+            // common case, looks identical under any rule.
+            //
+            // Gated on a POSITIVE amount: only a hit that actually adds
+            // ionization is an "ionizing hit". A weapon with negative
+            // Ionization is draining the charge, not painting the ship.
+            if (ionizationColor && damage.ionization > 0) {
                 ionizationColor.color = damage.ionizationColor;
             }
         }

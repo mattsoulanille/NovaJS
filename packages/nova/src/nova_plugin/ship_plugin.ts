@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import { OutfitData } from "novadatainterface/outfit_data";
 import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
+import { DEFAULT_IONIZE_COLOR } from "novadatainterface/weapon_data";
 import { GetEntity } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { System } from 'nova_ecs/system';
@@ -301,12 +302,22 @@ const ShipIonizationProvider = shipStatSystem(
     }),
     () => 0);
 
+/**
+ * A ship's ionization colour before any ionizing weapon has hit it.
+ *
+ * DamageSystem overwrites this with the wëap IonizeColor of each
+ * ionizing hit, so in practice a ship is never displayed on this value —
+ * you cannot be ionized without having been hit by something that
+ * ionizes. It stands in for the Bible's zero sentinel: any future
+ * non-weapon ionization source gets "a default bluish color" for free
+ * rather than a hardcoded grey that no wëap field ever asked for.
+ */
 const ShipIonizationColorProvider = Provide({
     name: "ShipIonizationColorProvider",
     provided: IonizationColorComponent,
     args: [] as const,
     factory() {
-        return { color: 0x888888 };
+        return { color: DEFAULT_IONIZE_COLOR };
     }
 });
 

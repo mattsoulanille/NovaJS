@@ -103,10 +103,58 @@ export interface SubmunitionType {
 }
 
 
+/**
+ * The colour an ionized ship shows when the weapon that ionized it left
+ * its wëap IonizeColor field at zero.
+ *
+ * EVN Bible, wëap IonizeColor: "The color that a ship hit by this weapon
+ * will appear after being sufficiently ionized (encoded the same as an
+ * HTML color value). A value of 0 here will be interpreted as a default
+ * bluish color. Using fairly bright colors here is probably the best, as
+ * low-intensity colors tend to look odd when used as the ionization
+ * color."
+ *
+ * The Bible names the default only as "a default bluish color" and gives
+ * no value, and no reference capture of an ionized ship exists to measure
+ * one from. So we adopt the stock Ion Cannon's OWN IonizeColor
+ * (wëap nova:142 and nova:201, 0x34C2FF) — Nova's own designers' idea of
+ * ion blue, and bright, as the Bible advises. Two stock weapons ride on
+ * this default: Polaron Massive Torp. (nova:199) and Solar Lance
+ * (nova:164) both ship IonizeColor 0.
+ *
+ * Resolving the sentinel matters: without it a zero field reaches the
+ * display as pure black, and a multiply tint of 0x000000 blacks the hull
+ * out entirely rather than colouring it.
+ */
+export const DEFAULT_IONIZE_COLOR = 0x34C2FF;
+
+/**
+ * Applies the IonizeColor zero sentinel (see DEFAULT_IONIZE_COLOR).
+ *
+ * The test is on the RGB nibbles alone: novaparse's weap_resource hands
+ * colours back with the alpha byte un-inverted, so a raw field of zero
+ * arrives as 0xFF000000, not 0.
+ */
+export function resolveIonizeColor(raw: number): number {
+    return (raw & 0xFFFFFF) === 0 ? DEFAULT_IONIZE_COLOR : raw;
+}
+
 export interface WeaponDamage {
     shield: number;
     armor: number;
+    /**
+     * wëap Ionization: "The amount of ionization energy to add to the
+     * ship that gets hit by this weapon" (EVN Bible). Only a POSITIVE
+     * amount is an ionizing hit, and only an ionizing hit repaints the
+     * victim's ionization colour.
+     */
     ionization: number;
+    /**
+     * wëap IonizeColor, with the zero sentinel already resolved to
+     * DEFAULT_IONIZE_COLOR — always a real, displayable colour. Recorded
+     * on the victim by the sim's DamageSystem when this weapon lands an
+     * ionizing hit, and read back by the display as the hull tint.
+     */
     ionizationColor: number;
     passThroughShield: number; // Factor of damage that passes through shield. 1 means all
     knockback: number;
@@ -217,7 +265,9 @@ export function getDefaultNotBayWeaponData(): NotBayWeaponData {
             shield: 1,
             armor: 1,
             ionization: 0,
-            ionizationColor: 0xffffff,
+            // Inert (ionization 0 never records a colour), but a real
+            // colour rather than white keeps the default honest.
+            ionizationColor: DEFAULT_IONIZE_COLOR,
             passThroughShield: 0,
             knockback: 0,
             disableOnly: false,
