@@ -27,95 +27,58 @@ This is an experiment in making Escape Velocity Nova run in the browser. Escape 
 
 ## Wait, but isn't EV Nova Copyrighted?
 
-Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights to anything in the [objects](https://github.com/mattsoulanille/NovaJS/tree/master/Nova/objects) directory. The end goal of this project is to write a Nova engine that can interpret Nova files without including any Nova data itself.
+Yes. Escape Velocity Nova is copyrighted by Ambrosia Software. I claim no rights to anything in the [objects](./packages/nova/objects) directory. The end goal of this project is to write a Nova engine that can interpret Nova files without including any Nova data itself.
 ## Getting Started
+
 ### Prerequisites
 
-[node.js](https://nodejs.org/),
-[npm](https://www.npmjs.com/),
-[A Mac copy of EV Nova](https://www.reddit.com/r/evnova/comments/cwwjnf/ambrosia_software_mediafire_archive_mirror/) ([Direct Link](http://www.tuxedojack.com/hosted/ambrosia-archive/mac/Action-Adventure/EVNova%201.1.1.dmg))
+* [node.js](https://nodejs.org/) 22 or newer (what `engines` declares and what the Docker image and CI run), with the npm it ships.
+* A Mac copy of EV Nova ([mirror](https://www.reddit.com/r/evnova/comments/cwwjnf/ambrosia_software_mediafire_archive_mirror/), [direct link](http://www.tuxedojack.com/hosted/ambrosia-archive/mac/Action-Adventure/EVNova%201.1.1.dmg)). The repo contains no game data.
 
-### Installing
-#### For the main branch
-##### Clone the main branch
+### Building
+
+The project is an npm-workspaces monorepo built with [turborepo](https://turbo.build/); the `turbo` binary is a devDependency, so nothing needs installing globally.
+
 ```
 git clone https://github.com/mattsoulanille/NovaJS.git
-```
-##### Install dependencies with Yarn
-```
-cd NovaJS/
-yarn
-```
-If you are using Ubuntu and see `00h00m00s 0/0: : ERROR: There are no scenarios; must have at least one.` after running `yarn`, you may need to `apt install yarnpkg` instead (and substitue `yarnpkg` wherever you see `yarn` in this readme).
-
-##### (Optional) Read from the Bazel Remote Cache
-To speed up compilation and test time, you can configure Bazel to use cached build and test results created by the project's continouous integration runs. To enable this, add `build --config=remote_cache` to `.bazelrc.user` at the root of the project. You may need to create `.bazelrc.user`.
-
-##### (Optional) Run the tests
-Tests can be run with `yarn test`. This will take a while the first time it's run since it tests all targets in the project. This includes building docker images for NovaJS. Subsequent runs should be much faster.
-
-##### Add Nova Files and Plug-ins
-Copy your `Nova Files` and `Plug-ins` directories to the `nova/Nova_Data/` directory. Make sure files are in `.ndat` or Mac resource fork format. Windows `.res` is not yet supported (PRs welcome though). Since resource fork is Mac-specific, Plug-ins can be saved as `.ndat` for use on Windows and Linux. Ideally, this won't matter once `.res` is supported, but that's a lower priority at the moment. If this proves annoying for users or developers, I can try to fix it.
-
-##### Run NovaJS
-To start NovaJS, run 
-```
-yarn start
+cd NovaJS
+npm ci          # never `npm install`: the lockfile is the build
+npm run build   # turbo run build — every package, in dependency order
 ```
 
-To watch for changes and automatically restart, run
+### Game data
+
+Put (or symlink) your `Nova Files` and `Plug-ins` directories in `packages/nova/Nova_Data/`, so that `packages/nova/Nova_Data/Nova Files/Nova Data 1.ndat` exists. Files must be `.ndat` or Mac resource-fork format; Windows `.res` is not supported. On macOS a symlink is better than a copy, because the resource forks live in extended attributes that some copies drop. `NOVA_DATA_PATH=/some/dir` overrides the location.
+
+For a git worktree, `scripts/setup_worktree.sh [<commit>]` does the linking, `npm ci` and the build in one go (set `NOVA_DATA_CANONICAL` to where your data lives).
+
+### Running
+
 ```
-yarn watch
+npm start                  # serves on port 8000 (settings/server.json)
+PORT=8080 npm start        # the PORT env var overrides it
+npm run dev                # rebuild and restart on change (turbo watch)
 ```
 
-To run with docker, run
-```
-yarn bazel run //nova:nova_image
-```
-This of course requires docker to be installed (and I've only gotten it to work on Linux. I've tried on Mac, but not Windows yet).
+Then open [localhost:8000](http://localhost:8000).
 
-#### For the [alpha js relase](https://github.com/mattsoulanille/NovaJS/releases):
+### Testing
 
-Download the release with your browser or with the following command
 ```
-curl -L https://github.com/mattsoulanille/NovaJS/archive/v0.1-alpha-js.tar.gz | tar xzf -
+npm test                   # turbo run test — every package
 ```
 
-Move your Nova Files and Plug-ins to the ```Nova Data``` directory in the unzipped release.
-###### Make sure you're using the Mac version of EV Nova. Windows EV Nova file formats are currently unsupported, so make sure your Nova files end with `.ndat`
-```
-cd NovaJS-0.1-alpha-js/
-cp -r /path/to/EV\ Nova.app/Contents/Resources/Nova\ Files/ ./Nova\ Data/
-mkdir ./Nova\ Data/Plug-ins/
-```
-###### You can add any plug-ins you like in the Plug-ins directory. Just make sure they're in the Mac format or the Nova Data `.ndat` format if you're using Windows / Linux.
-
-Install packages with `npm` (note that this is different from the main branch, which uses `yarn`)
-```
-npm install
-```
-Build for release with 
-```
-npm run build
-```
-Alternatively, build for development and debugging with
-```
-npm run build-debug
-```
-At this point, you can run NovaJS with
-```
-npm run run
-```
-You can also use
-```
-npm run watch
-```
-to compile incremental changed made to the browser's code, but you will still need to do a full `npm run build-server` and restart the server for changes to be applied to the server.
-
-By default the JS release runs on port 8000 but can be changed by editing the `port` variable in `settings/server.json`. Assuming you installed on the machine you would like to play from, navigate to [localhost:8000](http://localhost:8000).
+Specs that read the real game data mark themselves *pending* when `packages/nova/Nova_Data/Nova Files` is absent, so the suite is green (with several hundred pending specs) on a checkout without data; install it to run them. To run one package with a fixed spec order: `cd packages/nova && npx jasmine --config=jasmine.json --seed=22715`.
 
 ## Deployment
-Deployment for the js release is the same as installation, however, the port used for the server can be changed by editing the `port` variable in `settings/server.json`. For the main branch, build the docker container with `yarn bazelisk build //nova:nova_image.tar` and then deploy the docker container located at `dist/bin/nova/nova_image.tar` to whatever hosing service you want.
+
+`docker/Dockerfile` builds a production image of the `nova` package (`turbo prune` keeps only what it needs); `docker/docker-compose.yml` runs it on port 8000 with your `packages/nova/Nova_Data` mounted in:
+
+```
+docker compose -f docker/docker-compose.yml up --build
+```
+
+`deploy_demo.yaml` is the Cloud Build pipeline for the public demo: test, build the image, push it, and deploy it to Cloud Run with the game data mounted from a GCS bucket at `NOVA_DATA_PATH`.
 
 ### Build version and client force-reload
 Multiplayer assumes every peer runs the **same build** of NovaJS, and the server enforces it. `npm run build` stamps the build (the commit sha, or `<sha>-dirty-<timestamp>` from a dirty tree) into both the server and the browser bundle. A client announces its stamp when it opens its websocket; if it does not match, the server closes the socket before admitting it to any room and the page shows "Game updated — reloading…" and reloads once to pick up the new bundle. So **redeploying force-reloads connected players** — that is intended, and it is what keeps a stale cached bundle from desyncing against updated peers.
@@ -132,9 +95,10 @@ Accepting PRs, but this project is still in early stages. Documentation is poor 
 
 
 ## Project Structure
-The project is organized as a monorepo and has several subpackages:
+The project is organized as a monorepo (npm workspaces under `packages/`, built with turborepo) and has several subpackages:
 * `nova`: The server, client, and engine for NovaJS.
 * `novaparse`: Parses Nova Files and Plug-ins.
+* `resource_fork`: Parses Mac resource forks (what `.ndat` files and Plug-ins are made of).
 * `novadatainterface`: The interface implemented by `novaparse` and used by `nova`. It's a separate package because it made development easier while the project was using lerna to manage its monorepo, but it could perhaps be merged into `nova` (but this is low priority).
 * `nova_ecs`: The Entity Component System used by NovaJS.
 
