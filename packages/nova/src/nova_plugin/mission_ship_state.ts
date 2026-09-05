@@ -80,7 +80,7 @@ export type ShipObjectiveLive = t.TypeOf<typeof ShipObjectiveLiveType>;
  * on the owner's MissionsComponent; mutated by the shared sim's goal
  * systems (identically on every peer) and read at landing.
  */
-export const ShipObjectiveType = t.type({
+export const ShipObjectiveType = t.intersection([t.type({
     /** ShipGoal code (see the module comment). */
     goal: t.number,
     /**
@@ -118,7 +118,17 @@ export const ShipObjectiveType = t.type({
     /** Live tracked mission ships (uuid -> per-ship flags). Cleared by
      * the owner's client before it re-enters a system. */
     live: map(t.string, ShipObjectiveLiveType),
-});
+}), t.partial({
+    /**
+     * mïsn Flags 0x0800: the special ships' class, drawn once from the
+     * düde at the mission's first spawn and kept "whenever the special
+     * ships for that mission are created, until the mission ends"
+     * (mission_ship_spawn's freezeShipType). ADDITIVE: absent on
+     * missions without the flag, and on those accepted before it was
+     * modelled, which are frozen at their next spawn.
+     */
+    shipId: t.string,
+})]);
 export type ShipObjective = t.TypeOf<typeof ShipObjectiveType>;
 
 /**

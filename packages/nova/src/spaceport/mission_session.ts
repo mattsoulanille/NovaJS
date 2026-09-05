@@ -66,7 +66,9 @@ export class MissionSession {
         cargoCapacity: number,
         public shipId: string,
         private shipGovt: string | null,
+        private shipInherentAI: number | undefined,
         private playerContribute: bigint,
+        private payrollShips: ReadonlyMap<string, ShipData>,
         /**
          * Whether commit() announces mission accept/abort/complete/fail
          * events as pilot-history checkpoint requests. Off for a session
@@ -136,6 +138,7 @@ export class MissionSession {
             bits: this.state.bits,
             shipId: this.shipId,
             shipGovt: this.shipGovt,
+            shipInherentAI: this.shipInherentAI,
             activeMissions: this.state.missions,
             freeCargoSpace: this.state.cargoCapacity - cargoUsedTons,
             random: Math.random,
@@ -163,18 +166,27 @@ export class MissionSession {
         const shipId = entity.components.get(ShipComponent)?.id ?? 'default';
         const cargoCapacity = await computeCargoCapacity(entity, gameData);
         // The ship's inherent gövt gates the AvailShipType ship-govt
-        // ranges (2128+/3128+); missing ship data leaves it unrestricted.
+        // ranges (2128+/3128+), and its InherentAI the mïsn Flags 0x2000 /
+        // 0x4000 cargo-ship / warship gates; missing ship data leaves both
+        // unrestricted.
         let shipGovt: string | null = null;
+        let shipInherentAI: number | undefined;
         try {
-            shipGovt = (await gameData.data.Ship.get(shipId)).inherentGovt;
+            const shipData = await gameData.data.Ship.get(shipId);
+            shipGovt = shipData.inherentGovt;
+            shipInherentAI = shipData.inherentAI;
         } catch {
             // Unknown ship: the ship-govt ranges simply don't match.
         }
         // The ship + outfit Contribute mask gates the mïsn Require field.
         const playerContribute =
             await computePlayerContribute(entity, gameData);
+        // The escorts' hull prices, so a DatePostInc settled at commit can
+        // charge their wages synchronously (see commitState).
+        const payrollShips = await loadPayrollShips(entity, gameData);
         return new MissionSession(entity, universe, planetId,
-            cargoCapacity, shipId, shipGovt, playerContribute,
+            cargoCapacity, shipId, shipGovt, shipInherentAI,
+            playerContribute, payrollShips,
             options.announceCheckpoints ?? true);
     }
 
@@ -247,11 +259,47 @@ export class MissionSession {
         // array is returned, not written to the entity, so re-committing
         // does not duplicate notices in entity state.
         if (this.state.dateAdvance > 0) {
-            const date = entity.components.get(GameDateComponent)
-                ?? getDefaultGameDate();
-            entity.components.set(GameDateComponent,
-                addDays(date, this.state.dateAdvance));
+            const days = this.state.dateAdvance;
             this.state.dateAdvance = 0;
+            // The skipped days are LIVED, not merely dated (#109): stock
+            // nova:172 "Head to Nil'ar Kemorya" jumps 180 days and nova:659
+            // "Receive Training from Karlaekaar" 185, and a bare addDays
+            // left every one of them without its cron rolls, its ränk
+            // salary ("per day") and its escort wages. So they go through
+            // the same per-day settlement a jump or a landing gets, on the
+            // state just committed above — it is the entity, not the
+            // working copies, that settleDateAdvance reads and writes.
+            //
+            // A DETACHED copy (ship_mission_accept.ts, announceCheckpoints
+            // off) carries no CronStatesComponent — the crons' own
+            // once-only bookkeeping — and its diff has nowhere to carry one
+            // back, so on that path the crons are skipped and only the
+            // books and the calendar move; the delta the accept record
+            // carries (dateDelta, creditsDelta) then replays identically on
+            // every peer. No stock ship-offered mission has a DatePostInc
+            // (mission_accept.ts's note), so nothing turns on it today.
+            settleDateAdvance(entity, days, this.universe, {
+                contribute: this.playerContribute,
+                getShip: id => this.payrollShips.get(id),
+                crons: this.announceCheckpoints,
+            });
+            // The crons and the books may have moved the very state this
+            // session holds working copies of (a cron's Bxxx/Kxxx/Gxxx, a
+            // salary); a second commit() must not roll them back to the
+            // pre-advance copies.
+            this.state.bits = new Set(
+                entity.components.get(ControlBitsComponent) ?? []);
+            if (this.state.ranks) {
+                this.state.ranks = new Set(
+                    entity.components.get(ActiveRanksComponent) ?? []);
+            }
+            this.state.credits.credits =
+                entity.components.get(CreditsComponent)?.credits ?? 0;
+            this.outfits.clear();
+            for (const [id, { count }] of
+                entity.components.get(OutfitsStateComponent) ?? []) {
+                this.outfits.set(id, count);
+            }
         }
         return this.state.events;
     }
@@ -503,22 +551,84 @@ export async function advanceEntityDate(entity: Entity, days: number,
     if (days <= 0) {
         return;
     }
-    const date = entity.components.get(GameDateComponent)!;
-    const fromDay = dayNumber(date);
-    entity.components.set(GameDateComponent, addDays(date, days));
 
+    // Everything asynchronous is gathered BEFORE a single component is
+    // written, and the calendar is the LAST thing settleDateAdvance sets
+    // (#120): a rejected universe.load() or data fetch used to find the
+    // date already moved, so the days it skipped were never stepped by
+    // the crons — the next advance started from the new day — and never
+    // paid for. Now a failure here leaves the entity exactly as it was;
+    // the day is simply not charged (browser.ts's jump path already
+    // rules the date cost forfeit on a failure, and a landing retried
+    // after one is charged its day once, not twice).
     try {
         await universe.load();
-        const bits = new Set(entity.components.get(ControlBitsComponent)!);
-        const ranks =
-            new Set(entity.components.get(ActiveRanksComponent) ?? []);
-        const cronStates =
-            new Map(entity.components.get(CronStatesComponent)!);
         // The player's ship + outfit Contribute mask gates cron Require
         // (needs game data; without it crons see no contributions).
         const contribute = gameData
             ? await computePlayerContribute(entity, gameData)
             : 0n;
+        // Escort wages need the hull prices, so the payroll's ship classes
+        // are fetched first. Without game data (the bare callers) there are
+        // no prices and so no escort expense — the same "gameData-less
+        // callers see less" rule the Contribute mask above follows.
+        const payrollShips = await loadPayrollShips(entity, gameData);
+        settleDateAdvance(entity, days, universe, {
+            contribute, getShip: id => payrollShips.get(id),
+        });
+    } catch (e) {
+        console.warn('Cron evaluation failed:', e);
+    }
+
+    // In-flight mission upkeep: fail now-expired / sim-flagged missions
+    // and run OnShipDone for goals the sim just completed. Needs the game
+    // data for set strings and reputation, so it's skipped for the bare
+    // (gameData-less) callers.
+    if (gameData) {
+        try {
+            await processInFlightMissions(entity, gameData, universe);
+        } catch (e) {
+            console.warn('In-flight mission evaluation failed:', e);
+        }
+    }
+}
+
+/**
+ * The SYNCHRONOUS core of a date advance, shared by {@link advanceEntityDate}
+ * (jumps and landings) and by MissionSession.commitState (a completed or
+ * auto-aborted mission's DatePostInc, #109): steps the crons over each
+ * skipped day, settles the day's books, and only then moves the calendar.
+ *
+ * TRANSACTIONAL. The crons run on working copies of the bits, ranks, cron
+ * states and outfits, and nothing is written to the entity until every
+ * day has been stepped; a set string that throws leaves the entity — the
+ * date included — untouched (#120). The writes themselves are plain
+ * component sets, so a failure between them cannot occur.
+ *
+ * `crons: false` settles the books and the calendar alone, for a detached
+ * copy of the player that has no cron state to step (see commitState).
+ */
+export function settleDateAdvance(entity: Entity, days: number,
+    universe: MissionUniverse, options: {
+        /** The player's Contribute mask, gating crön Require. */
+        contribute: bigint,
+        /** Hull data for the escort payroll; a miss is no fee. */
+        getShip?: (id: string) => ShipData | undefined,
+        /** Whether to step the crons at all (default true). */
+        crons?: boolean,
+    }): void {
+    ensurePlayerStateComponents(entity);
+    if (days <= 0) {
+        return;
+    }
+    const date = entity.components.get(GameDateComponent)!;
+    const fromDay = dayNumber(date);
+    const ranks = new Set(entity.components.get(ActiveRanksComponent) ?? []);
+
+    if (options.crons ?? true) {
+        const bits = new Set(entity.components.get(ControlBitsComponent)!);
+        const cronStates =
+            new Map(entity.components.get(CronStatesComponent)!);
         // A cron's set string may grant a rank (Kxxx), so the crons run
         // against a working copy of the active ranks too and it is committed
         // beside the bits.
@@ -529,7 +639,7 @@ export async function advanceEntityDate(entity: Entity, days: number,
         const ownedOutfits = new Map([...entity.components.get(OutfitsStateComponent)
             ?? []].map(([id, { count }]) => [id, count]));
         runCronsForDays(universe.crons, cronStates, bits,
-            fromDay, fromDay + days, Math.random, contribute, {
+            fromDay, fromDay + days, Math.random, options.contribute, {
             ranks: {
                 active: ranks,
                 // Fallback only: runCronsForDays rescopes ids to each
@@ -552,28 +662,9 @@ export async function advanceEntityDate(entity: Entity, days: number,
         commitActiveRanks(entity, ranks, id => universe.getRank(id));
         entity.components.set(CronStatesComponent, cronStates);
         commitCronOutfits(entity, ownedOutfits);
-        // Escort wages need the hull prices, so the payroll's ship classes
-        // are fetched first. Without game data (the bare callers) there are
-        // no prices and so no escort expense — the same "gameData-less
-        // callers see less" rule the Contribute mask above follows.
-        const payrollShips = await loadPayrollShips(entity, gameData);
-        settlePlayerBudget(entity, ranks, universe, days,
-            id => payrollShips.get(id));
-    } catch (e) {
-        console.warn('Cron evaluation failed:', e);
     }
-
-    // In-flight mission upkeep: fail now-expired / sim-flagged missions
-    // and run OnShipDone for goals the sim just completed. Needs the game
-    // data for set strings and reputation, so it's skipped for the bare
-    // (gameData-less) callers.
-    if (gameData) {
-        try {
-            await processInFlightMissions(entity, gameData, universe);
-        } catch (e) {
-            console.warn('In-flight mission evaluation failed:', e);
-        }
-    }
+    settlePlayerBudget(entity, ranks, universe, days, options.getShip);
+    entity.components.set(GameDateComponent, addDays(date, days));
 }
 
 /**

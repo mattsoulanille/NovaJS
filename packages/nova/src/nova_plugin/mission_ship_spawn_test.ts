@@ -9,6 +9,7 @@ import { DisabledComponent } from './disabled_component.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { ArmorComponent } from './health_plugin.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
+import { ShipComponent } from './ship_plugin.js';
 import {
     buildMissionShipSpawns,
     MISSION_SHIP_NO_DEPART_MS,
@@ -361,6 +362,73 @@ describe('buildMissionShipSpawns', () => {
      * next system and back is still the same named ship — the multi-hop
      * case. Nothing is re-rolled per spawn (or per client).
      */
+    /**
+     * mïsn Flags 0x0800: "The special ships' type will be selected at
+     * mission start and then kept the same whenever the special ships for
+     * that mission are created, until the mission ends" (EVN Bible) —
+     * stock's bounty targets and the six house duels, whose "opponent"
+     * used to change hull between systems (#106).
+     */
+    describe('the frozen ship type (Flags 0x0800)', () => {
+        const OTHER_SHIP = 'nova:301';
+        function twoClassGameData(): MockGameData {
+            const gameData = makeGameData();
+            gameData.data.Dude.map.get(DUDE)!.ships = [
+                { id: SHIP, weight: 50 }, { id: OTHER_SHIP, weight: 50 },
+            ];
+            gameData.data.Ship.map.set(OTHER_SHIP, {
+                ...getDefaultShipData(), id: OTHER_SHIP, name: 'Other',
+            });
+            return gameData;
+        }
+        // pickWeighted: a draw of 0.1 lands on the first class, 0.9 on
+        // the second (equal weights).
+        const FIRST = () => 0.1;
+        const SECOND = () => 0.9;
+        const classesOf = (ships: Entity[]) => new Set(ships.map(
+            ship => ship.components.get(ShipComponent)?.id));
+
+        it('draws the class once and keeps it across system entries',
+            async () => {
+                const mission: MissionData = {
+                    ...getDefaultMissionData(), id: MISSION_ID,
+                    flags: { ...getDefaultMissionData().flags,
+                        freezeShipTypesAtStart: true },
+                };
+                const objective = makeObjective({ total: 3 });
+                const player = makePlayer(objective, mission);
+                const gameData = twoClassGameData();
+                const first = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', gameData, makeUniverse(mission), 0, FIRST);
+                expect(first.length).toBe(3);
+                expect(classesOf(first)).toEqual(new Set([SHIP]));
+                expect(objective.shipId).toBe(SHIP);
+                // Re-entry with a draw that would otherwise pick the other
+                // class every time.
+                objective.live = new Map();
+                const again = await buildMissionShipSpawns(player, OWNER,
+                    'nova:128', gameData, makeUniverse(mission), 0, SECOND);
+                expect(classesOf(again)).toEqual(new Set([SHIP]));
+            });
+
+        it('re-rolls on every entry without the flag, as before', async () => {
+            const mission: MissionData = {
+                ...getDefaultMissionData(), id: MISSION_ID,
+            };
+            const objective = makeObjective({ total: 2 });
+            const player = makePlayer(objective, mission);
+            const gameData = twoClassGameData();
+            const first = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', gameData, makeUniverse(mission), 0, FIRST);
+            expect(classesOf(first)).toEqual(new Set([SHIP]));
+            objective.live = new Map();
+            const again = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', gameData, makeUniverse(mission), 0, SECOND);
+            expect(classesOf(again)).toEqual(new Set([OTHER_SHIP]));
+            expect(objective.shipId).toBeUndefined();
+        });
+    });
+
     it('respawns the same name on every system entry', async () => {
         const mission: MissionData = {
             ...getDefaultMissionData(),
