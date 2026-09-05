@@ -15,11 +15,13 @@ import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import { Stat } from '../nova_plugin/stat.js';
 import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
+import { recordWith } from '../nova_plugin/reputation.js';
 import {
     CombatRatingComponent,
 } from '../nova_plugin/reputation_plugin.js';
 import {
-    CreditsComponent, GameDateComponent, MissionsComponent,
+    ActiveMissionType, CreditsComponent, GameDateComponent,
+    MissionsComponent,
 } from '../nova_plugin/player_state_plugin.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
@@ -398,6 +400,52 @@ describe('buildShipMissionAccept (the input record)', () => {
             expect(accept!.record.bitsSet).toEqual([801]);
             expect(accept!.record.ranksGranted).toEqual(['nova:152']);
             expect(accept!.record.ranksRevoked).toEqual(['nova:138']);
+        });
+
+    it('carries the missions an OnAccept starts and ends, and the record '
+        + 'change that ending one makes', async () => {
+            // Stock has no AvailLoc 2 mission whose OnAccept starts another
+            // (arpia's "Pro-death" cascade does), so the shape is pinned on
+            // a stock mission with a doctored OnAccept: `S128` starts
+            // "Delivery to Earth" and `F614` fails an active enforcement
+            // squad (CompGovt 128, CompReward 2: failure costs half, -1).
+            const { gameData, universe } = await universeFor();
+            const player = await makePlayer();
+            player.components.get(MissionsComponent)!.set('nova:614', {
+                id: 'nova:614', acceptedDay: 0, acceptedAt: 'nova:128',
+                travelPlanet: null, returnPlanet: null, cargoType: -1,
+                cargoQty: 0, cargoLoaded: false, travelDone: false,
+                deadlineDay: null,
+            });
+            const accept = await buildShipMissionAccept(player, {
+                data: {
+                    ...universe.getMission('nova:909')!,
+                    onAccept: 'b801 S128 F614',
+                },
+                travelPlanet: null, returnPlanet: null,
+                cargoType: -1, cargoQty: 0, acceptable: true,
+            }, gameData, universe,
+                { offeredBy: 'npc:eamon', systemId: HERE });
+            expect(accept).not.toBeNull();
+            const record = accept!.record;
+            expect(record.missionsEnded).toEqual(['nova:614']);
+            expect(record.missionsStarted?.length).toEqual(1);
+            const [id, started] = record.missionsStarted![0];
+            expect(id).toEqual('nova:128');
+            const decoded = ActiveMissionType.decode(started);
+            expect(decoded._tag).toEqual('Right');
+            if (decoded._tag === 'Right') {
+                expect(decoded.right.returnPlanet).toEqual('nova:128');
+            }
+            // The Federation record: materialized from the gövt's
+            // InitialRec on the client, then -1 for the failure.
+            const fed = universe.getGovt('nova:128');
+            const [[govtId, delta]] = record.recordsDelta!;
+            expect(govtId).toEqual('nova:128');
+            expect(delta).toEqual(recordWith(new Map(), 'nova:128', fed) - 1);
+            // The mirror is untouched.
+            expect(player.components.get(MissionsComponent)!.has('nova:614'))
+                .toBeTrue();
         });
 
     it('refuses an accept the machinery itself refuses', async () => {
