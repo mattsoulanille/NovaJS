@@ -51,9 +51,13 @@ export async function makeSystem(systemId: string, gameData: SimulationGameDataI
     world.resources.set(SystemIdResource, systemId);
     // Deterministic randomness and entity id allocation for simulation
     // code. Seeded per system so different systems behave differently
-    // while identical runs stay identical.
+    // while identical runs stay identical. The id factory is PREFIXED
+    // with the system id so no two worlds can mint the same uuid: a
+    // uuid carried across a transition (a target, an aggressor) then
+    // names nothing in the destination rather than an unrelated ship
+    // (issue #32; see IdFactory).
     world.resources.set(RandomResource, new Random(fnv1a(systemId)));
-    world.resources.set(IdFactoryResource, new IdFactory());
+    world.resources.set(IdFactoryResource, new IdFactory(systemId));
     // Guided-missile steering mode. Set here (the deterministic World builder
     // that every client and the server's RoomArchive run) so it is identical
     // for every peer in a room, satisfying the rollback determinism
