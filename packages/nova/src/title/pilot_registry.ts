@@ -25,8 +25,10 @@
 
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
+import { discoveryKeyFor } from '../nova_plugin/discovery_store.js';
 import {
-    decodeSave, encodeSave, SaveEnvelope, SAVE_KEY, setActiveSaveKey,
+    decodeSave, encodeSave, quarantineKeyFor, SaveEnvelope, SAVE_KEY,
+    setActiveSaveKey,
 } from '../nova_plugin/save_game.js';
 import {
     ControlsOverride, GameSettingsOverride, loadControlsOverride,
@@ -411,6 +413,15 @@ export function createPilot(profile: PilotProfile, storage?: PrefsStorage):
 /**
  * Deletes a pilot and its save data. If it was active, the first
  * remaining pilot becomes active (or none).
+ *
+ * "Its save data" is every key derived from the pilot's save key: the
+ * save itself, its checkpoint history, its discovery record
+ * (`<saveKey>:discovery`, discovery_store.ts) and any quarantined
+ * unreadable save (`<saveKey>:quarantine`, save_game.ts). Pilot ids are
+ * time+random, so a later pilot never inherits an orphan — but the
+ * discovery record is a whole explored-galaxy map per pilot, and a stale
+ * quarantine entry reads as a ghost in the "quarantined save" diagnostics
+ * (review finding #77).
  */
 export function deletePilot(id: string, storage?: PrefsStorage): void {
     const store = getStorage(storage);
@@ -425,10 +436,13 @@ export function deletePilot(id: string, storage?: PrefsStorage): void {
     }
     saveRegistry(registry, storage);
     if (store) {
-        try {
-            store.removeItem(found.saveKey);
-        } catch {
-            // Best effort.
+        for (const key of [found.saveKey, discoveryKeyFor(found.saveKey),
+            quarantineKeyFor(found.saveKey)]) {
+            try {
+                store.removeItem(key);
+            } catch {
+                // Best effort.
+            }
         }
         removeHistory(found.saveKey, store);
     }

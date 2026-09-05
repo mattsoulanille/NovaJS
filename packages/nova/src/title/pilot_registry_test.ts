@@ -1,7 +1,8 @@
 import 'jasmine';
+import { discoveryKeyFor } from '../nova_plugin/discovery_store.js';
 import {
-    encodeSave, getActiveSaveKey, resetSave, SAVE_KEY, SaveData,
-    setActiveSaveKey,
+    encodeSave, getActiveSaveKey, quarantineKeyFor, resetSave, SAVE_KEY,
+    SaveData, setActiveSaveKey,
 } from '../nova_plugin/save_game.js';
 import {
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, PilotProfile, PrefsStorage,
@@ -144,10 +145,22 @@ describe('pilot registry', () => {
             store.setItem(a.saveKey, encodeSave(SAMPLE_SAVE));
             recordCheckpoint(a.saveKey, JSON.parse(encodeSave(SAMPLE_SAVE)),
                 { label: 'x' }, store);
+            // The pilot's other per-save keys: the discovery record and a
+            // quarantined unreadable save. Both used to be orphaned
+            // (review finding #77).
+            store.setItem(discoveryKeyFor(a.saveKey),
+                JSON.stringify([['nova:130', 2]]));
+            store.setItem(quarantineKeyFor(a.saveKey), 'not a save');
+            // Another pilot's keys are not touched.
+            store.setItem(discoveryKeyFor(b.saveKey),
+                JSON.stringify([['nova:131', 1]]));
             deletePilot(a.id, store);
             expect(listPilots(store).map(p => p.name)).toEqual(['Beta']);
             expect(store.has(a.saveKey)).toBeFalse();
             expect(store.has(historyKeyFor(a.saveKey))).toBeFalse();
+            expect(store.has(discoveryKeyFor(a.saveKey))).toBeFalse();
+            expect(store.has(quarantineKeyFor(a.saveKey))).toBeFalse();
+            expect(store.has(discoveryKeyFor(b.saveKey))).toBeTrue();
             // Deleting the active pilot falls back to a remaining one.
             expect(getActivePilot(store)?.id).toBe(b.id);
         });
