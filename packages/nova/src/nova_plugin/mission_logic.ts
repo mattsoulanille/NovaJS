@@ -153,6 +153,13 @@ export interface MissionContext {
      * Gates the AvailShipType ship-govt ranges (2128+/3128+).
      */
     shipGovt?: string | null;
+    /**
+     * The player's ship class's shïp InherentAI (1 wimpy trader, 2 brave
+     * trader, 3 warship, 4 interceptor), gating mïsn Flags 0x2000 /
+     * 0x4000. Absent (ship data not loaded) leaves both gates open,
+     * like `shipGovt`.
+     */
+    shipInherentAI?: number;
     /** Missions already active (missions can't be offered twice). */
     activeMissions: Missions;
     /** Free cargo space in tons (capacity minus cargo aboard). */
@@ -465,6 +472,9 @@ export function missionMatchesLocation(mission: MissionData,
         prefix)) {
         return false;
     }
+    if (!shipAIMatches(mission, ctx.shipInherentAI)) {
+        return false;
+    }
     if (!testBits(mission.availBits, ctx, prefix)) {
         return false;
     }
@@ -479,7 +489,15 @@ export function missionMatchesLocation(mission: MissionData,
 export function stellarRecord(stellar: StellarInfo, records: LegalRecords,
     missionPrefix: string,
     getGovt: (id: string) => GovtData | undefined): number {
-    const govtId = stellar.govt ?? `${missionPrefix}:128`;
+    // The Bible's "first government [ID 128]" is a bare number, so it
+    // resolves stock-first like every other one: `nova:128` whenever
+    // stock defines it (it always does), and only a plug-in's own 128
+    // when a total conversion has replaced the stock govts. Keyed on
+    // the writer alone, a plug-in mission at an independent stellar was
+    // judged against a phantom `<plug>:128` record that no crime ever
+    // writes and no govt backs (#107).
+    const govtId = stellar.govt ?? resolveNumberedResource(128,
+        missionPrefix, id => getGovt(id) !== undefined);
     return recordWith(records, govtId, getGovt(govtId));
 }
 
@@ -510,6 +528,31 @@ function shipTypeMatches(availShipType: number, shipId: string,
     if (availShipType >= 3128 && availShipType <= 3383) {
         return !sameNumberedResource(shipGovt ?? null,
             availShipType - 3000, missionPrefix);
+    }
+    return true;
+}
+
+/**
+ * mïsn Flags 0x2000 "Mission unavailable if player's ship is of
+ * inherentAI type 1 or 2 (cargo ships)" and 0x4000 "... of inherentAI
+ * type 3 or 4 (warships)" (EVN Bible). Stock uses 0x2000 alone — the
+ * six house duels nova:759-764 and nova:597 "Test RAGE Gunboat", none of
+ * which a freighter should be handed; 0x4000 has no stock user. An
+ * unknown InherentAI (ship data not loaded) passes both, as an unknown
+ * ship govt passes the AvailShipType ranges.
+ */
+function shipAIMatches(mission: MissionData,
+    inherentAI: number | undefined): boolean {
+    if (inherentAI === undefined) {
+        return true;
+    }
+    if (mission.flags.notForCargoShips
+        && (inherentAI === 1 || inherentAI === 2)) {
+        return false;
+    }
+    if (mission.flags.notForWarships
+        && (inherentAI === 3 || inherentAI === 4)) {
+        return false;
     }
     return true;
 }
@@ -1397,6 +1440,11 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // disable/destroy without reading mission game data.
         failIfPlayerDisabledOrDestroyed:
             mission.flags.failIfPlayerDisabledOrDestroyed,
+        // mïsn Flags 0x8000 "Mission will fail if player is boarded by
+        // pirates", frozen for the same reason (MissionPlayerPlunderedSystem
+        // reads it). Only written when set, so the record stays additive.
+        ...(mission.flags.failIfBoardedByPirates
+            ? { failIfBoardedByPirates: true } : {}),
         // Copied (not aliased) so re-showing the offer stays pristine.
         shipObjective: offer.shipObjective && {
             ...offer.shipObjective,

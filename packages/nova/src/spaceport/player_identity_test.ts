@@ -9,10 +9,17 @@ const PROFILE: PilotProfile = {
     shipNumber: 525,
 };
 
-/** A universe stub exposing only shipTypeName (structural). */
+/**
+ * A universe stub exposing what the identity subs read (structural):
+ * shipTypeName, and the rank/govt lookups behind the rank tags — which
+ * resolve nothing here, so <PRK>, <PRKnnn> and <RRK> take their
+ * "captain" fallbacks whatever rank an earlier spec activated.
+ */
 function universeWith(name: string | undefined): MissionUniverse {
     return {
         shipTypeName: async () => name,
+        getRank: () => undefined,
+        getGovt: () => undefined,
     } as unknown as MissionUniverse;
 }
 

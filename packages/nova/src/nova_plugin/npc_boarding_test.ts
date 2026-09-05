@@ -26,7 +26,7 @@ import {
     PlayerPlunderedEvent,
 } from './npc_ai_plugin.js';
 import { BRIBE_FRACTION_LARGE, BRIBE_MINIMUM, bribeAmount } from './hail.js';
-import { CreditsComponent } from './player_state_plugin.js';
+import { ActiveMission, CreditsComponent, MissionsComponent } from './player_state_plugin.js';
 import { playerPlunderedMessage } from '../display/status_bar_content.js';
 import { ControlledByComponent } from './ship_control.js';
 import { Stat } from './stat.js';
@@ -486,6 +486,31 @@ describe('pirates plundering a disabled player', () => {
         expect(hulk.components.get(CreditsComponent)!.credits)
             .toEqual(20_000 - taken[0]);
     });
+
+    /**
+     * mïsn Flags 0x8000 "Mission will fail if player is boarded by
+     * pirates" (EVN Bible) — the Pirate Offshoot string nova:719-726.
+     * The plunder-boarding above IS that piracy (#106).
+     */
+    it('fails the owner\'s 0x8000-flagged missions when pirates board '
+        + 'them, and only those', async () => {
+            const { world, hulk } = await playerWorld();
+            const active = (id: string, flagged: boolean): ActiveMission => ({
+                id, acceptedDay: 0, acceptedAt: 'test:planet',
+                travelPlanet: null, returnPlanet: null, cargoType: -1,
+                cargoQty: 0, cargoLoaded: false, travelDone: false,
+                deadlineDay: null,
+                ...(flagged ? { failIfBoardedByPirates: true } : {}),
+            });
+            hulk.components.set(MissionsComponent, new Map([
+                ['test:courier', active('test:courier', true)],
+                ['test:tour', active('test:tour', false)],
+            ]));
+            expect(runUntilBoarded(world)).toBeTrue();
+            const missions = hulk.components.get(MissionsComponent)!;
+            expect(missions.get('test:courier')?.failed).toBeTrue();
+            expect(missions.get('test:tour')?.failed).toBeUndefined();
+        });
 
     it('will not touch a player who is still flying', async () => {
         // The disabled-first rule is this engine's, not the Bible's, and

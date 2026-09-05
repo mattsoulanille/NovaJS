@@ -9,6 +9,11 @@ import {
     DEFAULT_BOARD_PENALTY,
     DEFAULT_DISABLE_PENALTY,
     DEFAULT_KILL_PENALTY,
+    LEGAL_STATUS_EVIL_TIERS,
+    LEGAL_STATUS_GOOD_TIERS,
+    LEGAL_STATUS_NO_RECORD,
+    legalStatusInSystem,
+    legalStatusName,
     LegalRecords,
     recordHostile,
 } from './reputation.js';
@@ -85,6 +90,71 @@ describe('reputation against real Nova data', () => {
                 .toBe(DEFAULT_DISABLE_PENALTY);
             expect(crimePenalty(spanner, 'board'))
                 .toBe(DEFAULT_BOARD_PENALTY);
+        });
+
+    it('charges nothing for the derelict Wraiths, whose fields are -1 (#108)',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const wraith = await gameData.data.Govt.get('nova:159');
+            expect(wraith.name).toBe('Wraith');
+            expect(wraith.flags.startsDisabled).toBe(true);
+            expect(wraith.killPenalty).toBe(-1);
+            expect(wraith.disablePenalty).toBe(-1);
+            expect(wraith.boardPenalty).toBe(-1);
+            expect(crimePenalty(wraith, 'kill')).toBe(0);
+            // ...while the living Wraiths charge as written.
+            const living = await gameData.data.Govt.get('nova:138');
+            expect(living.name).toBe('Wraith');
+            expect(crimePenalty(living, 'kill')).toBe(16);
+        });
+
+    it('names legal statuses with the stock STR# 134 strings (#119)',
+        async () => {
+            const gameData = await getIntegrationGameData();
+            const { strings } = await gameData.data.StringTable.get('nova:134');
+            // Appendix II's two ladders, laid out in the resource as
+            // "No Record" x2, the eight evil steps, the six good steps,
+            // then the two domination titles.
+            expect(strings[0]).toBe(LEGAL_STATUS_NO_RECORD);
+            expect(strings.slice(2, 10))
+                .toEqual(LEGAL_STATUS_EVIL_TIERS.map(([, name]) => name));
+            expect(strings.slice(10, 16))
+                .toEqual(LEGAL_STATUS_GOOD_TIERS.map(([, name]) => name));
+            // And the scale is the govt's own CrimeTol: a record of -15
+            // is 2.5 tolerances against the Federation's 6 (a Minor
+            // Offender) but 5 against the Wild Geese's 3 (an Offender).
+            const fed = await gameData.data.Govt.get('nova:128');
+            expect(fed.crimeTol).toBe(6);
+            expect(legalStatusName(-15, fed.crimeTol)).toBe('Minor Offender');
+            const wildGeese = await gameData.data.Govt.get('nova:144');
+            expect(wildGeese.crimeTol).toBe(3);
+            expect(legalStatusName(-15, wildGeese.crimeTol)).toBe('Offender');
+        });
+
+    it('shows a FRESH pilot the same standing on the map and in the p '
+        + 'dialog where a stock govt starts them with a record', async () => {
+            const gameData = await getIntegrationGameData();
+            // Eight stock govts seed a nonzero InitialRec; the Rebellion
+            // (nova:147) starts every pilot at -5. The map used to read
+            // its missing entry as 0 ("No Record") while the dialog read
+            // the InitialRec — one record, two names.
+            const rebels = await gameData.data.Govt.get('nova:147');
+            expect(rebels.initialRecord).toBe(-5);
+            const fed = await gameData.data.Govt.get('nova:128');
+            expect(fed.initialRecord).toBe(0);
+            const getGovt = (id: string) => gameData.data.Govt.getCached(id);
+            const fresh = new Map<string, number>();
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .toBe(legalStatusName(-5, rebels.crimeTol));
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .not.toBe(LEGAL_STATUS_NO_RECORD);
+            // An independent system is judged by the Federation, with
+            // whom a fresh pilot really has no record...
+            expect(legalStatusInSystem(fresh, null, getGovt))
+                .toBe(LEGAL_STATUS_NO_RECORD);
+            // ...and by the Federation's tolerance once they have one.
+            expect(legalStatusInSystem(new Map([['nova:128', -15]]), null,
+                getGovt)).toBe('Minor Offender');
         });
 
     it('killing a Federation ship propagates across the real map',

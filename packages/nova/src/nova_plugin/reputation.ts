@@ -86,7 +86,7 @@ function clampRecord(value: number): number {
  * The player's record with a govt: the stored value, else the govt's
  * InitialRec, else 0 for an unknown govt.
  */
-export function recordWith(records: LegalRecords,
+export function recordWith(records: ReadonlyMap<string, number>,
     govtId: string, govtData?: GovtData): number {
     return records.get(govtId) ?? govtData?.initialRecord ?? 0;
 }
@@ -105,7 +105,25 @@ function intersects(a: readonly number[], b: readonly number[]): boolean {
 /** The kind of crime a legal-record penalty is charged for. */
 export type Crime = 'kill' | 'disable' | 'board';
 
-/** A crime's base penalty: the govt's field, or the engine default. */
+/**
+ * A crime's base penalty: the govt's field, or the engine default for a
+ * zero field — and NO PENALTY AT ALL for a negative one.
+ *
+ * The Bible describes every penalty field as "the amount of evilness"
+ * a crime earns and never gives a negative one a meaning, while "-1
+ * means unused" is the format's convention everywhere else (SalaryCap,
+ * AvailRating, the -1 ids). Exactly one stock gövt writes negatives:
+ * nova:159 "Wraith" — the DERELICT variant (Flags 0x0800 "start out
+ * disabled", can't be hailed, no assistance or mercy) — sets Smug,
+ * Disab, Board, Kill AND the "currently ignored" ShootPenalty all to
+ * -1, the copy-paste signature of "not applicable" rather than of a
+ * bounty; its living siblings nova:138/139 charge a KillPenalty of 16.
+ * Read literally (record -= -1) a pilot would be REWARDED a point of
+ * Wraith standing for shooting a derelict, and read as "unset -> engine
+ * default" they would be charged as for a typical govt; neither is what
+ * that author meant. So a negative field is "this govt does not care":
+ * the crime costs nothing and propagates nothing (#108).
+ */
 export function crimePenalty(govt: GovtData, crime: Crime): number {
     const field = crime === 'kill' ? govt.killPenalty
         : crime === 'disable' ? govt.disablePenalty
@@ -113,6 +131,9 @@ export function crimePenalty(govt: GovtData, crime: Crime): number {
     const fallback = crime === 'kill' ? DEFAULT_KILL_PENALTY
         : crime === 'disable' ? DEFAULT_DISABLE_PENALTY
             : DEFAULT_BOARD_PENALTY;
+    if (field < 0) {
+        return 0;
+    }
     return field !== 0 ? field : fallback;
 }
 
@@ -128,6 +149,9 @@ export function applyCrime(records: LegalRecords, victimGovt: GovtData,
     crime: Crime,
     allGovts: Iterable<readonly [string, GovtData]>): void {
     const penalty = crimePenalty(victimGovt, crime);
+    if (penalty === 0) {
+        return; // A govt that does not care (negative field): no entry.
+    }
     addRecord(records, victimGovt.id, victimGovt, -penalty);
     const propagated = Math.trunc(penalty / PROPAGATION_DIVISOR);
     if (propagated === 0) {
@@ -267,27 +291,113 @@ export function combatRatingName(kills: number): string {
 }
 
 /**
- * The map's "Legal Status:" name for a legal record with a government
- * (map/govt_borders.png shows "Citizen" at a clean record). The stock
- * strings live in STR# resources that are not parsed, so these tiers
- * are illustrative in the COMBAT_RATING_TIERS style: hostile records
- * (record < -crimeTol, see recordHostile) read as Criminal/Fugitive,
- * mild negatives as Offender, and positives improve with magnitude.
+ * The government whose record and CrimeTol judge the player's legal
+ * status in an INDEPENDENT system: gövt 128, per the Bible's Appendix
+ * II ("if the system is independent, it is based on the first
+ * government's [ID 128] crime tolerance"). The same rule keys the
+ * record itself (mission_logic's stellarRecord), so status is read
+ * from the record and the tolerance of ONE government.
+ */
+export const INDEPENDENT_STATUS_GOVT = 'nova:128';
+
+/** The government that judges legal status in a system with `systemGovt`. */
+export function statusGovtOf(systemGovt: string | null | undefined): string {
+    return systemGovt ?? INDEPENDENT_STATUS_GOVT;
+}
+
+/**
+ * The "Legal Status:" line for a system — the ONE reading shared by the
+ * starmap's properties column and the player-info ('p') dialog, so the
+ * two can never disagree (#119): the player's record with the system's
+ * status government (its own, or gövt 128 for an independent one),
+ * against that government's CrimeTol. An absent record reads as the
+ * govt's InitialRec, exactly as the simulation reads it (recordWith) —
+ * a fresh pilot in a nova:147 (InitialRec -5) system is not "No Record"
+ * on one screen and an offender on the other. Undefined when the status
+ * govt is unknown to `getGovt`, which is the caller's "no line" case.
+ */
+export function legalStatusInSystem(records: ReadonlyMap<string, number>,
+    systemGovt: string | null | undefined,
+    getGovt: (id: string) => GovtData | undefined): string | undefined {
+    const govtId = statusGovtOf(systemGovt);
+    const govt = getGovt(govtId);
+    if (!govt) {
+        return undefined;
+    }
+    return legalStatusName(recordWith(records, govtId, govt), govt.crimeTol);
+}
+
+/**
+ * Appendix II's legal-status ladder, in units of the government's
+ * CrimeTol: "enough 'good' or 'evil' points to equal the government's
+ * crime tolerance is given a value of 1". Each tier is [threshold,
+ * name] and applies when the scaled record is STRICTLY above the
+ * threshold (the Bible writes every row as ">n").
+ *
+ * The strings are stock STR# 134 verbatim (indices 10-15 for the good
+ * scale, 1-9 for the evil one; 0 is "No Record" and 16-17 the
+ * domination titles) — checked against the parsed resource in
+ * reputation_integration_test.ts, so the constants here, which the
+ * simulation-side modules can reach without game data, cannot drift
+ * from the data.
+ */
+export const LEGAL_STATUS_NO_RECORD = 'No Record';
+export const LEGAL_STATUS_GOOD_TIERS: readonly (readonly [number, string])[] = [
+    [0, 'Citizen'],
+    [4, 'Good Citizen'],
+    [16, 'Upstanding Citizen'],
+    [64, 'Leading Citizen'],
+    [256, 'Model Citizen'],
+    [1024, 'Virtuous Citizen'],
+];
+export const LEGAL_STATUS_EVIL_TIERS: readonly (readonly [number, string])[] = [
+    [0, 'No Convictions'],
+    [1, 'Minor Offender'],
+    [4, 'Offender'],
+    [16, 'Criminal'],
+    [64, 'Wanted Criminal'],
+    [256, 'Fugitive'],
+    [1024, 'Hunted Fugitive'],
+    [4096, 'Public Enemy'],
+];
+
+/**
+ * The "Legal Status:" name for a legal record with a government — the
+ * ONE implementation behind both the starmap's system readout and the
+ * player-info ('p') dialog, so the two can never disagree (#119).
+ *
+ * EVN Bible, Appendix II: "Your legal status in a system is based on
+ * the crime tolerance of that system's government. (if the system is
+ * independent, it is based on the first government's [ID 128] crime
+ * tolerance) On this scale, enough 'good' or 'evil' points to equal
+ * the government's crime tolerance is given a value of 1", then the
+ * power-of-four ladders above. The independent-system rule is the
+ * CALLER's: pass gövt 128's CrimeTol (mission_logic's stellarRecord
+ * already keys the record itself that way; legalStatusInSystem above
+ * does both for the map and the 'p' dialog).
+ *
+ * A CrimeTol of 0 (stock nova:171 Spanner, nova:183 Hypergate, and the
+ * scenery govts) would divide by zero; it is read as 1 — every point
+ * counts in full, which is also what "no tolerance" means for the
+ * hostility test (recordHostile clamps the same way). The evil scale's
+ * "Minor Offender" step (>1) therefore coincides exactly with the
+ * moment warships open fire (record < -CrimeTol): a "No Convictions"
+ * pilot is still within tolerance, a "Minor Offender" is not.
  */
 export function legalStatusName(record: number, crimeTol: number): string {
-    if (recordHostile(record, crimeTol)) {
-        return record <= -1000 ? 'Fugitive' : 'Criminal';
+    if (record === 0) {
+        return LEGAL_STATUS_NO_RECORD;
     }
-    if (record < 0) {
-        return 'Offender';
+    const scaled = Math.abs(record) / Math.max(1, crimeTol);
+    const tiers = record > 0
+        ? LEGAL_STATUS_GOOD_TIERS : LEGAL_STATUS_EVIL_TIERS;
+    let name = tiers[0][1];
+    for (const [threshold, tierName] of tiers) {
+        if (scaled > threshold) {
+            name = tierName;
+        }
     }
-    if (record >= 1000) {
-        return 'Upstanding Citizen';
-    }
-    if (record >= 100) {
-        return 'Decent Citizen';
-    }
-    return 'Citizen';
+    return name;
 }
 
 // --- mïsn PayVal decoding ---

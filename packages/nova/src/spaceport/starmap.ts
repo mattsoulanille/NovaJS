@@ -13,7 +13,7 @@ import { displayName } from "../nova_plugin/display_name.js";
 import { MissionMapMark, STANDARD_CARGO_NAMES } from "../nova_plugin/mission_logic.js";
 import { isPort, systemIsInhabited } from "../nova_plugin/landable.js";
 import { evaluateNCBTest } from "../nova_plugin/ncb.js";
-import { legalStatusName } from "../nova_plugin/reputation.js";
+import { legalStatusInSystem } from "../nova_plugin/reputation.js";
 import { LegalRecordsState } from "../nova_plugin/reputation_plugin.js";
 import { Button } from "./button.js";
 import { FindDialog } from "./find_dialog.js";
@@ -1555,9 +1555,8 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
     private showProperties(systemId: string) {
         this.propContainer.removeChildren();
         // Each group owns one of the column's five fixed slots, so a short
-        // Goods Traded list (or a missing Legal Status, in an ungoverned
-        // system) leaves a gap rather than pulling the rest up — which is
-        // what the original does.
+        // Goods Traded list leaves a gap rather than pulling the rest up —
+        // which is what the original does.
         const addLine = (slot: PropSlot, label: string, values: string[]) => {
             const top = PROP_TOP + PROP_GROUP_Y[slot];
             const labelText = new PIXI.Text(label, PROP_LABEL_FONT);
@@ -1591,14 +1590,19 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         addLine(PropSlot.Government, 'Government:',
             [govt ? displayName(govt.name) : 'Independent']);
 
-        if (govt && system.govt) {
-            // A landed caller's records win over the plugin's lookup, for
-            // the same reason as the bits (#29).
-            const records =
-                this.openOptions.legalRecords ?? this.getLegalRecords();
-            const record = records?.get(system.govt) ?? 0;
-            addLine(PropSlot.LegalStatus, 'Legal Status:',
-                [legalStatusName(record, govt.crimeTol)]);
+        // The player's standing with the system's status government —
+        // gövt 128's for an independent system (Bible, Appendix II) — read
+        // through the same function as the 'p' dialog, InitialRec fallback
+        // included, so the two screens never disagree about one record.
+        // A landed caller's records win over the plugin's lookup, for the
+        // same reason as the bits (#29). Only a status govt this universe
+        // cannot resolve leaves the slot empty.
+        const legalStatus = legalStatusInSystem(
+            this.openOptions.legalRecords ?? this.getLegalRecords()
+                ?? new Map(),
+            system.govt, id => this.universe.getGovt(id));
+        if (legalStatus !== undefined) {
+            addLine(PropSlot.LegalStatus, 'Legal Status:', [legalStatus]);
         }
 
         // Ports: the landable, INHABITED stellars (landable.ts isPort — the

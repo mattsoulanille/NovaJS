@@ -7,7 +7,11 @@ import {
     activateRank,
     activeRankData,
     deactivateRank,
+    mostRecentlyActivatedRank,
     rankConversationName,
+    rankConversationNamesForGovt,
+    resetMostRecentlyActivatedRank,
+    revokeRanksForCrime,
     rankContribute,
     rankPriceMod,
     rankSalaryPerDay,
@@ -303,6 +307,44 @@ describe('rank privileges', () => {
                 .toBeUndefined();
         });
 
+    it('answers <PRKnnn>/<SRKnnn> for one government only (#110)', () => {
+        const get = lookup(
+            rank('nova:300', { weight: 30, govt: 'nova:141',
+                convName: 'Rebel Colonel', shortName: 'Colonel' }),
+            rank('nova:301', { weight: 5, govt: 'nova:128',
+                convName: 'Federation Ambassador' }),
+            rank('nova:302', { weight: 1, govt: 'nova:128',
+                shortName: 'Ambassador' }));
+        const active = new Set(['nova:300', 'nova:301', 'nova:302']);
+        // The Federation's highest-weight rank has no ShortName; the
+        // lower one supplies it, exactly as <PRK>/<SRK> fall through.
+        expect(rankConversationNamesForGovt(active, get, 'nova:128'))
+            .toEqual({ convName: 'Federation Ambassador',
+                shortName: 'Ambassador' });
+        expect(rankConversationNamesForGovt(active, get, 'nova:141'))
+            .toEqual({ convName: 'Rebel Colonel', shortName: 'Colonel' });
+        expect(rankConversationNamesForGovt(active, get, 'nova:129'))
+            .toBeUndefined();
+        expect(rankConversationNamesForGovt(active, get, undefined))
+            .toBeUndefined();
+    });
+
+    it('remembers the most recently activated rank for <RRK>, session-'
+        + 'locally', () => {
+            resetMostRecentlyActivatedRank();
+            expect(mostRecentlyActivatedRank()).toBeUndefined();
+            const get = lookup(rank('nova:300'), rank('nova:301'));
+            const active = new Set<string>();
+            activateRank(active, 'nova:300', get);
+            expect(mostRecentlyActivatedRank()).toBe('nova:300');
+            activateRank(active, 'nova:301', get);
+            expect(mostRecentlyActivatedRank()).toBe('nova:301');
+            // Deactivation does not move the pointer.
+            deactivateRank(active, 'nova:301', get);
+            expect(mostRecentlyActivatedRank()).toBe('nova:301');
+            resetMostRecentlyActivatedRank();
+        });
+
     it('leaves prices unchanged with no affiliated rank active', () => {
         const get = lookup(rank('nova:300', { priceMod: 50 }));
         expect(rankPriceMod(undefined, get, 'nova:128')).toBe(100);
@@ -391,5 +433,94 @@ describe('rank privileges', () => {
             expect(rankSalaryPerDay(both, get, 350_000)).toBe(200);
             expect(rankSalaryPerDay(both, get, 400_000)).toBe(200);
             expect(rankSalaryPerDay(undefined, get, 0)).toBe(0);
+        });
+});
+
+/**
+ * The crime revocations, ränk Flags 0x0004 "Deactivate this rank if
+ * player destroys or disables a ship of the affiliated government or its
+ * allies" and 0x0040 "Deactivate this rank if the player commits any
+ * crime against the affiliated government" (EVN Bible). Stock's cover
+ * ranks — nova:148 "; Rebel 1" (0x144), nova:150 "; Nil'kemorya 1"
+ * (0x144), the duel protectors nova:153-158 (0x140) — exist for these
+ * bits alone (#56).
+ */
+describe('revokeRanksForCrime (ränk Flags 0x0004 / 0x0040)', () => {
+    const REBELLION = { id: 'nova:141', classes: [10] };
+    const REBEL_ALLY = { id: 'nova:300', classes: [7] };
+    const FEDERATION = { id: 'nova:128', classes: [1] };
+    // The Rebellion's allies are classes 7, 16, 13 and 11 (stock).
+    const getGovt = (id: string) =>
+        id === 'nova:141' ? { allies: [7, 16, 13, 11] } : undefined;
+
+    it('drops a 0x0040 cover on ANY crime against its own govt, and on '
+        + 'nothing else', () => {
+            const get = lookup(rank('nova:148', { govt: 'nova:141',
+                flags: 0x140 }));
+            for (const crime of ['kill', 'disable', 'board'] as const) {
+                const active = new Set(['nova:148']);
+                expect(revokeRanksForCrime(active, REBELLION, crime, get,
+                    getGovt)).toEqual(['nova:148']);
+                expect(active.size).toBe(0);
+            }
+            // An ally's ship, or an unrelated govt's, is no crime against
+            // the Rebellion.
+            const active = new Set(['nova:148']);
+            expect(revokeRanksForCrime(active, REBEL_ALLY, 'kill', get,
+                getGovt)).toEqual([]);
+            expect(revokeRanksForCrime(active, FEDERATION, 'kill', get,
+                getGovt)).toEqual([]);
+            expect(active.has('nova:148')).toBe(true);
+        });
+
+    it('drops a 0x0004 rank on destroying or disabling a ship of the '
+        + 'govt OR ITS ALLIES, but not on boarding one', () => {
+            const get = lookup(rank('nova:150', { govt: 'nova:141',
+                flags: 0x004 }));
+            let active = new Set(['nova:150']);
+            expect(revokeRanksForCrime(active, REBEL_ALLY, 'disable', get,
+                getGovt)).toEqual(['nova:150']);
+            active = new Set(['nova:150']);
+            expect(revokeRanksForCrime(active, REBELLION, 'kill', get,
+                getGovt)).toEqual(['nova:150']);
+            active = new Set(['nova:150']);
+            expect(revokeRanksForCrime(active, REBELLION, 'board', get,
+                getGovt)).toEqual([]);
+            expect(revokeRanksForCrime(active, FEDERATION, 'kill', get,
+                getGovt)).toEqual([]);
+            expect(active.has('nova:150')).toBe(true);
+        });
+
+    it('spares a PERMANENT rank and one with no affiliated govt', () => {
+        const get = lookup(
+            rank('nova:400', { govt: 'nova:141', flags: 0x044 | 0x008 }),
+            rank('nova:401', { govt: null, flags: 0x044 }));
+        const active = new Set(['nova:400', 'nova:401']);
+        expect(revokeRanksForCrime(active, REBELLION, 'kill', get, getGovt))
+            .toEqual([]);
+        expect(active.size).toBe(2);
+    });
+
+    it('runs the revoked rank\'s own deactivation cascade, like an Lxxx',
+        () => {
+            const get = lookup(
+                // 0x0040 with 0x0002: dropping it drops its govt-mates.
+                rank('nova:148', { govt: 'nova:141', flags: 0x042 }),
+                rank('nova:149', { govt: 'nova:141' }));
+            const active = new Set(['nova:148', 'nova:149']);
+            expect(revokeRanksForCrime(active, REBELLION, 'kill', get,
+                getGovt)).toEqual(['nova:148']);
+            expect(active.size).toBe(0);
+        });
+
+    it('re-bakes the 0x0100 suppression set without the fallen cover',
+        () => {
+            const get = lookup(rank('nova:148', { govt: 'nova:141',
+                flags: 0x144 }));
+            const active = new Set(['nova:148']);
+            expect(suppressAggressionGovts(active, get))
+                .toEqual(new Set(['nova:141']));
+            revokeRanksForCrime(active, REBELLION, 'kill', get, getGovt);
+            expect(suppressAggressionGovts(active, get)).toEqual(new Set());
         });
 });

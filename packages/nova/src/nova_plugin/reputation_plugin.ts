@@ -16,8 +16,12 @@ import { SourceComponent } from './weapon_components.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { GovtComponent } from './govt_component.js';
 import { ArmorComponent } from './health_plugin.js';
-import { applyCrime } from './reputation.js';
+import { applyCrime, Crime } from './reputation.js';
 import { ShipDataComponent } from './ship_plugin.js';
+import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from './ncb_plugin.js';
+import { revokeRanksForCrime, suppressAggressionGovts } from './rank_logic.js';
+import { Entity } from 'nova_ecs/entity';
+import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 
 /**
  * ============================================================================
@@ -100,6 +104,43 @@ const DamagerQuery = new Query([Optional(FiringGroupComponent),
     Optional(SourceComponent)] as const);
 
 /**
+ * Charges a crime against `victimGovt` to the responsible root entity —
+ * a player's ship — in full: the legal-record penalty with propagation
+ * (reputation.ts's applyCrime) AND the ränk revocations the crime
+ * triggers (rank_logic's revokeRanksForCrime, flags 0x0004 / 0x0040),
+ * re-baking the 0x0100 suppression set the NPC brains read whenever a
+ * rank falls. One entry point for the kill, disable and boarding credit
+ * systems, so a crime carries the same consequences however it was
+ * committed. A root without the player components (an NPC) is
+ * unaffected.
+ *
+ * The ränk lookup is the simulation's own cache, warm because makeSystem
+ * stages the whole ränk table at world genesis; a rank it still cannot
+ * resolve is simply kept, as rank_logic keeps unknown ids everywhere.
+ */
+export function chargeCrime(root: Entity, victimGovt: GovtData,
+    crime: Crime, gameData: SimulationGameDataInterface,
+    govts: ReadonlyMap<string, GovtData> | undefined): void {
+    const records = root.components.get(LegalRecordsComponent);
+    if (records) {
+        applyCrime(records, victimGovt, crime, govts ?? []);
+    }
+    const ranks = root.components.get(ActiveRanksComponent);
+    if (!ranks || ranks.size === 0) {
+        return;
+    }
+    const getRank = (id: string) => gameData.data.Rank.getCached(id);
+    const dropped = revokeRanksForCrime(ranks, victimGovt, crime, getRank,
+        id => govts?.get(id) ?? gameData.data.Govt.getCached(id));
+    if (dropped.length > 0) {
+        // Both halves together, as commitActiveRanks writes them: the
+        // sim reads 0x0100 off the baked set, never off the ranks.
+        root.components.set(AggressionSuppressGovtsComponent,
+            suppressAggressionGovts(ranks, getRank));
+    }
+}
+
+/**
  * Remembers who last damaged a ship: the weapon's firing-group root
  * (which is the fleet leader / carrier root, so escorts' and bay
  * fighters' shots attribute to their leader), else the firing ship.
@@ -176,11 +217,10 @@ const KillCreditSystem = new System({
         if (rating) {
             rating.kills += Math.max(0, shipData.strength);
         }
-        const records = root.components.get(LegalRecordsComponent);
-        if (records && govt) {
+        if (govt) {
             const govtData = gameData.data.Govt.getCached(govt.id);
             if (govtData) {
-                applyCrime(records, govtData, 'kill', govts ?? []);
+                chargeCrime(root, govtData, 'kill', gameData, govts);
             }
         }
     },
@@ -233,13 +273,9 @@ const DisableCreditSystem = new System({
         if (!root || !govt) {
             return;
         }
-        const records = root.components.get(LegalRecordsComponent);
-        if (!records) {
-            return;
-        }
         const govtData = gameData.data.Govt.getCached(govt.id);
         if (govtData) {
-            applyCrime(records, govtData, 'disable', govts ?? []);
+            chargeCrime(root, govtData, 'disable', gameData, govts);
         }
     },
 });

@@ -62,3 +62,50 @@ describe('expandMissionText <SN>', () => {
                 + 'system in the unknown ship.');
     });
 });
+
+/**
+ * The government-scoped rank tags — "<PRKnnn> Same as <PRK>, but only for
+ * ranks affiliated with government ID nnn" and its <SRKnnn> sibling — and
+ * "<RRK> The full name of the most recently activated rank resource"
+ * (EVN Bible). Stock nova:468 "Scout Polaris Space;Fed37" is the user:
+ * its BriefText grants "the diplomatic rank of '<PRK128>'".
+ */
+describe('expandMissionText <PRKnnn> / <SRKnnn> / <RRK> (#110)', () => {
+    const BRIEF = '"In that case," smiles Frandall slightly sardonically, '
+        + '"you are hereby given the diplomatic rank of \'<PRK128>\', '
+        + 'with all the privileges and responsibilities inherent in that '
+        + 'position.';
+    const byGovt = new Map([[128, {
+        convName: 'Federation Ambassador', shortName: 'Ambassador',
+    }]]);
+    const subs = {
+        rankName: 'Rebel Colonel', rankShortName: 'Colonel',
+        rankForGovt: (n: number) => byGovt.get(n),
+        recentRankName: 'Federation Diplomatic Rank',
+    };
+
+    it('expands <PRKnnn> / <SRKnnn> to THAT govt\'s rank, not the '
+        + 'highest-weight one', () => {
+            const text = expandMissionText(BRIEF, subs);
+            expect(text).toContain(
+                'the diplomatic rank of \'Federation Ambassador\'');
+            expect(text).not.toContain('<PRK');
+            expect(expandMissionText('<SRK128> <PRK> <SRK>', subs))
+                .toBe('Ambassador Rebel Colonel Colonel');
+        });
+
+    it('falls back to "captain" for a govt the player holds no rank '
+        + 'with, like <PRK>', () => {
+            expect(expandMissionText('<PRK141>, <SRK141>', subs))
+                .toBe('captain, captain');
+            expect(expandMissionText('<PRK128>', {})).toBe('captain');
+        });
+
+    it('expands <RRK> to the most recently activated rank\'s name, else '
+        + '"captain"', () => {
+            expect(expandMissionText('Congratulations, <RRK>.', subs))
+                .toBe('Congratulations, Federation Diplomatic Rank.');
+            expect(expandMissionText('Congratulations, <RRK>.', {}))
+                .toBe('Congratulations, captain.');
+        });
+});

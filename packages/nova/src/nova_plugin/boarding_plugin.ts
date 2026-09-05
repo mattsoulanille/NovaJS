@@ -45,13 +45,14 @@ import { ShieldComponent } from './health_plugin.js';
 import { FuelComponent } from './health_plugin.js';
 import {
     formationsIn, FormationComponent, nextFormationSlot, NpcComponent,
+    PlayerPlunderedEvent,
 } from './npc_ai_plugin.js';
 import {
     EscortLandingComponent, PlayerEscortComponent,
 } from './player_escort.js';
-import { CreditsComponent } from './player_state_plugin.js';
-import { applyCrime, LegalRecords } from './reputation.js';
-import { GovtsResource, LegalRecordsComponent } from './reputation_plugin.js';
+import { CreditsComponent, MissionsComponent } from './player_state_plugin.js';
+import { LegalRecords } from './reputation.js';
+import { chargeCrime, GovtsResource, LegalRecordsComponent } from './reputation_plugin.js';
 import {
     ControlledByComponent, ShipControlEvent, ShipControlStateComponent,
 } from './ship_control.js';
@@ -193,15 +194,18 @@ function ammoPlunderInputs(boarderOutfits: OutfitsState | undefined,
  * consequence however it happened. A victim with no government (your own
  * escorts, and anything already stripped of its GovtComponent) is a no-op.
  */
-function applyBoardCrime(records: LegalRecords | undefined,
+function applyBoardCrime(boarder: Entity, records: LegalRecords | undefined,
     govtId: string | undefined, gameData: SimulationGameDataInterface,
-    govts: Iterable<readonly [string, GovtData]> | undefined): void {
+    govts: ReadonlyMap<string, GovtData> | undefined): void {
     if (!records || !govtId) {
         return;
     }
     const govtData = gameData.data.Govt.getCached(govtId);
     if (govtData) {
-        applyCrime(records, govtData, 'board', govts ?? []);
+        // Records AND the ränk 0x0040 revocation ("any crime against the
+        // affiliated government"), through the one charge the kill and
+        // disable credits use (reputation_plugin.ts).
+        chargeCrime(boarder, govtData, 'board', gameData, govts);
     }
 }
 
@@ -509,7 +513,7 @@ const BoardingGateSystem = new System({
         const targetGovtId = targetEntity!.components.get(GovtComponent)?.id;
         if (captureBay !== undefined && stowCaptureIntoBay(
             targetUuid!, captureBay, entity, entities, gameData)) {
-            applyBoardCrime(records, targetGovtId, gameData, govts);
+            applyBoardCrime(entity, records, targetGovtId, gameData, govts);
             // Same memory sweep the plunder-dialog capture runs: the hull
             // is gone from the world, so nothing can shoot it any more,
             // but no NPC is left carrying an aggressor slot or a target
@@ -1190,7 +1194,7 @@ const BoardingActionSystem = new System({
                 return;
             }
             boarding.crimeApplied = true;
-            applyBoardCrime(records,
+            applyBoardCrime(entity, records,
                 target?.components.get(GovtComponent)?.id, gameData, govts);
         };
 
@@ -1401,10 +1405,43 @@ export const BoardingPlugin: Plugin = {
         world.addSystem(BoardingGateSystem);
         world.addSystem(BoardingActionSystem);
         world.addSystem(BoardingLandingResetSystem);
+        world.addSystem(MissionPlayerPlunderedSystem);
     },
     remove(world) {
         world.removeSystem(BoardingGateSystem);
         world.removeSystem(BoardingActionSystem);
         world.removeSystem(BoardingLandingResetSystem);
+        world.removeSystem(MissionPlayerPlunderedSystem);
     },
 };
+
+/**
+ * mïsn Flags 0x8000, "Mission will fail if player is boarded by pirates"
+ * (EVN Bible) — stock's Pirate Offshoot string nova:719-726 ("Rescue
+ * Tomak", "Pick Up Cargo", "Beat On 'Daring' Dan McGraw"...) sets it.
+ *
+ * "Boarded by pirates" is read as the one piracy the simulation has: an
+ * NPC warship plunder-boarding the disabled owner (gövt Flags 0x1000,
+ * npc_ai_plugin's PlayerPlunderedEvent, targeted at the victim). Every
+ * such boarding IS piracy whatever the boarder's government calls
+ * itself — the Bible's own definition of the act is "pirating one of
+ * this govt's ships" (BoardPenalty) — so no govt-class predicate is
+ * applied. A rival PLAYER boarding the owner is not an NPC pirate and
+ * does not count. Marks the flagged missions failed exactly as the
+ * player-loss systems do (mission_ship_plugin's
+ * failPlayerMissionsOnLoss); the OnFailure and the notice follow at the
+ * next date advance. Runs identically on every peer off the same event,
+ * and an already-failed mission stays failed.
+ */
+const MissionPlayerPlunderedSystem = new System({
+    name: 'MissionPlayerPlunderedSystem',
+    events: [PlayerPlunderedEvent],
+    args: [PlayerPlunderedEvent, MissionsComponent] as const,
+    step(_plundered, missions) {
+        for (const active of missions.values()) {
+            if (active.failIfBoardedByPirates && !active.failed) {
+                active.failed = true;
+            }
+        }
+    },
+});

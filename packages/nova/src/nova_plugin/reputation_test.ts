@@ -15,10 +15,15 @@ import {
     DEFAULT_BOARD_PENALTY,
     DEFAULT_DISABLE_PENALTY,
     DEFAULT_KILL_PENALTY,
+    INDEPENDENT_STATUS_GOVT,
     initialRecordsFromGovtStatuses,
+    LEGAL_STATUS_NO_RECORD,
+    legalStatusInSystem,
+    legalStatusName,
     LegalRecords,
     recordHostile,
     recordWith,
+    statusGovtOf,
 } from './reputation.js';
 
 function makeGovt(id: string, partial: Partial<GovtData> = {}): GovtData {
@@ -81,6 +86,21 @@ describe('crimePenalty', () => {
         const pirateHater = makeGovt('nova:131', { boardPenalty: 20 });
         expect(crimePenalty(pirateHater, 'board')).toBe(20);
     });
+
+    it('reads a NEGATIVE field as "no penalty", not as a bounty (#108)',
+        () => {
+            // Stock nova:159 "Wraith" (the derelict variant) sets every
+            // penalty field to -1. `record -= -1` would reward the kill.
+            const wraith = makeGovt('nova:159', {
+                killPenalty: -1, disablePenalty: -1, boardPenalty: -1,
+            });
+            expect(crimePenalty(wraith, 'kill')).toBe(0);
+            expect(crimePenalty(wraith, 'disable')).toBe(0);
+            expect(crimePenalty(wraith, 'board')).toBe(0);
+            const records: LegalRecords = new Map();
+            applyCrime(records, wraith, 'kill', [[wraith.id, wraith]]);
+            expect(records.size).toBe(0);
+        });
 });
 
 describe('applyCrime', () => {
@@ -133,6 +153,65 @@ describe('recordHostile', () => {
             expect(recordHostile(0, 0)).toBe(false);
             expect(recordHostile(-1, -5)).toBe(true);
         });
+});
+
+/**
+ * EVN Bible, Appendix II: the status is the record in units of the
+ * government's CrimeTol, against a power-of-four ladder — 0 No Record;
+ * good >0 Citizen, >4 Good Citizen, >16 Upstanding, >64 Leading, >256
+ * Model, >1024 Virtuous; evil >0 No Convictions, >1 Minor Offender, >4
+ * Offender, >16 Criminal, >64 Wanted Criminal, >256 Fugitive, >1024
+ * Hunted Fugitive, >4096 Public Enemy (strings: stock STR# 134, pinned
+ * in reputation_integration_test.ts).
+ */
+describe('legalStatusName (#119)', () => {
+    const TOL = 6; // The stock Federation's CrimeTol.
+
+    it('scales the record by CrimeTol and walks the good ladder', () => {
+        expect(legalStatusName(0, TOL)).toBe('No Record');
+        expect(legalStatusName(1, TOL)).toBe('Citizen');
+        expect(legalStatusName(4 * TOL, TOL)).toBe('Citizen');
+        expect(legalStatusName(4 * TOL + 1, TOL)).toBe('Good Citizen');
+        expect(legalStatusName(16 * TOL + 1, TOL)).toBe('Upstanding Citizen');
+        expect(legalStatusName(64 * TOL + 1, TOL)).toBe('Leading Citizen');
+        expect(legalStatusName(256 * TOL + 1, TOL)).toBe('Model Citizen');
+        expect(legalStatusName(1024 * TOL + 1, TOL)).toBe('Virtuous Citizen');
+    });
+
+    it('walks the evil ladder, whose second step is the hostility line',
+        () => {
+            expect(legalStatusName(-1, TOL)).toBe('No Convictions');
+            expect(legalStatusName(-TOL, TOL)).toBe('No Convictions');
+            // record < -CrimeTol: warships open fire (recordHostile) and
+            // the status is the first one past "No Convictions".
+            expect(recordHostile(-TOL - 1, TOL)).toBe(true);
+            expect(legalStatusName(-TOL - 1, TOL)).toBe('Minor Offender');
+            expect(legalStatusName(-4 * TOL - 1, TOL)).toBe('Offender');
+            expect(legalStatusName(-16 * TOL - 1, TOL)).toBe('Criminal');
+            expect(legalStatusName(-64 * TOL - 1, TOL))
+                .toBe('Wanted Criminal');
+            expect(legalStatusName(-256 * TOL - 1, TOL)).toBe('Fugitive');
+            expect(legalStatusName(-1024 * TOL - 1, TOL))
+                .toBe('Hunted Fugitive');
+            expect(legalStatusName(-4096 * TOL - 1, TOL))
+                .toBe('Public Enemy');
+        });
+
+    it('depends on CrimeTol: the same record reads differently per govt',
+        () => {
+            // -30 with a tolerance of 20 (scaled 1.5) is a Minor Offender;
+            // with a tolerance of 1 (scaled 30) a Criminal.
+            expect(legalStatusName(-30, 20)).toBe('Minor Offender');
+            expect(legalStatusName(-30, 1)).toBe('Criminal');
+            expect(legalStatusName(30, 20)).toBe('Citizen');
+            expect(legalStatusName(30, 1)).toBe('Upstanding Citizen');
+        });
+
+    it('reads a CrimeTol of 0 as 1 rather than dividing by zero', () => {
+        expect(legalStatusName(5, 0)).toBe('Good Citizen');
+        expect(legalStatusName(-2, 0)).toBe('Minor Offender');
+        expect(legalStatusName(-2, -7)).toBe('Minor Offender');
+    });
 });
 
 describe('cleanRecords', () => {
@@ -330,5 +409,60 @@ describe('criminal hostility: display disposition (shipDisposition)', () => {
     it('does not change politics-only calls (no records passed)', () => {
         expect(shipDisposition(fed, auroran)).toBe('hostile');
         expect(shipDisposition(fed, undefined)).toBe('neutral');
+    });
+});
+
+/**
+ * The map's properties column and the 'p' dialog print their "Legal
+ * Status:" through this ONE reading, so a record can never be named two
+ * ways — including the record they START from: an absent entry is the
+ * govt's InitialRec, exactly what the simulation charges against.
+ */
+describe('legalStatusInSystem (one reading for the map and the dialog)', () => {
+    const fed = makeGovt('nova:128', { crimeTol: 6 });
+    // Stock nova:147's shape: the pilot starts at -5 with them.
+    const rebels = makeGovt('nova:147', { crimeTol: 3, initialRecord: -5 });
+    const getGovt = (id: string) => [fed, rebels].find(g => g.id === id);
+
+    it("reads an absent record as the govt's InitialRec, as the sim does",
+        () => {
+            const fresh = new Map<string, number>();
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .toBe(legalStatusName(-5, 3));
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .not.toBe(LEGAL_STATUS_NO_RECORD);
+            // A govt with no InitialRec really is a clean slate.
+            expect(legalStatusInSystem(fresh, 'nova:128', getGovt))
+                .toBe(LEGAL_STATUS_NO_RECORD);
+        });
+
+    it('prefers the stored record, scaled by that govt\'s own CrimeTol',
+        () => {
+            const records = new Map([['nova:147', -13], ['nova:128', -13]]);
+            // -13 is 2.2 Federation tolerances but 4.3 Rebel ones.
+            expect(legalStatusInSystem(records, 'nova:128', getGovt))
+                .toBe('Minor Offender');
+            expect(legalStatusInSystem(records, 'nova:147', getGovt))
+                .toBe('Offender');
+            expect(legalStatusInSystem(new Map([['nova:147', 30]]),
+                'nova:147', getGovt)).toBe(legalStatusName(30, 3));
+        });
+
+    it('judges an independent system by gövt 128 (Bible, Appendix II)',
+        () => {
+            expect(statusGovtOf(null)).toBe(INDEPENDENT_STATUS_GOVT);
+            expect(statusGovtOf(undefined)).toBe('nova:128');
+            expect(statusGovtOf('nova:147')).toBe('nova:147');
+            expect(legalStatusInSystem(new Map([['nova:128', -30]]), null,
+                getGovt)).toBe(legalStatusName(-30, 6));
+            expect(legalStatusInSystem(new Map(), null, getGovt))
+                .toBe(LEGAL_STATUS_NO_RECORD);
+        });
+
+    it('has no line for a status govt the caller cannot resolve', () => {
+        expect(legalStatusInSystem(new Map(), 'arpia:600', getGovt))
+            .toBeUndefined();
+        expect(legalStatusInSystem(new Map(), null, () => undefined))
+            .toBeUndefined();
     });
 });

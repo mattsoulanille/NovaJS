@@ -20,6 +20,7 @@ import {
     processLanding,
     runMissionSetString,
     StellarInfo,
+    stellarRecord,
     stellarVisible,
 } from './mission_logic.js';
 import {
@@ -299,6 +300,60 @@ describe('missionMatchesLocation', () => {
         expect(missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
             makeContext({ bits: new Set([13]) }))).toBe(false);
     });
+
+    // mïsn Flags 0x2000 "Mission unavailable if player's ship is of
+    // inherentAI type 1 or 2 (cargo ships)" / 0x4000 "... type 3 or 4
+    // (warships)" — stock's six house duels nova:759-764 carry 0x2000.
+    describe('the InherentAI gates (Flags 0x2000 / 0x4000, #106)', () => {
+        const duel = makeMission({
+            flags: { ...getDefaultMissionData().flags, notForCargoShips: true },
+        });
+        const milkRun = makeMission({
+            flags: { ...getDefaultMissionData().flags, notForWarships: true },
+        });
+        const at = (mission: MissionData, shipInherentAI?: number) =>
+            missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
+                makeContext({ shipInherentAI }));
+
+        it('keeps a duel from a freighter and a milk run from a warship',
+            () => {
+                expect(at(duel, 1)).toBe(false);
+                expect(at(duel, 2)).toBe(false);
+                expect(at(duel, 3)).toBe(true);
+                expect(at(duel, 4)).toBe(true);
+                expect(at(milkRun, 1)).toBe(true);
+                expect(at(milkRun, 2)).toBe(true);
+                expect(at(milkRun, 3)).toBe(false);
+                expect(at(milkRun, 4)).toBe(false);
+            });
+
+        it('leaves both open when the ship\'s AI type is unknown', () => {
+            expect(at(duel)).toBe(true);
+            expect(at(milkRun)).toBe(true);
+        });
+    });
+
+    it('judges AvailRecord at an independent stellar by STOCK govt 128, '
+        + 'even for a plug-in\'s mission (#107)', () => {
+            // Appendix II: an independent system is judged by "the first
+            // government's [ID 128]". A plug-in mission used to key a
+            // phantom `<plug>:128` record no crime ever writes.
+            const fed = makeGovt('nova:128', { crimeTol: 6 });
+            const getGovt = (id: string) => id === fed.id ? fed : undefined;
+            const records = new Map([['nova:128', 40]]);
+            expect(stellarRecord(makeStellar({ govt: null }), records,
+                'arpia', getGovt)).toBe(40);
+            const plugMission = makeMission({
+                id: 'arpia:600', prefix: 'arpia', writerPrefix: 'arpia',
+                availRecord: 30,
+            });
+            expect(missionMatchesLocation(plugMission,
+                LOCATION_MISSION_COMPUTER,
+                makeContext({ records, getGovt }))).toBe(true);
+            expect(missionMatchesLocation(plugMission,
+                LOCATION_MISSION_COMPUTER,
+                makeContext({ records: new Map(), getGovt }))).toBe(false);
+        });
 
     // Exxx in AvailBits: "Returns 1 if the player has explored system ID
     // xxx" (Bible :157) — a mission that only turns up once the pilot has

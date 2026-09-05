@@ -180,6 +180,39 @@ export interface ReplacementPlacement {
     preferShipId?: string;
 }
 
+/**
+ * mïsn Flags 0x0800: "The special ships' type will be selected at mission
+ * start and then kept the same whenever the special ships for that
+ * mission are created, until the mission ends. This can be used for
+ * (e.g.) 'attack pirate' missions where you want the type of the enemy
+ * ship to be random at first but you don't want it to change every time
+ * the player lands or re-enters the system." (EVN Bible)
+ *
+ * One weighted draw from the düde, made the FIRST time the mission's
+ * special ships are built and written onto the ShipObjective (an
+ * additive `shipId`, on the owner's synced MissionsComponent) so every
+ * later system entry — and every peer, which sees only the spawned
+ * hulls — gets the same class. "At mission start" is the Bible's word;
+ * the accept path has no düde data in hand and nothing can observe the
+ * class before the first spawn, so the first spawn is where it is
+ * fixed. Missions accepted before this existed carry no `shipId` and are
+ * frozen at their next spawn. Stock leans on it: nova:132 "Escort
+ * Merchant", the Bounty Hunter targets 258-278, the six duels 759-764
+ * (whose "opponent" used to change hull between systems) — 118 stock
+ * missions in all. Aux ships are untouched: the flag names the special
+ * ships only. Undefined when the düde is unloadable, which buildShip then
+ * reports on its own.
+ */
+async function freezeShipType(ctx: SpawnContext,
+    dudeId: string): Promise<string | undefined> {
+    try {
+        const dude = await ctx.gameData.data.Dude.get(dudeId);
+        return pickWeighted(dude.ships, { next: ctx.random })?.id;
+    } catch {
+        return undefined;
+    }
+}
+
 /** Builds one mission ship from a dude draw; null if data is missing. */
 async function buildShip(ctx: SpawnContext, missionId: string,
     dudeId: string, options: {
@@ -190,17 +223,23 @@ async function buildShip(ctx: SpawnContext, missionId: string,
         name?: string,
         subtitle?: string,
         replace?: ReplacementPlacement,
+        /** The class frozen by mïsn Flags 0x0800 (see freezeShipType). */
+        frozenShipId?: string,
     }): Promise<Entity | null> {
     let dude, shipData;
     try {
         dude = await ctx.gameData.data.Dude.get(dudeId);
         // A replacement keeps the përs's own class when the düde can
-        // produce it (see ReplacementPlacement.preferShipId).
-        const prefer = options.replace?.preferShipId;
-        const choice = (prefer !== undefined
-            && dude.ships.some(s => s.id === prefer))
+        // produce it (see ReplacementPlacement.preferShipId); otherwise
+        // the class frozen at the mission's first spawn (0x0800); else
+        // a fresh draw.
+        const producible = dude.ships;
+        const prefer = [options.replace?.preferShipId, options.frozenShipId]
+            .find(id => id !== undefined
+                && producible.some(s => s.id === id));
+        const choice = prefer !== undefined
             ? { id: prefer }
-            : pickWeighted(dude.ships, { next: ctx.random });
+            : pickWeighted(producible, { next: ctx.random });
         if (!choice) {
             return null;
         }
@@ -473,6 +512,10 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
         // here counts towards ShipCount (see LiveMissionShips).
         const count = Math.max(0,
             shipsToSpawn(objective) - alreadyHere.special);
+        if (count > 0 && mission?.flags.freezeShipTypesAtStart
+            && objective.shipId === undefined) {
+            objective.shipId = await freezeShipType(ctx, objective.dudeId);
+        }
         for (let i = count; i > 0; i--) {
             const ship = await buildShip(ctx, missionId, objective.dudeId, {
                 aux: false,
@@ -481,6 +524,7 @@ async function buildShipsForMission(ctx: SpawnContext, missionId: string,
                 goal: objective.goal,
                 name,
                 subtitle,
+                frozenShipId: objective.shipId,
                 // A përs replacement is by the Bible's own wording a
                 // SINGLE special ship ("with a single special ship");
                 // only the first gets the përs's berth, and a

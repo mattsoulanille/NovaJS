@@ -47,6 +47,7 @@ describe('the docked starmap\'s control bits', () => {
         const data = new MockGameData();
         data.data.Govt.map.set('nova:128', {
             ...getDefaultGovtData(), id: 'nova:128', name: 'Federation',
+            crimeTol: 6,
         });
         data.data.System.map.set(KANIA, {
             ...getDefaultSystemData(), id: KANIA, name: 'Kania',
@@ -61,14 +62,28 @@ describe('the docked starmap\'s control bits', () => {
     }
 
     /** A map whose plugin-side bit lookup comes up EMPTY, exactly as it
-     * does while docked (the player's ship is out of the display world). */
-    async function dockedMap() {
+     * does while docked (the player's ship is out of the display world).
+     * The plugin-side legal-record lookup is the in-flight one. */
+    async function dockedMap(
+        getLegalRecords: () => Map<string, number> | undefined =
+            () => undefined) {
         const controlEvents = new Subject<ControlEvent>();
         const starmap = new Starmap(displayAssets(),
             gameData() as unknown as SimulationGameDataInterface, KANIA,
-            controlEvents, () => new Set());
+            controlEvents, () => new Set(), undefined, undefined, undefined,
+            undefined, getLegalRecords);
         await starmap.buildPromise;
         return starmap;
+    }
+
+    /** The text of the properties column's lines, in draw order. */
+    function propertyLines(starmap: Starmap): string[] {
+        const container = (starmap as unknown as {
+            propContainer: PIXI.Container,
+        }).propContainer;
+        return container.children
+            .filter((c): c is PIXI.Text => c instanceof PIXI.Text)
+            .map(t => t.text);
     }
 
     /** Whether the built graph has the system at all (hidden systems are
@@ -104,6 +119,39 @@ describe('the docked starmap\'s control bits', () => {
             const shown = starmap.show([]);
             await new Promise(resolve => setTimeout(resolve, 0));
             expect(shows(starmap, S7EVYN)).toBeFalse();
+            starmap.dismiss();
+            await shown;
+        });
+
+    // The Legal Status line reads the records the same way: the landed
+    // caller's win over the plugin's lookup, judged through
+    // legalStatusInSystem (record -30 is 5 Federation tolerances:
+    // "Offender"; +30 is "Good Citizen").
+    it('judges Legal Status by the records the landed caller passes',
+        async () => {
+            const starmap = await dockedMap(
+                () => new Map([['nova:128', 30]]));
+            starmap.openOptions = {
+                legalRecords: new Map([['nova:128', -30]]),
+            };
+            const shown = starmap.show([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const lines = propertyLines(starmap);
+            expect(lines[lines.indexOf('Legal Status:') + 1])
+                .toBe('Offender');
+            starmap.dismiss();
+            await shown;
+        });
+
+    it('judges Legal Status by the plugin\'s records when none are passed',
+        async () => {
+            const starmap = await dockedMap(
+                () => new Map([['nova:128', 30]]));
+            const shown = starmap.show([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const lines = propertyLines(starmap);
+            expect(lines[lines.indexOf('Legal Status:') + 1])
+                .toBe('Good Citizen');
             starmap.dismiss();
             await shown;
         });
