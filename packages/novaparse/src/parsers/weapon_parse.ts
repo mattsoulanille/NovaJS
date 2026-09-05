@@ -81,6 +81,18 @@ async function BaseWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
             sides: weap.turretBlindSpots.side,
             rear: weap.turretBlindSpots.back,
         },
+        // wëap Inaccuracy < 0: `accuracy` above is already the absolute
+        // value; this is the "fires to the side by this angle" marker.
+        firesAtFixedAngle: weap.firesAtFixedAngle,
+        // The behaviour flags the simulation gates firing on. See the
+        // BaseWeaponData docs for the Bible text of each.
+        fireWhileCloaked: weap.fireWhileCloaked,         // Flags2 0x4000
+        cantFireWhileIonized: weap.cantFireWhileIonized, // Seeker 0x0020
+        cantFireUntilShotExpires: weap.cantFireUntilShotExpires, // Flags3 0x0004
+        exclusive: weap.exclusive,                       // Flags3 0x0020
+        npcCantUse: weap.npcCantUse,                     // Flags2 0x0100
+        dontFireAtFastShips: weap.dontFireAtFastShips,   // Flags 0x0008
+        planetType: weap.planetType,                     // Flags2 0x0400
     }
 }
 
@@ -310,10 +322,24 @@ async function BeamWeaponParse(weap: WeapResource, notFoundFunction: (m: string)
         guidance = <BeamGuidanceType>weap.guidance;
     }
 
+    // EVN Bible, beam Count/Decay (~:3416-3419, 3437-3441): a beam with
+    // a positive Decay stays onscreen (shrinking) for
+    // Count + 16 - CoronaFalloff frames instead of Count. Count itself
+    // (shotDuration) remains how long the beam does damage; see
+    // BeamWeaponData.onScreenDuration. The Bible bounds Falloff to 2-16
+    // but plug-in data does not (extra-outfits:353 Mining Laser carries
+    // 60), so never let the tail shorten the beam below its Count.
+    const decay = Math.max(weap.decay, 0);
+    const onScreenFrames = decay > 0
+        ? Math.max(weap.duration, weap.duration + 16 - weap.coronaFalloff)
+        : weap.duration;
+
     return {
         ...notBayBase,
         type: "BeamWeaponData",
         guidance,
+        decay,
+        onScreenDuration: onScreenFrames * 1000 / FPS,
         beamAnimation: {
             lightningAmplitude: weap.lightningAmplitude,
             lightningDensity: weap.lightningDensity,

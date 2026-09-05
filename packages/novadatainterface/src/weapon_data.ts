@@ -211,6 +211,57 @@ export interface BaseWeaponData extends BaseData {
     turretBlindSpots: TurretBlindSpots;
     sound?: string;
     loopSound: boolean;
+    /**
+     * wëap Inaccuracy below zero: "Fires to the side by this angle
+     * (absolute value in degrees)" (EVN Bible ~:3139). `accuracy` above
+     * holds the absolute value; this marks that it is a FIXED side angle
+     * rather than a random spread. ResForge's wëap template labels the
+     * negative range "Fixed (unguided only)" with the note "Needs
+     * off-axis exits", which is how the side is chosen: the shot leans
+     * toward the side of the ship its exit point is on (see
+     * fixedAngleOffset in the sim). Only 'unguided' shots honour it, per
+     * that template note; every other guidance keeps the random spread.
+     * No stock combat weapon sets it; plug-ins do (More Blasters CHEAT
+     * "Side Radar Missile", -90).
+     */
+    firesAtFixedAngle: boolean;
+    /**
+     * wëap Flags2 0x4000 "Weapon can be fired while cloaked". Without
+     * it, a shot that actually leaves a cloaked ship drops its cloak
+     * (WeaponsSystem); with it the ship stays hidden — the Polaris
+     * cloak-and-strike weapons (Wraithii, the Polaron torpedoes).
+     */
+    fireWhileCloaked: boolean;
+    /** wëap Seeker 0x0020 "Can't fire if ship is ionized". */
+    cantFireWhileIonized: boolean;
+    /**
+     * wëap Flags3 0x0004 "Firing ship can't fire another shot of this
+     * type until the previous one expires or hits something".
+     */
+    cantFireUntilShotExpires: boolean;
+    /**
+     * wëap Flags3 0x0020 "Weapon is exclusive - no other weapons on the
+     * ship can fire while this weapon is firing or reloading".
+     */
+    exclusive: boolean;
+    /** wëap Flags2 0x0100 "AI ships won't use this weapon". */
+    npcCantUse: boolean;
+    /**
+     * wëap Flags 0x0008 "For guided weapons, don't fire at fast ships
+     * (ships with turn rate > 30)". An AI rule: ResForge's template
+     * names the bit "AI won't fire at ships with turn rate > 30".
+     */
+    dontFireAtFastShips: boolean;
+    /**
+     * wëap Flags2 0x0400 "Weapon is a planet-type weapon, and can only
+     * hit planet-type ships or destroyable stellars". Carried but NOT
+     * yet honoured by the simulation: the matching shïp Flags2 0x0400
+     * ("Ship is a planet-type ship, and can only be hit by planet-type
+     * weapons") is not parsed onto ShipData, and a gate that knows only
+     * the weapon's half would make such a shot hit nothing at all. One
+     * plug-in weapon carries it (extra-outfits:344).
+     */
+    planetType: boolean;
 }
 
 export function getDefaultBaseWeaponData(): BaseWeaponData {
@@ -231,6 +282,14 @@ export function getDefaultBaseWeaponData(): BaseWeaponData {
         firesFromClosestToTarget: false,
         turretBlindSpots: getDefaultTurretBlindSpots(),
         loopSound: false,
+        firesAtFixedAngle: false,
+        fireWhileCloaked: false,
+        cantFireWhileIonized: false,
+        cantFireUntilShotExpires: false,
+        exclusive: false,
+        npcCantUse: false,
+        dontFireAtFastShips: false,
+        planetType: false,
     };
 }
 
@@ -486,14 +545,38 @@ export interface BeamWeaponData extends NotBayWeaponData {
     type: "BeamWeaponData",
     guidance: BeamGuidanceType,
     beamAnimation: BeamAnimation,
+    /**
+     * wëap Decay, for a beam: "If Decay is greater than zero, the beam
+     * will 'shrink' before it disappears from the screen" (EVN Bible
+     * ~:3437). Its magnitude plays no part in the Bible's rules; only
+     * "greater than zero" does. Clamped to 0 for none, like the
+     * projectile `decay`.
+     */
+    decay: number,
+    /**
+     * How long the beam EXISTS, in ms — the Bible's "actual time the
+     * beam will exist onscreen": `Count` frames, or, when `decay` is
+     * positive, `Count + 16 - CoronaFalloff` frames (~:3416-3419, 3437-
+     * 3439; clamped to no less than Count, since a CoronaFalloff above
+     * 16 — the Bible's own ceiling for the field — would otherwise
+     * shorten the beam below its Count). `shotDuration` stays the
+     * beam's `Count` alone, and is how long it DAMAGES: the shrink tail
+     * is the beam disappearing, not extra firing time — the stock Pulse
+     * Laser's Reload 15 = Count 15 duty cycle would otherwise double.
+     * The display shrinks the beam over the tail (beam_display_plugin).
+     */
+    onScreenDuration: number,
 }
 
 export function getDefaultBeamWeaponData(): BeamWeaponData {
+    const base = getDefaultNotBayWeaponData();
     return {
-        ...getDefaultNotBayWeaponData(),
+        ...base,
         type: "BeamWeaponData",
         guidance: "beam",
-        beamAnimation: getDefaultBeamAnimation()
+        beamAnimation: getDefaultBeamAnimation(),
+        decay: 0,
+        onScreenDuration: base.shotDuration,
     };
 }
 
