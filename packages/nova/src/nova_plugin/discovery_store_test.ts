@@ -5,7 +5,7 @@ import {
 import {
     discoveredSystems, discoveryEntries, discoveryKeyFor, discoveryLevel,
     DiscoveryStorage, LEGACY_EXPLORED_KEY, loadDiscoveryEntries,
-    markDiscovered, markManyDiscovered, resetDiscovery,
+    markDiscovered, markManyDiscovered, resetDiscovery, resetDiscoveryCache,
     setDiscoveryStorageKey,
 } from './discovery_store.js';
 
@@ -23,11 +23,10 @@ describe('the discovery store', () => {
     let storage: FakeStorage;
 
     beforeEach(() => {
+        // A fresh storage per spec: the store caches PER STORAGE INSTANCE
+        // (and per key), so a new FakeStorage starts from an empty record
+        // whatever an earlier spec — or another spec file — wrote.
         storage = new FakeStorage();
-        // The store caches per key; point it somewhere and clear it so
-        // each spec starts from a known, empty record.
-        setDiscoveryStorageKey(OTHER_PILOT_KEY);
-        resetDiscovery(storage);
         setDiscoveryStorageKey(LEGACY_KEY);
         resetDiscovery(storage);
     });
@@ -83,10 +82,25 @@ describe('the discovery store', () => {
         markDiscovered('nova:131', DISCOVERY_ENTERED, storage);
         // Drop the in-memory cache without clearing storage, the way a
         // page reload would.
-        setDiscoveryStorageKey(OTHER_PILOT_KEY);
-        setDiscoveryStorageKey(LEGACY_KEY);
+        resetDiscoveryCache(storage);
         expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
         expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_ENTERED);
+    });
+
+    it('keeps each storage\'s record apart under the same key', () => {
+        // Every call takes its storage explicitly, but the memoised
+        // record used to be one module-level map per KEY, so a second
+        // storage under the same key read the first one's levels — and
+        // specs had to toggle the key back and forth to flush it (review
+        // finding #78).
+        const other = new FakeStorage();
+        markDiscovered('nova:130', DISCOVERY_LANDED, storage);
+        expect(discoveryLevel('nova:130', other)).toBe(DISCOVERY_UNKNOWN);
+        markDiscovered('nova:200', DISCOVERY_ENTERED, other);
+        expect(discoveryLevel('nova:200', storage)).toBe(DISCOVERY_UNKNOWN);
+        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
+        expect(other.getItem(discoveryKeyFor(LEGACY_KEY)))
+            .toBe(JSON.stringify([['nova:200', DISCOVERY_ENTERED]]));
     });
 
     it('keeps each pilot\'s knowledge to themselves', () => {
@@ -103,8 +117,7 @@ describe('the discovery store', () => {
         it('adopts a pre-discovery pilot\'s explored set as "entered"', () => {
             storage.setItem(LEGACY_EXPLORED_KEY,
                 JSON.stringify(['nova:130', 'nova:131']));
-            setDiscoveryStorageKey(OTHER_PILOT_KEY);
-            setDiscoveryStorageKey(LEGACY_KEY);
+            resetDiscoveryCache(storage);
             expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_ENTERED);
             expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_ENTERED);
         });
@@ -124,8 +137,7 @@ describe('the discovery store', () => {
             // (a reset, a rollback to a fresh start).
             markDiscovered('nova:131', DISCOVERY_ENTERED, storage);
             storage.setItem(LEGACY_EXPLORED_KEY, JSON.stringify(['nova:130']));
-            setDiscoveryStorageKey(OTHER_PILOT_KEY);
-            setDiscoveryStorageKey(LEGACY_KEY);
+            resetDiscoveryCache(storage);
             expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_ENTERED);
             expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
         });
@@ -164,8 +176,7 @@ describe('the discovery store', () => {
 
     it('survives unreadable stored data', () => {
         storage.setItem(discoveryKeyFor(LEGACY_KEY), 'not json');
-        setDiscoveryStorageKey(OTHER_PILOT_KEY);
-        setDiscoveryStorageKey(LEGACY_KEY);
+        resetDiscoveryCache(storage);
         expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
     });
 
