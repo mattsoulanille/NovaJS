@@ -28,6 +28,7 @@ import {
 } from "./screen_size_plugin.js";
 import { ShipAnimationPlugin } from "./ship_animation_plugin.js";
 import { ShipPhysicsDisplayPlugin } from "./ship_physics_display_plugin.js";
+import { CloakDisplayPlugin } from "./cloak_display_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
 import { SpaceportPlugin } from "./spaceport_plugin.js";
 import { BoardingDisplayPlugin } from "./boarding_plugin.js";
@@ -112,6 +113,9 @@ export const Display: Plugin = {
         // Before StatusBarPlugin and UiSoundTriggersPlugin: both read the
         // derived ShipPhysicsComponent, which does not cross the bridge.
         await world.addPlugin(ShipPhysicsDisplayPlugin);
+        // Same reason, for the radar's cloak visibility and the cloak
+        // scanner's on-screen reveal (StatusBarPlugin, ShipAnimationPlugin).
+        await world.addPlugin(CloakDisplayPlugin);
         // Keeps motion advancing on wall-clock time between simulation
         // snapshots; every draw system that declares `after:
         // [MovementSystem]` (ObjectDrawSystem, CenterShipSystem) then
@@ -212,6 +216,7 @@ export const Display: Plugin = {
         await world.removePlugin(StatusMessagePlugin);
         await world.removePlugin(starfieldPlugin);
         await world.removePlugin(MovementExtrapolationPlugin);
+        await world.removePlugin(CloakDisplayPlugin);
         await world.removePlugin(ShipPhysicsDisplayPlugin);
         await world.removePlugin(ScreenSizePlugin);
 

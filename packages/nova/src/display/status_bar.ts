@@ -17,7 +17,7 @@ import * as PIXI from "pixi.js";
 import { Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { CloakActiveComponent, CloakComponent, deriveCloakScanner } from "../nova_plugin/cloak_plugin.js";
+import { CloakActiveComponent, CloakActiveState, CloakCapability, CloakComponent, deriveCloakScanner } from "../nova_plugin/cloak_plugin.js";
 import { GovtComponent } from "../nova_plugin/govt_component.js";
 import { deriveIff, planetBlipColor, planetDisposition, PLANET_FLAT_COLOR, shipBlipColor, shipDisposition } from "../nova_plugin/iff_plugin.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
@@ -972,6 +972,25 @@ const StatusBarResize = new System({
 
 const RadarTime = new Component<{ lastTime: number }>('RadarTime');
 
+/**
+ * Whether a ship's cloak takes it off the radar: actively cloaked with a
+ * device whose 0x0002 "Visible on radar" bit is CLEAR (EVN Bible, oütf
+ * ModType 17; CloakData.hidesFromRadar is that bit inverted). Five of
+ * the six stock cloaks set the bit — Fed nova:211, Rebel nova:234/347,
+ * Wraith nova:266, Cloaking Organ v1.0 nova:268 — so those ships stay
+ * blips; only Cloaking Organ v1.1 nova:269 hides.
+ *
+ * `cloak` is the ship's CloakComponent, which the display derives from
+ * its synced outfits (cloak_display_plugin.ts); the sim never sends it,
+ * and before that plugin existed it was always undefined here, so the
+ * conservative default hid EVERY cloaked ship. The default stays: a
+ * cloak whose data has not cached yet hides until it has.
+ */
+export function radarHidesShip(cloakActive: CloakActiveState | undefined,
+    cloak: CloakCapability | undefined): boolean {
+    return cloakActive?.active === true && (cloak?.hidesFromRadar ?? true);
+}
+
 const DrawRadar = new System({
     name: 'DrawRadar',
     args: [Optional(RadarTime), TimeResource, SimulationTimeResource,
@@ -1009,7 +1028,7 @@ const DrawRadar = new System({
                 : false;
             const visibleShips = revealsCloaked ? ships : ships.filter(
                 ([, , , cloakActive, cloak]) =>
-                    !(cloakActive?.active && (cloak?.hidesFromRadar ?? true)));
+                    !radarHidesShip(cloakActive, cloak));
 
             // IFF (ModType 14): when the player owns an IFF outfit, colour
             // each ship's blip by its disposition toward the player. Without
