@@ -12,6 +12,7 @@ import {
     LEGAL_STATUS_EVIL_TIERS,
     LEGAL_STATUS_GOOD_TIERS,
     LEGAL_STATUS_NO_RECORD,
+    legalStatusInSystem,
     legalStatusName,
     LegalRecords,
     recordHostile,
@@ -128,6 +129,32 @@ describe('reputation against real Nova data', () => {
             const wildGeese = await gameData.data.Govt.get('nova:144');
             expect(wildGeese.crimeTol).toBe(3);
             expect(legalStatusName(-15, wildGeese.crimeTol)).toBe('Offender');
+        });
+
+    it('shows a FRESH pilot the same standing on the map and in the p '
+        + 'dialog where a stock govt starts them with a record', async () => {
+            const gameData = await getIntegrationGameData();
+            // Eight stock govts seed a nonzero InitialRec; the Rebellion
+            // (nova:147) starts every pilot at -5. The map used to read
+            // its missing entry as 0 ("No Record") while the dialog read
+            // the InitialRec — one record, two names.
+            const rebels = await gameData.data.Govt.get('nova:147');
+            expect(rebels.initialRecord).toBe(-5);
+            const fed = await gameData.data.Govt.get('nova:128');
+            expect(fed.initialRecord).toBe(0);
+            const getGovt = (id: string) => gameData.data.Govt.getCached(id);
+            const fresh = new Map<string, number>();
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .toBe(legalStatusName(-5, rebels.crimeTol));
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .not.toBe(LEGAL_STATUS_NO_RECORD);
+            // An independent system is judged by the Federation, with
+            // whom a fresh pilot really has no record...
+            expect(legalStatusInSystem(fresh, null, getGovt))
+                .toBe(LEGAL_STATUS_NO_RECORD);
+            // ...and by the Federation's tolerance once they have one.
+            expect(legalStatusInSystem(new Map([['nova:128', -15]]), null,
+                getGovt)).toBe('Minor Offender');
         });
 
     it('killing a Federation ship propagates across the real map',

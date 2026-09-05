@@ -15,11 +15,15 @@ import {
     DEFAULT_BOARD_PENALTY,
     DEFAULT_DISABLE_PENALTY,
     DEFAULT_KILL_PENALTY,
+    INDEPENDENT_STATUS_GOVT,
     initialRecordsFromGovtStatuses,
+    LEGAL_STATUS_NO_RECORD,
+    legalStatusInSystem,
     legalStatusName,
     LegalRecords,
     recordHostile,
     recordWith,
+    statusGovtOf,
 } from './reputation.js';
 
 function makeGovt(id: string, partial: Partial<GovtData> = {}): GovtData {
@@ -405,5 +409,60 @@ describe('criminal hostility: display disposition (shipDisposition)', () => {
     it('does not change politics-only calls (no records passed)', () => {
         expect(shipDisposition(fed, auroran)).toBe('hostile');
         expect(shipDisposition(fed, undefined)).toBe('neutral');
+    });
+});
+
+/**
+ * The map's properties column and the 'p' dialog print their "Legal
+ * Status:" through this ONE reading, so a record can never be named two
+ * ways — including the record they START from: an absent entry is the
+ * govt's InitialRec, exactly what the simulation charges against.
+ */
+describe('legalStatusInSystem (one reading for the map and the dialog)', () => {
+    const fed = makeGovt('nova:128', { crimeTol: 6 });
+    // Stock nova:147's shape: the pilot starts at -5 with them.
+    const rebels = makeGovt('nova:147', { crimeTol: 3, initialRecord: -5 });
+    const getGovt = (id: string) => [fed, rebels].find(g => g.id === id);
+
+    it("reads an absent record as the govt's InitialRec, as the sim does",
+        () => {
+            const fresh = new Map<string, number>();
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .toBe(legalStatusName(-5, 3));
+            expect(legalStatusInSystem(fresh, 'nova:147', getGovt))
+                .not.toBe(LEGAL_STATUS_NO_RECORD);
+            // A govt with no InitialRec really is a clean slate.
+            expect(legalStatusInSystem(fresh, 'nova:128', getGovt))
+                .toBe(LEGAL_STATUS_NO_RECORD);
+        });
+
+    it('prefers the stored record, scaled by that govt\'s own CrimeTol',
+        () => {
+            const records = new Map([['nova:147', -13], ['nova:128', -13]]);
+            // -13 is 2.2 Federation tolerances but 4.3 Rebel ones.
+            expect(legalStatusInSystem(records, 'nova:128', getGovt))
+                .toBe('Minor Offender');
+            expect(legalStatusInSystem(records, 'nova:147', getGovt))
+                .toBe('Offender');
+            expect(legalStatusInSystem(new Map([['nova:147', 30]]),
+                'nova:147', getGovt)).toBe(legalStatusName(30, 3));
+        });
+
+    it('judges an independent system by gövt 128 (Bible, Appendix II)',
+        () => {
+            expect(statusGovtOf(null)).toBe(INDEPENDENT_STATUS_GOVT);
+            expect(statusGovtOf(undefined)).toBe('nova:128');
+            expect(statusGovtOf('nova:147')).toBe('nova:147');
+            expect(legalStatusInSystem(new Map([['nova:128', -30]]), null,
+                getGovt)).toBe(legalStatusName(-30, 6));
+            expect(legalStatusInSystem(new Map(), null, getGovt))
+                .toBe(LEGAL_STATUS_NO_RECORD);
+        });
+
+    it('has no line for a status govt the caller cannot resolve', () => {
+        expect(legalStatusInSystem(new Map(), 'arpia:600', getGovt))
+            .toBeUndefined();
+        expect(legalStatusInSystem(new Map(), null, () => undefined))
+            .toBeUndefined();
     });
 });

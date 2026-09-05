@@ -10,10 +10,13 @@ import {
     CreditsComponent, GameDateComponent,
 } from '../nova_plugin/player_state_plugin.js';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
-import { legalStatusName } from '../nova_plugin/reputation.js';
+import {
+    legalStatusInSystem, legalStatusName,
+} from '../nova_plugin/reputation.js';
+import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { dailyBudget } from './daily_budget.js';
 import {
-    budgetRows, healthStatus, INDEPENDENT_STATUS_GOVT, systemLegalStatus,
+    budgetRows, healthStatus, stageSystemStatus,
 } from './player_info.js';
 import {
     advanceEntityDate, loadPayrollShips, playerPayroll,
@@ -93,12 +96,15 @@ describe('the player-info budget rows', () => {
 describe('the Legal Status row', () => {
     const fed = { ...getDefaultGovtData(), id: 'nova:128', crimeTol: 6 };
     const geese = { ...getDefaultGovtData(), id: 'nova:144', crimeTol: 3 };
+    const getGovt = (id: string) => [fed, geese].find(g => g.id === id);
+    const status = (record: number, govt: { id: string }) =>
+        legalStatusInSystem(new Map([[govt.id, record]]), govt.id, getGovt);
 
     it('prints exactly what the starmap prints for the same record', () => {
         for (const record of [-5000, -400, -30, -7, -6, -1, 0, 1, 25, 30,
             100, 1000, 7000]) {
             for (const govt of [fed, geese]) {
-                expect(systemLegalStatus(record, govt))
+                expect(status(record, govt))
                     .withContext(`${record} with ${govt.id}`)
                     .toBe(legalStatusName(record, govt.crimeTol));
             }
@@ -106,17 +112,76 @@ describe('the Legal Status row', () => {
     });
 
     it('judges an independent system by gövt 128', () => {
-        expect(INDEPENDENT_STATUS_GOVT).toBe('nova:128');
+        expect(legalStatusInSystem(new Map([['nova:128', -13]]), null,
+            getGovt)).toBe('Minor Offender');
     });
 
     it('scales by the govt\'s own tolerance, as the map does', () => {
         // -13 is 2.2 Federation tolerances but 4.3 Wild Geese ones.
-        expect(systemLegalStatus(-13, fed)).toBe('Minor Offender');
-        expect(systemLegalStatus(-13, geese)).toBe('Offender');
-        expect(systemLegalStatus(-30, fed)).toBe('Offender');
-        expect(systemLegalStatus(-100, geese)).toBe('Criminal');
-        expect(systemLegalStatus(0, fed)).toBe('No Record');
-        expect(systemLegalStatus(30, fed)).toBe('Good Citizen');
+        expect(status(-13, fed)).toBe('Minor Offender');
+        expect(status(-13, geese)).toBe('Offender');
+        expect(status(-30, fed)).toBe('Offender');
+        expect(status(-100, geese)).toBe('Criminal');
+        expect(status(0, fed)).toBe('No Record');
+        expect(status(30, fed)).toBe('Good Citizen');
+    });
+});
+
+/**
+ * The General page renders synchronously off the data caches, so the
+ * dialog's load() warms the current system and its STATUS government
+ * first — otherwise the first draw after entering a system could scale
+ * the record by an unresolved govt (CrimeTol 0) and only correct itself
+ * on the next page flip.
+ */
+describe('stageSystemStatus (the first render finds its govt cached)', () => {
+    const fed = { ...getDefaultGovtData(), id: 'nova:128', crimeTol: 6 };
+    const geese = { ...getDefaultGovtData(), id: 'nova:144', crimeTol: 3 };
+
+    /** A Gettable stand-in: getCached hits only after a get resolved. */
+    function fakeGettable<T>(items: Record<string, T>) {
+        const gotten: Record<string, T> = {};
+        return {
+            async get(id: string): Promise<T> {
+                if (!(id in items)) {
+                    throw new Error(`no ${id}`);
+                }
+                gotten[id] = items[id];
+                return items[id];
+            },
+            getCached: (id: string): T | undefined => gotten[id],
+        };
+    }
+    function fakeData(systems: Record<string, { govt: string | null }>) {
+        return {
+            data: {
+                System: fakeGettable(systems),
+                Govt: fakeGettable({ 'nova:128': fed, 'nova:144': geese }),
+            },
+        } as unknown as SimulationGameDataInterface;
+    }
+
+    it("caches the system and its own government", async () => {
+        const data = fakeData({ 'nova:200': { govt: 'nova:144' } });
+        expect(data.data.Govt.getCached('nova:144')).toBeUndefined();
+        await stageSystemStatus(data, 'nova:200');
+        expect(data.data.System.getCached('nova:200')).toBeDefined();
+        expect(data.data.Govt.getCached('nova:144')).toBe(geese);
+        expect(data.data.Govt.getCached('nova:128')).toBeUndefined();
+    });
+
+    it('caches gövt 128 for an independent system', async () => {
+        const data = fakeData({ 'nova:201': { govt: null } });
+        await stageSystemStatus(data, 'nova:201');
+        expect(data.data.Govt.getCached('nova:128')).toBe(fed);
+        expect(data.data.Govt.getCached('nova:144')).toBeUndefined();
+    });
+
+    it('tolerates an unknown system, and no system at all', async () => {
+        const data = fakeData({});
+        await expectAsync(stageSystemStatus(data, 'nova:999')).toBeResolved();
+        await expectAsync(stageSystemStatus(data, undefined)).toBeResolved();
+        expect(data.data.Govt.getCached('nova:128')).toBeUndefined();
     });
 });
 

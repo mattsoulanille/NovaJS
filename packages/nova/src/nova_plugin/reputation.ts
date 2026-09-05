@@ -86,7 +86,7 @@ function clampRecord(value: number): number {
  * The player's record with a govt: the stored value, else the govt's
  * InitialRec, else 0 for an unknown govt.
  */
-export function recordWith(records: LegalRecords,
+export function recordWith(records: ReadonlyMap<string, number>,
     govtId: string, govtData?: GovtData): number {
     return records.get(govtId) ?? govtData?.initialRecord ?? 0;
 }
@@ -291,6 +291,43 @@ export function combatRatingName(kills: number): string {
 }
 
 /**
+ * The government whose record and CrimeTol judge the player's legal
+ * status in an INDEPENDENT system: gövt 128, per the Bible's Appendix
+ * II ("if the system is independent, it is based on the first
+ * government's [ID 128] crime tolerance"). The same rule keys the
+ * record itself (mission_logic's stellarRecord), so status is read
+ * from the record and the tolerance of ONE government.
+ */
+export const INDEPENDENT_STATUS_GOVT = 'nova:128';
+
+/** The government that judges legal status in a system with `systemGovt`. */
+export function statusGovtOf(systemGovt: string | null | undefined): string {
+    return systemGovt ?? INDEPENDENT_STATUS_GOVT;
+}
+
+/**
+ * The "Legal Status:" line for a system — the ONE reading shared by the
+ * starmap's properties column and the player-info ('p') dialog, so the
+ * two can never disagree (#119): the player's record with the system's
+ * status government (its own, or gövt 128 for an independent one),
+ * against that government's CrimeTol. An absent record reads as the
+ * govt's InitialRec, exactly as the simulation reads it (recordWith) —
+ * a fresh pilot in a nova:147 (InitialRec -5) system is not "No Record"
+ * on one screen and an offender on the other. Undefined when the status
+ * govt is unknown to `getGovt`, which is the caller's "no line" case.
+ */
+export function legalStatusInSystem(records: ReadonlyMap<string, number>,
+    systemGovt: string | null | undefined,
+    getGovt: (id: string) => GovtData | undefined): string | undefined {
+    const govtId = statusGovtOf(systemGovt);
+    const govt = getGovt(govtId);
+    if (!govt) {
+        return undefined;
+    }
+    return legalStatusName(recordWith(records, govtId, govt), govt.crimeTol);
+}
+
+/**
  * Appendix II's legal-status ladder, in units of the government's
  * CrimeTol: "enough 'good' or 'evil' points to equal the government's
  * crime tolerance is given a value of 1". Each tier is [threshold,
@@ -336,7 +373,8 @@ export const LEGAL_STATUS_EVIL_TIERS: readonly (readonly [number, string])[] = [
  * the government's crime tolerance is given a value of 1", then the
  * power-of-four ladders above. The independent-system rule is the
  * CALLER's: pass gövt 128's CrimeTol (mission_logic's stellarRecord
- * already keys the record itself that way).
+ * already keys the record itself that way; legalStatusInSystem above
+ * does both for the map and the 'p' dialog).
  *
  * A CrimeTol of 0 (stock nova:171 Spanner, nova:183 Hypergate, and the
  * scenery govts) would divide by zero; it is read as 1 — every point

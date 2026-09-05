@@ -11,8 +11,9 @@ import { ArmorComponent, FuelComponent, ShieldComponent } from '../nova_plugin/h
 import { cargoName, missionCargoKey } from '../nova_plugin/mission_logic.js';
 import { OutfitsState, OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
-import { combatRatingName, legalStatusName, recordWith } from '../nova_plugin/reputation.js';
-import { GovtData } from 'novadatainterface/govt_data';
+import {
+    combatRatingName, legalStatusInSystem, statusGovtOf,
+} from '../nova_plugin/reputation.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
 import { deriveShipPhysics, ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
 import { Button } from './button.js';
@@ -107,25 +108,27 @@ const PROSE_FONT: Partial<PIXI.ITextStyle> = {
 type Page = 'general' | 'cargo' | 'extras' | 'honors';
 
 /**
- * The government whose CrimeTol scales the "Legal Status:" line for a
- * system: its own, or — for an independent system — gövt 128, per the
- * Bible's Appendix II ("if the system is independent, it is based on the
- * first government's [ID 128] crime tolerance"). The same rule keys the
- * record itself (mission_logic's stellarRecord), so the dialog reads the
- * record and the tolerance of ONE government.
+ * Warms the caches the General page's synchronous render reads for its
+ * "System:" and "Legal Status:" rows: the current system and its STATUS
+ * government (the system's own, or gövt 128 for an independent one —
+ * reputation.ts's statusGovtOf). Awaited by the dialog's load() before
+ * the first render, so the status is never first drawn against an
+ * unresolved govt (CrimeTol read as 0: unscaled tiers, -30 "Criminal"
+ * where the Federation's own tolerance makes it an "Offender") and only
+ * corrected on the next page flip. A system or govt this build cannot
+ * resolve is simply left unresolved; the render shows "-" for it.
  */
-export const INDEPENDENT_STATUS_GOVT = 'nova:128';
-
-/**
- * The dialog's "Legal Status:" value for a system: reputation.ts's
- * `legalStatusName` — the very function the starmap prints — over the
- * record and CrimeTol of the system's status government. This used to be a
- * second, CrimeTol-blind tier table of its own, so the map and the 'p'
- * dialog could name the same record differently (#119).
- */
-export function systemLegalStatus(record: number,
-    govt: { crimeTol: number } | undefined): string {
-    return legalStatusName(record, govt?.crimeTol ?? 0);
+export async function stageSystemStatus(data: SimulationGameDataInterface,
+    systemId: string | undefined): Promise<void> {
+    if (!systemId) {
+        return;
+    }
+    try {
+        const system = await data.data.System.get(systemId);
+        await data.data.Govt.get(statusGovtOf(system.govt));
+    } catch {
+        // Unresolvable: the row reads "-".
+    }
 }
 
 /**
@@ -431,6 +434,8 @@ export class PlayerInfoDialog {
             ? await this.simulationData.data.Ship.get(shipId) : undefined;
         this.cargoCapacity =
             await computeCargoCapacity(entity, this.simulationData);
+        // The General page's System / Legal Status rows read caches.
+        await stageSystemStatus(this.simulationData, this.getSystemId?.());
         if (this.cargoNames.length === 0) {
             const ids = await this.simulationData.ids;
             if (ids.PlayerStart[0]) {
@@ -572,13 +577,8 @@ export class PlayerInfoDialog {
         // Legal status is with the current system's government (gövt
         // 128's for an independent one), whose id keys the player's
         // legal records and whose CrimeTol scales the tiers.
-        let legal = '-';
-        if (systemId) {
-            const status = this.systemGovtRecord(systemId, records);
-            if (status !== undefined) {
-                legal = systemLegalStatus(status.record, status.govt);
-            }
-        }
+        const legal = systemId
+            ? this.systemLegalStatus(systemId, records) ?? '-' : '-';
 
         const left: InfoRow[] = [
             // Pilot naming isn't modeled (the original shows the
@@ -634,33 +634,25 @@ export class PlayerInfoDialog {
 
     private systemName?: string;
 
-    /** Loads the current system's name and the player's record there. */
     /**
-     * The player's record with the system's status government (see
-     * INDEPENDENT_STATUS_GOVT) and that government's data, for the
-     * "Legal Status:" row. An absent record reads as the govt's
-     * InitialRec, exactly as the simulation reads it (recordWith).
+     * Loads the current system's name and the player's "Legal Status:"
+     * there: the starmap's very reading (reputation.ts's
+     * legalStatusInSystem — the record with the system's status
+     * government, InitialRec when none, against its CrimeTol). Undefined
+     * (drawn "-") until the system and that govt are cached, which load()
+     * sees to before the first render (stageSystemStatus); the kick-off
+     * here covers a dialog that outlives a system change.
      */
-    private systemGovtRecord(systemId: string,
-        records?: ReadonlyMap<string, number>):
-        { record: number, govt: GovtData | undefined } | undefined {
-        // Kick off (or reuse) the async load; the value shows on the
-        // next page render if it wasn't ready yet.
-        void this.simulationData.data.System.get(systemId).then(system => {
-            this.systemName = displayName(system.name);
-        }).catch(() => undefined);
+    private systemLegalStatus(systemId: string,
+        records?: ReadonlyMap<string, number>): string | undefined {
+        void stageSystemStatus(this.simulationData, systemId);
         const cached = this.simulationData.data.System.getCached(systemId);
         if (!cached) {
-            return records ? { record: 0, govt: undefined } : undefined;
+            return undefined;
         }
         this.systemName = displayName(cached.name);
-        const govtId = cached.govt ?? INDEPENDENT_STATUS_GOVT;
-        void this.simulationData.data.Govt.get(govtId).catch(() => undefined);
-        const govt = this.simulationData.data.Govt.getCached(govtId);
-        return {
-            record: recordWith(new Map(records ?? []), govtId, govt),
-            govt,
-        };
+        return legalStatusInSystem(records ?? new Map(), cached.govt,
+            id => this.simulationData.data.Govt.getCached(id));
     }
 
     private renderCargo(entity: Entity) {
