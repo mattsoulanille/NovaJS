@@ -230,6 +230,18 @@ export class MissionUniverse {
     }
 
     /**
+     * Whether {@link hasOutfit} can answer at all — false until `load()`
+     * has populated the id list. The counterpart of {@link systemsLoaded},
+     * and read for the same reason: a caller resolving a bare oütf number
+     * must pass NO lookup rather than one that answers "nothing exists"
+     * while the universe is unloaded, or every plug-in `Oxxx` naming a
+     * stock outfit resolves to a phantom id under the plug-in's prefix.
+     */
+    get outfitsLoaded(): boolean {
+        return this.outfitIds.size > 0;
+    }
+
+    /**
      * Whether a sÿst with this global id exists, so the `Exxx` / `Xxxx`
      * discovery operators can resolve their bare numbers stock-first and
      * ignore a number no loaded data set defines (mission_logic's

@@ -16,7 +16,7 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { DiscoveryAccess } from '../nova_plugin/discovery.js';
 import {
-    setStringPrefix, systemDiscoveryOperators,
+    resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/mission_logic.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
 import {
@@ -51,6 +51,16 @@ export interface OutfitterContext {
      * own", the pre-existing behaviour for every numbered reference.
      */
     systemExists?(globalId: string): boolean;
+    /**
+     * Whether an oütf with this global id exists, for the same stock-first
+     * resolution `Oxxx` needs (see resolveOutfitReference).
+     *
+     * Absent falls back to asking `getOutfit`, which is only as good as
+     * what the caller's lookup is willing to say about a MISSING id — and
+     * the running menu's lookup is not good enough on its own. See the
+     * EXISTENCE, NOT WARMTH note on outfitReferenceExists.
+     */
+    outfitExists?(globalId: string): boolean;
     /**
      * Outfit id -> units the player owns that are NOT installed on the
      * docked ship: today, bay fighters still flying after the carrier
@@ -664,10 +674,48 @@ function ownedAmmoCount(ammoFor: string, context: OutfitterContext): number {
  */
 function resolveOutfitReference(id: number, from: OutfitData,
     context: OutfitterContext): string {
-    if (context.getOutfit(`nova:${id}`)) {
-        return `nova:${id}`;
+    return resolveNumberedResource(id, setStringPrefix(from),
+        globalId => outfitReferenceExists(globalId, context));
+}
+
+/**
+ * EXISTENCE, NOT WARMTH. Whether the game data defines an outfit with this
+ * global id — the one question resolveOutfitReference asks, and the one it
+ * used to get wrong.
+ *
+ * The old spelling was `context.getOutfit(id)` truthiness, and against the
+ * running menu's lookup that is not an existence test at all. Two
+ * behaviours downstream of it turn a miss into a lasting lie:
+ *
+ *   - Gettable.getCached returns undefined for an id it has not loaded and
+ *     STARTS A BACKGROUND LOAD, so the same probe answers differently a
+ *     frame later, and
+ *   - GameDataAggregator resolves an id no data source defines to
+ *     `Defaults[dataType]` rather than rejecting, so that background load
+ *     succeeds and caches a placeholder (`{ id: 'default', ... }`) under
+ *     the id nothing defines.
+ *
+ * The result was a purchase rule that flipped between two selections of the
+ * same tile: Extra Outfits' officers are oütf 504-521 and stock outfits stop
+ * at 443, so a post's `!Oxxx` exclusion resolved to the plug-in's own
+ * sibling (owned, refused) on the first evaluation and to a phantom
+ * `nova:xxx` (absent, allowed) on every one after — hiring a second officer
+ * for the same post, since applyBuy trusts this gate. See
+ * outfitter_officer_reselect_test.ts.
+ *
+ * So: prefer `context.outfitExists`, an id-list lookup that cannot be
+ * affected by load order (MissionUniverse.hasOutfit). Without one, fall
+ * back to `getOutfit` but demand that what comes back actually IS the
+ * outfit asked for — which rejects the aggregator's placeholder and is
+ * true by construction for the exhaustive id-keyed maps the headless
+ * callers pass.
+ */
+function outfitReferenceExists(globalId: string,
+    context: OutfitterContext): boolean {
+    if (context.outfitExists) {
+        return context.outfitExists(globalId);
     }
-    return `${setStringPrefix(from)}:${id}`;
+    return context.getOutfit(globalId)?.id === globalId;
 }
 
 /**
