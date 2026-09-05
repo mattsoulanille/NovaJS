@@ -169,8 +169,23 @@ export class Bar extends Menu<Entity> {
             console.warn('Bar entry sequence failed:', e);
         }
         this.popupBlocker.unbind();
-        this.controls.bind();
+        this.rebindControls();
         return result;
+    }
+
+    /**
+     * Takes the bar's keys back after the offer popups or a sub-dialog
+     * (news/gamble/hire) — but only while the bar is still on screen.
+     * Leave (Menu.done) hides the bar and unbinds its keys the moment it
+     * fires; a sequence still running then used to rebind them
+     * unconditionally on its way out, leaving a departed bar as
+     * MenuControls.focused for the rest of the session — the spaceport's
+     * rebindControls() guard (#28), mirrored here as the issue asked.
+     */
+    private rebindControls() {
+        if (this.container.visible) {
+            this.controls.bind();
+        }
     }
 
     /**
@@ -215,7 +230,7 @@ export class Bar extends Menu<Entity> {
         }
         this.controls.unbind();
         await this.news.show(this.input);
-        this.controls.bind();
+        this.rebindControls();
     }
 
     /** Bar mission offers (availLoc 1), one popup at a time. */
@@ -232,7 +247,7 @@ export class Bar extends Menu<Entity> {
         }
         this.controls.unbind();
         await this.gamble.show(this.session.state.credits);
-        this.controls.bind();
+        this.rebindControls();
     }
 
     private async showHireEscort() {
@@ -256,7 +271,7 @@ export class Bar extends Menu<Entity> {
                 await noShipsForHire(this.displayAssets), { accept: 'OK' },
                 { style: 'briefing' });
         }
-        this.controls.bind();
+        this.rebindControls();
     }
 
     /**
