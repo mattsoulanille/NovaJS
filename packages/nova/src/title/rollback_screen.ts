@@ -302,7 +302,7 @@ export class RollbackScreen {
             planetName: id => universe.getPlanet(id)
                 ? universe.planetName(id) : undefined,
             systemName: id => universe.systemName(id),
-            systemOfPlanet: id => universe.systemIdOfPlanet(id),
+            systemOfPlanet: (id, bits) => universe.systemIdOfPlanet(id, bits),
             outfitName: id => this.outfitNames.get(id)
                 ?? this.simulationData.data.Outfit.getCached(id)?.name,
             shipName: id => this.shipNames.get(id)

@@ -78,8 +78,14 @@ export interface OriginalPilotContext {
     knownMission(id: string): boolean;
     knownRank(id: string): boolean;
     knownJunk(id: string): boolean;
-    /** The system a planet is in, or undefined for an unknown planet. */
-    systemOfPlanet(planetId: string): string | undefined;
+    /**
+     * The system a planet is in, or undefined for an unknown planet. The
+     * pilot's set control bits are passed so a stellar stacked in duplicate
+     * systems under exclusive Visibility bits resolves to the copy this
+     * pilot can see (MissionUniverse.systemIdOfPlanet).
+     */
+    systemOfPlanet(planetId: string, bits: ReadonlySet<number>):
+        string | undefined;
     /** A system's gövt id, or null/undefined for independent/unknown. */
     govtOfSystem(systemId: string): string | null | undefined;
     /** Where a pilot goes when its last stellar is unknown. */
@@ -129,9 +135,19 @@ export function convertOriginalPilot(pilot: PilotData,
             + ' not in this game\'s data were dropped.');
     }
 
+    const novaControlBits: [string, number][] = [];
+    const bits = new Set<number>();
+    player.missionBits.forEach((set, bit) => {
+        if (set) {
+            novaControlBits.push([String(bit), 1]);
+            bits.add(bit);
+        }
+    });
+
     const lastStellar = player.lastStellar >= 0
         ? globalId(player.lastStellar) : undefined;
-    let system = lastStellar ? ctx.systemOfPlanet(lastStellar) : undefined;
+    let system = lastStellar
+        ? ctx.systemOfPlanet(lastStellar, bits) : undefined;
     if (!system) {
         notes.push(`Last stellar ${lastStellar ?? '(none)'} is unknown; the `
             + 'pilot starts in the default system.');
@@ -142,13 +158,6 @@ export function convertOriginalPilot(pilot: PilotData,
         year: player.date.year, month: player.date.month, day: player.date.day,
     };
     const today = dayNumber(date);
-
-    const novaControlBits: [string, number][] = [];
-    player.missionBits.forEach((set, bit) => {
-        if (set) {
-            novaControlBits.push([String(bit), 1]);
-        }
-    });
 
     const ranks: string[] = [];
     globals.rankActive.forEach((active, i) => {
@@ -275,7 +284,8 @@ export function convertOriginalPilot(pilot: PilotData,
     };
     return {
         save, profile, notes,
-        ...(lastStellar && ctx.systemOfPlanet(lastStellar) ? { lastStellar } : {}),
+        ...(lastStellar && ctx.systemOfPlanet(lastStellar, bits)
+            ? { lastStellar } : {}),
     };
 }
 

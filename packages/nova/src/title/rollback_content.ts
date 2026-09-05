@@ -27,8 +27,11 @@ export interface RollbackNames {
     planetName(id: string): string | undefined;
     systemName(id: string): string | undefined;
     /** The system a planet is in (for a checkpoint that only knows its
-     * stellar, and for mission destinations). */
-    systemOfPlanet(id: string): string | undefined;
+     * stellar, and for mission destinations). The checkpoint's set control
+     * bits pick the visible copy of a stellar stacked in duplicate systems
+     * (MissionUniverse.systemIdOfPlanet); the map is drawn under the same
+     * bits, so the target must be a system it actually shows. */
+    systemOfPlanet(id: string, bits: ReadonlySet<number>): string | undefined;
     outfitName(id: string): string | undefined;
     shipName(id: string): string | undefined;
     missionName(id: string): string | undefined;
@@ -159,7 +162,8 @@ export function checkpointSystem(history: PilotHistory, index: number,
         return c.system;
     }
     if (c.stellar) {
-        const system = names.systemOfPlanet(c.stellar);
+        const system = names.systemOfPlanet(c.stellar,
+            checkpointBits(history, index));
         if (system) {
             return system;
         }

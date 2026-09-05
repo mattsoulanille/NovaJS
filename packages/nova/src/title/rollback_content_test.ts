@@ -75,6 +75,24 @@ describe('rollback content', () => {
                 .toBe((SAVE_A as { data: { system: string } }).data.system);
         });
 
+    it('resolves a stellar-only checkpoint\'s system under that checkpoint\'s '
+        + 'bits, so a stacked stellar lands on the copy the map shows', () => {
+            const h = sampleHistory();
+            const seen: ReadonlySet<number>[] = [];
+            const names: RollbackNames = {
+                ...NAMES,
+                systemOfPlanet: (id, bits) => {
+                    seen.push(bits);
+                    return NAMES.systemOfPlanet(id, bits);
+                },
+            };
+            expect(checkpointSystem(h, 3, names)).toBe('nova:130');
+            expect(seen.length).toBe(1);
+            const expected = checkpointBits(h, 3);
+            expect(expected.size).toBeGreaterThan(0);
+            expect([...seen[0]].sort()).toEqual([...expected].sort());
+        });
+
     it('builds the path of the previous checkpoints, nearest first, '
         + 'collapsing repeats and dropping the current system', () => {
             const h = sampleHistory();
