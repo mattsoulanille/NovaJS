@@ -332,6 +332,19 @@ export async function buildShipMissionAccept(player: Entity,
         [...(entity.components.get(OutfitsStateComponent) ?? [])]
             .map(([id, state]) => [id, state.count] as const));
     const outfits = diffCounts(outfitCounts(before), outfitCounts(copy));
+    // The REST of the mission list: what the OnAccept's own Sxxx started
+    // and its Axxx/Fxxx ended, besides the mission being accepted (which
+    // has its own field below). See AcceptedMissionType.missionsStarted.
+    const missionsBefore = before.components.get(MissionsComponent)!;
+    const missionsNow = copy.components.get(MissionsComponent)!;
+    const missionsStarted: [string, unknown][] = [...missionsNow]
+        .filter(([id]) => id !== offer.data.id && !missionsBefore.has(id))
+        .map(([id, started]) => [id, ActiveMissionType.encode(started)]);
+    const missionsEnded = [...missionsBefore.keys()]
+        .filter(id => !missionsNow.has(id));
+    const records = diffCounts(
+        before.components.get(LegalRecordsComponent)!,
+        copy.components.get(LegalRecordsComponent)!);
 
     const active = missionsAfter(copy, offer.data.id);
     // An IMMEDIATE auto-abort mission never becomes active
@@ -384,6 +397,9 @@ export async function buildShipMissionAccept(player: Entity,
                 ? { suppressGovtsRemoved: suppressGovts.removed } : {}),
             ...(cargo.length ? { cargoDelta: cargo } : {}),
             ...(outfits.length ? { outfitsDelta: outfits } : {}),
+            ...(missionsStarted.length ? { missionsStarted } : {}),
+            ...(missionsEnded.length ? { missionsEnded } : {}),
+            ...(records.length ? { recordsDelta: records } : {}),
             ...(ships.length ? { ships: ships as never } : {}),
         },
     };

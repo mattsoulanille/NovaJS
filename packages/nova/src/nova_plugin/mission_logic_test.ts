@@ -457,6 +457,66 @@ describe('missionMatchesLocation', () => {
             }), LOCATION_MISSION_COMPUTER, makeContext())).toBe(true);
         });
 
+    describe('Oxxx in AvailBits', () => {
+        it('sees the player\'s outfits (nova:649 "Renew darts", '
+            + '`b371 & !O226`)', () => {
+                const renew = makeMission({ availBits: 'b371 & !O226' });
+                const bits = new Set([371]);
+                // Holding a Dart: not offered.
+                expect(missionMatchesLocation(renew, LOCATION_MISSION_COMPUTER,
+                    makeContext({
+                        bits,
+                        ownedOutfits: new Map([['nova:226', 2]]),
+                    }))).toBe(false);
+                // All darts gone: offered (three more are on their way).
+                expect(missionMatchesLocation(renew, LOCATION_MISSION_COMPUTER,
+                    makeContext({
+                        bits,
+                        ownedOutfits: new Map([['nova:226', 0]]),
+                    }))).toBe(true);
+                expect(missionMatchesLocation(renew, LOCATION_MISSION_COMPUTER,
+                    makeContext({ bits, ownedOutfits: new Map() })))
+                    .toBe(true);
+            });
+
+        it('is false without an outfits map (the unwired default)', () => {
+            expect(missionMatchesLocation(makeMission({ availBits: 'O226' }),
+                LOCATION_MISSION_COMPUTER, makeContext())).toBe(false);
+            expect(missionMatchesLocation(makeMission({ availBits: '!O226' }),
+                LOCATION_MISSION_COMPUTER, makeContext())).toBe(true);
+        });
+
+        it('resolves the oütf number stock-first, never to a third '
+            + 'plug-in\'s outfit', () => {
+                const mission = makeMission({
+                    id: 'plug:900', writerPrefix: 'plug', availBits: 'O226',
+                });
+                const at = (owned: [string, number][]) =>
+                    missionMatchesLocation(mission, LOCATION_MISSION_COMPUTER,
+                        makeContext({ ownedOutfits: new Map(owned) }));
+                expect(at([['nova:226', 1]])).toBe(true);
+                expect(at([['plug:226', 1]])).toBe(true);
+                expect(at([['other:226', 1]])).toBe(false);
+            });
+    });
+
+    it('gates a mïsn Flags 0x0008 mission on 100 units of fuel', () => {
+        // "(mission won't be offered if player has less than 100 units of
+        // fuel)" — the Refuel Traders, nova:141/650-652.
+        const trader = makeMission();
+        trader.flags = { ...trader.flags, remove100FuelOnAutoAbort: true };
+        expect(missionMatchesLocation(trader, LOCATION_MISSION_COMPUTER,
+            makeContext({ fuel: 30 }))).toBe(false);
+        expect(missionMatchesLocation(trader, LOCATION_MISSION_COMPUTER,
+            makeContext({ fuel: 100 }))).toBe(true);
+        // No reading at all leaves the gate open.
+        expect(missionMatchesLocation(trader, LOCATION_MISSION_COMPUTER,
+            makeContext())).toBe(true);
+        // Without the flag the tank is nobody's business.
+        expect(missionMatchesLocation(makeMission(), LOCATION_MISSION_COMPUTER,
+            makeContext({ fuel: 0 }))).toBe(true);
+    });
+
     it('gates a Require mask on the player Contribute mask', () => {
         const mission = makeMission({ require: '3' }); // bits 0x1 | 0x2
         // No contribute: the requirement is unmet.
@@ -638,6 +698,39 @@ describe('makeMissionOffer', () => {
         expect(makeMissionOffer(mission, makeContext({ freeCargoSpace: 20 })))
             .toBe(null);
     });
+
+    it('hides a LATER-pickup mission with the flag too (Flags2 0x0001, '
+        + '"even if the mission cargo won\'t be picked up until later")',
+        () => {
+            // nova:429 "Federation Resupply;Fed2": 20 t, PickupMode 1,
+            // the flag set. Offered to a 5-ton hold it would be accepted
+            // and stall silently at its travel stellar.
+            for (const pickupMode of [1, 2]) {
+                const mission = makeMission({
+                    cargoType: 7, cargoQty: 20, pickupMode,
+                });
+                mission.flags = {
+                    ...mission.flags,
+                    notOfferedIfInsufficientCargoSpace: true,
+                };
+                expect(makeMissionOffer(mission,
+                    makeContext({ freeCargoSpace: 5 })))
+                    .withContext(`pickupMode ${pickupMode}`).toBe(null);
+                // Enough room: offered, and acceptable (the cargo does
+                // not load now, so the "must fit now" check is moot).
+                expect(makeMissionOffer(mission,
+                    makeContext({ freeCargoSpace: 20 }))?.acceptable)
+                    .withContext(`pickupMode ${pickupMode}`).toBe(true);
+            }
+            // Without the flag a later-pickup mission is still offered
+            // to a hold that cannot take it (the pre-existing behaviour;
+            // the stall is the scenario author's to prevent).
+            const unflagged = makeMission({
+                cargoType: 7, cargoQty: 20, pickupMode: 1,
+            });
+            expect(makeMissionOffer(unflagged,
+                makeContext({ freeCargoSpace: 5 }))?.acceptable).toBe(true);
+        });
 
     it('enforces the active mission cap', () => {
         const activeMissions: Missions = new Map();
@@ -1289,6 +1382,84 @@ describe('accept / landing / completion flow', () => {
         expect(state.credits.credits).toBe(1500);
         expect(state.dateAdvance).toBe(2);
     });
+
+    it('an immediate auto-abort runs OnAbort after OnAccept '
+        + '(mïsn Flags 0x0001)', () => {
+            // "Any control bits pointed to by the mission's OnAbort fields
+            // will be automatically set when the mission aborts." Both
+            // strings run, OnAccept first: nova:609 "Drop Bear" sets b45
+            // on accept and clears it on abort so it can score again.
+            const mission = makeMission({
+                id: 'nova:609', onAccept: 'b1 b45', onAbort: 'b2 !b45',
+            });
+            mission.flags = { ...mission.flags, autoAbort: true };
+            const state = makeState();
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            expect(state.missions.size).toBe(0);
+            expect(state.bits.has(1)).toBe(true);
+            expect(state.bits.has(2)).toBe(true);
+            expect(state.bits.has(45)).toBe(false);
+        });
+
+    it('an immediate auto-abort leaves the CompReward abort reversal alone',
+        () => {
+            // The ruling in acceptOffer: nova:614-629 (the enforcement
+            // squads) all set Flags 0x0040 with CompRewards up to 30, and
+            // being hunted is not meant to cost a -150 record.
+            const mission = makeMission({
+                id: 'nova:614', compGovt: 128, compReward: 2,
+            });
+            mission.flags = {
+                ...mission.flags, autoAbort: true,
+                lose5xCompRewardOnAbort: true,
+            };
+            const state = makeState({ records: new Map([['nova:128', 10]]) });
+            const machinery = makeMachinery(state, [mission]);
+            acceptOffer(machinery,
+                makeMissionOffer(mission, machinery.offerContext())!);
+            expect(state.records!.get('nova:128')).toBe(10);
+        });
+
+    it('an immediate auto-abort with special ships queues them for the '
+        + 'lift-off (PendingAutoAbortShips)', () => {
+            // nova:614 "Avoid Federation Secession Task-Force": autoAbort,
+            // ShipCount 4, ShipSyst -6, ShipNames "Secession TF". The
+            // mission never becomes active, so its ships are kept aside.
+            const mission = makeMission({
+                id: 'nova:614', shipGoal: 0, shipCount: 4, shipSyst: -6,
+                shipDudeId: 'nova:130', shipBehav: 0, shipStart: 1,
+                shipNames: ['Secession TF'],
+            });
+            mission.flags = { ...mission.flags, autoAbort: true };
+            const state = makeState({ autoAbortShips: [] });
+            const machinery = makeMachinery(state, [mission], {
+                systems: [{ id: 'nova:200', govt: null, links: [] }],
+                systemIdOfStellar: () => 'nova:200',
+            });
+            const offer = makeMissionOffer(mission, machinery.offerContext())!;
+            expect(offer.shipObjective).toBeDefined();
+            acceptOffer(machinery, offer);
+            expect(state.missions.size).toBe(0);
+            expect(state.autoAbortShips!.length).toBe(1);
+            const [batch] = state.autoAbortShips!;
+            expect(batch.missionId).toBe('nova:614');
+            expect(batch.shipObjective.total).toBe(4);
+            expect(batch.shipObjective.systemId).toBeNull();
+            expect(batch.shipObjective.behavior).toBe(0);
+            // The name the notice showed is the name the ships wear.
+            expect(batch.shipName).toBe('Secession TF');
+            expect(state.events[0].specialShipName).toBe('Secession TF');
+            // A copy, not the offer's own live map.
+            expect(batch.shipObjective.live).not.toBe(offer.shipObjective!.live);
+            // A mission without ships queues nothing.
+            const plain = makeMission({ id: 'nova:609' });
+            plain.flags = { ...plain.flags, autoAbort: true };
+            acceptOffer(machinery,
+                makeMissionOffer(plain, machinery.offerContext())!);
+            expect(state.autoAbortShips!.length).toBe(1);
+        });
 });
 
 describe('mission set-string hooks (Sxxx/Axxx/Fxxx)', () => {

@@ -6,7 +6,7 @@ import {
 } from './ncb.js';
 import { CronState, CronStates } from './player_state_plugin.js';
 import {
-    resolveNumberedResource, sameNumberedResource, setStringPrefix,
+    ownsOutfit, resolveNumberedResource, setStringPrefix,
     systemDiscoveryOperators,
 } from './mission_logic.js';
 import { DiscoveryAccess, DiscoveryNCBOperators } from './discovery.js';
@@ -229,19 +229,6 @@ function mask(decimal: string): bigint {
 function requireMet(cron: CronData, contribute: bigint): boolean {
     const require = mask(cron.require);
     return (require & contribute) === require;
-}
-
-function ownsOutfit(owned: ReadonlyMap<string, number> | undefined,
-    id: number, prefix: string): boolean {
-    if (!owned) {
-        return false;
-    }
-    for (const [globalId, count] of owned) {
-        if (count > 0 && sameNumberedResource(globalId, id, prefix)) {
-            return true;
-        }
-    }
-    return false;
 }
 
 /**

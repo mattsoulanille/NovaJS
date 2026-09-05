@@ -88,12 +88,23 @@ export function resolveShipSystem(mission: MissionData, ctx: MissionContext,
             return systemIdOfStellar(ctx.stellar.id);
         case -2:
             return pick(systems, ctx.random)?.id;
-        case -3:
-            return travelPlanet
-                ? systemIdOfStellar(travelPlanet) : undefined;
-        case -4:
-            return returnPlanet
-                ? systemIdOfStellar(returnPlanet) : undefined;
+        // -3 "TravelStel's system", -4 "ReturnStel's system". RULING for
+        // a mission that names the stellar it does not have: use the
+        // destination it DOES have. Stock nova:428 "Federation Resupply;
+        // Fed1" (the outfitter entry to the whole Federation string) and
+        // nova:742 "Rescue Vell-os Slaves" are ShipSyst -3 with TravelStel
+        // -1 and a ReturnStel — their two pirates / the slavers are meant
+        // for the one leg the player flies. Read strictly, the reference
+        // is unsatisfiable and the mission can never be offered at all.
+        // With neither destination it still is.
+        case -3: {
+            const stellar = travelPlanet ?? returnPlanet;
+            return stellar ? systemIdOfStellar(stellar) : undefined;
+        }
+        case -4: {
+            const stellar = returnPlanet ?? travelPlanet;
+            return stellar ? systemIdOfStellar(stellar) : undefined;
+        }
         case -5: {
             const initial = systemIdOfStellar(ctx.stellar.id);
             const links = systems.find(s => s.id === initial)?.links ?? [];

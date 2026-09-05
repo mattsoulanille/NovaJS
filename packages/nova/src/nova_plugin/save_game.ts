@@ -27,6 +27,8 @@ import {
     GameDateComponent,
     GameDateType,
     MissionsComponent,
+    PendingAutoAbortShipsComponent,
+    PendingAutoAbortShipsType,
 } from './player_state_plugin.js';
 import { PlayerEscortComponent } from './player_escort.js';
 import { CombatRatingComponent, LegalRecordsComponent } from './reputation_plugin.js';
@@ -260,6 +262,20 @@ export const SaveData = t.intersection([
         // every OLDER build quarantine saves written by this one, whereas
         // an unknown field is ignored by the non-exact codec.
         playerUuid: t.string,
+        // The special ships of missions that auto-aborted at accept while
+        // the pilot was docked — the stock enforcement squads — queued for
+        // the lift-off that spawns them (PendingAutoAbortShipsComponent).
+        // Written only while such a batch is pending, i.e. a save taken
+        // between accepting the warning and lifting off; restoring puts it
+        // back on the entity, and the first system entry drains it as the
+        // lift-off would have. Absent otherwise, so a pilot with nothing
+        // queued writes exactly the payload this build wrote before.
+        //
+        // ADDITIVE and optional, like `ranks`: an older build ignores it
+        // (and loses the squad, which is what it did anyway), and a save
+        // without it reads as "nothing pending". SAVE_VERSION deliberately
+        // does NOT move; see `ranks`. (PR #142 review finding 2.)
+        autoAbortShips: PendingAutoAbortShipsType,
     }),
 ]);
 export type SaveData = t.TypeOf<typeof SaveData>;
@@ -354,6 +370,19 @@ export function extractSaveData(entity: Entity, systemId: string,
     const rating = entity.components.get(CombatRatingComponent);
     if (rating) {
         save.combatRatings = [['kills', rating.kills]];
+    }
+    // Only while a batch is actually queued: MissionSession.commit leaves
+    // an emptied component behind once one has existed, and that must not
+    // change the bytes a batchless pilot writes.
+    const autoAbortShips = entity.components.get(PendingAutoAbortShipsComponent);
+    if (autoAbortShips && autoAbortShips.length > 0) {
+        save.autoAbortShips = autoAbortShips.map(batch => ({
+            ...batch,
+            shipObjective: {
+                ...batch.shipObjective,
+                live: new Map(batch.shipObjective.live),
+            },
+        }));
     }
     // Star-system discovery is client-local UI state, not a component, so
     // it comes from its own store rather than off the entity. Left absent
@@ -484,6 +513,18 @@ export function restorePlayerState(entity: Entity, save: SaveData,
         if (kills !== undefined) {
             entity.components.set(CombatRatingComponent, { kills });
         }
+    }
+    if (save.autoAbortShips && save.autoAbortShips.length > 0) {
+        // Back on the entity as it was; buildMissionShipSpawns drains it at
+        // the restored pilot's first system entry.
+        entity.components.set(PendingAutoAbortShipsComponent,
+            save.autoAbortShips.map(batch => ({
+                ...batch,
+                shipObjective: {
+                    ...batch.shipObjective,
+                    live: new Map(batch.shipObjective.live),
+                },
+            })));
     }
     return restored;
 }

@@ -14,7 +14,11 @@ import { ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, Shie
 import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
 import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, MissionEvent, MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js';
+import {
+    LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT,
+    LOCATION_SHIPYARD, LOCATION_TRADING, MissionEvent, MissionMapMark,
+    missionMapMarks,
+} from '../nova_plugin/mission_logic.js';
 import { expandMissionText } from '../nova_plugin/mission_text.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
@@ -32,8 +36,9 @@ import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
 import { MissionSession, processEntityLanding } from './mission_session.js';
-import { rollOffers } from './mission_offers.js';
+import { offerRollsForSystem, rollOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
+import { presentVenueOffers } from './venue_offers.js';
 import { Outfitter } from './outfitter.js';
 import { playerIdentitySubs } from './player_identity.js';
 import { runShipBuildWorld } from './ship_build_world.js';
@@ -179,6 +184,12 @@ export class Spaceport extends Menu<Entity> {
             if (!this.enterVenue()) {
                 return;
             }
+            // Outfitter (AvailLoc 6) mission offers first: the Federation
+            // string opens here (nova:428). See presentVenueOffers.
+            await this.presentVenueOffers(LOCATION_OUTFIT);
+            if (!this.stillDocked()) {
+                return;
+            }
             // The outfitter mutates the ship's outfits and the
             // player's control bits.
             this.setLiveStatus(() => this.outfitter.dockedStatus());
@@ -254,6 +265,12 @@ export class Spaceport extends Menu<Entity> {
             if (!this.enterVenue()) {
                 return;
             }
+            // Trading (AvailLoc 4) mission offers first (Tutorial 002-004,
+            // United Shipping 5). See presentVenueOffers.
+            await this.presentVenueOffers(LOCATION_TRADING);
+            if (!this.stillDocked()) {
+                return;
+            }
             // The trade center mutates cargo and credits.
             this.setLiveStatus(() => this.tradeCenter.dockedStatus());
             this.input = await this.tradeCenter.show(this.input);
@@ -273,6 +290,13 @@ export class Spaceport extends Menu<Entity> {
                 return;
             }
             if (!this.enterVenue()) {
+                return;
+            }
+            // Shipyard (AvailLoc 5) mission offers first: the Sigma
+            // Shipyards string (nova:555/897/898), Pirate 009a (709). See
+            // presentVenueOffers.
+            await this.presentVenueOffers(LOCATION_SHIPYARD);
+            if (!this.stillDocked()) {
                 return;
             }
             // Any purchase inside the visit has already been adopted (and
@@ -482,6 +506,20 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
+     * Whether a venue may still open after the await its entry makes on
+     * the venue-entry offers (presentVenueOffers): a departure hides the
+     * container (Menu.show) and a world teardown destroys it
+     * (Spaceport.dismiss, then spaceport_plugin's remove) while the
+     * popups are up. Either way the venue must not open over a spaceport
+     * that is gone — it would draw destroyed graphics and take a keyboard
+     * nobody gives back (the mid-visit teardown spec) — the same guard
+     * rebindControls applies on the way out.
+     */
+    private stillDocked(): boolean {
+        return this.container.visible && !this.container.destroyed;
+    }
+
+    /**
      * The on-landing popup sequence, over the already-visible spaceport:
      * first each mission completion/failure text (the completion dësc,
      * per the "_succeed" references; nothing is repeated on the spaceport
@@ -572,8 +610,12 @@ export class Spaceport extends Menu<Entity> {
             console.warn('Spaceport offer session failed to load:', e);
             return;
         }
+        // The system visit's rolls (mission_offers.ts OfferRolls): a
+        // second landing in this system sees the same AvailRandom answers.
         const offers = rollOffers(session, this.universe,
-            LOCATION_MAIN_SPACEPORT).filter(offer => offer.acceptable);
+            LOCATION_MAIN_SPACEPORT, offerRollsForSystem(
+                this.universe.systemIdOfPlanet(this.id, session.state.bits)))
+            .filter(offer => offer.acceptable);
         if (offers.length === 0) {
             return;
         }
@@ -611,6 +653,27 @@ export class Spaceport extends Menu<Entity> {
             // write-back. See spaceport/credit_commit.ts.
             commitVenueCredits(entity, creditsBaseline,
                 () => session.commit());
+        }
+    }
+
+    /**
+     * The venue-entry mission offers (mïsn AvailLoc 4 trading, 5 shipyard,
+     * 6 outfitter), presented over the spaceport as the player walks in —
+     * before the venue opens, so an accept's effects are on the entity the
+     * venue builds its working copy from (see venue_offers.ts). The blocker
+     * holds the keyboard while the pointer-only popups are up, as the
+     * landing sequence's does. The rolls are the system visit's
+     * (mission_offers.ts OfferRolls), shared with the bar and the BBS.
+     */
+    private async presentVenueOffers(location: number) {
+        this.popupBlocker.bind();
+        try {
+            await presentVenueOffers(this.input, this.offerPopup,
+                this.universe, this.simulationData, this.id, location);
+        } catch (e) {
+            console.warn('Venue mission offers failed:', e);
+        } finally {
+            this.popupBlocker.unbind();
         }
     }
 

@@ -7,6 +7,7 @@ import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from './miss
 import { ActiveMission, ActiveMissionType, CreditsComponent, GameDateComponent, MissionsComponent, MAX_ACTIVE_MISSIONS } from './player_state_plugin.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
+import { LegalRecordsComponent } from './reputation_plugin.js';
 import { ControlledByComponent } from './ship_control.js';
 import { NpcComponent } from './npc_ai_plugin.js';
 import { ShipOfferSpentComponent } from './mission_accept.js';
@@ -223,6 +224,77 @@ describe('applyAcceptMission', () => {
             applyAcceptMission(world, PEER, accepted({ creditsDelta: 1 }));
             expect(player.components.has(OutfitsStateComponent)).toBeTrue();
         });
+
+        it('starts the missions the OnAccept started and ends the ones '
+            + 'it ended (Sxxx / Axxx / Fxxx)', () => {
+                const { world, player } = makeWorld();
+                missionsOf(player).set('nova:300',
+                    activeMission({ id: 'nova:300' }));
+                applyAcceptMission(world, PEER, accepted({
+                    missionsStarted: [['nova:301', ActiveMissionType.encode(
+                        activeMission({ id: 'nova:301' }))]],
+                    missionsEnded: ['nova:300', 'nova:999'],
+                }));
+                const missions = missionsOf(player);
+                expect([...missions.keys()].sort())
+                    .toEqual([MISSION, 'nova:301']);
+                expect(missions.get('nova:301')?.id).toEqual('nova:301');
+            });
+
+        it('skips a started mission already present, and re-checks the '
+            + 'cap for each', () => {
+                const { world, player } = makeWorld();
+                const present = activeMission({ id: 'nova:301',
+                    acceptedDay: 42 });
+                missionsOf(player).set('nova:301', present);
+                for (let i = 0; i < MAX_ACTIVE_MISSIONS - 2; i++) {
+                    missionsOf(player).set(`filler:${i}`,
+                        activeMission({ id: `filler:${i}` }));
+                }
+                applyAcceptMission(world, PEER, accepted({
+                    missionsStarted: [
+                        ['nova:301', ActiveMissionType.encode(
+                            activeMission({ id: 'nova:301' }))],
+                        ['nova:302', ActiveMissionType.encode(
+                            activeMission({ id: 'nova:302' }))],
+                        ['nova:303', ActiveMissionType.encode(
+                            activeMission({ id: 'nova:303' }))],
+                    ],
+                }));
+                const missions = missionsOf(player);
+                // The one already there kept its own state...
+                expect(missions.get('nova:301')).toBe(present);
+                // ...the primary took the 16th slot, and of the two new
+                // starts only nothing fits past the cap.
+                expect(missions.has(MISSION)).toBeTrue();
+                expect(missions.size).toEqual(MAX_ACTIVE_MISSIONS);
+                expect(missions.has('nova:302')).toBeFalse();
+                expect(missions.has('nova:303')).toBeFalse();
+            });
+
+        it('applies legal-record deltas over the current record, clamped',
+            () => {
+                const { world, player } = makeWorld();
+                player.components.set(LegalRecordsComponent,
+                    new Map([['nova:128', 10], ['nova:129', 32760]]));
+                applyAcceptMission(world, PEER, accepted({
+                    recordsDelta: [['nova:128', -3], ['nova:129', 100],
+                        ['nova:130', 5]],
+                }));
+                const records = player.components.get(LegalRecordsComponent)!;
+                expect(records.get('nova:128')).toEqual(7);
+                expect(records.get('nova:129')).toEqual(32767);
+                expect(records.get('nova:130')).toEqual(5);
+            });
+
+        it('seeds the records component when the player has none', () => {
+            const { world, player } = makeWorld();
+            applyAcceptMission(world, PEER, accepted({
+                recordsDelta: [['nova:128', -3]],
+            }));
+            expect(player.components.get(LegalRecordsComponent)
+                ?.get('nova:128')).toEqual(-3);
+        });
     });
 
     describe('the special ships that ride the record', () => {
@@ -438,6 +510,10 @@ describe('applyAcceptMission', () => {
             bitsSet: [3], ranksGranted: ['nova:200'],
             cargoDelta: [['Food', 2]], outfitsDelta: [['nova:300', 1]],
             offeredByFate: 'replace', autoAborted: true,
+            missionsStarted: [['nova:301', ActiveMissionType.encode(
+                activeMission({ id: 'nova:301' }))]],
+            missionsEnded: ['nova:300'],
+            recordsDelta: [['nova:128', -3]],
         });
         const wire = JSON.parse(JSON.stringify(
             AcceptedMissionType.encode(record)));
@@ -449,6 +525,11 @@ describe('applyAcceptMission', () => {
             expect(decoded.right.cargoDelta).toEqual([['Food', 2]]);
             expect(decoded.right.offeredByFate).toEqual('replace');
             expect(decoded.right.autoAborted).toBeTrue();
+            expect(decoded.right.missionsEnded).toEqual(['nova:300']);
+            expect(decoded.right.recordsDelta).toEqual([['nova:128', -3]]);
+            const [[id, started]] = decoded.right.missionsStarted!;
+            expect(id).toEqual('nova:301');
+            expect(ActiveMissionType.decode(started)._tag).toEqual('Right');
         }
     });
 });

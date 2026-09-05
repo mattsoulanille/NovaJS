@@ -19,7 +19,9 @@ import {
     makeNpcShip,
     pickWeighted,
 } from './npc_spawn_plugin.js';
-import { MissionsComponent } from './player_state_plugin.js';
+import {
+    MissionsComponent, PendingAutoAbortShipsComponent,
+} from './player_state_plugin.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
 import { SystemHoldComponent } from './system_hold.js';
 import { TargetComponent } from './target_component.js';
@@ -434,8 +436,16 @@ export async function buildMissionShipSpawns(playerEntity: Entity,
     gameData: SimulationGameDataInterface, universe: MissionShipUniverse,
     firstSlot = 0, random: () => number = Math.random,
     live?: LiveMissionShips): Promise<Entity[]> {
-    const missions = playerEntity.components.get(MissionsComponent);
-    if (!missions || missions.size === 0) {
+    const missions = playerEntity.components.get(MissionsComponent)
+        ?? new Map();
+    // The ships of missions that auto-aborted at accept while docked
+    // (PendingAutoAbortShipsComponent): TAKEN off the entity here, before
+    // it is encoded into its insertion record, so the batch is spawned
+    // once and never reaches a peer.
+    const autoAborted =
+        playerEntity.components.get(PendingAutoAbortShipsComponent) ?? [];
+    playerEntity.components.delete(PendingAutoAbortShipsComponent);
+    if (missions.size === 0 && autoAborted.length === 0) {
         return [];
     }
     const ctx: SpawnContext = {
@@ -444,6 +454,31 @@ export async function buildMissionShipSpawns(playerEntity: Entity,
     };
     const system = universe.getSystemInfo(systemId);
     const ships: Entity[] = [];
+
+    // RULING (the Bible does not say; the simple, bounded reading): an
+    // auto-aborted mission's ships are created ONCE, at this system entry,
+    // and only if their spawn system is this one (ShipSyst -6, "the
+    // system the player is in", always is). A batch bound for a system
+    // this is not is dropped rather than carried until the player happens
+    // by — the mission that asked for it is already over. They are
+    // `untethered` (see MissionShipComponent): tied to the owner's
+    // presence, not to a mission the owner will never hold, so the
+    // cleanup that deletes a finished mission's ships leaves them be —
+    // and so, like every other mission ship, they are swept when the owner
+    // leaves the system and do NOT follow across a jump. Stock's
+    // enforcement squads (nova:614-629) therefore shadow the player for
+    // the rest of this visit, which is what their offer text warns of.
+    for (const batch of autoAborted) {
+        const spawned = await buildShipsForMission(ctx, batch.missionId,
+            batch, systemId, system);
+        for (const ship of spawned) {
+            const missionShip = ship.components.get(MissionShipComponent);
+            if (missionShip) {
+                missionShip.untethered = true;
+            }
+        }
+        ships.push(...spawned);
+    }
 
     for (const [missionId, active] of missions) {
         const objective = active.shipObjective;

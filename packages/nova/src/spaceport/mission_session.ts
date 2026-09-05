@@ -5,6 +5,7 @@ import { addDays, dayNumber } from '../nova_plugin/calendar.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { runCronsForDays } from '../nova_plugin/cron_logic.js';
 import { playerDiscovery } from '../nova_plugin/discovery_store.js';
+import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import {
     failExpiredMissions,
     MissionContext,
@@ -27,6 +28,7 @@ import {
     CronStatesComponent,
     GameDateComponent,
     MissionsComponent,
+    PendingAutoAbortShipsComponent,
     PendingMissionNoticesComponent,
 } from '../nova_plugin/player_state_plugin.js';
 import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
@@ -93,6 +95,12 @@ export class MissionSession {
             events: [],
             records: new Map(
                 entity.components.get(LegalRecordsComponent) ?? []),
+            // Batches an earlier session this landing already queued (the
+            // landing popups' squad, then the bar's) accumulate until the
+            // lift-off drains them.
+            autoAbortShips: [
+                ...(entity.components.get(PendingAutoAbortShipsComponent)
+                    ?? [])],
         };
         this.outfits = new Map([...entity.components.get(OutfitsStateComponent)
             ?? []].map(([id, { count }]) => [id, count]));
@@ -182,6 +190,15 @@ export class MissionSession {
             discovery: playerDiscovery,
             systemExists: this.universe.systemsLoaded
                 ? (id: string) => this.universe.hasSystem(id) : undefined,
+            // `Oxxx` in AvailBits sees the WORKING outfits, so a Gxxx this
+            // visit already counts (mission_logic.ts's ownedOutfits note).
+            ownedOutfits: this.outfits,
+            // mïsn Flags 0x0008's "not offered below 100 units of fuel"
+            // gate. Read off the entity: fuel is not part of the working
+            // copy (nothing a mission does while docked changes it), and
+            // the in-flight offer session is built over the display
+            // mirror, which carries the live tank.
+            fuel: this.entity.components.get(FuelComponent)?.current,
         };
     }
 
@@ -263,6 +280,15 @@ export class MissionSession {
         }
         if (this.state.records) {
             entity.components.set(LegalRecordsComponent, this.state.records);
+        }
+        // Only written when there is something to write (or something to
+        // overwrite): an entity that never queued a batch does not gain an
+        // empty component from every session that touches it.
+        const autoAbortShips = this.state.autoAbortShips ?? [];
+        if (autoAbortShips.length > 0
+            || entity.components.has(PendingAutoAbortShipsComponent)) {
+            entity.components.set(PendingAutoAbortShipsComponent,
+                [...autoAbortShips]);
         }
 
         const previousOutfits = entity.components.get(OutfitsStateComponent);

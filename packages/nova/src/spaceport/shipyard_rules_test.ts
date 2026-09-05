@@ -14,6 +14,8 @@ import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import {
     CreditsComponent,
     GameDateComponent,
+    PendingAutoAbortShips,
+    PendingAutoAbortShipsComponent,
 } from '../nova_plugin/player_state_plugin.js';
 import { CombatRatingComponent } from '../nova_plugin/reputation_plugin.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
@@ -468,6 +470,38 @@ describe('shipyard purchase rules', () => {
                 ship('nova:101', { price: 200000 }), ctx);
             expect(bought.components.get(PendingEscortsComponent))
                 .toEqual(['nova:128', 'nova:129']);
+        });
+
+        it('carries a pending auto-abort squad across the hull swap', () => {
+            // PR #142 review finding 1: a mission that auto-aborted at
+            // accept while docked (the stock enforcement squads) queues its
+            // special ships on the hull for the lift-off to spawn. Buying a
+            // ship in between left the batch on the traded-in hull, so the
+            // squad the popup warned of never came.
+            const old = oldPlayer();
+            const batch: PendingAutoAbortShips = [{
+                missionId: 'nova:614',
+                shipObjective: {
+                    goal: 0, systemId: null, shipStart: 0, behavior: 0,
+                    dudeId: 'nova:130', total: 4, satisfied: 0,
+                    complete: false, failed: false, shipDonePending: false,
+                    live: new Map(),
+                },
+                travelPlanet: null,
+                returnPlanet: null,
+                shipName: 'Secession TF',
+            }];
+            old.components.set(PendingAutoAbortShipsComponent, batch);
+            const ctx = context({
+                currentShip: ship('nova:100', { price: 40000 }),
+                outfits: [['nova:221', 1], ['nova:200', 2]],
+                catalogue: [beam, cannon],
+                credits: 500000,
+            });
+            const bought = buildPurchasedShip(old,
+                ship('nova:101', { price: 200000 }), ctx);
+            expect(bought.components.get(PendingAutoAbortShipsComponent))
+                .toEqual(batch);
         });
 
         it('carries the escort PAYROLL across the hull swap', () => {

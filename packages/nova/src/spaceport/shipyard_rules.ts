@@ -35,6 +35,7 @@ import {
     CronStatesComponent,
     GameDateComponent,
     MissionsComponent,
+    PendingAutoAbortShipsComponent,
     PendingMissionNoticesComponent,
 } from '../nova_plugin/player_state_plugin.js';
 import {
@@ -411,6 +412,18 @@ export const CARRIED_COMPONENTS: readonly Component<any>[] = [
     // off must not discard them - the hire fee is already paid. (Review
     // round 6 finding; the loss predated the shipyard-economy rework.)
     PendingEscortsComponent,
+    // The special ships of a mission that auto-aborted at accept THIS
+    // landing (mïsn Flags 0x0001 immediate form — the stock enforcement
+    // squads, nova:614-629), queued on the hull and spawned only at
+    // lift-off (buildMissionShipSpawns). Same shape as the pending escorts
+    // above: accept the warning at the main spaceport, buy a ship before
+    // lifting off, and the batch stayed on the traded-in hull — the squad
+    // the popup promised never came. (PR #142 review finding 1.)
+    //
+    // Safe to share by reference: a plain list, nothing in it scoped to
+    // the hull, and every reader (MissionSession's seed/commit, the
+    // lift-off drain) copies or replaces the array rather than mutating it.
+    PendingAutoAbortShipsComponent,
     // The PAYROLL MIRROR: the ship-class ids of the escorts drawing a daily
     // wage (player_escort.ts's EscortPayrollComponent). It is the only
     // record of them that exists while the player is docked — the escorts

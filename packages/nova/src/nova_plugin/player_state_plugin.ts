@@ -213,6 +213,54 @@ export type PendingMissionNotices =
 export const PendingMissionNoticesComponent =
     new Component<PendingMissionNotices>('PendingMissionNotices');
 
+/**
+ * The special ships of a mission that auto-aborted the moment it was
+ * accepted WHILE DOCKED (mïsn Flags 0x0001 in its immediate form), waiting
+ * for the lift-off that will spawn them.
+ *
+ * The Bible calls the immediate auto-abort "sometimes useful to create
+ * special ships" and requires special ships for it to trigger at all: the
+ * ships ARE the mission. Stock nova:614-629 — the sixteen "Avoid
+ * Federation Task Force / Rebel Enforcement Squad / ..." missions the
+ * crime-tier bits offer at the main spaceport — are ShipCount 3-10,
+ * ShipSyst -6 (follow the player), invisible and cantRefuse: the popup is
+ * the "a squad has been dispatched to hunt you" warning and the squad is
+ * the point. An auto-aborted mission never joins MissionsComponent, which
+ * is what buildMissionShipSpawns walks at every system entry, so without
+ * this the warning showed and no squad ever came. The IN-FLIGHT accept
+ * (ship_mission_accept.ts) already keeps the offer's frozen objective for
+ * the same reason; this is the docked counterpart, in the same shape.
+ *
+ * Written by MissionSession.commit from the working state acceptOffer
+ * pushed to; drained by buildMissionShipSpawns at the owner's next system
+ * entry (the lift-off), BEFORE the entity is encoded into its insertion
+ * record, so it never reaches a peer. Serializer-registered all the same,
+ * like PendingMissionNotices, so a rollback snapshot or a docked mirror
+ * carries it unchanged. Carried onto a hull bought before lift-off
+ * (shipyard_rules.ts CARRIED_COMPONENTS) and written into the pilot save
+ * while non-empty (save_game.ts `autoAbortShips`), so neither a shipyard
+ * visit nor a save-and-quit between the warning and the lift-off loses
+ * the squad. (The notices are still not saved; that gap stands.)
+ */
+export const PendingAutoAbortShipType = t.intersection([t.type({
+    /** The auto-aborted mïsn, for the düde / aux / name lookups. */
+    missionId: t.string,
+    /** The offer's frozen objective (spawn system, düde, count, ...). */
+    shipObjective: ShipObjectiveType,
+    travelPlanet: t.union([t.string, t.null]),
+    returnPlanet: t.union([t.string, t.null]),
+}), t.partial({
+    /** The <SN> pick the auto-abort notice showed, so the ships wear it. */
+    shipName: t.string,
+    shipSubtitle: t.string,
+})]);
+export type PendingAutoAbortShip = t.TypeOf<typeof PendingAutoAbortShipType>;
+export const PendingAutoAbortShipsType = t.array(PendingAutoAbortShipType);
+export type PendingAutoAbortShips =
+    t.TypeOf<typeof PendingAutoAbortShipsType>;
+export const PendingAutoAbortShipsComponent =
+    new Component<PendingAutoAbortShips>('PendingAutoAbortShips');
+
 export const PlayerStatePlugin: Plugin = {
     name: 'PlayerStatePlugin',
     build(world) {
@@ -234,6 +282,9 @@ export const PlayerStatePlugin: Plugin = {
         });
         deltaMaker.addComponent(PendingMissionNoticesComponent, {
             componentType: PendingMissionNoticesType,
+        });
+        deltaMaker.addComponent(PendingAutoAbortShipsComponent, {
+            componentType: PendingAutoAbortShipsType,
         });
     }
 };

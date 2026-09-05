@@ -388,6 +388,12 @@ describe('display world UI lifecycle', () => {
                     await waitFor(() => !spaceport.onMainScreen
                         && MenuControls.focused !== undefined,
                         'the outfitter took the keyboard');
+                    // The venue-entry offers (none for this pilot) hold
+                    // the keyboard first; let them resolve so it is the
+                    // OUTFITTER that is up when the world dies.
+                    await settle(100);
+                    expect(spaceport.onMainScreen).toBe(false);
+                    expect(MenuControls.focused).toBeDefined();
                     await tearDown(landing);
                 }, tearDown);
             });

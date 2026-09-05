@@ -14,6 +14,8 @@ import {
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import { NpcComponent } from './npc_ai_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
+import { addRecord } from './reputation.js';
+import { LegalRecordsComponent } from './reputation_plugin.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
 import { SystemHoldComponent } from './system_hold.js';
 import { WeaponsStateComponent } from './weapons_state.js';
@@ -218,6 +220,33 @@ export const AcceptedMissionType = t.intersection([t.type({
      * accept time (PickupMode 0). */
     cargoDelta: t.array(t.tuple([t.string, t.number])),
     /**
+     * OTHER missions the accept started — an `Sxxx` inside the accepted
+     * mission's OnAccept — as `[id, encoded ActiveMission]` pairs, and the
+     * missions it ended (`Axxx` / `Fxxx` naming a sibling). The docked path
+     * writes back the whole working MissionsComponent; this path diffs it,
+     * and used to carry only the one mission being accepted, so a
+     * ship-offered mission whose OnAccept starts the next link (arpia's
+     * "Pro-death" cascade, arpia:1014 -> 1015) started nothing. Stock has
+     * no AvailLoc 2 `Sxxx`, so only plug-ins were hit.
+     *
+     * Applied under the record's own idempotence keys (the accepted
+     * mission / the offering hull) AND per entry: a started mission
+     * already on the list is skipped, the 16-mission cap is re-checked for
+     * each, and ending a mission that is not there is a no-op. Additive:
+     * older records simply carry neither field.
+     */
+    missionsStarted: t.array(t.tuple([t.string, t.unknown])),
+    missionsEnded: t.array(t.string),
+    /**
+     * Signed per-gövt legal-record change (LegalRecordsComponent), keyed
+     * by global gövt id: PayVal's record-cleaning encodings on an
+     * `applyPayOnAutoAbort` auto-abort, and a CompGovt change from a
+     * sibling mission an `Axxx`/`Fxxx` ended. The detached copy carried
+     * the component but the diff never read it. A delta, like credits,
+     * and clamped to the pilot file's int16 range on apply (addRecord).
+     */
+    recordsDelta: t.array(t.tuple([t.string, t.number])),
+    /**
      * Special/aux ships this acceptance spawns INTO THE CURRENT SYSTEM —
      * the Derelict Decoy's four pirates jumping in the moment you take
      * the bait. They ride this record rather than a follow-up input so
@@ -310,6 +339,25 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
         }
         missions.set(accepted.missionId, decoded.right);
     }
+    // The OnAccept's own starts and ends (see missionsStarted). Each start
+    // is guarded the way the primary is — present already: skip; at the
+    // cap: skip — so a record replayed against a world that got there by
+    // another route cannot double a mission or vault the cap.
+    for (const [id, encoded] of accepted.missionsStarted ?? []) {
+        if (missions.has(id) || missions.size >= MAX_ACTIVE_MISSIONS) {
+            continue;
+        }
+        const decoded = ActiveMissionType.decode(encoded);
+        if (isLeft(decoded)) {
+            console.warn(`Dropping mission ${id} started by the accept of `
+                + `${accepted.missionId}: it failed to decode`);
+            continue;
+        }
+        missions.set(id, decoded.right);
+    }
+    for (const id of accepted.missionsEnded ?? []) {
+        missions.delete(id);
+    }
     if (offering) {
         offering.components.set(ShipOfferSpentComponent,
             { missionId: accepted.missionId });
@@ -375,6 +423,19 @@ export function applyAcceptMission(world: World, peerId: string | undefined,
         }
         player.components.set(
             AggressionSuppressGovtsComponent, suppressGovts);
+    }
+    // Legal records, as deltas over whatever the record is NOW (a kill
+    // between the client's diff and this apply composes rather than being
+    // erased). Seeded when absent, like the suppression set above.
+    if ((accepted.recordsDelta?.length ?? 0) > 0) {
+        const records = player.components.get(LegalRecordsComponent)
+            ?? new Map<string, number>();
+        for (const [govtId, delta] of accepted.recordsDelta ?? []) {
+            // No gövt data in the simulation: an entry the diff produced
+            // was materialized on the client, so it is read back raw.
+            addRecord(records, govtId, undefined, delta);
+        }
+        player.components.set(LegalRecordsComponent, records);
     }
     const cargo = player.components.get(CargoComponent);
     if (cargo) {
