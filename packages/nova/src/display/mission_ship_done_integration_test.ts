@@ -31,6 +31,7 @@ import {
 } from '../spaceport/mission_session.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
+import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
 import { clearShipDoneTextShown } from '../spaceport/ship_done_shown.js';
 import {
     boardShipDoneStatusOf, MissionShipDonePlugin, presentBoardShipDone,
@@ -184,6 +185,10 @@ function shipDoneNotices(owner: Entity) {
 }
 
 describe('a mission ship goal completing in flight', () => {
+    // The popup is a PIXI.Graphics, which needs a canvas: install the
+    // headless stub here rather than rely on an earlier spec's install
+    // (under some random orders this file runs first).
+    beforeAll(() => installHeadlessPixi());
     beforeEach(() => clearShipDoneTextShown());
     afterEach(() => clearShipDoneTextShown());
 

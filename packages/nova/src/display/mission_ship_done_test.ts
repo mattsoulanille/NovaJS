@@ -27,6 +27,7 @@ import {
     boardShipDoneStatus, boardShipDoneStatusOf, MissionShipDonePlugin,
     presentBoardShipDone, presentShipDoneText, ShipDonePopupResource,
 } from './mission_ship_done_plugin.js';
+import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { BoardingState } from '../nova_plugin/boarding_component.js';
@@ -245,6 +246,10 @@ async function settle(times = 12) {
 }
 
 describe('presenting a ShipDoneText in flight', () => {
+    // The popup is a PIXI.Graphics, which needs a canvas: install the
+    // headless stub here rather than rely on an earlier spec's install
+    // (under some random orders this file runs first).
+    beforeAll(() => installHeadlessPixi());
     beforeEach(() => clearShipDoneTextShown());
     afterEach(() => clearShipDoneTextShown());
 
