@@ -8,6 +8,7 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import SAT from 'sat';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { AggressionComponent } from './aggression.js';
 import { CollisionVulnerabilityComponent } from './collision_interaction.js';
 import { CompositeHull, HitboxHullComponent } from './collisions_plugin.js';
@@ -138,7 +139,9 @@ describe('final explosion fireball scale', () => {
  */
 describe('final explosion ship fields against real Nova data', () => {
     let ships: ShipData[];
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const ids = await gameData.ids;
         ships = await Promise.all(

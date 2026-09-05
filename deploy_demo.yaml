@@ -5,18 +5,19 @@ steps:
     entrypoint: npm
     args: ['ci']
 
-  # Test novajs
+  # Test novajs. There is no game data here (Nova_Data is gitignored);
+  # data-backed specs mark themselves pending, the rest gate the deploy.
   - name: node:22
     id: unittest
     entrypoint: npx
     args: ['turbo', 'run', 'test']
     waitFor: ['install']
 
-  # Build the image
+  # Build the image — only once the tests pass.
   - name: 'gcr.io/cloud-builders/docker'
     id: build_image
     args: ['build', '-t', 'gcr.io/$PROJECT_ID/nova:dev', '-f', 'docker/Dockerfile', '.']
-    waitFor: ['install']
+    waitFor: ['unittest']
 
   # Push the image
   - name: 'gcr.io/cloud-builders/docker'

@@ -1,6 +1,7 @@
 import 'jasmine';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     isInhabited, isPort, landable, systemIsInhabited,
 } from './landable.js';
@@ -100,7 +101,9 @@ describe('systemIsInhabited', () => {
 
 describe('landable against real Nova data', () => {
     let planets: PlanetData[];
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const ids = await gameData.ids;
         planets = await Promise.all(

@@ -1,5 +1,6 @@
 import 'jasmine';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     DISCOVERY_LANDED, DISCOVERY_UNKNOWN,
 } from '../nova_plugin/discovery.js';
@@ -51,7 +52,9 @@ describe('stock map outfits', () => {
     let universe: MissionUniverse;
     let storage: FakeStorage;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         universe = MissionUniverse.shared(gameData);
         await universe.load();

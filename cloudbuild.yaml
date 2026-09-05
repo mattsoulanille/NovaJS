@@ -1,10 +1,22 @@
+# CI for pull requests / pushes. The build has no game data (Nova_Data is
+# gitignored and copyrighted); specs that need it mark themselves pending
+# (packages/nova/src/test_support/nova_data_gate.ts), so `turbo run test`
+# gates every package on what can run without it.
 steps:
   - name: node:22
+    id: install
     entrypoint: npm
     args: ['ci']
   - name: node:22
+    id: build
+    entrypoint: npx
+    args: ['turbo', 'run', 'build']
+    waitFor: ['install']
+  - name: node:22
+    id: unittest
     entrypoint: npx
     args: ['turbo', 'run', 'test']
+    waitFor: ['build']
 
 timeout: 900s
 options:

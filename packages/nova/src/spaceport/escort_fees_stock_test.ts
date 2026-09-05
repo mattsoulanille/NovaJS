@@ -1,6 +1,7 @@
 import 'jasmine';
 import { ShipData } from 'novadatainterface/ship_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost, escortUpgradeShip,
     hirePrice,
@@ -43,7 +44,9 @@ describe('escort prices against real stock data', () => {
     let terrapin: ShipData;
     let pirateViper: ShipData;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         terrapin = await gameData.data.Ship.get(TERRAPIN);
         pirateViper = await gameData.data.Ship.get(PIRATE_VIPER);

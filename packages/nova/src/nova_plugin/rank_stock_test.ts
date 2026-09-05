@@ -1,6 +1,7 @@
 import 'jasmine';
 import { RankData } from 'novadatainterface/rank_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { parseNCBSet } from './ncb.js';
 import {
     ranksSuppressAggression, suppressAggressionGovts,
@@ -23,7 +24,9 @@ import {
 describe('ränk resources against real Nova data', () => {
     let ranks: RankData[];
     let byId: Map<string, RankData>;
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const ids = await gameData.ids;
         ranks = await Promise.all(

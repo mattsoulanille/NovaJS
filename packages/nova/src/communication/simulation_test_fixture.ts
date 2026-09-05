@@ -18,12 +18,17 @@ import {
     SimulationBridgeHost,
 } from "./simulation_bridge.js";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
 
 const packageRoot = process.cwd();
 
 let gameDataPromise: Promise<GameDataAggregator> | undefined;
 
 export async function getIntegrationGameData() {
+    // No Nova_Data (CI, a fresh clone): the calling spec is marked pending
+    // rather than failing on the parser's rejection. See nova_data_gate.ts
+    // for the beforeAll caveat.
+    requireNovaData(packageRoot);
     if (!gameDataPromise) {
         // Base "Nova Files" data ONLY (novaPlugins: null). Tests must not
         // depend on which plug-ins happen to be installed in the developer's
@@ -131,7 +136,11 @@ export function makePluginNovaParse(pluginDirectories: string[]):
     const novaData = path.join(packageRoot, "Nova_Data");
     const pluginPaths = pluginDirectories.map(
         dir => path.join(novaData, "Plug-ins", dir));
-    if (!pluginPaths.every(p => fs.existsSync(p))) {
+    // The base data is checked too: with an EMPTY plug-in list the
+    // every() below is vacuously true, and the spec would otherwise reach
+    // the parser's rejection instead of skipping.
+    if (!novaDataInstalled(packageRoot)
+        || !pluginPaths.every(p => fs.existsSync(p))) {
         return undefined;
     }
     // A fixed scratch root, reused across runs rather than a fresh mkdtemp

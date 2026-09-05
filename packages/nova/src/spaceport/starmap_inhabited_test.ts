@@ -4,6 +4,7 @@ import { SystemData } from "novadatainterface/system_data";
 import {
     getIntegrationGameData, getPluginGameData,
 } from "../communication/simulation_test_fixture.js";
+import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 import { isPort, systemIsInhabited } from "../nova_plugin/landable.js";
 import {
@@ -43,7 +44,9 @@ async function loadUniverse(gameData: GameDataAggregator) {
 
 describe('star map inhabited coloring (stock data)', () => {
     let universe: Awaited<ReturnType<typeof loadUniverse>>;
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         universe = await loadUniverse(await getIntegrationGameData());
     }, 120_000);
 

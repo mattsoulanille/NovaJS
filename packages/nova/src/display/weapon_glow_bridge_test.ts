@@ -7,6 +7,7 @@ import {
 } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
 import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     WeaponsState, WeaponsStateComponent,
 } from '../nova_plugin/weapons_state.js';
@@ -32,7 +33,9 @@ describe('weapon-glow lastFired sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const harness = await makeSimulationBridgeHarness();
         simWorld = harness.world;
         serializer = simWorld.resources.get(SerializerResource)!;

@@ -2,6 +2,7 @@ import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { LegalRecords } from './reputation.js';
 import { ranksAllowLanding } from './rank_logic.js';
 import {
@@ -239,7 +240,9 @@ describe('planetClearance', () => {
 describe('stellarClearance against real Nova data', () => {
     let planets: PlanetData[];
     let govts: Map<string, GovtData>;
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const ids = await gameData.ids;
         planets = await Promise.all(
