@@ -341,7 +341,19 @@ class IDSpaceHandler {
             }
 
 
-            if (await isDirectory(currentPath)) {
+            // The stat is inside the per-plug-in isolation too: isDirectory
+            // rejects on anything but ENOENT (EACCES, ELOOP, EIO), and an
+            // unreadable entry must be skipped like an unparseable one, not
+            // take the whole id space ("core data load failed") with it.
+            let entryIsDirectory: boolean;
+            try {
+                entryIsDirectory = await isDirectory(currentPath);
+            } catch (e) {
+                reportSkippedPlugin(currentPath, e);
+                continue;
+            }
+
+            if (entryIsDirectory) {
                 log(currentPath + " is a directory");
                 await this.addDirectory(currentPath, prefix, /* fatalOnError */ false);
             }
@@ -395,18 +407,7 @@ class IDSpaceHandler {
         try {
             return await this.addPlugin(filePath, prefix);
         } catch (e) {
-            console.error(
-                "\n" +
-                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
-                "NovaParse: FAILED to load plug-in file and SKIPPED it:\n" +
-                "    " + filePath + "\n" +
-                "Underlying error: " + errorDetail(e) + "\n" +
-                "This plug-in's resources will be missing from the game. If it is a\n" +
-                "macOS resource-fork file, check that its resource fork survived any\n" +
-                "copy/transfer (see the xattr gotcha noted in addPlugin).\n" +
-                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",
-                e,
-            );
+            reportSkippedPlugin(filePath, e);
             return false;
         }
     }
@@ -462,6 +463,24 @@ function likelyHasResources(filePath: string): boolean {
     return resourceExtensions.has(ext) || ext === "";
 }
 
+// The loud "this plug-in was skipped" report: names the exact file and the
+// underlying error, so a missing resource fork, a permission problem or a
+// corrupt resource is diagnosable from the log alone.
+function reportSkippedPlugin(filePath: string, e: unknown): void {
+    console.error(
+        "\n" +
+        "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
+        "NovaParse: FAILED to load plug-in file and SKIPPED it:\n" +
+        "    " + filePath + "\n" +
+        "Underlying error: " + errorDetail(e) + "\n" +
+        "This plug-in's resources will be missing from the game. If it is a\n" +
+        "macOS resource-fork file, check that its resource fork survived any\n" +
+        "copy/transfer (see the xattr gotcha noted in addPlugin).\n" +
+        "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",
+        e,
+    );
+}
+
 // Renders an unknown thrown value into a readable, information-preserving
 // string (name, message, code, and stack when available).
 function errorDetail(e: unknown): string {
@@ -479,6 +498,7 @@ function isDirectory(path: string): Promise<boolean> {
             if (err) {
                 if (err.code == "ENOENT") {
                     fulfill(false);
+                    return;
                 }
                 reject(err);
             }

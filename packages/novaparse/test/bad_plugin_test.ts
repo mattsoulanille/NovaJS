@@ -127,6 +127,31 @@ describe("NovaParse id-space failure policy", () => {
         expect(loggedText).toMatch(/ENOENT|ENOTDIR/);
     });
 
+    // isDirectory (fs.stat) rejects on anything but ENOENT. Before the
+    // stat moved inside the per-plug-in isolation, one such entry rejected
+    // build() and took every id with it. A symlink loop gives a
+    // deterministic ELOOP without touching permissions.
+    it("skips a Plug-ins entry whose stat fails (ELOOP) and still loads the other ids", async () => {
+        installCore();
+        fs.copyFileSync(VALID_PLUGIN, path.join(tmpDir, "Plug-ins", "Plugin 1.ndat"));
+        const loopPath = path.join(tmpDir, "Plug-ins", "Loop.plug");
+        fs.symlinkSync("Loop.plug", loopPath);
+
+        const errorSpy = spyOn(console, "error").and.callThrough();
+
+        const np = new NovaParse(tmpDir, false);
+        const ids = await np.ids;
+        expect(ids.Weapon.length).toBeGreaterThan(0);
+        expect(ids.Weapon).toContain("Plugin 1:150");
+
+        const loggedText = errorSpy.calls.allArgs()
+            .map(args => args.map(String).join(" "))
+            .join("\n");
+        expect(loggedText).toContain("FAILED to load plug-in");
+        expect(loggedText).toContain("Loop.plug");
+        expect(loggedText).toContain("ELOOP");
+    });
+
     it("warns loudly (mentioning the xattr/resource-fork gotcha) for a plug-in that parses to zero resources", async () => {
         installCore();
         fs.writeFileSync(
