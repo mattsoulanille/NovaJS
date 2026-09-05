@@ -10,29 +10,84 @@ import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 
 /**
- * Offer plumbing shared by the mission BBS and the bar: rolling the
- * day's offers and building the wildcard substitution table for
- * expandMissionText.
+ * Offer plumbing shared by the mission BBS, the bar, the main spaceport
+ * and the trade/shipyard/outfitter venues: rolling the visit's offers and
+ * building the wildcard substitution table for expandMissionText.
  */
 
 /**
- * Rolls availability once (per board opening / bar entry) and freezes
- * the offers, sorted by display weight. The AvailRandom percentage
- * roll is player-local UI randomness (like the outfitter's R(a b)
- * rolls), so plain Math.random is fine — only accepted-mission state
- * ever reaches the simulation.
+ * The AvailRandom rolls of one SYSTEM VISIT: mission id -> a uniform
+ * number in [0, 100), compared against the mïsn's AvailRandom percentage.
+ *
+ * EVN Bible, AvailRandom: "Mission randomizing values are recalculated
+ * each time you warp into a system." So a 40% mission is either on offer
+ * for the whole visit or not at all — every landing in the system, every
+ * opening of the BBS, every walk into the bar sees the same answer. The
+ * rolls used to be made afresh on every board opening, which let a
+ * player close and reopen the BBS until a 10% mission appeared.
+ *
+ * Player-local UI randomness (like the outfitter's R(a b) rolls), so
+ * plain Math.random fills it — only accepted-mission state ever reaches
+ * the simulation. A plain Map so a spec can pre-seed a roll.
+ */
+export type OfferRolls = Map<string, number>;
+
+/** The one visit's rolls this client holds (see offerRollsForSystem). */
+let visitRolls: { systemId: string | undefined, rolls: OfferRolls } = {
+    systemId: undefined, rolls: new Map(),
+};
+
+/**
+ * The rolls for the visit to `systemId`, started afresh when the system
+ * differs from the last one asked about.
+ *
+ * KNOWN GAP: a jump out and straight back in — landing nowhere in
+ * between — keeps the previous visit's rolls, because the spaceport is
+ * the only caller and nothing here sees the intervening system entry.
+ * {@link resetOfferRolls} is the hook a system-entry path can call to
+ * close it; the spaceport-side cache is the faithful answer for every
+ * other sequence (several landings in one system share their rolls, as
+ * the original's do).
+ */
+export function offerRollsForSystem(systemId: string | undefined): OfferRolls {
+    if (systemId !== visitRolls.systemId) {
+        visitRolls = { systemId, rolls: new Map() };
+    }
+    return visitRolls.rolls;
+}
+
+/** Forgets the current visit's rolls (a new system entry; specs). */
+export function resetOfferRolls(): void {
+    visitRolls = { systemId: undefined, rolls: new Map() };
+}
+
+/**
+ * Rolls availability and freezes the offers, sorted by display weight.
+ *
+ * With `rolls` (the visit's — see OfferRolls) each mission's AvailRandom
+ * roll is made once and reused for the rest of the system visit; without
+ * it every call rolls afresh, which is what the in-flight përs offer
+ * wants (ship_mission_accept.ts: the original re-offers a refused
+ * mission on the next hail) and what the older specs exercise.
  */
 export function rollOffers(session: MissionSession,
-    universe: MissionUniverse, location: number): MissionOffer[] {
+    universe: MissionUniverse, location: number,
+    rolls?: OfferRolls, random: () => number = Math.random): MissionOffer[] {
     const ctx = session.machinery.offerContext();
     const offers: MissionOffer[] = [];
     for (const mission of universe.missions) {
         if (!missionMatchesLocation(mission, location, ctx)) {
             continue;
         }
-        if (mission.availRandom < 100
-            && Math.random() * 100 >= mission.availRandom) {
-            continue;
+        if (mission.availRandom < 100) {
+            let roll = rolls?.get(mission.id);
+            if (roll === undefined) {
+                roll = random() * 100;
+                rolls?.set(mission.id, roll);
+            }
+            if (roll >= mission.availRandom) {
+                continue;
+            }
         }
         const offer = makeMissionOffer(mission, ctx);
         if (offer) {

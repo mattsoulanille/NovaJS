@@ -443,8 +443,10 @@ export const LOCATION_OUTFIT = 6;
 
 /**
  * Whether the mission should appear at this stellar/location for this
- * player, not counting the AvailRandom roll (the caller rolls per
- * landing so re-opening the board doesn't reroll).
+ * player, not counting the AvailRandom roll — that is rolled once per
+ * SYSTEM VISIT by the caller (spaceport/mission_offers.ts OfferRolls, per
+ * the Bible's "recalculated each time you warp into a system"), so
+ * neither a second landing nor re-opening the board rerolls it.
  *
  * Known simplifications (documented gaps): Require must be zero (no
  * Contribute bits), and missions with a RESCUE ship goal are never

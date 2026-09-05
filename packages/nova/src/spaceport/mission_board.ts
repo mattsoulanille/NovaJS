@@ -18,7 +18,9 @@ import { PlayerIdentitySubs, playerIdentitySubs } from './player_identity.js';
 import { Button } from './button.js';
 import { commitVenueCredits } from './credit_commit.js';
 import { Menu } from './menu.js';
-import { activeAsOffer, offerSubstitutions, rollOffers } from './mission_offers.js';
+import {
+    activeAsOffer, offerRollsForSystem, offerSubstitutions, rollOffers,
+} from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { OpenStarmapOptions } from './starmap.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -275,8 +277,11 @@ export class MissionBoard extends Menu<Entity> {
         // concurrent writer survives the commit (credit_commit.ts).
         this.creditsBaseline = this.session.state.credits.credits;
         await this.loadStrings();
+        // The system visit's rolls (mission_offers.ts OfferRolls): closing
+        // and reopening the board does not reroll a 10% mission.
         this.offers = rollOffers(this.session, this.universe,
-            this.location);
+            this.location, offerRollsForSystem(this.universe.systemIdOfPlanet(
+                this.planetId, this.session.state.bits)));
         this.buildRows();
         this.selectedIndex = this.rows.findIndex(
             row => row.kind !== 'header');

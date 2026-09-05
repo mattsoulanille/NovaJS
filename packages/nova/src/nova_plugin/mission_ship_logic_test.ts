@@ -112,6 +112,16 @@ describe('resolveShipSystem', () => {
             makeContext(), null, null)).toBeUndefined();
     });
 
+    it("falls back to the destination the mission does have "
+        + "(nova:428: ShipSyst -3 with no TravelStel)", () => {
+            // The ruling in resolveShipSystem: -3 with only a return
+            // stellar uses it, and -4 with only a travel stellar likewise.
+            expect(resolveShipSystem(makeMission({ shipSyst: -3 }),
+                makeContext(), null, 'nova:401')).toBe('nova:130');
+            expect(resolveShipSystem(makeMission({ shipSyst: -4 }),
+                makeContext(), 'nova:401', null)).toBe('nova:130');
+        });
+
     it('freezes -5 to a system adjacent to the initial one', () => {
         const mission = makeMission({ shipSyst: -5 });
         // Initial system nova:128 links to nova:129 and nova:130.
