@@ -382,12 +382,21 @@ describe('stellarClearance against real Nova data', () => {
  * bit — and the permit only works if the gövt's Require is renumbered
  * through the same namespace as the outfit's Contribute (it was not:
  * the gövt kept the raw mask, and the 22 planets were unlandable forever).
+ *
+ * Install-dependent by design, so it PENDS (is skipped, not passed) on a
+ * machine without the plug-in; do not count it as coverage there. The
+ * mechanism is pinned without the plug-in by novaparse's
+ * plugin_govt_require_test (the same shape rebuilt from bytes, through the
+ * whole parse pipeline), flag_namespace_test and govt_parse_test.
  */
 describe('gövt Require against real plug-in data (arpia travel permit)', () => {
     it('is satisfied by the plug-in\'s own keycard outfit', async () => {
         const gameData = await getPluginGameData('arpia');
         if (!gameData) {
-            pending('arpia plug-in not installed');
+            pending('SKIPPED, not passed: the arpia plug-in is not installed '
+                + 'under packages/nova/Nova_Data/Plug-ins. The gövt Require '
+                + 'namespacing it checks is still pinned by novaparse\'s '
+                + 'plugin_govt_require_test (synthetic stand-in).');
             return;
         }
         const gasGiant = await gameData.data.Govt.get('arpia:202');
