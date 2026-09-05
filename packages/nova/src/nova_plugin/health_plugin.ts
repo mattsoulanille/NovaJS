@@ -60,6 +60,15 @@ const healthStats = [ShieldComponent, ArmorComponent, IonizationComponent,
         after: [TimeSystem],
     })] as const);
 
+/**
+ * The ionization stat's per-tick decay-and-clamp, exported so
+ * IonizedSystem (ionization_plugin) can order itself BEFORE it and judge
+ * "fully ionized" on the raw post-hit charge, before the clamp to
+ * IonizeMax and the tick's Deionize erase the overshoot.
+ */
+export const IonizationRechargeSystem = healthStats
+    .find(([component]) => component === IonizationComponent)![1];
+
 export const IonizationColorComponent =
     new Component<{ color: number }>('IonizationColorComponent');
 

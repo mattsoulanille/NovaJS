@@ -49,6 +49,11 @@ export class Stat {
     }
 
     get percent() {
+        if (this.max <= 0) {
+            // A stat with no capacity (IonizeMax 0 hulls, shieldless
+            // ships) is 0% full, not NaN%.
+            return 0;
+        }
         return Math.ceil(this.current / this.max * 100);
     }
 
