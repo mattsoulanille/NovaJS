@@ -72,11 +72,13 @@ export class Serializer {
     // Capitalized because it's a runtime type.
     readonly Entity = new t.Type(
         'Entity',
+        // `every`, not an initial-value-less `reduce`: reduce throws on
+        // an empty array, so a component-less entity failed the guard
+        // (#84).
         (u): u is Entity => u instanceof Object &&
             (u as Entity).components instanceof Map &&
             [...(u as Entity).components.keys()]
-                .map(k => k instanceof Component)
-                .reduce((a, b) => a && b),
+                .every(k => k instanceof Component),
 
         // Decode / deserialize entities.
         (i, context): Either<Errors, Entity> => {
@@ -131,6 +133,16 @@ export class Serializer {
 
     addComponent<Data>(component: Component<Data>,
         componentType: t.Type<Data, unknown, unknown>) {
+        // Every restore and delta path resolves components by NAME
+        // (decodeComponent), so two Components sharing a name would
+        // silently attach wire data to whichever registered last.
+        // Mirror addEvent's guard (#88). Re-registering the SAME
+        // component (e.g. with a different codec) stays allowed.
+        const existing = this.componentsByName.get(component.name);
+        if (existing && existing !== component) {
+            throw new Error(
+                `A component with name ${component.name} is already registered`);
+        }
         this.componentsByName.set(component.name, component as UnknownComponent);
         this.componentTypes.set(component, componentType);
     }

@@ -156,4 +156,31 @@ describe('Serializer Plugin', () => {
 
         expect(decoded.right).toEqual({ s: new Set(['foo', 'bar']) });
     });
+
+    // #84: the Entity guard used reduce without an initial value, which
+    // throws on an entity with no components.
+    it('Entity is-guard accepts a component-less entity', () => {
+        expect(serializer.Entity.is(new Entity())).toBeTrue();
+        expect(serializer.Entity.is(new Entity().addComponent(FooComponent, { x: 1 })))
+            .toBeTrue();
+        expect(serializer.Entity.is({ components: new Map([['notAComponent', 1]]) }))
+            .toBeFalse();
+        expect(serializer.Entity.is(null)).toBeFalse();
+    });
+
+    // #88: every restore/delta path resolves components by NAME, so a
+    // second Component with the same name would silently take over the
+    // wire data of the first.
+    it('rejects a different component registered under an existing name', () => {
+        const OtherFoo = new Component<{ x: number }>('Foo');
+        expect(() => serializer.addComponent(OtherFoo, FooType))
+            .toThrowError(/Foo.*already registered/);
+        // The original stays bound.
+        expect(serializer.componentsByName.get('Foo')).toBe(FooComponent);
+    });
+
+    it('allows re-registering the same component', () => {
+        expect(() => serializer.addComponent(FooComponent, FooType)).not.toThrow();
+        expect(serializer.componentsByName.get('Foo')).toBe(FooComponent);
+    });
 });
