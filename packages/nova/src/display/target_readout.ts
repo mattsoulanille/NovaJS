@@ -21,7 +21,11 @@ export function targetReadout(disabled: boolean, shield?: number,
         return { kind: 'shield', percent: shield };
     }
     if (typeof armor === 'number') {
-        return { kind: 'armor', percent: armor };
+        // Stat.percent is current / max * 100, which is NaN for a stat
+        // whose max is 0 — the stock Escape Pod (shïp nova:895) has no
+        // shield and no armor at all. Nothing to have is 0% of it, not
+        // "NaN%".
+        return { kind: 'armor', percent: Number.isFinite(armor) ? armor : 0 };
     }
     return { kind: 'none' };
 }
