@@ -24,6 +24,7 @@ import {
 } from "./client/session_transitions.js";
 import { CommunicatorClient } from "./communication/communicator_client.js";
 import { MultiRoom } from "./communication/multi_room_communicator.js";
+import { claimActiveSystem } from "./client/active_system_claim.js";
 import { applySimulationFrame, movementSyncedSinceStep, syncedComponents, warnedUnsyncableEntities } from "./communication/apply_simulation_frame.js";
 import { makeBrowserSimulationBridgeClient } from "./communication/simulation_bridge_browser_worker.js";
 import {
@@ -1477,9 +1478,15 @@ async function enterSystem({ entity, to, uuid }:
     syncedPlayerJumpRoute = undefined;
     await teardownActiveSystem();
     scope.check();
-    activeSystemId = to;
-
-    const room = multiRoom.join(to);
+    // Name the destination and join its room, with the undo registered on
+    // the scope: a rejection anywhere below, before a world is published,
+    // leaves the room again and clears the name, so `activeSystemId` never
+    // stands for a system with no world behind it (client/active_system_claim.ts).
+    const room = claimActiveSystem(scope, to, multiRoom, {
+        get: () => activeSystemId,
+        set: id => { activeSystemId = id; },
+        published: () => simulationBridge !== undefined,
+    });
     // The long waits below go through scope.race so an exit-to-title
     // settles them at once instead of waiting out a world build or a
     // room join it is about to throw away.
@@ -1937,6 +1944,17 @@ async function enterSystem({ entity, to, uuid }:
                 // own CustSndID (read there) decides the fly-out
                 // direction; randomDraw backs it up when that angle says
                 // "random".
+                //
+                // Math.random() HERE IS NOT SIM RANDOMNESS, though it looks
+                // like it. The draw is minted once, on this client, and
+                // rides to every peer INSIDE the GateArrivalComponent on
+                // the player's insertion record (the same owner-driven
+                // input path as the rest of the entity). GateArrivalSystem
+                // in the destination world reads only the replicated
+                // value, so every peer resolves the same exit; the sim's
+                // own wormhole choice uses the replicated RandomResource
+                // instead (gate_transit_plugin.ts). Display-side event
+                // plumbing, not a determinism-rule exception.
                 ship.components.set(GateArrivalComponent, {
                     destinationSpob,
                     emergenceAngle: null,
@@ -1986,6 +2004,14 @@ async function enterSystem({ entity, to, uuid }:
     // Mission ships whose spawn system this is (or that follow the
     // player) jump in with the player. Prepared before the player
     // entity is encoded into its insertion record.
+    //
+    // Unconditional on purpose: every caller of jumpTo hands it the LOCAL
+    // PLAYER'S ship (the jump and gate event handlers return early for any
+    // other entity; the recovery paths re-enter that same entity; startGame
+    // stamps PlayerShipSelector before its first jump), so the old
+    // PlayerShipSelector guard here never took its `[]` branch. And an
+    // entity with no MissionsComponent builds nothing anyway
+    // (buildMissionShipSpawns, pinned by its spec).
     const missionShips = await prepareMissionShips(entity, uuid, to,
         arrivingEscorts.length);
     scope.check();
@@ -3075,6 +3101,15 @@ async function startGame() {
         // The frame in flight, for teardownGame to wait on: a launch
         // block mid-await holds a roster it has taken, and the teardown
         // must not snapshot and reset the rosters underneath it.
+        //
+        // This handle is ALWAYS the frame in flight, if there is one:
+        // pumpSimulationFrame is called from nowhere else, it sets
+        // simulationTickInFlight synchronously (before its first await)
+        // and clears it in its own finally, so a tick that fires mid-frame
+        // leaves the handle alone and the next one that starts a frame
+        // replaces it. teardownGame removes this callback and stops the
+        // heartbeat synchronously, then reads the handle in the same task,
+        // so no frame can start between the two.
         if (!simulationTickInFlight) {
             pumpFrameInFlight = pumpSimulationFrame();
         }
