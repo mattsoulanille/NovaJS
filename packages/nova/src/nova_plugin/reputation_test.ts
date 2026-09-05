@@ -16,6 +16,7 @@ import {
     DEFAULT_DISABLE_PENALTY,
     DEFAULT_KILL_PENALTY,
     initialRecordsFromGovtStatuses,
+    legalStatusName,
     LegalRecords,
     recordHostile,
     recordWith,
@@ -81,6 +82,21 @@ describe('crimePenalty', () => {
         const pirateHater = makeGovt('nova:131', { boardPenalty: 20 });
         expect(crimePenalty(pirateHater, 'board')).toBe(20);
     });
+
+    it('reads a NEGATIVE field as "no penalty", not as a bounty (#108)',
+        () => {
+            // Stock nova:159 "Wraith" (the derelict variant) sets every
+            // penalty field to -1. `record -= -1` would reward the kill.
+            const wraith = makeGovt('nova:159', {
+                killPenalty: -1, disablePenalty: -1, boardPenalty: -1,
+            });
+            expect(crimePenalty(wraith, 'kill')).toBe(0);
+            expect(crimePenalty(wraith, 'disable')).toBe(0);
+            expect(crimePenalty(wraith, 'board')).toBe(0);
+            const records: LegalRecords = new Map();
+            applyCrime(records, wraith, 'kill', [[wraith.id, wraith]]);
+            expect(records.size).toBe(0);
+        });
 });
 
 describe('applyCrime', () => {
@@ -133,6 +149,65 @@ describe('recordHostile', () => {
             expect(recordHostile(0, 0)).toBe(false);
             expect(recordHostile(-1, -5)).toBe(true);
         });
+});
+
+/**
+ * EVN Bible, Appendix II: the status is the record in units of the
+ * government's CrimeTol, against a power-of-four ladder — 0 No Record;
+ * good >0 Citizen, >4 Good Citizen, >16 Upstanding, >64 Leading, >256
+ * Model, >1024 Virtuous; evil >0 No Convictions, >1 Minor Offender, >4
+ * Offender, >16 Criminal, >64 Wanted Criminal, >256 Fugitive, >1024
+ * Hunted Fugitive, >4096 Public Enemy (strings: stock STR# 134, pinned
+ * in reputation_integration_test.ts).
+ */
+describe('legalStatusName (#119)', () => {
+    const TOL = 6; // The stock Federation's CrimeTol.
+
+    it('scales the record by CrimeTol and walks the good ladder', () => {
+        expect(legalStatusName(0, TOL)).toBe('No Record');
+        expect(legalStatusName(1, TOL)).toBe('Citizen');
+        expect(legalStatusName(4 * TOL, TOL)).toBe('Citizen');
+        expect(legalStatusName(4 * TOL + 1, TOL)).toBe('Good Citizen');
+        expect(legalStatusName(16 * TOL + 1, TOL)).toBe('Upstanding Citizen');
+        expect(legalStatusName(64 * TOL + 1, TOL)).toBe('Leading Citizen');
+        expect(legalStatusName(256 * TOL + 1, TOL)).toBe('Model Citizen');
+        expect(legalStatusName(1024 * TOL + 1, TOL)).toBe('Virtuous Citizen');
+    });
+
+    it('walks the evil ladder, whose second step is the hostility line',
+        () => {
+            expect(legalStatusName(-1, TOL)).toBe('No Convictions');
+            expect(legalStatusName(-TOL, TOL)).toBe('No Convictions');
+            // record < -CrimeTol: warships open fire (recordHostile) and
+            // the status is the first one past "No Convictions".
+            expect(recordHostile(-TOL - 1, TOL)).toBe(true);
+            expect(legalStatusName(-TOL - 1, TOL)).toBe('Minor Offender');
+            expect(legalStatusName(-4 * TOL - 1, TOL)).toBe('Offender');
+            expect(legalStatusName(-16 * TOL - 1, TOL)).toBe('Criminal');
+            expect(legalStatusName(-64 * TOL - 1, TOL))
+                .toBe('Wanted Criminal');
+            expect(legalStatusName(-256 * TOL - 1, TOL)).toBe('Fugitive');
+            expect(legalStatusName(-1024 * TOL - 1, TOL))
+                .toBe('Hunted Fugitive');
+            expect(legalStatusName(-4096 * TOL - 1, TOL))
+                .toBe('Public Enemy');
+        });
+
+    it('depends on CrimeTol: the same record reads differently per govt',
+        () => {
+            // -30 with a tolerance of 20 (scaled 1.5) is a Minor Offender;
+            // with a tolerance of 1 (scaled 30) a Criminal.
+            expect(legalStatusName(-30, 20)).toBe('Minor Offender');
+            expect(legalStatusName(-30, 1)).toBe('Criminal');
+            expect(legalStatusName(30, 20)).toBe('Citizen');
+            expect(legalStatusName(30, 1)).toBe('Upstanding Citizen');
+        });
+
+    it('reads a CrimeTol of 0 as 1 rather than dividing by zero', () => {
+        expect(legalStatusName(5, 0)).toBe('Good Citizen');
+        expect(legalStatusName(-2, 0)).toBe('Minor Offender');
+        expect(legalStatusName(-2, -7)).toBe('Minor Offender');
+    });
 });
 
 describe('cleanRecords', () => {

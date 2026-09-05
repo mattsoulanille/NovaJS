@@ -9,8 +9,12 @@ import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import {
     CreditsComponent, GameDateComponent,
 } from '../nova_plugin/player_state_plugin.js';
+import { getDefaultGovtData } from 'novadatainterface/govt_data';
+import { legalStatusName } from '../nova_plugin/reputation.js';
 import { dailyBudget } from './daily_budget.js';
-import { budgetRows, healthStatus } from './player_info.js';
+import {
+    budgetRows, healthStatus, INDEPENDENT_STATUS_GOVT, systemLegalStatus,
+} from './player_info.js';
 import {
     advanceEntityDate, loadPayrollShips, playerPayroll,
 } from './mission_session.js';
@@ -77,6 +81,42 @@ describe('the player-info budget rows', () => {
     it('groups thousands the way every other credits figure does', () => {
         expect(budgetRows({ income: 1234567, expenses: 0 })[0].value)
             .toBe('1,234,567 credits');
+    });
+});
+
+/**
+ * The 'p' dialog's "Legal Status:" row is the STARMAP's function over the
+ * system's status government — record and CrimeTol both (#119). It used
+ * to be a CrimeTol-blind tier table of its own, so record -30 read
+ * "Criminal" on the map and "Offender" in the dialog.
+ */
+describe('the Legal Status row', () => {
+    const fed = { ...getDefaultGovtData(), id: 'nova:128', crimeTol: 6 };
+    const geese = { ...getDefaultGovtData(), id: 'nova:144', crimeTol: 3 };
+
+    it('prints exactly what the starmap prints for the same record', () => {
+        for (const record of [-5000, -400, -30, -7, -6, -1, 0, 1, 25, 30,
+            100, 1000, 7000]) {
+            for (const govt of [fed, geese]) {
+                expect(systemLegalStatus(record, govt))
+                    .withContext(`${record} with ${govt.id}`)
+                    .toBe(legalStatusName(record, govt.crimeTol));
+            }
+        }
+    });
+
+    it('judges an independent system by gövt 128', () => {
+        expect(INDEPENDENT_STATUS_GOVT).toBe('nova:128');
+    });
+
+    it('scales by the govt\'s own tolerance, as the map does', () => {
+        // -13 is 2.2 Federation tolerances but 4.3 Wild Geese ones.
+        expect(systemLegalStatus(-13, fed)).toBe('Minor Offender');
+        expect(systemLegalStatus(-13, geese)).toBe('Offender');
+        expect(systemLegalStatus(-30, fed)).toBe('Offender');
+        expect(systemLegalStatus(-100, geese)).toBe('Criminal');
+        expect(systemLegalStatus(0, fed)).toBe('No Record');
+        expect(systemLegalStatus(30, fed)).toBe('Good Citizen');
     });
 });
 

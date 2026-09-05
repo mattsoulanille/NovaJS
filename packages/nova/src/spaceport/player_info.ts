@@ -11,7 +11,8 @@ import { ArmorComponent, FuelComponent, ShieldComponent } from '../nova_plugin/h
 import { cargoName, missionCargoKey } from '../nova_plugin/mission_logic.js';
 import { OutfitsState, OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
-import { combatRatingName } from '../nova_plugin/reputation.js';
+import { combatRatingName, legalStatusName, recordWith } from '../nova_plugin/reputation.js';
+import { GovtData } from 'novadatainterface/govt_data';
 import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
 import { deriveShipPhysics, ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
 import { Button } from './button.js';
@@ -106,28 +107,25 @@ const PROSE_FONT: Partial<PIXI.ITextStyle> = {
 type Page = 'general' | 'cargo' | 'extras' | 'honors';
 
 /**
- * An approximation of the original's legal-status strings (STR# 7100
- * is not parsed yet): classifies the player's legal record with the
- * current system's government. A fresh pilot (record 0) is a
- * "Citizen", as in the p_properties/general.png reference.
+ * The government whose CrimeTol scales the "Legal Status:" line for a
+ * system: its own, or — for an independent system — gövt 128, per the
+ * Bible's Appendix II ("if the system is independent, it is based on the
+ * first government's [ID 128] crime tolerance"). The same rule keys the
+ * record itself (mission_logic's stellarRecord), so the dialog reads the
+ * record and the tolerance of ONE government.
  */
-export function legalStatusName(record: number): string {
-    if (record <= -200) {
-        return 'Public Enemy';
-    }
-    if (record <= -25) {
-        return 'Criminal';
-    }
-    if (record < 0) {
-        return 'Offender';
-    }
-    if (record < 25) {
-        return 'Citizen';
-    }
-    if (record < 100) {
-        return 'Good Citizen';
-    }
-    return 'Pillar of Society';
+export const INDEPENDENT_STATUS_GOVT = 'nova:128';
+
+/**
+ * The dialog's "Legal Status:" value for a system: reputation.ts's
+ * `legalStatusName` — the very function the starmap prints — over the
+ * record and CrimeTol of the system's status government. This used to be a
+ * second, CrimeTol-blind tier table of its own, so the map and the 'p'
+ * dialog could name the same record differently (#119).
+ */
+export function systemLegalStatus(record: number,
+    govt: { crimeTol: number } | undefined): string {
+    return legalStatusName(record, govt?.crimeTol ?? 0);
 }
 
 /**
@@ -571,13 +569,14 @@ export class PlayerInfoDialog {
                 ? `${Math.round(100 * part.current / part.max)}%` : '-';
 
         const systemId = this.getSystemId?.();
-        // Legal status is with the current system's government. The
-        // system's govt id keys the player's legal records.
+        // Legal status is with the current system's government (gövt
+        // 128's for an independent one), whose id keys the player's
+        // legal records and whose CrimeTol scales the tiers.
         let legal = '-';
         if (systemId) {
-            const record = this.systemGovtRecord(systemId, records);
-            if (record !== undefined) {
-                legal = legalStatusName(record);
+            const status = this.systemGovtRecord(systemId, records);
+            if (status !== undefined) {
+                legal = systemLegalStatus(status.record, status.govt);
             }
         }
 
@@ -636,8 +635,15 @@ export class PlayerInfoDialog {
     private systemName?: string;
 
     /** Loads the current system's name and the player's record there. */
+    /**
+     * The player's record with the system's status government (see
+     * INDEPENDENT_STATUS_GOVT) and that government's data, for the
+     * "Legal Status:" row. An absent record reads as the govt's
+     * InitialRec, exactly as the simulation reads it (recordWith).
+     */
     private systemGovtRecord(systemId: string,
-        records?: ReadonlyMap<string, number>): number | undefined {
+        records?: ReadonlyMap<string, number>):
+        { record: number, govt: GovtData | undefined } | undefined {
         // Kick off (or reuse) the async load; the value shows on the
         // next page render if it wasn't ready yet.
         void this.simulationData.data.System.get(systemId).then(system => {
@@ -645,13 +651,16 @@ export class PlayerInfoDialog {
         }).catch(() => undefined);
         const cached = this.simulationData.data.System.getCached(systemId);
         if (!cached) {
-            return records ? 0 : undefined;
+            return records ? { record: 0, govt: undefined } : undefined;
         }
         this.systemName = displayName(cached.name);
-        if (!cached.govt) {
-            return 0;
-        }
-        return records?.get(cached.govt) ?? 0;
+        const govtId = cached.govt ?? INDEPENDENT_STATUS_GOVT;
+        void this.simulationData.data.Govt.get(govtId).catch(() => undefined);
+        const govt = this.simulationData.data.Govt.getCached(govtId);
+        return {
+            record: recordWith(new Map(records ?? []), govtId, govt),
+            govt,
+        };
     }
 
     private renderCargo(entity: Entity) {
