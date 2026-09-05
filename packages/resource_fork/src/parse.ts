@@ -92,7 +92,11 @@ export function readRez(dataView: DataView): ResourceMap {
     for (let i = 0; i < numResources; i++) {
         //let [index, id]: [number, number];
         //let [resType, name]: [string, string];
-        const [[index, c1, c2, c3, c4, id], newPos] = unpack('>IBBBBH', dataView, pos);
+        // Resource ids are SIGNED 16-bit (Inside Macintosh, "Resource
+        // Manager": ResID is a short; -16455 is the custom-icon icns every
+        // Finder-decorated plug-in carries). Reading them unsigned mapped
+        // -1 to 65535 and so on, so nothing may key on id >= 32768.
+        const [[index, c1, c2, c3, c4, id], newPos] = unpack('>IBBBBh', dataView, pos);
         pos = newPos;
         const resType = decode_macroman([c1, c2, c3, c4]);
 
@@ -187,7 +191,8 @@ export function parseResourceFork(buffer: ArrayBuffer): ResourceMap {
 
         for (let j = 0; j < quantity; j++) {
             const resType = resource_type;
-            const resId = type_list.getUint16(offset + 12 * j);
+            // Signed, like readRez above: a Mac ResID is a short.
+            const resId = type_list.getInt16(offset + 12 * j);
             let resName: string;
 
             const o_name = type_list.getUint16(offset + 12 * j + 2);
@@ -243,6 +248,34 @@ export function decode_macroman(mac_roman_bytearray: Array<number>): string {
     })();
     return char_array.join('');
 }
+
+/**
+ * The inverse of decode_macroman, for writing resource forks (write.ts).
+ * Built from the decoder so the two can never disagree.
+ */
+export function encode_macroman(text: string): number[] {
+    if (macRomanByChar === null) {
+        macRomanByChar = new Map();
+        for (let byte = 0x80; byte <= 0xff; byte++) {
+            macRomanByChar.set(decode_macroman([byte]), byte);
+        }
+    }
+    const bytes: number[] = [];
+    for (const char of text) {
+        const code = char.charCodeAt(0);
+        if (code < 0x80) {
+            bytes.push(code);
+            continue;
+        }
+        const byte = macRomanByChar.get(char);
+        if (byte === undefined) {
+            throw new Error(`"${char}" has no MacRoman encoding`);
+        }
+        bytes.push(byte);
+    }
+    return bytes;
+}
+let macRomanByChar: Map<string, number> | null = null;
 
 class Resource {
     readonly data: DataView;
