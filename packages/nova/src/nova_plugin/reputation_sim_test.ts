@@ -12,6 +12,7 @@ import { NpcComponent } from './npc_ai_plugin.js';
 import { CombatRatingComponent, DamageAttributionComponent, LegalRecordsComponent } from './reputation_plugin.js';
 import { TargetComponent } from './target_component.js';
 import { ArmorComponent, ShieldComponent } from './health_plugin.js';
+import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from './ncb_plugin.js';
 
 /**
  * The victim throughout is a Federation (gövt nova:128) ship, so the
@@ -108,6 +109,55 @@ describe('reputation in a live world', () => {
         world.step();
         expect(records.get('nova:128')).toBe(-FED_KILL_PENALTY);
     });
+
+    /**
+     * ränk nova:148 "; Rebel 1" (AffilGovt nova:141 Rebellion, Flags
+     * 0x144): the cover "Infiltrate the Rebels" grants — 0x0100 their
+     * ships won't attack you, 0x0004 / 0x0040 blown the moment you turn on
+     * them. Until #56 the sim never revoked it, so an infiltrator could
+     * destroy Rebel ships forever with the Rebellion never fighting back.
+     */
+    it('revokes a 0x0004/0x0040 cover rank when its holder kills a ship '
+        + 'of the affiliated govt, and un-bakes its 0x0100 (#56)',
+        async () => {
+            const { gameData, world } = await makeWorld();
+            const player = await addPlayer(world, gameData);
+            player.components.set(ActiveRanksComponent,
+                new Set(['nova:148', 'nova:147']));
+            player.components.set(AggressionSuppressGovtsComponent,
+                new Set(['nova:141']));
+
+            const victimData = await gameData.data.Ship.get('nova:128');
+            const victim = makeShip(victimData);
+            victim.components.set(GovtComponent, { id: 'nova:141' });
+            await completeEntity(world, victim);
+            world.entities.set(VICTIM, victim);
+            const shot = new Entity(SHOT);
+            shot.components.set(FiringGroupComponent, { group: PLAYER });
+            world.entities.set(SHOT, shot);
+            world.step();
+
+            victim.components.get(ShieldComponent)!.current = 0;
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: 1e9, ionization: 0, ionizationColor: 0,
+                    knockback: 0, passThroughShield: 1,
+                },
+                damager: SHOT,
+            }, [VICTIM]);
+            world.step();
+
+            // The record still drops as before...
+            expect(player.components.get(LegalRecordsComponent)!
+                .get('nova:141')).toBeLessThan(0);
+            // ...the cover is gone, the hypergate rank (nova:147, permanent,
+            // another govt) untouched...
+            expect(player.components.get(ActiveRanksComponent))
+                .toEqual(new Set(['nova:147']));
+            // ...and the Rebellion's ships may attack again.
+            expect(player.components.get(AggressionSuppressGovtsComponent))
+                .toEqual(new Set());
+        });
 
     it('credits a disable: the disable penalty, once, and not on kill',
         async () => {

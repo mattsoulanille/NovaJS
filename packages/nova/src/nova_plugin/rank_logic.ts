@@ -103,6 +103,7 @@ function runCascade(active: ActiveRanks, source: RankData,
 export function activateRank(active: ActiveRanks, id: string,
     getRank: RankLookup): void {
     active.add(id);
+    recentlyActivated = id;
     const rank = getRank(id);
     if (!rank) {
         return;
@@ -110,6 +111,30 @@ export function activateRank(active: ActiveRanks, id: string,
     runCascade(active, rank, getRank,
         rank.rankFlags.dropOtherRanksWhenActivated,
         rank.rankFlags.dropLowerRanksWhenActivated);
+}
+
+/**
+ * The <RRK> pointer: "The full name of the most recently activated rank
+ * resource. Note that it's best to only use this in a mission briefing
+ * where you know that you've just given the player a rank, because
+ * otherwise bad things could happen. (e.g. the most recently activated
+ * rank pointer isn't cached between game sessions)" (EVN Bible).
+ *
+ * Exactly that: a SESSION-LOCAL pointer, set by every `Kxxx` this client
+ * runs (mission accept/success, crons, outfit set strings — all
+ * player-local paths) and deliberately not persisted. Read only by text
+ * expansion (spaceport/player_identity.ts); the simulation never sees it,
+ * so its being process state costs determinism nothing.
+ */
+let recentlyActivated: string | undefined;
+
+export function mostRecentlyActivatedRank(): string | undefined {
+    return recentlyActivated;
+}
+
+/** Test seam: forgets the <RRK> pointer, as a fresh session would. */
+export function resetMostRecentlyActivatedRank(): void {
+    recentlyActivated = undefined;
 }
 
 /**
@@ -429,4 +454,97 @@ export function rankConversationName(active: Iterable<string> | undefined,
         }
     }
     return undefined;
+}
+
+/**
+ * The <PRKnnn> / <SRKnnn> expansions: "Same as <PRK>, but only for ranks
+ * affiliated with government ID nnn" — the highest-weight active rank of
+ * `govtId` with a non-empty ConvName / ShortName respectively, or
+ * undefined (the caller's "captain" fallback). The two are looked up
+ * independently, as <PRK>/<SRK> are, so a rank with a ConvName but no
+ * ShortName does not shadow a lower one that has both.
+ */
+export function rankConversationNamesForGovt(
+    active: Iterable<string> | undefined, getRank: RankLookup,
+    govtId: string | null | undefined):
+    { convName: string, shortName: string } | undefined {
+    const ranks = ranksForGovt(active, getRank, govtId);
+    const convName = ranks.find(rank => rank.convName)?.convName;
+    const shortName = ranks.find(rank => rank.shortName)?.shortName;
+    if (!convName && !shortName) {
+        return undefined;
+    }
+    return { convName: convName ?? '', shortName: shortName ?? '' };
+}
+
+/**
+ * The crime revocations — RESOLVED WHERE THE CRIME IS CHARGED:
+ *
+ *   0x0004 "Deactivate this rank if player destroys or disables a ship of
+ *          the affiliated government or its allies"
+ *   0x0040 "Deactivate this rank if the player commits any crime against
+ *          the affiliated government"
+ *
+ * Drops from `active` every rank the crime revokes and returns the ids
+ * dropped (empty when nothing changed, so a caller can leave the synced
+ * components alone). `crime` is reputation.ts's: 'kill' and 'disable' are
+ * the 0x0004 events and, being crimes, 0x0040 events too; 'board' is a
+ * crime and so a 0x0040 event only. Smuggling is not modelled.
+ *
+ * Eight stock ranks exist for nothing BUT this bit pair: nova:148
+ * "; Rebel 1" (0x144, granted by "Infiltrate the Rebels"), nova:150
+ * "; Nil'kemorya 1" (0x144) and the six house "Duel protector" ranks
+ * nova:153-158 (0x140) held for a duel's duration. Each combines 0x0100
+ * (their ships won't attack you) with these — a cover, blown the moment
+ * you turn on the government that extended it. Until this ran, a player
+ * who had infiltrated the Rebellion could destroy Rebel ships forever
+ * without the Rebellion ever fighting back (#56).
+ *
+ * "Its allies" is read from the affiliated government's side, as
+ * cleanRecords' 'allies' scope reads it: a victim whose classes include
+ * one of the affiliated govt's ally classes. The affiliated govt's data
+ * comes through `getGovt`; without it only the govt itself matches.
+ *
+ * PERMANENT (0x0008) ranks are not touched: "cannot be deactivated except
+ * if explicitly done by a control bit eval string" — and a crime is not
+ * one. No stock rank pairs 0x0008 with either bit, so nothing turns on
+ * the ruling today. A revoked rank runs its own 0x0002/0x0020
+ * deactivation cascades, exactly as an `Lxxx` would; the candidates are
+ * visited in sorted-id order so every peer drops the same set in the same
+ * order.
+ *
+ * SIMULATION-SIDE, and deliberately so: the kill/disable/board credit
+ * systems (reputation_plugin, boarding_plugin) run on every peer with the
+ * victim's govt in hand, the ränk table is staged at world genesis
+ * (make_system.ts) so `getRank` is warm there, and ActiveRanksComponent
+ * plus the baked AggressionSuppressGovtsComponent are delta-synced player
+ * state — so the drop is applied identically everywhere, and a rollback
+ * simply replays it from the restored snapshot.
+ */
+export function revokeRanksForCrime(active: ActiveRanks,
+    victim: { id: string, classes: readonly number[] },
+    crime: 'kill' | 'disable' | 'board', getRank: RankLookup,
+    getGovt: (id: string) => { allies: readonly number[] } | undefined):
+    string[] {
+    const dropped: string[] = [];
+    for (const id of [...active].sort()) {
+        if (!active.has(id)) {
+            continue; // Cascaded away by an earlier revocation.
+        }
+        const rank = getRank(id);
+        if (!rank || !rank.affilGovt || rank.rankFlags.permanent) {
+            continue;
+        }
+        const againstGovt = rank.affilGovt === victim.id;
+        const againstAlly = !againstGovt && (getGovt(rank.affilGovt)?.allies
+            ?? []).some(cls => victim.classes.includes(cls));
+        const revoked = (rank.rankFlags.dropIfCrimeAgainstGovt && againstGovt)
+            || (rank.rankFlags.dropIfDestroyGovtOrAllyShip
+                && crime !== 'board' && (againstGovt || againstAlly));
+        if (revoked) {
+            deactivateRank(active, id, getRank);
+            dropped.push(id);
+        }
+    }
+    return dropped;
 }

@@ -120,6 +120,15 @@ export const ActiveMissionType = t.intersection([t.type({
      */
     failIfPlayerDisabledOrDestroyed: t.boolean,
     /**
+     * Frozen at accept time from the mïsn Flags 0x8000 bit ("Mission
+     * will fail if player is boarded by pirates"), for the same reason:
+     * the boarding happens in the shared simulation (an NPC warship
+     * plundering the disabled owner, npc_ai_plugin's PlayerPlunderedEvent)
+     * and the sim never reads mission game data. ADDITIVE — absent on
+     * older records, which is "not set".
+     */
+    failIfBoardedByPirates: t.boolean,
+    /**
      * Set true by the shared sim when a fail condition it can observe
      * has occurred (the owner was disabled or destroyed while
      * failIfPlayerDisabledOrDestroyed is set). Landing processing turns

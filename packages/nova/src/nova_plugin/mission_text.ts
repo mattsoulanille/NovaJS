@@ -3,10 +3,10 @@
  * mission description is shown, tags like <DST> are replaced with
  * pertinent mission information.
  *
- * The player-identity tags (<PN>, <PNN>, <PSN>, <PST>) take their real
- * values from spaceport/player_identity.ts (pilot profile + current
- * hull); the rank tags still fall back to placeholders until ranks
- * exist.
+ * The player-identity tags (<PN>, <PNN>, <PSN>, <PST>) and the rank tags
+ * (<PRK>, <SRK>/<PSR>, <PRKnnn>, <SRKnnn>, <RRK>) take their real values
+ * from spaceport/player_identity.ts (pilot profile, current hull, active
+ * ränks).
  */
 import { displayName } from './display_name.js';
 import { NCBTestContext } from './ncb.js';
@@ -44,6 +44,25 @@ export interface MissionTextSubstitutions {
     rankName?: string;
     /** <SRK> / <PSR> the same rank's ShortName. */
     rankShortName?: string;
+    /**
+     * <PRKnnn> / <SRKnnn>: "Same as <PRK>, but only for ranks affiliated
+     * with government ID nnn" (EVN Bible) — the highest-weight active
+     * rank of THAT government that has the text, by the bare gövt number
+     * as the dësc wrote it (stock nova:468 "Scout Polaris Space" hands
+     * out "the diplomatic rank of '<PRK128>'"). Undefined when the player
+     * holds no such rank, which falls back to "captain" like <PRK>.
+     */
+    rankForGovt?(govtNumber: number):
+        { convName: string, shortName: string } | undefined;
+    /**
+     * <RRK> "The full name of the most recently activated rank resource"
+     * — the ränk's resource name, from rank_logic's session-local
+     * mostRecentlyActivatedRank. The Bible itself warns "the most
+     * recently activated rank pointer isn't cached between game
+     * sessions", so absent (nothing activated this session) falls back
+     * to "captain" rather than to anything persisted.
+     */
+    recentRankName?: string;
     /**
      * <OSN> "The offering ship name (only works when offering a mission
      * from a ship)" (EVN Bible). The name of the përs whose LinkMission
@@ -89,7 +108,17 @@ export function expandMissionText(text: string,
     // wildcards are independent, but resolving conditionals first keeps their
     // quoted strings from confusing the wildcard pass and lets a chosen string
     // itself contain a wildcard.
-    const conditional = ctx ? resolveConditionalBlocks(text, ctx) : text;
+    let conditional = ctx ? resolveConditionalBlocks(text, ctx) : text;
+    // The government-scoped rank tags go first: they carry a number the
+    // plain <PRK>/<SRK> literals below cannot match, and the Bible's "only
+    // once per description" caveat is the original's, not ours — every
+    // occurrence expands.
+    conditional = conditional.replace(/<([PS])RK(\d+)>/g,
+        (_tag, kind: string, digits: string) => {
+            const rank = subs.rankForGovt?.(Number(digits));
+            const name = kind === 'P' ? rank?.convName : rank?.shortName;
+            return name || 'captain';
+        });
     const replacements: [string, string][] = [
         ['<DSY>', subs.destinationSystem ?? 'an unknown system'],
         ['<DST>', subs.destinationStellar ?? 'an unknown stellar'],
@@ -116,6 +145,7 @@ export function expandMissionText(text: string,
         ['<PRK>', subs.rankName ?? 'captain'],
         ['<SRK>', subs.rankShortName ?? 'captain'],
         ['<PSR>', subs.rankShortName ?? 'captain'],
+        ['<RRK>', subs.recentRankName ?? 'captain'],
         // The <SN> fallback is deliberately article-free ("the <SN>" is
         // how every stock mission phrases it, so "the unknown ship"
         // reads as English): an unaccepted mission has no name yet, and
