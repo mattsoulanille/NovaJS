@@ -118,14 +118,24 @@ class RledResource extends BaseResource {
                     col += (count >> ((this.bitsPerPixel >> 3) - 1));
                     break;
                 case 4://RLEOpCode_PixelRun = 0x04;
+                    // The run's 32-bit value holds the TWO 16-bit pixels
+                    // that repeat, in memory (big-endian) order: the high
+                    // half first, then the low half. They are the run's
+                    // own colours, not `pixel` — that is the last value
+                    // an opcode-2 PixelData word left behind (or black at
+                    // frame start), which is what used to be painted
+                    // here, smearing the previous colour across every
+                    // solid run a tool like ResForge or EVNEW emits.
                     pixelRun = this.data.getUint32(pointer); pointer += 4;
+                    var runHigh = pixelRun >>> 16;
+                    var runLow = pixelRun & 0xFFFF;
 
                     for (var i = 0; i < count; i += 4) {
                         var offset = (currentLine * this.size[0] + col) << 2;
-                        mapSetColor(frames[currentFrame], offset, pixel); col++;
+                        mapSetColor(frames[currentFrame], offset, runHigh); col++;
                         if (i + 2 < count) {
                             var offset = (currentLine * this.size[0] + col) << 2;
-                            mapSetColor(frames[currentFrame], offset, pixel); col++;
+                            mapSetColor(frames[currentFrame], offset, runLow); col++;
                         } // allignment
 
                     }
