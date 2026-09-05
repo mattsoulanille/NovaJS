@@ -19,6 +19,37 @@ export function getDefaultJammingStrengths(): JammingStrengths {
     return [0, 0, 0, 0];
 }
 
+/** See OutfitData.requireGovtScope. */
+export type RequireGovtScope =
+    | 'all'
+    | 'govtOrAllies'
+    | 'independentOrGovt'
+    | 'exceptGovt'
+    | 'exceptIndependentOrGovt';
+
+/**
+ * Splits a raw oütf RequireGovt value into its gövt LOCAL id and scope
+ * (EVN Bible ~:2052; see OutfitData.requireGovtScope for the table). Any
+ * value outside the four documented ranges — -1, the stock editors' 0 and
+ * 127 sentinels — is "applies in all outfit shops", which is what the
+ * outfitter did unconditionally before the field was decoded.
+ */
+export function decodeRequireGovt(raw: number):
+    { govtLocalId: number | null, scope: RequireGovtScope } {
+    const ranges: [number, RequireGovtScope][] = [
+        [0, 'govtOrAllies'],
+        [1000, 'independentOrGovt'],
+        [2000, 'exceptGovt'],
+        [3000, 'exceptIndependentOrGovt'],
+    ];
+    for (const [offset, scope] of ranges) {
+        if (raw >= offset + 128 && raw <= offset + 383) {
+            return { govtLocalId: raw - offset, scope };
+        }
+    }
+    return { govtLocalId: null, scope: 'all' };
+}
+
 export interface OutfitData extends BaseData {
     weapons: { [index: string]: number }, // globalID : count
 
@@ -116,6 +147,75 @@ export interface OutfitData extends BaseData {
     persistent: boolean,
     /** This item can't be sold. */
     cantSell: boolean,
+    /**
+     * oütf flag 0x0010: "Remove any items of this type after purchase
+     * (useful for permits and other intangible purchases)" (Bible ~:1966).
+     * The outfitter charges the price and runs OnPurchase, then takes the
+     * unit straight back off the ship — stock uses it for the ship-upgrade
+     * permits (oütf 314-318, whose OnPurchase is an `Hxxx` ship change)
+     * and the Forged Exotic Ships & Weapons License (363).
+     */
+    removeAfterPurchase: boolean,
+    /**
+     * oütf flag 0x0020: "This item is persistent in the case where the
+     * player's ship is changed by a mission set operator. The item's normal
+     * persistence for when the player buys or captures a new ship is still
+     * controlled by the 0x0004 bit" (Bible ~:1968). Read ONLY by the
+     * `Hxxx` set operator (change ship, dropping nonpersistent outfits);
+     * the shipyard reads `persistent` instead.
+     */
+    persistentOnShipChange: boolean,
+    /**
+     * oütf flag 0x2000: "This outfit appears in the Ranks section of the
+     * player info dialog instead of in the Extras section" (Bible ~:1985).
+     * Plumbed for the player-info dialog; two plug-in outfits set it.
+     */
+    showAsRank: boolean,
+    /**
+     * oütf flag 0x0200: "This item's total price is proportional to the
+     * player's ship's mass (ship class Mass field is multiplied by this
+     * item's Cost field)" (Bible ~:1974). Every stock armour plating sets
+     * it: Carbon Fiber (oütf 180, Cost 250) is 6,250 cr on a mass-25 Heavy
+     * Shuttle and 2,500,000 cr on a Leviathan. See outfitter_rules'
+     * outfitPrice, which is the ONE place the multiplication happens.
+     */
+    priceScalesWithShipMass: boolean,
+    /**
+     * oütf flag 0x0400: "This item's total mass (at purchase) is
+     * proportional to the player's ship's mass (ship class Mass field is
+     * multiplied by this item's Mass field and then divided by 100). Only
+     * works for positive-mass items" (Bible ~:1977). See
+     * outfitter_rules' installedMass for the rounding ruling.
+     */
+    massScalesWithShipMass: boolean,
+    /**
+     * oütf RequireGovt (Bible ~:2052): WHERE the Require bits are enforced.
+     * The raw field is a gövt id in one of four ranges (128-383,
+     * 1128-1383, 2128-2383, 3128-3383) or -1; here it is split into the
+     * govt's GLOBAL id (null when the requirement applies everywhere, or
+     * the value names no gövt) and the range's meaning:
+     *
+     *   'all'                   -1 (and any out-of-range value, including
+     *                           the stock editors' 127 / 0 sentinels):
+     *                           "Requirements apply in all outfit shops."
+     *   'govtOrAllies'          128-383: "only on stellars belonging to
+     *                           this govt or its allies."
+     *   'independentOrGovt'     1128-1383: "only on independent stellars
+     *                           and stellars belonging to this govt or
+     *                           its allies."
+     *   'exceptGovt'            2128-2383: "on all stellars except those
+     *                           belonging to this govt or its allies."
+     *   'exceptIndependentOrGovt' 3128-3383: "on all stellars except
+     *                           independent stellars or stellars belonging
+     *                           to this govt or its allies."
+     *
+     * Consumed by outfitter_rules' requireApplies. Nine stock outfits use
+     * 128 (Federation): the Medium Blaster, the IR/Radar missiles and
+     * launchers, the Polaron Cannon and Carbon Fiber only need their
+     * Federation licence at Federation-owned or allied worlds.
+     */
+    requireGovt: string | null,
+    requireGovtScope: RequireGovtScope,
     /**
      * True for an IMPLICIT item that no oütf resource defines: the
      * synthesized outfit that mounts a ship's built-in weapon (or its
@@ -295,6 +395,13 @@ export function getDefaultOutfitData(): OutfitData {
         turret: false,
         persistent: false,
         cantSell: false,
+        removeAfterPurchase: false,
+        persistentOnShipChange: false,
+        showAsRank: false,
+        priceScalesWithShipMass: false,
+        massScalesWithShipMass: false,
+        requireGovt: null,
+        requireGovtScope: 'all',
         builtIn: false,
         ammoFor: null,
         increasesMax: null,

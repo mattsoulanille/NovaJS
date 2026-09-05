@@ -266,4 +266,123 @@ describe("OutfitParse", () => {
             expect(outfit.turret).toBe(false);
         });
     });
+
+    describe("purchase-effect and economy flags (Bible ~:1966-1985)", () => {
+        function flagOutf(flags: number): OutfResource {
+            return {
+                ...fakeOutf([["shield", 10]]), flags,
+            } as unknown as OutfResource;
+        }
+
+        it("decodes 0x0010 as removeAfterPurchase", async () => {
+            // The stock ship-upgrade permits (oütf 314-318) are 0x4110.
+            const outfit = await OutfitParse(
+                flagOutf(0x0010 | 0x0100 | 0x4000), () => { });
+            expect(outfit.removeAfterPurchase).toBe(true);
+            expect(outfit.persistentOnShipChange).toBe(false);
+            expect(outfit.cantSell).toBe(false);
+        });
+
+        it("decodes 0x0020 as persistentOnShipChange, apart from 0x0004",
+            async () => {
+                const shipChange = await OutfitParse(flagOutf(0x0020), () => { });
+                expect(shipChange.persistentOnShipChange).toBe(true);
+                expect(shipChange.persistent).toBe(false);
+                expect(shipChange.removeAfterPurchase).toBe(false);
+
+                const trade = await OutfitParse(flagOutf(0x0004), () => { });
+                expect(trade.persistent).toBe(true);
+                expect(trade.persistentOnShipChange).toBe(false);
+            });
+
+        it("decodes 0x0200 / 0x0400 as the ship-mass proportional flags",
+            async () => {
+                // Every stock armour plating (Carbon Fiber, Matrix Steel,
+                // Titanium Lattice, Spun Diamond) sets both: 0x0600.
+                const both = await OutfitParse(flagOutf(0x0600), () => { });
+                expect(both.priceScalesWithShipMass).toBe(true);
+                expect(both.massScalesWithShipMass).toBe(true);
+
+                const price = await OutfitParse(flagOutf(0x0200), () => { });
+                expect(price.priceScalesWithShipMass).toBe(true);
+                expect(price.massScalesWithShipMass).toBe(false);
+                expect(price.hideUnlessRequirementsMet).toBe(false);
+
+                const mass = await OutfitParse(flagOutf(0x0400), () => { });
+                expect(mass.massScalesWithShipMass).toBe(true);
+                expect(mass.priceScalesWithShipMass).toBe(false);
+                expect(mass.sellAnywhere).toBe(false);
+            });
+
+        it("decodes 0x2000 as showAsRank", async () => {
+            const outfit = await OutfitParse(flagOutf(0x2000), () => { });
+            expect(outfit.showAsRank).toBe(true);
+            expect(outfit.excludesEqualDisplayWeight).toBe(false);
+            expect(outfit.hideUnlessAvailable).toBe(false);
+        });
+
+        it("leaves them all false when unset", async () => {
+            const outfit = await OutfitParse(flagOutf(0), () => { });
+            expect(outfit.removeAfterPurchase).toBe(false);
+            expect(outfit.persistentOnShipChange).toBe(false);
+            expect(outfit.showAsRank).toBe(false);
+            expect(outfit.priceScalesWithShipMass).toBe(false);
+            expect(outfit.massScalesWithShipMass).toBe(false);
+        });
+    });
+
+    describe("RequireGovt (Bible ~:2052)", () => {
+        function govtOutf(requireBitsApplyTo: number): OutfResource {
+            const outf = fakeOutf([["shield", 10]]) as unknown as
+                { idSpace: { gövt: { [id: number]: { globalID: string } } } };
+            outf.idSpace.gövt = { 128: { globalID: "nova:128" } };
+            return { ...outf, requireBitsApplyTo } as unknown as OutfResource;
+        }
+
+        it("applies everywhere for -1", async () => {
+            const outfit = await OutfitParse(govtOutf(-1), () => { });
+            expect(outfit.requireGovt).toBeNull();
+            expect(outfit.requireGovtScope).toEqual("all");
+        });
+
+        it("applies everywhere for the stock editors' 127 / 0 sentinels",
+            async () => {
+                // 217 stock outfits carry 127 and 14 carry 0; neither is
+                // in any of the Bible's four ranges.
+                for (const raw of [127, 0]) {
+                    const outfit = await OutfitParse(govtOutf(raw), () => { });
+                    expect(outfit.requireGovt).toBeNull();
+                    expect(outfit.requireGovtScope).toEqual("all");
+                }
+            });
+
+        it("resolves the four ranges to the govt and its scope", async () => {
+            const cases: [number, string][] = [
+                [128, "govtOrAllies"],
+                [1128, "independentOrGovt"],
+                [2128, "exceptGovt"],
+                [3128, "exceptIndependentOrGovt"],
+            ];
+            for (const [raw, scope] of cases) {
+                const outfit = await OutfitParse(govtOutf(raw), () => { });
+                expect(outfit.requireGovt).toEqual("nova:128");
+                expect(outfit.requireGovtScope).toEqual(scope);
+            }
+        });
+
+        it("falls back to 'all' when the range names no gövt", async () => {
+            // 129 is in range but the fake id space only has gövt 128.
+            const outfit = await OutfitParse(govtOutf(129), () => { });
+            expect(outfit.requireGovt).toBeNull();
+            expect(outfit.requireGovtScope).toEqual("all");
+        });
+
+        it("applies everywhere when the resource has no field at all",
+            async () => {
+                // A fakeOutf without requireBitsApplyTo (undefined).
+                const outfit = await OutfitParse(
+                    fakeOutf([["shield", 10]]), () => { });
+                expect(outfit.requireGovtScope).toEqual("all");
+            });
+    });
 });

@@ -98,6 +98,27 @@ describe("NovaParse", () => {
         // private bit, renumbered into the private range (ncb_namespace.ts:
         // ship's bits 1,2,3,4 from OnPurchase come first, then 13).
         expect(s128.availability).toEqual("b20004");
+        // The other four shïp NCB strings (Bible ~:2594-2639), namespaced
+        // the same way as availability: AppearOn (a düde-spawn gate),
+        // OnPurchase / OnRetire (run at a shipyard trade) and OnCapture.
+        // The fixture's nova:128 carries bits 1-4 in OnPurchase (renumbered
+        // first, 20000-20003) and 5-7 in AppearOn; its OnCapture/OnRetire
+        // are blank, as is everything on nova:129.
+        expect(s128.onPurchase).toEqual("b20000 b20001 !b20002 ^b20003");
+        expect(s128.appearOn).toEqual("b20006 & (b20007 | !b20005)");
+        expect(s128.onCapture).toEqual("");
+        expect(s128.onRetire).toEqual("");
+        expect(s129.onPurchase).toEqual("");
+        expect(s129.appearOn).toEqual("");
+        // Flags 0x0008 ("player ship takes advantage of FuelRegen") is
+        // CLEAR on the fixture (its flags word is 0x0004 = fast jumping),
+        // so the FPS/22 energyRecharge above is for AI pilots only.
+        expect(s128.playerFuelRegen).toEqual(false);
+        // Holds is positive on both fixture ships: the hold is as written
+        // and mass expansions are allowed (Bible ~:2346's negative-sign
+        // rule is pinned in the parser spec below).
+        expect(s128.noMassExpansions).toEqual(false);
+        expect(s128.physics.freeCargo).toEqual(14);
         expect(s128.buyRandom).toEqual(4);
         expect(s128.hideIfAvailabilityFalse).toEqual(true);
         expect(s128.hideIfRequireUnmet).toEqual(true);

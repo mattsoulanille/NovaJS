@@ -304,7 +304,12 @@ export async function ShipParse(ship: ShipResource,
         inertialess: Boolean(ship.flags2N & 0x40),
         mass: ship.mass,
         freeMass,
-        freeCargo: ship.cargoSpace,
+        // shïp Holds (EVN Bible ~:2346): a NEGATIVE value is still that
+        // many tons of hold — the sign only says "no mass expansions",
+        // which ShipData.noMassExpansions carries below. Taken literally
+        // it gave six plug-in hulls a negative hold that could never
+        // scoop, trade or load mission cargo.
+        freeCargo: Math.abs(ship.cargoSpace),
         maxGuns: ship.maxGuns,
         maxTurrets: ship.maxTurrets,
         jumpSpeedMult,
@@ -358,6 +363,20 @@ export async function ShipParse(ship: ShipResource,
         // The shipyard gates (EVN Bible shïp Availability ~:2588, BuyRandom
         // ~:2630, and the Flags3 0x0100/0x0200/0x4000 bits ~:2655).
         availability: ship.availabilityNCB,
+        // The other four NCB strings (Bible ~:2594-2639), already
+        // namespaced per plug-in by ncb_namespace.ts alongside
+        // availabilityNCB: AppearOn gates düde spawning, OnPurchase /
+        // OnRetire run at a shipyard trade, OnCapture at a boarding.
+        appearOn: ship.appearOn,
+        onPurchase: ship.onPurchase,
+        onCapture: ship.onCapture,
+        onRetire: ship.onRetire,
+        // shïp Flags 0x0008 (EVN Bible ~:2517): "Player ship takes
+        // advantage of FuelRegen property". Without it the class's
+        // energyRecharge above is for AI pilots only.
+        playerFuelRegen: Boolean(ship.flagsN & 0x0008),
+        // shïp Holds < 0: see freeCargo above.
+        noMassExpansions: ship.cargoSpace < 0,
         buyRandom: ship.buyRandom,
         hideIfAvailabilityFalse: Boolean(ship.flags3N & 0x0100),
         hideIfRequireUnmet: Boolean(ship.flags3N & 0x0200),

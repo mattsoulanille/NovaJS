@@ -123,6 +123,62 @@ export interface ShipData extends SpaceObjectData {
      */
     availability: string;
     /**
+     * shïp AppearOn (EVN Bible ~:2594): "Control bit test expression.
+     * Ships of this type will not show up in dude resources if this
+     * expression evaluates to false." A gate on NPC (düde) spawning, NOT
+     * on the shipyard — that is `availability`. Namespaced per plug-in
+     * like every other NCB string. 22 stock ships carry one (every Aur
+     * Cruiser variant, nova:247-255, is `!b333`). Plumbed for
+     * npc_spawn_plugin, which has the same shared-world constraint on
+     * per-player bits that flët AppearOn has (see its module comment).
+     */
+    appearOn: string;
+    /**
+     * shïp OnPurchase (EVN Bible ~:2598): "Control bit set expression",
+     * run when the player BUYS a ship of this class at a shipyard. 171
+     * stock hulls set `b8888` (which crön nova:222 and the second-hand
+     * hulls' AppearOn test). Run by spaceport/shipyard.ts's buyShip after
+     * the traded-in class's `onRetire`, each under its own writer prefix.
+     */
+    onPurchase: string;
+    /**
+     * shïp OnCapture (EVN Bible ~:2636): "evaluated when you capture a
+     * ship of this type." Plumbed for the boarding lane; not run here.
+     */
+    onCapture: string;
+    /**
+     * shïp OnRetire (EVN Bible ~:2639): "evaluated when you sell a ship of
+     * this type and/or replace it with a captured ship." A shipyard trade
+     * sells the current hull, so buyShip runs the OLD class's onRetire
+     * before the new class's onPurchase — stock nova:377 "Pegasus;rogue"
+     * sets b4322 on purchase and clears it here.
+     */
+    onRetire: string;
+    /**
+     * shïp Flags 0x0008 (EVN Bible ~:2517): "Player ship takes advantage of
+     * FuelRegen property". FuelRegen itself (~:2554) says "for the player
+     * to be able to use this field, the 0x0008 flag must also be set (this
+     * allows you to give enemy ships built-in fuel scoops but still make
+     * the player have to buy his own)". So physics.energyRecharge is the
+     * class's INHERENT regeneration for an AI pilot; a PLAYER-flown hull
+     * only regenerates (or, for a negative FuelRegen, drains) on it when
+     * this is true. Outfit scoops (ModType 18) are unaffected. See
+     * nova_plugin/ship_plugin.ts's ShipFuelProvider. All 21 stock
+     * regenerating classes set it; 13 plug-in classes do not.
+     */
+    playerFuelRegen: boolean;
+    /**
+     * shïp Holds < 0 (EVN Bible ~:2346): "Put a negative sign in front of
+     * this value if you want to prevent the player from purchasing mass
+     * expansions (e.g. a value of -100 would mean 100 tons of hold space
+     * but no mass expansions allowed)". physics.freeCargo carries the
+     * ABSOLUTE value; this carries the sign's meaning, read by
+     * outfitter_rules' canBuyOutfit to refuse any outfit that takes cargo
+     * space away (a negative ModType 2, e.g. stock oütf 190 Mass
+     * Expansion). No stock ship sets it; six plug-in hulls do.
+     */
+    noMassExpansions: boolean;
+    /**
      * The percent chance this ship is available for purchase on a given
      * day (shïp BuyRandom, EVN Bible ~:2630): "0 means this ship will
      * never be made available for purchase." The daily roll is a
@@ -299,6 +355,12 @@ export function getDefaultShipData(): ShipData {
         contribute: "0x0",
         require: "0x0",
         availability: "",
+        appearOn: "",
+        onPurchase: "",
+        onCapture: "",
+        onRetire: "",
+        playerFuelRegen: false,
+        noMassExpansions: false,
         buyRandom: 0,
         hideIfAvailabilityFalse: false,
         hideIfRequireUnmet: false,
