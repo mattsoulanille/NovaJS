@@ -105,9 +105,9 @@ describe('beam turret with a dead target', () => {
      * Shooter at (1000, 1000) facing -y, bystander 60 ahead of it, and a
      * victim 60 off to the +x side that the shooter is targeting. Both
      * are well inside the Ion Cannon's 240-unit reach, and close enough
-     * that the weapon's own 4-degree inaccuracy (BeamSystem re-samples it
-     * every tick) cannot throw the ray clear of a Shuttle's 14x17
-     * hitbox.
+     * that the weapon's own 4-degree inaccuracy (sampled once as the beam
+     * leaves the ship, and held for its life) cannot throw the ray clear
+     * of a Shuttle's 14x17 hitbox.
      */
     async function setUp() {
         const { gameData, world } = await makeBattlefield();
