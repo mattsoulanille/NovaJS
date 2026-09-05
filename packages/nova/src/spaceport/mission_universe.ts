@@ -98,9 +98,58 @@ export class MissionUniverse {
         return universe;
     }
 
-    /** Idempotent; concurrent callers share one load. */
+    /**
+     * How long a FAILED load stays cached before the next load() tries
+     * again. Doubles per consecutive failure up to RETRY_BACKOFF_MAX_MS and
+     * resets on success. Public so a spec can drive the retry without
+     * waiting; the game never changes it.
+     */
+    retryBackoffMs = 1000;
+    private static readonly RETRY_BACKOFF_MAX_MS = 30_000;
+    private consecutiveFailures = 0;
+
+    /**
+     * Idempotent; concurrent callers share one load, and once it has
+     * succeeded every later call returns the same resolved promise.
+     *
+     * A FAILED load is not cached forever. doLoad fetches every mïsn /
+     * spöb / sÿst / gövt / crön / ränk, so one rejected resource (a 502, a
+     * timeout, Chrome's ERR_INSUFFICIENT_RESOURCES under the first
+     * landing's fetch storm) rejects the whole load — and with the
+     * rejection cached, every later landing, jump-day, BBS, bar, mission
+     * info and starmap open failed with the same stale error until the
+     * page was reloaded (review finding #66). The underlying Gettable
+     * already drops a failed id from ITS cache, so a retry is cheap and
+     * only re-fetches what failed. The rejection is kept for a short,
+     * growing backoff so a burst of callers during an outage doesn't
+     * restart the fetch storm on every frame; after it, the next call
+     * loads again. Callers must still cope with a load that has not
+     * succeeded yet (they all catch and warn — the universe is simply not
+     * there for that landing/open, and it will be for the next).
+     */
     load(): Promise<void> {
-        this.loadPromise ??= this.doLoad();
+        if (!this.loadPromise) {
+            const attempt = this.doLoad().then(() => {
+                this.consecutiveFailures = 0;
+            }, e => {
+                this.consecutiveFailures++;
+                const backoff = Math.min(
+                    this.retryBackoffMs * 2 ** (this.consecutiveFailures - 1),
+                    MissionUniverse.RETRY_BACKOFF_MAX_MS);
+                console.warn(`Mission universe load failed (attempt `
+                    + `${this.consecutiveFailures}); retrying after `
+                    + `${backoff}ms:`, e);
+                const timer = setTimeout(() => {
+                    if (this.loadPromise === attempt) {
+                        this.loadPromise = undefined;
+                    }
+                }, backoff);
+                // Don't keep a node process (a spec) alive for the retry.
+                (timer as { unref?: () => void }).unref?.();
+                throw e;
+            });
+            this.loadPromise = attempt;
+        }
         return this.loadPromise;
     }
 

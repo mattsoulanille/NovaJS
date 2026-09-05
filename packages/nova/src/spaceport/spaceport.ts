@@ -20,6 +20,7 @@ import {
     ActiveRanksComponent, ControlBitsComponent,
 } from '../nova_plugin/ncb_plugin.js';
 import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
 import { Bar } from './bar.js';
 import { Button } from './button.js';
@@ -279,10 +280,15 @@ export class Spaceport extends Menu<Entity> {
             // top of the focus stack while open, so the spaceport keys
             // stay quiet under them and 'd' backs out of just the
             // overlay. The docked entity is out of the display world,
-            // so its date and mission marks ride along to the map.
+            // so its date, mission marks, control bits (NCB system
+            // visibility) and legal records (the Legal Status line) all
+            // ride along to the map (#29).
             map: () => void this.openStarmap?.({
                 date: this.input?.components.get(GameDateComponent),
                 missionMarks: this.activeMissionMarks(),
+                playerBits: this.input?.components.get(ControlBitsComponent),
+                legalRecords:
+                    this.input?.components.get(LegalRecordsComponent),
             }),
             properties: () => void this.openPlayerInfo?.(this.input),
             // The planetId enables the dialog's docked-only Abort.
