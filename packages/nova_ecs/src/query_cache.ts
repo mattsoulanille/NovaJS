@@ -34,6 +34,15 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
      * peer that rolled back. Appends in order are the common case and
      * cost nothing; only an out-of-order join marks the map for a
      * re-sort at the next refill (`members()`).
+     *
+     * Cost of that re-sort: O(k log k) over the k members plus a fresh
+     * Map, paid at most once per getResult after a dirtying join. A
+     * query whose membership churns in alternating order every tick
+     * (e.g. a target acquired and dropped across ships) can therefore
+     * re-sort per tick; bounded by the query's size and, measured on
+     * the 600-step determinism run, not visible. If a hot query ever
+     * shows up here, an ordered structure (or inserting at the sorted
+     * position) replaces the sort without changing the order contract.
      */
     private entities: Map<string, Entity>;
     /** Highest insertionOrder ever appended; a join below it is out of order. */
