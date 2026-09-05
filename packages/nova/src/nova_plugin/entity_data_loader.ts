@@ -80,14 +80,16 @@ async function loadAnimationGameData(gameData: SimulationGameDataInterface,
     animation: { images: { baseImage: { id: string } } }) {
     // Hull geometry (simulation state) derives from the sprite sheet:
     // retry so a transient fetch failure cannot leave this world's
-    // hulls quietly different from everyone else's.
-    try {
-        await loadWithRetries(() => gameData.data.SpriteSheet.get(
-            animation.images.baseImage.id),
-            `sprite sheet ${animation.images.baseImage.id}`, 2);
-    } catch (e) {
-        console.warn(String(e));
-    }
+    // hulls quietly different from everyone else's. A failure that
+    // outlives the retries rejects like every other staged load (#60):
+    // swallowing it here left the hull to attach at a load-dependent
+    // tick via HitboxProvider's per-step getCached retry, on this
+    // world alone — the ship un-hittable meanwhile, and its hull is
+    // hashed simulation input. Genesis fails construction; insertion
+    // staging retries the whole load or resyncs.
+    await loadWithRetries(() => gameData.data.SpriteSheet.get(
+        animation.images.baseImage.id),
+        `sprite sheet ${animation.images.baseImage.id}`, 2);
 }
 
 /**

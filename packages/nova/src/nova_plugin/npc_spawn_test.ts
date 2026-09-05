@@ -291,7 +291,7 @@ describe('NPC genesis load failures', () => {
     }
 
     function makeWorld(failures: {
-        dude?: number, pers?: number, ship?: number,
+        dude?: number, pers?: number, ship?: number, sheet?: number,
     } = {}) {
         const dude = { ...getDefaultDudeData(), id: 'test:dude',
             ships: [{ id: SHIP.id, weight: 1 }] };
@@ -308,7 +308,8 @@ describe('NPC genesis load failures', () => {
                     { [SHIP.id]: failures.ship ?? 0 }),
                 Outfit: stubGettable({}),
                 Weapon: stubGettable({}),
-                SpriteSheet: stubGettable({ [SHEET]: {} }),
+                SpriteSheet: stubGettable({ [SHEET]: {} },
+                    { [SHEET]: failures.sheet ?? 0 }),
                 Mission: stubGettable({}),
             },
             ids: Promise.resolve({ Fleet: [], Pers: [] }),
@@ -341,6 +342,22 @@ describe('NPC genesis load failures', () => {
     it('fails construction when a düde\'s ship class cannot be staged', async () => {
         await expectAsync(buildNpcSpawnTable(makeWorld({ ship: 99 }), SYSTEM, withDude))
             .toBeRejectedWithError(new RegExp(`NPC ship ${SHIP.id}`));
+    });
+
+    // The sprite-sheet leg of #60: hull geometry derives from the
+    // sheet and is hashed simulation input. A sheet failure used to be
+    // warned away inside loadAnimationGameData, leaving the hull to
+    // attach at a load-dependent tick on this world alone.
+    it('fails construction when a ship class\'s sprite sheet cannot be loaded after retries', async () => {
+        const warn = spyOn(console, 'warn');
+        await expectAsync(buildNpcSpawnTable(makeWorld({ sheet: 99 }), SYSTEM, withDude))
+            .toBeRejectedWithError(new RegExp(`sprite sheet ${SHEET}`));
+        expect(warn).not.toHaveBeenCalled();
+    });
+
+    it('absorbs a transient sprite sheet failure and keeps the entry', async () => {
+        const entries = await buildNpcSpawnTable(makeWorld({ sheet: 1 }), SYSTEM, withDude);
+        expect(entries.length).toBe(1);
     });
 
     it('fails construction when a listed përs cannot be loaded after retries', async () => {
