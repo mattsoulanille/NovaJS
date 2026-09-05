@@ -1,7 +1,15 @@
 import 'jasmine';
+import { getDefaultDudeData } from 'novadatainterface/dude_data';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
+import { getDefaultPersData } from 'novadatainterface/pers_data';
+import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { Random } from 'nova_ecs/plugins/random_plugin';
+import { World } from 'nova_ecs/world';
+import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { SimulationGameDataResource } from './game_data_resource.js';
 import {
+    buildNpcSpawnTable, buildPersSpawnTable,
     fleetAllowedInSystem, MAX_NPC_POPULATION, persAllowedInSystem,
     PERS_SPAWN_CHANCE, pickPersEntry, pickWeighted, rollPopulationTarget,
 } from './npc_spawn_plugin.js';
@@ -249,5 +257,107 @@ describe('persAllowedInSystem (përs LinkSyst ranges)', () => {
         expect(persAllowedInSystem(
             { type: 'govtSystems', govt: 'nova:128' },
             'nova:130', 'nova:128', federation, undefined)).toBeTrue();
+    });
+});
+
+// #60: the spawn tables are genesis state every world in a room must
+// compute identically. A load that still fails after retries used to
+// DROP the entry (warn and continue), so the affected world rolled a
+// different population and consumed Random differently from tick 0 —
+// a fork no rollback can repair. It must fail construction instead,
+// like the asteroid loader; the caller retries or resyncs.
+describe('NPC genesis load failures', () => {
+    const SYSTEM = 'test:system';
+    const SHIP = getDefaultShipData();
+    const SHEET = SHIP.animation.images.baseImage.id;
+
+    /** A Gettable that fails `transient[id]` times before succeeding. */
+    function stubGettable<T>(items: Record<string, T>,
+        transient: Record<string, number> = {}) {
+        const left = { ...transient };
+        return {
+            get: async (id: string): Promise<T> => {
+                if ((left[id] ?? 0) > 0) {
+                    left[id]!--;
+                    throw new Error(`transient failure loading ${id}`);
+                }
+                if (!(id in items)) {
+                    throw new Error(`missing ${id}`);
+                }
+                return items[id]!;
+            },
+            getCached: (id: string): T | undefined => items[id],
+        };
+    }
+
+    function makeWorld(failures: {
+        dude?: number, pers?: number, ship?: number,
+    } = {}) {
+        const dude = { ...getDefaultDudeData(), id: 'test:dude',
+            ships: [{ id: SHIP.id, weight: 1 }] };
+        const pers = { ...getDefaultPersData(), id: 'test:pers', ship: SHIP.id };
+        const gameData = {
+            data: {
+                Dude: stubGettable({ 'test:dude': dude },
+                    { 'test:dude': failures.dude ?? 0 }),
+                Fleet: stubGettable({}),
+                Pers: stubGettable({ 'test:pers': pers },
+                    { 'test:pers': failures.pers ?? 0 }),
+                Govt: stubGettable({}),
+                Ship: stubGettable({ [SHIP.id]: SHIP },
+                    { [SHIP.id]: failures.ship ?? 0 }),
+                Outfit: stubGettable({}),
+                Weapon: stubGettable({}),
+                SpriteSheet: stubGettable({ [SHEET]: {} }),
+                Mission: stubGettable({}),
+            },
+            ids: Promise.resolve({ Fleet: [], Pers: [] }),
+        } as unknown as SimulationGameDataInterface;
+        const world = new World('npc genesis test');
+        world.resources.set(SimulationGameDataResource, gameData);
+        return world;
+    }
+
+    const withDude = { ...getDefaultSystemData(), id: SYSTEM,
+        dudes: [{ id: 'test:dude', weight: 1 }] };
+    const withPers = { ...getDefaultSystemData(), id: SYSTEM,
+        persons: [{ id: 'test:pers', chance: 50 }] };
+
+    it('fails construction when a düde cannot be loaded after retries', async () => {
+        const warn = spyOn(console, 'warn');
+        await expectAsync(buildNpcSpawnTable(makeWorld({ dude: 99 }), SYSTEM, withDude))
+            .toBeRejectedWithError(/düde test:dude/);
+        expect(warn).not.toHaveBeenCalledWith(jasmine.stringMatching(/dropping/));
+    });
+
+    it('absorbs a transient düde failure and keeps the entry', async () => {
+        const entries = await buildNpcSpawnTable(makeWorld({ dude: 2 }), SYSTEM, withDude);
+        expect(entries).toEqual([{
+            weight: 1,
+            dude: { aiType: 0, govt: null, ships: [{ id: SHIP.id, weight: 1 }] },
+        }]);
+    });
+
+    it('fails construction when a düde\'s ship class cannot be staged', async () => {
+        await expectAsync(buildNpcSpawnTable(makeWorld({ ship: 99 }), SYSTEM, withDude))
+            .toBeRejectedWithError(new RegExp(`NPC ship ${SHIP.id}`));
+    });
+
+    it('fails construction when a listed përs cannot be loaded after retries', async () => {
+        const warn = spyOn(console, 'warn');
+        await expectAsync(buildPersSpawnTable(makeWorld({ pers: 99 }), SYSTEM, withPers))
+            .toBeRejectedWithError(/përs test:pers/);
+        expect(warn).not.toHaveBeenCalledWith(jasmine.stringMatching(/dropping/));
+    });
+
+    it('fails construction when a përs ship class cannot be staged', async () => {
+        await expectAsync(buildPersSpawnTable(makeWorld({ ship: 99 }), SYSTEM, withPers))
+            .toBeRejectedWithError(new RegExp(`NPC ship ${SHIP.id}`));
+    });
+
+    it('builds the përs table when everything loads', async () => {
+        const entries = await buildPersSpawnTable(makeWorld({ pers: 1 }), SYSTEM, withPers);
+        expect(entries.map(e => [e.id, e.ship, e.chance])).toEqual([
+            ['test:pers', SHIP.id, 50]]);
     });
 });

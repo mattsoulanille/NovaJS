@@ -343,25 +343,30 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     }
     const entries: NpcSpawnEntry[] = [];
 
+    // LOAD FAILURES FAIL CONSTRUCTION (#60). This table is genesis state
+    // that every world in a room must compute identically, and a world
+    // that quietly dropped an entry after a transient fetch failure
+    // rolls a different population — and consumes the per-system
+    // Random differently — from tick 0: a fork no rollback can repair
+    // (memory item 8: a flaky Android link). So nothing here catches:
+    // loadWithRetries absorbs micro-blips, and anything longer rejects
+    // out of makeSystem, whose callers retry or resync the whole build
+    // — exactly the asteroid loader's ruling (see load_retry.ts). An
+    // entry that does not EXIST is not a load failure: the aggregator
+    // resolves an unknown id to default data, identically everywhere.
     for (const { id, weight } of systemData.dudes) {
-        try {
-            const dude = await loadWithRetries(
-                () => gameData.data.Dude.get(id), `düde ${id}`);
-            const ships: Array<{ id: string, weight: number }> = [];
-            for (const ship of dude.ships) {
-                await stageShip(world, ship.id, dude.govt);
-                ships.push({ id: ship.id, weight: ship.weight });
-            }
-            if (ships.length > 0) {
-                entries.push({
-                    weight,
-                    dude: { aiType: dude.aiType, govt: dude.govt, ships },
-                });
-            }
-        } catch (e) {
-            // A dude that cannot load is dropped on EVERY world (the
-            // table is genesis state computed identically everywhere).
-            console.warn(`NPC spawn table: dropping düde ${id}: ${e}`);
+        const dude = await loadWithRetries(
+            () => gameData.data.Dude.get(id), `düde ${id}`);
+        const ships: Array<{ id: string, weight: number }> = [];
+        for (const ship of dude.ships) {
+            await stageShip(world, ship.id, dude.govt);
+            ships.push({ id: ship.id, weight: ship.weight });
+        }
+        if (ships.length > 0) {
+            entries.push({
+                weight,
+                dude: { aiType: dude.aiType, govt: dude.govt, ships },
+            });
         }
     }
 
@@ -401,37 +406,33 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
 
     // Fleets referenced directly by the sÿst DudeTypes table.
     for (const { id, weight } of systemData.fleets) {
-        try {
-            const fleet = await loadWithRetries(
-                () => gameData.data.Fleet.get(id), `flët ${id}`);
-            if (!appears(fleet)) {
-                continue;
-            }
-            entries.push({ weight, fleet: await stageFleet(fleet) });
-        } catch (e) {
-            console.warn(`NPC spawn table: dropping flët ${id}: ${e}`);
+        const fleet = await loadWithRetries(
+            () => gameData.data.Fleet.get(id), `flët ${id}`);
+        if (!appears(fleet)) {
+            continue;
         }
+        entries.push({ weight, fleet: await stageFleet(fleet) });
     }
 
     // Roaming fleets: scan every flët's LinkSyst against this system.
-    // Sorted ids so the table is identical on every world.
+    // Sorted ids so the table is identical on every world. The govt
+    // loads used to swallow failures into `undefined`, which silently
+    // flips fleetAllowedInSystem's ally/enemy answers on that world
+    // alone — the same fork as a dropped entry (#60).
     const systemGovtData = systemData.govt
-        ? await gameData.data.Govt.get(systemData.govt).catch(() => undefined)
+        ? await loadWithRetries(() => gameData.data.Govt.get(systemData.govt!),
+            `system govt ${systemData.govt}`)
         : undefined;
     const roaming: FleetData[] = [];
     const fleetIds = [...(await gameData.ids).Fleet].sort();
     for (const fleetId of fleetIds) {
-        let fleet: FleetData;
-        try {
-            fleet = await gameData.data.Fleet.get(fleetId);
-        } catch {
-            continue;
-        }
+        const fleet = await loadWithRetries(
+            () => gameData.data.Fleet.get(fleetId), `flët ${fleetId}`);
         const link = fleet.linkSyst;
         const linkGovtData =
             (link.type === 'allySystems' || link.type === 'enemySystems')
-                ? await gameData.data.Govt.get(link.govt)
-                    .catch(() => undefined)
+                ? await loadWithRetries(() => gameData.data.Govt.get(link.govt),
+                    `flët ${fleetId} link govt ${link.govt}`)
                 : undefined;
         const allowed = fleetAllowedInSystem(link, systemId,
             systemData.govt, systemGovtData, linkGovtData);
@@ -440,14 +441,10 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
         }
     }
     for (const fleet of roaming) {
-        try {
-            entries.push({
-                weight: ROAMING_FLEET_WEIGHT / roaming.length,
-                fleet: await stageFleet(fleet),
-            });
-        } catch (e) {
-            console.warn(`NPC spawn table: dropping flët ${fleet.id}: ${e}`);
-        }
+        entries.push({
+            weight: ROAMING_FLEET_WEIGHT / roaming.length,
+            fleet: await stageFleet(fleet),
+        });
     }
 
     return entries;
@@ -501,41 +498,37 @@ export async function buildPersSpawnTable(world: World, systemId: string,
         }
     };
 
+    // Load failures fail construction rather than dropping the person
+    // or their ship class (#60) — see buildNpcSpawnTable's ruling; the
+    // përs table is the same genesis state.
     let eligible: Array<{ pers: PersData, chance: number }>;
     if (systemData.persons.length > 0) {
         // The authored cast. LinkSyst is deliberately not consulted
         // (see the module comment: 160 of 228 stock entries would die).
         eligible = (await pooledMap(systemData.persons,
             async ({ id, chance }) => {
-                let pers: PersData;
-                try {
-                    pers = await gameData.data.Pers.get(id);
-                } catch (e) {
-                    console.warn(`përs table: dropping ${id} listed by `
-                        + `${systemId}: ${e}`);
-                    return undefined;
-                }
+                const pers = await loadWithRetries(
+                    () => gameData.data.Pers.get(id),
+                    `përs ${id} listed by ${systemId}`);
                 return active(pers) ? { pers, chance } : undefined;
             })).filter((entry): entry is { pers: PersData, chance: number } =>
                 entry !== undefined);
     } else {
         const systemGovtData = systemData.govt
-            ? await gameData.data.Govt.get(systemData.govt)
-                .catch(() => undefined)
+            ? await loadWithRetries(
+                () => gameData.data.Govt.get(systemData.govt!),
+                `system govt ${systemData.govt}`)
             : undefined;
         const persIds = [...(await gameData.ids).Pers].sort();
         const pool = (await pooledMap(persIds, async persId => {
-            let pers: PersData;
-            try {
-                pers = await gameData.data.Pers.get(persId);
-            } catch {
-                return undefined;
-            }
+            const pers = await loadWithRetries(
+                () => gameData.data.Pers.get(persId), `përs ${persId}`);
             const link = pers.linkSyst;
             const linkGovtData =
                 (link.type === 'allySystems' || link.type === 'enemySystems')
-                    ? await gameData.data.Govt.get(link.govt)
-                        .catch(() => undefined)
+                    ? await loadWithRetries(
+                        () => gameData.data.Govt.get(link.govt),
+                        `përs ${persId} link govt ${link.govt}`)
                     : undefined;
             if (!persAllowedInSystem(link, systemId, systemData.govt,
                 systemGovtData, linkGovtData)) {
@@ -548,23 +541,17 @@ export async function buildPersSpawnTable(world: World, systemId: string,
     }
 
     // Stage each distinct ship-class/govt pair once.
-    const staged = new Map<string, Promise<boolean>>();
+    const staged = new Map<string, Promise<void>>();
     const stageOnce = (ship: string, govt: string | null) => {
         const key = `${ship}\0${govt ?? ''}`;
         let promise = staged.get(key);
         if (!promise) {
-            promise = stageShip(world, ship, govt)
-                .then(() => true, e => {
-                    console.warn(`përs table: dropping ships of class `
-                        + `${ship}: ${e}`);
-                    return false;
-                });
+            promise = stageShip(world, ship, govt);
             staged.set(key, promise);
         }
         return promise;
     };
-    const stagedOk = await pooledMap(eligible,
-        ({ pers }) => stageOnce(pers.ship, pers.govt));
+    await pooledMap(eligible, ({ pers }) => stageOnce(pers.ship, pers.govt));
 
     // "Does this person's LinkMission ask to be rescued?" — resolved
     // HERE, where mïsn resources can be awaited, so the spawner never
@@ -576,19 +563,18 @@ export async function buildPersSpawnTable(world: World, systemId: string,
         .filter((id): id is string => !!id))].sort();
     const rescueMissions = new Set<string>();
     await pooledMap(missionIds, async missionId => {
-        try {
-            const mission = await gameData.data.Mission.get(missionId);
-            if (mission.shipGoal === GOAL_RESCUE) {
-                rescueMissions.add(missionId);
-            }
-        } catch {
-            // Unreadable mïsn: no hold, exactly as for a person with no
-            // LinkMission at all.
+        // A mïsn that fails to LOAD fails construction like everything
+        // else here: `holdsForOffer` is synced genesis state, and a
+        // world that could not read the mission would hold nobody
+        // while every other world held the person (#60).
+        const mission = await loadWithRetries(
+            () => gameData.data.Mission.get(missionId), `mïsn ${missionId}`);
+        if (mission.shipGoal === GOAL_RESCUE) {
+            rescueMissions.add(missionId);
         }
     });
 
-    return eligible.filter((_, index) => stagedOk[index])
-        .map(({ pers, chance }) => ({
+    return eligible.map(({ pers, chance }) => ({
             id: pers.id,
             name: pers.name,
             subtitle: pers.subtitle,
