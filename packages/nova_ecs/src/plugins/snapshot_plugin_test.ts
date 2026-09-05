@@ -1,8 +1,11 @@
 import 'jasmine';
 import { immerable } from 'immer';
 import * as t from 'io-ts';
+import { UUID } from '../arg_types.js';
 import { Component } from '../component.js';
 import { Entity } from '../entity.js';
+import { Resource } from '../resource.js';
+import { System } from '../system.js';
 import { World } from '../world.js';
 import { SerializerPlugin, SerializerResource } from './serializer_plugin.js';
 import {
@@ -283,6 +286,63 @@ describe('wire snapshot sign of zero', () => {
         expect(Object.is(get('zero'), 0)).toBeTrue();
         expect(get('inf')).toBe(-Infinity);
         expect(get('nan')).toBeNaN();
+    });
+});
+
+// #41: restore rebuilt every query entry in world order, while a live
+// world's entry held members in the order they gained the query's
+// components — so the peer that rolled back visited entities in a
+// different order from one that ran straight through (and from a late
+// joiner). Same world state must mean the same order everywhere.
+describe('per-entity system order survives snapshot and restore', () => {
+    const VisitedResource = new Resource<string[]>('Visited');
+    const VisitSystem = new System({
+        name: 'Visit',
+        args: [UUID, NumComponent, VisitedResource] as const,
+        step: (uuid, _num, visited) => {
+            visited.push(uuid);
+        },
+    });
+
+    function makeVisitWorld(): World {
+        const world = makeSerializedWorld();
+        world.resources.set(VisitedResource, []);
+        world.addSystem(VisitSystem);
+        return world;
+    }
+
+    function visitOrder(world: World): string[] {
+        const visited = world.resources.get(VisitedResource)!;
+        visited.length = 0;
+        world.step();
+        return [...visited];
+    }
+
+    it('is the same live, after an in-memory restore, and for a wire late joiner', () => {
+        const world = makeVisitWorld();
+        world.entities.set('a', new Entity().addComponent(NumComponent, { v: 0 }));
+        world.entities.set('b', new Entity().addComponent(NumComponent, { v: 0 }));
+        world.step();
+        // 'a' leaves the query and rejoins.
+        world.entities.get('a')!.components.delete(NumComponent);
+        world.entities.get('a')!.components.set(NumComponent, { v: 0 });
+        world.step();
+
+        const live = visitOrder(world);
+
+        const snapshot = snapshotWorld(world);
+        const wire = JSON.parse(JSON.stringify(wireSnapshotWorld(world)));
+
+        restoreWorld(world, snapshot);
+        const rolledBack = visitOrder(world);
+
+        const joiner = makeVisitWorld();
+        restoreWireWorldSnapshot(joiner, wire);
+        const lateJoined = visitOrder(joiner);
+
+        expect(rolledBack).toEqual(live);
+        expect(lateJoined).toEqual(live);
+        expect(live).toEqual(['a', 'b']);
     });
 });
 

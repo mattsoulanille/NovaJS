@@ -211,6 +211,33 @@ describe('query cache', () => {
         expect(cached.getResult().length).toBe(0);
     });
 
+    // #41: member order must be a function of world state (the world
+    // map's insertion order), not of the order in which entities gained
+    // the query's components.
+    it('visits members in world order after a member leaves and rejoins', () => {
+        const query = new Query([FooComponent]);
+        const a = new Entity().addComponent(FooComponent, { x: 1 });
+        const b = new Entity().addComponent(FooComponent, { x: 2 });
+        entities.set('a', a);
+        entities.set('b', b);
+        const cached = queryCache.get(query);
+        getArg.and.callFake(((_arg: unknown, entity: Entity) =>
+            right(entity)) as unknown as World['getArg']);
+
+        expect(cached.getResult().map(([e]) => e as unknown as Entity)).toEqual([a, b]);
+
+        a.components.delete(FooComponent);
+        a.components.set(FooComponent, { x: 1 });
+        expect(cached.getResult().map(([e]) => e as unknown as Entity)).toEqual([a, b]);
+
+        // And for a query that only gains members after creation.
+        const late = new Query([FooComponent, BarComponent]);
+        const cachedLate = queryCache.get(late);
+        b.components.set(BarComponent, { y: 'b' });
+        a.components.set(BarComponent, { y: 'a' });
+        expect(cachedLate.getResult().map(([e]) => e as unknown as Entity)).toEqual([a, b]);
+    });
+
     it('drops a replaced entity the new object does not support', () => {
         // Rollback snapshot restore reuses uuids with fresh entity
         // objects; an entry that held the old object must drop it even

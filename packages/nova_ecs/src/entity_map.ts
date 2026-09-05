@@ -17,6 +17,8 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
 
     private entityChangeUnsubscribe = new Map<string,
         { unsubscribe: () => void }>();
+    /** Next `Entity.insertionOrder`; see that field. */
+    private nextInsertionOrder = 0;
 
     constructor() {
         super();
@@ -30,6 +32,13 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
         // This is the only place where the entity's uuid should be set.
         // 'uuid' is marked as readonly to avoid accidentally setting it elsewhere.
         (entity as { uuid: string }).uuid = uuid;
+        // Likewise the only place insertionOrder is assigned. A
+        // replacement inherits the position the Map keeps for its key;
+        // a fresh uuid (or a deleted one re-inserted) is appended.
+        const current = this.get(uuid);
+        (entity as { insertionOrder: number }).insertionOrder =
+            current !== undefined ? current.insertionOrder
+                : this.nextInsertionOrder++;
 
         // Drop the previous subscriptions whenever there are any — also
         // when the SAME entity object is re-set: the record below is

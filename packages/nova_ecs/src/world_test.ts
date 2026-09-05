@@ -1884,4 +1884,77 @@ describe('world plugin loading', () => {
         await expectAsync(world.addPlugin(failing))
             .toBeRejectedWithError(/build failed/);
     });
+
+    // #41: the order a per-entity system visits entities used to be the
+    // order in which they GAINED the query's components (a member that
+    // left and rejoined moved to the end), while snapshot restore rebuilt
+    // it in world order — so a peer that rolled back visited entities in
+    // a different order from one that ran straight through.
+    describe('per-entity system order', () => {
+        const VISIT_SYSTEM = new System({
+            name: 'visit',
+            args: [UUID, FOO_COMPONENT] as const,
+            step: (uuid, foo) => {
+                visited.push(uuid);
+                foo.x++;
+            },
+        });
+        let visited: string[] = [];
+        beforeEach(() => {
+            visited = [];
+            world.addSystem(VISIT_SYSTEM);
+        });
+
+        it('is world insertion order, not component-gain order', () => {
+            world.entities.set('a', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.entities.set('b', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.step();
+            expect(visited).toEqual(['a', 'b']);
+
+            // 'a' leaves the query and rejoins.
+            const a = world.entities.get('a')!;
+            a.components.delete(FOO_COMPONENT);
+            a.components.set(FOO_COMPONENT, { x: 0 });
+            visited = [];
+            world.step();
+            expect(visited).toEqual(['a', 'b']);
+            expect([...world.entities.keys()]).toEqual(['singleton', 'a', 'b']);
+        });
+
+        it('follows a uuid that is deleted and re-inserted to the end', () => {
+            world.entities.set('a', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.entities.set('b', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.entities.delete('a');
+            world.entities.set('a', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.step();
+            expect(visited).toEqual(['b', 'a']);
+            expect([...world.entities.keys()]).toEqual(['singleton', 'b', 'a']);
+        });
+
+        it('keeps a replaced entity in its uuid\'s position', () => {
+            world.entities.set('a', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.entities.set('b', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.entities.set('a', new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            world.step();
+            expect(visited).toEqual(['a', 'b']);
+        });
+
+        it('is stable through membership churn of many entities', () => {
+            const uuids = ['e0', 'e1', 'e2', 'e3', 'e4', 'e5'];
+            for (const uuid of uuids) {
+                world.entities.set(uuid, new Entity().addComponent(FOO_COMPONENT, { x: 0 }));
+            }
+            world.step();
+            // Churn in a scrambled order.
+            for (const uuid of ['e4', 'e1', 'e5', 'e0']) {
+                world.entities.get(uuid)!.components.delete(FOO_COMPONENT);
+            }
+            for (const uuid of ['e5', 'e0', 'e4', 'e1']) {
+                world.entities.get(uuid)!.components.set(FOO_COMPONENT, { x: 0 });
+            }
+            visited = [];
+            world.step();
+            expect(visited).toEqual(uuids);
+        });
+    });
 });

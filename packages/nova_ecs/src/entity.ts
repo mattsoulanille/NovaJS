@@ -12,6 +12,21 @@ export type ComponentTypes = Set<UnknownComponent>;
 export class Entity {
     readonly components: ComponentMap;
     readonly componentsBinSet: BinSet<UnknownComponent>;
+    /**
+     * Position of this entity in its world's entity map, as a
+     * monotonically increasing sequence assigned by
+     * `EntityMapWithEvents.set` (like `uuid`, never set elsewhere): a
+     * uuid's first insertion takes the next number, a replacement under
+     * an existing uuid inherits the previous entity's (a Map keeps the
+     * key's position), and a delete + re-insert takes a fresh one (the
+     * Map appends). Query results are iterated in this order, so
+     * per-entity system order is a function of world state alone —
+     * not of the order in which entities gained a query's components
+     * (#41). Snapshot restore re-inserts entities in world order, so
+     * a rolled-back or late-joined world reproduces the same relative
+     * sequence.
+     */
+    readonly insertionOrder: number = -1;
 
     /**
      * Construct a new Entity. A common pattern is to use the chaining api

@@ -23,7 +23,22 @@ interface QueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]
 }
 
 class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes[]> {
+    /**
+     * Members, kept in `Entity.insertionOrder` (= world map) order so
+     * that the order a per-entity system visits them is a function of
+     * world state, not of the order in which they gained the query's
+     * components (#41). A member that leaves and rejoins (a component
+     * deleted and re-added) would otherwise land at the END of this
+     * map, and snapshot restore — which rebuilds every entry in world
+     * order — would then silently change the visitation order on the
+     * peer that rolled back. Appends in order are the common case and
+     * cost nothing; only an out-of-order join marks the map for a
+     * re-sort at the next refill (`members()`).
+     */
     private entities: Map<string, Entity>;
+    /** Highest insertionOrder ever appended; a join below it is out of order. */
+    private maxOrder = -1;
+    private orderDirty = false;
     private entityResults = new Map<Entity, ArgsToData<Args>>();
     private resources: Map<UnknownResource, unknown>;
     private wrappedResult: ArgsToData<Args>[] = []
@@ -35,8 +50,12 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         private getArg: World['getArg'],
         entities: EntityMapWithEvents,
         resources: ResourceMapWrapped) {
+        // The world map is already in insertionOrder.
         this.entities = new Map([...entities].filter(
             ([, entity]) => query.supportsEntity(entity)));
+        for (const entity of this.entities.values()) {
+            this.maxOrder = entity.insertionOrder;
+        }
         this.resources = new Map([...resources].filter(
             ([resource]) => query.resources.has(resource)));
 
@@ -77,12 +96,41 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
         return this.query.supportsEntity(entity);
     }
 
+    /**
+     * Adds (or replaces) a member. A replacement keeps its Map position
+     * and inherited insertionOrder, so only a NEW member can be out of
+     * order — and checking `has` first keeps the hot component-add path
+     * (a member gaining an Optional component) from marking the map
+     * dirty spuriously.
+     */
+    private addMember(uuid: string, entity: Entity) {
+        if (!this.entities.has(uuid)) {
+            const order = entity.insertionOrder;
+            if (order < this.maxOrder) {
+                this.orderDirty = true;
+            } else {
+                this.maxOrder = order;
+            }
+        }
+        this.entities.set(uuid, entity);
+    }
+
+    /** The members in insertionOrder, re-sorting first if a join was out of order. */
+    private members(): IterableIterator<Entity> {
+        if (this.orderDirty) {
+            this.entities = new Map([...this.entities].sort(
+                ([, a], [, b]) => a.insertionOrder - b.insertionOrder));
+            this.orderDirty = false;
+        }
+        return this.entities.values();
+    }
+
     onEntitySet(uuid: string, entity: Entity) {
         if (this.supported(entity)) {
             if (this.entities.get(uuid) === entity) {
                 return;
             }
-            this.entities.set(uuid, entity);
+            this.addMember(uuid, entity);
         } else if (!this.entities.delete(uuid)) {
             // Was not a member and still is not: nothing changed.
             return;
@@ -103,7 +151,7 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
 
     onComponentAdded(uuid: string, entity: Entity) {
         if (this.supported(entity)) {
-            this.entities.set(uuid, entity);
+            this.addMember(uuid, entity);
         }
         this.entityResults.delete(entity); // for `Optional` etc.
         this.resultValid = false;
@@ -179,14 +227,14 @@ class CachedQueryCacheEntry<Args extends readonly ArgTypes[] = readonly ArgTypes
 
         let supportedEntities: Iterable<Entity>;
         if (entities || event?.[0] === DeleteEvent) {
-            supportedEntities = [...entities ?? this.entities.values()].filter(entity => {
+            supportedEntities = [...entities ?? this.members()].filter(entity => {
                 // Don't rely on the cached query when checking if the entity is supported
                 // because the entity (and its entry in the cached query) may have already
                 // been removed (e.g. in the case of DeleteEvent).
                 return this.entities.has(entity.uuid) || this.query.supportsEntity(entity);
             });
         } else {
-            supportedEntities = this.entities.values();
+            supportedEntities = this.members();
         }
 
         const queryResults: QueryResults<Query<Args>> = [];
