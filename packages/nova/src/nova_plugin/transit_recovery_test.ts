@@ -21,24 +21,48 @@ describe('failed-transit recovery', () => {
     }
 
     describe('a hypergate / wormhole transit', () => {
-        it('goes back to the gate it left from', () => {
-            const entity = shipAt('nova:HG-Koria');
-            expect(planGateTransitRecovery(entity, 'nova:HG-V01'))
-                .toEqual({ kind: 'gate', planetId: 'nova:HG-V01' });
-        });
+        const originUp = { systemId: 'nova:130', worldAlive: true };
+        const originGone = { systemId: 'nova:130', worldAlive: false };
 
-        it('drops the arrival claim, so nothing teleports the ship to a '
-            + 'gate it never came through', () => {
+        it('goes back to the gate it left from while the origin world is '
+            + 'still up (an unresolvable destination, found before jumpTo)',
+            () => {
                 const entity = shipAt('nova:HG-Koria');
-                planGateTransitRecovery(entity, 'nova:HG-V01');
-                expect(entity.components.has(GateArrivalComponent))
-                    .toBeFalse();
+                expect(planGateTransitRecovery(entity, 'nova:HG-V01', originUp))
+                    .toEqual({ kind: 'gate', planetId: 'nova:HG-V01' });
+            });
+
+        it('re-enters the origin system once jumpTo has torn the origin '
+            + 'world down (issue #13): there is no world for a lift-off '
+            + 'block to put the ship back into', () => {
+                const entity = shipAt('nova:HG-Koria');
+                expect(planGateTransitRecovery(entity, 'nova:HG-V01',
+                    originGone))
+                    .toEqual({ kind: 'reenter', to: 'nova:130' });
+            });
+
+        it('reports the ship lost rather than arming a lift-off that can '
+            + 'never run when the origin is gone AND unknown', () => {
+                const entity = shipAt('nova:HG-Koria');
+                const plan = planGateTransitRecovery(entity, 'nova:HG-V01',
+                    { systemId: undefined, worldAlive: false });
+                expect(plan.kind).toBe('lost');
+            });
+
+        it('drops the arrival claim either way, so nothing teleports the '
+            + 'ship to a gate it never came through', () => {
+                for (const origin of [originUp, originGone]) {
+                    const entity = shipAt('nova:HG-Koria');
+                    planGateTransitRecovery(entity, 'nova:HG-V01', origin);
+                    expect(entity.components.has(GateArrivalComponent))
+                        .toBeFalse();
+                }
             });
 
         it('works on a ship that never had an arrival marker (a map pick '
             + 'that failed before one was written)', () => {
                 const entity = new Entity('player');
-                expect(planGateTransitRecovery(entity, 'nova:HG-V01'))
+                expect(planGateTransitRecovery(entity, 'nova:HG-V01', originUp))
                     .toEqual({ kind: 'gate', planetId: 'nova:HG-V01' });
             });
     });

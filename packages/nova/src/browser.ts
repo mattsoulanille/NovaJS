@@ -11,11 +11,17 @@ import { Serializer, SerializerResource } from "nova_ecs/plugins/serializer_plug
 import { TimePlugin, TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
-import { firstValueFrom, filter, Subject, Subscription } from "rxjs";
+import { firstValueFrom, filter, Subject, Subscription, timeout } from "rxjs";
 import Stats from 'stats.js';
 import { v4 } from "uuid";
 import { DisplayAssetData } from "./client/gamedata/display_asset_data.js";
 import { SimulationGameData } from "./client/gamedata/simulation_game_data.js";
+import {
+    buildHiredEscort, insertEscortBatch, insertPlayerAndFleet,
+} from "./client/fleet_insertion.js";
+import {
+    isSessionEnded, SessionTransitions, TransitionScope,
+} from "./client/session_transitions.js";
 import { CommunicatorClient } from "./communication/communicator_client.js";
 import { MultiRoom } from "./communication/multi_room_communicator.js";
 import { applySimulationFrame, movementSyncedSinceStep, syncedComponents, warnedUnsyncableEntities } from "./communication/apply_simulation_frame.js";
@@ -61,7 +67,9 @@ import { LeaveGateMapEvent, OpenGateMapEvent } from "./display/gate_map_plugin.j
 import { GateArrivalAnticipationEvent } from "./display/gate_animation_plugin.js";
 import { makeShip } from "./nova_plugin/make_ship.js";
 import { makeSystem, SIMULATION_STEP_MS } from "./nova_plugin/make_system.js";
-import { clearCarriedAggressionForTransition } from "./nova_plugin/aggression.js";
+import {
+    prepareCarriedEntitiesForFreshWorld,
+} from "./nova_plugin/transition_prep.js";
 import { makeControlBitHooks, NCBParseError, runNCBSet } from "./nova_plugin/ncb.js";
 import {
     commitActiveRanks, ControlBitsComponent,
@@ -94,13 +102,9 @@ import {
 } from "./nova_plugin/save_game.js";
 import { ControlledByComponent } from "./nova_plugin/ship_control.js";
 import { ShipComponent, ShipPhysicsComponent } from "./nova_plugin/ship_plugin.js";
-import { MovementStateComponent, MovementTimeLimitResource } from "nova_ecs/plugins/movement_plugin";
+import { MovementTimeLimitResource } from "nova_ecs/plugins/movement_plugin";
 import { shouldExtrapolate } from "./display/movement_extrapolation_plugin.js";
-import { Vector } from "nova_ecs/datatypes/vector";
-import { EscortCommandComponent } from "./nova_plugin/escort_command.js";
-import { FiringGroupComponent } from "./nova_plugin/firing_group.js";
-import { FormationComponent, formationSlotPosition } from "./nova_plugin/npc_ai_plugin.js";
-import { makeNpcShip } from "./nova_plugin/npc_spawn_plugin.js";
+import { FormationComponent } from "./nova_plugin/npc_ai_plugin.js";
 import {
     buildMissionShipSpawns, liveMissionShips,
 } from "./nova_plugin/mission_ship_spawn.js";
@@ -109,7 +113,7 @@ import { clearShipDoneTextShown } from "./spaceport/ship_done_shown.js";
 import { PendingEscortsComponent } from "./spaceport/pending_escorts.js";
 import {
     carriedBatchMustHold, carriedBatchSettled, CarriedEscort,
-    escortsAccountedFor, prepareCarriedEscorts, restoreFailedTransitionBatch,
+    escortsAccountedFor, restoreFailedTransitionBatch,
     takeCarriedEscorts, takeEscortsForTransition,
 } from "./spaceport/landed_escorts.js";
 import { restockCarriedEscorts } from "./spaceport/escort_restock.js";
@@ -387,6 +391,36 @@ window.addEventListener('resize', () => applyDisplayScale());
 let simulationBridge: AsyncSimulationBridgeClient | undefined;
 let simulationWorker: Worker | undefined;
 let simulationSerializer: Serializer | undefined;
+/**
+ * The session generation every system transition runs under, so that an
+ * exit-to-title can invalidate the transitions still in flight instead of
+ * racing them (client/session_transitions.ts; issue #30). startGame opens
+ * a generation, teardownGame closes it and waits for the bail-outs.
+ */
+const sessionTransitions = new SessionTransitions();
+/**
+ * How long a transition waits for the destination room's server peer
+ * before giving up and recovering the ship (issue #72). A room join
+ * normally completes well inside a second; the bound only matters when
+ * the socket drops mid-transition, where waiting forever left the white
+ * screen up for good with the escort batch held in a local.
+ */
+const SERVER_PEER_TIMEOUT_MS = 20_000;
+
+/**
+ * A bridge call whose result nobody waits for (a keypress, a touch
+ * release, an autopilot cancel). Rejecting because the bridge closed
+ * under it is the ordinary consequence of a transition taking the
+ * bridge away mid-call, and is silent; anything else is logged rather
+ * than surfacing as an unhandled rejection (issue #71).
+ */
+function sendToBridge(call: Promise<unknown> | undefined, what: string): void {
+    call?.catch(e => {
+        if (!(e instanceof SimulationBridgeClosedError)) {
+            console.warn(`${what} failed:`, e);
+        }
+    });
+}
 let activeSystemId: string | undefined;
 let roomSubscriptions: Subscription[] = [];
 let pendingDockedShip: { uuid: string, entity: Entity, planetId: string } | undefined;
@@ -707,53 +741,27 @@ function nextFormationSlot(displayWorld: World, leaderUuid: string): number {
     return slot;
 }
 
+/**
+ * The bar-hire spawn on its own, for the `novaSpawnEscorts` test lever:
+ * the lift-off paths spawn their hires inside the one fleet-insertion
+ * sequence (client/fleet_insertion.ts), and this is the same builder
+ * without the player insertion in front of it.
+ */
 async function spawnHiredEscorts(
     bridge: AsyncSimulationBridgeClient, displayWorld: World,
     leaderUuid: string, leader: Entity, shipIds: string[],
-    ownerUuid?: string, firstSlot?: number): Promise<void> {
-    const movement = leader.components.get(MovementStateComponent);
-    if (!movement) {
-        console.warn('Hired escorts skipped: leader has no movement state');
-        return;
-    }
-    // Continue slot numbering after existing followers (e.g. escorts
-    // hired on an earlier landing this session). `firstSlot` lets a
-    // caller that inserts several batches in one launch (returning
-    // escorts, then new hires) keep their slots distinct — the display
-    // world does not see the earlier batch until a later frame.
-    let slot = firstSlot ?? nextClientSlot(displayWorld, leaderUuid);
+    ownerUuid?: string): Promise<void> {
+    let slot = nextClientSlot(displayWorld, leaderUuid);
     noteSlotsUsed(leaderUuid, slot + shipIds.length);
     for (const shipId of shipIds) {
         try {
             const shipData = await simulationGameData.data.Ship.get(shipId);
-            const position = formationSlotPosition(
-                movement.position, movement.rotation, slot);
-            const escort = makeNpcShip(shipData, 0, null, position,
-                movement.rotation, new Vector(0, 0));
-            escort.components.set(FormationComponent,
-                { leader: leaderUuid, slot });
-            // Fresh escorts start under the default escort command;
-            // spawning here (on liftoff / system entry) IS the
-            // "commands reset to formation" rule.
-            escort.components.set(EscortCommandComponent,
-                { command: 'formation' });
-            // Hired escorts share the player's firing group so their shots
-            // pass through the player (and vice versa via the owner-root
-            // fallback) — same friendly-fire immunity as NPC fleets.
-            escort.components.set(FiringGroupComponent,
-                { group: leaderUuid });
-            // Durable ownership from the first tick (the simulation's
-            // MarkPlayerEscortsSystem would stamp this anyway, one tick
-            // later, from the formation link).
-            // PROVENANCE 'hired': this pilot was engaged at the bar. It is
-            // what makes the comm dialog charge a daily wage for them and
-            // refuse to sell their ship (it was never the player's) — see
-            // player_escort.ts's provenance and spaceport/escort_fees.ts.
-            escort.components.set(PlayerEscortComponent,
-                { player: leaderUuid, parent: leaderUuid,
-                    provenance: 'hired' });
-            if (ownerUuid) {
-                escort.components.set(MultiplayerData, { owner: ownerUuid });
+            const escort = buildHiredEscort(shipData, leaderUuid, leader,
+                slot, ownerUuid);
+            if (!escort) {
+                console.warn('Hired escorts skipped: leader has no movement '
+                    + 'state');
+                return;
             }
             await bridge.addEntity(v4(), escort);
             slot++;
@@ -765,29 +773,20 @@ async function spawnHiredEscorts(
 
 /**
  * Re-inserts escorts the simulation handed over (landed with the player, or
- * departed with them into hyperspace) at formation stations on their leader.
- *
- * Fresh uuids: a batch can be re-inserted into a brand new system world whose
- * id factory has restarted, so reusing the old bay-launch ids could collide
- * with a later launch. Intra-batch references (a fighter naming its carrier)
- * are remapped to the new uuids by prepareCarriedEscorts, and a fighter's own
- * identity is component-borne rather than uuid-borne, so re-minting is safe.
+ * departed with them into hyperspace) at formation stations on their leader,
+ * and RETURNS THE ONES THAT COULD NOT BE INSERTED so the caller can put them
+ * back on a roster (client/fleet_insertion.ts has the whole policy; issue
+ * #31). The standing flushes retry them on a later frame.
  */
 async function insertCarriedEscorts(
     bridge: AsyncSimulationBridgeClient, displayWorld: World,
     leaderUuid: string, leader: Entity, escorts: CarriedEscort[],
-    ownerUuid?: string, firstSlot?: number): Promise<void> {
-    const base = firstSlot ?? nextClientSlot(displayWorld, leaderUuid);
-    const prepared = prepareCarriedEscorts(escorts, leaderUuid, leader, base,
-        v4, ownerUuid);
+    ownerUuid?: string): Promise<CarriedEscort[]> {
+    const base = nextClientSlot(displayWorld, leaderUuid);
     noteSlotsUsed(leaderUuid, base + escorts.length);
-    for (const { uuid, entity } of prepared) {
-        try {
-            await bridge.addEntity(uuid, entity);
-        } catch (e) {
-            console.warn(`Failed to re-insert carried escort ${uuid}:`, e);
-        }
-    }
+    const { failed } = await insertEscortBatch(bridge, leaderUuid, leader,
+        escorts, base, v4, ownerUuid);
+    return failed;
 }
 
 /**
@@ -879,10 +878,17 @@ function takeLandedEscorts(player: string): CarriedEscort[] {
 async function takeLandedEscortsRestocked(player: string):
     Promise<CarriedEscort[]> {
     const taken = takeLandedEscorts(player);
-    await restockCarriedEscorts(taken, {
-        getOutfit: id => simulationGameData.data.Outfit.get(id),
-        getWeapon: id => simulationGameData.data.Weapon.get(id),
-    });
+    try {
+        await restockCarriedEscorts(taken, {
+            getOutfit: id => simulationGameData.data.Outfit.get(id),
+            getWeapon: id => simulationGameData.data.Weapon.get(id),
+        });
+    } catch (e) {
+        // The roster was emptied before the (network-bound) restock; a
+        // failure there must not take the batch with it (issue #31).
+        landedEscorts.push(...taken);
+        throw e;
+    }
     return taken;
 }
 
@@ -953,8 +959,9 @@ async function flushLandedEscorts(bridge: AsyncSimulationBridgeClient,
     if (mine.length === 0) {
         return;
     }
-    await insertCarriedEscorts(bridge, displayWorld, playerUuid, leader, mine,
-        communicator.uuid ?? undefined);
+    // Whatever could not go in goes back on the roster for the next frame.
+    landedEscorts.push(...await insertCarriedEscorts(bridge, displayWorld,
+        playerUuid, leader, mine, communicator.uuid ?? undefined));
 }
 
 /**
@@ -986,8 +993,9 @@ async function flushCarriedJumpEscorts(bridge: AsyncSimulationBridgeClient,
     if (mine.length === 0) {
         return;
     }
-    await insertCarriedEscorts(bridge, displayWorld, playerUuid, leader, mine,
-        communicator.uuid ?? undefined);
+    // Whatever could not go in goes back on the roster for the next frame.
+    carriedJumpEscorts.push(...await insertCarriedEscorts(bridge,
+        displayWorld, playerUuid, leader, mine, communicator.uuid ?? undefined));
 }
 
 /**
@@ -1020,22 +1028,6 @@ async function prepareMissionShips(playerEntity: Entity, playerUuid: string,
     } catch (e) {
         console.warn('Failed to prepare mission ships:', e);
         return [];
-    }
-}
-
-async function insertMissionShips(bridge: AsyncSimulationBridgeClient,
-    ships: Entity[], ownerUuid?: string): Promise<void> {
-    for (const ship of ships) {
-        try {
-            if (ownerUuid) {
-                // Like hired escorts: peer-owned so removePeer cleans
-                // them up if this client vanishes.
-                ship.components.set(MultiplayerData, { owner: ownerUuid });
-            }
-            await bridge.addEntity(v4(), ship);
-        } catch (e) {
-            console.warn('Failed to spawn mission ship:', e);
-        }
     }
 }
 
@@ -1099,11 +1091,17 @@ function buildSaveData(entity?: Entity): SaveData | undefined {
     }
     // While docked the player entity is out of the display world; the
     // docked/relaunching entity carries the freshest state (mission
-    // acceptances, payments, the advanced date).
+    // acceptances, payments, the advanced date). A HYPERGATE dock holds
+    // the entity the same way (the gate map is open, the ship is out of
+    // the sim) and was missing from this chain, so every periodic save
+    // between a gate landing and the transit wrote nothing (issue #69).
     const playerShip = entity
         ?? pendingLaunchedShip
+        ?? pendingGateLaunch
         ?? dockedShip?.entity
+        ?? gateDockedShip?.entity
         ?? pendingDockedShip?.entity
+        ?? pendingGateShip?.entity
         ?? getPlayerShipEntity(displayWorld);
     if (!playerShip) {
         return undefined;
@@ -1201,7 +1199,8 @@ function recordCheckpointNow(request: CheckpointRequest) {
         return;
     }
     const stellar = request.stellar
-        ?? dockedShip?.planetId ?? pendingDockedShip?.planetId;
+        ?? dockedShip?.planetId ?? pendingDockedShip?.planetId
+        ?? gateDockedShip?.planetId ?? pendingGateShip?.planetId;
     try {
         recordCheckpoint(getActiveSaveKey(), envelope, {
             label: request.label,
@@ -1322,13 +1321,27 @@ async function makeDisplayWorld(systemId: string) {
 
 /**
  * Tears down the currently active system: detaches and closes the
- * simulation bridge (optionally removing an entity first so peers see it
- * vanish), unsubscribes the room forwarders, removes the display stage,
- * leaves the system room, drops the Display plugin, and clears the synced
- * entities. Shared by a system transition (jumpTo, which then joins the
- * next system) and by leaving the game entirely (exit-to-title).
+ * simulation bridge, unsubscribes the room forwarders, removes the display
+ * stage, leaves the system room, drops the Display plugin, and clears the
+ * synced entities. Shared by a system transition (jumpTo, which then joins
+ * the next system) and by leaving the game entirely (exit-to-title).
+ *
+ * IDEMPOTENT: a second call finds nothing to do. An exit-to-title can run
+ * while a transition is between its own teardown and its new world (issue
+ * #30), and both call this.
+ *
+ * THE PLAYER'S SHIP IS NOT REMOVED HERE. It used to be scheduled as a
+ * `removeEntity` input just before `close()`, on the theory that every
+ * other peer would see it vanish — but an input is only published by a
+ * `step()`, and nothing steps between the two calls (the pump is detached
+ * first, by design), so the record never left this client (issue #68). On
+ * a jump or a gate pick the simulation has already deleted the ship on
+ * every peer anyway; on an exit-to-title the mechanism that actually
+ * removes it is the room leave below: the server's relay authors a
+ * `removePeer` record for a peer that leaves (rollback_relay.ts), which
+ * every peer applies deterministically to everything this peer owned.
  */
-async function teardownActiveSystem(removeUuid?: string) {
+async function teardownActiveSystem() {
     if (simulationBridge) {
         // Detach the bridge from the pump BEFORE tearing it down, so
         // no new pump frame starts a call against the dying worker. A
@@ -1338,9 +1351,6 @@ async function teardownActiveSystem(removeUuid?: string) {
         const oldBridge = simulationBridge;
         simulationBridge = undefined;
         simulationPacing = undefined;
-        if (removeUuid) {
-            await oldBridge.removeEntity(removeUuid);
-        }
         await oldBridge.close();
     }
     simulationWorker = undefined;
@@ -1354,11 +1364,14 @@ async function teardownActiveSystem(removeUuid?: string) {
             app.stage.removeChild(root);
         }
         multiRoom.leave(activeSystemId);
+        activeSystemId = undefined;
         if (displayWorld) {
-            await displayWorld.removePlugin(Display);
-        }
-        for (const uuid of syncedComponents.keys()) {
-            displayWorld?.entities.delete(uuid);
+            const oldWorld = displayWorld;
+            displayWorld = undefined;
+            await oldWorld.removePlugin(Display);
+            for (const uuid of syncedComponents.keys()) {
+                oldWorld.entities.delete(uuid);
+            }
         }
         syncedComponents.clear();
         // The freshness stamps name uuids from the world being torn down.
@@ -1400,25 +1413,45 @@ async function jumpTo(args: { entity: Entity, to: string, uuid: string }) {
     // (takeLandedEscortsRestocked). See takeEscortsForTransition.
     const { batch: jumpEscorts, fromLanded } = takeEscortsForTransition(
         carriedJumpEscorts, landedEscorts, args.uuid);
-    // The carried entities' aggression is cleared inside enterSystem, at the
-    // one point where the batch is FINAL (a restored save's escorts join it
-    // there) — see clearCarriedAggressionForTransition.
+    // The carried entities' aggression and stale references are cleared
+    // inside enterSystem, at the one point where the batch is FINAL (a
+    // restored save's escorts join it there) — see
+    // prepareCarriedEntitiesForFreshWorld.
+    //
+    // Run as a TRACKED transition of the current session: an exit-to-title
+    // in the middle of it invalidates the scope, enterSystem bails at its
+    // next check, and teardownGame waits for that before it resets the
+    // rosters — so the batch handed back below lands before the reset,
+    // never after it (issue #30).
     try {
-        await enterSystem(args, jumpEscorts);
+        await sessionTransitions.run(scope => enterSystem(args, jumpEscorts,
+            scope));
     } catch (e) {
         // Never drop a single escort — but put each one back on the roster
         // it came from, so a landed escort keeps its landed bookkeeping
         // instead of being quietly reclassified as mid-jump.
-        const back = restoreFailedTransitionBatch(jumpEscorts, fromLanded);
-        landedEscorts.push(...back.landed);
-        carriedJumpEscorts.push(...back.jumping);
+        //
+        // UNLESS THE SESSION IS GONE: then the rosters belong to no one (the
+        // teardown resets them, and the save that stands predates the
+        // jump), and a batch pushed onto them from here would be dealt
+        // into the NEXT session's first system.
+        if (!isSessionEnded(e)) {
+            const back = restoreFailedTransitionBatch(jumpEscorts, fromLanded);
+            landedEscorts.push(...back.landed);
+            carriedJumpEscorts.push(...back.jumping);
+        }
         throw e;
     }
 }
 
 async function enterSystem({ entity, to, uuid }:
     { entity: Entity, to: string, uuid: string },
-    jumpEscorts: CarriedEscort[]) {
+    jumpEscorts: CarriedEscort[], scope: TransitionScope) {
+    // The session may already have ended while the caller was awaiting
+    // something ahead of this (the FinishJumpEvent handler's date advance
+    // runs the mission preload on the first jump): nothing below may touch
+    // the torn-down session.
+    scope.check();
     autopilot?.cancel();
     // A multi-jump chain (ModType 32) is about to auto-continue out of the
     // system we are arriving in. Hold the batch rather than inserting it
@@ -1442,11 +1475,16 @@ async function enterSystem({ entity, to, uuid }:
     gateDockedShip = undefined;
     pendingGateLaunch = undefined;
     syncedPlayerJumpRoute = undefined;
-    await teardownActiveSystem(uuid);
+    await teardownActiveSystem();
+    scope.check();
     activeSystemId = to;
 
     const room = multiRoom.join(to);
-    const serializerWorld = await makeSystem(to, simulationGameData, 'worker');
+    // The long waits below go through scope.race so an exit-to-title
+    // settles them at once instead of waiting out a world build or a
+    // room join it is about to throw away.
+    const serializerWorld = await scope.race(
+        makeSystem(to, simulationGameData, 'worker'));
     const serializer = serializerWorld.resources.get(SerializerResource);
     if (!serializer) {
         throw new Error('Expected simulation serializer resource to exist');
@@ -1497,10 +1535,11 @@ async function enterSystem({ entity, to, uuid }:
     }
 
     // THE CARRIED-ENTITY PREPARATION FOR A FRESH WORLD, player and escorts
-    // alike. Run HERE rather than back in jumpTo because the batch is only
-    // final now: a restored save's escorts were pushed onto it just above.
-    // See clearCarriedAggressionForTransition.
-    clearCarriedAggressionForTransition(entity, jumpEscorts);
+    // alike: aggression tables, the player's reticles, every escort's
+    // out-of-batch references. Run HERE rather than back in jumpTo because
+    // the batch is only final now: a restored save's escorts were pushed
+    // onto it just above. See prepareCarriedEntitiesForFreshWorld.
+    prepareCarriedEntitiesForFreshWorld(entity, uuid, jumpEscorts);
 
     const worker = new Worker("/simulation_bridge_browser_worker_bundle.js", {
         type: "module",
@@ -1510,6 +1549,24 @@ async function enterSystem({ entity, to, uuid }:
         serializer,
     );
     simulationWorker = worker;
+
+    // From here on there is a Worker to account for. It is published to
+    // the pump (`simulationBridge`) only at the very end, so a rejection
+    // anywhere in between — the room join, the snapshot, the display
+    // world, an insertion, or the session ending — used to leave it alive
+    // for the page lifetime, still joined to the room under this peer's
+    // uuid (issue #67). Closing the bridge terminates it; the scope runs
+    // this if (and only if) the transition rejects.
+    scope.onFailure(async () => {
+        for (const subscription of roomSubscriptions) {
+            subscription.unsubscribe();
+        }
+        roomSubscriptions = [];
+        if (simulationWorker === worker) {
+            simulationWorker = undefined;
+        }
+        await newSimulationBridge.close();
+    });
 
     // Forward room traffic to the worker BEFORE init: init awaits
     // joinRoom, whose catch-up reply arrives on this channel. With the
@@ -1529,7 +1586,7 @@ async function enterSystem({ entity, to, uuid }:
         }),
     ];
 
-    await host.init(
+    await scope.race(host.init(
         {
             systemId: to,
             roomState: {
@@ -1542,10 +1599,11 @@ async function enterSystem({ entity, to, uuid }:
         Comlink.proxy(async (message, destination) => {
             room.sendMessage(message, destination);
         }),
-    );
+    ));
 
-    const initialFrame = await newSimulationBridge.snapshot();
+    const initialFrame = await scope.race(newSimulationBridge.snapshot());
     const newDisplayWorld = await makeDisplayWorld(to);
+    scope.check();
     if (pendingGateArrivalSpob) {
         // Announce the incoming gate arrival before the room join completes:
         // the event is queued and processed once this world starts stepping
@@ -1590,35 +1648,36 @@ async function enterSystem({ entity, to, uuid }:
             ...(planetId ? { stellar: planetId } : {}),
         });
     });
-    newDisplayWorld.events.get(AddEnemyEvent).subscribe(async ({ data }) => {
+    newDisplayWorld.events.get(AddEnemyEvent).subscribe(({ data }) => {
         const { shipId } = data;
-        await simulationGameData.data.Ship.get(shipId);
-        await newSimulationBridge.spawnNpc(shipId);
+        sendToBridge(simulationGameData.data.Ship.get(shipId)
+            .then(() => newSimulationBridge.spawnNpc(shipId)), 'Add enemy');
     });
     // Plunder/capture dialog buttons drive the sim through the control
     // input path: a single 'start' edge fires the edge-triggered boarding
     // action system (BoardingActionSystem) once, replayed on every peer.
     // Idempotency lives in the sim (per-action flags / capture state).
     newDisplayWorld.events.get(PlunderActionEvent).subscribe(({ data }) => {
-        void newSimulationBridge.controlEvents([
-            { action: data.action, state: 'start' }]);
+        sendToBridge(newSimulationBridge.controlEvents([
+            { action: data.action, state: 'start' }]), 'Plunder action');
     });
     // Debug-button cheats (status_bar.ts): forwarded on the same
     // control-event input path as the plunder actions, so the +credits /
     // clear-record edge fires DebugCheatSystem once, replayed on every
     // peer.
     newDisplayWorld.events.get(DebugActionEvent).subscribe(({ data }) => {
-        void newSimulationBridge.controlEvents([
-            { action: data.action, state: 'start' }]);
+        sendToBridge(newSimulationBridge.controlEvents([
+            { action: data.action, state: 'start' }]), 'Debug action');
     });
     newDisplayWorld.events.get(SetJumpRouteEvent).subscribe(({ data }) => {
         syncedPlayerJumpRoute = data.route.slice();
-        void newSimulationBridge.setPlayerJumpRoute(data.route);
+        sendToBridge(newSimulationBridge.setPlayerJumpRoute(data.route),
+            'Jump route');
     });
     // Hail dialog actions become deterministic input records: assist/bribe go
     // through bridge.hail.
     newDisplayWorld.events.get(HailRequestEvent).subscribe(({ data }) => {
-        void newSimulationBridge.hail(data.action);
+        sendToBridge(newSimulationBridge.hail(data.action), 'Hail');
     });
     // The escort comm dialog's MANAGEMENT functions (release / sell /
     // upgrade — nova_plugin/escort_action.ts) take the same road, on their
@@ -1631,7 +1690,8 @@ async function enterSystem({ entity, to, uuid }:
     // (spaceport/escort_deals.ts). (Commanding escorts is still the keyboard
     // escort-controls' job; this dialog does not issue fleet orders.)
     newDisplayWorld.events.get(EscortActionEvent).subscribe(({ data }) => {
-        void newSimulationBridge.escortAction(data.action);
+        sendToBridge(newSimulationBridge.escortAction(data.action),
+            'Escort action');
     });
     // A mission accepted from a përs ship in flight (mïsn AvailLoc 2).
     // The display resolved the whole acceptance against a detached copy
@@ -1683,6 +1743,11 @@ async function enterSystem({ entity, to, uuid }:
                 entity: playerShip,
                 planetId: data.id,
             };
+            // A save point exactly like the spaceport dock below: the ship
+            // is out of the sim from here until it transits or lifts off,
+            // and the periodic save reads it through the gate handles
+            // (buildSaveData; issue #69).
+            saveNow();
             return;
         }
         pendingDockedShip = {
@@ -1739,7 +1804,11 @@ async function enterSystem({ entity, to, uuid }:
         // The system being LEFT, captured before the transition clears it.
         // A failed jumpTo has nowhere else to put the ship back.
         const origin = activeSystemId;
-        void (async () => {
+        // The WHOLE follow-through is a tracked transition (issue #30),
+        // date advance included: an exit-to-title during the (possibly
+        // long) advance waits for this to bail rather than letting the
+        // jumpTo below start into a torn-down session.
+        void sessionTransitions.run(async () => {
             // A jump takes days (by ship mass, adjusted by any
             // "hyperspace speed mod" outfits); advance the player's
             // calendar while the entity is between simulations. The
@@ -1784,11 +1853,21 @@ async function enterSystem({ entity, to, uuid }:
             try {
                 await jumpTo(data);
             } catch (e) {
+                if (isSessionEnded(e)) {
+                    // Exit-to-title took the session: there is no world
+                    // to recover the ship into, and nothing was lost —
+                    // the save that stands is the last one written.
+                    return;
+                }
                 console.warn('Hyperspace jump failed:', e);
                 await abortHyperspaceJump(data, origin,
                     'Hyperspace jump failed.');
             }
-        })();
+        }).catch(e => {
+            if (!isSessionEnded(e)) {
+                console.error('Jump follow-through failed:', e);
+            }
+        });
     });
     newDisplayWorld.events.get(GateTransitEvent).subscribe(({ data }) => {
         // Wormhole transit reuses the jump room-switch. Only the local
@@ -1797,14 +1876,26 @@ async function enterSystem({ entity, to, uuid }:
         if (!data.entity.components.has(PlayerShipSelector)) {
             return;
         }
+        // The system being LEFT, captured before the transition clears it:
+        // a rejection after jumpTo has torn this world down has nowhere
+        // else to put the ship back (issue #13).
+        const origin = activeSystemId;
         // A rejection here would leave the ship and its flock deleted with
         // nothing to put them back (the sim removed them as the transit
-        // began), so failures land on the same return-to-the-gate recovery
-        // as an unresolvable destination.
-        void gateTransit(data).catch(e => {
-            console.warn('Gate transit failed:', e);
-            abortGateTransit(data, 'Gate transit failed.');
-        });
+        // began), so failures land on the same recovery as an unresolvable
+        // destination.
+        void sessionTransitions.run(() => gateTransit(data, origin)
+            .catch(async e => {
+                if (isSessionEnded(e)) {
+                    return; // See the FinishJumpEvent handler.
+                }
+                console.warn('Gate transit failed:', e);
+                await abortGateTransit(data, origin, 'Gate transit failed.');
+            })).catch(e => {
+                if (!isSessionEnded(e)) {
+                    console.error('Gate transit follow-through failed:', e);
+                }
+            });
     });
     newDisplayWorld.events.get(LeaveGateMapEvent).subscribe(({ data }) => {
         // The hypergate map closed. With a destination picked, ride the jump
@@ -1821,46 +1912,83 @@ async function enterSystem({ entity, to, uuid }:
         // Same recovery as a wormhole transit: the pump's gate-dock block
         // has already removed this ship from the simulation, so a rejection
         // anywhere below would lose it. `fromSpob` is the gate it is docked
-        // at, which is exactly where abortGateTransit puts it back.
+        // at, which is exactly where abortGateTransit puts it back while
+        // this world is still up — and `origin` is where it re-enters once
+        // jumpTo has torn this world down (issue #13).
         const abortTo = {
             entity: ship, uuid: docked.uuid, fromSpob: docked.planetId,
         };
-        void (async () => {
-            const to = await gateDestinationResolver.systemOf(destinationSpob);
-            if (!to) {
-                console.warn(`Hypergate destination ${destinationSpob} is not `
-                    + `in any system; lifting off instead.`);
-                pendingGateLaunch = ship;
-                return;
+        const origin = activeSystemId;
+        // Tracked, recovery included (see the FinishJumpEvent handler).
+        void sessionTransitions.run(async () => {
+            try {
+                const to = await gateDestinationResolver.systemOf(
+                    destinationSpob);
+                if (!to) {
+                    console.warn(`Hypergate destination ${destinationSpob} `
+                        + `is not in any system; lifting off instead.`);
+                    pendingGateLaunch = ship;
+                    return;
+                }
+                // The arrival marker rides the re-insertion input record
+                // to every peer; GateArrivalSystem in the destination
+                // world positions the ship flying out of the arrival gate.
+                // The emergence angle is null so the DESTINATION gate's
+                // own CustSndID (read there) decides the fly-out
+                // direction; randomDraw backs it up when that angle says
+                // "random".
+                ship.components.set(GateArrivalComponent, {
+                    destinationSpob,
+                    emergenceAngle: null,
+                    randomDraw: Math.random(),
+                });
+                pendingGateArrivalSpob = destinationSpob;
+                await jumpTo({ entity: ship, to, uuid: docked.uuid });
+            } catch (e) {
+                if (isSessionEnded(e)) {
+                    return;
+                }
+                console.warn('Hypergate transit failed:', e);
+                await abortGateTransit(abortTo, origin,
+                    'Hypergate transit failed.');
             }
-            // The arrival marker rides the re-insertion input record to every
-            // peer; GateArrivalSystem in the destination world positions the
-            // ship flying out of the arrival gate. The emergence angle is
-            // null so the DESTINATION gate's own CustSndID (read there)
-            // decides the fly-out direction; randomDraw backs it up when
-            // that angle says "random".
-            ship.components.set(GateArrivalComponent, {
-                destinationSpob,
-                emergenceAngle: null,
-                randomDraw: Math.random(),
-            });
-            pendingGateArrivalSpob = destinationSpob;
-            await jumpTo({ entity: ship, to, uuid: docked.uuid });
-        })().catch(e => {
-            console.warn('Hypergate transit failed:', e);
-            abortGateTransit(abortTo, 'Hypergate transit failed.');
+        }).catch(e => {
+            if (!isSessionEnded(e)) {
+                console.error('Hypergate transit recovery failed:', e);
+            }
         });
     });
 
     // Wait until the current peer set includes the server, without racing
     // between an immediate state check and a later join event subscription.
-    await firstValueFrom(room.peers.current.pipe(filter(peers => peers.has('server'))));
+    // BOUNDED (issue #72): a socket drop mid-transition used to leave this
+    // waiting forever, white screen up, escort batch held in a local. The
+    // rxjs timeout drops the subscription and rejects, which lands on the
+    // recovery paths like any other failed transition; the session ending
+    // settles it sooner still.
+    await scope.race(firstValueFrom(room.peers.current.pipe(
+        filter(peers => peers.has('server')),
+        timeout({ first: SERVER_PEER_TIMEOUT_MS }))));
+    // Escorts that followed the player through hyperspace are inserted at
+    // formation stations around the arrival point, coasting in at the
+    // player's arrival velocity. Instant carry with no warp-in animation of
+    // their own (documented v1 seam): the escorts simply appear with the
+    // player. Their commands are reset to formation by
+    // prepareCarriedEscorts, which also keeps any carrier-and-wing
+    // relationships inside the batch intact.
+    //
+    // UNLESS the batch must be HELD: another hop is coming, or the player
+    // has not been placed at its arrival gate yet. Then it waits rather
+    // than being put down here. The next jumpTo takes it straight back out
+    // of this array (same player uuid), and flushCarriedJumpEscorts puts it
+    // down once the chain ends / the gate exit is known.
+    const arrivingEscorts = holdBatch ? [] : jumpEscorts;
     // Mission ships whose spawn system this is (or that follow the
     // player) jump in with the player. Prepared before the player
     // entity is encoded into its insertion record.
-    const missionShips = entity.components.has(PlayerShipSelector)
-        ? await prepareMissionShips(entity, uuid, to,
-            holdBatch ? 0 : jumpEscorts.length) : [];
+    const missionShips = await prepareMissionShips(entity, uuid, to,
+        arrivingEscorts.length);
+    scope.check();
     // A gate/wormhole arrival reconciles the pinned route with where the
     // player actually is (a hyperspace arrival's route is already right —
     // beginJump shifted it at jump start; see reconcileRouteOnArrival).
@@ -1869,38 +1997,32 @@ async function enterSystem({ entity, to, uuid }:
     // insertion record keeps this on the owner-driven input path.
     reconcileRouteOnArrival(entity, to,
         entity.components.has(GateArrivalComponent) ? 'gate' : 'jump');
-    await newSimulationBridge.addEntity(uuid, entity);
-    if (entity.components.has(PlayerShipSelector)) {
-        (window as any).myShip = entity;
+    // THE ONE INSERTION SEQUENCE (client/fleet_insertion.ts): player,
+    // carried escorts, mission ships. A fresh world has a fresh slot run
+    // (clientSlotFloor was cleared above), so stations start at 0.
+    noteSlotsUsed(uuid, arrivingEscorts.length);
+    const inserted = await insertPlayerAndFleet({
+        bridge: newSimulationBridge, playerUuid: uuid, player: entity,
+        escorts: arrivingEscorts, missionShips,
+        ownerUuid: communicator.uuid ?? undefined, baseSlot: 0,
+        mintUuid: v4, getShip: id => simulationGameData.data.Ship.get(id),
+    });
+    (window as any).myShip = entity;
+    if (holdBatch) {
+        carriedJumpEscorts.push(...jumpEscorts);
     }
-    // Escorts that followed the player through hyperspace, inserted at
-    // formation stations around the arrival point and coasting in at the
-    // player's arrival velocity. Instant carry with no warp-in animation of
-    // their own (documented v1 seam): the escorts simply appear with the
-    // player. Their commands are reset to formation by
-    // prepareCarriedEscorts, which also keeps any carrier-and-wing
-    // relationships inside the batch intact.
-    if (jumpEscorts.length > 0) {
-        if (holdBatch) {
-            // Another hop is coming, or the player has not been placed at
-            // its arrival gate yet: the batch waits rather than being put
-            // down here. The next jumpTo takes it straight back out of
-            // this array (same player uuid), and flushCarriedJumpEscorts
-            // puts it down once the chain ends / the gate exit is known.
-            carriedJumpEscorts.push(...jumpEscorts);
-        } else {
-            await insertCarriedEscorts(newSimulationBridge, newDisplayWorld,
-                uuid, entity, jumpEscorts, communicator.uuid ?? undefined);
-        }
-    }
-    await insertMissionShips(newSimulationBridge, missionShips,
-        communicator.uuid ?? undefined);
+    // An escort whose own insertion rejected is not dropped: the standing
+    // flush puts it down on a later frame (issue #31).
+    carriedJumpEscorts.push(...inserted.failed);
     // The new bridge starts from a fresh delta stream, so drop any
     // bookkeeping from the previous system's sync.
     syncedComponents.clear();
     warnedUnsyncableEntities.clear();
     applySimulationFrame(initialFrame, serializer, newDisplayWorld);
     syncedPlayerJumpRoute = getDisplayPlayerJumpRoute(newDisplayWorld)?.slice();
+    // The last thing that can fail is behind us: the session is checked
+    // one final time so a world is never published over a title screen.
+    scope.check();
     simulationBridge = newSimulationBridge;
     displayWorld = newDisplayWorld;
     // Debug toggles, e.g. novaDebug.showCollisionShapes = true. Settings
@@ -1919,18 +2041,36 @@ async function enterSystem({ entity, to, uuid }:
  * simply returning would delete the player's ship and every escort from the
  * game — the "staying put" this used to claim was never true.
  *
- * Recovery reuses the hypergate lift-off machinery rather than re-adding the
- * ship by hand: setting the docked/launch pair makes the pump's
- * `pendingGateLaunch && gateDockedShip` block re-add the ship at the gate,
- * re-insert the landed roster (which is where the swept flock is waiting),
- * and respawn mission ships, with the slot bookkeeping already right. That
- * is exactly the path a player takes when they open a hypergate map and
- * close it without picking anything.
+ * WHILE THE ORIGIN WORLD IS STILL UP (a destination that could not be
+ * resolved — found before jumpTo ran), recovery reuses the hypergate
+ * lift-off machinery rather than re-adding the ship by hand: setting the
+ * docked/launch pair makes the pump's `pendingGateLaunch && gateDockedShip`
+ * block re-add the ship at the gate, re-insert the landed roster (which is
+ * where the swept flock is waiting), and respawn mission ships, with the
+ * slot bookkeeping already right. That is exactly the path a player takes
+ * when they open a hypergate map and close it without picking anything.
+ *
+ * ONCE jumpTo HAS TORN THE ORIGIN DOWN — which is where every realistic
+ * rejection happens (the destination world build, the worker, the room
+ * join, the arrival insertion) — that block can never run: there is no
+ * bridge, the origin's display is off the stage, and its room is left.
+ * Arming the pair anyway used to leave the player with a black screen, no
+ * ship in any world, the flock parked on the landed roster for ever, and
+ * no save (issue #13). So the ship RE-ENTERS the origin system instead,
+ * the way a failed hyperspace jump does (abortHyperspaceJump): jumpTo
+ * builds the origin world again and inserts the ship where it was — at
+ * the gate — and the retry's own takeEscortsForTransition picks the flock
+ * up off the roster jumpTo handed it back to. transit_recovery.ts holds
+ * the choice; `origin` is the system captured before the transit began.
  */
-function abortGateTransit(
-    data: { entity: Entity, uuid: string, fromSpob: string }, reason: string) {
-    console.warn(`${reason} Returning the ship to the origin gate.`);
-    const plan = planGateTransitRecovery(data.entity, data.fromSpob);
+async function abortGateTransit(
+    data: { entity: Entity, uuid: string, fromSpob: string },
+    origin: string | undefined, reason: string): Promise<void> {
+    const plan = planGateTransitRecovery(data.entity, data.fromSpob, {
+        systemId: origin,
+        worldAlive: origin !== undefined && activeSystemId === origin
+            && simulationBridge !== undefined,
+    });
     // The arrival announcement goes with the arrival marker the plan just
     // stripped. `pendingGateArrivalSpob` is set just before the transit's
     // jumpTo and consumed by the NEXT display world that gets built; an
@@ -1940,13 +2080,32 @@ function abortGateTransit(
     // entered, opening an unrelated gate for a ship that is not coming
     // through it.
     pendingGateArrivalSpob = undefined;
-    if (plan.kind !== 'gate') {
-        return;
+    switch (plan.kind) {
+        case 'gate':
+            console.warn(`${reason} Returning the ship to the origin gate.`);
+            gateDockedShip = {
+                uuid: data.uuid, entity: data.entity, planetId: plan.planetId,
+            };
+            pendingGateLaunch = data.entity;
+            return;
+        case 'reenter':
+            console.warn(`${reason} Returning the ship to ${plan.to}.`);
+            try {
+                await jumpTo({
+                    entity: data.entity, to: plan.to, uuid: data.uuid,
+                });
+            } catch (e) {
+                if (!isSessionEnded(e)) {
+                    console.error('Failed to return the player ship to its '
+                        + 'origin system:', e);
+                }
+            }
+            return;
+        case 'lost':
+            console.error(`${reason} The player ship cannot be restored: `
+                + `${plan.reason}.`);
+            return;
     }
-    gateDockedShip = {
-        uuid: data.uuid, entity: data.entity, planetId: plan.planetId,
-    };
-    pendingGateLaunch = data.entity;
 }
 
 /**
@@ -1994,8 +2153,10 @@ async function abortHyperspaceJump(
     try {
         await jumpTo({ entity: data.entity, to: plan.to, uuid: data.uuid });
     } catch (e) {
-        console.error('Failed to return the player ship to its origin '
-            + 'system:', e);
+        if (!isSessionEnded(e)) {
+            console.error('Failed to return the player ship to its origin '
+                + 'system:', e);
+        }
     }
 }
 
@@ -2009,7 +2170,7 @@ async function abortHyperspaceJump(
  */
 async function gateTransit(data: {
     entity: Entity, uuid: string, fromSpob: string, destinationSpob: string | null,
-}) {
+}, origin: string | undefined) {
     const arrival = data.entity.components.get(GateArrivalComponent);
     let destinationSpob = data.destinationSpob;
     if (!destinationSpob) {
@@ -2027,14 +2188,14 @@ async function gateTransit(data: {
         }
     }
     if (!destinationSpob) {
-        abortGateTransit(data, `Gate transit from ${data.fromSpob} had no `
-            + `resolvable destination.`);
+        await abortGateTransit(data, origin, `Gate transit from `
+            + `${data.fromSpob} had no resolvable destination.`);
         return;
     }
     const to = await gateDestinationResolver.systemOf(destinationSpob);
     if (!to) {
-        abortGateTransit(data, `Gate destination spöb ${destinationSpob} is `
-            + `not in any system.`);
+        await abortGateTransit(data, origin, `Gate destination spöb `
+            + `${destinationSpob} is not in any system.`);
         return;
     }
     pendingGateArrivalSpob = destinationSpob;
@@ -2047,6 +2208,9 @@ async function startGame() {
     // starts with none read. Cheap insurance: an entry is normally
     // consumed by the very next date advance anyway.
     clearShipDoneTextShown();
+    // A fresh session generation: every transition from here on (the
+    // startup entry included) runs under it, and teardownGame ends it.
+    sessionTransitions.begin();
     world = new World();
     world.resources.set(SimulationGameDataResource, simulationGameData);
     await world.addPlugin(multiplayer(multiRoom.join('main room')));
@@ -2357,13 +2521,15 @@ async function startGame() {
         for (const controlEvent of controlEvents) {
             controlsSubject.next(controlEvent);
         }
-        void simulationBridge?.controlEvents(controlEvents);
+        sendToBridge(simulationBridge?.controlEvents(controlEvents),
+            'Control events');
     }
 
     const controlSinks: ControlSinks = {
         controlEvents: emitControlEvents,
         analogControl(control: AnalogControlState) {
-            void simulationBridge?.analogControl(control);
+            sendToBridge(simulationBridge?.analogControl(control),
+                'Analog control');
         },
     };
     autopilot = new Autopilot(controlSinks);
@@ -2528,12 +2694,14 @@ async function startGame() {
         installTapTargeting(app.view as unknown as HTMLElement, {
             getWorld: () => displayWorld,
             getMyPeerId: () => communicator.uuid ?? undefined,
-            targetShip: uuid => void simulationBridge?.setTarget(uuid),
+            targetShip: uuid => sendToBridge(
+                simulationBridge?.setTarget(uuid), 'Target ship'),
             navigateToPlanet: uuid => {
                 // Select the stellar (so the land handshake acts on THIS
                 // planet even if another was already picked, and the nav
                 // readout lights up immediately), then autopilot to it.
-                void simulationBridge?.setPlanetTarget(uuid);
+                sendToBridge(simulationBridge?.setPlanetTarget(uuid),
+                    'Target planet');
                 autopilot?.navigateTo(uuid);
             },
             // A click on the map, a dialog, a button or the status bar is
@@ -2619,60 +2787,71 @@ async function startGame() {
                     dockedShip.entity);
             }
             if (pendingLaunchedShip && dockedShip) {
-                // A ship bought at the shipyard is a fresh entity: it
-                // must carry the multiplayer identity or no peer's
-                // inputs steer it (and removePeer never cleans it up).
-                if (communicator.uuid) {
-                    pendingLaunchedShip.components.set(ControlledByComponent,
-                        { peerId: communicator.uuid });
-                    pendingLaunchedShip.components.set(MultiplayerData,
-                        { owner: communicator.uuid });
-                }
+                const launching = pendingLaunchedShip;
+                const docked = dockedShip;
                 // Escorts hired in the bar spawn alongside the
                 // relaunched player ship. The pending list is
                 // display-side bookkeeping; pop it before the entity
                 // is encoded into the addEntity input record.
                 const pendingEscorts =
-                    pendingLaunchedShip.components.get(PendingEscortsComponent);
-                pendingLaunchedShip.components.delete(PendingEscortsComponent);
+                    launching.components.get(PendingEscortsComponent) ?? [];
+                launching.components.delete(PendingEscortsComponent);
                 // Escorts that landed with the player take off with them,
                 // still carrying their damage, outfits, and (for deployed
                 // bay fighters) their bay identity. Escorts that never made
                 // it down are re-attached in the simulation instead
                 // (EscortReattachSystem).
                 const returningEscorts =
-                    await takeLandedEscortsRestocked(dockedShip.uuid);
-                // One slot run across all three batches inserted by this
-                // launch: the display world does not see any of them until a
-                // later frame, so each batch must be told where to start.
-                const launchBaseSlot =
-                    nextClientSlot(currentDisplayWorld, dockedShip.uuid);
-                const hireBaseSlot = launchBaseSlot + returningEscorts.length;
-                // Mission ships spawn alongside the relaunch; prepared
-                // before the player entity is encoded (see
-                // prepareMissionShips), inserted after it.
-                const missionShips = await prepareMissionShips(
-                    pendingLaunchedShip, dockedShip.uuid,
-                    activeSystemId ?? '',
-                    hireBaseSlot + (pendingEscorts?.length ?? 0),
-                    currentDisplayWorld);
-                await currentBridge.addEntity(dockedShip.uuid, pendingLaunchedShip);
-                if (returningEscorts.length > 0) {
-                    await insertCarriedEscorts(currentBridge,
-                        currentDisplayWorld, dockedShip.uuid,
-                        pendingLaunchedShip, returningEscorts,
-                        communicator.uuid ?? undefined, launchBaseSlot);
+                    await takeLandedEscortsRestocked(docked.uuid);
+                try {
+                    // One slot run across all three batches inserted by
+                    // this launch: the display world does not see any of
+                    // them until a later frame, so each batch must be told
+                    // where to start.
+                    const launchBaseSlot =
+                        nextClientSlot(currentDisplayWorld, docked.uuid);
+                    const missionBaseSlot = launchBaseSlot
+                        + returningEscorts.length + pendingEscorts.length;
+                    // Mission ships spawn alongside the relaunch; prepared
+                    // before the player entity is encoded (see
+                    // prepareMissionShips), inserted after it.
+                    const missionShips = await prepareMissionShips(
+                        launching, docked.uuid, activeSystemId ?? '',
+                        missionBaseSlot, currentDisplayWorld);
+                    noteSlotsUsed(docked.uuid, missionBaseSlot);
+                    // THE ONE INSERTION SEQUENCE (client/fleet_insertion.ts):
+                    // player (stamped with the multiplayer identity — a ship
+                    // bought at the shipyard is a fresh entity), returning
+                    // escorts, hires, mission ships.
+                    const inserted = await insertPlayerAndFleet({
+                        bridge: currentBridge, playerUuid: docked.uuid,
+                        player: launching, escorts: returningEscorts,
+                        hires: pendingEscorts, missionShips,
+                        ownerUuid: communicator.uuid ?? undefined,
+                        baseSlot: launchBaseSlot, mintUuid: v4,
+                        getShip: id => simulationGameData.data.Ship.get(id),
+                    });
+                    // An escort whose own insertion rejected goes back on
+                    // the roster; the in-flight flush below retries it.
+                    landedEscorts.push(...inserted.failed);
+                } catch (e) {
+                    // The player's own insertion rejected: nothing went
+                    // in. Everything goes back where it was — the escorts
+                    // to the landed roster, the hires onto the docked
+                    // entity — and the block runs again next frame with
+                    // the docked handles still set (issue #31). Before
+                    // this, the re-run found an empty roster and a
+                    // popped hire list: the fleet was gone from the
+                    // session and from the next save.
+                    landedEscorts.push(...returningEscorts);
+                    if (pendingEscorts.length > 0) {
+                        launching.components.set(PendingEscortsComponent,
+                            pendingEscorts);
+                    }
+                    throw e;
                 }
-                if (pendingEscorts && pendingEscorts.length > 0) {
-                    await spawnHiredEscorts(currentBridge,
-                        currentDisplayWorld, dockedShip.uuid,
-                        pendingLaunchedShip, pendingEscorts,
-                        communicator.uuid ?? undefined, hireBaseSlot);
-                }
-                await insertMissionShips(currentBridge, missionShips,
-                    communicator.uuid ?? undefined);
-                if (pendingLaunchedShip.components.has(PlayerShipSelector)) {
-                    (window as any).myShip = pendingLaunchedShip;
+                if (launching.components.has(PlayerShipSelector)) {
+                    (window as any).myShip = launching;
                 }
                 dockedShip = undefined;
                 pendingLaunchedShip = undefined;
@@ -2695,33 +2874,42 @@ async function startGame() {
             // The map closed without a destination: lift back off from the
             // gate into the origin system (nothing strands the ship).
             if (pendingGateLaunch && gateDockedShip) {
+                const launching = pendingGateLaunch;
+                const docked = gateDockedShip;
                 // Any escorts that had already landed also lift off here,
                 // exactly as at a spaceport — otherwise a roster captured
                 // before the gate dock would be stranded out of the world.
                 const gateEscorts =
-                    await takeLandedEscortsRestocked(gateDockedShip.uuid);
-                const gateBaseSlot = nextClientSlot(
-                    currentDisplayWorld, gateDockedShip.uuid);
-                // Mission ships despawned while gate-docked; respawn
-                // them with the lift-off (same shape as the spaceport
-                // launch above).
-                const gateMissionShips = await prepareMissionShips(
-                    pendingGateLaunch, gateDockedShip.uuid,
-                    activeSystemId ?? '',
-                    gateBaseSlot + gateEscorts.length,
-                    currentDisplayWorld);
-                await currentBridge.addEntity(
-                    gateDockedShip.uuid, pendingGateLaunch);
-                if (gateEscorts.length > 0) {
-                    await insertCarriedEscorts(currentBridge,
-                        currentDisplayWorld, gateDockedShip.uuid,
-                        pendingGateLaunch, gateEscorts,
-                        communicator.uuid ?? undefined, gateBaseSlot);
+                    await takeLandedEscortsRestocked(docked.uuid);
+                try {
+                    const gateBaseSlot = nextClientSlot(
+                        currentDisplayWorld, docked.uuid);
+                    // Mission ships despawned while gate-docked; respawn
+                    // them with the lift-off (same shape as the spaceport
+                    // launch above).
+                    const gateMissionShips = await prepareMissionShips(
+                        launching, docked.uuid, activeSystemId ?? '',
+                        gateBaseSlot + gateEscorts.length,
+                        currentDisplayWorld);
+                    noteSlotsUsed(docked.uuid,
+                        gateBaseSlot + gateEscorts.length);
+                    // The same insertion sequence as the spaceport launch.
+                    const inserted = await insertPlayerAndFleet({
+                        bridge: currentBridge, playerUuid: docked.uuid,
+                        player: launching, escorts: gateEscorts,
+                        missionShips: gateMissionShips,
+                        ownerUuid: communicator.uuid ?? undefined,
+                        baseSlot: gateBaseSlot, mintUuid: v4,
+                        getShip: id => simulationGameData.data.Ship.get(id),
+                    });
+                    landedEscorts.push(...inserted.failed);
+                } catch (e) {
+                    // Same failure policy as the spaceport launch above.
+                    landedEscorts.push(...gateEscorts);
+                    throw e;
                 }
-                await insertMissionShips(currentBridge, gateMissionShips,
-                    communicator.uuid ?? undefined);
-                if (pendingGateLaunch.components.has(PlayerShipSelector)) {
-                    (window as any).myShip = pendingGateLaunch;
+                if (launching.components.has(PlayerShipSelector)) {
+                    (window as any).myShip = launching;
                 }
                 gateDockedShip = undefined;
                 pendingGateLaunch = undefined;
@@ -2884,8 +3072,14 @@ async function startGame() {
             // and a step has been attempted.
             movementSyncedSinceStep.clear();
         }
-        void pumpSimulationFrame();
+        // The frame in flight, for teardownGame to wait on: a launch
+        // block mid-await holds a roster it has taken, and the teardown
+        // must not snapshot and reset the rosters underneath it.
+        if (!simulationTickInFlight) {
+            pumpFrameInFlight = pumpSimulationFrame();
+        }
     };
+    let pumpFrameInFlight: Promise<void> | undefined;
     app.ticker.add(pumpTick);
     sessionDisposers.push(() => app.ticker.remove(pumpTick));
 
@@ -2928,12 +3122,15 @@ async function startGame() {
     // this session set up, so the player can be dropped back on the title
     // screen and re-enter cleanly (enter -> esc -> enter -> esc ...).
     return async function teardownGame() {
-        // Persist first: a pure read of the display world, still intact.
-        try {
-            saveNow();
-        } catch (e) {
-            console.warn('Failed to save on exit to title:', e);
-        }
+        // END THE SESSION GENERATION FIRST (issue #30): every transition
+        // still in flight — a jump on its white screen, a gate pick
+        // building its destination — is invalidated at once and bails at
+        // its next check, terminating the worker it made and handing its
+        // escort batch back to the rosters. Waited for below, BEFORE the
+        // save and the reset, so nothing lands on the rosters after they
+        // have been snapshotted and cleared, and no world is ever
+        // published over the title screen.
+        const transitionsSettled = sessionTransitions.end();
         // Stop the pump, heartbeat and input listeners BEFORE closing the
         // bridge, so no frame pumps against a dying worker and no stray
         // keypress reaches a torn-down world.
@@ -2945,19 +3142,36 @@ async function startGame() {
             }
         }
         sessionDisposers = [];
-        // Remove the local player's ship from the sim so every other peer
-        // sees it disappear (the same removeEntity broadcast a jump uses),
-        // then tear down the system room + bridge + display world.
-        let playerUuid: string | undefined;
-        if (displayWorld) {
-            for (const [uuid, entity] of displayWorld.entities) {
-                if (entity.components.has(PlayerShipSelector)) {
-                    playerUuid = uuid;
-                    break;
-                }
-            }
+        // The frame already in flight completes against the still-open
+        // bridge (a lift-off in progress finishes putting its fleet in, so
+        // the save below sees it), and the transitions finish bailing out.
+        await pumpFrameInFlight;
+        await transitionsSettled;
+        // Persist: a pure read of the display world, still intact.
+        try {
+            saveNow();
+        } catch (e) {
+            console.warn('Failed to save on exit to title:', e);
         }
-        await teardownActiveSystem(playerUuid);
+        // Tear down the system room + bridge + display world. Leaving the
+        // room is what removes this player's ship (and everything else it
+        // owns) for every other peer: the server authors a removePeer
+        // record (see teardownActiveSystem).
+        await teardownActiveSystem();
+        // The hyperspace white-out (display/jump_fade_plugin.ts) is a
+        // singleton on the APP stage by design: it has to outlive the
+        // display world that is torn down mid-jump, and only the
+        // destination world's JumpFadeSystem clears it. An exit-to-title
+        // during the white screen has no destination world, so the title
+        // would come back under a full-white cover until the next Enter
+        // Ship (issue #30). Cleared here by name: nothing else of a
+        // session's is left on the app stage.
+        const jumpFade = app.stage.getChildByName('JumpFadeOverlay');
+        if (jumpFade) {
+            jumpFade.alpha = 0;
+            jumpFade.visible = false;
+            app.stage.removeChild(jumpFade);
+        }
         // Leave the top-level lobby room too and drop the sim world.
         multiRoom.leave('main room');
 
