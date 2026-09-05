@@ -56,6 +56,11 @@ export function zeroOrderGuidance(position: Position, targetPosition: Position):
 
 export function firstOrderGuidance(position: Position, velocity: Vector,
     targetPosition: Position, targetVelocity: Vector, shotSpeed: number): Angle[] {
+    if (!(shotSpeed > 0)) {
+        // A shot that does not move (or a NaN speed) has no intercept
+        // solution; scaling by 1 / 0 below would poison the angles.
+        return [];
+    }
     const pos = targetPosition.subtract(position).scale(1 / shotSpeed);
     const vel = targetVelocity.subtract(velocity).scale(1 / shotSpeed);
 
@@ -63,25 +68,29 @@ export function firstOrderGuidance(position: Position, velocity: Vector,
     const b = 2 * pos.dot(vel);
     const c = pos.lengthSquared;
 
-    let hitTimes: number[] = [];
+    let hitTimes: number[];
     if (a === 0) {
+        // Relative speed exactly equals the shot speed: the quadratic
+        // degenerates to the linear b*t + c = 0. The general branch
+        // below would divide by 2a = 0 and yield an Infinity hit time,
+        // whose intercept angle is NaN.
         if (b === 0) {
             return [];
         }
-        hitTimes = [-c / b];
+        hitTimes = [-c / b].filter(x => x >= 0);
+    } else {
+        const det = b ** 2 - 4 * a * c;
+        if (det < 0) {
+            return [];
+        }
+
+        const detSqrt = Math.sqrt(det);
+
+        hitTimes = [
+            (detSqrt - b) / (2 * a),
+            (-detSqrt - b) / (2 * a),
+        ].filter(x => x >= 0).sort((a, b) => a - b);
     }
-
-    const det = b ** 2 - 4 * a * c;
-    if (det < 0) {
-        return [];
-    }
-
-    const detSqrt = Math.sqrt(det);
-
-    hitTimes = [
-        (detSqrt - b) / (2 * a),
-        (-detSqrt - b) / (2 * a),
-    ].filter(x => x >= 0).sort((a, b) => a - b);
 
     return hitTimes.map(time => pos.add(vel.scale(time)).angle);
 }

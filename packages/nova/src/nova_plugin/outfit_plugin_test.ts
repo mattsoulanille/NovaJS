@@ -1,7 +1,8 @@
 import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
+import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { OutfitsState, sumOutfitField } from './outfit_plugin.js';
+import { applyOutfitPhysics, OutfitsState, sumOutfitField } from './outfit_plugin.js';
 
 /** A gameData stub exposing only Outfit.getCached. */
 function mockGameData(outfits: { [id: string]: OutfitData | undefined }) {
@@ -38,6 +39,33 @@ describe('sumOutfitField', () => {
         const total = sumOutfitField(outfits, mockGameData({}),
             o => o.murkClear);
         expect(total).toBeUndefined();
+    });
+});
+
+describe('applyOutfitPhysics', () => {
+    const base = getDefaultShipData().physics;
+
+    it('grants a boolean capability from an owned outfit', () => {
+        const dampers = outfit('a', {
+            physics: { inertialess: true } as OutfitData['physics'],
+        });
+        expect(applyOutfitPhysics(base, [[dampers, 1]]).inertialess)
+            .toBeTrue();
+    });
+
+    it('grants nothing from a zero-count entry, booleans included', () => {
+        const dampers = outfit('a', {
+            physics: {
+                inertialess: true, canJumpWithoutSlowing: true,
+                autoRefuel: true, speed: 50,
+            } as OutfitData['physics'],
+        });
+        const physics = applyOutfitPhysics(base, [[dampers, 0]]);
+        expect(physics.inertialess).toBe(base.inertialess);
+        expect(physics.canJumpWithoutSlowing).toBe(base.canJumpWithoutSlowing);
+        expect(physics.autoRefuel).toBe(base.autoRefuel);
+        expect(physics.speed).toBe(base.speed);
+        expect(physics).toEqual(base);
     });
 });
 

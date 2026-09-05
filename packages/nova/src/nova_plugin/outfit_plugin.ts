@@ -55,6 +55,14 @@ export function applyOutfitPhysics(basePhysics: ShipPhysics,
     outfits: Iterable<readonly [OutfitData, number /* count */]>) {
     return produce(basePhysics, (basePhysics) => {
         for (const [outfit, count] of outfits) {
+            if (count <= 0) {
+                // An outfit the ship does not actually own contributes
+                // nothing — including its boolean capabilities, which
+                // the `||` below would otherwise grant regardless of
+                // count. Same rule as every other outfit summation
+                // (sumOutfitField, deriveRepair, deriveIff, deriveCloak).
+                continue;
+            }
             for (const [uncast, val] of Object.entries(outfit.physics)) {
                 const key = uncast as keyof OutfitPhysics;
                 if (basePhysics.hasOwnProperty(key)) {

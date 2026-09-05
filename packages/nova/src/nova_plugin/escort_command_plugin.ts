@@ -652,21 +652,29 @@ export const EscortCommandBehaviorSystem = new System({
                 // a disabled intruder is no longer a threat, so the
                 // engagement ends there (matching the NPC AI's rule),
                 // not at destruction.
+                //
+                // An EXPLODING intruder (its DeathDelay death sequence)
+                // is gone too, as in the attack arm above and every
+                // other targeting path: keeping it engaged would steer
+                // at a fireball and latch `firing` on every fixed gun
+                // for up to DeathDelay seconds.
                 let engaged = command.target !== undefined
                     ? entities.get(command.target) : undefined;
                 if (engaged && (engaged.components.has(DisabledComponent)
+                    || engaged.components.has(ExplodingComponent)
                     || !isHostileTo(engaged, command.target!, root ?? uuid,
                         uuid, hostility))) {
                     engaged = undefined;
                 }
                 if (!engaged) {
                     // Watch for intruders inside the defend bubble
-                    // (disabled ships are not intruders).
+                    // (disabled and exploding ships are not intruders).
                     const nearby: Array<readonly [string, number]> = [];
                     for (const [otherUuid, other, otherMovement]
                         of candidates) {
                         if (otherUuid === uuid || otherUuid === root
-                            || other.components.has(DisabledComponent)) {
+                            || other.components.has(DisabledComponent)
+                            || other.components.has(ExplodingComponent)) {
                             continue;
                         }
                         const distanceSquared = otherMovement.position
@@ -752,8 +760,10 @@ export const EscortCommandBehaviorSystem = new System({
             const inReach: Array<readonly [string, number]> = [];
             for (const [otherUuid, other, otherMovement] of candidates) {
                 if (otherUuid === uuid || otherUuid === root
-                    // Disabled ships aren't valid attack targets.
-                    || other.components.has(DisabledComponent)) {
+                    // Disabled and exploding ships aren't valid attack
+                    // targets.
+                    || other.components.has(DisabledComponent)
+                    || other.components.has(ExplodingComponent)) {
                     continue;
                 }
                 if (orders?.restrictTurretsToTarget
