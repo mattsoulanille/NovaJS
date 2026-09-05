@@ -137,6 +137,7 @@ export class AnimationGraphic {
         // The container's alpha (murk fade) and scale (debris chunk
         // scale) may have been changed.
         this.container.alpha = 1;
+        this.cloakAlpha = 1;
         this.container.scale.set(1);
         this.wrappedProgress = 0;
         this.foldProgress = 0;
@@ -150,6 +151,17 @@ export class AnimationGraphic {
         this.weaponFireSeen = false;
         this.rotation = 0;
     }
+
+    /**
+     * How visible the ship's cloak leaves it, in [0, 1]; 1 when not
+     * cloaked. Written by ShipAnimationSystem and COMPOSED into the
+     * container alpha by MurkFadeSystem (murk * cloak), which owns that
+     * property: two systems assigning it in turn meant whichever ran
+     * last won, and ships never faded into the murk. Kept here rather
+     * than on the child sprites because every layer of a cloaked ship
+     * fades together.
+     */
+    cloakAlpha = 1;
 
     set glowAlpha(alpha: number) {
         const glowImage = this.sprites.get('glowImage');

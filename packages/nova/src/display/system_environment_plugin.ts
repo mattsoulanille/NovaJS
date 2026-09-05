@@ -11,6 +11,7 @@ import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { SystemIdResource } from "../nova_plugin/system_id_resource.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
+import { ShipAnimationSystem } from "./ship_animation_plugin.js";
 import { PixiAppResource } from "./pixi_app_resource.js";
 import { StarfieldResource } from "./starfield_plugin.js";
 import { WorldLayer } from "./stage_resource.js";
@@ -148,7 +149,12 @@ const PlayerPositionQuery =
  * Systems that fade specific entities further (e.g. DebrisDrawSystem)
  * write the child sprite alphas instead; PIXI multiplies alpha down
  * the tree, so the effects compose without two systems fighting over
- * one property.
+ * one property. The one whole-graphic fade that is not murk — a ship's
+ * cloak — is published by ShipAnimationSystem as
+ * AnimationGraphic.cloakAlpha and multiplied in here, which is why this
+ * system runs after it: it used to run before, and the cloak write
+ * (1.0 for every uncloaked ship) replaced the murk fade every frame, so
+ * in a murky system ships alone never faded with distance.
  */
 export const MurkFadeSystem = new System({
     name: 'MurkFadeSystem',
@@ -157,15 +163,15 @@ export const MurkFadeSystem = new System({
     step(murk, graphic, movementState, players) {
         const player = players[0];
         if (!player) {
-            graphic.container.alpha = 1;
+            graphic.container.alpha = graphic.cloakAlpha;
             return;
         }
         const [{ position: playerPosition }] = player;
         const distance = movementState.position
             .subtract(playerPosition).length;
-        graphic.container.alpha = murkAlpha(distance, murk);
+        graphic.container.alpha = murkAlpha(distance, murk) * graphic.cloakAlpha;
     },
-    after: [ObjectDrawSystem],
+    after: [ObjectDrawSystem, ShipAnimationSystem],
 });
 
 /** The effective murk each starfield was last dimmed for. */
