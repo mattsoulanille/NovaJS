@@ -318,23 +318,26 @@ describe("WeapResource", () => {
         expect(turret.decay).toEqual(32767);
     });
 
+    // The fixture beam carries -1 in the particle bytes; those are filler
+    // in the beam variant of the template (keyed union on Weapon Type), so
+    // the parser reads them as "no particles" rather than as -1 particles.
     it("should parse trailParticles number", () => {
         expect(unguided.trailParticles.count).toEqual(34);
-        expect(beam.trailParticles.count).toEqual(-1);
+        expect(beam.trailParticles.count).toEqual(0);
         expect(missile.trailParticles.count).toEqual(25);
         expect(turret.trailParticles.count).toEqual(32767);
     });
 
     it("should parse trailParticles lifeMin", () => {
         expect(unguided.trailParticles.lifeMin).toEqual(35);
-        expect(beam.trailParticles.lifeMin).toEqual(-1);
+        expect(beam.trailParticles.lifeMin).toEqual(0);
         expect(missile.trailParticles.lifeMin).toEqual(26);
         expect(turret.trailParticles.lifeMin).toEqual(32767);
     });
 
     it("should parse trailParticles lifeMax", () => {
         expect(unguided.trailParticles.lifeMax).toEqual(40);
-        expect(beam.trailParticles.lifeMax).toEqual(-1);
+        expect(beam.trailParticles.lifeMax).toEqual(0);
         expect(missile.trailParticles.lifeMax).toEqual(31);
         expect(turret.trailParticles.lifeMax).toEqual(32767);
     });
@@ -764,6 +767,84 @@ describe("WeapResource builder-based", () => {
         const w = new WeapResource(resource, idSpace);
         expect(w.guidance).toEqual("unguided");
         expect(warnSpy).toHaveBeenCalled();
+    });
+
+    // The wëap template is a keyed union on Weapon Type: the beam and
+    // carried-ship variants mark projectile-only ranges as filler, and
+    // buildWeap fills every one of those ranges with a recognizable value.
+    describe("keyed-union filler ranges", () => {
+        function withGuidance(guidance: number, id: number): WeapResource {
+            const dv = buildWeap().dataView();
+            dv.setInt16(8, guidance);
+            return new WeapResource(new Resource("wëap", id, "Keyed", dv), idSpace);
+        }
+
+        it("zeroes the projectile-only ranges of a beam (Radius, particles, subs)", () => {
+            for (const guidance of [0, 3, 10]) {
+                const w = withGuidance(guidance, 300 + guidance);
+                expect(w.proxRadius).withContext(`guidance ${guidance}`).toEqual(0);
+                expect(w.blastRadius).toEqual(0);
+                expect(w.trailParticles).toEqual(
+                    { count: 0, velocity: 0, lifeMin: 0, lifeMax: 0, color: 0 });
+                expect(w.submunition).toBeNull();
+                expect(w.proxSafety).toEqual(0);
+                // The beam's own fields are untouched.
+                expect(w.beamLength).toEqual(19);
+                expect(w.beamWidth).toEqual(123);
+                expect(w.coronaFalloff).toEqual(24);
+                expect(w.beamColor).toEqual(0xFF151617);
+                expect(w.impact).toEqual(13);
+                expect(w.explosion).toEqual(138);
+                expect(w.exitType).toEqual("turret");
+                expect(w.ionization).toEqual(20);
+                expect(w.hitParticles.count).toEqual(32);
+            }
+        });
+
+        it("reads a carried-ship (bay) weapon by its own layout", () => {
+            const w = withGuidance(99, 310);
+            expect(w.guidance).toEqual("bay");
+            // 88 is a filler word for bays: fighters launch from the centre.
+            expect(w.exitType).toEqual("center");
+            expect(w.exitTypeN).toEqual(-1);
+            // 20-27, 32-71, 74-85 and 110-117 are filler too.
+            expect(w.impact).toEqual(0);
+            expect(w.explosion).toBeNull();
+            expect(w.explosion128sparks).toBeFalse();
+            expect(w.proxRadius).toEqual(0);
+            expect(w.blastRadius).toEqual(0);
+            expect(w.cicnSmoke).toBeNull();
+            expect(w.decay).toEqual(0);
+            expect(w.trailParticles.count).toEqual(0);
+            expect(w.beamLength).toEqual(0);
+            expect(w.spinRate).toEqual(0);
+            expect(w.submunition).toBeNull();
+            expect(w.ionization).toEqual(0);
+            expect(w.hitParticles.count).toEqual(0);
+            expect(w.lightningDensity).toEqual(0);
+            expect(w.lightningAmplitude).toEqual(0);
+            // The bay's real fields survive: Launch Speed, Ship Type,
+            // flags, burst, jamming, durability and Max Ammo.
+            expect(w.speed).toEqual(17);
+            expect(w.ammoType).toEqual(2);
+            expect(w.accuracy).toEqual(19);
+            expect(w.sound).toEqual(212);
+            expect(w.fireGroup).toEqual("primary");
+            expect(w.burstCount).toEqual(14);
+            expect(w.burstReload).toEqual(15);
+            expect(w.jam.radar).toEqual(44);
+            expect(w.durability).toEqual(42);
+            expect(w.maxAmmo).toEqual(13);
+        });
+
+        it("leaves a projectile weapon's fields alone", () => {
+            const w = withGuidance(-1, 320);
+            expect(w.proxRadius).toEqual(40);
+            expect(w.blastRadius).toEqual(39);
+            expect(w.trailParticles.count).toEqual(25);
+            expect(w.submunition?.id).toEqual(217);
+            expect(w.exitType).toEqual("turret");
+        });
     });
 
     it("parses the smoke set into eight consecutive cicn ids", () => {
