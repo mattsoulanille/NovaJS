@@ -8,10 +8,13 @@ import { resolveFixture } from "./fixtures.js";
 import { buildResourceFork } from "resource_fork/write";
 
 // These tests pin the failure policy for id-space loading:
-//   - Core "Nova Files" data failing to load is FATAL (the `ids` promise
+//   - A core "Nova Files" FILE failing to load is FATAL (the `ids` promise
 //     rejects) rather than silently returning empty ids.
 //   - A single broken plug-in is SKIPPED with a loud, file-naming error log,
 //     and the rest of the ids still load.
+//   - A single malformed RESOURCE inside a readable file — plug-in or core,
+//     deliberately alike (see readNovaFile) — is dropped and named, and the
+//     rest of that file still loads.
 //   - A plug-in that reads clean but yields zero resources (the classic
 //     macOS xattr-stripped resource-fork case) warns loudly.
 //
@@ -224,6 +227,40 @@ describe("IDSpaceHandler failure policy", () => {
         // The file itself was NOT skipped.
         expect(loggedText).not.toContain("FAILED to load plug-in");
     });
+
+    // The same isolation applies to the core "Nova Files" — deliberately (see
+    // the readNovaFile comment). The file-level policy is untouched: an
+    // unreadable core file is still fatal (spec below). But a malformed
+    // resource inside a readable core file used to take the whole id space
+    // down; it is now dropped and named like one in a plug-in, and the rest
+    // of the file loads under the "nova" prefix.
+    it("drops only the malformed resource of a CORE file and names it, "
+        + "instead of failing the id space", async () => {
+            const partial = buildResourceFork([
+                { type: "oütf", id: 30900, name: "Keycard", data: [] },
+                { type: "rlëD", id: 30900, name: "Torn", data: [0, 0, 0] },
+                { type: "shïp", id: 30900, name: "Kilmura", data: [] },
+            ]);
+            fs.writeFileSync(path.join(tmpDir, "Nova Files", "Data File 2.ndat"),
+                Buffer.from(partial));
+            const errorSpy = spyOn(console, "error").and.callThrough();
+
+            const handler = new IDSpaceHandler(tmpDir);
+            const idSpace = await handler.getIDSpace();
+
+            expect(idSpace.oütf["nova:30900"]?.name).toEqual("Keycard");
+            expect(idSpace.shïp["nova:30900"]?.name).toEqual("Kilmura");
+            expect(idSpace.rlëD["nova:30900"]).toBeUndefined();
+            // The other core file is untouched.
+            expect(Object.keys(idSpace.wëap).length).toBeGreaterThan(0);
+
+            const loggedText = errorSpy.calls.allArgs()
+                .map(args => args.map(String).join(" "))
+                .join("\n");
+            expect(loggedText).toContain("rlëD");
+            expect(loggedText).toContain("30900");
+            expect(loggedText).toContain("Data File 2.ndat");
+        });
 
     it("getIDSpace succeeds even when a plug-in is unreadable (plug-in skipped)", async () => {
         fs.writeFileSync(path.join(tmpDir, "Plug-ins", "Singularity1.plug"), Buffer.from([]));

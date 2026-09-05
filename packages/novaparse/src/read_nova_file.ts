@@ -52,6 +52,19 @@ import { $enum } from "ts-enum-util";
 // therefore dropped and named here, and the rest of the file loads; a
 // reference to the dropped resource then fails as "not found", which is the
 // truthful outcome.
+//
+// This applies to the core "Nova Files" exactly as to plug-ins, and that is
+// deliberate. The FILE-level policy is unchanged: a core file that cannot be
+// read at all (missing, no resource fork) is still fatal in
+// IDSpaceHandler.addNovaFilesDirectory, where a plug-in file is skipped. But
+// a single malformed resource INSIDE a readable core file used to be fatal
+// too (the throw escaped to addPlugin and took the id space with it); it now
+// degrades the same way as in a plug-in — dropped, named, and whatever
+// references it fails as not-found (weapon_parse "Missing rlëD",
+// getOverlayFrames -> undefined). Stock data has no such resource, so this
+// only ever changes what a corrupt install does: a loud drop that names the
+// resource, instead of a hard stop that named the whole file. Pinned by
+// bad_plugin_test.ts ("drops only the malformed resource of a CORE file").
 async function readNovaFile(filePath: string, localIDSpace: NovaResources): Promise<number> {
     const rf = await read(filePath);
 
