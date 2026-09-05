@@ -132,7 +132,12 @@ export function mostRecentlyActivatedRank(): string | undefined {
     return recentlyActivated;
 }
 
-/** Test seam: forgets the <RRK> pointer, as a fresh session would. */
+/**
+ * Forgets the <RRK> pointer, as a fresh session would. Called when a
+ * pilot's game starts (browser.ts startGame) so that a second pilot
+ * opened in the same client process never has the first one's last
+ * activated rank surface in a briefing; also the specs' reset.
+ */
 export function resetMostRecentlyActivatedRank(): void {
     recentlyActivated = undefined;
 }

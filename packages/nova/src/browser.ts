@@ -106,6 +106,7 @@ import {
 } from "./nova_plugin/mission_ship_spawn.js";
 import { advanceEntityDate, ensurePlayerStateComponents } from "./spaceport/mission_session.js";
 import { clearShipDoneTextShown } from "./spaceport/ship_done_shown.js";
+import { resetMostRecentlyActivatedRank } from "./nova_plugin/rank_logic.js";
 import { PendingEscortsComponent } from "./spaceport/pending_escorts.js";
 import {
     carriedBatchMustHold, carriedBatchSettled, CarriedEscort,
@@ -2047,6 +2048,10 @@ async function startGame() {
     // starts with none read. Cheap insurance: an entry is normally
     // consumed by the very next date advance anyway.
     clearShipDoneTextShown();
+    // Likewise the <RRK> "most recently activated rank" pointer, which the
+    // Bible says is not kept between game sessions: it must not carry one
+    // pilot's rank into another pilot's briefing.
+    resetMostRecentlyActivatedRank();
     world = new World();
     world.resources.set(SimulationGameDataResource, simulationGameData);
     await world.addPlugin(multiplayer(multiRoom.join('main room')));
