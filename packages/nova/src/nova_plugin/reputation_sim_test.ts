@@ -86,7 +86,7 @@ describe('reputation in a live world', () => {
         expect(victim.components.get(ArmorComponent)!.current).toBe(0);
         // Attribution recorded and credited exactly once.
         expect(victim.components.get(DamageAttributionComponent))
-            .toEqual({ root: PLAYER, killCredited: true });
+            .toEqual({ root: PLAYER, killCredited: true, disabledAtHit: false });
         const records = player.components.get(LegalRecordsComponent)!;
         expect(records.get('nova:128')).toBe(-FED_KILL_PENALTY);
         // Ally (Bureau) and enemy (Auroran) propagation, real map.
@@ -143,6 +143,67 @@ describe('reputation in a live world', () => {
             expect(records.get('nova:128')).toBe(-FED_DISABLE_PENALTY);
             // Steps while it stays disabled do not re-charge.
             world.step();
+            expect(records.get('nova:128')).toBe(-FED_DISABLE_PENALTY);
+        });
+
+    it('does not credit a disable for a hit on a ship that was already ' +
+        'a hulk', async () => {
+            const { gameData, world } = await makeWorld();
+            const player = await addPlayer(world, gameData);
+
+            const victimData = await gameData.data.Ship.get('nova:128');
+            const victim = makeShip(victimData);
+            victim.components.set(GovtComponent, { id: 'nova:128' });
+            await completeEntity(world, victim);
+            world.entities.set(VICTIM, victim);
+            const shot = new Entity(SHOT);
+            shot.components.set(FiringGroupComponent, { group: PLAYER });
+            world.entities.set(SHOT, shot);
+            world.step();
+
+            // Disabled by nobody the player can be blamed for: an
+            // unattributed cause takes it below the threshold (the same
+            // state a spawn-disabled derelict or a mïsn rescue hulk is
+            // in when the player first finds it).
+            const armor = victim.components.get(ArmorComponent)!;
+            victim.components.get(ShieldComponent)!.current = 0;
+            armor.current = 0.3 * armor.max;
+            world.step();
+            world.step();
+            expect(victim.components.has(DisabledComponent)).toBeTrue();
+            const records = player.components.get(LegalRecordsComponent)!;
+            expect(records.get('nova:128')).toBeUndefined();
+
+            // A stray player shot at the hulk: it did not disable it.
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: 1, ionization: 0,
+                    ionizationColor: 0, knockback: 0, passThroughShield: 1,
+                },
+                damager: SHOT,
+            }, [VICTIM]);
+            for (let i = 0; i < 3; i++) {
+                world.step();
+            }
+            expect(victim.components.get(DamageAttributionComponent)!.root)
+                .toBe(PLAYER);
+            expect(records.get('nova:128')).toBeUndefined();
+
+            // Repaired and then genuinely disabled by the player: charged.
+            armor.current = armor.max;
+            world.step();
+            expect(victim.components.has(DisabledComponent)).toBeFalse();
+            world.emit(DamagedEvent, {
+                damage: {
+                    shield: 0, armor: armor.max * 0.7, ionization: 0,
+                    ionizationColor: 0, knockback: 0, passThroughShield: 1,
+                },
+                damager: SHOT,
+            }, [VICTIM]);
+            for (let i = 0; i < 3; i++) {
+                world.step();
+            }
+            expect(victim.components.has(DisabledComponent)).toBeTrue();
             expect(records.get('nova:128')).toBe(-FED_DISABLE_PENALTY);
         });
 

@@ -74,6 +74,14 @@ export const DamageAttributionType = t.partial({
     root: t.string,
     killCredited: t.boolean,
     disableCredited: t.boolean,
+    /**
+     * Whether the ship was ALREADY disabled when `root` was last
+     * written. A hit on a hulk (a spawn-disabled derelict, a mïsn
+     * rescue target, a ship disabled by an unattributed cause) must
+     * not credit the shooter with disabling it. Additive: records
+     * without it read as "not disabled at the hit".
+     */
+    disabledAtHit: t.boolean,
 });
 export type DamageAttribution = t.TypeOf<typeof DamageAttributionType>;
 export const DamageAttributionComponent =
@@ -100,8 +108,8 @@ const DamageAttributionSystem = new System({
     name: 'DamageAttributionSystem',
     events: [DamagedEvent],
     args: [DamagedEvent, ShipDataComponent, GetEntity, UUID,
-        RunQuery] as const,
-    step({ damager }, _shipData, { components }, uuid, runQuery) {
+        RunQuery, Optional(DisabledComponent)] as const,
+    step({ damager }, _shipData, { components }, uuid, runQuery, disabled) {
         const result = runQuery(DamagerQuery, damager)[0];
         if (!result) {
             return;
@@ -111,11 +119,18 @@ const DamageAttributionSystem = new System({
         if (!root || root === uuid) {
             return;
         }
+        // Whether the victim was a hulk when this hit landed. The hit
+        // that disables a ship lands while it is still enabled:
+        // ShipDisableSystem attaches DisabledComponent from the armor
+        // it finds on its next step, after this event is handled.
+        const disabledAtHit = disabled !== undefined;
         const attribution = components.get(DamageAttributionComponent);
         if (attribution) {
             attribution.root = root;
+            attribution.disabledAtHit = disabledAtHit;
         } else {
-            components.set(DamageAttributionComponent, { root });
+            components.set(DamageAttributionComponent,
+                { root, disabledAtHit });
         }
     },
 });
@@ -178,6 +193,15 @@ const KillCreditSystem = new System({
  * The guard resets when the ship is repaired, so disabling it again
  * counts again. Dead ships (armor 0 — a hulk mid-explosion is
  * "below the disable threshold" too) charge the KILL penalty only.
+ *
+ * Only a hit that landed while the ship was still ENABLED can have
+ * disabled it (`disabledAtHit`, recorded with the root above). A ship
+ * that was already a hulk when its last damager hit it — a
+ * spawn-disabled derelict (gövt Flags 0x0800), a mïsn ShipGoal-5
+ * rescue target, or a ship disabled by an unattributed cause — charges
+ * that damager nothing: they did not disable it. Stock derelict govts
+ * carry DisabPenalty 0 so this only ever mattered for a rescue hulk of
+ * a penalising government, but the logic was wrong either way.
  */
 const DisableCreditSystem = new System({
     name: 'DisableCreditSystem',
@@ -193,6 +217,14 @@ const DisableCreditSystem = new System({
         }
         if (attribution.disableCredited || attribution.killCredited
             || !armor || armor.current <= 0) {
+            return;
+        }
+        if (attribution.disabledAtHit) {
+            // The last damager shot a hulk; nobody gets this disable.
+            // Consumed like a credit so the next hit on the hulk is
+            // judged afresh (it re-records disabledAtHit) and repair
+            // resets the guard as usual.
+            attribution.disableCredited = true;
             return;
         }
         attribution.disableCredited = true;
