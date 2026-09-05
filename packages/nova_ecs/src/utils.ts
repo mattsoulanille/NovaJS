@@ -7,7 +7,14 @@ export interface WithComponents {
 
 export class DuplicateNameError extends Error {}
 
-export function topologicalSortList(list: Sortable[]): Sortable[] {
+/**
+ * Sorts sortables by their declared before/after edges. Among nodes
+ * that are ready at the same time, `compare` decides (default: the
+ * position in `list`), so the result is a pure function of `list`'s
+ * order and the edges — see `topologicalSort` (#43).
+ */
+export function topologicalSortList(list: Sortable[],
+    compare?: (a: Sortable, b: Sortable) => number): Sortable[] {
     // Construct a graph with no edges.
     const graph = new Map<Sortable, Set<Sortable>>(
         list.map(val => [val, new Set()]));
@@ -40,7 +47,33 @@ export function topologicalSortList(list: Sortable[]): Sortable[] {
         }
     }
 
-    return topologicalSort(graph);
+    return topologicalSort(graph, compare);
+}
+
+/**
+ * Opt-in tie-break for `topologicalSortList` that makes the order a
+ * function of the sortable SET and the edges alone (independent of
+ * registration order): by name, compared code unit by code unit (NOT
+ * localeCompare, which is locale-dependent and so would differ between
+ * peers). Unnamed markers sort after named ones; two unnamed (or
+ * same-named) sortables fall through to the list-position tie-break.
+ *
+ * Not the World's default. Measured against the real game (#43, at
+ * 7f4e013e): switching the simulation world to this order moved 140 of
+ * its 144 systems (4623 unconstrained pairs flipped — TimeSystem from
+ * position 2 to 100, every Provider after its consumers) and failed
+ * three specs on orderings that hold only by registration order. The
+ * game must declare those edges before this can be adopted; the World
+ * exposes `systemNames` so peers can at least verify they agree.
+ */
+export function sortableNameOrder(a: Sortable, b: Sortable): number {
+    if (a.name === undefined) {
+        return b.name === undefined ? 0 : 1;
+    }
+    if (b.name === undefined) {
+        return -1;
+    }
+    return a.name < b.name ? -1 : a.name > b.name ? 1 : 0;
 }
 
 /**
@@ -51,46 +84,122 @@ export function topologicalSortList(list: Sortable[]): Sortable[] {
  * (it isn't in the output), and since it isn't in the graph it can't impose an
  * ordering constraint anyway. This matches how `topologicalSortList` treats
  * references to sortables that aren't present.
+ *
+ * Among the nodes that are ready at each step, the smallest by
+ * `compare` goes next (Kahn's algorithm with a priority queue); ties —
+ * and no `compare` at all — fall back to the Map's insertion index. So
+ * the result is a pure function of (the Map's order, the edges, and
+ * `compare`), with a well-defined rule for unconstrained pairs. The
+ * old pass-based sort placed every ready node per pass instead, which
+ * made an unconstrained pair's order depend on how the previous
+ * partial results had been re-sorted (#43); `World` now sorts its
+ * full registration list every time rather than its previous output
+ * plus one node, so system order is a function of registration order
+ * and declared edges only.
  */
-export function topologicalSort<T>(graph: Map<T, Set<T>>): T[] {
-    const usedNodes = new Set<T>();
-    const sorted: T[] = [];
+export function topologicalSort<T>(graph: Map<T, Set<T>>,
+    compare?: (a: T, b: T) => number): T[] {
+    const index = new Map<T, number>();
+    const outgoing = new Map<T, T[]>();
+    for (const node of graph.keys()) {
+        index.set(node, index.size);
+        outgoing.set(node, []);
+    }
+    const order = (a: T, b: T) =>
+        (compare?.(a, b) || 0) || index.get(a)! - index.get(b)!;
 
-    while (sorted.length < graph.size) {
-        const lastLength = sorted.length;
-        for (const [node, incomingEdges] of graph) {
-            // Skip nodes we've already added
-            if (usedNodes.has(node)) {
-                continue;
-            }
-            // Check if all in-graph nodes this node must come after are already
-            // in the list. Edges to nodes outside the graph are ignored so a
-            // dangling edge doesn't get mistaken for a cycle.
-            if (incomingEdgesSatisfied(incomingEdges, usedNodes, graph)) {
-                sorted.push(node);
-                usedNodes.add(node);
+    // In-graph incoming edge counts; a self-edge is a cycle.
+    const remaining = new Map<T, number>();
+    for (const [node, incomingEdges] of graph) {
+        let count = 0;
+        for (const edge of incomingEdges) {
+            if (graph.has(edge)) {
+                count++;
+                outgoing.get(edge)!.push(node);
             }
         }
-        if (sorted.length === lastLength) {
-            throw new Error('Graph contains a cycle');
+        remaining.set(node, count);
+    }
+
+    const ready = new BinaryHeap<T>(order);
+    for (const [node, count] of remaining) {
+        if (count === 0) {
+            ready.push(node);
         }
     }
 
+    const sorted: T[] = [];
+    while (ready.size > 0) {
+        const node = ready.pop()!;
+        sorted.push(node);
+        for (const next of outgoing.get(node)!) {
+            const count = remaining.get(next)! - 1;
+            remaining.set(next, count);
+            if (count === 0) {
+                ready.push(next);
+            }
+        }
+    }
+    if (sorted.length < graph.size) {
+        throw new Error('Graph contains a cycle');
+    }
     return sorted;
 }
 
-// Returns true if every incoming edge that refers to a node in the graph has
-// already been placed (is in `usedNodes`). Edges to nodes absent from the graph
-// are treated as satisfied.
-function incomingEdgesSatisfied<T>(
-    incomingEdges: ReadonlySet<T>, usedNodes: ReadonlySet<T>,
-    graph: ReadonlyMap<T, unknown>): boolean {
-    for (const edge of incomingEdges) {
-        if (!usedNodes.has(edge) && graph.has(edge)) {
-            return false;
+/** Minimal binary min-heap for the priority-queue Kahn sort above. */
+class BinaryHeap<T> {
+    private items: T[] = [];
+    constructor(private compare: (a: T, b: T) => number) { }
+
+    get size() {
+        return this.items.length;
+    }
+
+    push(item: T) {
+        const items = this.items;
+        items.push(item);
+        let i = items.length - 1;
+        while (i > 0) {
+            const parent = (i - 1) >> 1;
+            if (this.compare(items[i]!, items[parent]!) >= 0) {
+                break;
+            }
+            [items[i], items[parent]] = [items[parent]!, items[i]!];
+            i = parent;
         }
     }
-    return true;
+
+    pop(): T | undefined {
+        const items = this.items;
+        if (items.length === 0) {
+            return undefined;
+        }
+        const top = items[0]!;
+        const last = items.pop()!;
+        if (items.length > 0) {
+            items[0] = last;
+            let i = 0;
+            for (;;) {
+                const left = 2 * i + 1;
+                const right = left + 1;
+                let smallest = i;
+                if (left < items.length
+                    && this.compare(items[left]!, items[smallest]!) < 0) {
+                    smallest = left;
+                }
+                if (right < items.length
+                    && this.compare(items[right]!, items[smallest]!) < 0) {
+                    smallest = right;
+                }
+                if (smallest === i) {
+                    break;
+                }
+                [items[i], items[smallest]] = [items[smallest]!, items[i]!];
+                i = smallest;
+            }
+        }
+        return top;
+    }
 }
 
 // Returns true if a is a subset of b

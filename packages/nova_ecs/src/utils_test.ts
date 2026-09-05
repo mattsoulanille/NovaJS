@@ -1,6 +1,6 @@
 import 'jasmine';
 import { Marker, Sortable } from './system.js';
-import { setEqual, subset, topologicalSort, topologicalSortList } from './utils.js';
+import { setEqual, sortableNameOrder, subset, topologicalSort, topologicalSortList } from './utils.js';
 
 describe('utils', () => {
     describe('topologicalSort', () => {
@@ -99,6 +99,98 @@ describe('utils', () => {
             ]);
 
             expect(() => topologicalSort(graph)).toThrowError('Graph contains a cycle');
+        });
+
+        it('throws for a self-edge', () => {
+            const graph: Map<string, Set<string>> = new Map([
+                ['a', new Set(['a'])],
+            ]);
+            expect(() => topologicalSort(graph)).toThrowError('Graph contains a cycle');
+        });
+
+        // #43: with a comparator, the order among ready nodes is the
+        // comparator's, independent of Map insertion order.
+        it('breaks ties by the comparator, not by insertion order', () => {
+            const compare = (a: string, b: string) => a < b ? -1 : a > b ? 1 : 0;
+            const forward: Map<string, Set<string>> = new Map([
+                ['c', new Set()], ['a', new Set()], ['b', new Set(['c'])],
+            ]);
+            const backward = new Map([...forward].reverse());
+            expect(topologicalSort(forward, compare)).toEqual(['a', 'c', 'b']);
+            expect(topologicalSort(backward, compare)).toEqual(['a', 'c', 'b']);
+        });
+
+        it('falls back to insertion order without a comparator', () => {
+            const graph: Map<string, Set<string>> = new Map([
+                ['c', new Set()], ['a', new Set()], ['b', new Set(['c'])],
+            ]);
+            expect(topologicalSort(graph)).toEqual(['c', 'a', 'b']);
+        });
+    });
+
+    // #43: system order must be a well-defined function of its inputs.
+    describe('topologicalSortList order', () => {
+        function marker(name: string, edges: { before?: Sortable[], after?: Sortable[] } = {}) {
+            return new Marker({ name, before: edges.before, after: edges.after });
+        }
+        const names = (list: Sortable[]) => list.map(s => s.name);
+
+        it('keeps list order for unconstrained nodes by default', () => {
+            const a = marker('A');
+            const x = marker('X');
+            const b = marker('B');
+            expect(names(topologicalSortList([b, x, a]))).toEqual(['B', 'X', 'A']);
+            expect(names(topologicalSortList([x, b, a]))).toEqual(['X', 'B', 'A']);
+        });
+
+        it('places a delayed node right after the constraint that delays it', () => {
+            // The old pass-based sort gave [A, X, B] and, after adding
+            // N{before: X}, [A, B, N, X]. The priority-queue sort gives
+            // the same here, but by a stated rule (registration order
+            // among ready nodes) rather than by pass structure.
+            const a = marker('A');
+            const x = marker('X');
+            const b = marker('B');
+            const n = marker('N', { before: [x] });
+            expect(names(topologicalSortList([a, x, b]))).toEqual(['A', 'X', 'B']);
+            expect(names(topologicalSortList([a, x, b, n]))).toEqual(['A', 'B', 'N', 'X']);
+            // A node delayed by an edge to an EARLIER-registered node
+            // stays in place.
+            const m = marker('M', { before: [b] });
+            expect(names(topologicalSortList([a, m, x, b]))).toEqual(['A', 'M', 'X', 'B']);
+        });
+
+        describe('with sortableNameOrder', () => {
+            it('is independent of list order for unconstrained nodes', () => {
+                const a = marker('A');
+                const x = marker('X');
+                const b = marker('B');
+                const sorted = (list: Sortable[]) =>
+                    names(topologicalSortList(list, sortableNameOrder));
+                expect(sorted([a, x, b])).toEqual(['A', 'B', 'X']);
+                expect(sorted([b, x, a])).toEqual(['A', 'B', 'X']);
+                expect(sorted([x, b, a])).toEqual(['A', 'B', 'X']);
+            });
+
+            it('is idempotent and reversal-invariant', () => {
+                const root = marker('root');
+                const b1 = marker('b1');
+                const a1 = marker('a1', { before: [b1], after: [root] });
+                const a2 = marker('a2', { after: [root] });
+                const c1 = marker('c1', { after: [root, b1] });
+                const first = topologicalSortList([c1, root, b1, a1, a2], sortableNameOrder);
+                expect(topologicalSortList(first, sortableNameOrder)).toEqual(first);
+                expect(topologicalSortList([...first].reverse(), sortableNameOrder))
+                    .toEqual(first);
+            });
+
+            it('orders unnamed markers after named ones, by list order among themselves', () => {
+                const u1 = new Marker();
+                const u2 = new Marker();
+                const z = marker('Z');
+                expect(topologicalSortList([u2, z, u1], sortableNameOrder))
+                    .toEqual([z, u2, u1]);
+            });
         });
     });
     describe('topologicalSortList', () => {

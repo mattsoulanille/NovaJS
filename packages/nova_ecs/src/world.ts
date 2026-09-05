@@ -15,7 +15,7 @@ import { QueryCache } from "./query_cache.js";
 import { Resource, UnknownResource } from "./resource.js";
 import { ResourceMapWrapped } from "./resource_map.js";
 import { Marker, Phase, Sortable, System, SystemSet } from "./system.js";
-import { DefaultMap, isPromise, topologicalSort, topologicalSortList } from './utils.js';
+import { DefaultMap, isPromise, topologicalSortList } from './utils.js';
 
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
@@ -59,6 +59,17 @@ export class World {
     private nameSystemMap = new Map<string, System>();
     private nameResourceMap = new Map<string, UnknownResource>();
 
+    /**
+     * Every system and marker in registration (addSystem/addMarker)
+     * order. `sortables` is always `topologicalSortList(registered)`:
+     * a pure function of registration order and declared edges. (It
+     * used to be the previous sorted output re-sorted with the new node
+     * appended, which made an unconstrained pair's order depend on the
+     * sort history — #43.) Registration order is deterministic today
+     * because every simulation plugin registers synchronously in a
+     * fixed order; `systemNames` lets peers check they agree.
+     */
+    private registered: Array<Sortable> = [];
     private sortables: Array<Sortable> = []; // This includes systems and markers
     private systems: Array<System> = []; // Not a map because order matters.
     /**
@@ -403,8 +414,7 @@ export class World {
             throw new Error(`A system with name ${system.name} already exists`)
         }
 
-        this.sortables = topologicalSortList([...this.sortables, system]);
-        this.setSystems(filterSystems(this.sortables));
+        this.register(system);
         this.nameSystemMap.set(system.name, system);
 
         for (const component of system.query.components) {
@@ -413,10 +423,27 @@ export class World {
         return this;
     }
 
-    private addAnyMarker(marker: Marker): this {
-        this.sortables = topologicalSortList([...this.sortables, marker]);
+    private register(sortable: Sortable) {
+        if (!this.registered.includes(sortable)) {
+            this.registered.push(sortable);
+        }
+        this.sortables = topologicalSortList(this.registered);
         this.setSystems(filterSystems(this.sortables));
+    }
+
+    private addAnyMarker(marker: Marker): this {
+        this.register(marker);
         return this;
+    }
+
+    /**
+     * The names of the systems in the order they run. Two worlds that
+     * must simulate in lockstep must agree on this list exactly (it is
+     * not covered by state hashes); compare it the way the game-data
+     * fingerprint is compared at join.
+     */
+    get systemNames(): string[] {
+        return this.systems.map(system => system.name);
     }
 
     /**
@@ -470,10 +497,11 @@ export class World {
         }
 
         this.nameSystemMap.delete(system.name);
-        const index = this.sortables.indexOf(system);
+        const index = this.registered.indexOf(system);
         if (index >= 0) {
-            this.sortables.splice(index, 1);
+            this.registered.splice(index, 1);
         }
+        this.sortables = topologicalSortList(this.registered);
         this.setSystems(filterSystems(this.sortables));
 
         return this;

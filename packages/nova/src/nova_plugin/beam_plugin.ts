@@ -14,7 +14,7 @@ import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import SAT from "sat";
-import { CollisionSystem, CompositeHull, HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem } from './collisions_plugin.js';
+import { CollisionSystem, CompositeHull, HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from './collisions_plugin.js';
 import { CollisionEvent, CollisionHitterComponent } from './collision_interaction.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { ShipComponent } from './ship_plugin.js';
@@ -132,7 +132,11 @@ class BeamWeaponEntry extends WeaponEntry {
 
 export const BeamSystem = new System({
     name: 'BeamSystem',
-    before: [UpdateHitboxHullSystem],
+    // Before BOTH hull updaters: a beam is a hitter, so its hull is a
+    // HurtboxHullComponent (see makeBeam), and it must be recomputed
+    // from the movement this system writes in the same tick. The
+    // hurtbox edge held only by addSystem insertion order (#113/#43).
+    before: [UpdateHitboxHullSystem, UpdateHurtboxHullSystem],
     // TimeSystem listed explicitly (determinism rule 4): reads time.time
     // for beam aging. after: [MovementSystem] already pins it after
     // TimeSystem transitively, but the explicit edge keeps it robust.

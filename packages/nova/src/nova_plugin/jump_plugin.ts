@@ -952,7 +952,23 @@ export const JumpSequenceSystem = new System({
     // after: [ControlShipSystem] edge does NOT imply this (ControlShipSystem
     // is not itself ordered after TimeSystem), so without the explicit edge a
     // restore could toposort JumpSequenceSystem before TimeSystem.
-    after: [TimeSystem, ControlShipSystem],
+    //
+    // After both jump STARTERS (#113): JumpRouteReconcileSystem's
+    // correctness argument ("nothing can start another jump before the
+    // tick after arrival") holds only because this system — which drops
+    // JumpComponent on the arrival tick — runs after PlayerJumpControl
+    // and MultiJumpContinueSystem on that tick. Were either sorted after
+    // this one, a held jump key (or the multi-jump marker) would begin
+    // the route's next hop on the ARRIVAL tick, before the reconcile
+    // system has dropped an unflyable head — and beginJump's getCached
+    // for a non-link hop is warm on the browser (preload bundle) and cold
+    // on the archive: the review-r13 fork the reconcile system exists to
+    // prevent. That ordering used to hold only by addSystem insertion
+    // order; this edge makes it a constraint. (Declared here rather than
+    // as `before` on the starters because they are defined above this
+    // const and cannot reference it.)
+    after: [TimeSystem, ControlShipSystem, PlayerJumpControl,
+        MultiJumpContinueSystem],
     before: [MovementSystem],
 });
 

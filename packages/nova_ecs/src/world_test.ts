@@ -9,6 +9,7 @@ import { Plugin } from './plugin.js';
 import { Query } from './query.js';
 import { Resource } from './resource.js';
 import { System } from './system.js';
+import { topologicalSortList } from './utils.js';
 import { SingletonComponent, World } from './world.js';
 
 const FOO_COMPONENT = new Component<{ x: number }>('foo');
@@ -1883,6 +1884,58 @@ describe('world plugin loading', () => {
             .toBeRejectedWithError(/build failed/);
         await expectAsync(world.addPlugin(failing))
             .toBeRejectedWithError(/build failed/);
+    });
+
+    // #43: system order is a function of registration order and declared
+    // edges. It used to be the previous sorted output re-sorted with the
+    // new node appended, so an unconstrained pair's order could depend on
+    // the sort history rather than on any stated rule.
+    describe('system order', () => {
+        function system(name: string, edges: { before?: System[], after?: System[] } = {}) {
+            return new System({
+                name, args: [] as const, step: () => { },
+                before: edges.before, after: edges.after,
+            });
+        }
+
+        // The base plugins register systems too; look only at ours.
+        const mine = new Set(['A', 'B', 'M', 'N', 'X']);
+        const ours = (w: World) => w.systemNames.filter(name => mine.has(name));
+
+        it('equals the topological sort of the registration list', () => {
+            const a = system('A');
+            const x = system('X');
+            const b = system('B');
+            const n = system('N', { before: [x] });
+            const m = system('M', { after: [n] });
+            for (const s of [a, x, b, n, m]) {
+                world.addSystem(s);
+            }
+            const expected = topologicalSortList([a, x, b, n, m])
+                .map(s => (s as System).name);
+            expect(ours(world)).toEqual(expected);
+            expect(ours(world)).toEqual(['A', 'B', 'N', 'X', 'M']);
+        });
+
+        it('is the same whether the systems were added one at a time or removed and re-added', () => {
+            const a = system('A');
+            const x = system('X');
+            const b = system('B');
+            const n = system('N', { before: [x] });
+            world.addSystem(a).addSystem(x).addSystem(b).addSystem(n);
+            const once = ours(world);
+
+            const other = new World('other');
+            other.addSystem(a).addSystem(x).addSystem(b).addSystem(n);
+            expect(ours(other)).toEqual(once);
+
+            // Removing and re-adding the last-registered system changes
+            // nothing (it keeps the last registration slot).
+            world.removeSystem(n);
+            expect(ours(world)).toEqual(['A', 'X', 'B']);
+            world.addSystem(n);
+            expect(ours(world)).toEqual(once);
+        });
     });
 
     // #41: the order a per-entity system visits entities used to be the

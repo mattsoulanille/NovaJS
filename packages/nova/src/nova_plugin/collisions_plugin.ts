@@ -310,7 +310,11 @@ export const UpdateHurtboxHullSystem = new System({
 
 export const CollisionSystem = new System({
     name: "CollisionSystem",
-    after: [UpdateHitboxHullSystem],
+    // After BOTH hull updaters (#113): the hurtbox edge used to hold
+    // only by addSystem insertion order. Sorted before
+    // UpdateHurtboxHullSystem, projectiles would collide with one-tick-
+    // stale hurtboxes (deterministic, but wrong).
+    after: [UpdateHitboxHullSystem, UpdateHurtboxHullSystem],
     args: [RBushResource,
         new Query([HitboxHullComponent, UUID, CollisionVulnerabilityComponent] as const),
         new Query([HurtboxHullComponent, UUID, CollisionHitterComponent] as const),
