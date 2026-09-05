@@ -898,19 +898,35 @@ class StatusBar {
     async reload(statusBarData: StatusBarData) {
         this.statusBarData = statusBarData;
         this.built = false;
-        this.container.removeChildren();
+        const outgoing = this.container.removeChildren();
         // The panes are class-owned containers that build() re-parents; their
         // children are per-build text objects, so they start empty again.
         this.targetContainer.removeChildren();
         this.noTargetContainer.removeChildren();
         // Each PIXI.Text owns a generated canvas texture, so the outgoing set
-        // is destroyed rather than merely detached. Only the texts are
-        // destroyed: the background sprite shares its texture with the asset
-        // cache, and the debug buttons are re-added by build().
+        // is destroyed rather than merely detached.
         for (const text of [...Object.values(this.text),
             ...this.cargoNameTexts, ...this.cargoQuantityTexts]) {
             text.destroy();
         }
+        // Everything else build() made for the old ïntf goes too — the
+        // background sprite, the radar's static TilingSprite, the readout
+        // panes' containers — or every interface swap would orphan them
+        // (review #40). Only what build() RE-ADDS is kept: the class-owned
+        // graphics and panes and the debug buttons. Textures are not
+        // destroyed here: the background's and the static's are shared with
+        // the asset cache (Sprite.destroy leaves them alone by default).
+        const kept = new Set<PIXI.DisplayObject>([
+            this.radar, this.statsGraphics, this.targetContainer,
+            this.noTargetContainer, this.addEnemyButton.container,
+            this.giveCreditsButton.container, this.clearRecordButton.container,
+        ]);
+        for (const child of outgoing) {
+            if (!kept.has(child) && !child.destroyed) {
+                child.destroy({ children: true });
+            }
+        }
+        this.staticSprite = undefined;
         this.text = {};
         this.cargoNameTexts = [];
         this.cargoQuantityTexts = [];
@@ -921,8 +937,26 @@ class StatusBar {
         await this.buildPromise;
     }
 
-    /** Releases the cached target RenderTexture (and its base texture). */
+    /**
+     * Releases everything the bar owns: the cached target RenderTexture
+     * (and its base texture) and the whole display tree — some forty
+     * PIXI.Text canvases, the graphics, the sprites. Shared textures (the
+     * background PICT, the ppat statics) are left to the asset cache;
+     * Text destroys its own canvas texture regardless (review #40).
+     */
     destroy() {
+        this.container.destroy({ children: true });
+        // A Text the bar owns but never parented (targetImagePlaceholder)
+        // is out of the container's reach and has to be destroyed by name.
+        for (const text of [...Object.values(this.text),
+            ...this.cargoNameTexts, ...this.cargoQuantityTexts]) {
+            if (!text.destroyed) {
+                text.destroy();
+            }
+        }
+        this.text = {};
+        this.cargoNameTexts = [];
+        this.cargoQuantityTexts = [];
         this.targetRenderTexture?.destroy(true);
         this.targetRenderTexture = undefined;
     }

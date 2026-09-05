@@ -607,6 +607,8 @@ export class HailDialog {
     private content = new PIXI.Container();
     private controls: MenuControls;
     private closed = new Subject<void>();
+    /** Set by {@link dismiss}: torn down with its world, never shown again. */
+    private dismissed = false;
     private phase: 'main' | 'haggle' = 'main';
     private context?: HailContext;
     /** The context the channel opened with, so Greetings can restore it. */
@@ -643,6 +645,10 @@ export class HailDialog {
         this.opening = context;
         this.phase = 'main';
         await this.render();
+        if (this.dismissed) {
+            // Torn down while the frame art loaded: nothing to open.
+            return;
+        }
         this.container.visible = true;
         this.callbacks.playSound(HAIL_SND_OPEN);
         this.controls.bind();
@@ -750,6 +756,22 @@ export class HailDialog {
         this.closed.next();
     }
 
+    /**
+     * Closes the channel from OUTSIDE: the owning display world is being
+     * torn down (a jump that completes with the dialog up). Settles the
+     * pending show() so its caller unwinds, and releases the controls for
+     * good — show() binds only after it has rendered, so a dialog
+     * dismissed mid-render would otherwise take the keyboard a moment
+     * after its world died and keep it (see MenuControls.release). The
+     * dialog is destroyed right after this; it is never shown again.
+     * No-op when nothing is open.
+     */
+    dismiss() {
+        this.dismissed = true;
+        this.controls.release();
+        this.close();
+    }
+
     /** Local UI beep for a button press (not the closing "Close Channel",
      * whose close beep already covers it). */
     private beep() {
@@ -769,6 +791,11 @@ export class HailDialog {
         // from the sprite, so a slow/missing texture cannot shift the layout.
         const background = await this.displayAssets
             .spriteFromPictAsync(frame.pict);
+        // Dismissed and destroyed with its world while the art loaded (see
+        // dismiss): a destroyed container has no child list to draw into.
+        if (this.dismissed) {
+            return;
+        }
         // Positioned by its top-left at the WHOLE-PIXEL origin the original
         // blits to (frameOrigin), not centred with anchor 0.5: an odd-width
         // frame centred that way lands on a half pixel, which blurs the art
@@ -814,6 +841,9 @@ export class HailDialog {
             try {
                 const image = await this.displayAssets
                     .spriteFromPictAsync(context.image);
+                if (this.dismissed) {
+                    return;
+                }
                 image.anchor.set(0.5);
                 const fit = fitImage(frame.imagePane, image.width,
                     image.height);

@@ -154,7 +154,7 @@ export class OfferPopup {
                 up: () => this.scrollBy(-POPUP_SCROLL_STEP),
                 down: () => this.scrollBy(POPUP_SCROLL_STEP),
                 accept: () => this.choice.next('accept'),
-                depart: () => this.dismiss(),
+                depart: () => this.depart(),
             });
         }
         // Headless-harness hook, like window.novaHailDialog: the
@@ -178,11 +178,30 @@ export class OfferPopup {
      * Escape / 'd' on a one-button notice: the same outcome its lone
      * button gives. A popup that also offers Refuse is left alone.
      */
-    private dismiss() {
+    private depart() {
         const choice = popupDepartChoice(this.hasRefuse);
         if (choice) {
             this.choice.next(choice);
         }
+    }
+
+    /**
+     * Takes the popup down from OUTSIDE: its owning display world is
+     * being torn down (a jump that completes with a ship's offer or a
+     * ship-done notice up). Releases the keyboard for good and hides the
+     * popup; the pending show() is left UNSETTLED on purpose. Its answer
+     * is a decision with consequences — accept runs the mission, refuse
+     * runs OnRefuse — and a teardown is neither, exactly as Escape picks
+     * neither on a two-button offer; and settling it would run the
+     * caller's continuation (acceptShipOffer, the next offer in
+     * presentOffers) against a dead world. An unsettled promise that
+     * nothing holds is collected with the popup. Safe when nothing is
+     * showing; the popup is destroyed right after and never shown again.
+     */
+    dismiss() {
+        this.controls?.release();
+        this.container.visible = false;
+        this.endHold();
     }
 
     async show(text: string, buttons: {
@@ -313,6 +332,19 @@ export class OfferPopup {
             PIXI.Ticker.shared.remove(this.hold.tick);
             this.hold = undefined;
         }
+    }
+
+    /**
+     * Tears the popup down with its owning display world: a popup still
+     * up is dismissed first (its keyboard binding and any scroll hold on
+     * the shared Ticker released — see dismiss), then the display tree
+     * is destroyed, children included, so the popup's Text canvases and
+     * Graphics don't outlive the world (review #40). Sprite textures are
+     * the asset cache's and are left alone.
+     */
+    destroy() {
+        this.dismiss();
+        this.container.destroy({ children: true });
     }
 
     /** Moves the text by `delta` px (positive scrolls further down). */

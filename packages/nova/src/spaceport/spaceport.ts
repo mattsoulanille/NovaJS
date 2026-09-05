@@ -164,7 +164,10 @@ export class Spaceport extends Menu<Entity> {
 
         this.outfitter = new Outfitter(displayAssets, simulationData, controlEvents);
         const showOutfitter = async () => {
-            if (this.data && !this.data.flags.hasOutfitter) {
+            // No stellar data yet (the spaceport's keys go live before its
+            // build finishes — see show) or no such venue here: nothing
+            // to open. The same rule guards every venue below.
+            if (!this.data?.flags.hasOutfitter) {
                 return;
             }
             this.controls.unbind();
@@ -212,7 +215,7 @@ export class Spaceport extends Menu<Entity> {
         this.bar = new Bar(displayAssets, simulationData, controlEvents,
             this.universe, id);
         const showBar = async () => {
-            if (this.data && !this.data.flags.hasBar) {
+            if (!this.data?.flags.hasBar) {
                 return;
             }
             this.controls.unbind();
@@ -229,7 +232,7 @@ export class Spaceport extends Menu<Entity> {
         this.tradeCenter = new TradeCenter(displayAssets, simulationData,
             controlEvents, id);
         const showTradeCenter = async () => {
-            if (this.data && !this.data.flags.hasCommodityExchange) {
+            if (!this.data?.flags.hasCommodityExchange) {
                 return;
             }
             this.controls.unbind();
@@ -248,7 +251,7 @@ export class Spaceport extends Menu<Entity> {
         this.shipyard.onShipPurchased = ship => this.adoptPurchasedShip(ship);
 
         const showShipyard = async () => {
-            if (this.data && !this.data.flags.hasShipyard) {
+            if (!this.data?.flags.hasShipyard) {
                 return;
             }
             this.controls.unbind();
@@ -306,6 +309,35 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
+     * Gives the keyboard back from OUTSIDE: the owning display world is
+     * being torn down with the player still docked here (display/
+     * spaceport_plugin.ts's remove). Everything the visit may have bound
+     * on the focus stack goes — the venue on top (through Menu.dismiss,
+     * which also commits what the visit did there), the landing popup and
+     * its blocker, and the spaceport's own keys — and the spaceport's and
+     * blocker's controls are released for good, because show()'s own
+     * chain and every venue's caller re-bind them after an await (see
+     * MenuControls.release).
+     *
+     * Deliberately NOT Menu.dismiss's "resolve show()": for the spaceport
+     * that resolution IS the departure — the plugin turns it into
+     * LeaveSpaceportEvent, which the client answers by relaunching the
+     * ship and recording a "Departed" checkpoint. A teardown is not a
+     * departure, so show() is left unsettled (nothing holds it; it is
+     * collected with the spaceport) and the ship stays docked in the
+     * client's eyes.
+     */
+    override dismiss() {
+        for (const venue of [this.outfitter, this.shipyard, this.bar,
+            this.tradeCenter, this.missionComputer]) {
+            venue.dismiss();
+        }
+        this.offerPopup.dismiss();
+        this.popupBlocker.release();
+        this.controls.release();
+    }
+
+    /**
      * The orange active-mission map marks for the docked ship (the
      * entity is out of the display world while docked, so the starmap
      * plugin can't derive these itself).
@@ -343,6 +375,15 @@ export class Spaceport extends Menu<Entity> {
         // docked entity to player info) work during the gap too.
         this.setInput(input);
         this.controls.bind();
+        // Built lazily, on the first landing here (display/
+        // spaceport_plugin.ts), so the stellar's data may still be on its
+        // way. The VENUE keys read it — which venues exist, the outfitter's
+        // and shipyard's tech level — and each stands down until it is in
+        // (see showOutfitter and friends); the keys that don't need it
+        // ('p', 'i', 'm', depart) are live from the first frame, as above.
+        // Quick — the stellar has been in the display world all along, so
+        // its record is cached — unlike the mission-universe load below.
+        await this.buildPromise;
         let events: MissionEvent[] = [];
         try {
             events = await processEntityLanding(input,

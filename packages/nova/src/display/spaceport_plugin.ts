@@ -1,8 +1,8 @@
-import { Emit, Entities, RunQuery } from 'nova_ecs/arg_types';
+import { Emit, Entities, GetEntity, RunQuery } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
+import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
-import { Provide } from 'nova_ecs/provide';
 import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
@@ -26,20 +26,25 @@ import { OpenStarmapResource } from './starmap_plugin.js';
 import { UiSoundEvent } from './ui_sound.js';
 
 
-const SpaceportComponent = new Component<Spaceport>("Spaceport");
+/**
+ * A stellar's Spaceport, BUILT ON THE FIRST LANDING THERE and kept for the
+ * rest of the display world's life (a second landing at the same stellar
+ * reuses it; the world's teardown destroys it — see remove()).
+ *
+ * It used to be a `Provide` over every PlanetComponent, so entering a
+ * system built a full Spaceport — outfitter, shipyard, trade center, bar
+ * and mission board, a couple of thousand PIXI.Text canvases each — for
+ * EVERY stellar in it, unlandable ones included (Jupiter, gates and
+ * wormholes got a shipyard; stock data has 461 stellars, 77 of them
+ * unlandable, and Sol/Aldebaran/Aurora/K-003 have five each), only to
+ * destroy the lot at the next jump. The player opens at most the one
+ * they land at, so that is the one that gets built (review #39).
+ */
+export const SpaceportComponent = new Component<Spaceport>("Spaceport");
 
-const SpaceportProvider = Provide({
-    name: "SpaceportProvider",
-    provided: SpaceportComponent,
-    args: [DisplayAssetDataResource, SimulationGameDataResource, ControlsSubject, Stage, OpenStarmapResource, OpenPlayerInfoResource, OpenMissionInfoResource, PlanetComponent] as const,
-    factory(displayAssets, simulationData, controls, stage, openStarmap, openPlayerInfo, openMissionInfo, { id }) {
-        const spaceport = new Spaceport(displayAssets, simulationData, id, controls, openStarmap, openPlayerInfo, openMissionInfo);
-        stage.addChild(spaceport.container);
-        return spaceport;
-    }
-});
-
-const SpaceportQuery = new Query([SpaceportComponent, PlanetComponent] as const);
+/** Every stellar in the system, with its Spaceport if one has been built. */
+const PlanetSpaceportQuery = new Query(
+    [GetEntity, PlanetComponent, Optional(SpaceportComponent)] as const);
 
 /**
  * `uuid` is the docked ship's uuid in the display world. It is optional
@@ -79,13 +84,28 @@ const OpenSpaceportSystem = new System({
     events: [OpenSpaceportEvent],
     args: [OpenSpaceportEvent, RunQuery, ScreenSize, Emit,
         DockedShipResource, Entities, SimulationGameDataResource,
+        DisplayAssetDataResource, ControlsSubject, Stage, OpenStarmapResource,
+        OpenPlayerInfoResource, OpenMissionInfoResource,
         SingletonComponent] as const,
     step({ planetId, ship, uuid, landedEscorts, onShipSwap }, runQuery,
-        { x, y }, emit, dockedHolder, entities, gameData) {
-        const spaceport = runQuery(SpaceportQuery)
-            .find(([, { id }]) => id === planetId)?.[0];
-        if (!spaceport) {
+        { x, y }, emit, dockedHolder, entities, gameData, displayAssets,
+        controls, stage, openStarmap, openPlayerInfo, openMissionInfo) {
+        const landedAt = runQuery(PlanetSpaceportQuery)
+            .find(([, { id }]) => id === planetId);
+        if (!landedAt) {
             return;
+        }
+        const [planet, , existing] = landedAt;
+        let spaceport = existing;
+        if (!spaceport) {
+            // First landing here this visit: build the stellar's spaceport
+            // now (see SpaceportComponent's doc). Its own async build —
+            // the stellar's data, its landing PICT and the venues' stock —
+            // is what Spaceport.show waits for before its keys go live.
+            spaceport = new Spaceport(displayAssets, gameData, planetId,
+                controls, openStarmap, openPlayerInfo, openMissionInfo);
+            stage.addChild(spaceport.container);
+            planet.components.set(SpaceportComponent, spaceport);
         }
 
         // Owned-but-not-aboard outfits for this landing: fighters still
@@ -201,29 +221,34 @@ export const SpaceportPlugin: Plugin = {
         if (!world.resources.get(DockedShipResource)) {
             world.resources.set(DockedShipResource, {});
         }
-        world.addSystem(SpaceportProvider);
         world.addSystem(OpenSpaceportSystem);
         world.addSystem(CloseSpaceportSystem);
         world.addSystem(SpaceportResizeSystem);
         world.addSystem(SpaceportAmbientSystem);
     },
     remove(world) {
-        world.removeSystem(SpaceportProvider);
         world.removeSystem(OpenSpaceportSystem);
         world.removeSystem(CloseSpaceportSystem);
         world.removeSystem(SpaceportResizeSystem);
         world.removeSystem(SpaceportAmbientSystem);
         world.resources.delete(SpaceportAmbientState);
-        // Every dockable stellar got a full Spaceport (outfitter, shipyard,
-        // trade center, bar, mission board: a couple of thousand PIXI.Text
-        // objects each). Text owns a canvas texture registered in PIXI's
-        // global TextureCache, so dropping the container is not enough:
-        // without destroy() every system the player passes through leaks
-        // its planets' UI canvases (and, once rendered, their GPU
-        // textures) for the rest of the session.
+        // Every stellar the player landed at got a full Spaceport
+        // (outfitter, shipyard, trade center, bar, mission board: a couple
+        // of thousand PIXI.Text objects each). Text owns a canvas texture
+        // registered in PIXI's global TextureCache, so dropping the
+        // container is not enough: without destroy() every system the
+        // player passes through leaks its planets' UI canvases (and, once
+        // rendered, their GPU textures) for the rest of the session.
+        // `children: true` without `texture` is deliberate: Text destroys
+        // its own canvas texture regardless, while the Sprites' textures
+        // (PICTs, cicns) are shared with the asset cache and stay.
         for (const [, entity] of world.entities) {
             const spaceport = entity.components.get(SpaceportComponent);
             if (spaceport) {
+                // One still docked at gives the keyboard back first (see
+                // Spaceport.dismiss); a spaceport left bound after its
+                // world died would hold it for the rest of the session.
+                spaceport.dismiss();
                 spaceport.container.destroy({ children: true });
                 entity.components.delete(SpaceportComponent);
             }

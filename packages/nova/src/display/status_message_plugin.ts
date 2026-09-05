@@ -281,11 +281,10 @@ export const StatusMessagePlugin: Plugin = {
         world.removeSystem(ShowPlayerPlunderedMessage);
         world.removeSystem(ShowEscortRepairedMessage);
         world.removeSystem(ShowBayCaptureMessage);
-        const stage = world.resources.get(Stage);
-        const statusLine = world.resources.get(StatusLineResource);
-        if (stage && statusLine) {
-            stage.removeChild(statusLine.container);
-        }
+        // Destroyed, children included: the line's Text owns a canvas
+        // texture that leaked with every transit (review #40).
+        world.resources.get(StatusLineResource)?.container
+            .destroy({ children: true });
         world.resources.delete(StatusLineResource);
         world.resources.delete(DateSuffixResource);
         world.resources.delete(ArrivalShownResource);

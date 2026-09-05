@@ -135,7 +135,7 @@ import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';
  * second peer draws is the same box.
  */
 
-const HailDialogResource = new Resource<HailDialog>('HailDialog');
+export const HailDialogResource = new Resource<HailDialog>('HailDialog');
 const HailControlsSubscription =
     new Resource<Subscription>('HailControlsSubscription');
 
@@ -987,11 +987,16 @@ export const HailDialogPlugin: Plugin = {
     },
     remove(world) {
         world.resources.get(HailControlsSubscription)?.unsubscribe();
-        const stage = world.resources.get(Stage);
         const dialog = world.resources.get(HailDialogResource);
-        if (stage && dialog) {
-            stage.removeChild(dialog.container);
-        }
+        // A channel still open while its world dies (a jump completing
+        // with 'h' up) would otherwise keep its MenuControls bound for
+        // the rest of the session (see HailDialog.dismiss).
+        dialog?.dismiss();
+        // The dialog is per-world; destroying it (children included) frees
+        // its Text canvases and Graphics rather than just detaching them —
+        // every system transit used to leak a dialog's worth (review #40).
+        // Sprite textures are the asset cache's and are left alone.
+        dialog?.container.destroy({ children: true });
         world.resources.delete(HailControlsSubscription);
         world.resources.delete(HailDialogResource);
     },
