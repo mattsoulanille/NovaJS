@@ -14,7 +14,9 @@ import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import { creditBalance } from './credit_commit.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Outfitter } from './outfitter.js';
-import { canBuyOutfit, OutfitterContext, ownedCount } from './outfitter_rules.js';
+import {
+    canBuyOutfit, OutfitterContext, outfitPrice, outfitResaleValue, ownedCount,
+} from './outfitter_rules.js';
 
 /**
  * ============================================================================
@@ -183,6 +185,57 @@ describe('a ship-upgrade permit bought at the real outfitter', () => {
             expect([...working.keys()]).toEqual([MEDIUM_BLASTER]);
             const context: OutfitterContext = (outfitter as any).makeContext();
             expect([...context.outfits.keys()]).toEqual([MEDIUM_BLASTER]);
+            outfitter.dismiss();
+            await shown;
+        }, 120_000);
+
+    it('charges a unit a build order\'s Dxxx consumes against THIS visit\'s '
+        + 'receipt, so the pre-owned unit sells back at resale, not at cost',
+        async () => {
+            // The pilot owns one Medium Blaster, buys a second (a same-visit
+            // receipt: selling it back would refund 100%), then buys a
+            // build order in the BYOM:455 "Dismantle" mould — a 0x0010
+            // permit whose OnPurchase is `D129`, one Medium Blaster gone.
+            // One blaster is left aboard and one was paid for this visit;
+            // the unit the order dismantled spends that receipt. Otherwise
+            // the survivor — the pre-owned one — sells at the full price
+            // the consumed one was bought for, and the player is 75% of a
+            // blaster ahead for having dismantled it.
+            const gameData = await getIntegrationGameData();
+            const entity = await dockedValkyrie(100_000);
+            const outfitter = new Outfitter(displayAssets(), gameData,
+                new Subject<ControlEvent>());
+            await outfitter.buildPromise;
+            const shown = outfitter.show(entity);
+            await untilShown(outfitter);
+
+            const blaster = await gameData.data.Outfit.get(MEDIUM_BLASTER);
+            const ship = (outfitter as any).shipData;
+            const dismantle = {
+                ...await gameData.data.Outfit.get(FUEL_TRANSFER),
+                id: 'nova:9129', name: 'Dismantle Medium Blaster',
+                price: 0, onPurchase: 'D129',
+            };
+            expect(dismantle.removeAfterPurchase).toBe(true);
+            // (Re-read the working copy after each buy: an OnPurchase that
+            // runs through the mission session replaces the map.)
+            const working = (): Map<string, number> => (outfitter as any).outfits;
+            (outfitter as any).applyBuy(blaster);
+            expect(working().get(MEDIUM_BLASTER)).toBe(2);
+            (outfitter as any).applyBuy(dismantle);
+            expect(working().get(MEDIUM_BLASTER)).toBe(1);
+            expect(working().has(dismantle.id)).toBe(false);
+            const receipts: Map<string, number> =
+                (outfitter as any).visitPurchases;
+            expect(receipts.get(MEDIUM_BLASTER) ?? 0).toBe(0);
+
+            const before = (outfitter as any).credits.credits;
+            (outfitter as any).applySell(blaster);
+            expect((outfitter as any).credits.credits - before)
+                .toBe(outfitResaleValue(blaster, ship));
+            expect(outfitResaleValue(blaster, ship))
+                .toBeLessThan(outfitPrice(blaster, ship));
+
             outfitter.dismiss();
             await shown;
         }, 120_000);

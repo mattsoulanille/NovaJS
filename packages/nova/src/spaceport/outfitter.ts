@@ -881,7 +881,28 @@ export class Outfitter extends Menu<Entity> {
             this.visitPurchases.set(outfit.id,
                 Math.max(0, this.visitPurchases.get(outfit.id) - units));
         }
+        // What was aboard as the OnPurchase starts, for every outfit with
+        // a receipt from this visit (see the Dxxx note below).
+        const ownedBefore = new Map([...this.visitPurchases.keys()]
+            .map(id => [id, this.outfits.get(id)] as const));
         this.runSetString(outfit.onPurchase, setStringPrefix(outfit));
+        // A `Dxxx` in the set string (its own or a build order's, e.g.
+        // BYOM:455 "Dismantle ir missile" `D455 D135`), or an `Hxxx`
+        // dropping the nonpersistent outfits, may have consumed a unit
+        // bought THIS visit. Only units still aboard can be refunded in
+        // full, or a pre-owned unit of the same outfit would be sold back
+        // at 100% on the strength of the consumed one's receipt — so a
+        // unit the set string removes is charged against this visit's
+        // receipts FIRST, for every outfit it touched (the receipt of the
+        // outfit being bought is not the only one a build order can
+        // spend: BYOM:455's `D135` spends an IR Missile's).
+        for (const [id, before] of ownedBefore) {
+            const removed = before - this.outfits.get(id);
+            if (removed > 0) {
+                this.visitPurchases.set(id,
+                    Math.max(0, this.visitPurchases.get(id) - removed));
+            }
+        }
         // oütf 0x0010: "Remove any items of this type after purchase
         // (useful for permits and other intangible purchases)" (Bible
         // ~:1966). The price is paid and the OnPurchase has run; the item
@@ -895,11 +916,8 @@ export class Outfitter extends Menu<Entity> {
             this.visitPurchases.set(outfit.id,
                 Math.max(0, this.visitPurchases.get(outfit.id) - units));
         }
-        // A `Dxxx` in the set string (its own or a build order's, e.g.
-        // BYOM:455 "Dismantle ir missile" `D455 D135`) may have consumed a
-        // unit bought THIS visit. Only units still aboard can be refunded
-        // in full, or a pre-owned unit of the same outfit would be sold
-        // back at 100% on the strength of the consumed one's receipt.
+        // ...and, whatever happened above, never a receipt for more units
+        // than are aboard.
         const owned = this.outfits.get(outfit.id);
         if (this.visitPurchases.get(outfit.id) > owned) {
             this.visitPurchases.set(outfit.id, owned);
