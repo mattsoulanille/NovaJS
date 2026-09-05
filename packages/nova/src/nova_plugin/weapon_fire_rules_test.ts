@@ -13,6 +13,7 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import { CloakActiveComponent } from './cloak_plugin.js';
 import { completeEntity } from './entity_data_loader.js';
@@ -28,6 +29,7 @@ import { ControlledByComponent } from './ship_control.js';
 import { TargetComponent } from './target_component.js';
 import {
     effectiveReload, FAST_SHIP_TURN_RATE, intervalElapsed, ORIGINAL_FRAME_MS,
+    WeaponsSystem,
 } from './weapon_plugin.js';
 import { WeaponsStateComponent, WeaponState } from './weapons_state.js';
 
@@ -79,9 +81,15 @@ interface WorldOptions {
     /** Weapon data -> mount count. */
     weapons: Array<[WeaponData, number]>;
     ship?: Partial<ShipData>;
+    /**
+     * Ticks to run before handing the world over (default 2). 0 leaves
+     * the world's clock untouched, for specs about the very first tick.
+     */
+    prestep?: number;
 }
 
-async function makeTestWorld({ weapons, ship: shipOver = {} }: WorldOptions) {
+async function makeTestWorld({ weapons, ship: shipOver = {}, prestep = 2 }:
+    WorldOptions) {
     const gameData = new MockGameData();
     const mounts: { [id: string]: number } = {};
     for (const [data, count] of weapons) {
@@ -122,7 +130,7 @@ async function makeTestWorld({ weapons, ship: shipOver = {} }: WorldOptions) {
     pin(ship);
     world.entities.set(SHIP_UUID, ship);
 
-    await stepWorld(world, 2);
+    await stepWorld(world, prestep);
     return { world, ship, gameData };
 }
 
@@ -183,6 +191,19 @@ describe('intervalElapsed', () => {
             expect(intervalElapsed(ticks * DELTA, interval, DELTA))
                 .withContext(`${ticks} of ${ticks} ticks`).toBeTrue();
         }
+    });
+
+    it('rounds a fractional-tick interval to the nearest tick, halves down', () => {
+        // Only a plug-in reaches this (a per-mount reload share that is
+        // not a whole number of ticks, e.g. Reload 5 on four mounts =
+        // 2.5 ticks); see the intervalElapsed doc. The plain comparison
+        // would wait for tick 3 in all three cases below.
+        expect(intervalElapsed(2 * DELTA, 2.25 * DELTA, DELTA)).toBeTrue();
+        expect(intervalElapsed(2 * DELTA, 2.5 * DELTA, DELTA)).toBeTrue();
+        expect(intervalElapsed(2 * DELTA, 2.75 * DELTA, DELTA)).toBeFalse();
+        expect(intervalElapsed(3 * DELTA, 2.75 * DELTA, DELTA)).toBeTrue();
+        // Never before the tick below the interval.
+        expect(intervalElapsed(1 * DELTA, 2.25 * DELTA, DELTA)).toBeFalse();
     });
 });
 
@@ -612,6 +633,53 @@ describe('exclusive weapon (wëap Flags3 0x0020)', () => {
         setFiring(ship, 'test:other', true);
         await stepWorld(world, 5);
         expect(projectiles(world, 'test:other').length).toEqual(3);
+    });
+
+    // isExclusiveLocking reads a lastFired of 0 as "never fired". That
+    // is only sound if no shot can ever be stamped at time 0, which the
+    // three assertions below pin: the simulation clock is past 0 by the
+    // time any weapon is consulted, so the sentinel is unambiguous.
+    describe('the never-fired sentinel (lastFired 0)', () => {
+        it('cannot collide with a real shot: the clock is past 0 on tick 1', async () => {
+            const { world } = await makeTestWorld({
+                weapons: [[weapon('test:other'), 1]], prestep: 0,
+            });
+            const time = world.resources.get(TimeResource)!;
+            expect(time.time).toEqual(0);
+            await stepWorld(world, 1);
+            expect(time.time).toEqual(SIMULATION_STEP_MS);
+            expect(time.time).toBeGreaterThan(0);
+        });
+
+        it('is read after TimeSystem has advanced the clock', () => {
+            expect(WeaponsSystem.after).toContain(TimeSystem);
+        });
+
+        it('locks from a weapon\'s very first shot in a fresh world', async () => {
+            const { world, ship } = await makeTestWorld({
+                weapons: [
+                    [weapon('test:exclusive', { exclusive: true }), 1],
+                    [weapon('test:other'), 1],
+                ],
+                prestep: 0,
+            });
+            setFiring(ship, 'test:exclusive', true);
+            setFiring(ship, 'test:other', true);
+            // A fresh weapon serves one full (floored) reload from world
+            // creation, so the earliest shot in any world is tick 2 —
+            // and it stamps the smallest lastFired a weapon can hold.
+            await stepWorld(world, 2);
+            expect(projectiles(world, 'test:exclusive').length).toEqual(1);
+            const local = ship.components.get(WeaponsComponent)!
+                .get('test:exclusive');
+            expect(local.lastFired).toEqual(2 * SIMULATION_STEP_MS);
+            expect(local.lastFired).toBeGreaterThan(0);
+            // The lock holds from that first shot: the other weapon,
+            // ready every second tick, never fires.
+            await stepWorld(world, 8);
+            expect(projectiles(world, 'test:exclusive').length).toEqual(5);
+            expect(projectiles(world, 'test:other').length).toEqual(0);
+        });
     });
 });
 
