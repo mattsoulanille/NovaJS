@@ -158,7 +158,17 @@ export type RollbackProtocolMessage =
     | { kind: 'inputs', record: InputRecord }
     /** The server's clock, broadcast periodically. */
     | { kind: 'tickSync', tick: number }
-    /** Ask the server for the input log from a tick (late join). */
+    /**
+     * Ask the server for the input log from a tick; answered with an
+     * `inputLog`, which the bridge integrates record by record. DORMANT
+     * ON THE WIRE: no shipped client sends the request — late join and
+     * resync both go through `joinRequest`/`catchUp`, which carry a
+     * baseline as well as the log. The pair is kept as the log-only
+     * resync path the bridge already understands (simulation_bridge.ts)
+     * and the relay tests exercise; it exposes nothing `joinRequest`
+     * does not (the same log, to a room member only, server-stamped).
+     * Removing it is a protocol change: bump PROTOCOL_VERSION with it.
+     */
     | { kind: 'inputLogRequest', fromTick: number }
     | { kind: 'inputLog', records: InputRecord[] }
     /** Join: the input log up to the server's current tick, plus the
