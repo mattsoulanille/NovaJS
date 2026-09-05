@@ -4,7 +4,7 @@ import {
     DISCOVERY_LANDED, DISCOVERY_UNKNOWN,
 } from '../nova_plugin/discovery.js';
 import {
-    discoveryLevel, DiscoveryStorage, resetDiscovery, setDiscoveryStorageKey,
+    discoveryLevel, resetDiscovery, setDiscoveryStorageKey,
 } from '../nova_plugin/discovery_store.js';
 import { applyMapOutfit, applyOwnedMapOutfits } from './map_outfit.js';
 import { MissionUniverse } from './mission_universe.js';
@@ -27,13 +27,6 @@ import { MissionUniverse } from './mission_universe.js';
  * OnEnd `G342` -> oütf nova:342 "Area Map - Vell-os", ModType 16 ModVal 2.
  */
 
-class FakeStorage implements DiscoveryStorage {
-    private items = new Map<string, string>();
-    getItem(key: string) { return this.items.get(key) ?? null; }
-    setItem(key: string, value: string) { this.items.set(key, value); }
-    removeItem(key: string) { this.items.delete(key); }
-}
-
 /** oütf ids of every stock map, with the ModVal each carries. */
 const STOCK_MAPS: [string, string, number][] = [
     ['nova:204', "Map; Sol/Kel'ar Iy only", 1],
@@ -49,7 +42,6 @@ const KANIA = 'nova:130';
 
 describe('stock map outfits', () => {
     let universe: MissionUniverse;
-    let storage: FakeStorage;
 
     beforeAll(async () => {
         const gameData = await getIntegrationGameData();
@@ -57,13 +49,17 @@ describe('stock map outfits', () => {
         await universe.load();
     });
 
+    // map_outfit.ts writes through the store's DEFAULT storage (none under
+    // node: the process-local record), so the read-backs below go through
+    // the same one. This spec used to hand the reads a FakeStorage and got
+    // away with it only because the cache was shared across storages
+    // (review finding #78).
     beforeEach(() => {
-        storage = new FakeStorage();
         setDiscoveryStorageKey('novajs:save');
-        resetDiscovery(storage);
+        resetDiscovery();
     });
 
-    afterEach(() => resetDiscovery(storage));
+    afterEach(() => resetDiscovery());
 
     it('is exactly the six ModType 16 items the game ships', async () => {
         const gameData = await getIntegrationGameData();
@@ -105,7 +101,7 @@ describe('stock map outfits', () => {
         // surrounding this one", so a mapped system knows its services and
         // traded goods — level 2.
         applyMapOutfit(1, KANIA, universe);
-        expect(discoveryLevel(KANIA, storage)).toBe(DISCOVERY_LANDED);
+        expect(discoveryLevel(KANIA)).toBe(DISCOVERY_LANDED);
     });
 
     it('never leaves the region reachable by hyperspace', () => {
@@ -139,7 +135,7 @@ describe('stock map outfits', () => {
             () => vellos);
         expect(revealed.sort())
             .toEqual(applyMapOutfit(2, KANIA, universe).sort());
-        expect(discoveryLevel(KANIA, storage)).toBe(DISCOVERY_LANDED);
+        expect(discoveryLevel(KANIA)).toBe(DISCOVERY_LANDED);
     });
 
     it('ignores outfits that are not maps', async () => {
@@ -149,7 +145,7 @@ describe('stock map outfits', () => {
         expect(shield.map).toBeNull();
         expect(applyOwnedMapOutfits(['nova:132'], KANIA, universe,
             () => shield)).toEqual([]);
-        expect(discoveryLevel(KANIA, storage)).toBe(DISCOVERY_UNKNOWN);
+        expect(discoveryLevel(KANIA)).toBe(DISCOVERY_UNKNOWN);
     });
 
     it('is the crön that keeps the Vell-os ability supplied', async () => {

@@ -1231,6 +1231,18 @@ export interface OpenStarmapOptions {
      * while docked, so the plugin can't always read it itself).
      */
     date?: GameDate;
+    /**
+     * The player's control bits, for NCB system visibility. Landed screens
+     * pass the docked entity's: like the marks and the date, the bits live
+     * on an entity that is out of the display world while docked, and a
+     * map filtered against the plugin's empty fallback hid every
+     * bXXX-gated system and resurrected every !bXXX stacked duplicate
+     * (review finding #29). Omitted, the plugin's own lookup is used.
+     */
+    playerBits?: ReadonlySet<number>;
+    /** The player's legal records, for the Legal Status line — passed by
+     * landed screens for the same reason as `playerBits`. */
+    legalRecords?: LegalRecordsState;
 }
 
 // Right-column/properties fonts. Field captions are the light grey the
@@ -1401,7 +1413,16 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
         this.allSystems = await Promise.all(
             systemIds.map(s => this.simulationData.data.System.get(s)));
         // Planet/govt/system indices for the properties panel and borders.
-        await this.universe.load();
+        // A failed load must not sink buildPromise (which is built once
+        // and awaited by every show()): the universe's load is retryable
+        // (#66), and show() re-awaits it, so the map that could not open
+        // during an outage opens on a later press.
+        try {
+            await this.universe.load();
+        } catch (e) {
+            console.warn('Starmap: mission universe failed to load; '
+                + 'will retry when the map is next opened:', e);
+        }
         // The original's mission-mark icons. Loaded via the same
         // textureFromCicn path the target-corner icons use; the objects/
         // FilesystemData overlay wins over parsed data if it ever provides
@@ -1571,7 +1592,11 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
             [govt ? displayName(govt.name) : 'Independent']);
 
         if (govt && system.govt) {
-            const record = this.getLegalRecords()?.get(system.govt) ?? 0;
+            // A landed caller's records win over the plugin's lookup, for
+            // the same reason as the bits (#29).
+            const records =
+                this.openOptions.legalRecords ?? this.getLegalRecords();
+            const record = records?.get(system.govt) ?? 0;
             addLine(PropSlot.LegalStatus, 'Legal Status:',
                 [legalStatusName(record, govt.crimeTol)]);
         }
@@ -1630,9 +1655,16 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
 
     override async show(route: string[]) {
         await this.buildPromise
+        // Cheap once loaded (the same resolved promise); after a failed
+        // load during build (#66) this is the retry, and a map without
+        // its planet/govt/system indices is not shown — the throw reaches
+        // the opener, which warns, exactly as a rejected buildPromise did,
+        // except that the NEXT open can succeed.
+        await this.universe.load();
         // The player's bits may have changed (missions, outfits) since
-        // the graph was built; refilter NCB-gated systems.
-        this.rebuildGraph(this.getPlayerBits());
+        // the graph was built; refilter NCB-gated systems. A landed
+        // caller's bits win over the plugin's lookup (#29).
+        this.rebuildGraph(this.openOptions.playerBits ?? this.getPlayerBits());
         if (!this.systemGraph) {
             throw new Error('Expected system graph to be built')
         }

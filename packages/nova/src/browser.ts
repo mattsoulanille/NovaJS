@@ -3075,7 +3075,7 @@ async function originalPilotContext(): Promise<OriginalPilotContext> {
         knownMission: id => missions.has(id),
         knownRank: id => ranks.has(id),
         knownJunk: id => junk.has(id),
-        systemOfPlanet: id => universe.systemIdOfPlanet(id),
+        systemOfPlanet: (id, bits) => universe.systemIdOfPlanet(id, bits),
         govtOfSystem: id => universe.getSystemInfo(id)?.govt,
         fallbackSystem,
     };

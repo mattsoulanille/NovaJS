@@ -9,6 +9,7 @@ import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
 import { discoveryLevel } from '../nova_plugin/discovery_store.js';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { MissionsComponent } from '../nova_plugin/player_state_plugin.js';
 import { GateMap } from '../spaceport/gate_map.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -46,6 +47,11 @@ const GateMapUniverseResource =
  * ever opens for a ship the browser has just pulled out of the world, so
  * the marks have to come off that entity — the same reason the spaceport
  * passes its own marks to the starmap (OpenStarmapOptions.missionMarks).
+ *
+ * Resolved with the ship's control bits: a destination stellar stacked in
+ * NCB-duplicate systems (Auroran LP I in nova:308 "!b995" / nova:765
+ * "b995") must mark the copy the player can SEE, or the mark lands in the
+ * hidden copy and is never drawn (review finding #65).
  */
 export function gateMapMissionMarks(ship: Entity,
     universe: MissionUniverse): MissionMapMark[] {
@@ -53,9 +59,10 @@ export function gateMapMissionMarks(ship: Entity,
     if (!missions) {
         return [];
     }
+    const bits = ship.components.get(ControlBitsComponent) ?? new Set();
     return missionMapMarks(missions.values(),
         id => universe.getMission(id),
-        planetId => universe.systemIdOfPlanet(planetId));
+        planetId => universe.systemIdOfPlanet(planetId, bits));
 }
 
 const OpenGateMapSystem = new System({

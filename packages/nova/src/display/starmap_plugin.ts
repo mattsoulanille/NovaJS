@@ -16,7 +16,7 @@ import {
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
-import { missionMapMarks } from '../nova_plugin/mission_logic.js';
+import { MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
@@ -26,6 +26,7 @@ import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { emptyRouteState } from '../spaceport/route.js';
 import { OpenStarmapOptions, RouteStateStore, Starmap } from '../spaceport/starmap.js';
+import { DockedShipResource } from './docked_ship.js';
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { BEEP_MAP_CLOSE, BEEP_MAP_OPEN, playUiSound } from './ui_sound.js';
@@ -58,7 +59,17 @@ export const OpenStarmapResource =
  */
 const persistentRouteStore: RouteStateStore = { state: emptyRouteState() };
 
-function playerComponent<T>(world: World,
+/**
+ * A component of the player's ship: the in-world PlayerShipSelector
+ * entity in flight, or — while DOCKED — the entity the spaceport is
+ * holding (DockedShipResource, the same handle the status bar reads).
+ * Landing removes the ship from the simulation and hence from this
+ * display world, so a scan of `world.entities` alone comes up empty for
+ * the whole visit; the docked map was therefore filtered against an EMPTY
+ * control-bit set — every bXXX-gated system gone, every !bXXX stacked
+ * duplicate back, no Legal Status line (review finding #29).
+ */
+export function playerComponent<T>(world: World,
     component: Component<T>): T | undefined {
     for (const entity of world.entities.values()) {
         if (!entity.components.has(PlayerShipSelector)) {
@@ -69,7 +80,29 @@ function playerComponent<T>(world: World,
             return value;
         }
     }
-    return undefined;
+    return world.resources.get(DockedShipResource)?.current?.entity
+        .components.get(component);
+}
+
+/**
+ * The player's active-mission map marks (the original's orange arrows),
+ * resolved against the player's REAL control bits so a destination in an
+ * NCB-stacked duplicate system marks the copy the player can see (review
+ * finding #65: without bits, systemIdOfPlanet picks the id-sorted first
+ * copy — the pre-story one — which the graph then filters out, so the
+ * arrow for exactly the storyline missions that unlock new copies was
+ * never drawn in flight).
+ */
+export function playerMissionMarks(world: World,
+    universe: MissionUniverse): MissionMapMark[] {
+    const missions = playerComponent(world, MissionsComponent);
+    if (!missions) {
+        return [];
+    }
+    const bits = playerComponent(world, ControlBitsComponent) ?? new Set();
+    return missionMapMarks(missions.values(),
+        id => universe.getMission(id),
+        planetId => universe.systemIdOfPlanet(planetId, bits));
 }
 
 export const StarmapPlugin: Plugin = {
@@ -143,15 +176,7 @@ export const StarmapPlugin: Plugin = {
             applyOwnedMapOutfits(mapOutfits.keys(), systemId, universe,
                 id => mapOutfits.get(id));
         }).catch(e => console.warn('Failed to apply map outfits:', e));
-        const getMissionMarks = () => {
-            const missions = playerComponent(world, MissionsComponent);
-            if (!missions) {
-                return [];
-            }
-            return missionMapMarks(missions.values(),
-                id => universe.getMission(id),
-                planetId => universe.systemIdOfPlanet(planetId));
-        };
+        const getMissionMarks = () => playerMissionMarks(world, universe);
 
         const starmap = new Starmap(displayAssets, simulationData, systemId,
             controls, getPlayerBits, getMissionMarks, persistentRouteStore,

@@ -1,10 +1,14 @@
 import "jasmine";
 import { getDefaultMissionData } from "novadatainterface/mission_data";
+import { MockGameData } from "novadatainterface/mock_game_data";
+import { getDefaultPlanetData } from "novadatainterface/planet_data";
+import { getDefaultSystemData } from "novadatainterface/system_data";
 import { Entity } from "nova_ecs/entity";
 import * as PIXI from "pixi.js";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
 import { gateMapMissionMarks } from "../display/gate_map_plugin.js";
 import { MissionMapMark } from "../nova_plugin/mission_logic.js";
+import { ControlBitsComponent } from "../nova_plugin/ncb_plugin.js";
 import { ActiveMission, MissionsComponent } from "../nova_plugin/player_state_plugin.js";
 import { landable } from "../nova_plugin/landable.js";
 import {
@@ -205,4 +209,53 @@ describe('the hypergate map keeps the starmap\'s mission marks', () => {
             expect(gateMapGraphOptions([], new Set(), undefined, undefined)
                 .missionMarkTextures).toBeUndefined();
         });
+});
+
+/**
+ * Review finding #65: the gate map's marks resolved a stellar's system
+ * without the docked ship's control bits, so a destination stacked in
+ * NCB-duplicate systems (Auroran LP I in nova:308 "!b995" / nova:765
+ * "b995") was marked in the copy the graph filters out once the story
+ * bit is set — and so never drawn.
+ */
+describe('the hypergate map\'s marks under NCB-stacked systems', () => {
+    async function stackedUniverse(): Promise<MissionUniverse> {
+        const gameData = new MockGameData();
+        gameData.data.Mission.map.set('nova:737', {
+            ...getDefaultMissionData(), id: 'nova:737',
+        });
+        gameData.data.Planet.map.set('nova:333', {
+            ...getDefaultPlanetData(), id: 'nova:333', name: 'Auroran LP I',
+        });
+        gameData.data.System.map.set('nova:308', {
+            ...getDefaultSystemData(), id: 'nova:308', name: 'SPC-1421',
+            planets: ['nova:333'], visibility: '!b995', position: [10, 20],
+        });
+        gameData.data.System.map.set('nova:765', {
+            ...getDefaultSystemData(), id: 'nova:765', name: 'SPC-1421',
+            planets: ['nova:333'], visibility: 'b995', position: [10, 20],
+        });
+        const universe = new MissionUniverse(gameData);
+        await universe.load();
+        return universe;
+    }
+
+    function docked(bits: number[]): Entity {
+        return new Entity('docked')
+            .addComponent(ControlBitsComponent, new Set(bits))
+            .addComponent(MissionsComponent, new Map([['nova:737', {
+                id: 'nova:737', acceptedDay: 0, acceptedAt: 'nova:128',
+                travelPlanet: null, returnPlanet: 'nova:333', cargoType: -1,
+                cargoQty: 0, cargoLoaded: false, travelDone: false,
+                deadlineDay: null,
+            }]]));
+    }
+
+    it('marks the copy the docked ship\'s bits make visible', async () => {
+        const universe = await stackedUniverse();
+        expect(gateMapMissionMarks(docked([995]), universe)
+            .map(m => m.systemId)).toEqual(['nova:765']);
+        expect(gateMapMissionMarks(docked([]), universe)
+            .map(m => m.systemId)).toEqual(['nova:308']);
+    });
 });

@@ -53,20 +53,54 @@ export function discoveryKeyFor(saveKey: string): string {
 }
 
 let storageKey = discoveryKeyFor(DEFAULT_SAVE_KEY);
-let cache: Map<string, DiscoveryLevel> | undefined;
+
+/**
+ * The in-memory copy of one storage's record, tagged with the key it was
+ * read under so a pilot switch (setDiscoveryStorageKey) simply misses.
+ */
+interface CacheEntry {
+    key: string;
+    levels: Map<string, DiscoveryLevel>;
+}
+
+/**
+ * One cache PER STORAGE INSTANCE, not one global cache per key. Every
+ * read/write takes an optional `storage` (localStorage by default, an
+ * in-memory fake in specs); a single module-level cache keyed only by the
+ * storage key let two callers with different storages under the same key
+ * see each other's levels — which is why the specs used to toggle the key
+ * back and forth just to flush it (review finding #78). Weakly held, so a
+ * spec's throwaway storage doesn't pin its record forever.
+ */
+const caches = new WeakMap<DiscoveryStorage, CacheEntry>();
+/** The record when there is no storage at all (node without localStorage
+ * and no explicit storage): still memoised so marks within one process
+ * cohere, exactly as before. */
+let storelessCache: CacheEntry | undefined;
 
 /**
  * Points the store at the pilot whose save key this is (called by
- * save_game's setActiveSaveKey, which pilot_registry drives). Switching
- * pilots drops the cache so the next read loads that pilot's record.
+ * save_game's setActiveSaveKey, which pilot_registry drives). Each cache
+ * entry remembers the key it was read under, so the next read after a
+ * switch reloads that pilot's record.
  */
 export function setDiscoveryStorageKey(saveKey: string | null | undefined) {
-    const next = discoveryKeyFor(saveKey || DEFAULT_SAVE_KEY);
-    if (next === storageKey) {
-        return;
+    storageKey = discoveryKeyFor(saveKey || DEFAULT_SAVE_KEY);
+}
+
+/**
+ * Drops the in-memory copy of `storage`'s record WITHOUT touching what is
+ * stored — the next read loads it again, the way a page reload would. For
+ * specs (resetDiscovery also deletes the stored record, so it can't play
+ * this role).
+ */
+export function resetDiscoveryCache(storage?: DiscoveryStorage) {
+    const store = storage ?? defaultStorage();
+    if (store) {
+        caches.delete(store);
+    } else {
+        storelessCache = undefined;
     }
-    storageKey = next;
-    cache = undefined;
 }
 
 function defaultStorage(): DiscoveryStorage | undefined {
@@ -151,12 +185,17 @@ function migrateLegacy(store: DiscoveryStorage,
 }
 
 function load(storage?: DiscoveryStorage): Map<string, DiscoveryLevel> {
-    if (cache) {
-        return cache;
-    }
-    const levels = cache = new Map<string, DiscoveryLevel>();
     const store = storage ?? defaultStorage();
-    if (!store) {
+    const cached = store ? caches.get(store) : storelessCache;
+    if (cached && cached.key === storageKey) {
+        return cached.levels;
+    }
+    const levels = new Map<string, DiscoveryLevel>();
+    const entry = { key: storageKey, levels };
+    if (store) {
+        caches.set(store, entry);
+    } else {
+        storelessCache = entry;
         return levels;
     }
     let raw: string | null = null;
@@ -171,13 +210,15 @@ function load(storage?: DiscoveryStorage): Map<string, DiscoveryLevel> {
     return levels;
 }
 
-function persist(storage?: DiscoveryStorage) {
+/** Writes `levels` (the record load() returned for this storage) out. */
+function persist(levels: Map<string, DiscoveryLevel>,
+    storage?: DiscoveryStorage) {
     const store = storage ?? defaultStorage();
-    if (!store || !cache) {
+    if (!store) {
         return;
     }
     try {
-        store.setItem(storageKey, JSON.stringify([...cache]));
+        store.setItem(storageKey, JSON.stringify([...levels]));
     } catch (e) {
         console.warn('Failed to persist system discovery:', e);
     }
@@ -201,7 +242,7 @@ export function markDiscovered(systemId: string, level: DiscoveryLevel,
         return false;
     }
     levels.set(systemId, level);
-    persist(storage);
+    persist(levels, storage);
     return true;
 }
 
@@ -217,7 +258,7 @@ export function markManyDiscovered(systemIds: Iterable<string>,
         }
     }
     if (changed) {
-        persist(storage);
+        persist(levels, storage);
     }
     return changed;
 }
@@ -256,7 +297,7 @@ export function loadDiscoveryEntries(
         }
     }
     if (changed) {
-        persist(storage);
+        persist(levels, storage);
     }
 }
 
@@ -283,7 +324,7 @@ export const playerDiscovery: DiscoveryAccess = {
 
 /** Forgets everything — a new pilot starts undiscovered (see resetSave). */
 export function resetDiscovery(storage?: DiscoveryStorage) {
-    cache = undefined;
+    resetDiscoveryCache(storage);
     const store = storage ?? defaultStorage();
     try {
         store?.removeItem(storageKey);

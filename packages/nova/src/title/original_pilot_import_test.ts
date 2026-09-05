@@ -142,6 +142,31 @@ describe('original pilot import', () => {
         expect(notes.some(n => /Last stellar/.test(n))).toBeTrue();
     });
 
+    it('resolves the last stellar\'s system under the pilot\'s own bits',
+        () => {
+            // Stellar 138 stacked in two systems under exclusive Visibility
+            // bits: the copy this pilot (bit 42 set) can see is nova:130.
+            const seen: ReadonlySet<number>[] = [];
+            const ctx: OriginalPilotContext = {
+                ...CTX,
+                systemOfPlanet: (id, bits) => {
+                    seen.push(bits);
+                    if (id !== 'nova:138') {
+                        return undefined;
+                    }
+                    return bits.has(S.missionBit) ? 'nova:130' : 'nova:131';
+                },
+            };
+            const { save, lastStellar } = convertOriginalPilotBytes(
+                buildPltPilotFile('x'), 'p.plt', ctx);
+            expect(save.system).toBe('nova:130');
+            expect(lastStellar).toBe('nova:138');
+            expect(seen.length).toBeGreaterThan(0);
+            for (const bits of seen) {
+                expect([...bits]).toEqual([S.missionBit]);
+            }
+        });
+
     it('registers the pilot with an "Imported from EV Nova pilot" checkpoint',
         () => {
             const store = new MemoryStorage();
