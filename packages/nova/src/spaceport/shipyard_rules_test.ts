@@ -24,6 +24,7 @@ import {
     cargoForNewShip,
     outfitsAfterShipChange,
     outfitsForNewShip,
+    runShipTradeSetStrings,
     partitionOutfits,
     purchaseContextFrom,
     ShipPurchaseContext,
@@ -581,6 +582,73 @@ describe('shipyard purchase rules', () => {
                 expect(check.allowed ? '' : check.reason)
                     .toBe('fightersDeployed');
             });
+    });
+
+    /**
+     * shïp OnRetire (~:2639) and OnPurchase (~:2598) at a trade, on the
+     * entity the trade built.
+     */
+    describe('the shïp set strings a trade fires', () => {
+        /** Every stock hull's OnPurchase; Pegasus;rogue's OnRetire. */
+        const rogue = ship('nova:377',
+            { onPurchase: 'b4322', onRetire: '!b4322' });
+        const starbridge = ship('nova:133',
+            { onPurchase: 'b8888 G200', writerPrefix: 'nova' });
+
+        function traded(bits: number[], retired: ShipData, bought: ShipData) {
+            const entity = makeShip(bought);
+            entity.components.set(ControlBitsComponent, new Set(bits));
+            entity.components.set(OutfitsStateComponent, new Map());
+            runShipTradeSetStrings(entity, retired, bought,
+                { outfitExists: id => id === 'nova:200' });
+            return entity;
+        }
+
+        it('runs the old class\'s OnRetire, then the new class\'s OnPurchase',
+            () => {
+                const entity = traded([4322], rogue, starbridge);
+                const bits = entity.components.get(ControlBitsComponent)!;
+                expect(bits.has(4322)).toBe(false);
+                expect(bits.has(8888)).toBe(true);
+            });
+
+        it('retires BEFORE buying, so a shared bit ends up set', () => {
+            // Two hulls that set and clear the same "flying one of ours"
+            // bit: trading between them must leave it set.
+            const a = ship('nova:300', { onPurchase: 'b20289', onRetire: '!b20289' });
+            const b = ship('nova:301', { onPurchase: 'b20289', onRetire: '!b20289' });
+            expect(traded([20289], a, b).components
+                .get(ControlBitsComponent)!.has(20289)).toBe(true);
+        });
+
+        it('writes a NEW bit set, leaving the traded-in entity\'s alone',
+            () => {
+                const old = makeShip(rogue);
+                const shared = new Set([4322]);
+                old.components.set(ControlBitsComponent, shared);
+                const bought = makeShip(starbridge);
+                bought.components.set(ControlBitsComponent, shared);
+                runShipTradeSetStrings(bought, rogue, starbridge);
+                expect(old.components.get(ControlBitsComponent)).toBe(shared);
+                expect(shared.has(4322)).toBe(true);
+                expect(bought.components.get(ControlBitsComponent)!.has(4322))
+                    .toBe(false);
+            });
+
+        it('applies a Gxxx grant to the new hull\'s outfits', () => {
+            const entity = traded([], rogue, starbridge);
+            expect(entity.components.get(OutfitsStateComponent)!.get('nova:200'))
+                .toEqual({ count: 1 });
+        });
+
+        it('is a no-op for blank strings and a missing retired class', () => {
+            const plain = ship('nova:128');
+            const entity = makeShip(plain);
+            entity.components.set(ControlBitsComponent, new Set([1]));
+            runShipTradeSetStrings(entity, undefined, plain);
+            expect([...entity.components.get(ControlBitsComponent)!])
+                .toEqual([1]);
+        });
     });
 
     /**

@@ -88,8 +88,12 @@ describe('a shipyard purchase published to the docked seam', () => {
     }
 
     const SHIPS = new Map<string, ShipData>([
-        [OLD_SHIP, ship(OLD_SHIP, 100_000, { name: 'Old Hull' })],
-        [NEW_SHIP, ship(NEW_SHIP, 200_000, { name: 'New Hull; author note' })],
+        // The shïp set strings a trade fires (Bible ~:2598, ~:2639): the
+        // old hull is Pegasus;rogue-shaped, the new one every stock hull.
+        [OLD_SHIP, ship(OLD_SHIP, 100_000,
+            { name: 'Old Hull', onPurchase: 'b4322', onRetire: '!b4322' })],
+        [NEW_SHIP, ship(NEW_SHIP, 200_000,
+            { name: 'New Hull; author note', onPurchase: 'b8888' })],
         [ESCORT_SHIP, ship(ESCORT_SHIP, 40_000,
             { name: 'Escort', escortSellValue: 40_000 })],
     ]);
@@ -307,6 +311,22 @@ describe('a shipyard purchase published to the docked seam', () => {
                 .toBe(500_000);
             // Trade-up price: 200,000 less 25% of the old hull's 100,000.
             expect(creditBalance(client.entity)).toBe(500_000 - 175_000);
+        });
+
+    it('runs the traded-in class\'s OnRetire and the bought class\'s '
+        + 'OnPurchase on the new hull', async () => {
+            const visit = await land(500_000);
+            const { client, entity } = visit;
+            // Flying the old hull set its purchase bit some time ago.
+            entity.components.get(ControlBitsComponent)!.add(4322);
+            await tradeUp(visit);
+
+            const bits = client.entity.components.get(ControlBitsComponent)!;
+            expect(bits.has(8888)).toBe(true);
+            expect(bits.has(4322)).toBe(false);
+            // The dead hull's own set is untouched.
+            expect(entity.components.get(ControlBitsComponent)!.has(4322))
+                .toBe(true);
         });
 
     it('settles an escort sale onto the ship the player will fly, '

@@ -48,6 +48,15 @@ import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
 import { outfitPrice } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
+import { DiscoveryAccess } from '../nova_plugin/discovery.js';
+import {
+    resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
+} from '../nova_plugin/mission_logic.js';
+import { makeControlBitHooks, NCBParseError, runNCBSet } from '../nova_plugin/ncb.js';
+import { commitActiveRanks } from '../nova_plugin/ncb_plugin.js';
+import { RankData } from 'novadatainterface/rank_data';
+import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
+import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
 
 /**
  * The fraction of the current ship-and-outfits value that is credited
@@ -480,6 +489,105 @@ export function buildPurchasedShip(oldShip: Entity, newShip: ShipData,
     const outfits = outfitsForNewShip(newShip, context);
     return buildShipEntity(oldShip, newShip, outfits, context.credits - price,
         context.getOutfit);
+}
+
+/**
+ * The lookups a shïp OnRetire / OnPurchase set string resolves its
+ * numbered references through — MissionUniverse's, in the real shipyard.
+ * Every one is optional: without them a Gxxx/Kxxx/Xxxx number is read
+ * under the writing plug-in's own prefix, the documented no-id-space
+ * behaviour everywhere else.
+ */
+export interface TradeSetStringLookups {
+    outfitExists?(globalId: string): boolean;
+    getRank?(globalId: string): RankData | undefined;
+    systemExists?(globalId: string): boolean;
+    discovery?: DiscoveryAccess;
+}
+
+/**
+ * Runs the two shïp set strings a shipyard trade fires, ON THE NEW ENTITY
+ * (`bought` is the class it is; `retired` the class traded in):
+ *
+ *   OnRetire    "Control bit set expression, evaluated when you sell a
+ *               ship of this type and/or replace it with a captured ship"
+ *               (EVN Bible ~:2639) — a trade-in sells the current hull.
+ *   OnPurchase  "Control bit set expression. Leave blank if unused."
+ *               (~:2598), on the hull just bought.
+ *
+ * In that order, retiring before buying: stock nova:377 "Pegasus;rogue"
+ * sets b4322 on purchase and clears it on retire, and a plug-in whose
+ * purchase bit is shared between hulls (ShipVariants v2's b20289-91) would
+ * otherwise have the new hull's set undone by the old hull's clear. Each
+ * string runs under its own class's writer prefix. 171 stock hulls set
+ * `b8888` on purchase, which crön nova:222 ("Advanced Pirate news") and
+ * the second-hand hulls' AppearOn test; arpia gates its own upgrade
+ * outfits (arpia:511-518) on its OnPurchase bits.
+ *
+ * Run through makeControlBitHooks rather than a MissionSession: the
+ * shipyard prices and charges from the LIVE entity at the click
+ * (credit_commit.ts), so there is no working copy to thread the strings
+ * through, and the purchase must stay synchronous. That covers bit ops,
+ * Gxxx/Dxxx, Kxxx/Lxxx, Xxxx and R(); an Sxxx/Axxx/Fxxx in a shïp string
+ * (none in stock or the bundled plug-ins) is reported as unimplemented
+ * by ncb.ts's missingHook. The bits are written back as a NEW set: the
+ * purchase shares ControlBitsComponent by reference with the old entity
+ * (CARRIED_COMPONENTS), and the traded-in hull must stay as it was.
+ */
+export function runShipTradeSetStrings(entity: Entity,
+    retired: ShipData | undefined, bought: ShipData,
+    lookups: TradeSetStringLookups = {}): void {
+    const bits = new Set(entity.components.get(ControlBitsComponent) ?? []);
+    const outfits = new Map([...entity.components.get(OutfitsStateComponent)
+        ?? []].map(([id, { count }]) => [id, count]));
+    const ranks = new Set(entity.components.get(ActiveRanksComponent) ?? []);
+    const rankExists = lookups.getRank
+        && ((id: string) => lookups.getRank!(id) !== undefined);
+    const run = (expression: string, ship: ShipData) => {
+        if (!expression) {
+            return;
+        }
+        const prefix = setStringPrefix(ship);
+        try {
+            // Player-local, like the outfitter's: only the resulting
+            // state reaches the simulation, so plain randomness is fine
+            // for R(a b).
+            runNCBSet(expression, makeControlBitHooks(bits, {
+                outfits,
+                resolveId: id => resolveNumberedResource(
+                    id, prefix, lookups.outfitExists),
+            }, {
+                active: ranks,
+                resolveId: id => resolveNumberedResource(id, prefix, rankExists),
+                getRank: id => lookups.getRank?.(id),
+            }, systemDiscoveryOperators(lookups.discovery, prefix,
+                lookups.systemExists)), Math.random);
+        } catch (error) {
+            if (error instanceof NCBParseError) {
+                console.warn(`Bad shïp set string on ${ship.id}:`, error);
+                return;
+            }
+            throw error;
+        }
+    };
+    if (retired) {
+        run(retired.onRetire, retired);
+    }
+    run(bought.onPurchase, bought);
+
+    entity.components.set(ControlBitsComponent, bits);
+    commitActiveRanks(entity, ranks, id => lookups.getRank?.(id));
+    const previous = entity.components.get(OutfitsStateComponent);
+    const live = [...outfits].filter(([, count]) => count > 0);
+    const outfitsChanged = !previous || previous.size !== live.length
+        || live.some(([id, count]) => previous.get(id)?.count !== count);
+    if (outfitsChanged) {
+        entity.components.set(OutfitsStateComponent,
+            new Map(live.map(([id, count]) => [id, { count }])));
+        // Re-derived from the new outfits (see spaceport.ts).
+        entity.components.delete(WeaponsStateComponent);
+        entity.components.delete(ShipPhysicsComponent);
+    }
 }
 
 /**

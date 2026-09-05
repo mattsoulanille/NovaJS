@@ -30,8 +30,10 @@ import {
     buildPurchasedShip,
     canBuyShip,
     purchaseContextFrom,
+    runShipTradeSetStrings,
     ShipPurchaseContext,
 } from './shipyard_rules.js';
+import { playerDiscovery } from '../nova_plugin/discovery_store.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { shipGateContext } from './ship_gate_context.js';
 import {
@@ -427,6 +429,18 @@ export class Shipyard extends Menu<Entity> {
         // Menu.done() emits it, and the Spaceport re-runs the stat
         // providers on the entity it gets back (spaceport.ts).
         this.input = buildPurchasedShip(this.input, newShip, context);
+        // The traded-in class's OnRetire, then the bought class's
+        // OnPurchase (EVN Bible ~:2598, ~:2639), on the new entity — the
+        // `b8888` every stock hull sets, the bits arpia's upgrade outfits
+        // are gated on. See runShipTradeSetStrings.
+        const universe = MissionUniverse.shared(this.simulationData);
+        runShipTradeSetStrings(this.input, this.currentShipData, newShip, {
+            outfitExists: id => universe.hasOutfit(id),
+            getRank: id => universe.getRank(id),
+            systemExists: universe.systemsLoaded
+                ? (id: string) => universe.hasSystem(id) : undefined,
+            discovery: playerDiscovery,
+        });
         // The hull just bought is what a SECOND purchase in this same
         // visit trades in, so the valuation must follow it immediately
         // rather than keep pricing against the ship we no longer own.
