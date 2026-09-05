@@ -105,7 +105,7 @@ Only after 3 works end-to-end: input compression/batching, tuning input delay vs
 
 ## Decisions
 
-1. **Browser support:** all clients assumed to run latest Google Chrome. No deterministic math layer needed initially; periodic ship state broadcasts (position/velocity/rotation) are the drift backstop.
+1. **Browser support:** all clients assumed to run latest Google Chrome. ~~No deterministic math layer needed initially; periodic ship state broadcasts (position/velocity/rotation) are the drift backstop.~~ **Superseded by code** (see finding "RESOLVED — the archive-vs-browsers class was cross-engine trig" under Phase 3 item 4): node and Chrome disagree at the ulp level on `Math.sin/cos/atan2/...`, so `makeSystem` installs `nova_ecs/deterministic_math.ts` onto the global `Math` in every simulating context. There are no periodic ship-state broadcasts in the input-driven model; drift is caught by the 60-tick checkpoint hashes and healed by resync (item 4), not papered over by state pushes.
 2. **Tick rate:** target 60 Hz; 30 Hz is the acceptable fallback if the Phase 2 benchmark demands it.
 3. **Players per system:** ≤ 8–10 per room.
 4. **Fallback:** server-authoritative with client-side prediction is acceptable only if it avoids input-round-trip floatiness — the local ship must be predicted locally, never "send keypress, wait for server to say what happened" (a local preview of the attempted action is fine). Phases 0–1 are prerequisite work for that design too, so nothing is wasted up to the Phase 2 checkpoint.
