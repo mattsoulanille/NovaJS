@@ -17,7 +17,7 @@ import * as PIXI from "pixi.js";
 import { Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { CloakActiveComponent, CloakComponent, deriveCloakScanner } from "../nova_plugin/cloak_plugin.js";
+import { CloakActiveComponent, CloakActiveState, CloakCapability, CloakComponent, deriveCloakScanner } from "../nova_plugin/cloak_plugin.js";
 import { GovtComponent } from "../nova_plugin/govt_component.js";
 import { deriveIff, planetBlipColor, planetDisposition, PLANET_FLAT_COLOR, shipBlipColor, shipDisposition } from "../nova_plugin/iff_plugin.js";
 import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
@@ -175,7 +175,20 @@ const CARGO_SPECIAL_VALUE_Y = 495 - 458 - TEXT_INK_TOP;
 const CARGO_CREDITS_LABEL_Y = 515 - 458 - TEXT_INK_TOP;
 const CARGO_CREDITS_VALUE_Y = 531 - 458 - TEXT_INK_TOP;
 
-class StatusBar {
+/**
+ * How full a stat bar is, in [0, 1]. A stat whose max is 0 — the stock
+ * Escape Pod (shïp nova:895) has both shield and armor at 0 — has
+ * nothing to be full OF: its bar is empty rather than NaN (0/0), which
+ * used to reach PIXI's lineTo through Math.max(0, NaN).
+ */
+export function statFullness({ current, max }: { current: number, max: number }): number {
+    if (!(max > 0)) {
+        return 0;
+    }
+    return Math.max(0, current / max);
+}
+
+export class StatusBar {
     readonly container = new PIXI.Container();
     /** Resolves when the current build (or reload) has finished. */
     buildPromise: Promise<void>;
@@ -711,18 +724,16 @@ class StatusBar {
         fuel?: { current: number, max: number }) {
         this.statsGraphics.clear();
 
-        const shieldFullness = Math.max(0, shield.current / shield.max);
         this.drawLine(this.statusBarData.dataAreas.shield,
-            this.statusBarData.colors.shield, shieldFullness);
+            this.statusBarData.colors.shield, statFullness(shield));
 
-        const armorFullness = Math.max(0, armor.current / armor.max);
         this.drawLine(this.statusBarData.dataAreas.armor,
-            this.statusBarData.colors.armor, armorFullness);
+            this.statusBarData.colors.armor, statFullness(armor));
 
         if (fuel && fuel.max > 0) {
             // Partial-jump fuel in the dim color, with the whole jumps'
             // worth (100 units each) drawn over it in the full color.
-            const fuelFullness = Math.max(0, fuel.current / fuel.max);
+            const fuelFullness = statFullness(fuel);
             this.drawLine(this.statusBarData.dataAreas.fuel,
                 this.statusBarData.colors.fuelPartial, fuelFullness);
             const fullJumps = Math.max(0, Math.floor(
@@ -751,6 +762,16 @@ class StatusBar {
     drawTarget(name: string, shield?: number, armor?: number,
         shipGraphic?: AnimationGraphic, disabled = false,
         subtitle = "", government = "") {
+        // Mid-reload (an ïntf swap) the texts are destroyed and `text`
+        // is empty until build() has awaited the new PICT. The other
+        // draw methods already wait it out; this one dereferenced
+        // text.targetName and threw, and the ECS flush has no per-system
+        // try/catch, so every draw system after it was skipped for the
+        // frame. DrawStatusBarTarget calls this every frame, so the
+        // first built frame redraws the target.
+        if (!this.built) {
+            return;
+        }
         this.targetContainer.visible = true;
         this.noTargetContainer.visible = false;
         this.text.targetName.text = name;
@@ -809,6 +830,9 @@ class StatusBar {
 
     }
     clearTarget() {
+        if (!this.built) {
+            return;
+        }
         this.targetContainer.visible = false;
         this.noTargetContainer.visible = true;
         this.targetSprite.visible = false;
@@ -1006,6 +1030,25 @@ const StatusBarResize = new System({
 
 const RadarTime = new Component<{ lastTime: number }>('RadarTime');
 
+/**
+ * Whether a ship's cloak takes it off the radar: actively cloaked with a
+ * device whose 0x0002 "Visible on radar" bit is CLEAR (EVN Bible, oütf
+ * ModType 17; CloakData.hidesFromRadar is that bit inverted). Five of
+ * the six stock cloaks set the bit — Fed nova:211, Rebel nova:234/347,
+ * Wraith nova:266, Cloaking Organ v1.0 nova:268 — so those ships stay
+ * blips; only Cloaking Organ v1.1 nova:269 hides.
+ *
+ * `cloak` is the ship's CloakComponent, which the display derives from
+ * its synced outfits (cloak_display_plugin.ts); the sim never sends it,
+ * and before that plugin existed it was always undefined here, so the
+ * conservative default hid EVERY cloaked ship. The default stays: a
+ * cloak whose data has not cached yet hides until it has.
+ */
+export function radarHidesShip(cloakActive: CloakActiveState | undefined,
+    cloak: CloakCapability | undefined): boolean {
+    return cloakActive?.active === true && (cloak?.hidesFromRadar ?? true);
+}
+
 const DrawRadar = new System({
     name: 'DrawRadar',
     args: [Optional(RadarTime), TimeResource, SimulationTimeResource,
@@ -1043,7 +1086,7 @@ const DrawRadar = new System({
                 : false;
             const visibleShips = revealsCloaked ? ships : ships.filter(
                 ([, , , cloakActive, cloak]) =>
-                    !(cloakActive?.active && (cloak?.hidesFromRadar ?? true)));
+                    !radarHidesShip(cloakActive, cloak));
 
             // IFF (ModType 14): when the player owns an IFF outfit, colour
             // each ship's blip by its disposition toward the player. Without
@@ -1491,13 +1534,33 @@ export function playerEscortEntities(entities: ReadonlyMap<string, Entity>,
     return found.map(([, entity]) => entity);
 }
 
-const DrawStatusBarCargo = new System({
+/**
+ * How often the in-flight cargo readout is recomputed, in display ms.
+ * The computation walks every entity for escorts, sorts them, and sums
+ * the fleet's holds — all to feed a readout that changes about once a
+ * minute — so, like the radar (radarPeriod), it runs a few times a
+ * second rather than every frame. drawCargo's own memo still skips the
+ * PIXI text writes when nothing changed.
+ */
+export const CARGO_READOUT_PERIOD_MS = 200;
+
+const CargoReadoutTime = new Component<{ lastTime: number }>('CargoReadoutTime');
+
+export const DrawStatusBarCargo = new System({
     name: 'DrawStatusBarCargo',
     args: [StatusBarResource, Optional(CargoComponent), Optional(CreditsComponent),
         ShipComponent, Optional(OutfitsStateComponent),
         SimulationGameDataResource, Entities, UUID,
+        Optional(CargoReadoutTime), TimeResource, GetEntity,
         PlayerShipSelector] as const,
-    step(statusBar, cargo, credits, ship, outfits, gameData, entities, uuid) {
+    step(statusBar, cargo, credits, ship, outfits, gameData, entities, uuid,
+        readoutTime, { time }, entity) {
+        // First draw immediately (a fresh player entity has no stamp),
+        // then at most once per period.
+        if (readoutTime
+            && time - readoutTime.lastTime < CARGO_READOUT_PERIOD_MS) {
+            return;
+        }
         const capacity = cargoCapacityOf(ship.id, outfits, gameData);
         if (capacity === undefined) {
             return; // Ship/outfit data not cached yet.
@@ -1512,6 +1575,13 @@ const DrawStatusBarCargo = new System({
         const { free, lines, special } =
             cargoDisplayOf(fleet.cargo, fleet.capacity, gameData);
         statusBar.drawCargo(free, credits?.credits ?? 0, lines, special);
+        // Stamped only after a real draw, so a frame that bailed on
+        // uncached data retries next frame instead of waiting a period.
+        if (readoutTime) {
+            readoutTime.lastTime = time;
+        } else {
+            entity.components.set(CargoReadoutTime, { lastTime: time });
+        }
     }
 });
 

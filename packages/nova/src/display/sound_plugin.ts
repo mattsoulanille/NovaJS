@@ -48,8 +48,22 @@ function playSound({ id, loop, stop }: SoundEventData,
         maybeSound.volume = volume;
         if (loop) {
             loopingSounds.set(id, maybeSound);
-            maybeSound.play(() => {
-                loopingSounds.delete(id);
+            // The loop has to be asked for PER PLAY. @pixi/sound's
+            // play(callback) overload builds `{ complete }` and merges it
+            // over `{ loop: false, ... }` (Sound.play; the Sound's own
+            // `loop` is consulted only for the string/sprite overload),
+            // so a bare callback started every "loop" as a one-shot: the
+            // player's death loop (snd 371, 0.46 s) went silent for the
+            // rest of a death sequence up to 8 s long. The option is per
+            // instance, so the shared cached Sound is left untouched.
+            // A looping instance never completes; `complete` is kept for
+            // the day one is stopped by something other than the stop
+            // path above, which already clears the map itself.
+            maybeSound.play({
+                loop: true,
+                complete: () => {
+                    loopingSounds.delete(id);
+                },
             });
         } else {
             maybeSound.play();
@@ -129,6 +143,17 @@ export const SoundPlugin: Plugin = {
         world.removeSystem(SoundSystem);
         world.resources.delete(SoundLimiterResource);
         world.resources.delete(VolumeResource);
+        // Now that loops really loop, a loop still running when this
+        // world is torn down (a system change mid-death, say) would ring
+        // forever with nothing left to stop it. The systems that started
+        // them are gone with the world, so silence them here.
+        const loopingSounds = world.resources.get(LoopingSounds);
+        if (loopingSounds) {
+            for (const sound of loopingSounds.values()) {
+                sound.stop();
+            }
+            loopingSounds.clear();
+        }
         world.resources.delete(LoopingSounds);
     }
 }

@@ -21,11 +21,26 @@ export interface SpriteSheetMulti {
 
 const SHEET_LOOP = 10;
 
-class DimensionError extends Error { };
+export class DimensionError extends Error { };
 
-function getWH(frames: Array<PNG>): { singleFrameWidth: number, singleFrameHeight: number, fullPixelWidth: number, fullPixelHeight: number } {
+/**
+ * The packed sheet's geometry: every frame is `singleFrameWidth` x
+ * `singleFrameHeight` (the rlëD's own size — a sheet is one resource, so
+ * every frame shares it), laid out SHEET_LOOP to a row.
+ *
+ * The frame height is the frame's HEIGHT. It used to be copied from the
+ * width, which is invisible for the square ship sprites but wrong for
+ * every non-square rlëD: the stock stations (CC Station nova:2034 is
+ * 140x85, Double-Deimos nova:2039 315x200), the hypergates (nova:2063,
+ * 53x60), the ground explosion (nova:4006, 50x63). A wide frame in a
+ * width x width rect is centred by the sprite anchor (w-h)/2 px above
+ * the entity — tens of pixels north of where the ship lands or the
+ * shots hit — and a tall one has its bottom rows written past its row
+ * block, i.e. cropped (or overwritten by the next row of frames).
+ */
+export function getWH(frames: Array<PNG>): { singleFrameWidth: number, singleFrameHeight: number, fullPixelWidth: number, fullPixelHeight: number } {
     var singleFrameWidth = frames[0].width;
-    var singleFrameHeight = frames[0].width;
+    var singleFrameHeight = frames[0].height;
 
     var fullPixelWidth: number = Math.min(SHEET_LOOP, frames.length) * singleFrameWidth;
     var fullPixelHeight: number = Math.ceil(frames.length / SHEET_LOOP) * singleFrameHeight;
@@ -38,7 +53,8 @@ function getWH(frames: Array<PNG>): { singleFrameWidth: number, singleFrameHeigh
     }
 }
 
-function buildPNG(frames: Array<PNG>): PNG {
+/** Packs the frames into one sheet image, SHEET_LOOP frames per row. */
+export function buildPNG(frames: Array<PNG>): PNG {
     var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
 
     var outPNG = new PNG({
@@ -50,11 +66,14 @@ function buildPNG(frames: Array<PNG>): PNG {
     for (let f = 0; f < frames.length; f++) {
         let frame = frames[f];
 
-        // Validation for sanity
-        // if (frame.width != singleFrameWidth || frame.height != singleFrameHeight) {
-        //     throw new DimensionError("Wrong dimensions " + frame.width + " by " + frame.height
-        //         + ". Expected " + singleFrameWidth + " by " + singleFrameHeight + ".");
-        // }
+        // Every frame must fit the row pitch computed from frame 0: a
+        // larger one would write into (or past) its neighbours' pixels.
+        // An rlëD carries one size for all its frames, so this never
+        // fires on decoded game data; it guards the packer's contract.
+        if (frame.width != singleFrameWidth || frame.height != singleFrameHeight) {
+            throw new DimensionError("Wrong dimensions " + frame.width + " by " + frame.height
+                + ". Expected " + singleFrameWidth + " by " + singleFrameHeight + ".");
+        }
 
         var col = f % SHEET_LOOP;
         var row = Math.floor(f / SHEET_LOOP);
@@ -217,7 +236,12 @@ export function makeHulls(frames: Array<PNG>,
     });
 }
 
-function buildSpriteSheetFrames(rled: RledResource,
+/**
+ * The PIXI spritesheet frame table for a packed sheet: one `w x h` rect
+ * per frame at its (col, row) slot, with the same geometry buildPNG laid
+ * the pixels out in. Only `rled.globalID` is read.
+ */
+export function buildSpriteSheetFrames(rled: Pick<RledResource, 'globalID'>,
     frames: Array<PNG>): SpriteSheetFramesData {
     var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
 

@@ -18,8 +18,10 @@ import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
-import { DisplayAssetDataResource } from '../nova_plugin/game_data_resource.js';
-import { formatCredits } from './status_bar_content.js';
+import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
+import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { STANDARD_CARGO_NAMES } from '../nova_plugin/mission_logic.js';
+import { formatCredits, standardCargoIndex } from './status_bar_content.js';
 import { Button } from '../spaceport/button.js';
 import {
     CAPTURE_FRAME, frameOrigin, PLUNDER_BUTTONS, PLUNDER_FRAME,
@@ -159,8 +161,34 @@ export interface PlunderRow {
     rightValue?: string;
 }
 
+/**
+ * The name the plunder readout shows for one CargoComponent key. The
+ * keys are internal ("cargo:<0-5>", "junk:<globalID>", "mission:<id>";
+ * cargo_plugin.ts) and used to be printed verbatim — "12 tons of
+ * cargo:3". Standard commodities read from the STR# 4000 names the
+ * status bar uses; a jünk commodity reads its full jünk name (the status
+ * bar abbreviates; a sentence does not need to) once its data is cached,
+ * and mission freight is just "mission cargo".
+ */
+export function cargoKeyDisplayName(key: string,
+    gameData?: SimulationGameDataInterface): string {
+    const stdIndex = standardCargoIndex(key);
+    if (stdIndex !== null) {
+        return STANDARD_CARGO_NAMES[stdIndex] ?? `Cargo ${stdIndex}`;
+    }
+    if (key.startsWith('junk:')) {
+        const junk = gameData?.data.Junk.getCached(key.slice(5));
+        return junk?.name || 'cargo';
+    }
+    if (key.startsWith('mission:')) {
+        return 'mission cargo';
+    }
+    return key;
+}
+
 export function plunderDialogContent(boarding: BoardingState,
-    target: Entity | undefined, playerCrew: number): {
+    target: Entity | undefined, playerCrew: number,
+    cargoName: (key: string) => string = key => cargoKeyDisplayName(key)): {
         rows: PlunderRow[], notes: string[], lines: string[],
         enabledByAction: Record<string, boolean>
     } {
@@ -180,7 +208,7 @@ export function plunderDialogContent(boarding: BoardingState,
     const cargoKeys = cargo ? [...cargo.keys()].sort() : [];
     const cargoText = cargoTons <= 0 ? 'None'
         : cargoKeys.length === 1
-            ? `${cargoTons} tons of ${cargoKeys[0]}`
+            ? `${cargoTons} tons of ${cargoName(cargoKeys[0])}`
             : `${cargoTons} tons`;
     const odds = boarding.capture === 'succeeded' || captureBlocked
         ? null : Math.round(captureChance(playerCrew, targetCrew) * 100);
@@ -333,6 +361,9 @@ class PlunderDialog {
         label: PIXI.Text, value: PIXI.Text,
         rightLabel: PIXI.Text, rightValue: PIXI.Text,
     }[] = [];
+    /** Resolves a cargo key to the name the readout shows (see
+     * cargoKeyDisplayName); the plugin points it at the game data. */
+    cargoName: (key: string) => string = key => cargoKeyDisplayName(key);
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         controlEvents: Observable<ControlEvent>,
@@ -485,7 +516,7 @@ class PlunderDialog {
     refresh(boarding: BoardingState, target: Entity | undefined,
         playerCrew: number) {
         const { rows, notes, enabledByAction } =
-            plunderDialogContent(boarding, target, playerCrew);
+            plunderDialogContent(boarding, target, playerCrew, this.cargoName);
         this.readout.forEach((cells, i) => {
             const row = rows[i];
             cells.label.text = row?.label ?? '';
@@ -867,6 +898,9 @@ export const BoardingDisplayPlugin: Plugin = {
                 present: targetUuid =>
                     presentBoardShipDone(world, targetUuid),
             });
+        // jünk commodity names for the booty line come from the game data.
+        const gameData = world.resources.get(SimulationGameDataResource);
+        ui.plunder.cargoName = key => cargoKeyDisplayName(key, gameData);
         stage.addChild(ui.plunder.container);
         stage.addChild(ui.assignment.container);
         world.resources.set(BoardingUiResource, ui);

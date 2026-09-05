@@ -24,4 +24,11 @@ describe('targetReadout (status bar target pane rule)', () => {
     it('shows nothing without stats', () => {
         expect(targetReadout(false)).toEqual({ kind: 'none' });
     });
+
+    it('reads 0% for a hull with no armor at all, never NaN%', () => {
+        // Stat.percent is current / max * 100: NaN when max is 0, which
+        // the stock Escape Pod (shïp nova:895, shield 0 / armor 0) is.
+        expect(targetReadout(false, NaN, NaN))
+            .toEqual({ kind: 'armor', percent: 0 });
+    });
 });

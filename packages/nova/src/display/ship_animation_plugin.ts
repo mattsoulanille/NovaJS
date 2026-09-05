@@ -319,20 +319,32 @@ export const ShipAnimationSystem = new System({
         // If the local player has a cloak scanner that reveals cloaked
         // ships on screen (ModVal 0x0002), other cloaked ships show as a
         // faint ghost instead of vanishing.
+        //
+        // PlayerScannerQuery reads CloakScannerComponent, which the sim
+        // never sends (snapshot policy `skip`); the display derives it
+        // from the player's synced outfits itself — see
+        // cloak_display_plugin.ts — or this query matched nothing and the
+        // reveal was dead.
+        let cloakAlpha = UNCLOAKED_ALPHA;
         if (cloakActive?.active) {
             const isPlayerShip = entity.components.has(PlayerShipSelector);
             const playerRevealsOnScreen =
                 playerScanners[0]?.[1]?.revealsOnScreen === true;
             if (isPlayerShip) {
-                animation.container.alpha = CLOAKED_ALPHA_SELF;
+                cloakAlpha = CLOAKED_ALPHA_SELF;
             } else if (playerRevealsOnScreen) {
-                animation.container.alpha = CLOAKED_ALPHA_REVEALED;
+                cloakAlpha = CLOAKED_ALPHA_REVEALED;
             } else {
-                animation.container.alpha = CLOAKED_ALPHA_OTHER;
+                cloakAlpha = CLOAKED_ALPHA_OTHER;
             }
-        } else {
-            animation.container.alpha = UNCLOAKED_ALPHA;
         }
+        // The container alpha is MurkFadeSystem's (it composes murk with
+        // this factor, and runs after this system); assigning it here
+        // used to overwrite the murk fade every frame, so ships never
+        // faded with distance in a murky system. The direct write below
+        // covers worlds without murk at all (no SystemEnvironmentPlugin).
+        animation.cloakAlpha = cloakAlpha;
+        animation.container.alpha = cloakAlpha;
     },
 });
 
