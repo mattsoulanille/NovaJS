@@ -178,14 +178,17 @@ export const AcceptedMissionType = t.intersection([t.type({
      * auto-abort mission is the moment it is accepted.
      *
      * A DELTA, like every other field here, so it composes with whatever
-     * else moved the clock in between, and applied as a plain `addDays`
-     * because that is exactly what the docked path does
-     * (MissionSession.commit's dateAdvance): no crons are run and no
-     * deadlines are swept for these days on either path, and the two must
-     * not disagree. Absent (and omitted from older records) when the
-     * accept left the date alone, which is every stock ship-offered
-     * mission — mïsn nova:609/610 are the only stock autoAbort missions
-     * with a DatePostInc and they are AvailLoc 3, main-spaceport.
+     * else moved the clock in between, and applied as a plain `addDays`:
+     * the books for those days (ränk salary, escort wages) were settled
+     * on the detached copy at accept and ride here as `creditsDelta`,
+     * while the crons are NOT stepped on this path — the copy carries no
+     * cron state and this record has nowhere to carry one back (see
+     * MissionSession.commitState, which does step them for a docked
+     * DatePostInc). No deadline is swept on either path. Absent (and
+     * omitted from older records) when the accept left the date alone,
+     * which is every stock ship-offered mission — mïsn nova:609/610 are
+     * the only stock autoAbort missions with a DatePostInc and they are
+     * AvailLoc 3, main-spaceport.
      */
     dateDelta: t.number,
     /** Control bits the OnAccept set string set / cleared. */
