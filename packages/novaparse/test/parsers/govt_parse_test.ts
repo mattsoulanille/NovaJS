@@ -5,6 +5,9 @@ import { StrNResource } from "../../src/resource_parsers/strn_resource.js";
 import { getEmptyNovaResources, NovaResources } from "../../src/resource_parsers/resource_holder_base.js";
 import { defaultIDSpace } from "../resource_parsers/default_id_space.js";
 import { ResourceBuilder } from "../resource_parsers/resource_builder.js";
+import {
+    buildFlagNamespaceMapFrom, FIRST_PRIVATE_PHYSICAL_BIT, FlagResourceRef,
+} from "../../src/flag_namespace.js";
 
 /**
  * A gövt resource with every field set to a distinct, recognizable value.
@@ -80,6 +83,42 @@ function parseGovtWithGreetings(govtId: number,
     resource.prefix = "nova";
     return GovtParse(resource, () => { });
 }
+
+describe("GovtParse Require flag namespacing", () => {
+    it("emits the raw Require (decimal) without a flag map", async () => {
+        const govt = await parseGovt();
+        expect(govt.require).toEqual(String(0x0000000100000002n));
+    });
+
+    it("resolves Require through the writing plug-in's namespace", async () => {
+        // buildGovt's Require is bits 1 and 32. With 32 in the base set and
+        // bit 1 private to "arpia", the plug-in's permit outfit (which also
+        // contributes raw bit 1) must land on the same physical bit.
+        const permit: FlagResourceRef = {
+            type: "oütf",
+            resource: { globalID: "arpia:493", writerPrefix: "arpia", contribute: 1n << 1n, require: 0n },
+        };
+        const resource = new GovtResource(
+            buildGovt().resource("gövt", 202, "Gas Giant"), defaultIDSpace);
+        resource.globalID = "arpia:202";
+        resource.prefix = "arpia";
+        resource.writerPrefix = "arpia";
+        const gasGiant: FlagResourceRef = {
+            type: "gövt",
+            resource: { globalID: "arpia:202", writerPrefix: "arpia", require: resource.require },
+        };
+        const map = buildFlagNamespaceMapFrom(
+            [permit, gasGiant], new Set([32]), ["arpia"]);
+
+        const govt = await GovtParse(resource, () => { }, map);
+        const expected = (1n << 32n) | (1n << BigInt(FIRST_PRIVATE_PHYSICAL_BIT));
+        expect(govt.require).toEqual(expected.toString());
+        // Same encoding as a mïsn's Require: decimal, parseable by BigInt.
+        expect(BigInt(govt.require)).toEqual(expected);
+        expect(map.resolve("arpia", 1n << 1n))
+            .toEqual(1n << BigInt(FIRST_PRIVATE_PHYSICAL_BIT));
+    });
+});
 
 describe("GovtParse comm greetings (STR# 7000 + govt offset)", () => {
     it("reads the greetings of the first government from STR# 7000",

@@ -1,7 +1,9 @@
 import 'jasmine';
 import { getDefaultGovtData, GovtData } from 'novadatainterface/govt_data';
 import { getDefaultPlanetData, PlanetData } from 'novadatainterface/planet_data';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import {
+    getIntegrationGameData, getPluginGameData,
+} from '../communication/simulation_test_fixture.js';
 import { LegalRecords } from './reputation.js';
 import { ranksAllowLanding } from './rank_logic.js';
 import {
@@ -369,4 +371,40 @@ describe('stellarClearance against real Nova data', () => {
                     .toBe(0n);
             }
         });
+});
+
+/**
+ * The one real travel permit in the installed data. arpia's "Gas Giant"
+ * gövts 202/203 own 22 landable stellars (Neo New York, Tau III, Jupiter,
+ * Spica, ...) and Require raw bit 7; the plug-in's Keycard oütf 493 (and
+ * the Kilmura / Sylvatha hulls) Contribute raw bit 7. Bit 7 is not in the
+ * stock base set, so NovaParse renumbers it to a plug-in-private physical
+ * bit — and the permit only works if the gövt's Require is renumbered
+ * through the same namespace as the outfit's Contribute (it was not:
+ * the gövt kept the raw mask, and the 22 planets were unlandable forever).
+ */
+describe('gövt Require against real plug-in data (arpia travel permit)', () => {
+    it('is satisfied by the plug-in\'s own keycard outfit', async () => {
+        const gameData = await getPluginGameData('arpia');
+        if (!gameData) {
+            pending('arpia plug-in not installed');
+            return;
+        }
+        const gasGiant = await gameData.data.Govt.get('arpia:202');
+        const keycard = await gameData.data.Outfit.get('arpia:493');
+        expect(gasGiant.name).toContain('Gas Giant');
+        expect(keycard.name).toContain('Keycard');
+        const require = BigInt(gasGiant.require);
+        expect(require).not.toBe(0n);
+        // Namespaced: the raw bit 7 is not in the stock base set, so the
+        // physical bit is a private one at or past 64.
+        expect(require & ((1n << 64n) - 1n)).toBe(0n);
+
+        // Nothing owned: denied.
+        expect(govtRequirementsMet(gasGiant.require,
+            contributeBits(undefined, []))).toBeFalse();
+        // Keycard owned: cleared.
+        expect(govtRequirementsMet(gasGiant.require,
+            contributeBits(undefined, [keycard.contribute]))).toBeTrue();
+    });
 });

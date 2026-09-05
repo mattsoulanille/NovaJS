@@ -55,10 +55,13 @@ describe("scanBaseFlagSet", () => {
         (resources.oütf as any)["nova:129"] = { globalID: "nova:129", writerPrefix: "nova", contribute: 0n, require: mask(0, 32) };
         (resources.crön as any)["nova:130"] = { globalID: "nova:130", writerPrefix: "nova", contribute: mask(40), require: mask(41) };
         (resources.mïsn as any)["nova:131"] = { globalID: "nova:131", writerPrefix: "nova", require: mask(5) };
+        // A gövt Require (travel permit) is tested against the same player
+        // Contribute set, so its bits are part of the base set too.
+        (resources.gövt as any)["nova:132"] = { globalID: "nova:132", writerPrefix: "nova", require: mask(7) };
         // A wëap has no flag fields and must be ignored.
         (resources.wëap as any)["nova:128"] = { globalID: "nova:128", writerPrefix: "nova" };
         expect([...scanBaseFlagSet(resources)].sort((a, b) => a - b))
-            .toEqual([0, 4, 5, 32, 40, 41]);
+            .toEqual([0, 4, 5, 7, 32, 40, 41]);
     });
 });
 
@@ -203,4 +206,26 @@ describe("resolveResourceFlags", () => {
         expect(resolveResourceFlags(map, { writerPrefix: "p" }, mask(0, 22)))
             .toBe(mask(0, 64));
     });
+
+    // arpia's Gas Giant gövts 202/203 require bit 7 (not in the stock base
+    // set); its Keycard oütf 493 contributes bit 7. The permit only works
+    // if both resolve to the SAME physical bit, i.e. the gövt is part of
+    // the flag space like everything else that reads the Contribute set.
+    it("resolves a plug-in gövt Require to the same bit as the plug-in's "
+        + "own Contribute", () => {
+            const keycard = ref("oütf", "arpia:493", "arpia", [7], []);
+            const gasGiant: FlagResourceRef = {
+                type: "gövt",
+                resource: { globalID: "arpia:202", writerPrefix: "arpia", require: mask(7) },
+            };
+            const map = buildFlagNamespaceMapFrom(
+                [keycard, gasGiant], new Set([0, 4, 5, 6, 16]), ["arpia"]);
+            const require = resolveResourceFlags(map, gasGiant.resource, mask(7));
+            const contribute = resolveResourceFlags(map, keycard.resource, mask(7));
+            expect(require).toBe(contribute);
+            expect(require).toBe(mask(FIRST_PRIVATE_PHYSICAL_BIT));
+            expect((require & contribute) === require).toBeTrue();
+            // And the gövt's Require is not reported as unsatisfiable.
+            expect(map.report.unsatisfiable).toEqual([]);
+        });
 });
