@@ -31,10 +31,11 @@ export class EntityMapWithEvents extends EventMap<string, Entity> implements Ent
         // 'uuid' is marked as readonly to avoid accidentally setting it elsewhere.
         (entity as { uuid: string }).uuid = uuid;
 
-        const current = this.get(uuid);
-        if (current && current !== entity) {
-            this.entityChangeUnsubscribe.get(uuid)?.unsubscribe();
-        }
+        // Drop the previous subscriptions whenever there are any — also
+        // when the SAME entity object is re-set: the record below is
+        // overwritten either way, and subscriptions it no longer holds
+        // would fire forever, duplicating every component event (#87).
+        this.entityChangeUnsubscribe.get(uuid)?.unsubscribe();
 
         const componentEvents = entity.components.events;
 
