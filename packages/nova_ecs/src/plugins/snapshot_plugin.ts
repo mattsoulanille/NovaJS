@@ -240,6 +240,56 @@ function restoreComponents(world: World, entity: Entity,
     }
 }
 
+/**
+ * Whether snapshotComponents would capture `component` — the policy
+ * decision it makes, factored out so restore can tell "absent from the
+ * snapshot because it was never captured" from "absent because it did
+ * not exist when the snapshot was taken".
+ */
+function isSnapshotted(world: World, policies: SnapshotPolicies,
+    component: UnknownComponent): boolean {
+    const policy = policies.components.get(component);
+    if (policy) {
+        return policy.policy !== 'skip';
+    }
+    return world.resources.get(SerializerResource)?.hasComponent(component)
+        ?? false;
+}
+
+/** wireSnapshotComponents' capture decision; see isSnapshotted. */
+function isWireSnapshotted(world: World, policies: SnapshotPolicies,
+    component: UnknownComponent): boolean {
+    if (policies.wireDerived.has(component)) {
+        return false;
+    }
+    return policies.wireCodecs.has(component)
+        || (world.resources.get(SerializerResource)?.hasComponent(component)
+            ?? false);
+}
+
+/**
+ * Removes from the singleton every component the snapshot WOULD have
+ * captured but does not contain: it was attached after the snapshot
+ * was taken, so it is not part of the timeline being restored.
+ * Non-singleton entities are rebuilt from scratch; the singleton is the
+ * one entity restore mutates in place, and without this it kept
+ * post-snapshot components through a rollback (#86).
+ *
+ * Components the snapshot never captures are deliberately left alone:
+ * a 'skip' policy means "not simulation state, keep the live value"
+ * (or wire-derived: the restoring world rebuilds it), and an
+ * unregistered component has nothing to be restored from.
+ */
+function pruneSingleton(singleton: Entity,
+    present: ReadonlySet<UnknownComponent>,
+    captured: (component: UnknownComponent) => boolean) {
+    for (const component of [...singleton.components.keys()]) {
+        if (!present.has(component) && captured(component)) {
+            singleton.components.delete(component);
+        }
+    }
+}
+
 /** Worlds already warned about a snapshot taken with queued events. */
 const warnedQueuedEventWorlds = new WeakSet<World>();
 
@@ -375,6 +425,9 @@ export function restoreWorld(world: World, snapshot: WorldSnapshot,
 
     const singleton = world.entities.get('singleton');
     if (singleton) {
+        pruneSingleton(singleton,
+            new Set(snapshot.singleton.map(([component]) => component)),
+            component => isSnapshotted(world, policies, component));
         restoreComponents(world, singleton, snapshot.singleton, policies);
     }
 
@@ -390,18 +443,31 @@ export function restoreWorld(world: World, snapshot: WorldSnapshot,
 }
 
 /**
- * JSON cannot represent Infinity, NaN, or undefined — but encoded game
- * state legitimately contains them (inertialess ships have infinite
- * max velocity; marker components encode to undefined). Sentinel-wrap
- * them on capture and unwrap on restore, so a JSON roundtrip of a wire
- * snapshot is exact. The walk also detaches the data from live state.
+ * JSON cannot represent Infinity, NaN, undefined, or the sign of zero —
+ * but encoded game state legitimately contains them (inertialess ships
+ * have infinite max velocity; marker components encode to undefined;
+ * vector math produces -0 routinely, e.g. `(0).scale(-k)`). Sentinel-
+ * wrap them on capture and unwrap on restore, so a JSON roundtrip of a
+ * wire snapshot is exact. The walk also detaches the data from live
+ * state.
+ *
+ * -0 is PRESERVED rather than canonicalised (#85): the in-memory
+ * rollback snapshot keeps it, so every peer that never left memory
+ * holds -0, and `Math.atan2(-0, x < 0)` / `1 / -0` branch differently
+ * from +0. A late joiner or resynced peer must hold the same bits.
+ * hashWorld distinguishes it for the same reason.
  */
-function toJsonSafe(value: unknown): unknown {
+export function toJsonSafe(value: unknown): unknown {
     if (value === undefined) {
         return { $undefined: true };
     }
-    if (typeof value === 'number' && !Number.isFinite(value)) {
-        return { $nonfinite: value > 0 ? '+' : value < 0 ? '-' : 'nan' };
+    if (typeof value === 'number') {
+        if (!Number.isFinite(value)) {
+            return { $nonfinite: value > 0 ? '+' : value < 0 ? '-' : 'nan' };
+        }
+        if (Object.is(value, -0)) {
+            return { $negzero: true };
+        }
     }
     if (Array.isArray(value)) {
         return value.map(toJsonSafe);
@@ -416,7 +482,7 @@ function toJsonSafe(value: unknown): unknown {
     return value;
 }
 
-function fromJsonSafe(value: unknown): unknown {
+export function fromJsonSafe(value: unknown): unknown {
     if (value && typeof value === 'object') {
         if ('$undefined' in value) {
             return undefined;
@@ -424,6 +490,9 @@ function fromJsonSafe(value: unknown): unknown {
         if ('$nonfinite' in value) {
             const kind = (value as { $nonfinite: string }).$nonfinite;
             return kind === '+' ? Infinity : kind === '-' ? -Infinity : NaN;
+        }
+        if ('$negzero' in value) {
+            return -0;
         }
         if (Array.isArray(value)) {
             return value.map(fromJsonSafe);
@@ -660,6 +729,18 @@ export function restoreWireWorldSnapshot(world: World,
 
     const singleton = world.entities.get('singleton');
     if (singleton) {
+        const serializer = world.resources.get(SerializerResource);
+        const byName = wireCodecsByName(policies);
+        const present = new Set<UnknownComponent>();
+        for (const [name] of snapshot.singleton) {
+            const component = byName.get(name)?.[0]
+                ?? serializer?.componentsByName.get(name);
+            if (component) {
+                present.add(component);
+            }
+        }
+        pruneSingleton(singleton, present,
+            component => isWireSnapshotted(world, policies, component));
         restoreWireComponents(world, singleton, snapshot.singleton, policies);
     }
 

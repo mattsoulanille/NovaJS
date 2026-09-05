@@ -1,8 +1,14 @@
 import 'jasmine';
 import { immerable } from 'immer';
+import * as t from 'io-ts';
+import { Component } from '../component.js';
 import { Entity } from '../entity.js';
 import { World } from '../world.js';
-import { cloneEncoded, SnapshotPolicies, SnapshotPoliciesResource, snapshotWorld } from './snapshot_plugin.js';
+import { SerializerPlugin, SerializerResource } from './serializer_plugin.js';
+import {
+    cloneEncoded, restoreWireWorldSnapshot, restoreWorld, SnapshotPolicies,
+    SnapshotPoliciesResource, snapshotWorld, wireSnapshotWorld,
+} from './snapshot_plugin.js';
 import { TimePlugin } from './time_plugin.js';
 
 class Point {
@@ -228,5 +234,100 @@ describe('snapshotWorld queued-event invariant', () => {
         const warn = spyOn(console, 'warn');
         snapshotWorld(world);
         expect(warn).not.toHaveBeenCalled();
+    });
+});
+
+const NumComponent = new Component<{ v: number }>('Num');
+const SkippedComponent = new Component<{ live: number }>('Skipped');
+const UnregisteredComponent = new Component<{ u: number }>('Unregistered');
+
+function makeSerializedWorld(): World {
+    const world = new World('snapshot restore test');
+    world.addPlugin(SerializerPlugin);
+    world.resources.get(SerializerResource)!
+        .addComponent(NumComponent, t.type({ v: t.number }));
+    world.resources.get(SerializerResource)!
+        .addComponent(SkippedComponent, t.type({ live: t.number }));
+    const policies = new SnapshotPolicies();
+    policies.set(SkippedComponent, { policy: 'skip' });
+    world.resources.set(SnapshotPoliciesResource, policies);
+    return world;
+}
+
+// #85: the in-memory snapshot preserves -0 but the wire snapshot went
+// through JSON, which serializes -0 as 0, so a late joiner held +0 where
+// every other peer held -0.
+describe('wire snapshot sign of zero', () => {
+    it('preserves -0 across a JSON roundtrip', () => {
+        const world = makeSerializedWorld();
+        world.entities.set('e', new Entity().addComponent(NumComponent, { v: -0 }));
+        const wire = JSON.parse(JSON.stringify(wireSnapshotWorld(world)));
+
+        const restored = makeSerializedWorld();
+        restoreWireWorldSnapshot(restored, wire);
+        const v = restored.entities.get('e')!.components.get(NumComponent)!.v;
+        expect(Object.is(v, -0)).toBeTrue();
+    });
+
+    it('still preserves +0 and non-finite values', () => {
+        const world = makeSerializedWorld();
+        world.entities.set('zero', new Entity().addComponent(NumComponent, { v: 0 }));
+        world.entities.set('inf', new Entity().addComponent(NumComponent, { v: -Infinity }));
+        world.entities.set('nan', new Entity().addComponent(NumComponent, { v: NaN }));
+        const wire = JSON.parse(JSON.stringify(wireSnapshotWorld(world)));
+
+        const restored = makeSerializedWorld();
+        restoreWireWorldSnapshot(restored, wire);
+        const get = (uuid: string) =>
+            restored.entities.get(uuid)!.components.get(NumComponent)!.v;
+        expect(Object.is(get('zero'), 0)).toBeTrue();
+        expect(get('inf')).toBe(-Infinity);
+        expect(get('nan')).toBeNaN();
+    });
+});
+
+// #86: non-singleton entities are rebuilt from scratch on restore, but
+// the singleton is mutated in place and kept any component attached
+// after the snapshot was taken.
+describe('restore prunes post-snapshot singleton components', () => {
+    it('removes a captured component the snapshot does not hold (in-memory)', () => {
+        const world = makeSerializedWorld();
+        const snapshot = snapshotWorld(world);
+        world.singletonEntity.components.set(NumComponent, { v: 5 });
+
+        restoreWorld(world, snapshot);
+        expect(world.singletonEntity.components.has(NumComponent)).toBeFalse();
+    });
+
+    it('removes a captured component the snapshot does not hold (wire)', () => {
+        const world = makeSerializedWorld();
+        const wire = JSON.parse(JSON.stringify(wireSnapshotWorld(world)));
+        world.singletonEntity.components.set(NumComponent, { v: 5 });
+
+        restoreWireWorldSnapshot(world, wire);
+        expect(world.singletonEntity.components.has(NumComponent)).toBeFalse();
+    });
+
+    it('restores a captured component the snapshot does hold', () => {
+        const world = makeSerializedWorld();
+        world.singletonEntity.components.set(NumComponent, { v: 1 });
+        const snapshot = snapshotWorld(world);
+        world.singletonEntity.components.set(NumComponent, { v: 2 });
+
+        restoreWorld(world, snapshot);
+        expect(world.singletonEntity.components.get(NumComponent)).toEqual({ v: 1 });
+    });
+
+    it("keeps 'skip'-policy and unregistered singleton components", () => {
+        // 'skip' means "not simulation state, keep the live value", and
+        // an unregistered component has nothing to be restored from.
+        const world = makeSerializedWorld();
+        const snapshot = snapshotWorld(world);
+        world.singletonEntity.components.set(SkippedComponent, { live: 7 });
+        world.singletonEntity.components.set(UnregisteredComponent, { u: 8 });
+
+        restoreWorld(world, snapshot);
+        expect(world.singletonEntity.components.get(SkippedComponent)).toEqual({ live: 7 });
+        expect(world.singletonEntity.components.get(UnregisteredComponent)).toEqual({ u: 8 });
     });
 });

@@ -50,6 +50,18 @@ describe('hashWorld', () => {
         ]);
     });
 
+    // #85: JSON.stringify collapses -0 to 0 and NaN/±Infinity to null,
+    // so worlds holding different bits hashed the same. The hash must
+    // distinguish exactly what the wire snapshot preserves.
+    it('distinguishes -0 from +0 and non-finite values from each other', () => {
+        const hashes = [-0, 0, NaN, Infinity, -Infinity].map(x => {
+            const world = makeWorld();
+            world.entities.set('a', new Entity('a').addComponent(FooComponent, { x }));
+            return hashWorld(world).hash;
+        });
+        expect(new Set(hashes).size).toBe(hashes.length);
+    });
+
     it('reports entities that only exist in one world', () => {
         const world1 = makeWorld();
         world1.entities.set('a', new Entity('a').addComponent(FooComponent, { x: 1 }));

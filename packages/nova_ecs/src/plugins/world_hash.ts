@@ -11,6 +11,26 @@ export function fnv1a(text: string, seed = 0x811c9dc5): number {
     return hash >>> 0;
 }
 
+/**
+ * JSON.stringify maps -0 to "0" and NaN/±Infinity to "null", so two
+ * worlds holding different bits hashed identically and a fork stayed
+ * invisible until it propagated into non-zero state (#85). Fold the
+ * exact values in, matching what the wire snapshot preserves
+ * (snapshot_plugin's toJsonSafe): the hash distinguishes precisely the
+ * states a resync could produce a peer in.
+ */
+function hashReplacer(_key: string, value: unknown): unknown {
+    if (typeof value === 'number') {
+        if (Object.is(value, -0)) {
+            return '$-0';
+        }
+        if (!Number.isFinite(value)) {
+            return value > 0 ? '$+inf' : value < 0 ? '$-inf' : '$nan';
+        }
+    }
+    return value;
+}
+
 export interface WorldHash {
     /** Combined hash of all entities. */
     hash: string;
@@ -43,7 +63,8 @@ export function hashWorld(world: World,
         const components = [...encoded.components]
             .filter(([name]) => !excludeComponents?.has(name))
             .sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0);
-        const json = JSON.stringify({ name: encoded.name, components }) ?? '';
+        const json = JSON.stringify({ name: encoded.name, components },
+            hashReplacer) ?? '';
         const entityHash = fnv1a(json).toString(16).padStart(8, '0');
         entities.set(uuid, entityHash);
         combined = fnv1a(`${uuid}=${entityHash};`, combined);
