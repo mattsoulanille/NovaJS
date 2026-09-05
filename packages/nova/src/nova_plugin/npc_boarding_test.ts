@@ -11,6 +11,7 @@ import { World } from 'nova_ecs/world';
 import { UUID } from 'nova_ecs/arg_types';
 import { System } from 'nova_ecs/system';
 import { BoardedComponent, plunderSpent } from './boarding_component.js';
+import { ExplodingComponent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { completeEntity } from './entity_data_loader.js';
 import { GovtComponent } from './govt_component.js';
@@ -83,6 +84,8 @@ interface HulkOptions {
     xenophobicPirate?: boolean;
     /** Pre-spend its plunder record, as if somebody boarded it first. */
     alreadyBoarded?: string;
+    /** Put it in its death sequence (ExplodingComponent) as well. */
+    exploding?: boolean;
 }
 
 /**
@@ -166,6 +169,11 @@ async function plunderWorld(options: HulkOptions & {
             if (options.credits !== undefined) {
                 ship.components.set(CreditsComponent,
                     { credits: options.credits });
+            }
+            if (options.exploding) {
+                // Far-future death time: it stays mid-explosion for the
+                // whole spec instead of being deleted by DeathEvent.
+                ship.components.set(ExplodingComponent, 1e12);
             }
         });
     if (options.disabled ?? true) {
@@ -310,6 +318,20 @@ describe('NPC plunder-boarding (gövt Flags 0x1000)', () => {
         // And the player's claim is not overwritten.
         expect(hulk.components.get(BoardedComponent)?.boarder)
             .toEqual('the player');
+    });
+
+    it('ignores a hulk that has begun its death sequence', async () => {
+        // A hulk that is EXPLODING is a corpse, not a prize: DeathEvent
+        // deletes it moments later, and the rest of the engine
+        // (DropExplodingTargetSystem, fire_weapon_plugin) already treats
+        // it as gone. The NPC gather skips exploding ships before the
+        // disabled/plunder branch, so no plunder run is ever started.
+        const { world, pirate } = await plunderWorld({ exploding: true });
+        expect(pirate.components.get(NpcComponent)?.mode)
+            .not.toEqual('board');
+        expect(pirate.components.get(NpcComponent)?.boardTarget)
+            .toBeUndefined();
+        expect(runUntilBoarded(world, 300)).toBeFalse();
     });
 
     it('never sets out for a hulk that is already spent', async () => {

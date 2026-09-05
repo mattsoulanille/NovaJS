@@ -868,7 +868,11 @@ const NpcDecisionSystem = new System({
         // Disabled enemies are collected SEPARATELY as plunder candidates
         // (gövt Flags 0x1000; see npcPlunderEligible). They are still not
         // hostiles — a warship never shoots at a hulk — but a warship of a
-        // plundering government will fly over and board one.
+        // plundering government will fly over and board one. The
+        // exploding skip below runs BEFORE the disabled branch on purpose:
+        // a hulk that has begun its death sequence is a corpse, not a
+        // prize (DeathEvent deletes it moments later), so it is never a
+        // plunder candidate either.
         const hostiles: Array<readonly [string, number]> = [];
         const plunderable: Array<readonly [string, number]> = [];
         // Only a warship of a plundering government looks at hulks at all,
