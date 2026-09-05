@@ -113,6 +113,34 @@ export class MissionSession {
     }
 
     /**
+     * Wires the `Cxxx` / `Exxx` / `Hxxx` (change ship) operators to the
+     * venue that can perform them, and the shïp existence lookup they
+     * resolve their number through. Only a venue holding the docked
+     * entity can swap it; it must call {@link retarget} from inside the
+     * hook so the commit lands on the hull the player is now in.
+     */
+    setChangeShipHook(
+        changeShip: NonNullable<MissionMachineryContext['changeShip']>,
+        shipExists?: (globalId: string) => boolean): void {
+        this.machinery.changeShip = changeShip;
+        this.machinery.shipExists = shipExists;
+    }
+
+    /**
+     * Points the session at a NEW entity for the player — the one a
+     * change-ship operator just built (spaceport/shipyard_rules'
+     * buildChangedShip) — so commit() writes the working copies onto the
+     * hull that will lift off rather than the one just discarded. The
+     * working copies themselves are unchanged: they are absolute state
+     * (missions, cargo, credits, bits, ranks, records) that means the same
+     * thing on either hull; the caller replaces `outfits` itself.
+     */
+    retarget(entity: Entity, shipId: string): void {
+        this.entity = entity;
+        this.shipId = shipId;
+    }
+
+    /**
      * Updates the working cargo capacity. The outfitter calls this after
      * every buy/sell so an OnPurchase/OnSell set string that starts a
      * cargo mission (Sxxx) checks against the CURRENT capacity — buying or

@@ -453,7 +453,7 @@ export function purchaseContextFrom(entity: Entity, currentShip: ShipData,
 /** The new hull's hold: its own capacity plus freeCargo from its outfits. */
 export function newShipCargoCapacity(newShip: ShipData,
     outfits: ReadonlyMap<string, { count: number }>,
-    context: ShipPurchaseContext): number {
+    context: Pick<ShipPurchaseContext, 'getOutfit'>): number {
     let capacity = newShip.physics.freeCargo;
     for (const [id, { count }] of outfits) {
         capacity += (context.getOutfit(id)?.physics.freeCargo ?? 0) * count;
@@ -478,6 +478,20 @@ export function buildPurchasedShip(oldShip: Entity, newShip: ShipData,
     context: ShipPurchaseContext): Entity {
     const price = shipPurchasePrice(newShip, context);
     const outfits = outfitsForNewShip(newShip, context);
+    return buildShipEntity(oldShip, newShip, outfits, context.credits - price,
+        context.getOutfit);
+}
+
+/**
+ * The hull-swap common to a shipyard purchase and a mission set string's
+ * ship change: a fresh entity of class `newShip` carrying the player-scoped
+ * state (CARRIED_COMPONENTS), the given outfits and credits, and as much of
+ * the old hold as fits. See buildPurchasedShip for the contract; the old
+ * entity is left untouched.
+ */
+function buildShipEntity(oldShip: Entity, newShip: ShipData,
+    outfits: Map<string, { count: number }>, credits: number,
+    getOutfit: (id: string) => OutfitData | undefined): Entity {
     const entity = makeShip(newShip);
 
     entity.components.set(PlayerShipSelector, undefined);
@@ -497,12 +511,96 @@ export function buildPurchasedShip(oldShip: Entity, newShip: ShipData,
     entity.components.set(OutfitsStateComponent, outfits);
     entity.components.set(CargoComponent, cargoForNewShip(
         oldShip.components.get(CargoComponent) ?? new Map(),
-        newShipCargoCapacity(newShip, outfits, context)));
-    entity.components.set(CreditsComponent,
-        { credits: context.credits - price });
+        newShipCargoCapacity(newShip, outfits, { getOutfit })));
+    entity.components.set(CreditsComponent, { credits });
     // Safety net for state an older save never carried.
     ensurePlayerStateComponents(entity);
     return entity;
+}
+
+/**
+ * How a mission set operator's ship change treats the player's outfits
+ * (EVN Bible, control bit set operators ~:230-240):
+ *
+ *   'keep'                  Cxxx — "The player will keep all of his previous
+ *                           outfit items and won't be given any of the
+ *                           default weapons or items that come with ship
+ *                           type xxx."
+ *   'keepAndGrantDefaults'  Exxx — "...will keep all of his previous outfit
+ *                           items and will also be given all of the default
+ *                           weapons and items that come with ship type xxx."
+ *   'dropAndGrantDefaults'  Hxxx — "The player will lose any nonpersistent
+ *                           outfit items he previously had, but will be
+ *                           given all of the default weapons and items that
+ *                           come with ship type xxx."
+ *
+ * The same three names ncb.ts's parser produces for the C/E/H letters.
+ */
+export type ShipChangeMode =
+    | 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults';
+
+/**
+ * The outfits aboard after a Cxxx/Exxx/Hxxx ship change (see
+ * ShipChangeMode), in OutfitsStateComponent's shape.
+ *
+ * "Nonpersistent" for Hxxx is oütf flag 0x0020 — "This item is persistent
+ * in the case where the player's ship is changed by a mission set
+ * operator. The item's normal persistence for when the player buys or
+ * captures a new ship is still controlled by the 0x0004 bit" (Bible
+ * ~:1968) — NOT the shipyard's 0x0004. Stock sets 0x0020 on the Vell-os
+ * weapons (oütf 221-226) precisely so the plot's H-changes into and out
+ * of Vell-os hulls keep them.
+ */
+export function outfitsAfterShipChange(newShip: ShipData,
+    outfits: ReadonlyMap<string, number>,
+    getOutfit: (id: string) => OutfitData | undefined,
+    mode: ShipChangeMode): Map<string, { count: number }> {
+    const merged = new Map<string, { count: number }>();
+    if (mode !== 'keep') {
+        for (const [id, count] of Object.entries(newShip.outfits)) {
+            if (count > 0) {
+                merged.set(id, { count });
+            }
+        }
+    }
+    for (const [id, count] of outfits) {
+        if (count <= 0) {
+            continue;
+        }
+        if (mode === 'dropAndGrantDefaults'
+            && !getOutfit(id)?.persistentOnShipChange) {
+            continue;
+        }
+        const existing = merged.get(id);
+        merged.set(id, { count: (existing?.count ?? 0) + count });
+    }
+    return merged;
+}
+
+/**
+ * Builds the entity the player is in after a mission set operator changed
+ * their ship to `newShip` (Cxxx / Exxx / Hxxx — see ShipChangeMode). No
+ * price and no trade-in: the credits are carried over as they stand on
+ * `oldShip`, and the outfits are what outfitsAfterShipChange says. The old
+ * entity is left untouched, as in buildPurchasedShip.
+ *
+ * `outfits` is the caller's CURRENT view of the player's outfits — for the
+ * outfitter that is its mission session's working copy, which is ahead of
+ * the entity's component mid-visit (the permit whose OnPurchase is running
+ * has just been bought).
+ *
+ * The new class's OnPurchase and the old one's OnRetire are deliberately
+ * NOT run: the Bible ties those to buying/selling/capturing (shïp
+ * OnPurchase ~:2598, OnRetire ~:2639), and a mission handing the player a
+ * ship is none of those.
+ */
+export function buildChangedShip(oldShip: Entity, newShip: ShipData,
+    outfits: ReadonlyMap<string, number>,
+    getOutfit: (id: string) => OutfitData | undefined,
+    mode: ShipChangeMode): Entity {
+    return buildShipEntity(oldShip, newShip,
+        outfitsAfterShipChange(newShip, outfits, getOutfit, mode),
+        oldShip.components.get(CreditsComponent)?.credits ?? 0, getOutfit);
 }
 
 /*

@@ -163,6 +163,11 @@ export class Spaceport extends Menu<Entity> {
         buttons.refuel.click.subscribe(this.refuel.bind(this));
 
         this.outfitter = new Outfitter(displayAssets, simulationData, controlEvents);
+        // A ship change from an OnPurchase set string (Cxxx/Exxx/Hxxx)
+        // is a hull swap like a shipyard purchase, published the same way
+        // — see adoptPurchasedShip.
+        this.outfitter.onShipChanged =
+            ship => this.adoptPurchasedShip(ship, 'Changed ship to');
         const showOutfitter = async () => {
             if (this.data && !this.data.flags.hasOutfitter) {
                 return;
@@ -174,6 +179,10 @@ export class Spaceport extends Menu<Entity> {
             const outfitsBefore = outfitCounts(this.input);
             this.input = await this.outfitter.show(this.input);
             this.setLiveStatus(undefined);
+            // An OnPurchase `Hxxx` (stock 314 "Chrome Valk Upgrade") may
+            // have swapped the hull mid-visit; its stat providers are
+            // still running, exactly as after a shipyard purchase.
+            await this.shipBuild;
             this.announcePurchases(outfitsBefore);
             // Delete these so they are re-created with the new outfits.
             // Nothing re-derives them while docked (the entity is out of
@@ -575,7 +584,7 @@ export class Spaceport extends Menu<Entity> {
      * re-enters only as the lift-off's `addEntity` record, so no peer sees
      * either hull until then.
      */
-    private adoptPurchasedShip(ship: Entity) {
+    private adoptPurchasedShip(ship: Entity, verb = 'Bought') {
         this.input = ship;
         // The client's handle on the docked ship — the status bar, the
         // escort-deal settlement and the save writer all read it.
@@ -590,7 +599,7 @@ export class Spaceport extends Menu<Entity> {
                 ?.split(';')[0].trim() ?? shipId
             : 'a ship';
         requestCheckpoint({
-            label: `Bought ${name}`, kind: 'purchase',
+            label: `${verb} ${name}`, kind: 'purchase',
             entity: ship, stellar: this.id,
         });
         // Construct a fake system and run providers so that outfits of the

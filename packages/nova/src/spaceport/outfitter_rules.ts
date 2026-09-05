@@ -1171,9 +1171,10 @@ export function maxBuyCount(outfit: OutfitData, context: OutfitterContext,
 export function hasPurchaseSideEffects(outfit: OutfitData): boolean {
     // ModType 16 maps count: buying one reveals systems and then removes
     // itself from the ship (outfitter.ts applyBuy), which the batched
-    // side-effect-free path would get wrong.
+    // side-effect-free path would get wrong. So does a 0x0010 item, which
+    // comes straight back off the ship the same way.
     return Boolean(outfit.onPurchase) || outfit.cleanLegalRecord !== null
-        || outfit.map !== null;
+        || outfit.map !== null || outfit.removeAfterPurchase;
 }
 
 /**
