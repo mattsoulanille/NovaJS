@@ -69,7 +69,17 @@ export class RoomArchive {
         this.name = name;
         if (autoUpdate) {
             this.updateInterval = setInterval(() => {
-                void this.update();
+                // A rejected update (a genesis load that outlived its
+                // retries, a staging failure) must not escape as an
+                // unhandled rejection: Node's default is to kill the
+                // process, taking every room's relay with it. Log it
+                // and let the next tick retry — `this.world` stays
+                // unset until makeWorld succeeds, so construction is
+                // attempted again from scratch.
+                this.update().catch(error => {
+                    console.error(`Archive ${this.name ?? 'room'} update `
+                        + `failed: ${error}`);
+                });
             }, UPDATE_INTERVAL_MS);
         }
     }
