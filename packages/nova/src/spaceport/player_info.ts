@@ -322,8 +322,7 @@ export class PlayerInfoDialog {
     private cargoCapacity = 0;
     /** Standard cargo names (STR# 4000), loaded on first show. */
     private cargoNames: string[] = [];
-    private outfitNames =
-        new Map<string, { name: string, price: number, builtIn: boolean }>();
+    private outfitNames = new Map<string, ExtrasOutfitInfo>();
     /** The player's active ranks, loaded on show for the Honors page. */
     private ranks: RankData[] = [];
     /** The same ranks by id, for the General page's salary arithmetic. */
@@ -476,10 +475,13 @@ export class PlayerInfoDialog {
                         // the trade-in line below values at 25%.
                         price: outfitPrice(outfit, this.shipData),
                         builtIn: outfit.builtIn,
+                        showAsRank: outfit.showAsRank,
                     });
                 } catch {
-                    this.outfitNames.set(id,
-                        { name: id, price: 0, builtIn: false });
+                    this.outfitNames.set(id, {
+                        name: id, price: 0, builtIn: false,
+                        showAsRank: false,
+                    });
                 }
             }
         }
@@ -705,28 +707,11 @@ export class PlayerInfoDialog {
     }
 
     private renderExtras(entity: Entity) {
-        const outfits = entity.components.get(OutfitsStateComponent);
-        const parts: string[] = [];
-        let outfitValue = 0;
-        if (outfits) {
-            for (const [id, { count }] of outfits) {
-                if (count <= 0) {
-                    continue;
-                }
-                const info = this.outfitNames.get(id);
-                // A built-in weapon is part of the hull, not an extra the
-                // player bought — and it has no trade-in value, because
-                // the shipyard's valuation prices real oütf items.
-                if (info?.builtIn) {
-                    continue;
-                }
-                const name = info?.name ?? id;
-                parts.push(count > 1 ? `${count} x ${name}` : name);
-                outfitValue += (info?.price ?? 0) * count;
-            }
-        }
+        const { extras, outfitValue } = extrasListing(
+            entity.components.get(OutfitsStateComponent),
+            id => this.outfitNames.get(id));
         const lines = ['Current extras for your ship:',
-            parts.length > 0 ? parts.join(', ') + '.' : 'None.'];
+            extras.length > 0 ? extras.join(', ') + '.' : 'None.'];
         if (this.shipData) {
             // Trade-in at 25% of the ship's and outfits' original
             // cost (the original's shipyard trade-in rate).
@@ -753,7 +738,62 @@ export class PlayerInfoDialog {
         const names = this.ranks
             .map(rank => rank.name.split(';')[0].trim())
             .filter(name => name.length > 0);
+        // ...followed by the oütf 0x2000 outfits, which "appear in the
+        // Ranks section of the player info dialog instead of in the
+        // Extras section" (Bible ~:1985).
+        if (this.entity) {
+            names.push(...extrasListing(
+                this.entity.components.get(OutfitsStateComponent),
+                id => this.outfitNames.get(id)).honors);
+        }
         this.addProse(['Your ranks and honors:',
             names.length > 0 ? names.join('\n') : 'None.']);
     }
+}
+
+/** What the Extras / Honors pages need to know about one owned outfit. */
+export interface ExtrasOutfitInfo {
+    name: string;
+    /** Its price on the player's hull (outfitter_rules' outfitPrice). */
+    price: number;
+    builtIn: boolean;
+    /** oütf 0x2000: listed under Honors rather than Extras. */
+    showAsRank: boolean;
+}
+
+/**
+ * Partitions the ship's outfits between the Extras page and the Honors
+ * page, and totals what the Extras trade-in line values.
+ *
+ *  - A built-in weapon is part of the hull, not an extra the player
+ *    bought — and it has no trade-in value, because the shipyard's
+ *    valuation prices real oütf items. Listed nowhere.
+ *  - An oütf 0x2000 outfit (`showAsRank`) is named under Honors instead
+ *    of Extras (Bible ~:1985: "This outfit appears in the Ranks section
+ *    of the player info dialog instead of in the Extras section"). It
+ *    is still an outfit aboard the ship, so it still counts toward the
+ *    trade-in value exactly as the shipyard's own valuation counts it
+ *    (shipyard_rules' tradeInValue does not read the flag).
+ *  - An outfit the data set cannot name is listed by id, valued at 0.
+ */
+export function extrasListing(outfits: Iterable<[string, { count: number }]>
+    | undefined, info: (id: string) => ExtrasOutfitInfo | undefined):
+    { extras: string[], honors: string[], outfitValue: number } {
+    const extras: string[] = [];
+    const honors: string[] = [];
+    let outfitValue = 0;
+    for (const [id, { count }] of outfits ?? []) {
+        if (count <= 0) {
+            continue;
+        }
+        const outfit = info(id);
+        if (outfit?.builtIn) {
+            continue;
+        }
+        const name = outfit?.name ?? id;
+        const line = count > 1 ? `${count} x ${name}` : name;
+        (outfit?.showAsRank ? honors : extras).push(line);
+        outfitValue += (outfit?.price ?? 0) * count;
+    }
+    return { extras, honors, outfitValue };
 }
