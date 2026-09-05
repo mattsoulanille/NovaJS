@@ -127,10 +127,14 @@ export interface ShipData extends SpaceObjectData {
      * Ships of this type will not show up in dude resources if this
      * expression evaluates to false." A gate on NPC (düde) spawning, NOT
      * on the shipyard — that is `availability`. Namespaced per plug-in
-     * like every other NCB string. 22 stock ships carry one (every Aur
-     * Cruiser variant, nova:247-255, is `!b333`). Plumbed for
-     * npc_spawn_plugin, which has the same shared-world constraint on
-     * per-player bits that flët AppearOn has (see its module comment).
+     * like every other NCB string. 135 stock ships carry one: mostly
+     * negated story bits (every Aur Cruiser variant, nova:247-255, is
+     * `!b333`), plus positive-bit story variants (the Polaris cloaking
+     * hulls nova:257-273, the `b8888` pirate variants nova:398-404).
+     * Read by npc_spawn_plugin's buildNpcSpawnTable, which filters each
+     * düde's ship list on it under the same shared-world constraint on
+     * per-player bits that flët AppearOn has (see its module comment):
+     * evaluated at genesis against an empty bit set.
      */
     appearOn: string;
     /**
