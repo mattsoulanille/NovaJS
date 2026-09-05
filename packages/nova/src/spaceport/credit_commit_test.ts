@@ -10,10 +10,14 @@ import { makeShip } from '../nova_plugin/make_ship.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
-import { commitVenueCredits, creditBalance } from './credit_commit.js';
+import { commitVenueCredits, creditBalance, spendableBalance } from './credit_commit.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Outfitter } from './outfitter.js';
 import { TradeCenter } from './trade_center.js';
+import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
+import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
+import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
+import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 
 /**
  * THE DOCKED-VENUE CREDIT SEAM (credit_commit.ts).
@@ -175,4 +179,108 @@ describe('venue credit commits compose with concurrent writers', () => {
         expect(commitVenueCredits(entity, 0, () => undefined)).toBe(0);
         expect(entity.components.has(CreditsComponent)).toBe(false);
     });
+
+    /**
+     * THE GATE, NOT JUST THE ARITHMETIC. An escort UPGRADE settling
+     * mid-visit is a spend: browser.ts asks whether the player can afford
+     * it, then debits the live component. Read off the live balance while
+     * the outfitter's working copy had already spent most of it, the
+     * upgrade went through and Done rebased the visit's spend to a
+     * negative balance. It is gated on the venue's working balance now
+     * (credit_commit.ts's spendableBalance).
+     */
+    describe('a mid-visit escort upgrade is gated on the venue\'s balance',
+        () => {
+            const PLAYER = 'player-uuid';
+            const ESCORT = 'test:terrapin';
+            const BETTER = 'test:terrapin-2';
+            const ships = (upgradeCost: number) => new Map<string, ShipData>([
+                [ESCORT, {
+                    ...getDefaultShipData(), id: ESCORT, price: 150_000,
+                    escortUpgradeShip: BETTER, escortUpgradeCost: upgradeCost,
+                }],
+                [BETTER, { ...getDefaultShipData(), id: BETTER, price: 400_000 }],
+            ]);
+            /** A landed escort with an upgrade queued, on the roster. */
+            function roster(catalogue: Map<string, ShipData>): EscortDealEntry[] {
+                return [{
+                    player: PLAYER, uuid: 'escort-uuid',
+                    entity: new Entity('escort')
+                        .addComponent(ShipComponent, { id: ESCORT })
+                        .addComponent(ShipDataComponent, catalogue.get(ESCORT)!)
+                        .addComponent(PlayerEscortComponent, {
+                            player: PLAYER, parent: PLAYER,
+                            provenance: 'hired', pendingUpgrade: BETTER,
+                        }),
+                }];
+            }
+            /**
+             * browser.ts's docked frame, as it now settles: gated on the
+             * spendable balance, debited on the live component.
+             */
+            function settleFrame(entity: Entity, deals: EscortDealEntry[],
+                catalogue: Map<string, ShipData>,
+                liveStatus?: () => { credits?: number }) {
+                const settled = settleEscortDeals(deals, PLAYER,
+                    spendableBalance(entity, liveStatus),
+                    id => catalogue.get(id));
+                entity.components.get(CreditsComponent)!.credits +=
+                    settled.credits;
+                return settled;
+            }
+
+            it('leaves an upgrade the working balance cannot cover QUEUED, '
+                + 'so Done never goes negative', () => {
+                    // 100,000 cr; the outfitter's working copy has spent
+                    // 90,000 of it; a 50,000 upgrade lands mid-visit.
+                    const entity = new Entity();
+                    entity.components.set(CreditsComponent, { credits: 100_000 });
+                    const working = { credits: 10_000 };
+                    const catalogue = ships(50_000);
+                    const deals = roster(catalogue);
+
+                    const settled = settleFrame(entity, deals, catalogue,
+                        () => ({ credits: working.credits }));
+                    expect(settled.upgraded).toEqual([]);
+                    expect(creditBalance(entity)).toBe(100_000);
+                    // Still queued: it will settle on a later docked frame.
+                    expect(deals[0].entity.components.get(PlayerEscortComponent)!
+                        .pendingUpgrade).toBe(BETTER);
+
+                    // Done: the venue's delta lands and the balance is what
+                    // the player saw — not the -40,000 the live gate gave.
+                    commitVenueCredits(entity, 100_000, () => entity.components
+                        .set(CreditsComponent, { credits: working.credits }));
+                    expect(creditBalance(entity)).toBe(10_000);
+                });
+
+            it('settles an upgrade the working balance CAN cover, composed '
+                + 'with the venue\'s delta at Done', () => {
+                    const entity = new Entity();
+                    entity.components.set(CreditsComponent, { credits: 100_000 });
+                    const working = { credits: 10_000 };
+                    const catalogue = ships(5_000);
+                    const deals = roster(catalogue);
+
+                    const settled = settleFrame(entity, deals, catalogue,
+                        () => ({ credits: working.credits }));
+                    expect(settled.upgraded.length).toBe(1);
+                    expect(creditBalance(entity)).toBe(95_000);
+
+                    commitVenueCredits(entity, 100_000, () => entity.components
+                        .set(CreditsComponent, { credits: working.credits }));
+                    expect(creditBalance(entity)).toBe(5_000);
+                });
+
+            it('reads the live balance when no venue is open', () => {
+                const entity = new Entity();
+                entity.components.set(CreditsComponent, { credits: 100_000 });
+                expect(spendableBalance(entity)).toBe(100_000);
+                expect(spendableBalance(entity, () => ({}))).toBe(100_000);
+                const catalogue = ships(50_000);
+                const settled = settleFrame(entity, roster(catalogue), catalogue);
+                expect(settled.upgraded.length).toBe(1);
+                expect(creditBalance(entity)).toBe(50_000);
+            });
+        });
 });

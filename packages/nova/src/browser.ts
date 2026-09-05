@@ -117,6 +117,8 @@ import { fleetHoldOpen } from "./spaceport/fleet_cargo.js";
 import {
     queuedUpgradeTargets, settleEscortDeals,
 } from "./spaceport/escort_deals.js";
+import { spendableBalance } from "./spaceport/credit_commit.js";
+import { DockedShipResource } from "./display/docked_ship.js";
 import {
     EscortJumpEvent, EscortLandedEvent,
 } from "./nova_plugin/player_escort_plugin.js";
@@ -817,14 +819,20 @@ async function insertCarriedEscorts(
  * escort whose HOLD is checked out by the open exchange has its deals frozen
  * until Done (fleet_cargo's fleetHoldOpen, passed below).
  */
-async function settleDockedEscortDeals(player: string, entity: Entity):
-    Promise<void> {
+async function settleDockedEscortDeals(player: string,
+    docked: { entity: Entity },
+    liveStatus?: () => { credits?: number }): Promise<void> {
     // The target classes have to be BUILT to refit against, and the
     // settlement itself is synchronous (it mutates the roster the frame
     // loop owns), so they are loaded first.
     await Promise.all(queuedUpgradeTargets(landedEscorts, player)
         .map(id => simulationGameData.data.Ship.get(id)
             .catch(() => undefined)));
+    // Read the HANDLE's entity after the await, not the one it named
+    // before: a shipyard purchase during that fetch repoints
+    // `dockedShip.entity` at the new hull (onShipSwap), and the money
+    // must land on the hull that lifts off, not the one just traded in.
+    const entity = docked.entity;
     const credits = entity.components.get(CreditsComponent);
     if (!credits) {
         // No balance, no trades: settling here would still SELL queued
@@ -834,8 +842,14 @@ async function settleDockedEscortDeals(player: string, entity: Entity):
         // deals just wait.
         return;
     }
+    // Affordability is gated on what the player is ABOUT to have — the
+    // open venue's working balance when one is open — not the live
+    // component a venue has already spent from in its working copy. See
+    // credit_commit.ts's spendableBalance for the negative-balance case
+    // this closes. The debit itself still lands on the live component,
+    // which the venue's delta commit composes with.
     const settled = settleEscortDeals(landedEscorts, player,
-        credits.credits,
+        spendableBalance(entity, liveStatus),
         id => simulationGameData.data.Ship.getCached(id),
         fleetHoldOpen);
     credits.credits += settled.credits;
@@ -2615,8 +2629,12 @@ async function startGame() {
             if (dockedShip && landedEscorts.length > 0
                 && simulationGameData.data.Planet
                     .getCached(dockedShip.planetId)?.flags.hasShipyard) {
-                await settleDockedEscortDeals(dockedShip.uuid,
-                    dockedShip.entity);
+                // The handle, not its entity (a purchase may repoint it
+                // during the settlement's await), and the open venue's
+                // working balance for the affordability gate.
+                await settleDockedEscortDeals(dockedShip.uuid, dockedShip,
+                    currentDisplayWorld.resources.get(DockedShipResource)
+                        ?.current?.liveStatus);
             }
             if (pendingLaunchedShip && dockedShip) {
                 // A ship bought at the shipyard is a fresh entity: it

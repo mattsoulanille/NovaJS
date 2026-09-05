@@ -91,6 +91,30 @@ export function creditBalance(entity: Entity): number {
 }
 
 /**
+ * The balance a CONCURRENT SPENDER may check affordability against while
+ * the player is docked: the open venue's WORKING balance when a venue is
+ * open (its dockedStatus().credits, routed through DockedShip.liveStatus),
+ * else the live component.
+ *
+ * The delta rule above composes two writers' ARITHMETIC but not their
+ * GATES. The escort-deal settlement (browser.ts's settleDockedEscortDeals)
+ * asks "can the player afford this upgrade?" and then debits the live
+ * component; with the outfitter holding a working copy that has already
+ * spent 90,000 of a 100,000 balance, a 50,000 upgrade read the live
+ * 100,000, went through, and Done then rebased the venue's spend over it
+ * to -40,000 — a debt settleDailyBudget quietly forgave at the next date
+ * advance. The venue's working balance is exactly what the player is
+ * about to have, so it is what a spend must be gated on: the deal is left
+ * queued (escort_deals.ts retries it every docked frame) until Done
+ * releases a balance that covers it. Sales (credits IN) need no gate and
+ * keep landing on the live component.
+ */
+export function spendableBalance(entity: Entity,
+    liveStatus?: () => { credits?: number }): number {
+    return liveStatus?.().credits ?? creditBalance(entity);
+}
+
+/**
  * Runs a venue's credit commit as a DELTA against `baseline` — the balance
  * its working copy was seeded from — so concurrent writers survive it.
  * See the module comment for why.

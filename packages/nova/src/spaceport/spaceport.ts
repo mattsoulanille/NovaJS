@@ -651,6 +651,9 @@ export class Spaceport extends Menu<Entity> {
     setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
         playerUuid?: string) {
         this.tradeCenter.setLandedEscorts(roster, playerUuid);
+        // ...and the bar, whose hire dialog counts the fleet against the
+        // escort cap (hire_escort.ts's MAX_ESCORTS).
+        this.bar.setLandedEscorts(roster, playerUuid);
     }
 
     /**
