@@ -21,7 +21,7 @@ import { rollOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { NewsDialog } from './news_dialog.js';
-import { PendingEscortsComponent } from './pending_escorts.js';
+import { commitPendingEscorts } from './pending_escorts.js';
 
 // The 263x185 Bar dialog (PICT 8503). Geometry lives in
 // dialog_layout.ts, measured against bar/bar_earth.png and
@@ -294,13 +294,10 @@ export class Bar extends Menu<Entity> {
             this.creditsBaseline = commitVenueCredits(
                 this.input, this.creditsBaseline, () => session.commit());
         }
-        if (this.hired.length > 0) {
-            const pending =
-                this.input.components.get(PendingEscortsComponent) ?? [];
-            this.input.components.set(PendingEscortsComponent,
-                [...pending, ...this.hired]);
-            this.hired = [];
-        }
+        // Appends this visit's hires to the entity and empties the list
+        // in one step, so the escort cap (which counts both) can never
+        // see a hire twice; see pending_escorts.ts.
+        commitPendingEscorts(this.input, this.hired);
         super.done();
     }
 }

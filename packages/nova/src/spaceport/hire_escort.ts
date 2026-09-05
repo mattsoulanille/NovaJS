@@ -387,7 +387,11 @@ export class HireEscortDialog {
     /**
      * Escorts the player has right now, counting this visit's hires
      * (`hired` is the entity's PendingEscortsComponent-to-be, appended
-     * here and committed by the bar at Leave).
+     * here and committed by the bar at Leave). escortCount already
+     * counts the component, so this sum is right only while no hire is
+     * in both `hired` and the component: pending_escorts.ts's
+     * commitPendingEscorts, the one way hires move across, empties
+     * `hired` as it copies — hire_escort_test pins the invariant.
      */
     private escortsHeld(): number {
         return escortCount(this.player.entity, this.player.landedEscorts,

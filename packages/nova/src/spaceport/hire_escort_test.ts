@@ -8,7 +8,9 @@ import {
     escortCount, hirePrice, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
     NO_SHIPS_FOR_HIRE,
 } from './hire_escort.js';
-import { PendingEscortsComponent } from './pending_escorts.js';
+import {
+    commitPendingEscorts, PendingEscortsComponent,
+} from './pending_escorts.js';
 
 function makeShip(ship: Partial<ShipData>): ShipData {
     return { ...getDefaultShipData(), ...ship };
@@ -65,6 +67,35 @@ describe('the escort cap', () => {
             expect(escortCount(entity)).toBe(4);
             expect(escortCount(new Entity())).toBe(0);
         });
+
+    it('never counts a hire twice across the bar\'s commit', () => {
+        // The hire dialog counts escortCount(entity) + hired.length, where
+        // `hired` is the visit's list and the entity's PendingEscorts is
+        // what earlier commits wrote. The commit is the ONE operation that
+        // moves hires from the first into the second, and it empties the
+        // first as it does so — so the dialog's sum reads the same number
+        // before and after, and a re-hire later the same landing (the bar
+        // reopened after Leave) starts from a clean list.
+        const entity = new Entity();
+        entity.components.set(PendingEscortsComponent, ['nova:130']);
+        const hired = ['nova:136', 'nova:136'];
+        const held = () => escortCount(entity) + hired.length;
+        expect(held()).toBe(3);
+
+        expect(commitPendingEscorts(entity, hired)).toBe(2);
+        expect(entity.components.get(PendingEscortsComponent))
+            .toEqual(['nova:130', 'nova:136', 'nova:136']);
+        expect(hired).toEqual([]);
+        expect(held()).toBe(3);
+
+        // Committing again is a no-op, not a second copy.
+        expect(commitPendingEscorts(entity, hired)).toBe(0);
+        expect(held()).toBe(3);
+        hired.push('nova:130');
+        expect(held()).toBe(4);
+        commitPendingEscorts(entity, hired);
+        expect(held()).toBe(4);
+    });
 });
 
 describe('hirePrice', () => {
