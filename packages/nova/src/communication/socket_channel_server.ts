@@ -16,6 +16,15 @@ interface Client {
     keepaliveTimeout?: NodeJS.Timeout;
 }
 
+/**
+ * The largest frame a client may send. ws's default is 100 MiB, fully
+ * buffered and JSON.parsed per frame. The largest legitimate
+ * client->server message is a desync dump (32 checkpoint snapshots of
+ * a busy system: low single-digit MiB); DesyncRecorder caps what it
+ * writes at the same figure. ws closes a frame over this with 1009.
+ */
+export const MAX_PAYLOAD_BYTES = 16 * 1024 * 1024;
+
 export class SocketChannelServer implements ChannelServer {
     readonly message = new Subject<MessageWithSourceType<unknown>>();
     readonly clientConnect = new Subject<string>();
@@ -57,7 +66,10 @@ export class SocketChannelServer implements ChannelServer {
             this.wss = wss;
         }
         else if (server) {
-            this.wss = new WebSocketServer({ server: server });
+            this.wss = new WebSocketServer({
+                server: server,
+                maxPayload: MAX_PAYLOAD_BYTES,
+            });
         }
         else {
             throw new Error("httpsServer or wss must be defined");
@@ -108,10 +120,30 @@ export class SocketChannelServer implements ChannelServer {
             // Send the client a ping
             this.sendRawIfOpen(uuid, { ping: true });
             client.keepaliveTimeout = setTimeout(() => {
-                // Remove the client if it hasn't responded
+                // Remove the client if it hasn't responded. Closing the
+                // socket is part of removing it: forgetting the map
+                // entry alone left the TCP connection open with no
+                // listeners at all — a leaked descriptor per keepalive
+                // cycle on a flaky link, and a receiver error on that
+                // orphan then threw ERR_UNHANDLED_ERROR.
                 this.handleClientClose(uuid);
             }, this.timeout);
         }, this.timeout);
+    }
+
+    /**
+     * Every socket needs an `error` listener for its whole life: ws's
+     * receiver emits `error` on the WebSocket for protocol violations
+     * (invalid UTF-8 in a text frame, reserved bits, a frame over
+     * maxPayload), and an EventEmitter with no `error` listener throws
+     * — an uncaught exception from a network peer's bytes. ws closes
+     * the socket itself after such an error, so the `close` listener
+     * does the cleanup; this one only reports.
+     */
+    private guardSocketErrors(webSocket: NodeWebSocket, who: string) {
+        webSocket.on("error", (error: unknown) => {
+            this.warn(`Socket error from ${who}: ${String(error)}`);
+        });
     }
 
     /**
@@ -135,6 +167,9 @@ export class SocketChannelServer implements ChannelServer {
             const decision = shouldAdmitClient(this.buildVersion, clientVersion);
             if (!decision.admit) {
                 this.warn(`Refusing websocket connection: ${decision.reason}`);
+                // A refused socket still has a close frame in flight
+                // and a receiver that can error while it does.
+                this.guardSocketErrors(webSocket, 'refused client');
                 // The client reads this code and reloads itself to pick up
                 // the current bundle. The reason carries the server's stamp
                 // so a refusal is diagnosable from a browser console alone.
@@ -145,6 +180,7 @@ export class SocketChannelServer implements ChannelServer {
         }
 
         const clientUUID = v4();
+        this.guardSocketErrors(webSocket, clientUUID);
         // This uuid is used only for communication and
         // has nothing to do with the game engine's uuids
         const client: Client = {
@@ -170,17 +206,32 @@ export class SocketChannelServer implements ChannelServer {
     }
 
     // Handles messages received from clients. Forwards messages to their destination.
-    private handleMessageFromClient(clientUUID: string, serialized: string) {
-        this.resetClientTimeout(clientUUID);
+    //
+    // ws invokes this synchronously from the socket's data handler, so
+    // anything thrown here is an uncaught exception: every failure
+    // below drops the message instead.
+    private handleMessageFromClient(clientUUID: string,
+        serialized: string | Buffer | ArrayBuffer | Buffer[]) {
         const client = this.clientMap.get(clientUUID);
         if (!client) {
-            throw new Error(`Missing client object for ${clientUUID}`);
+            // A frame that raced the client's removal.
+            this.warn(`Dropping message from departed client ${clientUUID}`);
+            return;
         }
+        this.resetClientTimeout(clientUUID);
 
-        const maybeSocketMessage = SocketMessage.decode(JSON.parse(serialized) as unknown);
+        let parsed: unknown;
+        try {
+            parsed = JSON.parse(String(serialized));
+        } catch (error) {
+            this.warn(`Dropping unparseable message from client `
+                + `${clientUUID}: ${String(error)}`);
+            return;
+        }
+        const maybeSocketMessage = SocketMessage.decode(parsed);
 
         if (isLeft(maybeSocketMessage)) {
-            console.warn(`Received bad message from client ${clientUUID}: ${maybeSocketMessage.left}`);
+            this.warn(`Received bad message from client ${clientUUID}`);
             return;
         }
 
@@ -207,11 +258,15 @@ export class SocketChannelServer implements ChannelServer {
         });
     }
 
+    /**
+     * Removes a client: on its socket closing, or on a keepalive
+     * timeout (in which case the socket is still open and is torn down
+     * here). Idempotent — a close event can trail a timeout removal.
+     */
     private handleClientClose(clientUUID: string) {
         const client = this.clientMap.get(clientUUID);
         if (!client) {
-            throw new Error(
-                `Tried to remove nonexistant client ${clientUUID}`);
+            return;
         }
 
         if (client.keepaliveTimeout !== undefined) {
@@ -219,6 +274,12 @@ export class SocketChannelServer implements ChannelServer {
         }
 
         client.socket.removeAllListeners();
+        // Listenerless sockets throw on a late receiver error; keep a
+        // sink until the socket is gone for good.
+        client.socket.on("error", () => { });
+        if (client.socket.readyState !== WebSocket.CLOSED) {
+            client.socket.terminate();
+        }
         this.clientMap.delete(clientUUID);
         this.clientDisconnect.next(clientUUID);
     }
