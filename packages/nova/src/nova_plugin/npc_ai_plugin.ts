@@ -684,7 +684,8 @@ const NpcTargetsQuery = new Query([UUID, MovementStateComponent, ShipComponent,
     Optional(LegalRecordsComponent),
     // The ränk 0x0100 suppression set, baked at grant time: the sim
     // worker never loads Rank data, so the flag cannot be read here.
-    Optional(AggressionSuppressGovtsComponent)] as const);
+    Optional(AggressionSuppressGovtsComponent),
+    Optional(ExplodingComponent)] as const);
 
 function lookupGovt(gameData: SimulationGameDataInterface,
     govt: { id: string } | undefined) {
@@ -853,6 +854,13 @@ const NpcDecisionSystem = new System({
         // aggressor. Cloaked ships are excluded (invisible to AI), and
         // so are DISABLED ships: a disabled ship is no longer a threat,
         // so warships and interceptors drop it and pick a new target.
+        // EXPLODING ships (ExplodingComponent, the shïp DeathDelay
+        // death sequence) are excluded too, matching every other
+        // targeting path (ChooseTargetSystem, selectNearestHostile,
+        // the escort attack arm): DropExplodingTargetSystem would clear
+        // the lock again each tick, so re-choosing a fireball here left
+        // the ship idling on a corpse — neither steering nor firing at
+        // the next live enemy — for the victim's whole DeathDelay.
         // Ships with legal records (players) whose record with this govt
         // is below its crime tolerance are enemies too: crime has
         // consequences.
@@ -871,8 +879,9 @@ const NpcDecisionSystem = new System({
         let aggressorEntry: readonly [string, number, number] | undefined;
         for (const [otherUuid, otherMovement, , otherData, otherGovt,
             otherShield, cloak, otherDisabled, otherRecords,
-            otherSuppressGovts] of ships) {
-            if (otherUuid === uuid || !isTargetable(cloak)) {
+            otherSuppressGovts, otherExploding] of ships) {
+            if (otherUuid === uuid || !isTargetable(cloak)
+                || otherExploding !== undefined) {
                 continue;
             }
             if (otherUuid === pacifiedFrom) {

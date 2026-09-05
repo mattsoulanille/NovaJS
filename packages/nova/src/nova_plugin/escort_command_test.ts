@@ -15,6 +15,7 @@ import {
     AGGRESSION_DAMAGE_THRESHOLD, AGGRESSION_WINDOW_MS,
     AggressionComponent,
 } from './aggression.js';
+import { ExplodingComponent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
 import { styleForTarget } from './hostility.js';
@@ -263,6 +264,34 @@ describe('escort commands', () => {
             world.step();
             expect(command(world).command).toBe('defend');
             expect(command(world).target).toBeUndefined();
+        });
+
+    it('defend: an exploding intruder is dropped and never re-picked, ' +
+        'guns silent', async () => {
+            const { world, addShip } = await makeWorld();
+            await addShip('nearPirate', 400, 200, ship => {
+                ship.components.set(GovtComponent, { id: 'test:pirate' });
+            });
+            press(world, 'defend');
+            world.step();
+            world.step();
+            expect(command(world).target).toBe('nearPirate');
+            const weapons = world.entities.get('escort')!.components
+                .get(WeaponsStateComponent)!;
+            expect([...weapons.values()].some(w => w.firing)).toBeTrue();
+            // The intruder starts its death sequence: it is beyond
+            // shooting at, exactly as the attack arm treats it.
+            world.entities.get('nearPirate')!.components
+                .set(ExplodingComponent, 1e12);
+            world.step();
+            expect(command(world).command).toBe('defend');
+            expect(command(world).target).toBeUndefined();
+            expect([...weapons.values()].every(w => !w.firing)).toBeTrue();
+            // Still in the bubble, still exploding: not an intruder.
+            world.step();
+            world.step();
+            expect(command(world).target).toBeUndefined();
+            expect([...weapons.values()].every(w => !w.firing)).toBeTrue();
         });
 
     it('holdPosition: brakes to rest and stays put; knocked around, it ' +
