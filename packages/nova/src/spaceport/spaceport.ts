@@ -342,6 +342,13 @@ export class Spaceport extends Menu<Entity> {
         // input is set first so handlers that read it (e.g. 'p' passing the
         // docked entity to player info) work during the gap too.
         this.setInput(input);
+        // Built lazily, on the first landing here (display/
+        // spaceport_plugin.ts), so the stellar's data may still be on its
+        // way: the venue keys read it (which venues exist, the outfitter's
+        // and shipyard's tech level), so they must not go live before it.
+        // Quick — the stellar has been in the display world all along, so
+        // its record is cached — unlike the mission-universe load below.
+        await this.buildPromise;
         this.controls.bind();
         let events: MissionEvent[] = [];
         try {
