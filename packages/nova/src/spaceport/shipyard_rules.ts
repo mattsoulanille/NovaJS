@@ -46,6 +46,7 @@ import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
+import { outfitPrice } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
 
 /**
@@ -221,7 +222,12 @@ export function tradeInValue(context: ShipPurchaseContext): number {
     const { tradedIn } = partitionOutfits(context);
     let total = context.currentShip.price;
     for (const [id, count] of tradedIn) {
-        total += (context.getOutfit(id)?.price ?? 0) * count;
+        const outfit = context.getOutfit(id);
+        // The "original cost" of an outfit flagged oütf 0x0200 is what it
+        // cost ON THIS HULL — its Cost times the current ship's Mass
+        // (outfitter_rules' outfitPrice), which is what the player paid.
+        total += (outfit ? outfitPrice(outfit, context.currentShip) : 0)
+            * count;
     }
     return Math.floor(total * SHIP_TRADE_IN_FRACTION);
 }
@@ -515,6 +521,4 @@ export function buildPurchasedShip(oldShip: Entity, newShip: ShipData,
  *   trade before charging. There is no reference screenshot of it in
  *   ui_screenshots/original_macos_screenshots/shipyard, so the Buy
  *   button commits directly and simply greys out when unaffordable.
- * - oütf 0x0200 (price proportional to ship mass) is not decoded
- *   anywhere yet, so such an outfit is valued at its base Cost here.
  */

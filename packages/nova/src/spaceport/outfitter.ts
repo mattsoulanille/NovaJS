@@ -37,7 +37,7 @@ import { applyMapOutfit } from "./map_outfit.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { rankContribute } from "../nova_plugin/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
-import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 
@@ -714,8 +714,9 @@ export class Outfitter extends Menu<Entity> {
         // the OnPurchase / legal-record hooks below run ONCE per call, so
         // callers must pass units=1 for outfits that have them
         // (hasPurchaseSideEffects).
-        // The same price the grid quotes and canBuyOutfit checked against.
-        this.credits.credits -= outfitPrice(outfit) * units;
+        // The same price the grid quotes and canBuyOutfit checked against
+        // (ship-mass-proportional for oütf 0x0200, hence the hull).
+        this.credits.credits -= outfitPrice(outfit, this.shipData) * units;
         this.outfits.set(outfit.id, this.outfits.get(outfit.id) + units);
         // Record the same-visit purchase so selling it back before
         // leaving refunds the full price (see applySell).
@@ -774,7 +775,8 @@ export class Outfitter extends Menu<Entity> {
      * the per-unit loop calls this repeatedly.
      */
     private applySell(outfit: OutfitData) {
-        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id));
+        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id),
+            this.shipData);
         this.credits.credits += refund.credited;
         this.visitPurchases.set(outfit.id, refund.boughtThisVisit);
         this.outfits.set(outfit.id, Math.max(0, this.outfits.get(outfit.id) - 1));
@@ -1090,12 +1092,19 @@ export class Outfitter extends Menu<Entity> {
             makeDescTextContext(this.controlBits, playerGender()));
 
         // Set price text -- the same figure the Buy button charges
-        // (outfitter_rules' outfitPrice; no ränk PriceMod, see price_mod.ts).
-        this.text.price.text = formatPrice(outfitPrice(outfitTile.item));
+        // (outfitter_rules' outfitPrice; no ränk PriceMod, see price_mod.ts;
+        // scaled by the docked hull's mass for oütf 0x0200).
+        this.text.price.text = formatPrice(
+            outfitPrice(outfitTile.item, this.shipData));
 
-        if (outfitTile.item.physics.freeMass > 0) {
+        // The tonnage as installed on THIS hull (oütf 0x0400 scales it):
+        // the carbon-fibre capture reads "Item Mass: 1 ton" on a mass-25
+        // hull for an item whose written Mass is also 1, which the
+        // rounding ruling in installedOutfitMass reproduces.
+        const mass = installedMass(outfitTile.item, this.shipData);
+        if (mass > 0) {
             // Set mass text
-            this.text.mass.text = formatMass(outfitTile.item.physics.freeMass);
+            this.text.mass.text = formatMass(mass);
             this.setFreeMassText();
             this.text.mass.visible = true;
             this.text.itemMass.visible = true;

@@ -25,6 +25,7 @@ import { ActiveRanksComponent } from '../nova_plugin/ncb_plugin.js';
 import { activeRankData } from '../nova_plugin/rank_logic.js';
 import { RankData } from 'novadatainterface/rank_data';
 import { displayName } from '../nova_plugin/display_name.js';
+import { outfitPrice } from './outfitter_rules.js';
 
 // The player-info dialog composes the three PICTs 8518 (top strip,
 // 413x40, tab row) / 8519 (black content pane, tiled to the content
@@ -470,7 +471,10 @@ export class PlayerInfoDialog {
                         await this.simulationData.data.Outfit.get(id);
                     this.outfitNames.set(id, {
                         name: outfit.name,
-                        price: outfit.price,
+                        // What it cost on THIS hull (oütf 0x0200 scales
+                        // the price by the ship's mass), which is what
+                        // the trade-in line below values at 25%.
+                        price: outfitPrice(outfit, this.shipData),
                         builtIn: outfit.builtIn,
                     });
                 } catch {

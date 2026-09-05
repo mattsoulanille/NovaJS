@@ -137,6 +137,27 @@ describe('shipyard purchase rules', () => {
             // 0.25 * 4002 = 1000.5
             expect(tradeInValue(ctx)).toBe(1000);
         });
+
+        it('values a ship-mass-proportional outfit at what it cost on '
+            + 'THIS hull (oütf 0x0200)', () => {
+                // Carbon Fiber (Cost 250, flag 0x0200) on a Leviathan
+                // (Mass 10,000) cost 2,500,000 cr, and that is its
+                // "original cost" for the 25%.
+                const plating = outfit('nova:180', {
+                    price: 250, priceScalesWithShipMass: true,
+                });
+                const leviathan = ship('nova:131', {
+                    price: 12_000_000,
+                    physics: { ...getDefaultShipData().physics, mass: 10_000 },
+                });
+                const ctx = context({
+                    currentShip: leviathan,
+                    outfits: [['nova:180', 2]],
+                    catalogue: [plating],
+                });
+                // 0.25 * (12,000,000 + 2 * 2,500,000)
+                expect(tradeInValue(ctx)).toBe(4_250_000);
+            });
     });
 
     describe('purchase price', () => {

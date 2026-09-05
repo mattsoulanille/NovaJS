@@ -19,6 +19,7 @@ import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/mission_logic.js';
 import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
+import { installedOutfitMass } from '../nova_plugin/outfit_plugin.js';
 import {
     dayRoll, passesDayRoll, resourceNumber as resourceNumberOf,
 } from './day_roll.js';
@@ -366,11 +367,26 @@ export type SellDenialReason =
 export const OUTFIT_RESALE_FRACTION = 0.5;
 
 /**
- * What this outfitter charges for one unit of `outfit`: its oütf Cost, as
- * written. Everything that quotes or charges an outfit price goes through
- * here -- the Outfitter's "Item Price:" line, the credits deducted on Buy,
- * canBuyOutfit's affordability test and maxBuyCount's credit bound -- so the
- * shown and charged figures are the same number by construction.
+ * What this outfitter charges for one unit of `outfit` aboard `ship`: its
+ * oütf Cost as written — or, for an outfit flagged 0x0200, that Cost
+ * MULTIPLIED BY THE SHIP CLASS'S MASS: "This item's total price is
+ * proportional to the player's ship's mass. (ship class Mass field is
+ * multiplied by this item's Cost field)" (EVN Bible ~:1974). Every stock
+ * armour plating is flagged: Carbon Fiber (oütf 180, Cost 250) is 6,250 cr
+ * on the mass-25 Heavy Shuttle of the original-hardware capture
+ * outfitter/earth_outfitter_carbon_fiber_cant_hold_any_more.png ("Item
+ * Price: 6,250 cr"), and 2,500,000 cr on a Leviathan (Mass 10,000).
+ *
+ * Everything that quotes or charges an outfit price goes through here --
+ * the Outfitter's "Item Price:" line, the credits deducted on Buy,
+ * canBuyOutfit's affordability test, maxBuyCount's credit bound, the
+ * sell-back below and the shipyard's trade-in valuation -- so the shown
+ * and charged figures are the same number by construction.
+ *
+ * `ship` is the hull the outfit is (or would be) installed on. It is
+ * optional only for the specs and displays that price an outfit with no
+ * hull in hand; without one a flagged outfit is quoted UNSCALED, which is
+ * never what a shop wants, so every shop path passes its context's ship.
  *
  * NO ränk PriceMod. Per Matthew's ruling a rank discount bends SHIP prices
  * (and the hire fee taken off them) but never the outfitter: at Extra
@@ -379,8 +395,25 @@ export const OUTFIT_RESALE_FRACTION = 0.5;
  * the plug-in prices those materials from 2,500 to 7,000,000 cr precisely
  * because you are meant to pay for them. price_mod.ts has the full evidence.
  */
-export function outfitPrice(outfit: OutfitData): number {
+export function outfitPrice(outfit: OutfitData, ship?: ShipData): number {
+    if (outfit.priceScalesWithShipMass && ship) {
+        return outfit.price * ship.physics.mass;
+    }
     return outfit.price;
+}
+
+/**
+ * The tonnage one unit of `outfit` occupies aboard `ship` — the oütf Mass,
+ * or for flag 0x0400 the ship-mass-proportional figure. The rule and its
+ * rounding ruling live in nova_plugin/outfit_plugin.ts's
+ * installedOutfitMass, which is also what the sim's physics derivation
+ * uses, so the free mass this shop shows is the free mass the ship
+ * flies with. Like outfitPrice, a missing ship means "as written".
+ */
+export function installedMass(outfit: OutfitData, ship?: ShipData): number {
+    return ship
+        ? installedOutfitMass(outfit, ship.physics.mass)
+        : outfit.physics.freeMass;
 }
 
 /**
@@ -391,10 +424,11 @@ export function outfitPrice(outfit: OutfitData): number {
  * what keeps the invariant that matters: within one shop, buying and
  * immediately selling can never profit. Discounting one end and not the other
  * would mint credits, so the two must always move together -- today that
- * means neither moves at all.
+ * means neither moves at all. (A ship-mass-proportional price scales both
+ * ends by the same hull, for the same reason.)
  */
-export function outfitResaleValue(outfit: OutfitData): number {
-    return Math.floor(outfitPrice(outfit) * OUTFIT_RESALE_FRACTION);
+export function outfitResaleValue(outfit: OutfitData, ship?: ShipData): number {
+    return Math.floor(outfitPrice(outfit, ship) * OUTFIT_RESALE_FRACTION);
 }
 
 /**
@@ -407,16 +441,16 @@ export function outfitResaleValue(outfit: OutfitData): number {
  * unit in a bulk sell and the full/half split falls out naturally (buy 3
  * this visit, sell 5 -> 3 full + 2 half).
  */
-export function sellRefund(outfit: OutfitData, boughtThisVisit: number):
-    { credited: number, boughtThisVisit: number } {
+export function sellRefund(outfit: OutfitData, boughtThisVisit: number,
+    ship?: ShipData): { credited: number, boughtThisVisit: number } {
     if (boughtThisVisit > 0) {
         return {
-            credited: outfitPrice(outfit),
+            credited: outfitPrice(outfit, ship),
             boughtThisVisit: boughtThisVisit - 1,
         };
     }
     return {
-        credited: outfitResaleValue(outfit), boughtThisVisit,
+        credited: outfitResaleValue(outfit, ship), boughtThisVisit,
     };
 }
 
@@ -443,7 +477,7 @@ function* ownedOutfits(context: OutfitterContext):
 export function freeMass(context: OutfitterContext): number {
     let free = context.shipData.physics.freeMass;
     for (const [outfit, count] of ownedOutfits(context)) {
-        free -= outfit.physics.freeMass * count;
+        free -= installedMass(outfit, context.shipData) * count;
     }
     return free;
 }
@@ -827,7 +861,7 @@ export function canBuyOutfit(outfit: OutfitData,
         }
     }
 
-    if (outfit.physics.freeMass > freeMass(context)) {
+    if (installedMass(outfit, context.shipData) > freeMass(context)) {
         return denied('mass', 'You don\'t have enough free mass.');
     }
 
@@ -838,7 +872,7 @@ export function canBuyOutfit(outfit: OutfitData,
 
     // Checked last: structural denials (mass, hardpoints, Max) are
     // permanent, but "can't afford" just means come back with money.
-    if (outfitPrice(outfit) > context.credits) {
+    if (outfitPrice(outfit, context.shipData) > context.credits) {
         return denied('credits', 'You can\'t afford this item.');
     }
 
@@ -998,8 +1032,8 @@ export function canSellOutfit(outfit: OutfitData,
     // Selling an item that GRANTED outfit space (a negative-Mass Mass
     // Expansion, stock oütf 190) shrinks the hold it freed. STR# 2002
     // index 206 is the original's own sentence for exactly this.
-    if (outfit.physics.freeMass < 0
-        && freeMass(context) + outfit.physics.freeMass < 0) {
+    const mass = installedMass(outfit, context.shipData);
+    if (mass < 0 && freeMass(context) + mass < 0) {
         return denied('negativeFreeMass', NEGATIVE_FREE_MASS_REFUSAL);
     }
     if (context.planet && !buysBackOutfit(outfit, context.planet)) {
@@ -1107,7 +1141,8 @@ export function maxBuyCount(outfit: OutfitData, context: OutfitterContext,
         working.set(outfit.id, (working.get(outfit.id) ?? 0) + (n - 1));
         return canBuyOutfit(outfit, {
             ...context, outfits: working,
-            credits: context.credits - (n - 1) * outfitPrice(outfit),
+            credits: context.credits
+                - (n - 1) * outfitPrice(outfit, context.shipData),
         }).allowed;
     };
     if (limit <= 0 || !canBuyN(1)) {

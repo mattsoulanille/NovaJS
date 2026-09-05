@@ -14,11 +14,13 @@ import {
     effectiveMax,
     freeCargo,
     freeMass,
+    installedMass,
     maxBuyCount,
     maxSellCount,
     NEGATIVE_FREE_MASS_REFUSAL,
     neverOnSale,
     OUTFIT_RESALE_FRACTION,
+    outfitPrice,
     outfitResaleValue,
     OutfitterContext,
     playerContribute,
@@ -1310,6 +1312,99 @@ describe('canSellOutfit', () => {
             expect(freeMass(context)).toBe(30);
             expect(maxSellCount(expansion, context)).toBe(3);
         });
+    });
+});
+
+describe('ship-mass-proportional outfits (oütf flags 0x0200 / 0x0400)', () => {
+    /**
+     * Carbon Fiber as stock oütf 180 is written: Cost 250, Mass 1, both
+     * bits set. "Ship class Mass field is multiplied by this item's Cost
+     * field" and "multiplied by this item's Mass field and then divided
+     * by 100" (EVN Bible ~:1974-1979).
+     */
+    const carbonFiber = makeOutfit('nova:180', {
+        name: 'Carbon Fiber', price: 250,
+        priceScalesWithShipMass: true, massScalesWithShipMass: true,
+    }, { freeMass: 1 });
+    /** Spun Diamond (oütf 183): Cost 2,500, Mass 1. */
+    const spunDiamond = makeOutfit('nova:183', {
+        price: 2500, priceScalesWithShipMass: true,
+        massScalesWithShipMass: true,
+    }, { freeMass: 1 });
+    /** A Heavy Shuttle (shïp 129, Mass 25) and a Leviathan (131, 10,000). */
+    const heavyShuttle = makeShip({ mass: 25, freeMass: 3 });
+    const leviathan = makeShip({ mass: 10_000, freeMass: 500 });
+
+    it('prices at Cost x ship mass: the 6,250 cr of the Earth capture', () => {
+        // outfitter/earth_outfitter_carbon_fiber_cant_hold_any_more.png
+        // reads "Item Price: 6,250 cr" for Carbon Fiber on a mass-25 hull.
+        expect(outfitPrice(carbonFiber, heavyShuttle)).toBe(6_250);
+        expect(outfitPrice(carbonFiber, leviathan)).toBe(2_500_000);
+        expect(outfitPrice(spunDiamond, leviathan)).toBe(25_000_000);
+        // Unflagged outfits are untouched by the hull.
+        expect(outfitPrice(makeOutfit('nova:129', { price: 20_000 }),
+            leviathan)).toBe(20_000);
+    });
+
+    it('installs at ship mass x Mass / 100, rounded up to a whole ton', () => {
+        expect(installedMass(carbonFiber, leviathan)).toBe(100);
+        // 25 x 1 / 100 = 0.25, shown as "Item Mass: 1 ton" in the capture.
+        expect(installedMass(carbonFiber, heavyShuttle)).toBe(1);
+    });
+
+    it('charges the scaled price and checks the scaled mass on Buy', () => {
+        const rich = makeContext({
+            ship: leviathan, outfits: [carbonFiber], credits: 2_500_000,
+        });
+        expect(canBuyOutfit(carbonFiber, rich)).toEqual({ allowed: true });
+        const poor = makeContext({
+            ship: leviathan, outfits: [carbonFiber], credits: 2_499_999,
+        });
+        expect(canBuyOutfit(carbonFiber, poor)).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'credits' }));
+        // 500 tons free on the Leviathan: five plates (100 t each) fit,
+        // and the sixth does not, whatever the flat Mass 1 says.
+        const full = makeContext({
+            ship: leviathan, outfits: [carbonFiber],
+            owned: [['nova:180', 5]],
+        });
+        expect(freeMass(full)).toBe(0);
+        expect(canBuyOutfit(carbonFiber, full)).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'mass' }));
+    });
+
+    it('reproduces the capture: three plates fill a 3-ton hold', () => {
+        // The reference pilot owns 3 Carbon Fiber, sees "Available: 0
+        // tons" and "Can't hold any more!" (the mass denial).
+        const context = makeContext({
+            ship: heavyShuttle, outfits: [carbonFiber],
+            owned: [['nova:180', 3]],
+        });
+        expect(freeMass(context)).toBe(0);
+        expect(canBuyOutfit(carbonFiber, context)).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'mass' }));
+    });
+
+    it('bounds the bulk buy by the scaled price and mass', () => {
+        const context = makeContext({
+            ship: leviathan, outfits: [carbonFiber], credits: 7_500_000,
+        });
+        // 3 affordable at 2.5M each (5 would fit by mass).
+        expect(maxBuyCount(carbonFiber, context)).toBe(3);
+    });
+
+    it('sells back at half the SCALED price, so no hull can mint credits',
+        () => {
+            expect(outfitResaleValue(carbonFiber, leviathan)).toBe(1_250_000);
+            expect(sellRefund(carbonFiber, 1, leviathan).credited)
+                .toBe(2_500_000);
+            expect(sellRefund(carbonFiber, 0, heavyShuttle).credited)
+                .toBe(3_125);
+        });
+
+    it('is quoted unscaled with no hull in hand', () => {
+        expect(outfitPrice(carbonFiber)).toBe(250);
+        expect(installedMass(carbonFiber)).toBe(1);
     });
 });
 
