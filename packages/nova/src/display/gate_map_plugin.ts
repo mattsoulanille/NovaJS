@@ -112,9 +112,13 @@ export const GateMapPlugin: Plugin = {
     },
     remove(world) {
         const gateMap = world.resources.get(GateMapResource);
-        const stage = world.resources.get(Stage);
         if (gateMap) {
-            stage?.removeChild(gateMap.container);
+            // Destroyed, children included: the map is per-world, and its
+            // Texts and Graphics leaked with every transit (review #40).
+            // Sprite textures are the asset cache's and are left alone.
+            // (Not dismissed like the starmap: its result drives a
+            // relaunch/jump in browser.ts, which a teardown must not fire.)
+            gateMap.container.destroy({ children: true });
         }
         world.removeSystem(OpenGateMapSystem);
         world.removeSystem(GateMapResizeSystem);

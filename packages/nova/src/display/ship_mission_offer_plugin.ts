@@ -559,11 +559,9 @@ export const ShipMissionOfferPlugin: Plugin = {
     },
     remove(world) {
         world.removeSystem(PersHailQuoteSystem);
-        const stage = world.resources.get(Stage);
-        const popup = world.resources.get(ShipOfferPopupResource);
-        if (stage && popup) {
-            stage.removeChild(popup.container);
-        }
+        // Destroyed, not just detached: the popup is per-world, and its
+        // Text canvases leaked with every system transit (review #40).
+        world.resources.get(ShipOfferPopupResource)?.destroy();
         world.resources.delete(ShipOfferPopupResource);
         world.resources.delete(HailQuoteStateResource);
     },

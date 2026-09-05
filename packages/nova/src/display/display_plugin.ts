@@ -222,6 +222,14 @@ export const Display: Plugin = {
         }
         const root = world.resources.get(DisplayRoot);
         root?.removeChildren();
+        // The four layer containers are this world's own: destroy them
+        // (WITHOUT children — every plugin above has taken its objects
+        // down, and anything still parented here is somebody else's, e.g.
+        // a pooled sprite, so it is only detached). Review #40.
+        for (const layer of [space, world.resources.get(Stage), worldLayer,
+            root]) {
+            layer?.destroy();
+        }
 
         world.resources.delete(DisplayRoot);
         world.resources.delete(WorldLayer);

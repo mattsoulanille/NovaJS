@@ -987,11 +987,12 @@ export const HailDialogPlugin: Plugin = {
     },
     remove(world) {
         world.resources.get(HailControlsSubscription)?.unsubscribe();
-        const stage = world.resources.get(Stage);
-        const dialog = world.resources.get(HailDialogResource);
-        if (stage && dialog) {
-            stage.removeChild(dialog.container);
-        }
+        // The dialog is per-world; destroying it (children included) frees
+        // its Text canvases and Graphics rather than just detaching them —
+        // every system transit used to leak a dialog's worth (review #40).
+        // Sprite textures are the asset cache's and are left alone.
+        world.resources.get(HailDialogResource)?.container
+            .destroy({ children: true });
         world.resources.delete(HailControlsSubscription);
         world.resources.delete(HailDialogResource);
     },

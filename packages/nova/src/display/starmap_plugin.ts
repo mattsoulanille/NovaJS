@@ -260,6 +260,11 @@ export const StarmapPlugin: Plugin = {
         if (stage && starmap) {
             stage.removeChild(starmap.container);
         }
+        // Destroyed, children included: the map is per-world, and its
+        // system-name Texts and link/route Graphics leaked with every
+        // transit (review #40). Sprite textures (cicn marks, PICT frame)
+        // are the asset cache's and are left alone.
+        starmap?.container.destroy({ children: true });
         world.resources.delete(StarmapControlsSubscription);
         world.resources.delete(StarmapDisposer);
         world.resources.delete(StarmapResource);

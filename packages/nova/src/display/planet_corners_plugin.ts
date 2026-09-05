@@ -66,11 +66,11 @@ export const PlanetCornersPlugin: Plugin = {
         world.addSystem(SweepPlanetCornersSystem);
     },
     remove(world) {
-        const targetCorners = world.resources.get(PlanetCornersResource);
-        const space = world.resources.get(Space);
-        if (targetCorners) {
-            space?.removeChild(targetCorners.container);
-        }
+        // Destroyed, children included: the corner sprites are per-world
+        // and leaked with every transit (review #40). Their cicn textures
+        // are the asset cache's and are left alone.
+        world.resources.get(PlanetCornersResource)?.container
+            .destroy({ children: true });
         world.removeSystem(DrawPlanetCornersSystem);
         world.removeSystem(SweepPlanetCornersSystem);
         world.resources.delete(PlanetCornersResource);

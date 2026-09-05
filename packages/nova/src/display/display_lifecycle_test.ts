@@ -291,4 +291,78 @@ describe('display world UI lifecycle', () => {
                 await world.removePlugin(SpaceportPlugin);
             });
     });
+
+    describe('plugin teardown (review #40)', () => {
+        /**
+         * The UI plugins that build PIXI objects in build() and used to only
+         * detach them in remove(), in display_plugin.ts's build order...
+         */
+        const uiPlugins = [
+            StatusBarPlugin, StatusMessagePlugin, TargetCornersPlugin,
+            PlanetCornersPlugin, StarmapPlugin, PlayerInfoPlugin,
+            MissionInfoPlugin, ShipMissionOfferPlugin, MissionShipDonePlugin,
+            HailDialogPlugin, SpaceportPlugin, BoardingDisplayPlugin,
+            GateMapPlugin, CursorPlugin,
+        ];
+        /** ...and in its remove order. */
+        const removeOrder = [
+            CursorPlugin, GateMapPlugin, BoardingDisplayPlugin,
+            SpaceportPlugin, HailDialogPlugin, MissionShipDonePlugin,
+            ShipMissionOfferPlugin, MissionInfoPlugin, PlayerInfoPlugin,
+            StarmapPlugin, PlanetCornersPlugin, TargetCornersPlugin,
+            StatusBarPlugin, StatusMessagePlugin,
+        ];
+
+        /** One system transit's worth of display world: build, then tear
+         * down. Returns what was on the stage and in space in between. */
+        async function transit() {
+            const world = await displayWorld();
+            for (const plugin of uiPlugins) {
+                await world.addPlugin(plugin);
+            }
+            await settle();
+            const built = [
+                ...descendants(world.resources.get(Stage)!),
+                ...descendants(world.resources.get(Space)!),
+            ];
+            for (const plugin of removeOrder) {
+                await world.removePlugin(plugin);
+            }
+            await settle();
+            return built;
+        }
+
+        it('destroys every object the UI plugins built, so N transits '
+            + 'leave PIXI\'s texture cache where it started', async () => {
+                const gameData = await getIntegrationGameData();
+                // Warm the shared caches (the mission universe, the
+                // parsed systems the starmap reads) so the measured
+                // transits are not racing their own first data reads.
+                await MissionUniverse.shared(gameData).load();
+                await transit();
+
+                const before = cachedTextures();
+                const transits = 3;
+                for (let i = 0; i < transits; i++) {
+                    const built = await transit();
+                    // Sanity: this really is the UI. Texts are the leak
+                    // that mattered, so there had better be plenty.
+                    const texts = built.filter(o => o instanceof PIXI.Text);
+                    expect(texts.length).withContext('texts built')
+                        .toBeGreaterThan(50);
+                    const survivors = built.filter(o => !o.destroyed);
+                    expect(survivors.length)
+                        .withContext('objects not destroyed after '
+                            + `transit ${i}: ` + survivors.slice(0, 10)
+                                .map(o => `${o.constructor.name}`
+                                    + `(${o.name ?? ''})`).join(', '))
+                        .toBe(0);
+                }
+                // Before the fix this grew by every Text the dialogs,
+                // maps, status bar and popups had built — per transit.
+                expect(cachedTextures() - before)
+                    .withContext(`textures leaked over ${transits} transits`)
+                    .toBe(0);
+            });
+    });
 });

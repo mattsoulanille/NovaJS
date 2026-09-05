@@ -111,6 +111,11 @@ export class GameCursor {
         // registers every frame texture with PIXI's cache.
         const { frames } =
             await displayAssets.data.SpriteSheetFrames.get(CURSOR_RLED);
+        // The world may have been torn down while the frames loaded; a
+        // destroyed sprite must not be handed a texture.
+        if (this.container.destroyed) {
+            return;
+        }
         this.textures = texturesFromFrames(frames);
         this.setFrame(0);
     }
@@ -269,11 +274,11 @@ export const CursorPlugin: Plugin = {
         world.removeSystem(DrawCursorSystem);
         world.resources.get(CursorListenersResource)?.remove();
         world.resources.delete(CursorListenersResource);
-        const stage = world.resources.get(Stage);
-        const cursor = world.resources.get(GameCursorResource);
-        if (stage && cursor) {
-            stage.removeChild(cursor.container);
-        }
+        // Destroyed, children included: the cursor sprite is per-world
+        // and leaked with every transit (review #40). Its rlëD frame
+        // textures are the asset cache's and are left alone.
+        world.resources.get(GameCursorResource)?.container
+            .destroy({ children: true });
         // The display world tears down at every system transit; put the OS
         // cursor back so menus/loading screens aren't cursorless.
         setOsCursorHidden(world.resources.get(PixiAppResource), false);

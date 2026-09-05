@@ -111,6 +111,10 @@ export const PlayerInfoPlugin: Plugin = {
         if (stage && dialog) {
             stage.removeChild(dialog.container);
         }
+        // Destroyed, children included: the dialog is per-world, and its
+        // Text canvases and Graphics leaked with every transit (review
+        // #40). Sprite textures are the asset cache's and are left alone.
+        dialog?.container.destroy({ children: true });
         world.resources.delete(PlayerInfoControlsSubscription);
         world.resources.delete(PlayerInfoResource);
         world.resources.delete(OpenPlayerInfoResource);

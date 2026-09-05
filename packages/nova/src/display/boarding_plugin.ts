@@ -874,11 +874,17 @@ export const BoardingDisplayPlugin: Plugin = {
     },
     remove(world) {
         world.removeSystem(BoardingUiSystem);
-        const stage = world.resources.get(Stage);
         const ui = world.resources.get(BoardingUiResource);
-        if (stage && ui) {
-            stage.removeChild(ui.plunder.container);
-            stage.removeChild(ui.assignment.container);
+        if (ui) {
+            // A dialog still up while its world dies would keep its
+            // MenuControls bound (see Menu.dismiss); then the dialogs are
+            // destroyed, children included, so their Text canvases and
+            // Graphics go with the world instead of leaking per transit
+            // (review #40). Sprite textures are the asset cache's.
+            ui.plunder.close();
+            ui.assignment.close();
+            ui.plunder.container.destroy({ children: true });
+            ui.assignment.container.destroy({ children: true });
         }
         world.resources.delete(BoardingUiResource);
     },

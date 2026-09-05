@@ -63,6 +63,12 @@ export class TargetCorners {
             const texture = await displayAssets.textureFromCicn(imageId);
             this.textures.set(cornerName, texture);
         }
+        // The world may have been torn down while the cicns loaded; a
+        // destroyed sprite must not be handed a texture (it would hang a
+        // listener off the shared texture).
+        if (this.container.destroyed) {
+            return;
+        }
         this.setStyle("neutral");
     }
 
@@ -212,11 +218,11 @@ export const TargetCornersPlugin: Plugin = {
     remove(world) {
         world.removeSystem(DrawTargetCornersSystem);
         world.removeSystem(SweepTargetCornersSystem);
-        const space = world.resources.get(Space);
-        const targetCorners = world.resources.get(TargetCornersResource);
-        if (space && targetCorners) {
-            space.removeChild(targetCorners.container);
-        }
+        // Destroyed, children included: the corner sprites are per-world
+        // and leaked with every transit (review #40). Their cicn textures
+        // are the asset cache's and are left alone.
+        world.resources.get(TargetCornersResource)?.container
+            .destroy({ children: true });
         world.resources.delete(TargetCornersResource);
     }
 }

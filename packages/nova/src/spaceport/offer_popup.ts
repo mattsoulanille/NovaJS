@@ -315,6 +315,18 @@ export class OfferPopup {
         }
     }
 
+    /**
+     * Tears the popup down with its owning display world: a scroll hold
+     * still on the shared Ticker is dropped, and the display tree is
+     * destroyed, children included, so the popup's Text canvases and
+     * Graphics don't outlive the world (review #40). Sprite textures are
+     * the asset cache's and are left alone.
+     */
+    destroy() {
+        this.endHold();
+        this.container.destroy({ children: true });
+    }
+
     /** Moves the text by `delta` px (positive scrolls further down). */
     private scrollBy(delta: number) {
         if (!this.scroll) {
