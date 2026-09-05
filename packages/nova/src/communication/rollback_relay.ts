@@ -1,7 +1,8 @@
 import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { Subscription } from "rxjs";
+import { warnThrottled } from "../common/log_throttle.js";
 import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
-import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
+import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
 
 /** Everything the relay knows about a convicted desync, for the
  * incident recorder. */
@@ -72,6 +73,15 @@ export class RollbackRelay {
     private mismatchStreaks = new Map<string, number>();
     /** Protocol versions peers declared at join (0 = never declared). */
     private peerProtocols = new Map<string, number>();
+    /**
+     * Peers whose state history the incident recorder is waiting for:
+     * everyone a desync broadcast named as diverged (they push a dump
+     * unprompted) plus anyone explicitly asked. A dump from anyone
+     * else is dropped — an unsolicited dump is the largest message a
+     * client can send, written to disk by the recorder, and nothing
+     * legitimate ever sends one.
+     */
+    private dumpsExpected = new Set<string>();
     private readonly subscription: Subscription;
     private clockInterval?: ReturnType<typeof setInterval>;
     private syncInterval?: ReturnType<typeof setInterval>;
@@ -131,6 +141,11 @@ export class RollbackRelay {
             this.log.push(record);
             this.room.sendMessage(
                 wrapRollbackMessage({ kind: 'inputs', record }));
+            // Per-peer bookkeeping is keyed by socket uuid, which is
+            // fresh on every reconnect: forget the departed.
+            this.mismatchStreaks.delete(peerId);
+            this.peerProtocols.delete(peerId);
+            this.dumpsExpected.delete(peerId);
         });
 
         if (autoClock) {
@@ -165,6 +180,12 @@ export class RollbackRelay {
 
     get inputLog(): readonly InputRecord[] {
         return this.log;
+    }
+
+    /** How many checkpoint ticks have reports awaiting comparison
+     * (diagnostics / memory-bound specs). */
+    get pendingStateHashTicks(): number {
+        return this.stateHashes.size;
     }
 
     /**
@@ -291,8 +312,18 @@ export class RollbackRelay {
             const healthy = voters.find(([peerId, hash]) =>
                 hash === canonical && peerId !== this.room.uuid);
             if (healthy) {
+                this.dumpsExpected.add(healthy[0]);
                 this.room.sendMessage(wrapRollbackMessage(
                     { kind: 'desyncDumpRequest' }), healthy[0]);
+            }
+        }
+        // Every peer the broadcast shows off-canonical uploads its
+        // history unprompted on seeing it (simulation_bridge.ts
+        // handleDesync) — not only the convicted ones, whose streak
+        // merely crossed the threshold first. Expect exactly those.
+        for (const [peerId, hash] of allHashes) {
+            if (hash !== canonical && peerId !== this.room.uuid) {
+                this.dumpsExpected.add(peerId);
             }
         }
         this.onDesync?.({
@@ -318,8 +349,21 @@ export class RollbackRelay {
     }
 
     private handleMessage(source: string, raw: unknown) {
+        // Validated: a malformed envelope is dropped here, never
+        // dereferenced (one used to throw inside this subscriber and
+        // take the server process down — rxjs rethrows on a macrotask).
         const message = unwrapRollbackMessage(raw);
         if (!message) {
+            return;
+        }
+        // Trust model item 3 (rollback_protocol.ts): only room MEMBERS
+        // speak here. The room filter upstream keys
+        // on the room name alone, so a socket that never sent `inRoom`
+        // for this room could otherwise log inputs into it (which are
+        // then relayed, archived, and replayed to every joiner).
+        if (!this.roomPeers().has(source)) {
+            warnThrottled(`relay-nonmember:${source}`, () =>
+                `Dropping ${message.kind} from ${source}: not in this room`);
             return;
         }
         switch (message.kind) {
@@ -395,6 +439,24 @@ export class RollbackRelay {
                 break;
             }
             case 'stateHash': {
+                // A bucket lives until every member reports it or the
+                // sweep passes it, so a tick nobody else will ever
+                // report — off the checkpoint grid, or far enough in
+                // the future that the sweep is ages away — was a
+                // permanent Map entry per distinct value. Peers hash
+                // only checkpoint ticks they have already SETTLED (30
+                // ticks behind their own clock, which leads the relay's
+                // by ~4), so a legitimate report is always at or behind
+                // the relay clock; the margin only spares a joiner's
+                // replayed checkpoints and clock jitter.
+                if (message.tick % STATE_HASH_INTERVAL !== 0
+                    || message.tick > this.tick + STATE_HASH_SWEEP_TICKS) {
+                    warnThrottled(`relay-statehash:${source}`, () =>
+                        `Dropping stateHash for tick ${message.tick} from `
+                        + `${source}: not a reachable checkpoint (relay `
+                        + `tick ${this.tick})`);
+                    break;
+                }
                 let reports = this.stateHashes.get(message.tick);
                 if (!reports) {
                     reports = new Map();
@@ -406,6 +468,11 @@ export class RollbackRelay {
                 break;
             }
             case 'desyncDump': {
+                if (!this.dumpsExpected.delete(source)) {
+                    warnThrottled(`relay-dump:${source}`, () =>
+                        `Dropping unsolicited desync dump from ${source}`);
+                    break;
+                }
                 this.onDesyncDump?.(source, message.dump);
                 break;
             }

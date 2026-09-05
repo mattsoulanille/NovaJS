@@ -69,7 +69,16 @@ export class RoomArchive {
         this.name = name;
         if (autoUpdate) {
             this.updateInterval = setInterval(() => {
-                void this.update();
+                // Never an unhandled rejection: under Node's default
+                // --unhandled-rejections=throw, one failed update (a
+                // record this world cannot stage, a plug-in system that
+                // throws on construction) would exit the server
+                // process. Report it and keep the interval alive; the
+                // next update retries from the same tick.
+                this.update().catch(error => {
+                    console.error(`Archive ${this.name ?? 'room'} update `
+                        + `failed at tick ${this.tick}:`, error);
+                });
             }, UPDATE_INTERVAL_MS);
         }
     }

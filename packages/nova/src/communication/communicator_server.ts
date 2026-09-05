@@ -1,9 +1,22 @@
 import { isLeft } from "fp-ts/lib/Either.js";
 import { Communicator, Peers } from "nova_ecs/plugins/multiplayer_plugin";
 import { BehaviorSubject, Subject } from "rxjs";
+import { warnThrottled } from "../common/log_throttle.js";
 import { ChannelServer } from "./channel.js";
 import { CommunicatorMessage, MessageType } from "./communicator_message.js";
 
+/** Whether a client-chosen destination names anyone but the server
+ * (undefined means "the room", which also includes other clients). */
+function namesOthers(destination: string | Set<string> | undefined,
+    server: string): boolean {
+    if (destination === undefined) {
+        return true;
+    }
+    if (typeof destination === 'string') {
+        return destination !== server;
+    }
+    return [...destination].some(dest => dest !== server);
+}
 
 export class CommunicatorServer implements Communicator {
     readonly messages = new Subject<{ source: string, message: unknown }>();
@@ -43,11 +56,31 @@ export class CommunicatorServer implements Communicator {
                 case MessageType.peers:
                     console.warn(`${source} tried to change server peers`);
                     return;
-                case MessageType.message:
+                case MessageType.message: {
+                    // Trust model item 3 (rollback_protocol.ts): a
+                    // client's message is delivered to the SERVER only,
+                    // whatever destination it named. Nothing in the
+                    // input-record design needs
+                    // client->client delivery — the rollback relay is
+                    // the single fan-out, and every client accepts
+                    // rollback traffic from the server alone (see
+                    // simulation_bridge.ts). Honouring the client's
+                    // destination let any peer push forged protocol
+                    // control messages (and the legacy delta-sync
+                    // plugin's remove/state) straight to a chosen
+                    // victim, with the server's own stamp of the
+                    // sender as the only provenance.
                     const message = maybeMessage.right.message;
                     const destination = maybeMessage.right.destination;
-                    this.sendMessageWithSource(message, source, this.getDestSet(source, destination));
+                    if (namesOthers(destination, this.uuid)) {
+                        warnThrottled(`server-dest:${source}`, () =>
+                            `${source} addressed peers directly; `
+                            + 'delivering to the server only');
+                    }
+                    this.sendMessageWithSource(message, source,
+                        new Set([this.uuid]));
                     return;
+                }
             }
         });
 
