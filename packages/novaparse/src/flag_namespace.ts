@@ -1,10 +1,11 @@
 /**
  * Per-plug-in namespacing of the Require/Contribute flag space.
  *
- * The EVN Bible gives shïps, oütfs, cröns and mïsns ONE global 64-bit
- * Contribute/Require flag set: a thing can be bought (a mission offered, a
- * cron run) only when every bit in its Require is present in the OR of the
- * player's hull Contribute, owned-outfit Contributes (and active crons).
+ * The EVN Bible gives shïps, oütfs, cröns, mïsns and gövts ONE global
+ * 64-bit Contribute/Require flag set: a thing can be bought (a mission
+ * offered, a cron run, a government's planet landed on) only when every bit
+ * in its Require is present in the OR of the player's hull Contribute,
+ * owned-outfit Contributes (and active crons).
  * Plug-ins are written independently of one another, so two plug-ins
  * routinely claim the same bit for unrelated purposes — the Nuke plug-in's
  * missile launcher (Contribute bit 22) unlocked every crew outfit in Extra
@@ -69,9 +70,16 @@ export interface FlagResourceRef {
  * The resource types that share the flag space, in the order they are
  * scanned (this order does not affect the mapping — only namespace order
  * and bit number do — but it keeps reports stable).
+ *
+ * gövt belongs here too: its Require ("useful for making travel permits"
+ * — EVN Bible, gövt) is tested against the SAME player Contribute set as
+ * a shïp's or oütf's, so it must be resolved in the same namespace. Left
+ * raw, a plug-in gövt requiring one of its own private bits could never
+ * be satisfied by the plug-in's own permit outfit (arpia's Gas Giant
+ * gövts 202/203 require bit 7, which its Keycard oütf 493 contributes).
  */
 export const FLAG_RESOURCE_TYPES =
-    ["shïp", "oütf", "crön", "mïsn", "ränk"] as const;
+    ["shïp", "oütf", "crön", "mïsn", "ränk", "gövt"] as const;
 
 /** Positions of the 1-bits of `value`, ascending. */
 export function flagBits(value: bigint): number[] {
@@ -86,7 +94,8 @@ export function flagBits(value: bigint): number[] {
 }
 
 /**
- * Every shïp/oütf/crön/mïsn currently in `resources`, as flag resources.
+ * Every shïp/oütf/crön/mïsn/ränk/gövt currently in `resources`, as flag
+ * resources.
  * A resource whose writerPrefix was never set (only possible for hand-made
  * resources in tests) is skipped rather than blowing up the whole map.
  */

@@ -1,4 +1,5 @@
 import 'jasmine';
+import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { loadAsteroidGameData } from './asteroid_plugin.js';
@@ -66,7 +67,63 @@ function makeCyclicGameData(): SimulationGameDataInterface {
     } as never;
 }
 
+/** Like fakeGettable, but an unknown id rejects as the real data does. */
+function strictGettable<T>(items: Record<string, T>) {
+    return {
+        get: async (id: string) => {
+            if (!(id in items)) {
+                throw new NovaIDNotFoundError(`no ${id}`);
+            }
+            return items[id];
+        },
+        getCached: (id: string) => items[id],
+    };
+}
+
+/**
+ * A ship whose stock outfit names a weapon the data set does not define
+ * (as the "Advanced Vell-os Beams" plug-in's ships do), plus an outfit
+ * that does not exist at all.
+ */
+function makeDanglingGameData(): SimulationGameDataInterface {
+    return {
+        data: {
+            Ship: strictGettable({
+                A: {
+                    animation: ANIMATION,
+                    outfits: { 'outfit real': 1, 'outfit ghost': 1, 'outfit missing': 1 },
+                },
+            }),
+            Outfit: strictGettable({
+                'outfit real': { weapons: { 'real': 1 } },
+                'outfit ghost': { weapons: { 'ghost': 1, 'real': 1 } },
+            }),
+            Weapon: strictGettable({
+                real: { type: 'ProjectileWeaponData', animation: ANIMATION, submunitions: [] },
+            }),
+            SpriteSheet: strictGettable({ sheet: { hulls: [] } }),
+        },
+    } as never;
+}
+
 describe('entity data loader', () => {
+    it('skips outfits and weapons the data set does not define, with a warning', async () => {
+        // A dangling reference used to resolve to a placeholder default
+        // weapon; it now rejects as not-found, and staging must skip it
+        // rather than fail the whole ship.
+        const warn = spyOn(console, 'warn');
+        const weaponIds = await loadShipGameData(makeDanglingGameData(), 'A');
+        expect(weaponIds.has('real')).toBeTrue();
+        const warned = warn.calls.allArgs().map(args => args.join(' ')).join('\n');
+        expect(warned).toContain('ghost');
+        expect(warned).toContain('outfit missing');
+    });
+
+    it('still rejects when the ship itself does not exist', async () => {
+        await expectAsync(loadShipGameData(makeDanglingGameData(), 'nope'))
+            .toBeRejectedWithError(NovaIDNotFoundError);
+    });
+
     it('terminates on mutually recursive carried ships', async () => {
         const weaponIds = await loadShipGameData(makeCyclicGameData(), 'A');
         expect([...weaponIds].sort()).toEqual(['bay A', 'bay B', 'bay C', 'subX', 'subY']);

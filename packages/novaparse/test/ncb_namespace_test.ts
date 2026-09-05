@@ -51,6 +51,20 @@ describe("findControlBits", () => {
         expect(bitsOf("b1 & z & b2", "test")).toEqual([1, 2]);
         expect(bitsOf("b1 ) b2", "set")).toEqual([1, 2]);
     });
+
+    // The Bible's counted sets: `( [b1 b2 b3] = 2 )`. The set's elements
+    // are bits; the constant after `=`, `<` or `>` is a count and must not
+    // be read as (and allocated) a bit.
+    it("reads the elements of a counted set but not the comparison constant", () => {
+        expect(bitsOf("( [b1 b2 b3] = 2 )", "test")).toEqual([1, 2, 3]);
+        expect(bitsOf("[b1 b2 b3]<2 & [b4 5] > 1", "test")).toEqual([1, 2, 3, 4, 5]);
+        expect(bitsOf("[b7 !b8 (b9 | 10)]", "test")).toEqual([7, 8, 9, 10]);
+        // A b-prefixed number after the operator is a bit (the evaluator
+        // rejects it, but it is still not a count).
+        expect(bitsOf("[b1] = b2", "test")).toEqual([1, 2]);
+        // Whitespace between the operator and the count does not matter.
+        expect(bitsOf("[b1 b2]=   2", "test")).toEqual([1, 2]);
+    });
 });
 
 describe("rewriteControlBits", () => {
@@ -65,6 +79,10 @@ describe("rewriteControlBits", () => {
             .toBe(`a {b${P0} "y" "n"} {b3 "z"}`);
         // A bare number stays bare.
         expect(rewriteControlBits("22 | 3", "test", map)).toBe(`${P0} | 3`);
+        // In a counted set the elements are renamed; the count is not,
+        // even when it happens to equal a renamed bit number.
+        expect(rewriteControlBits("( [b22 b45 3] = 22 )", "test", map))
+            .toBe(`( [b${P0} b${P0 + 1} 3] = 22 )`);
     });
 
     it("returns the very same string when nothing changes", () => {

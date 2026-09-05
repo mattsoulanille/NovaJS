@@ -46,6 +46,94 @@ function fakeBayWeap({ shipId = 128, maxAmmo = 4, id = "nova:150" }: {
     } as unknown as WeapResource;
 }
 
+/**
+ * A minimal unguided projectile wëap with no Graphic (-1), as Extra
+ * Outfits' 324-326 / 332-334 and More Blasters CHEAT's 254 are.
+ */
+function fakeGraphiclessWeap(id = "extra-outfits:324"): WeapResource {
+    return {
+        globalID: id,
+        id,
+        name: "Invisible Shot",
+        prefix: "extra-outfits",
+        guidance: "unguided",
+        guidanceN: -1,
+        ammoType: -1,
+        maxAmmo: 0,
+        accuracy: 0,
+        burstCount: 0,
+        burstReload: 0,
+        exitType: "gun",
+        fireGroup: "primary",
+        reload: 30,
+        fireSimultaneously: false,
+        speed: 500,
+        duration: 60,
+        sound: null,
+        loopSound: false,
+        useFiringAnimation: false,
+        firesFromClosestToTarget: false,
+        turretBlindSpots: { front: false, side: false, back: false },
+        graphic: null,
+        explosion: null,
+        explosion128sparks: false,
+        shieldDamage: 10,
+        armorDamage: 5,
+        ionization: 0,
+        ionizeColor: 0,
+        passThroughShields: false,
+        impact: 0,
+        disableOnly: false,
+        submunition: null,
+        blastRadius: 0,
+        proxRadius: 0,
+        proxSafety: 0,
+        proxHitAll: true,
+        trailParticles: { count: 0, velocity: 0, lifeMin: 0, lifeMax: 0, color: 0 },
+        hitParticles: { count: 0, velocity: 0, lifeMin: 0, lifeMax: 0, color: 0 },
+        vulnerableToPD: false,
+        jamVuln: [0, 0, 0, 0],
+        passOverAsteroids: false,
+        decoyedByAsteroids: false,
+        confusedByInterference: false,
+        turnsAwayIfJammed: false,
+        attackParentIfJammed: false,
+        decay: 0,
+        coronaFalloff: 0,
+        spinShots: false,
+        spinRate: 0,
+        turnRate: 0,
+        durability: 0,
+        translucent: false,
+        pictID: 0,
+        descID: 0,
+        idSpace: {
+            "snd ": {},
+            shïp: {},
+            wëap: {},
+            dësc: {},
+            spïn: {},
+            rlëD: {},
+            bööm: {},
+        },
+    } as unknown as WeapResource;
+}
+
+describe("WeaponParse projectile with no graphic", () => {
+    it("degrades to the default animation and reports it, instead of throwing",
+        async () => {
+            const reported: string[] = [];
+            const weapon = await WeaponParse(fakeGraphiclessWeap(), m => reported.push(m));
+            expect(weapon.type).toBe("ProjectileWeaponData");
+            if (weapon.type === "ProjectileWeaponData") {
+                expect(weapon.animation.images.baseImage.id).toBe("default");
+                expect(weapon.damage.shield).toBe(10);
+            }
+            expect(reported.some(m => m.includes("extra-outfits:324")
+                && m.toLowerCase().includes("graphic"))).toBeTrue();
+        });
+});
+
 describe("WeaponParse bay ammo", () => {
     it("points a bay weapon's ammoType at its own supply, so the "
         + "generic ammo machinery spends fighters on launch", async () => {

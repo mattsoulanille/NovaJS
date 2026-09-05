@@ -40,6 +40,31 @@ import { $enum } from "ts-enum-util";
 // Returns the number of resources parsed from the file. A count of zero for a
 // file that should contain resources is a strong signal that its resource fork
 // was lost (see the macOS xattr / resource-fork gotcha in id_space_handler.ts).
+//
+// Each resource is constructed in isolation. Most constructors read through
+// Reader, whose past-the-end reads fall back to defaults, but a few reject
+// malformed input outright (BoomResource with no graphic, ShanResource with
+// no base image, RledResource shorter than its size header). Resources are
+// written into the shared id space type by type as they are constructed, so
+// letting one such throw escape left the file HALF loaded — every type
+// before it in enum order present, everything after it missing — while the
+// caller's log claimed the whole file was skipped. A malformed resource is
+// therefore dropped and named here, and the rest of the file loads; a
+// reference to the dropped resource then fails as "not found", which is the
+// truthful outcome.
+//
+// This applies to the core "Nova Files" exactly as to plug-ins, and that is
+// deliberate. The FILE-level policy is unchanged: a core file that cannot be
+// read at all (missing, no resource fork) is still fatal in
+// IDSpaceHandler.addNovaFilesDirectory, where a plug-in file is skipped. But
+// a single malformed resource INSIDE a readable core file used to be fatal
+// too (the throw escaped to addPlugin and took the id space with it); it now
+// degrades the same way as in a plug-in — dropped, named, and whatever
+// references it fails as not-found (weapon_parse "Missing rlëD",
+// getOverlayFrames -> undefined). Stock data has no such resource, so this
+// only ever changes what a corrupt install does: a loud drop that names the
+// resource, instead of a hard stop that named the whole file. Pinned by
+// bad_plugin_test.ts ("drops only the malformed resource of a CORE file").
 async function readNovaFile(filePath: string, localIDSpace: NovaResources): Promise<number> {
     const rf = await read(filePath);
 
@@ -48,7 +73,16 @@ async function readNovaFile(filePath: string, localIDSpace: NovaResources): Prom
         const parser = getParser(<NovaResourceType>resourceType);
 
         for (const id in rf[resourceType]) {
-            localIDSpace[resourceType][id] = new parser(rf[resourceType][id], localIDSpace);
+            let resource: BaseResource;
+            try {
+                resource = new parser(rf[resourceType][id], localIDSpace);
+            } catch (e) {
+                console.error("NovaParse: SKIPPED malformed " + resourceType
+                    + " id " + id + " in " + filePath + ": "
+                    + (e instanceof Error ? e.message : String(e)));
+                continue;
+            }
+            localIDSpace[resourceType][id] = resource;
             resourceCount++;
         }
     }

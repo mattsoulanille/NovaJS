@@ -2,6 +2,7 @@ import { GovtData } from "novadatainterface/govt_data";
 import { BaseData } from "novadatainterface/base_data";
 import { GovtResource } from "../resource_parsers/govt_resource.js";
 import { BaseParse } from "./base_parse.js";
+import { FlagNamespaceMap, resolveResourceFlags } from "../flag_namespace.js";
 
 
 /**
@@ -25,7 +26,8 @@ const GREETING_STRN_BASE = 7000;
 const FIRST_GOVT_ID = 128;
 
 export async function GovtParse(govt: GovtResource,
-    notFoundFunction: (m: string) => void): Promise<GovtData> {
+    notFoundFunction: (m: string) => void,
+    flagMap: FlagNamespaceMap | null = null): Promise<GovtData> {
     const base: BaseData = await BaseParse(govt, notFoundFunction);
 
     const greetingStrn = GREETING_STRN_BASE + (govt.id - FIRST_GOVT_ID);
@@ -88,7 +90,10 @@ export async function GovtParse(govt: GovtResource,
         mediumName: govt.mediumName,
         color: govt.color,
         shipColor: govt.shipColor,
-        require: govt.require.toString(),
+        // Namespaced like a mïsn's Require (same encoding: decimal), so a
+        // plug-in gövt's travel permit is satisfiable by the plug-in's own
+        // Contribute bits. See flag_namespace.ts.
+        require: resolveResourceFlags(flagMap, govt, govt.require).toString(),
         voiceType: govt.voiceType,
         newsPic: govt.newsPic >= 128
             ? govt.idSpace.PICT[govt.newsPic]?.globalID ?? null

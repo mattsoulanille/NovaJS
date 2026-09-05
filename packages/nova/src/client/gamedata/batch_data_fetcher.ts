@@ -1,4 +1,5 @@
 import urlJoin from 'url-join';
+import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { batchPath } from '../../common/game_data_paths.js';
 import type { BatchRequest, BatchResponse } from '../../server/setup_routes.js';
 
@@ -139,7 +140,12 @@ export class BatchDataFetcher {
                     const message = entry && 'error' in entry
                         ? entry.error
                         : `Missing '${dataType}' id '${id}' in batch response`;
-                    const error = new Error(message);
+                    // The server's "no data source defines this id" keeps
+                    // its class, so Gettable caches the miss rather than
+                    // re-fetching the id on every later read.
+                    const error = entry && 'error' in entry && entry.notFound
+                        ? new NovaIDNotFoundError(message)
+                        : new Error(message);
                     for (const w of waiters) {
                         w.reject(error);
                     }

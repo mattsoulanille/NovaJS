@@ -423,6 +423,58 @@ class WeapResource extends BaseResource {
         this.ionizeColor = color32(r.uint32()); // 114
 
         // Offsets 118-133 are Unused in the template.
+
+        // The template is a KEYED UNION on Weapon Type (docs/tmpl/
+        // tmpl_offsets.txt, wëap): the beam and carried-ship variants
+        // reinterpret the record, and the byte ranges below are filler
+        // (Fxxx) there — whatever the editor last left in them. Read as
+        // projectile fields they are garbage: in the installed data 36
+        // stock beams carry a non-zero prox/blast radius (Polaron Cannon
+        // prox=3, Solar Lance prox=3, ...), 6 beams a trail particle count
+        // of -1, and 4 plug-in bays (Planet Rico Swarmer Bay, Star Wars Mod
+        // Tie Fighter / X Wing, Intelligent EMP Torpedo Combat Drone) an
+        // exit type of gun/turret from the filler word at 88, which
+        // launched their fighters from a gun port instead of the ship's
+        // centre. Those ranges take the value an all-zero field parses to.
+        const isBeam = this.guidance === 'beam' || this.guidance === 'beamTurret'
+            || this.guidance === 'pointDefenseBeam';
+        const isBay = this.guidance === 'bay';
+        const noParticles = (): ParticleConfig =>
+            ({ count: 0, velocity: 0, lifeMin: 0, lifeMax: 0, color: 0 });
+        if (isBeam || isBay) {
+            this.proxRadius = 0;          // 24-27: beam FLNG Radius / bay F008 Impact
+            this.blastRadius = 0;
+            this.trailParticles = noParticles(); // 36-47: F00C (beam), F028 (bay)
+            this.submunition = null;      // 62-71: F00A (beam), F028 (bay)
+            this.proxSafety = 0;
+        }
+        if (isBay) {
+            // 20-27 F008 Impact; 32-71 F028 Smoke Set; 74-85 F00C Ionization
+            // Charge; 88 FWRD Exit Type; 110-117 F008 Lightning.
+            this.impact = 0;
+            this.explosion = null;
+            this.explosion128sparks = false;
+            this.cicnSmoke = null;
+            this.decay = 0;
+            this.beamLength = 0;
+            this.beamWidth = this.spinRate = 0;
+            this.coronaFalloff = 0;
+            this.beamColor = color32(0);
+            this.coronaColor = color32(0);
+            this.ionization = 0;
+            this.hitParticles = noParticles();
+            this.exitTypeN = -1;
+            this.exitType = "center";
+            this.lightningDensity = 0;
+            this.lightningAmplitude = 0;
+            this.ionizeColor = color32(0);
+        }
+        // The beam variant also marks 10 (Shot Speed), 14 (Graphic) and 32
+        // (Smoke Set) as filler words; stock beams do hold junk there
+        // (Polaron Cannon graphic=-8, Chiron Beam speed=-1). They are left
+        // as read: BeamWeaponParse consumes none of them, and the beam
+        // entry overrides the shotSpeed-based turret lead (beam_plugin),
+        // so nothing downstream reads them for a beam either.
     }
 }
 

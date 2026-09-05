@@ -111,11 +111,115 @@ describe('parseNCBTest', () => {
         expect(() => parseNCBTest('foo')).toThrowError(NCBParseError);
         expect(() => parseNCBTest('!')).toThrowError(NCBParseError);
     });
+
+    // EVN Bible, test expressions: "[ ]  Counted set - returns the number
+    // of 1s in the set. =,<,>  Comparison operators for counted sets."
+    describe('counted sets', () => {
+        it('parses the third example from the EVN Bible', () => {
+            // ( [b1 b2 b3] = 2 )
+            expect(parseNCBTest('( [b1 b2 b3] = 2 )')).toEqual({
+                type: 'compare',
+                operator: '=',
+                count: {
+                    type: 'count',
+                    operands: [
+                        { type: 'bit', bit: 1 },
+                        { type: 'bit', bit: 2 },
+                        { type: 'bit', bit: 3 },
+                    ],
+                },
+                value: 2,
+            });
+        });
+
+        it('parses < and > and a set with no comparison', () => {
+            expect(parseNCBTest('[b1 b2]<1')).toEqual(jasmine.objectContaining(
+                { type: 'compare', operator: '<', value: 1 }));
+            expect(parseNCBTest('[b1 b2] > 0')).toEqual(jasmine.objectContaining(
+                { type: 'compare', operator: '>', value: 0 }));
+            expect(parseNCBTest('[b1 b2]')).toEqual({
+                type: 'count',
+                operands: [{ type: 'bit', bit: 1 }, { type: 'bit', bit: 2 }],
+            });
+        });
+
+        it('takes any term, negation or parenthesised expression as an element', () => {
+            expect(parseNCBTest('[b1 !b2 (b3 | b4) o5 g 6] = 3')).toEqual({
+                type: 'compare',
+                operator: '=',
+                count: {
+                    type: 'count',
+                    operands: [
+                        { type: 'bit', bit: 1 },
+                        { type: 'not', operand: { type: 'bit', bit: 2 } },
+                        { type: 'or', operands: [{ type: 'bit', bit: 3 }, { type: 'bit', bit: 4 }] },
+                        { type: 'outfit', id: 5 },
+                        { type: 'gender' },
+                        { type: 'bit', bit: 6 },
+                    ],
+                },
+                value: 3,
+            });
+        });
+
+        it('composes with the boolean operators', () => {
+            expect(parseNCBTest('b9 & ([b1 b2 b3] = 2 | !b8)')).toEqual({
+                type: 'and',
+                operands: [
+                    { type: 'bit', bit: 9 },
+                    {
+                        type: 'or',
+                        operands: [
+                            jasmine.objectContaining({ type: 'compare', operator: '=', value: 2 }),
+                            { type: 'not', operand: { type: 'bit', bit: 8 } },
+                        ],
+                    },
+                ],
+            });
+        });
+
+        it('does not range-check the comparison constant as a bit', () => {
+            expect(() => parseNCBTest('[b1 b2] < 10000')).not.toThrow();
+        });
+
+        it('rejects malformed counted sets', () => {
+            expect(() => parseNCBTest('[b1 b2')).toThrowError(NCBParseError);
+            expect(() => parseNCBTest('b1 b2]')).toThrowError(NCBParseError);
+            expect(() => parseNCBTest('[b1 & b2]')).toThrowError(NCBParseError);
+            expect(() => parseNCBTest('[b1] =')).toThrowError(NCBParseError);
+            // The right-hand side must be a bare number, not a bit.
+            expect(() => parseNCBTest('[b1] = b2')).toThrowError(NCBParseError);
+            // A comparison needs a counted set on its left.
+            expect(() => parseNCBTest('b1 = 1')).toThrowError(NCBParseError);
+            expect(() => parseNCBTest('= 2')).toThrowError(NCBParseError);
+        });
+    });
 });
 
 describe('evaluateNCBTest', () => {
     it('evaluates blank expressions to true', () => {
         expect(evaluateNCBTest('', bitContext())).toBe(true);
+    });
+
+    it('counts the 1s of a counted set and compares them', () => {
+        const example = '( [b1 b2 b3] = 2 )';
+        expect(evaluateNCBTest(example, bitContext(1, 2))).toBe(true);
+        expect(evaluateNCBTest(example, bitContext(2, 3))).toBe(true);
+        expect(evaluateNCBTest(example, bitContext(1))).toBe(false);
+        expect(evaluateNCBTest(example, bitContext(1, 2, 3))).toBe(false);
+        expect(evaluateNCBTest(example, bitContext())).toBe(false);
+
+        expect(evaluateNCBTest('[b1 b2 b3] < 2', bitContext(1))).toBe(true);
+        expect(evaluateNCBTest('[b1 b2 b3] < 2', bitContext(1, 2))).toBe(false);
+        expect(evaluateNCBTest('[b1 b2 b3] > 2', bitContext(1, 2, 3))).toBe(true);
+        expect(evaluateNCBTest('[b1 b2 b3] > 2', bitContext(1, 2))).toBe(false);
+
+        // Negated elements count when they are true.
+        expect(evaluateNCBTest('[!b1 !b2] = 2', bitContext())).toBe(true);
+        // A bare set is true when nonzero.
+        expect(evaluateNCBTest('[b1 b2]', bitContext(2))).toBe(true);
+        expect(evaluateNCBTest('[b1 b2]', bitContext())).toBe(false);
+        expect(evaluateNCBTest('![b1 b2]', bitContext())).toBe(true);
     });
 
     it('looks up bits', () => {

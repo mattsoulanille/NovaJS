@@ -5,6 +5,7 @@ import { getDefaultControlBitNamespaces } from "novadatainterface/control_bit_na
 import { idsPath, dataPath, batchPath, settingsPrefix, controlBitNamespacesPath } from "../common/game_data_paths.js";
 import { GameDataInterface } from "novadatainterface/game_data_interface";
 import { NovaDataType } from "novadatainterface/nova_data_interface";
+import { isNovaIDNotFoundError } from "novadatainterface/nova_id_not_found_error";
 
 /**
  * Request body for the batch endpoint: a map from data type to the
@@ -17,8 +18,14 @@ export type BatchRequest = { [dataType: string]: string[] };
  * entry is either `{ data }` on success or `{ error }` if that single
  * id could not be resolved. A missing id must NOT fail the whole
  * batch, so errors are reported per-id rather than as a non-200 status.
+ *
+ * `notFound` (additive) marks the error as "no data source defines this
+ * id" — the per-id equivalent of the GET route's 404 — so the client can
+ * cache the miss instead of retrying it; every other error is a load
+ * failure a retry may fix. Older servers omit the field.
  */
-export type BatchResponseEntry<T = unknown> = { data: T } | { error: string };
+export type BatchResponseEntry<T = unknown> =
+    { data: T } | { error: string, notFound?: true };
 export type BatchResponse = {
     [dataType: string]: { [id: string]: BatchResponseEntry }
 };
@@ -112,7 +119,9 @@ export async function resolveBatch(
                 }
                 typeResult[id] = { data };
             } catch (e) {
-                typeResult[id] = { error: e instanceof Error ? e.message : String(e) };
+                const error = e instanceof Error ? e.message : String(e);
+                typeResult[id] = isNovaIDNotFoundError(e)
+                    ? { error, notFound: true } : { error };
             }
         }));
     }));
@@ -268,7 +277,14 @@ class GameDataServer {
             res.send(data);
         } catch (e) {
             if (!res.headersSent) {
-                res.status(500).send("Failed to get " + name + "/" + item);
+                if (isNovaIDNotFoundError(e)) {
+                    // No data source defines the id: 404, so a client can
+                    // tell "does not exist" from a load failure. (It used
+                    // to be a 200 carrying a placeholder default object.)
+                    res.status(404).send("No " + name + " with id " + item);
+                } else {
+                    res.status(500).send("Failed to get " + name + "/" + item);
+                }
             }
         }
     }

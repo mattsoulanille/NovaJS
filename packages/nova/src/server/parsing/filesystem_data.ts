@@ -11,6 +11,7 @@ import { ExplosionData } from "novadatainterface/explosion_data";
 import { GameDataInterface } from "novadatainterface/game_data_interface";
 import { Gettable } from "novadatainterface/gettable";
 import { NovaDataInterface } from "novadatainterface/nova_data_interface";
+import { NovaIDNotFoundError } from "novadatainterface/nova_id_not_found_error";
 import { NovaIDs } from "novadatainterface/nova_ids";
 import { OutfitData } from "novadatainterface/outfit_data";
 import { PersData } from "novadatainterface/pers_data";
@@ -132,7 +133,13 @@ class FilesystemData implements GameDataInterface {
                 fs.readFile(filePath,
                     function(err, contents) {
                         if (err) {
-                            reject(err);
+                            // No object file means this overlay source does
+                            // not define the id — the aggregator's cue to
+                            // try the next source — not a load failure.
+                            reject(err.code === "ENOENT"
+                                ? new NovaIDNotFoundError(
+                                    "No " + p.path + " object file for id " + id)
+                                : err);
                         }
                         else {
                             if (p.extension == "json") {

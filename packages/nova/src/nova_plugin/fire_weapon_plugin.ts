@@ -1,6 +1,7 @@
 import * as t from 'io-ts';
 import { Animation } from 'novadatainterface/animation';
 import { Gettable } from 'novadatainterface/gettable';
+import { isNovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { Emit, EmitFunction, Entities, GetEntity, RunQuery, RunQueryFunction, UUID } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
@@ -708,7 +709,19 @@ export const FireWeaponPlugin: Plugin = {
         const weaponConstructors = world.resources.get(WeaponConstructors)!;
 
         const weaponEntries = new Gettable<WeaponEntry | undefined>(async id => {
-            const data = await gameData.data.Weapon.get(id);
+            // A dangling wëap reference (a plug-in ship or outfit naming a
+            // weapon it never shipped) has no entry, so it never fires;
+            // see entity_data_loader's loadIfDefined. Other failures
+            // propagate.
+            const data = await gameData.data.Weapon.get(id).catch(e => {
+                if (isNovaIDNotFoundError(e)) {
+                    return undefined;
+                }
+                throw e;
+            });
+            if (!data) {
+                return undefined;
+            }
             const construct = weaponConstructors.get(data.type);
             if (!construct) {
                 return undefined;

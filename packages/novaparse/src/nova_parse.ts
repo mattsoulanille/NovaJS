@@ -327,7 +327,8 @@ export class NovaParse implements GameDataInterface {
             System: this.makeGettable<SystResource, SystemData>(
                 NovaResourceType.sÿst,
                 SystemParseClosure(this.systemBacklinkMap)),
-            Govt: this.makeGettable<GovtResource, GovtData>(NovaResourceType.gövt, GovtParse),
+            Govt: this.makeGettable<GovtResource, GovtData>(NovaResourceType.gövt,
+                async (govt, notFound) => GovtParse(govt, notFound, await this.flagMap)),
             Dude: this.makeGettable<DudeResource, DudeData>(NovaResourceType.düde, DudeParse),
             Fleet: this.makeGettable<FletResource, FleetData>(NovaResourceType.flët, FleetParse),
             Junk: this.makeGettable<JunkResource, JunkData>(NovaResourceType.jünk, JunkParse),

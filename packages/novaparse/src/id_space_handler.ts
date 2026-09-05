@@ -290,7 +290,10 @@ class IDSpaceHandler {
     // parse (e.g. a missing/stripped resource fork throwing ENOENT), we log a
     // prominent error naming the exact file and the underlying exception, then
     // skip it and continue with the rest. Contrast with the core "Nova Files"
-    // data, where any failure is fatal (see addNovaFilesDirectory).
+    // data, where a file that fails to read is fatal (see
+    // addNovaFilesDirectory). In BOTH cases a single malformed resource inside
+    // a readable file is dropped on its own, not with the file: see
+    // readNovaFile.
     async addNovaPluginsDirectory(pluginsPath: string) {
         if (!(await isDirectory(pluginsPath))) {
             throw new BadDirectoryStructureError("Plug-ins must be a directory. Got " + pluginsPath + " instead");
@@ -341,7 +344,19 @@ class IDSpaceHandler {
             }
 
 
-            if (await isDirectory(currentPath)) {
+            // The stat is inside the per-plug-in isolation too: isDirectory
+            // rejects on anything but ENOENT (EACCES, ELOOP, EIO), and an
+            // unreadable entry must be skipped like an unparseable one, not
+            // take the whole id space ("core data load failed") with it.
+            let entryIsDirectory: boolean;
+            try {
+                entryIsDirectory = await isDirectory(currentPath);
+            } catch (e) {
+                reportSkippedPlugin(currentPath, e);
+                continue;
+            }
+
+            if (entryIsDirectory) {
                 log(currentPath + " is a directory");
                 await this.addDirectory(currentPath, prefix, /* fatalOnError */ false);
             }
@@ -353,8 +368,12 @@ class IDSpaceHandler {
 
     // Adds the Nova Files directory.
     //
-    // Failure policy: the core data is required for anything to work, so any
-    // failure here propagates (is fatal) rather than being swallowed.
+    // Failure policy: the core data is required for anything to work, so a
+    // file that fails to read propagates (is fatal) rather than being
+    // swallowed. That is the FILE level. A malformed resource inside a
+    // readable core file is isolated by readNovaFile exactly like one in a
+    // plug-in (dropped and named, the rest of the file loads) — a deliberate
+    // choice, reasoned in the comment there.
     async addNovaFilesDirectory(filePath: string) {
         if (!(await isDirectory(filePath))) {
             throw new BadDirectoryStructureError("Nova Files must be a directory. Got " + filePath + " instead");
@@ -395,18 +414,7 @@ class IDSpaceHandler {
         try {
             return await this.addPlugin(filePath, prefix);
         } catch (e) {
-            console.error(
-                "\n" +
-                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
-                "NovaParse: FAILED to load plug-in file and SKIPPED it:\n" +
-                "    " + filePath + "\n" +
-                "Underlying error: " + errorDetail(e) + "\n" +
-                "This plug-in's resources will be missing from the game. If it is a\n" +
-                "macOS resource-fork file, check that its resource fork survived any\n" +
-                "copy/transfer (see the xattr gotcha noted in addPlugin).\n" +
-                "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",
-                e,
-            );
+            reportSkippedPlugin(filePath, e);
             return false;
         }
     }
@@ -462,6 +470,24 @@ function likelyHasResources(filePath: string): boolean {
     return resourceExtensions.has(ext) || ext === "";
 }
 
+// The loud "this plug-in was skipped" report: names the exact file and the
+// underlying error, so a missing resource fork, a permission problem or a
+// corrupt resource is diagnosable from the log alone.
+function reportSkippedPlugin(filePath: string, e: unknown): void {
+    console.error(
+        "\n" +
+        "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n" +
+        "NovaParse: FAILED to load plug-in file and SKIPPED it:\n" +
+        "    " + filePath + "\n" +
+        "Underlying error: " + errorDetail(e) + "\n" +
+        "This plug-in's resources will be missing from the game. If it is a\n" +
+        "macOS resource-fork file, check that its resource fork survived any\n" +
+        "copy/transfer (see the xattr gotcha noted in addPlugin).\n" +
+        "!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n",
+        e,
+    );
+}
+
 // Renders an unknown thrown value into a readable, information-preserving
 // string (name, message, code, and stack when available).
 function errorDetail(e: unknown): string {
@@ -479,6 +505,7 @@ function isDirectory(path: string): Promise<boolean> {
             if (err) {
                 if (err.code == "ENOENT") {
                     fulfill(false);
+                    return;
                 }
                 reject(err);
             }

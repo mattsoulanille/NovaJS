@@ -107,7 +107,10 @@ const repl = new NovaRepl();
 
 let communicator: CommunicatorServer;
 async function startGame() {
-    // Set up the novaparse webworker
+    // Set up the novaparse webworker. No `stdout`/`stderr: true`: the
+    // worker's console output (plug-in load diagnostics, see
+    // nova_parse_worker.ts) is piped into this process's, i.e. the server
+    // log.
     const novaParseWorker = new Worker(novaParseWorkerPath);
     const novaParseWorkerApi = Comlink.wrap<NovaParseWorkerApi>(
         nodeEndpoint(novaParseWorker));

@@ -4,10 +4,13 @@ import * as http from 'http';
 import { AddressInfo } from 'net';
 import { Gettable } from 'novadatainterface/gettable';
 import { GameDataInterface } from 'novadatainterface/game_data_interface';
+import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { resolveBatch, BatchResponse, setupRoutes, isValidResourceId } from './setup_routes.js';
 
 // A minimal GameDataInterface whose gettables are backed by the maps
-// passed in. A `null` value for an id means "throw when fetched".
+// passed in. A `null` value for an id means "throw when fetched"; an id
+// absent from the table rejects with NovaIDNotFoundError, as the
+// aggregator does for an id no data source defines.
 function makeGameData(tables: {
     [dataType: string]: { [id: string]: unknown | null };
 }): GameDataInterface {
@@ -15,7 +18,7 @@ function makeGameData(tables: {
     for (const [type, entries] of Object.entries(tables)) {
         data[type] = new Gettable<unknown>(async (id: string) => {
             if (!(id in entries)) {
-                throw new Error(`No ${type} with id ${id}`);
+                throw new NovaIDNotFoundError(`No ${type} with id ${id}`);
             }
             const val = entries[id];
             if (val === null) {
@@ -95,7 +98,16 @@ describe('resolveBatch', () => {
         expect('error' in absent).toBe(true);
         if ('error' in absent) {
             expect(absent.error).toContain('absent');
+            // The per-id 404: lets the client cache the miss.
+            expect(absent.notFound).toBe(true);
         }
+    });
+
+    it('does not mark a per-id load failure as not-found', async () => {
+        const gameData = makeGameData({ Ship: { 'boom': null } });
+        const resp = await resolveBatch(gameData, { Ship: ['boom'] });
+        const boom = entry(resp, 'Ship', 'boom');
+        expect('error' in boom && boom.notFound).toBeUndefined();
     });
 
     it('reports a per-id load failure as an error without failing siblings', async () => {
@@ -208,7 +220,7 @@ describe('GameDataServer request routes', () => {
 
     beforeAll(async () => {
         const gameData = makeGameData({
-            Ship: { 'a': { name: 'ShipA' } },
+            Ship: { 'a': { name: 'ShipA' }, 'boom': null },
         });
         // The ids promise rejects to prove the ids route can't leak an
         // unhandled rejection (which kills the process on modern Node).
@@ -285,8 +297,16 @@ describe('GameDataServer request routes', () => {
     });
 
     it('500s when a gettable rejects instead of crashing the process', async () => {
-        const resp = await fetch(`${baseUrl}/gameData/data/Ship/missing`);
+        const resp = await fetch(`${baseUrl}/gameData/data/Ship/boom`);
         expect(resp.status).toBe(500);
+    });
+
+    it('404s an id no data source defines', async () => {
+        // It used to be a 200 carrying a placeholder default object, so a
+        // client could not tell "does not exist" from "exists".
+        const resp = await fetch(`${baseUrl}/gameData/data/Ship/missing`);
+        expect(resp.status).toBe(404);
+        expect(await resp.text()).toContain('missing');
     });
 
     it('500s when the ids promise rejects', async () => {

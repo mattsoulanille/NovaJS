@@ -1,3 +1,5 @@
+import { isNovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
+
 /**
  * Retries a game-data load with backoff. Staging is the only thing
  * keeping the simulation's `getCached` reads deterministic (see the
@@ -16,6 +18,12 @@ export async function loadWithRetries<T>(load: () => Promise<T>,
         try {
             return await load();
         } catch (error) {
+            // "Does not exist" is not transient: the data set will give
+            // the same answer after every backoff, so give it now (and
+            // keep its class, so callers can tell it from a failure).
+            if (isNovaIDNotFoundError(error)) {
+                throw error;
+            }
             lastError = error;
             if (attempt < attempts) {
                 await new Promise(resolve =>
