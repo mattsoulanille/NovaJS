@@ -115,10 +115,16 @@ describe('save_game schema', () => {
     beforeEach(() => {
         setActiveSaveKey(SAVE_KEY);
         resetDiscovery(new FakeStorage());
+        // Also the DEFAULT store, the one extractSaveData actually reads
+        // (storeless in node: a FakeStorage reset does not touch it).
+        resetDiscovery();
     });
     afterEach(() => {
         setActiveSaveKey(SAVE_KEY);
         resetDiscovery(new FakeStorage());
+        // Also the DEFAULT store, the one extractSaveData actually reads
+        // (storeless in node: a FakeStorage reset does not touch it).
+        resetDiscovery();
     });
 
     it('round-trips a save through encode and decode', () => {
