@@ -2,6 +2,7 @@ import 'jasmine';
 import * as t from 'io-ts';
 import { isLeft, isRight } from 'fp-ts/lib/Either.js';
 import { Entity } from 'nova_ecs/entity';
+import { resetWarnThrottle } from '../common/log_throttle.js';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { CommunicatorResource, MultiplayerData, MultiplayerDataType } from 'nova_ecs/plugins/multiplayer_plugin';
 import { SerializerPlugin, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
@@ -213,6 +214,36 @@ describe('malformed inputs', () => {
             { kind: 'removeEntity', uuid: 'own' },
         ])).not.toThrow();
         expect(world.entities.has('own')).toBeFalse();
+    });
+
+    it('a flood of dropped inputs logs a bounded number of lines', () => {
+        // A peer streaming records whose inputs are all rejected must
+        // not make every world log a line per input at record rate: the
+        // drop paths throttle per peer and kind (common/log_throttle.ts),
+        // like the relay's. Each dropped input still drops.
+        resetWarnThrottle();
+        const warn = spyOn(console, 'warn');
+        const { world } = makeWorld();
+        const throwing = { kind: 'control', events: null } as unknown as SimulationInput;
+        const records: Parameters<typeof applyInputRecords>[1] = [];
+        for (let tick = 1; tick <= 500; tick++) {
+            records.push({
+                peerId: 'a', tick, inputs: [
+                    throwing,
+                    { kind: 'removeEntity', uuid: 'victim' } as SimulationInput,
+                    { kind: 'removePeer', peerId: 'b' } as SimulationInput,
+                ],
+            });
+        }
+        expect(() => applyInputRecords(world, records)).not.toThrow();
+        expect(world.entities.has('victim')).toBeTrue();
+        // One line per (peer, kind) per second: three kinds, so three
+        // lines, or up to six if the loop straddles a second boundary.
+        expect(warn.calls.count()).toBeGreaterThanOrEqual(3);
+        expect(warn.calls.count()).toBeLessThanOrEqual(6);
+        const kinds = new Set(warn.calls.allArgs().map(([line]) =>
+            /Dropping (\S+)/.exec(String(line))?.[1]));
+        expect(kinds).toEqual(new Set(['control', 'removeEntity', 'removePeer']));
     });
 
     it('the input codec rejects every shape the relay used to forward', () => {

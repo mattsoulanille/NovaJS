@@ -4,6 +4,7 @@ import { Entity } from "nova_ecs/entity";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
+import { warnThrottled } from "../common/log_throttle.js";
 import { ControlEvent, ControlEventType, ControlsSubject } from "../nova_plugin/controls_plugin.js";
 import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/entity_data_loader.js";
 import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
@@ -342,12 +343,26 @@ function authorizeMissionShips(world: World, peerId: string | undefined,
         if (mayInsert(world, peerId, ship.uuid, decoded.right)) {
             return true;
         }
-        console.warn(`Dropping mission ship ${ship.uuid} from ${peerId}: `
+        warnDrop(peerId, 'missionShip', () =>
+            `Dropping mission ship ${ship.uuid} from ${peerId}: `
             + 'not authorised to insert it');
         return false;
     });
     return ships.length === accepted.ships.length
         ? accepted : { ...accepted, ships };
+}
+
+/**
+ * Every drop here is a per-input decision, so a peer streaming records
+ * whose inputs are all rejected would otherwise log a line per input at
+ * record rate — the same log flood the relay's drop paths already
+ * throttle (common/log_throttle.ts). One line per second per peer and
+ * kind, with the rest counted. Logging only: the drop itself is
+ * unconditional and deterministic.
+ */
+function warnDrop(peerId: string | undefined, kind: unknown,
+    message: () => string) {
+    warnThrottled(`input-drop:${peerId ?? 'local'}:${String(kind)}`, message);
 }
 
 /**
@@ -366,8 +381,9 @@ export function applySimulationInputs(world: World, inputs: SimulationInput[],
         try {
             applySimulationInput(world, input, peerId);
         } catch (error) {
-            console.warn(`Dropping ${(input as { kind?: unknown })?.kind} input `
-                + `from ${peerId ?? 'local'}: ${String(error)}`);
+            const kind = (input as { kind?: unknown })?.kind;
+            warnDrop(peerId, kind, () =>
+                `Dropping ${kind} input from ${peerId ?? 'local'}: ${String(error)}`);
         }
     }
 }
@@ -409,12 +425,14 @@ function applySimulationInput(world: World, input: SimulationInput,
             }
             const decoded = serializer.decode(input.entity);
             if (isLeft(decoded)) {
-                console.warn(`Dropping addEntity input for ${input.uuid}: `
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping addEntity input for ${input.uuid}: `
                     + serializer.describeDecodeFailure(input.entity, decoded.left));
                 break;
             }
             if (!mayInsert(world, peerId, input.uuid, decoded.right)) {
-                console.warn(`Dropping addEntity input for ${input.uuid} `
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping addEntity input for ${input.uuid} `
                     + `from ${peerId}: not authorised to insert it`);
                 break;
             }
@@ -433,7 +451,8 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'removeEntity': {
             if (!mayActOn(world, peerId, input.uuid)) {
-                console.warn(`Dropping removeEntity input for ${input.uuid} `
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping removeEntity input for ${input.uuid} `
                     + `from ${peerId}: not authorised to remove it`);
                 break;
             }
@@ -442,7 +461,8 @@ function applySimulationInput(world: World, input: SimulationInput,
         }
         case 'removePeer': {
             if (peerId === undefined || !isServerPeer(world, peerId)) {
-                console.warn(`Dropping removePeer input for ${input.peerId} `
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping removePeer input for ${input.peerId} `
                     + `from ${peerId}: only the server removes peers`);
                 break;
             }
