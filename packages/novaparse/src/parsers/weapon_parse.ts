@@ -170,15 +170,22 @@ async function NotBayWeaponParse(weap: WeapResource, notFoundFunction: (m: strin
 async function ProjectileWeaponParse(weap: WeapResource, notFoundFunction: (m: string) => void, baseWeapon: BaseWeaponData): Promise<ProjectileWeaponData> {
     var notBayBase = await NotBayWeaponParse(weap, notFoundFunction, baseWeapon);
 
-
-    if (!weap.graphic) {
-        throw new Error("ProjectileWeapon " + baseWeapon.id + " had no graphic listed");
-    }
-
     // Parse the weapon's animation (the projectile it fires)
     var animation: Animation;
-    let spinResource = weap.idSpace.spïn[weap.graphic];
-    if (spinResource) {
+    // A projectile with no Graphic (-1) is malformed, but it is a resource
+    // that exists, and seven installed plug-in weapons are like this
+    // (Extra Outfits' 324-326 and 332-334, More Blasters CHEAT 254). It
+    // takes the same degraded path as a Graphic naming a spïn that is not
+    // there — reported through notFoundFunction, default animation — so
+    // one such weapon cannot fail the whole outfitter's warm-up. (It used
+    // to throw, which GameDataAggregator masked with a placeholder; the
+    // aggregator no longer does, see #47.)
+    let spinResource = weap.graphic === null ? undefined : weap.idSpace.spïn[weap.graphic];
+    if (weap.graphic === null) {
+        notFoundFunction("wëap " + notBayBase.id + " lists no graphic (Graphic -1)");
+        animation = getDefaultAnimation();
+    }
+    else if (spinResource) {
         let rledResource = spinResource.idSpace.rlëD[spinResource.spriteID];
         if (rledResource) {
 
