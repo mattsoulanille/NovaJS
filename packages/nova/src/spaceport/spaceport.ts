@@ -306,6 +306,35 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
+     * Gives the keyboard back from OUTSIDE: the owning display world is
+     * being torn down with the player still docked here (display/
+     * spaceport_plugin.ts's remove). Everything the visit may have bound
+     * on the focus stack goes — the venue on top (through Menu.dismiss,
+     * which also commits what the visit did there), the landing popup and
+     * its blocker, and the spaceport's own keys — and the spaceport's and
+     * blocker's controls are released for good, because show()'s own
+     * chain and every venue's caller re-bind them after an await (see
+     * MenuControls.release).
+     *
+     * Deliberately NOT Menu.dismiss's "resolve show()": for the spaceport
+     * that resolution IS the departure — the plugin turns it into
+     * LeaveSpaceportEvent, which the client answers by relaunching the
+     * ship and recording a "Departed" checkpoint. A teardown is not a
+     * departure, so show() is left unsettled (nothing holds it; it is
+     * collected with the spaceport) and the ship stays docked in the
+     * client's eyes.
+     */
+    override dismiss() {
+        for (const venue of [this.outfitter, this.shipyard, this.bar,
+            this.tradeCenter, this.missionComputer]) {
+            venue.dismiss();
+        }
+        this.offerPopup.dismiss();
+        this.popupBlocker.release();
+        this.controls.release();
+    }
+
+    /**
      * The orange active-mission map marks for the docked ship (the
      * entity is out of the display world while docked, so the starmap
      * plugin can't derive these itself).

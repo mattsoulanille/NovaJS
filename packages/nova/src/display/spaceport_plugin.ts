@@ -40,7 +40,7 @@ import { UiSoundEvent } from './ui_sound.js';
  * destroy the lot at the next jump. The player opens at most the one
  * they land at, so that is the one that gets built (review #39).
  */
-const SpaceportComponent = new Component<Spaceport>("Spaceport");
+export const SpaceportComponent = new Component<Spaceport>("Spaceport");
 
 /** Every stellar in the system, with its Spaceport if one has been built. */
 const PlanetSpaceportQuery = new Query(
@@ -245,6 +245,10 @@ export const SpaceportPlugin: Plugin = {
         for (const [, entity] of world.entities) {
             const spaceport = entity.components.get(SpaceportComponent);
             if (spaceport) {
+                // One still docked at gives the keyboard back first (see
+                // Spaceport.dismiss); a spaceport left bound after its
+                // world died would hold it for the rest of the session.
+                spaceport.dismiss();
                 spaceport.container.destroy({ children: true });
                 entity.components.delete(SpaceportComponent);
             }

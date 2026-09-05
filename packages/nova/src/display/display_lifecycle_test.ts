@@ -25,9 +25,11 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { BoardingDisplayPlugin } from './boarding_plugin.js';
 import { CursorPlugin } from './cursor_plugin.js';
 import { GateMapPlugin } from './gate_map_plugin.js';
-import { HailDialogPlugin } from './hail_dialog_plugin.js';
+import { HailDialogPlugin, HailDialogResource } from './hail_dialog_plugin.js';
 import { MissionInfoPlugin, OpenMissionInfoResource } from './mission_info_plugin.js';
-import { MissionShipDonePlugin } from './mission_ship_done_plugin.js';
+import {
+    MissionShipDonePlugin, ShipDonePopupResource,
+} from './mission_ship_done_plugin.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 import { PlanetCornersPlugin } from './planet_corners_plugin.js';
 import { OpenPlayerInfoResource, PlayerInfoPlugin } from './player_info_plugin.js';
@@ -35,7 +37,8 @@ import { DisplayScaleResource, ScreenSize } from './screen_size_plugin.js';
 import { ShipMissionOfferPlugin } from './ship_mission_offer_plugin.js';
 import { CameraFocus, Space } from './space_resource.js';
 import {
-    LeaveSpaceportEvent, OpenSpaceportEvent, SpaceportPlugin,
+    LeaveSpaceportEvent, OpenSpaceportEvent, SpaceportComponent,
+    SpaceportPlugin,
 } from './spaceport_plugin.js';
 import { Stage } from './stage_resource.js';
 import { OpenStarmapResource, StarmapPlugin } from './starmap_plugin.js';
@@ -70,11 +73,22 @@ import { TargetCornersPlugin } from './target_corners_plugin.js';
  *     the asset cache) are NOT destroyed: Sprite.destroy leaves its texture
  *     alone unless told otherwise, and only Text destroys its own.
  *
- * Both are pinned by counting PIXI's TextureCache — exactly the thing that
- * leaked — and by checking `destroyed` on every object the plugins put under
- * the stage. Headless: the fixture's stub canvas lets Text exist, and the
- * asset layer hands out empty sprites/textures, so nothing here measures how
- * anything looks.
+ *  3. A SURFACE STILL OPEN WHEN ITS WORLD DIES GIVES THE KEYBOARD BACK. The
+ *     landed UI's surfaces share one process-wide focus stack
+ *     (MenuControls), and the in-flight 'h'/'i'/'m' handlers stand down
+ *     while anything is on it. A hail dialog, an offer popup or a spaceport
+ *     that was destroyed with its world but never unbound would therefore
+ *     mute those keys for the rest of the session (review finding 2, the
+ *     starmap's documented failure). Each is dismissed before it is
+ *     destroyed, and — because their show() chains bind after an await —
+ *     released for good, so a continuation that outlives the world cannot
+ *     put them back.
+ *
+ * All are pinned by counting PIXI's TextureCache — exactly the thing that
+ * leaked — by checking `destroyed` on every object the plugins put under
+ * the stage, and by reading the focus stack. Headless: the fixture's stub
+ * canvas lets Text exist, and the asset layer hands out empty
+ * sprites/textures, so nothing here measures how anything looks.
  */
 describe('display world UI lifecycle', () => {
     beforeAll(() => installHeadlessPixi());
@@ -289,6 +303,134 @@ describe('display world UI lifecycle', () => {
                 world.step();
                 expect(spaceportsOn(world)).toBe(0);
                 await world.removePlugin(SpaceportPlugin);
+            });
+
+        it('gives the keyboard back when torn down mid-visit, venue and '
+            + 'all, without departing (finding 2)', async () => {
+                const gameData = await getIntegrationGameData();
+                const ids = await gameData.ids;
+                await MissionUniverse.shared(gameData).load();
+
+                /** Lands a fresh pilot at `planetId` in a world of its own. */
+                async function land(planetId: string) {
+                    const world = await spaceportWorld([planetId]);
+                    let left = 0;
+                    world.events.get(LeaveSpaceportEvent)
+                        .subscribe(() => left++);
+                    world.emit(OpenSpaceportEvent,
+                        { planetId, ship: pilot(ids.Ship[0]) });
+                    world.step();
+                    const spaceport = world.entities.get(`planet ${planetId}`)!
+                        .components.get(SpaceportComponent)!;
+                    await settle(100);
+                    return { world, spaceport, left: () => left };
+                }
+
+                /** The transit: nothing the visit bound may survive it. */
+                async function tearDown(landing: Awaited<ReturnType<typeof land>>) {
+                    await landing.world.removePlugin(SpaceportPlugin);
+                    expect(MenuControls.focused).toBeUndefined();
+                    expect(landing.spaceport.container.destroyed).toBe(true);
+                    // Including after every continuation has run on: a
+                    // venue's caller re-binds the spaceport's keys once
+                    // the venue resolves, which used to put the dead
+                    // spaceport back on the stack a microtask after it
+                    // was destroyed.
+                    await settle(100);
+                    expect(MenuControls.focused).toBeUndefined();
+                    // And a teardown is not a departure: no relaunch, no
+                    // "Departed" checkpoint.
+                    expect(landing.left()).toBe(0);
+                }
+
+                // The stellars with an outfitter, in data order. Some of
+                // them greet a fresh pilot with mission offers (Earth's
+                // intro missions), which sit on the spaceport as popups
+                // until answered: those are torn down WITH THE OFFER UP,
+                // the first one that reaches its main screen is torn down
+                // with a VENUE up.
+                let venueCase = false;
+                for (const planetId of ids.Planet) {
+                    if (!(await gameData.data.Planet.get(planetId))
+                        .flags.hasOutfitter) {
+                        continue;
+                    }
+                    const landing = await land(planetId);
+                    const { spaceport, world } = landing;
+                    expect(MenuControls.focused)
+                        .withContext(`docked at ${planetId}`).toBeDefined();
+                    if (!spaceport.onMainScreen) {
+                        await tearDown(landing);
+                        continue;
+                    }
+                    // Into the outfitter: its keys go over the spaceport's.
+                    world.resources.get(ControlsSubject)!
+                        .next({ action: 'outfitter', state: 'start' });
+                    await waitFor(() => !spaceport.onMainScreen
+                        && MenuControls.focused !== undefined,
+                        'the outfitter took the keyboard');
+                    await tearDown(landing);
+                    venueCase = true;
+                    break;
+                }
+                expect(venueCase)
+                    .withContext('some outfitter stellar makes no offers')
+                    .toBe(true);
+            });
+    });
+
+    describe('dismissal at teardown (finding 2)', () => {
+        it('closes a hail channel still open when its world dies, and one '
+            + 'still rendering', async () => {
+                const context = {
+                    variant: 'ship' as const, heading: 'Pirate Viper',
+                    image: null, body: 'Channel open.',
+                };
+                // Open, bound, then torn down.
+                let world = await displayWorld();
+                await world.addPlugin(HailDialogPlugin);
+                let dialog = world.resources.get(HailDialogResource)!;
+                let shown = dialog.show(context);
+                await waitFor(() => MenuControls.focused !== undefined,
+                    'the hail dialog took the keyboard');
+                await world.removePlugin(HailDialogPlugin);
+                expect(MenuControls.focused).toBeUndefined();
+                expect(dialog.container.destroyed).toBe(true);
+                // The caller unwinds, as it does on Close Channel.
+                await shown;
+                expect(MenuControls.focused).toBeUndefined();
+
+                // Torn down while the frame art is still loading: show()
+                // binds only after it has rendered, so the dialog must
+                // neither take the keyboard afterwards nor draw into its
+                // destroyed container.
+                world = await displayWorld();
+                await world.addPlugin(HailDialogPlugin);
+                dialog = world.resources.get(HailDialogResource)!;
+                shown = dialog.show(context);
+                await world.removePlugin(HailDialogPlugin);
+                await settle();
+                expect(MenuControls.focused).toBeUndefined();
+                await shown;
+                expect(MenuControls.focused).toBeUndefined();
+            });
+
+        it('takes down an offer popup still up when its world dies, '
+            + 'without answering it', async () => {
+                const world = await displayWorld();
+                await world.addPlugin(MissionShipDonePlugin);
+                const popup = world.resources.get(ShipDonePopupResource)!;
+                let answered = false;
+                void popup.show('The derelict is yours.', { accept: 'Okay' })
+                    .then(() => { answered = true; });
+                expect(MenuControls.focused).toBeDefined();
+                await world.removePlugin(MissionShipDonePlugin);
+                expect(MenuControls.focused).toBeUndefined();
+                expect(popup.container.destroyed).toBe(true);
+                // A notice's answer is the player's; a teardown gives none.
+                await settle();
+                expect(answered).toBe(false);
+                expect(MenuControls.focused).toBeUndefined();
             });
     });
 

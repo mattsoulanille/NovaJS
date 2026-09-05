@@ -38,11 +38,17 @@ export class MenuControls {
     readonly repeatableActions = new Set<ControlAction>(REPEATABLE);
 
     private controlsSubscription: Subscription | undefined;
+    /** Set by {@link release}: this surface is dead and must never take
+     * the keyboard again. */
+    private released = false;
     constructor(private controlEvents: Observable<ControlEvent>,
         public controls: { [index in ControlAction]?: () => void } = {}) { }
 
     bind() {
         this.unbind();
+        if (this.released) {
+            return;
+        }
         MenuControls.stack.push(this);
         this.controlsSubscription =
             this.controlEvents.subscribe(({ action, state }) => {
@@ -65,5 +71,24 @@ export class MenuControls {
         if (index >= 0) {
             MenuControls.stack.splice(index, 1);
         }
+    }
+
+    /**
+     * Unbinds for good: the surface that owns these controls is being
+     * destroyed with its display world (a jump or gate transit while a
+     * dialog is up), and every later bind() is a no-op.
+     *
+     * The permanence is the point. A dialog's show() is an async chain
+     * that binds AFTER an await (the hail dialog renders its frame first;
+     * a venue's caller re-binds the spaceport's keys once the venue
+     * resolves), so an unbind alone can be undone a microtask later by a
+     * continuation that does not know its world died — and a surface
+     * left on the focus stack after that keeps the keyboard for the rest
+     * of the session: the next system's in-flight 'h'/'i'/'m' handlers
+     * all stand down while anything is focused.
+     */
+    release() {
+        this.released = true;
+        this.unbind();
     }
 }
