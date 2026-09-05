@@ -195,15 +195,18 @@ describe('ränk PriceMod at real stock stellars', () => {
             expect(outfitResaleValue(outfit))
                 .toBeLessThanOrEqual(outfitPrice(outfit));
 
-            // The outfitter's view of a stellar does not even carry the
-            // owning govt any more: there is nothing in the shop for a rank
-            // to match against.
+            // The outfitter's view of a stellar carries the owning govt for
+            // ONE purpose — the oütf RequireGovt scoping (which stellars a
+            // Require is enforced at, outfitter_rules' requireApplies) —
+            // and no price rule reads it: there is nothing in the shop for
+            // a rank to match against.
             expect(newIreland.govt).toBe('nova:144');
             expect(stellarOf(newIreland))
                 .toEqual({
                     techLevel: newIreland.techLevel,
                     specialTech: newIreland.specialTech,
                     buysAnyOutfit: newIreland.flags.buysAnyOutfit,
+                    govt: 'nova:144',
                 });
         });
 });
