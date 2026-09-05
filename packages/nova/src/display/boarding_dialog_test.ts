@@ -7,7 +7,9 @@ import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import { ControlledByComponent } from '../nova_plugin/ship_control.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { Stat } from '../nova_plugin/stat.js';
-import { plunderDialogContent } from './boarding_plugin.js';
+import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { STANDARD_CARGO_NAMES } from '../nova_plugin/mission_logic.js';
+import { cargoKeyDisplayName, plunderDialogContent } from './boarding_plugin.js';
 
 /**
  * The plunder dialog's rules, read off the synced boarding state and the
@@ -101,6 +103,61 @@ describe('plunder dialog content', () => {
      * bridge mirrors here, so the dialog can never offer an action the sim
      * would refuse.
      */
+    /**
+     * CargoComponent keys are internal ("cargo:<0-5>", "junk:<globalID>",
+     * "mission:<id>") and were printed verbatim — "12 tons of cargo:3".
+     * The single-commodity line reads the commodity's display name.
+     */
+    describe('the single-commodity cargo line', () => {
+        function holding(key: string, tons: number): Entity {
+            const hulk = victim();
+            hulk.components.set(CargoComponent, new Map([[key, tons]]));
+            return hulk;
+        }
+        const cargoLine = (entity: Entity,
+            cargoName?: (key: string) => string) =>
+            plunderDialogContent(boardingState(), entity, 100, cargoName)
+                .rows[0].value;
+
+        it('names a standard commodity, never its key', () => {
+            const line = cargoLine(holding('cargo:3', 12));
+            expect(line).toEqual(`12 tons of ${STANDARD_CARGO_NAMES[3]}`);
+            expect(line).not.toContain('cargo:');
+        });
+
+        it('names a jünk commodity from the game data', () => {
+            const gameData = {
+                data: {
+                    Junk: {
+                        getCached: (id: string) => id === 'nova:128'
+                            ? { name: 'Medical Supplies', abbrev: 'Med' }
+                            : undefined,
+                    },
+                },
+            } as unknown as SimulationGameDataInterface;
+            expect(cargoLine(holding('junk:nova:128', 5),
+                key => cargoKeyDisplayName(key, gameData)))
+                .toEqual('5 tons of Medical Supplies');
+        });
+
+        it('falls back to "cargo" for a jünk whose data is not cached', () => {
+            expect(cargoLine(holding('junk:nova:128', 5)))
+                .toEqual('5 tons of cargo');
+        });
+
+        it('calls mission freight mission cargo', () => {
+            expect(cargoLine(holding('mission:nova:700', 8)))
+                .toEqual('8 tons of mission cargo');
+        });
+
+        it('summarises a mixed hold by tonnage alone', () => {
+            const hulk = victim();
+            hulk.components.set(CargoComponent,
+                new Map([['cargo:0', 4], ['cargo:2', 6]]));
+            expect(cargoLine(hulk)).toEqual('10 tons');
+        });
+    });
+
     describe('rows grey off what the victim actually has', () => {
         it('greys Cargo for an empty hold', () => {
             const empty = victim();
