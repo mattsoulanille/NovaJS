@@ -5,8 +5,10 @@ import * as t from 'io-ts';
 export function set<Value, ValueEncode>(value: t.Type<Value, ValueEncode>) {
     return new t.Type(
         `Set<${value.name}>`,
+        // `every`, not an initial-value-less `reduce`: reduce throws on
+        // an empty array, so an empty Set failed the guard (#84).
         (u): u is Set<Value> => u instanceof Set
-            && [...u].map(u => value.is(u)).reduce((a, b) => a && b),
+            && [...u].every(u => value.is(u)),
         (i, context) => {
             const decoded = t.array(value).validate(i, context);
             if (isLeft(decoded)) {

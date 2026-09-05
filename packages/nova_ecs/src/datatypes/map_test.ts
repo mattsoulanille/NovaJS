@@ -76,4 +76,12 @@ describe('Map', () => {
         const result = map(t.number, t.string).decode(notAMap);
         expect(isLeft(result)).toBeTrue();
     });
+
+    // #84: reduce without an initial value throws on an empty array.
+    it('is-guard accepts an empty map', () => {
+        expect(map(t.string, t.number).is(new Map())).toBeTrue();
+        expect(map(t.string, t.number).is(new Map([['a', 1]]))).toBeTrue();
+        expect(map(t.string, t.number).is(new Map([['a', 'b']]))).toBeFalse();
+        expect(map(t.string, t.number).is({})).toBeFalse();
+    });
 });

@@ -64,4 +64,20 @@ describe('Set', () => {
         const result = set(t.number).decode(notASet);
         expect(isLeft(result)).toBeTrue();
     });
+
+    // #84: the guard used reduce without an initial value, which throws
+    // on an empty array — so an empty Set (and anything that routes
+    // through `is`, like a union encode) crashed instead of matching.
+    it('is-guard accepts an empty set', () => {
+        expect(set(t.string).is(new Set())).toBeTrue();
+        expect(set(t.string).is(new Set(['a']))).toBeTrue();
+        expect(set(t.string).is(new Set([1]))).toBeFalse();
+        expect(set(t.string).is(['a'])).toBeFalse();
+    });
+
+    it('encodes an empty set inside a union', () => {
+        // communicator_message's `destination: t.union([t.string, set(t.string)])`
+        const codec = t.union([t.string, set(t.string)]);
+        expect(codec.encode(new Set())).toEqual([]);
+    });
 });
