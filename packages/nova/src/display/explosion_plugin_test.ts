@@ -25,7 +25,7 @@ import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { SoundEvent, SoundEventData } from '../nova_plugin/sound_plugin.js';
 import { Stat } from '../nova_plugin/stat.js';
 import {
-    ExplosionPlugin, makeExplosion, MAX_EXPLOSION_SPARKS,
+    ExplosionPlugin, GAME_FRAME_MS, makeExplosion, MAX_EXPLOSION_SPARKS,
     MIN_EXPLOSION_SPARKS, randomSparkCount, SecondaryExplosionComponent,
     SPARK_PERIOD_MS, SPARK_RADIUS,
 } from './explosion_plugin.js';
@@ -315,6 +315,32 @@ describe('display secondary explosions', () => {
         expect(explosionCount()).toEqual(0);
     });
 
+    it('keeps the running schedule when the hulk is hit again', async () => {
+        // The sim emits ZeroArmorEvent on EVERY hit that leaves armor at
+        // zero and ignores the repeats itself (ShipZeroArmorSystem's
+        // ExplodingComponent guard). The display's schedule must stay
+        // anchored on the first zero too, not restart on each hit.
+        const { ship, stepTime, zeroArmor, simTime } =
+            await displayWorld(0, { deathDelay: 5 });
+        zeroArmor();
+        stepTime();
+        const schedule = () =>
+            ship.components.get(SecondaryExplosionComponent)!.schedule!;
+        for (let i = 0; i < 30 && schedule().spawned === 0; i++) {
+            stepTime();
+        }
+        const { startTime, endTime, spawned } = schedule();
+        expect(spawned).toBeGreaterThan(0);
+        expect(simTime.time).toBeGreaterThan(startTime);
+
+        // Another hit on the hulk, a second or so into the sequence.
+        zeroArmor();
+        stepTime();
+        expect(schedule().startTime).toEqual(startTime);
+        expect(schedule().endTime).toEqual(endTime);
+        expect(schedule().spawned).toBeGreaterThanOrEqual(spawned);
+    });
+
     it('self-heals a leaked secondary explosion once armor is back up',
         async () => {
             // Whatever the upstream ordering, a ship above zero armor
@@ -388,6 +414,54 @@ describe('display secondary explosions', () => {
  * of this peer's frame rate — so two worlds stepping identically produce
  * identical explosion spawn ticks, with no random draw anywhere.
  */
+/**
+ * bööm FrameAdvance is in GAME frames of 1/30 s: "100 will cause each
+ * frame of the explosion to appear for exactly one frame of the game
+ * animation" (EVN Bible). ExplosionData.rate is FrameAdvance / 100, so
+ * the stub's 16-frame sprite lives 16 * 33.3 = 533 ms at rate 1. It used
+ * to be given 30 ms per frame (480 ms): every explosion ran ~10% fast.
+ */
+describe('explosion animation timing', () => {
+    async function explosionLife(rate: number) {
+        const { world, stepTime, explosionCount } =
+            await displayWorld(100, { graphics: true });
+        // A nonzero clock, as in the real client: ExplosionSystem reads a
+        // start time of 0 as "not started yet" and would re-arm.
+        stepTime(100);
+        world.entities.set('boom', makeExplosion(
+            { ...getDefaultExplosionData(), id: EXPLOSION_ID, rate },
+            new Position(0, 0)));
+        // Attach the stub graphic and start the clock, without advancing
+        // it, whichever order those two systems happen to run in.
+        stepTime(0);
+        stepTime(0);
+        expect(explosionCount()).toEqual(1);
+        return { stepTime, explosionCount };
+    }
+
+    it('holds each sprite frame for one 1/30 s game frame at rate 1',
+        async () => {
+            const { stepTime, explosionCount } = await explosionLife(1);
+            stepTime(500);
+            expect(explosionCount()).toEqual(1);
+            stepTime(100);
+            expect(explosionCount()).toEqual(0);
+        });
+
+    it('holds each sprite frame for two game frames at rate 0.5',
+        async () => {
+            const { stepTime, explosionCount } = await explosionLife(0.5);
+            stepTime(1000);
+            expect(explosionCount()).toEqual(1);
+            stepTime(100);
+            expect(explosionCount()).toEqual(0);
+        });
+
+    it('exposes the game frame length the rate counts in', () => {
+        expect(GAME_FRAME_MS).toBeCloseTo(1000 / 30, 10);
+    });
+});
+
 describe('death sequence explosion cadence', () => {
     /** Runs a whole death sequence, returning the tick each spawn fell on. */
     async function spawnTicks(stepMs: number, deathDelay = 5) {

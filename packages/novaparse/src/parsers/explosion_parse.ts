@@ -58,6 +58,10 @@ export async function ExplosionParse(boom: BoomResource, notFoundFunction: (m: s
         ...base,
         animation,
         sound: soundID,
+        // bööm FrameAdvance, normalised so 1 = "each frame of the
+        // explosion appears for exactly one frame of the game animation"
+        // (EVN Bible, bööm: FrameAdvance 100). See ExplosionData.rate for
+        // the unit — sprite frames per 1/30 s game frame.
         rate: boom.animationRate / 100
     }
 };

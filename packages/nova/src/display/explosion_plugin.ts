@@ -45,6 +45,17 @@ const ExplosionState = new Component<{
     scale?: number,
 }>('ExplosionState');
 
+/**
+ * One frame of the game animation, in ms. bööm FrameAdvance counts in
+ * these: "100 will cause each frame of the explosion to appear for
+ * exactly one frame of the game animation" (EVN Bible), and the game runs
+ * at 30 fps — the unit every other display timer uses (FADE_FRAME_MS,
+ * running_light_blink's MS_PER_FRAME). ExplosionData.rate is
+ * FrameAdvance / 100, so a sprite frame lasts GAME_FRAME_MS / rate. It
+ * used to be 30 / rate, which ran every explosion ~10% fast.
+ */
+export const GAME_FRAME_MS = 1000 / 30;
+
 const ExplosionSystem = new System({
     name: 'ExplosionSystem',
     args: [AnimationGraphicComponent, ExplosionDataComponent,
@@ -59,7 +70,7 @@ const ExplosionSystem = new System({
         }
         if (!explosionState.startTime || !explosionState.lifetime) {
             explosionState.startTime = time.time;
-            const frameTime = 30 / explosionData.rate;
+            const frameTime = GAME_FRAME_MS / explosionData.rate;
             explosionState.lifetime = frameTime * Math.max(0,
                 ...[...graphic.sprites.values()].map(s => s.frames));
 
@@ -498,6 +509,18 @@ const ShipSecondaryExplosionSystem = new System({
         // since only a DeathEvent takes them off again. See
         // armorFullyRestored.
         if (armorFullyRestored(armor)) {
+            return;
+        }
+        // Already dying: the hulk keeps taking hits, and the sim emits a
+        // ZeroArmorEvent for EVERY hit that leaves armor at zero. The
+        // sim's ShipZeroArmorSystem ignores those repeats (its
+        // ExplodingComponent guard, death_plugin.ts) so its deadline
+        // stays anchored on the FIRST zero; the schedule here has to stay
+        // anchored on the same one, or every further hit restarted the
+        // breakup from its slow phase — replaying the early explosions,
+        // never reaching the accelerating tail, and drifting the display's
+        // end past the sim's death.
+        if (components.get(SecondaryExplosionComponent)?.schedule) {
             return;
         }
 
