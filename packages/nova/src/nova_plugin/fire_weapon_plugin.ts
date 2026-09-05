@@ -68,6 +68,14 @@ export interface WeaponLocalState {
     reloadingBurst: boolean,
     wasFiring: boolean,
     exitIndex: number,
+    /**
+     * The uuid of the last entity this weapon spawned (the last of a
+     * simultaneous volley), for wëap Flags3 0x0004 "can't fire another
+     * shot of this type until the previous one expires or hits
+     * something". Optional (absent until the first shot) so the default
+     * state, older snapshots and the wire shape are unchanged.
+     */
+    lastShot?: string,
 }
 type WeaponsLocalState = DefaultMap<string, WeaponLocalState>;
 export const WeaponsComponent = new Component<WeaponsLocalState>('WeaponsComponent')
@@ -189,6 +197,29 @@ export function liveTargetMovement(entities: EntityMap,
 
 export function sampleInaccuracy(accuracy: number, random: Random) {
     return 2 * (random.next() - 0.5) * accuracy * (2 * Math.PI / 360);
+}
+
+/**
+ * The aim offset, in radians, of a weapon with a NEGATIVE wëap
+ * Inaccuracy: "Fires to the side by this angle (absolute value in
+ * degrees)" (EVN Bible ~:3139). `accuracy` is that absolute value.
+ *
+ * WHICH side the Bible does not say. ResForge's wëap template annotates
+ * the negative range "Fixed (unguided only) ... Needs off-axis exits",
+ * and that note is the rule adopted here: the shot leans toward the
+ * side of the ship its exit point sits on, so a weapon with a gun
+ * position on each flank fires its broadsides alternately left and
+ * right as the exit points cycle, which is exactly what "needs
+ * off-axis exits" describes. `exitX` is the exit point's raw shän x
+ * offset — positive is the ship's starboard (see applyExitPoint), and
+ * positive angles turn to starboard (Angle.getUnitVector). An exit ON
+ * the axis (x = 0, including exitType 'center') has no side to lean to
+ * and goes to starboard. Deterministic: no PRNG draw at all, unlike the
+ * random spread — the whole point of a fixed angle.
+ */
+export function fixedAngleOffset(accuracy: number, exitX: number): number {
+    const side = exitX < 0 ? -1 : 1;
+    return side * accuracy * (2 * Math.PI / 360);
 }
 
 /**
@@ -321,10 +352,18 @@ export abstract class WeaponEntry {
      * it so a submunition burst is heard once rather than once per child.
      * Purely an output concern: SoundEvent carries no simulation state,
      * so silencing a shot cannot move the sim.
+     *
+     * `aimOffset` is the inaccuracy already folded into `angle`, in
+     * radians, for shots that are re-aimed after they spawn: a beam is
+     * rebuilt from its firing ship every tick and must keep the SAME
+     * error it left with (EVN Bible: inaccuracy is the error "as it
+     * leaves the ship"), so BeamWeaponEntry stores it. Projectiles carry
+     * their heading and ignore it.
      */
     abstract fire(position: Position, angle: Angle, owner?: string,
         target?: string, source?: string, sourceVelocity?: Vector,
-        exitPointData?: ExitPointData, silent?: boolean): Entity | undefined;
+        exitPointData?: ExitPointData, silent?: boolean,
+        aimOffset?: number): Entity | undefined;
 
     /**
      * Stamps a spawned weapon entity (projectile, beam, bay fighter,
@@ -529,12 +568,25 @@ export abstract class WeaponEntry {
             }
         }
 
-        if (inaccuracy) {
-            angle = angle.add(sampleInaccuracy(this.data.accuracy, this.random));
+        // The weapon's error as it leaves the ship (wëap Inaccuracy,
+        // ~:3137-3143): "ignored for guidance-10 point defense beams",
+        // so those draw nothing and aim true; a negative Inaccuracy is a
+        // fixed side angle (fixedAngleOffset) rather than a spread, on
+        // unguided shots. Everything else gets the uniform random error.
+        // Which branch a weapon takes is a property of its synced data,
+        // so every peer draws the PRNG the same number of times.
+        let aimOffset = 0;
+        if (inaccuracy && this.data.guidance !== 'pointDefenseBeam') {
+            aimOffset = this.data.firesAtFixedAngle
+                && this.data.guidance === 'unguided'
+                ? fixedAngleOffset(this.data.accuracy, exitPointData.position[0])
+                : sampleInaccuracy(this.data.accuracy, this.random);
+            angle = angle.add(aimOffset);
         }
 
         const spawned = this.fire(exitPoint, angle, owner.owner ?? source,
-            target, source, movement.velocity, exitPointData);
+            target, source, movement.velocity, exitPointData, false,
+            aimOffset);
         if (spawned) {
             this.stampFiringGroup(spawned, entity, owner.owner);
         }
@@ -560,7 +612,24 @@ export abstract class WeaponEntry {
 
         const subs: Entity[] = [];
         for (const sub of this.data.submunitions) {
-            if (subCounts.get(sub.id) > sub.limit) {
+            // wëap SubLimit (EVN Bible ~:3280-3284): "If you have defined
+            // a recursively-submunitioning weapon (i.e. one which splits
+            // into more copies of itself) this field will allow you to
+            // limit the number of recursive splits that happen. This
+            // field is ignored if the weapon is not recursively
+            // submunitioning." So it applies ONLY when the sub is this
+            // very weapon — arpia's "Explosion" (sub limit -1, the usual
+            // unused value) is not recursive and must sub regardless —
+            // and it counts SPLITS: subCounts holds how many ancestors
+            // of this shot were themselves spawned as this sub, i.e.
+            // which generation this shot is, and a limit of L allows
+            // generations 0..L-1 to split, L splits in all. A recursive
+            // weapon with a limit of 0 or less makes no recursive splits
+            // at all: an unbounded chain of copies is an entity explosion
+            // nobody asks for, and every recursive weapon in the stock
+            // data and 27 plug-ins carries a positive limit (2..375).
+            if (sub.id === this.data.id
+                && subCounts.get(sub.id) >= Math.max(sub.limit, 0)) {
                 continue;
             }
 

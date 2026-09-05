@@ -9,6 +9,7 @@ import { World } from 'nova_ecs/world';
 import { completeEntity, loadWireSnapshotGameData } from '../nova_plugin/entity_data_loader.js';
 import { deriveEntityComponents } from '../nova_plugin/entity_factory.js';
 import { makeNpc } from '../nova_plugin/npc_plugin.js';
+import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { compareWorlds, makeDeterminismWorld } from './determinism_harness.js';
 import { applyInputRecords } from './simulation_input.js';
 import { getIntegrationGameData } from './simulation_test_fixture.js';
@@ -52,6 +53,21 @@ describe('Wire snapshots', () => {
             }],
         }]);
         for (let i = 0; i < 240; i++) {
+            source.step();
+        }
+        // A ship spawned mid-tick (a bay fighter) gets its derived
+        // components (ShipData, outfits, physics...) from the provider
+        // systems on the NEXT step, whereas restoring a snapshot derives
+        // them immediately. Capturing on a launch tick therefore hashes
+        // the restored fighter with a ShipData the source's does not have
+        // yet — an asymmetry of the derive-at-restore path, not of the
+        // wire. Step past any such tick so the gate below judges the
+        // wire alone. (Surfaced when the weapon reload floor moved the
+        // carriers' launch ticks onto 240.)
+        const undrivedShip = () => [...source.entities.values()].some(entity =>
+            entity.components.has(ShipComponent)
+            && !entity.components.has(ShipDataComponent));
+        while (undrivedShip()) {
             source.step();
         }
         // The capture must contain transient combat entities

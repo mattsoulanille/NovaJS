@@ -42,7 +42,9 @@ async function makeTestWorld({ ammoType, ammoCounts = {}, energy = 200,
     const weapon: ProjectileWeaponData = {
         ...getDefaultProjectileWeaponData(),
         id: WEAPON_ID,
-        // Reloaded every step.
+        // The shortest reload there is: WeaponsSystem floors it at one
+        // original 30 fps frame, so a held trigger fires every SECOND
+        // 60 Hz step (steps 1, 3, 5, ...).
         reload: 1,
         // Projectiles never expire during a test.
         shotDuration: 1e9,
@@ -135,7 +137,8 @@ describe('weapon ammo', () => {
         });
         setFiring(ship, true);
 
-        await stepWorld(world, 2);
+        // Two shots: steps 1 and 3.
+        await stepWorld(world, 4);
         const outfits = ship.components.get(OutfitsStateComponent)!;
         expect(outfits.get(AMMO_A_ID)!.count).toEqual(1);
         expect(countProjectiles(world)).toEqual(2);
@@ -171,7 +174,8 @@ describe('weapon ammo', () => {
         });
         setFiring(ship, true);
 
-        await stepWorld(world, 3);
+        // Three shots: steps 1, 3 and 5.
+        await stepWorld(world, 5);
         const outfits = ship.components.get(OutfitsStateComponent)!;
         // The lowest outfit id drains first.
         expect(outfits.get(AMMO_A_ID)!.count).toEqual(0);

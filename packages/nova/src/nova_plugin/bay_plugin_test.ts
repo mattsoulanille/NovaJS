@@ -59,7 +59,9 @@ async function makeTestWorld({ fighterCounts = { [FIGHTER_A_ID]: 2 },
         ammoType: ['weapon', BAY_ID],
         maxAmmo,
         fireGroup: 'secondary',
-        // Reloaded every step.
+        // The shortest reload there is: WeaponsSystem floors it at one
+        // original 30 fps frame, so a held trigger launches every SECOND
+        // 60 Hz step (see launchOne).
         reload: 1,
     };
     gameData.data.Weapon.map.set(BAY_ID, bay);
@@ -136,11 +138,15 @@ function fighters(world: World): [string, Entity][] {
         .filter(([, entity]) => entity.components.has(BayFighterComponent));
 }
 
-/** Launches exactly one fighter and returns it. */
+/**
+ * Launches exactly one fighter and returns it. Two steps with the
+ * trigger held: the launch on the first, and the second is the bay's
+ * one-frame reload, so back-to-back calls each get their own fighter.
+ */
 async function launchOne(world: World, carrier: Entity) {
     const before = fighters(world).length;
     setFiring(carrier, true);
-    await stepWorld(world, 1);
+    await stepWorld(world, 2);
     setFiring(carrier, false);
     const now = fighters(world);
     expect(now.length).toBe(before + 1);
@@ -432,6 +438,14 @@ describe('bay weapons', () => {
         async () => {
             const { world, carrier } = await makeTestWorld();
             const [uuid, fighter] = await launchOne(world, carrier);
+            // Parked well clear of the carrier, so the only collision
+            // in play is the foreign one emitted below (a returning
+            // fighter still alongside its carrier would really dock).
+            fighter.components.set(MovementStateComponent, {
+                ...fighter.components.get(MovementStateComponent)!,
+                position: new Position(5000, 5000),
+                velocity: new Vector(0, 0),
+            });
             startReturnHome(fighter);
             world.emit(CollisionEvent,
                 { other: 'some other ship', initiator: true }, [uuid]);
