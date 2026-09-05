@@ -115,10 +115,12 @@ describe('a landing popup over the spaceport', () => {
         expect(ready()).toBe(true);
     }
 
-    /** The spaceport's private landing popup and its Leave button. */
+    /** The spaceport's private landing popup, keys, BBS and Leave button. */
     function internals(spaceport: Spaceport) {
         return spaceport as unknown as {
             offerPopup: OfferPopup,
+            controls: MenuControls,
+            missionComputer: { container: PIXI.Container },
             buttons: { leave: Button },
         };
     }
@@ -197,5 +199,41 @@ describe('a landing popup over the spaceport', () => {
             // that has already been left.
             expect(MenuControls.focused).toBeUndefined();
             expect(spaceport.onMainScreen).toBeFalse();
+        });
+
+    /**
+     * Spaceport.show() binds its keys BEFORE the landing processing (so
+     * 'p'/'i' work while the mission universe loads) and only reveals the
+     * frame afterwards. A venue key in that gap used to open the venue
+     * invisibly over the landing processing; enterVenue() now refuses
+     * while the spaceport is not on screen, and keeps the keys.
+     */
+    it('ignores a venue key during the landing gap, before the spaceport '
+        + 'is on screen', async () => {
+            const controlEvents = new Subject<ControlEvent>();
+            const spaceport = new Spaceport(displayAssets(),
+                gameData() as unknown as SimulationGameDataInterface,
+                PLANET_ID, controlEvents);
+            await spaceport.buildPromise;
+            const departed = spaceport.show(landedPilot());
+            const { controls, missionComputer, offerPopup } =
+                internals(spaceport);
+            // The gap: keys owned, frame not yet revealed.
+            expect(spaceport.container.visible).toBeFalse();
+            expect(MenuControls.focused).toBe(controls);
+            controlEvents.next({ action: 'missionBBS', state: 'start' });
+            // Refused: the venue did not take the keys, nothing opened.
+            expect(MenuControls.focused).toBe(controls);
+            expect(missionComputer.container.visible).toBeFalse();
+            await waitFor(() => offerPopup.container.visible);
+            expect(spaceport.container.visible).toBeTrue();
+            expect(missionComputer.container.visible).toBeFalse();
+            (offerPopup as unknown as {
+                choice: Subject<'accept' | 'refuse'>,
+            }).choice.next('refuse');
+            await waitFor(() => spaceport.onMainScreen);
+            controlEvents.next({ action: 'depart', state: 'start' });
+            await departed;
+            expect(MenuControls.focused).toBeUndefined();
         });
 });
