@@ -9,7 +9,7 @@ import { Observable, Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
-import { makeControlBitHooks, NCBParseError, runNCBSet } from "../nova_plugin/ncb.js";
+import { makeControlBitHooks, NCBParseError, NCBSetOperation, parseNCBSet, runNCBSet } from "../nova_plugin/ncb.js";
 import { ControlBits, ControlBitsComponent } from "../nova_plugin/ncb_plugin.js";
 import { playerDiscovery } from "../nova_plugin/discovery_store.js";
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
@@ -37,9 +37,11 @@ import { applyMapOutfit } from "./map_outfit.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { rankContribute } from "../nova_plugin/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
-import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, govtsAllied, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { CargoComponent, cargoUsed } from "../nova_plugin/cargo_plugin.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
+import { buildChangedShip, ShipChangeMode } from "./shipyard_rules.js";
 
 
 const descWidth = 190;
@@ -246,6 +248,21 @@ export class Outfitter extends Menu<Entity> {
      * outfitter_rules' AMMO_SELL_STRINGS).
      */
     private ammoSellStrings: AmmoSellStrings = AMMO_SELL_STRINGS;
+    /**
+     * Every shïp global id in the game data, so a change-ship operator
+     * (`Cxxx` / `Exxx` / `Hxxx` in an OnPurchase) resolves its number
+     * stock-first like every other numeric reference. Loaded in build().
+     */
+    private shipIds = new Set<string>();
+    /**
+     * Told the moment an OnPurchase set string has CHANGED THE PLAYER'S
+     * SHIP, with the new entity — the outfitter's twin of the shipyard's
+     * `onShipPurchased`, wired by the Spaceport to the same
+     * `adoptPurchasedShip`, and for the same reason: the docked frame loop
+     * keeps writing to whichever entity the client holds, so the swap has
+     * to be published at the instant it happens rather than at Done.
+     */
+    onShipChanged?: (ship: Entity) => void;
 
     private text = {
         description: new PIXI.Text("", FONT.normal),
@@ -480,10 +497,99 @@ export class Outfitter extends Menu<Entity> {
         await Promise.all([...weaponIds].map(id =>
             this.simulationData.data.Weapon.get(id, 100)));
 
+        // The set strings run synchronously, so the ship classes that a
+        // change-ship operator can name (stock: oütf 314-318's H165/H178/
+        // H179/H148/H149) are warmed here, the way the weapons are above.
+        this.shipIds = new Set((await this.simulationData.ids).Ship);
+        await Promise.all(this.changeShipTargets(outfits).map(id =>
+            this.simulationData.data.Ship.get(id, 100).catch(() => undefined)));
+
         this.allOutfits = outfits;
         const itemGrid = new ItemGrid(this.displayAssets, outfits);
         itemGrid.setCounts(this.outfits);
         return itemGrid;
+    }
+
+    /**
+     * Every shïp global id some outfit's OnPurchase or OnSell could change
+     * the player's ship to, resolved under that outfit's own writer prefix
+     * (an unparseable set string is skipped here and warned about when it
+     * runs).
+     */
+    private changeShipTargets(outfits: OutfitData[]): string[] {
+        const targets = new Set<string>();
+        const exists = (id: string) => this.shipIds.has(id);
+        const collect = (operations: NCBSetOperation[], prefix: string) => {
+            for (const operation of operations) {
+                if (operation.type === 'changeShip') {
+                    targets.add(resolveNumberedResource(
+                        operation.id, prefix, exists));
+                } else if (operation.type === 'random') {
+                    collect(operation.choices, prefix);
+                }
+            }
+        };
+        for (const outfit of outfits) {
+            for (const expression of [outfit.onPurchase, outfit.onSell]) {
+                if (!expression) {
+                    continue;
+                }
+                try {
+                    collect(parseNCBSet(expression), setStringPrefix(outfit));
+                } catch (error) {
+                    if (!(error instanceof NCBParseError)) {
+                        throw error;
+                    }
+                }
+            }
+        }
+        return [...targets].sort();
+    }
+
+    /**
+     * `Cxxx` / `Exxx` / `Hxxx` from an OnPurchase / OnSell set string: the
+     * player's ship becomes class `globalId`, right now, mid-visit. Stock
+     * oütf 314 "Chrome Valk Upgrade" (50,000 cr, `H165`) turns a Valkyrie
+     * into a Mod Starbridge this way, and 315-318 are its Rebel/Pirate
+     * siblings.
+     *
+     * The swap is the shipyard's hull swap with no price
+     * (shipyard_rules' buildChangedShip), applied to the mission session's
+     * WORKING outfits — which are ahead of the entity's component: the
+     * permit whose OnPurchase is running has just been added to them, and
+     * an `H` change drops it along with everything else that is not
+     * 0x0020-persistent. The session is then re-pointed at the new entity
+     * so Done commits onto the hull that lifts off, and the new hull is
+     * published through onShipChanged exactly as a shipyard purchase is.
+     *
+     * Credits are untouched by the change itself: the new entity carries
+     * the OLD entity's live balance, and the visit's spend still lands
+     * through the session commit + commitVenueCredits delta at Done.
+     */
+    private changeShip(globalId: string, mode: ShipChangeMode) {
+        const session = this.missionSession;
+        const newShip = this.simulationData.data.Ship.getCached(globalId);
+        if (!session || !newShip) {
+            console.warn(`Change-ship to ${globalId} ignored: `
+                + (session ? 'ship data not loaded' : 'no mission session'));
+            return;
+        }
+        const entity = buildChangedShip(this.input, newShip, session.outfits,
+            id => this.simulationData.data.Outfit.getCached(id), mode);
+        // The rest of the running set string, and the re-seed of the grid
+        // copy after it, read the session's outfits: make them the new
+        // hull's.
+        session.outfits.clear();
+        for (const [id, { count }] of
+            entity.components.get(OutfitsStateComponent) ?? []) {
+            session.outfits.set(id, count);
+        }
+        session.retarget(entity, newShip.id);
+        // Swapping this.input is how a ship change is communicated:
+        // Menu.done() emits it, exactly as the shipyard's buyShip does.
+        this.input = entity;
+        this.shipData = newShip;
+        this.onShipChanged?.(entity);
     }
 
     /** See the planetData field. Call before showing the outfitter. */
@@ -537,9 +643,18 @@ export class Outfitter extends Menu<Entity> {
         if (!this.shipData) {
             return undefined;
         }
+        // A plain SNAPSHOT of the owned counts, not the DefaultMap itself:
+        // the rules only read it, but a DefaultMap's get() INSERTS on a
+        // miss, and visibleOutfits probes every outfit in the game — so the
+        // working copy used to grow to every id at count 0 after one grid
+        // refresh, every ownedOutfits walk then iterated all of them, and
+        // countDeployedFighters was handed unowned ammo outfits to
+        // attribute fighters to. Zero counts are dropped here too.
+        const owned = new Map(
+            [...this.outfits].filter(([, count]) => count > 0));
         return {
             shipData: this.shipData,
-            outfits: this.outfits,
+            outfits: owned,
             // WARMTH PRECONDITION: getCached answers only for ids already
             // fetched. makeOutfitsGrid fetches EVERY outfit id (and every
             // weapon those outfits name) before the grid — and so any
@@ -568,8 +683,20 @@ export class Outfitter extends Menu<Entity> {
             // Resolved against the outfits the player owns, because a
             // deployed fighter names only its bay weapon and has to be
             // attributed back to one of the player's ammo outfits.
-            deployedCounts: this.deployedOutfitCounts?.(this.outfits.keys()),
+            deployedCounts: this.deployedOutfitCounts?.(owned.keys()),
             planet: this.stellar(),
+            // The freight in the hold, for the cargo gate — the session's
+            // working copy when there is one (an OnPurchase Sxxx may have
+            // loaded mission cargo this visit), else the entity's own.
+            cargoUsed: cargoUsed(this.missionSession?.state.cargo
+                ?? this.input?.components.get(CargoComponent) ?? new Map()),
+            // gövt allies for the oütf RequireGovt scoping, off the govt
+            // list build() loaded for ModType 21.
+            govtAllied: (govt, stellarGovt) => {
+                const a = this.govts.find(([id]) => id === govt)?.[1];
+                const b = this.govts.find(([id]) => id === stellarGovt)?.[1];
+                return a !== undefined && b !== undefined && govtsAllied(a, b);
+            },
             ammoSellStrings: this.ammoSellStrings,
             // `Exxx` in an Availability: the local pilot's map knowledge,
             // read straight from the store (the shop is a player-local
@@ -714,8 +841,9 @@ export class Outfitter extends Menu<Entity> {
         // the OnPurchase / legal-record hooks below run ONCE per call, so
         // callers must pass units=1 for outfits that have them
         // (hasPurchaseSideEffects).
-        // The same price the grid quotes and canBuyOutfit checked against.
-        this.credits.credits -= outfitPrice(outfit) * units;
+        // The same price the grid quotes and canBuyOutfit checked against
+        // (ship-mass-proportional for oütf 0x0200, hence the hull).
+        this.credits.credits -= outfitPrice(outfit, this.shipData) * units;
         this.outfits.set(outfit.id, this.outfits.get(outfit.id) + units);
         // Record the same-visit purchase so selling it back before
         // leaving refunds the full price (see applySell).
@@ -728,7 +856,14 @@ export class Outfitter extends Menu<Entity> {
             if (outfit.cleanLegalRecord === -1) {
                 cleanRecords(this.records, 'all', undefined, this.govts);
             } else {
-                const govtId = `nova:${outfit.cleanLegalRecord}`;
+                // The gövt number resolves stock-first under the outfit's
+                // own writer prefix, like every other numbered reference
+                // in this file (see runSetString's resolveId): a plug-in
+                // outfit clearing the record with a plug-in gövt used to
+                // look for `nova:<n>` and clear nothing.
+                const govtId = resolveNumberedResource(outfit.cleanLegalRecord,
+                    setStringPrefix(outfit),
+                    id => this.govts.some(([g]) => g === id));
                 cleanRecords(this.records, 'govt',
                     this.govts.find(([id]) => id === govtId)?.[1],
                     this.govts);
@@ -746,7 +881,50 @@ export class Outfitter extends Menu<Entity> {
             this.visitPurchases.set(outfit.id,
                 Math.max(0, this.visitPurchases.get(outfit.id) - units));
         }
+        // What was aboard as the OnPurchase starts, for every outfit with
+        // a receipt from this visit (see the Dxxx note below).
+        const ownedBefore = new Map([...this.visitPurchases.keys()]
+            .map(id => [id, this.outfits.get(id)] as const));
         this.runSetString(outfit.onPurchase, setStringPrefix(outfit));
+        // A `Dxxx` in the set string (its own or a build order's, e.g.
+        // BYOM:455 "Dismantle ir missile" `D455 D135`), or an `Hxxx`
+        // dropping the nonpersistent outfits, may have consumed a unit
+        // bought THIS visit. Only units still aboard can be refunded in
+        // full, or a pre-owned unit of the same outfit would be sold back
+        // at 100% on the strength of the consumed one's receipt — so a
+        // unit the set string removes is charged against this visit's
+        // receipts FIRST, for every outfit it touched (the receipt of the
+        // outfit being bought is not the only one a build order can
+        // spend: BYOM:455's `D135` spends an IR Missile's).
+        for (const [id, before] of ownedBefore) {
+            const removed = before - this.outfits.get(id);
+            if (removed > 0) {
+                this.visitPurchases.set(id,
+                    Math.max(0, this.visitPurchases.get(id) - removed));
+            }
+        }
+        // oütf 0x0010: "Remove any items of this type after purchase
+        // (useful for permits and other intangible purchases)" (Bible
+        // ~:1966). The price is paid and the OnPurchase has run; the item
+        // itself never stays aboard — so it cannot be sold back, and its
+        // Max of 1 does not stop the player buying it again (stock 236
+        // "Fuel Transfer"). Counted down rather than deleted outright: an
+        // `H` change in the OnPurchase may already have dropped it.
+        if (outfit.removeAfterPurchase) {
+            this.outfits.set(outfit.id,
+                Math.max(0, this.outfits.get(outfit.id) - units));
+            this.visitPurchases.set(outfit.id,
+                Math.max(0, this.visitPurchases.get(outfit.id) - units));
+        }
+        // ...and, whatever happened above, never a receipt for more units
+        // than are aboard.
+        const owned = this.outfits.get(outfit.id);
+        if (this.visitPurchases.get(outfit.id) > owned) {
+            this.visitPurchases.set(outfit.id, owned);
+        }
+        if (owned <= 0) {
+            this.outfits.delete(outfit.id);
+        }
     }
 
     /**
@@ -774,7 +952,8 @@ export class Outfitter extends Menu<Entity> {
      * the per-unit loop calls this repeatedly.
      */
     private applySell(outfit: OutfitData) {
-        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id));
+        const refund = sellRefund(outfit, this.visitPurchases.get(outfit.id),
+            this.shipData);
         this.credits.credits += refund.credited;
         this.visitPurchases.set(outfit.id, refund.boughtThisVisit);
         this.outfits.set(outfit.id, Math.max(0, this.outfits.get(outfit.id) - 1));
@@ -825,6 +1004,9 @@ export class Outfitter extends Menu<Entity> {
                     : "Can't have any of this item!";
             case 'mass':
             case 'cargo':
+            // A hull that takes no mass expansions (shïp Holds < 0)
+            // cannot hold the item at all, in exactly these words.
+            case 'noMassExpansions':
                 return owned > 0
                     ? "Can't hold any more!"
                     : "Can't hold any of this item!";
@@ -893,6 +1075,11 @@ export class Outfitter extends Menu<Entity> {
             case 'ammoAboard':
             case 'negativeFreeMass':
             case 'fightersDeployed':
+            // The two twins of the negative-free-mass refusal (a granted
+            // hold or hardpoints that are still in use) are captioned for
+            // the same reason it is: surprising, and fixable by the player.
+            case 'cargoAboard':
+            case 'hardpoints':
                 return sellCheck.message;
             default:
                 return '';
@@ -1090,12 +1277,19 @@ export class Outfitter extends Menu<Entity> {
             makeDescTextContext(this.controlBits, playerGender()));
 
         // Set price text -- the same figure the Buy button charges
-        // (outfitter_rules' outfitPrice; no ränk PriceMod, see price_mod.ts).
-        this.text.price.text = formatPrice(outfitPrice(outfitTile.item));
+        // (outfitter_rules' outfitPrice; no ränk PriceMod, see price_mod.ts;
+        // scaled by the docked hull's mass for oütf 0x0200).
+        this.text.price.text = formatPrice(
+            outfitPrice(outfitTile.item, this.shipData));
 
-        if (outfitTile.item.physics.freeMass > 0) {
+        // The tonnage as installed on THIS hull (oütf 0x0400 scales it):
+        // the carbon-fibre capture reads "Item Mass: 1 ton" on a mass-25
+        // hull for an item whose written Mass is also 1, which the
+        // rounding ruling in installedOutfitMass reproduces.
+        const mass = installedMass(outfitTile.item, this.shipData);
+        if (mass > 0) {
             // Set mass text
-            this.text.mass.text = formatMass(outfitTile.item.physics.freeMass);
+            this.text.mass.text = formatMass(mass);
             this.setFreeMassText();
             this.text.mass.visible = true;
             this.text.itemMass.visible = true;
@@ -1124,6 +1318,11 @@ export class Outfitter extends Menu<Entity> {
             // stellar, so a placeholder is fine for outfitter-run scripts.
             this.missionSession = await MissionSession.create(
                 input, this.simulationData, universe, '<outfitter>');
+            // The change-ship operators need the docked entity, which only
+            // this menu holds (see changeShip).
+            this.missionSession.setChangeShipHook(
+                (id, mode) => this.changeShip(id, mode),
+                id => this.shipIds.has(id));
         } catch (e) {
             console.warn('Outfitter mission session unavailable:', e);
         }

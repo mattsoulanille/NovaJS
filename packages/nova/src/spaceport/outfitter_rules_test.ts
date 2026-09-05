@@ -14,14 +14,19 @@ import {
     effectiveMax,
     freeCargo,
     freeMass,
+    installedMass,
     maxBuyCount,
     maxSellCount,
     NEGATIVE_FREE_MASS_REFUSAL,
     neverOnSale,
     OUTFIT_RESALE_FRACTION,
+    outfitPrice,
     outfitResaleValue,
     OutfitterContext,
+    OutfitterStellar,
     playerContribute,
+    requireApplies,
+    requirementsMet,
     sellRefund,
     stellarStocks,
     visibleOutfits,
@@ -60,7 +65,7 @@ function makeWeapon(id: string, weapon: Partial<WeaponData> = {}): WeaponData {
 }
 
 function makeContext({ ship, outfits, weapons, owned, bits, credits,
-    deployed, discovery, systemExists }: {
+    deployed, discovery, systemExists, planet }: {
         ship?: ShipData,
         outfits?: OutfitData[],
         weapons?: WeaponData[],
@@ -72,6 +77,8 @@ function makeContext({ ship, outfits, weapons, owned, bits, credits,
         /** The pilot's map knowledge, for an Availability's Exxx. */
         discovery?: DiscoveryAccess,
         systemExists?: (globalId: string) => boolean,
+        /** The docked stellar; absent stocks everything. */
+        planet?: OutfitterStellar,
     } = {}): OutfitterContext {
     const outfitMap = new Map((outfits ?? []).map(o => [o.id, o]));
     const weaponMap = new Map((weapons ?? []).map(w => [w.id, w]));
@@ -87,6 +94,7 @@ function makeContext({ ship, outfits, weapons, owned, bits, credits,
         ...(deployed ? { deployedCounts: new Map(deployed) } : {}),
         ...(discovery ? { discovery } : {}),
         ...(systemExists ? { systemExists } : {}),
+        ...(planet ? { planet } : {}),
     };
 }
 
@@ -887,6 +895,42 @@ describe('canBuyOutfit', () => {
         }))).toEqual({ allowed: true });
     });
 
+    it('refuses a cargo-consuming outfit when the freight aboard would '
+        + 'no longer fit', () => {
+            // A Mass Expansion (stock 190, cargo -15) on a 20-ton hold
+            // with 20 tons of freight: capacity would stay positive (5)
+            // but the hold would be over capacity by 15.
+            const expansion = makeOutfit('nova:190', {}, { freeCargo: -15 });
+            const full = {
+                ...makeContext({ ship: makeShip({ freeCargo: 20 }) }),
+                cargoUsed: 20,
+            };
+            expect(canBuyOutfit(expansion, full)).toEqual(
+                jasmine.objectContaining({ allowed: false, reason: 'cargo' }));
+            // Five tons of freight leaves exactly the 5-ton hold.
+            expect(canBuyOutfit(expansion, { ...full, cargoUsed: 5 }))
+                .toEqual({ allowed: true });
+            // An absent cargoUsed is an empty hold (every older spec).
+            expect(canBuyOutfit(expansion,
+                makeContext({ ship: makeShip({ freeCargo: 20 }) })))
+                .toEqual({ allowed: true });
+        });
+
+    it('refuses any cargo-consuming outfit on a no-mass-expansions hull '
+        + '(shïp Holds < 0)', () => {
+            const expansion = makeOutfit('nova:190', {}, { freeCargo: -15 });
+            const hull = makeShip({ freeCargo: 60 }, { noMassExpansions: true });
+            expect(canBuyOutfit(expansion, makeContext({ ship: hull })))
+                .toEqual(jasmine.objectContaining(
+                    { allowed: false, reason: 'noMassExpansions' }));
+            // Cargo EXPANSIONS (positive) and everything else are fine.
+            const cargoPod = makeOutfit('nova:189', {}, { freeCargo: 10 });
+            expect(canBuyOutfit(cargoPod, makeContext({ ship: hull })))
+                .toEqual({ allowed: true });
+            expect(canBuyOutfit(makeOutfit('nova:129'),
+                makeContext({ ship: hull }))).toEqual({ allowed: true });
+        });
+
     it('requires enough credits to afford the item', () => {
         const outfit = makeOutfit('nova:200', { price: 5000 });
         expect(canBuyOutfit(outfit, makeContext({ credits: 4999 })))
@@ -1310,6 +1354,244 @@ describe('canSellOutfit', () => {
             expect(freeMass(context)).toBe(30);
             expect(maxSellCount(expansion, context)).toBe(3);
         });
+    });
+
+    describe('granted cargo space and hardpoints (the twins of that rule)',
+        () => {
+            /** A Cargo Expansion: stock 189, +10 tons of hold. */
+            const cargoPod = makeOutfit('nova:189', {}, { freeCargo: 10 });
+            /** Sigma Mount Reinforcement: stock 335, +4 guns, +2 turrets. */
+            const mounts = makeOutfit('nova:335', {},
+                { maxGuns: 4, maxTurrets: 2 });
+            const gun = makeOutfit('nova:129', { fixedGun: true });
+            const turret = makeOutfit('nova:131', { turret: true });
+
+            it('refuses to sell a Cargo Expansion the freight is using', () => {
+                // 20-ton hull + 10 = 30 tons, 25 aboard.
+                const context = {
+                    ...makeContext({
+                        ship: makeShip({ freeCargo: 20 }),
+                        outfits: [cargoPod], owned: [['nova:189', 1]],
+                    }),
+                    cargoUsed: 25,
+                };
+                expect(canSellOutfit(cargoPod, context)).toEqual(
+                    jasmine.objectContaining(
+                        { allowed: false, reason: 'cargoAboard' }));
+                expect(canSellOutfit(cargoPod, { ...context, cargoUsed: 20 }))
+                    .toEqual({ allowed: true });
+                expect(canSellOutfit(cargoPod, makeContext({
+                    ship: makeShip({ freeCargo: 20 }),
+                    outfits: [cargoPod], owned: [['nova:189', 1]],
+                }))).toEqual({ allowed: true });
+            });
+
+            it('refuses to sell the mounts the guns are hanging on', () => {
+                // A 2-gun / 1-turret hull with the reinforcement: 6 guns,
+                // 3 turrets. Five guns mounted need it; two do not.
+                const armed = (guns: number, turrets: number) => makeContext({
+                    ship: makeShip({ maxGuns: 2, maxTurrets: 1 }),
+                    outfits: [mounts, gun, turret],
+                    owned: [['nova:335', 1], ['nova:129', guns],
+                        ['nova:131', turrets]],
+                });
+                expect(canSellOutfit(mounts, armed(5, 0))).toEqual(
+                    jasmine.objectContaining(
+                        { allowed: false, reason: 'hardpoints' }));
+                expect(canSellOutfit(mounts, armed(0, 2))).toEqual(
+                    jasmine.objectContaining(
+                        { allowed: false, reason: 'hardpoints' }));
+                expect(canSellOutfit(mounts, armed(2, 1)))
+                    .toEqual({ allowed: true });
+                expect(maxSellCount(mounts, armed(3, 0))).toBe(0);
+            });
+        });
+});
+
+describe('oütf RequireGovt (where the Require bits are enforced)', () => {
+    /** The stock Medium Blaster: Require the Heavy Weapons License bit,
+     * scoped to the Federation (RequireGovt 128). */
+    const blaster = makeOutfit('nova:129', {
+        require: '0x100000001', requireGovt: 'nova:128',
+        requireGovtScope: 'govtOrAllies',
+    });
+    const FEDERATION = 'nova:128';
+    const AURORA = 'nova:129';
+    /** Vell-os (nova:136) is allied with the Federation's class. */
+    const VELLOS = 'nova:136';
+    const allied = (govt: string, other: string) =>
+        govt === FEDERATION && other === VELLOS;
+    const stellar = (govt: string | null | undefined) => ({
+        techLevel: 7, specialTech: [], buysAnyOutfit: false,
+        ...(govt === undefined ? {} : { govt }),
+    });
+    /** A hull whose Contribute is only the base bit: no licence. */
+    const unlicensed = (govt: string | null | undefined) => ({
+        ...makeContext({
+            ship: makeShip({}, { contribute: '0x1' }), outfits: [blaster],
+            planet: stellar(govt),
+        }),
+        govtAllied: allied,
+    });
+
+    it('enforces a govt-scoped Require at that govt\'s own stellars', () => {
+        expect(requireApplies(blaster, unlicensed(FEDERATION))).toBe(true);
+        expect(requirementsMet(blaster, unlicensed(FEDERATION))).toBe(false);
+        expect(canBuyOutfit(blaster, unlicensed(FEDERATION))).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'require' }));
+    });
+
+    it('...and at its allies\', but nowhere else', () => {
+        expect(requireApplies(blaster, unlicensed(VELLOS))).toBe(true);
+        expect(requireApplies(blaster, unlicensed(AURORA))).toBe(false);
+        expect(requireApplies(blaster, unlicensed(null))).toBe(false);
+        expect(requirementsMet(blaster, unlicensed(AURORA))).toBe(true);
+        expect(canBuyOutfit(blaster, unlicensed(AURORA)))
+            .toEqual({ allowed: true });
+    });
+
+    it('applies everywhere with no stellar, or for scope "all"', () => {
+        expect(requireApplies(blaster, {
+            ...makeContext({ outfits: [blaster] }), govtAllied: allied,
+        })).toBe(true);
+        const everywhere = makeOutfit('nova:147', {
+            require: '0x2', requireGovt: null, requireGovtScope: 'all',
+        });
+        expect(requireApplies(everywhere, unlicensed(AURORA))).toBe(true);
+    });
+
+    it('reads the other three scopes as the Bible words them', () => {
+        const scoped = (scope: OutfitData['requireGovtScope']) =>
+            makeOutfit('nova:200', {
+                require: '0x2', requireGovt: FEDERATION, requireGovtScope: scope,
+            });
+        // 1128-1383: independent stellars and the govt/allies.
+        expect(requireApplies(scoped('independentOrGovt'), unlicensed(null)))
+            .toBe(true);
+        expect(requireApplies(scoped('independentOrGovt'), unlicensed(VELLOS)))
+            .toBe(true);
+        expect(requireApplies(scoped('independentOrGovt'), unlicensed(AURORA)))
+            .toBe(false);
+        // 2128-2383: everywhere EXCEPT the govt/allies.
+        expect(requireApplies(scoped('exceptGovt'), unlicensed(FEDERATION)))
+            .toBe(false);
+        expect(requireApplies(scoped('exceptGovt'), unlicensed(AURORA)))
+            .toBe(true);
+        expect(requireApplies(scoped('exceptGovt'), unlicensed(null)))
+            .toBe(true);
+        // 3128-3383: everywhere except independents and the govt/allies.
+        expect(requireApplies(scoped('exceptIndependentOrGovt'),
+            unlicensed(null))).toBe(false);
+        expect(requireApplies(scoped('exceptIndependentOrGovt'),
+            unlicensed(VELLOS))).toBe(false);
+        expect(requireApplies(scoped('exceptIndependentOrGovt'),
+            unlicensed(AURORA))).toBe(true);
+    });
+
+    it('never waives a licence when the stellar\'s govt is unknown', () => {
+        // A stellar with no `govt` field: treated as not belonging to the
+        // govt, so 'govtOrAllies' does not fire (the requirement is
+        // waived only where the original would ALSO waive it: never at a
+        // Federation world, which this cannot be shown to be).
+        expect(requireApplies(blaster, unlicensed(undefined))).toBe(false);
+        // ...and without an ally lookup only an exact match counts.
+        const noAllies = { ...unlicensed(VELLOS), govtAllied: undefined };
+        expect(requireApplies(blaster, noAllies)).toBe(false);
+        expect(requireApplies(blaster,
+            { ...unlicensed(FEDERATION), govtAllied: undefined })).toBe(true);
+    });
+});
+
+describe('ship-mass-proportional outfits (oütf flags 0x0200 / 0x0400)', () => {
+    /**
+     * Carbon Fiber as stock oütf 180 is written: Cost 250, Mass 1, both
+     * bits set. "Ship class Mass field is multiplied by this item's Cost
+     * field" and "multiplied by this item's Mass field and then divided
+     * by 100" (EVN Bible ~:1974-1979).
+     */
+    const carbonFiber = makeOutfit('nova:180', {
+        name: 'Carbon Fiber', price: 250,
+        priceScalesWithShipMass: true, massScalesWithShipMass: true,
+    }, { freeMass: 1 });
+    /** Spun Diamond (oütf 183): Cost 2,500, Mass 1. */
+    const spunDiamond = makeOutfit('nova:183', {
+        price: 2500, priceScalesWithShipMass: true,
+        massScalesWithShipMass: true,
+    }, { freeMass: 1 });
+    /** A Heavy Shuttle (shïp 129, Mass 25) and a Leviathan (131, 10,000). */
+    const heavyShuttle = makeShip({ mass: 25, freeMass: 3 });
+    const leviathan = makeShip({ mass: 10_000, freeMass: 500 });
+
+    it('prices at Cost x ship mass: the 6,250 cr of the Earth capture', () => {
+        // outfitter/earth_outfitter_carbon_fiber_cant_hold_any_more.png
+        // reads "Item Price: 6,250 cr" for Carbon Fiber on a mass-25 hull.
+        expect(outfitPrice(carbonFiber, heavyShuttle)).toBe(6_250);
+        expect(outfitPrice(carbonFiber, leviathan)).toBe(2_500_000);
+        expect(outfitPrice(spunDiamond, leviathan)).toBe(25_000_000);
+        // Unflagged outfits are untouched by the hull.
+        expect(outfitPrice(makeOutfit('nova:129', { price: 20_000 }),
+            leviathan)).toBe(20_000);
+    });
+
+    it('installs at ship mass x Mass / 100, rounded up to a whole ton', () => {
+        expect(installedMass(carbonFiber, leviathan)).toBe(100);
+        // 25 x 1 / 100 = 0.25, shown as "Item Mass: 1 ton" in the capture.
+        expect(installedMass(carbonFiber, heavyShuttle)).toBe(1);
+    });
+
+    it('charges the scaled price and checks the scaled mass on Buy', () => {
+        const rich = makeContext({
+            ship: leviathan, outfits: [carbonFiber], credits: 2_500_000,
+        });
+        expect(canBuyOutfit(carbonFiber, rich)).toEqual({ allowed: true });
+        const poor = makeContext({
+            ship: leviathan, outfits: [carbonFiber], credits: 2_499_999,
+        });
+        expect(canBuyOutfit(carbonFiber, poor)).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'credits' }));
+        // 500 tons free on the Leviathan: five plates (100 t each) fit,
+        // and the sixth does not, whatever the flat Mass 1 says.
+        const full = makeContext({
+            ship: leviathan, outfits: [carbonFiber],
+            owned: [['nova:180', 5]],
+        });
+        expect(freeMass(full)).toBe(0);
+        expect(canBuyOutfit(carbonFiber, full)).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'mass' }));
+    });
+
+    it('reproduces the capture: three plates fill a 3-ton hold', () => {
+        // The reference pilot owns 3 Carbon Fiber, sees "Available: 0
+        // tons" and "Can't hold any more!" (the mass denial).
+        const context = makeContext({
+            ship: heavyShuttle, outfits: [carbonFiber],
+            owned: [['nova:180', 3]],
+        });
+        expect(freeMass(context)).toBe(0);
+        expect(canBuyOutfit(carbonFiber, context)).toEqual(
+            jasmine.objectContaining({ allowed: false, reason: 'mass' }));
+    });
+
+    it('bounds the bulk buy by the scaled price and mass', () => {
+        const context = makeContext({
+            ship: leviathan, outfits: [carbonFiber], credits: 7_500_000,
+        });
+        // 3 affordable at 2.5M each (5 would fit by mass).
+        expect(maxBuyCount(carbonFiber, context)).toBe(3);
+    });
+
+    it('sells back at half the SCALED price, so no hull can mint credits',
+        () => {
+            expect(outfitResaleValue(carbonFiber, leviathan)).toBe(1_250_000);
+            expect(sellRefund(carbonFiber, 1, leviathan).credited)
+                .toBe(2_500_000);
+            expect(sellRefund(carbonFiber, 0, heavyShuttle).credited)
+                .toBe(3_125);
+        });
+
+    it('is quoted unscaled with no hull in hand', () => {
+        expect(outfitPrice(carbonFiber)).toBe(250);
+        expect(installedMass(carbonFiber)).toBe(1);
     });
 });
 

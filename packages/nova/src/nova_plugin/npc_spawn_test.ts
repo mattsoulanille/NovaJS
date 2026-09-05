@@ -1,13 +1,16 @@
 import 'jasmine';
 import { getDefaultDudeData } from 'novadatainterface/dude_data';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
+import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultPersData } from 'novadatainterface/pers_data';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { Random } from 'nova_ecs/plugins/random_plugin';
 import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { SimulationGameDataResource } from './game_data_resource.js';
+import { makeSystem } from './make_system.js';
 import {
     buildNpcSpawnTable, buildPersSpawnTable,
     fleetAllowedInSystem, MAX_NPC_POPULATION, persAllowedInSystem,
@@ -377,4 +380,117 @@ describe('NPC genesis load failures', () => {
         expect(entries.map(e => [e.id, e.ship, e.chance])).toEqual([
             ['test:pers', SHIP.id, 50]]);
     });
+});
+
+/**
+ * shïp AppearOn — "Ships of this type will not show up in dude resources
+ * if this expression evaluates to false" (EVN Bible ~:2594) — filters
+ * each düde's ship list when the spawn table is built. It is read the way
+ * flët AppearOn is read: at genesis, against an EMPTY bit set (the
+ * module's multiplayer constraint), from data the table stages anyway,
+ * so every peer computes the same table.
+ */
+describe('buildNpcSpawnTable and shïp AppearOn', () => {
+    const SYSTEM = 'test:system';
+
+    function mockData(dudes: Array<{ id: string, ships: string[] }>,
+        ships: Record<string, string>) {
+        const gameData = new MockGameData();
+        for (const [id, appearOn] of Object.entries(ships)) {
+            gameData.data.Ship.map.set(id,
+                { ...getDefaultShipData(), id, appearOn });
+        }
+        for (const { id, ships: dudeShips } of dudes) {
+            gameData.data.Dude.map.set(id, {
+                ...getDefaultDudeData(), id, aiType: 2, govt: null,
+                ships: dudeShips.map(ship => ({ id: ship, weight: 1 })),
+            });
+        }
+        const systemData = {
+            ...getDefaultSystemData(), id: SYSTEM,
+            dudes: dudes.map(({ id }) => ({ id, weight: 1 })),
+        };
+        gameData.data.System.map.set(SYSTEM, systemData);
+        return { gameData, systemData };
+    }
+
+    async function tableFor(dudes: Array<{ id: string, ships: string[] }>,
+        ships: Record<string, string>) {
+        const { gameData, systemData } = mockData(dudes, ships);
+        const world = await makeSystem(SYSTEM, gameData, undefined,
+            { npcs: false });
+        return buildNpcSpawnTable(world, SYSTEM, systemData);
+    }
+
+    it('drops a ship class whose AppearOn needs a bit nobody can have set',
+        async () => {
+            const entries = await tableFor(
+                [{ id: 'test:dude', ships: ['test:plain', 'test:gated',
+                    'test:negated'] }],
+                { 'test:plain': '', 'test:gated': 'b1', 'test:negated': '!b1' });
+            expect(entries.length).toBe(1);
+            expect(entries[0].dude?.ships.map(({ id }) => id))
+                .toEqual(['test:plain', 'test:negated']);
+        });
+
+    it('drops the düde altogether when every class is gated, so its weight '
+        + 'goes to the rest of the table', async () => {
+            const entries = await tableFor([
+                { id: 'test:story', ships: ['test:gated', 'test:gated2'] },
+                { id: 'test:common', ships: ['test:plain'] },
+            ], { 'test:gated': 'b1', 'test:gated2': 'b2 & !b3',
+                'test:plain': '' });
+            expect(entries.map(entry => entry.dude?.ships.map(({ id }) => id)))
+                .toEqual([['test:plain']]);
+        });
+
+    it('treats an unparseable AppearOn as false rather than crashing the '
+        + 'table', async () => {
+            const warn = spyOn(console, 'warn');
+            const entries = await tableFor(
+                [{ id: 'test:dude', ships: ['test:broken', 'test:plain'] }],
+                { 'test:broken': 'b1 &', 'test:plain': '' });
+            expect(entries[0].dude?.ships.map(({ id }) => id))
+                .toEqual(['test:plain']);
+            expect(warn).toHaveBeenCalled();
+        });
+
+    it('does not stage a class it filtered out', async () => {
+        const { gameData, systemData } = mockData(
+            [{ id: 'test:dude', ships: ['test:gated'] }],
+            { 'test:gated': 'b1' });
+        const world = await makeSystem(SYSTEM, gameData, undefined,
+            { npcs: false });
+        // Staging a class fetches its sprite sheet (entity_data_loader's
+        // loadShipGameData); the filter runs first, so a gated class
+        // never reaches it.
+        const sheetGet = spyOn(gameData.data.SpriteSheet, 'get')
+            .and.callThrough();
+        expect(await buildNpcSpawnTable(world, SYSTEM, systemData))
+            .toEqual([]);
+        expect(sheetGet).not.toHaveBeenCalled();
+    });
+
+    it('filters the stock story variants out of real düdes', async () => {
+        // düde nova:270 mixes four gated classes (nova:406/407 `b1307`,
+        // nova:357 `... & b753`, nova:408 `b324`) with two `!b333` Auroran
+        // capitals and an ungated Abomination (nova:246); düde nova:182
+        // is four nova:406 and nothing else.
+        const gameData = await getIntegrationGameData();
+        const world = await makeSystem('nova:130', gameData, undefined,
+            { npcs: false });
+        const systemData = {
+            ...await gameData.data.System.get('nova:130'),
+            dudes: [{ id: 'nova:270', weight: 50 },
+                { id: 'nova:182', weight: 50 }],
+            fleets: [],
+        };
+        const entries = await buildNpcSpawnTable(world, 'nova:130',
+            systemData);
+        // (Roaming flëts bound to Sol by LinkSyst join the table too;
+        // only the düde entries are under test.)
+        expect(entries.filter(entry => entry.dude)
+            .map(entry => entry.dude?.ships.map(({ id }) => id)))
+            .toEqual([['nova:302', 'nova:255', 'nova:246']]);
+    }, 120_000);
 });

@@ -4,6 +4,7 @@ import { ShipData, ShipPhysics } from "novadatainterface/ship_data";
 import { DEFAULT_IONIZE_COLOR } from "novadatainterface/weapon_data";
 import { GetEntity } from 'nova_ecs/arg_types';
 import { Component } from 'nova_ecs/component';
+import { Entity } from 'nova_ecs/entity';
 import { System } from 'nova_ecs/system';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
@@ -23,6 +24,7 @@ import { ArmorComponent, AUTO_REFUEL_PER_SECOND, FuelComponent, IonizationColorC
 import { applyOutfitPhysics, OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { registerEntityDeriver } from './entity_factory.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { ControlledByComponent } from './ship_control.js';
 import { Stat } from './stat.js';
 import { TargetComponent } from './target_component.js';
 
@@ -189,33 +191,40 @@ function shipStatSystem(name: string, component: Component<Stat>,
         name,
         args: [ShipPhysicsComponent, Optional(component), GetEntity] as const,
         step(physics, stat, entity) {
-            const { max, min, recharge } = bounds(physics);
-            if (!stat) {
-                entity.components.set(component, new Stat({
-                    current: initialCurrent(physics), max, min, recharge,
-                }));
-                return;
-            }
-            if (stat.max === max && stat.min === min
-                && stat.recharge === recharge) {
-                return;
-            }
-            // Through the setters, which flag the change for the stat
-            // delta channel (getStatDelta) — a brand new Stat would
-            // report no change at all and leave other peers on the old
-            // capacity.
-            stat.max = max;
-            stat.min = min;
-            stat.recharge = recharge;
-            // Selling the tank spills what no longer fits. The recharge
-            // systems clamp too, but only after this tick's readers
-            // (the jump check, the status bar) have looked.
-            const clamped = Math.max(min, Math.min(max, stat.current));
-            if (stat.current !== clamped) {
-                stat.current = clamped;
-            }
+            reconcileStat(entity, component, stat, bounds(physics),
+                initialCurrent(physics));
         }
     });
+}
+
+/** The step of shipStatSystem, shared with the fuel provider below. */
+function reconcileStat(entity: Entity, component: Component<Stat>,
+    stat: Stat | undefined, { max, min, recharge }: StatBounds,
+    initialCurrent: number): void {
+    if (!stat) {
+        entity.components.set(component, new Stat({
+            current: initialCurrent, max, min, recharge,
+        }));
+        return;
+    }
+    if (stat.max === max && stat.min === min
+        && stat.recharge === recharge) {
+        return;
+    }
+    // Through the setters, which flag the change for the stat
+    // delta channel (getStatDelta) — a brand new Stat would
+    // report no change at all and leave other peers on the old
+    // capacity.
+    stat.max = max;
+    stat.min = min;
+    stat.recharge = recharge;
+    // Selling the tank spills what no longer fits. The recharge
+    // systems clamp too, but only after this tick's readers
+    // (the jump check, the status bar) have looked.
+    const clamped = Math.max(min, Math.min(max, stat.current));
+    if (stat.current !== clamped) {
+        stat.current = clamped;
+    }
 }
 
 const ShipAnimationProvider = Provide({
@@ -281,17 +290,54 @@ const ShipArmorProvider = shipStatSystem(
     }),
     physics => physics.armor);
 
-const ShipFuelProvider = shipStatSystem(
-    "ShipFuelProvider", FuelComponent,
-    // Base recharge is the fuel scoop (ModType 18); an auto-refueller
-    // (ModType 19) adds a slow constant trickle on top.
-    physics => ({
+/**
+ * A ship's fuel bounds: capacity, and the per-second recharge from three
+ * sources — fuel scoops (oütf ModType 18), an auto-refueller (ModType 19,
+ * a slow constant trickle), and the hull's own shïp FuelRegen.
+ *
+ * THE HULL TERM IS GATED FOR THE PLAYER. shïp Flags 0x0008 is "Player
+ * ship takes advantage of FuelRegen property" (EVN Bible ~:2517), and
+ * FuelRegen itself says "for the player to be able to use this field, the
+ * 0x0008 flag must also be set (this allows you to give enemy ships
+ * built-in fuel scoops but still make the player have to buy his own)"
+ * (~:2554). `physics.energyRecharge` is hull plus outfits (outfit_plugin's
+ * applyOutfitPhysics sums them), so the hull's share — the class's own
+ * ShipData.physics.energyRecharge — is subtracted back out for a
+ * player-controlled ship whose class lacks the flag. Outfit scoops stay.
+ *
+ * Every stock regenerating class sets the flag, so stock is unchanged;
+ * without the gate thirteen plug-in hulls handed the player free fuel
+ * (the Purveyor, the X-wing) and arpia's two FuelRegen -1 hulls (421
+ * Frandall, 422 Uhngys) DRAINED a player's 300-unit tank in ten seconds,
+ * where the original drains nothing.
+ *
+ * "The player" is a ControlledByComponent ship: peer-controlled, and
+ * synced, so every peer derives the same stat. Escorts are AI-flown and
+ * keep their class's regeneration, as the Bible's "enemy ships" do.
+ */
+export function shipFuelBounds(physics: ShipPhysics, shipData: ShipData,
+    playerControlled: boolean): StatBounds {
+    const hullRegen = playerControlled && !shipData.playerFuelRegen
+        ? shipData.physics.energyRecharge : 0;
+    return {
         max: physics.energy,
         min: 0,
-        recharge: physics.energyRecharge
+        recharge: physics.energyRecharge - hullRegen
             + (physics.autoRefuel ? AUTO_REFUEL_PER_SECOND : 0),
-    }),
-    physics => physics.energy);
+    };
+}
+
+const ShipFuelProvider = new System({
+    name: "ShipFuelProvider",
+    args: [ShipPhysicsComponent, ShipDataComponent,
+        Optional(ControlledByComponent), Optional(FuelComponent),
+        GetEntity] as const,
+    step(physics, shipData, controlledBy, fuel, entity) {
+        reconcileStat(entity, FuelComponent, fuel,
+            shipFuelBounds(physics, shipData, controlledBy !== undefined),
+            physics.energy);
+    },
+});
 
 const ShipIonizationProvider = shipStatSystem(
     "ShipIonizationProvider", IonizationComponent,

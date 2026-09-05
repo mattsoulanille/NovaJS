@@ -78,7 +78,9 @@ import { TargetComponent } from './target_component.js';
  * on their own world: an instant desync). Until missions land and a
  * design for shared-vs-personal encounters exists, only fleets whose
  * AppearOn passes with no bits set (i.e. unconditional or negated-bit
- * expressions) can spawn.
+ * expressions) can spawn. shïp AppearOn, which gates the ship classes a
+ * düde may pick from, is read under exactly the same rule (see
+ * buildNpcSpawnTable).
  *
  * përs unique characters ride the same machinery: the Bible's "When
  * ships are created, there is a 5% chance that a specific AI-person
@@ -331,9 +333,11 @@ async function stageShip(world: World, shipId: string, govt: string | null) {
 
 /**
  * Builds the system's NPC spawn table: resolves the sÿst dude/fleet
- * entries and the roaming LinkSyst fleets, evaluates AppearOn against
- * an empty bit set (see the multiplayer constraint above), and stages
- * every ship class and govt the table can spawn.
+ * entries and the roaming LinkSyst fleets, evaluates flët AppearOn and
+ * each düde ship class's shïp AppearOn against an empty bit set (see
+ * the multiplayer constraint above), and stages every ship class and
+ * govt the table can spawn. Reads only genesis-staged data — never a
+ * player's bits — so every peer builds the same table.
  */
 export async function buildNpcSpawnTable(world: World, systemId: string,
     systemData: SystemData): Promise<NpcSpawnEntry[]> {
@@ -354,21 +358,8 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
     // — exactly the asteroid loader's ruling (see load_retry.ts). An
     // entry that does not EXIST is not a load failure: the aggregator
     // resolves an unknown id to default data, identically everywhere.
-    for (const { id, weight } of systemData.dudes) {
-        const dude = await loadWithRetries(
-            () => gameData.data.Dude.get(id), `düde ${id}`);
-        const ships: Array<{ id: string, weight: number }> = [];
-        for (const ship of dude.ships) {
-            await stageShip(world, ship.id, dude.govt);
-            ships.push({ id: ship.id, weight: ship.weight });
-        }
-        if (ships.length > 0) {
-            entries.push({
-                weight,
-                dude: { aiType: dude.aiType, govt: dude.govt, ships },
-            });
-        }
-    }
+    // Neither is an entry the data GATES OUT (AppearOn, below): that is
+    // the same answer on every world.
 
     // AppearOn: empty bit set (per-player bits cannot drive shared
     // spawns; see the module comment). `Exxx` ("has the player explored
@@ -390,6 +381,48 @@ export async function buildNpcSpawnTable(world: World, systemId: string,
             return false;
         }
     };
+    // shïp AppearOn — "Ships of this type will not show up in dude
+    // resources if this expression evaluates to false" (Bible ~:2594) —
+    // is the same gate one level down, on each of a düde's ship classes,
+    // and is read the same way: against the empty set, at genesis, from
+    // the ShipData the staging below warms anyway. Under that reading the
+    // stock story-beat variants (the Polaris cloaking hulls nova:257-273
+    // `b1301`/`b323`..., the `b8888` pirate variants nova:398-404) never
+    // spawn, and düde nova:182 — four nova:406 `b1307` — spawns nothing;
+    // the negated-bit majority (every `!b333` Fed/Auroran capital ship)
+    // spawns as before. A düde left with no ships (every class gated
+    // out) is dropped identically everywhere — that is data, not a load
+    // failure: its weight goes to the rest of the table.
+    const shipAppears = (ship: ShipData) => {
+        try {
+            return evaluateNCBTest(ship.appearOn, emptyBits);
+        } catch (e) {
+            console.warn(`Bad AppearOn for ship ${ship.id}: ${e}`);
+            return false;
+        }
+    };
+
+    for (const { id, weight } of systemData.dudes) {
+        const dude = await loadWithRetries(
+            () => gameData.data.Dude.get(id), `düde ${id}`);
+        const ships: Array<{ id: string, weight: number }> = [];
+        for (const ship of dude.ships) {
+            const shipData = await loadWithRetries(
+                () => gameData.data.Ship.get(ship.id),
+                `NPC ship ${ship.id}`);
+            if (!shipAppears(shipData)) {
+                continue;
+            }
+            await stageShip(world, ship.id, dude.govt);
+            ships.push({ id: ship.id, weight: ship.weight });
+        }
+        if (ships.length > 0) {
+            entries.push({
+                weight,
+                dude: { aiType: dude.aiType, govt: dude.govt, ships },
+            });
+        }
+    }
 
     const stageFleet = async (fleet: FleetData) => {
         await stageShip(world, fleet.leadShip, fleet.govt);

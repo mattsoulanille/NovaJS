@@ -8,9 +8,13 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
+import { BayFighterComponent } from '../nova_plugin/bay_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+import { PendingEscortsComponent } from './pending_escorts.js';
 import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
@@ -57,6 +61,82 @@ export async function noShipsForHire(
 }
 
 /**
+ * THE MOST ESCORTS A PLAYER CAN HAVE.
+ *
+ * The original refuses a hire past a cap — stock STR# 2002 index 123 is
+ * "You already have the maximum possible number of escorts." — but the
+ * Bible never states the number. The pilot file does: it records the
+ * player's escorts in fixed arrays of SIXTY-FOUR slots (escortClass[64],
+ * escortUpgrade[64], escortSale[64], escortVoiceMode[64] — see
+ * novaparse/docs/pilot_file_format.md), with a separate fighterClass[64]
+ * for bay fighters. Sixty-four is therefore the most the original could
+ * ever record, and it is the ceiling used here. RULING: if the engine's
+ * own cap is lower (folk memory says it is, without a source), lower this
+ * constant; the wording and the counting rule below stand either way.
+ *
+ * What COUNTS is what the pilot file's escort array records: hired and
+ * captured escorts, not bay fighters (their own array) and not mission
+ * ships (never the player's). See {@link escortCount}.
+ */
+export const MAX_ESCORTS = 64;
+
+/** STR# 2002 index 123, verbatim, as the fallback for a short table. */
+export const MAX_ESCORTS_MESSAGE =
+    'You already have the maximum possible number of escorts.';
+export const MAX_ESCORTS_INDEX = 123;
+
+/**
+ * The "maximum possible number of escorts" refusal, read from STR# 2002
+ * index 123. Falls back to the constant above when the table is absent.
+ */
+export async function maxEscortsMessage(
+    displayAssets: DisplayAssetDataInterface): Promise<string> {
+    try {
+        const table = await displayAssets.data.StringTable.get(
+            NO_SHIPS_FOR_HIRE_TABLE);
+        const text = table.strings[MAX_ESCORTS_INDEX];
+        return text?.trim() ? text : MAX_ESCORTS_MESSAGE;
+    } catch {
+        return MAX_ESCORTS_MESSAGE;
+    }
+}
+
+/**
+ * How many escorts the player has, counted against {@link MAX_ESCORTS}:
+ *
+ *   - the escorts on the client's landed roster that are neither bay
+ *     fighters nor mission ships (hired AND captured — a captured prize
+ *     draws no wage, so it is in no payroll mirror, but it is an escort),
+ *   - or, if that is fewer, the EscortPayrollComponent mirror of the
+ *     hired escorts that were in the world with the player — the roster
+ *     fills as they touch down, a few seconds behind the player, and the
+ *     mirror already knows about all of them;
+ *   - plus the pilots hired THIS landing and not yet spawned
+ *     (PendingEscortsComponent), the list `hire()` appends to.
+ *
+ * The two roster/mirror figures are not summed: a hired escort is on
+ * both once it has landed.
+ */
+export function escortCount(entity: Entity | undefined,
+    roster?: () => readonly { player: string, entity: Entity }[],
+    playerUuid?: string): number {
+    let landed = 0;
+    for (const { player, entity: escort } of roster?.() ?? []) {
+        if (playerUuid !== undefined && player !== playerUuid) {
+            continue;
+        }
+        if (escort.components.has(BayFighterComponent)
+            || escort.components.has(MissionShipComponent)) {
+            continue;
+        }
+        landed++;
+    }
+    const payroll = entity?.components.get(EscortPayrollComponent)?.length ?? 0;
+    const pending = entity?.components.get(PendingEscortsComponent)?.length ?? 0;
+    return Math.max(landed, payroll) + pending;
+}
+
+/**
  * The one-time fee to hire an escort — see escort_fees.ts, which owns every
  * escort price (the daily wage, the upgrade cost and the resale value are
  * all derived from the same rule there) so none of them can drift apart, and
@@ -79,6 +159,13 @@ export { hirePrice } from './escort_fees.js';
 export interface HirePlayer {
     entity?: Entity;
     bits?: ReadonlySet<number>;
+    /**
+     * The client's landed-escort roster and the docked ship's uuid, for
+     * the escort cap ({@link escortCount}). Absent counts only the payroll
+     * mirror and this landing's hires.
+     */
+    landedEscorts?: () => readonly { player: string, entity: Entity }[];
+    playerUuid?: string;
 }
 
 /**
@@ -118,6 +205,10 @@ export class HireEscortDialog {
     private credits: { credits: number } = { credits: 0 };
     private bits?: ReadonlySet<number>;
     private hired: string[] = [];
+    /** Who is hiring (see HirePlayer), for the escort cap. */
+    private player: HirePlayer = {};
+    /** STR# 2002 #123, loaded in show(); the stock wording until then. */
+    private maxEscortsText = MAX_ESCORTS_MESSAGE;
     private loadPromise?: Promise<void>;
     /** The docked stellar's tech rules, from its PlanetData (see load). */
     private stellar?: ShipyardStellar;
@@ -293,17 +384,38 @@ export class HireEscortDialog {
         this.refreshButtons();
     }
 
+    /**
+     * Escorts the player has right now, counting this visit's hires
+     * (`hired` is the entity's PendingEscortsComponent-to-be, appended
+     * here and committed by the bar at Leave). escortCount already
+     * counts the component, so this sum is right only while no hire is
+     * in both `hired` and the component: pending_escorts.ts's
+     * commitPendingEscorts, the one way hires move across, empties
+     * `hired` as it copies — hire_escort_test pins the invariant.
+     */
+    private escortsHeld(): number {
+        return escortCount(this.player.entity, this.player.landedEscorts,
+            this.player.playerUuid) + this.hired.length;
+    }
+
     private refreshButtons() {
         this.text.count.text = `${this.credits.credits.toLocaleString()} cr`;
         const ship = this.itemGrid?.selection;
         this.buttons.hire.state =
             ship && this.credits.credits >= hirePrice(ship, this.priceMod)
+                && this.escortsHeld() < MAX_ESCORTS
                 ? 'normal' : 'grey';
     }
 
     private hire() {
         const ship = this.itemGrid?.selection;
         if (!ship) {
+            return;
+        }
+        // The cap first: it is the structural refusal (STR# 2002 #123),
+        // and money cannot fix it.
+        if (this.escortsHeld() >= MAX_ESCORTS) {
+            this.text.status.text = this.maxEscortsText;
             return;
         }
         const price = hirePrice(ship, this.priceMod);
@@ -333,11 +445,13 @@ export class HireEscortDialog {
         player: HirePlayer = {}): Promise<'closed' | 'empty'> {
         this.credits = credits;
         this.hired = hired;
+        this.player = player;
         this.bits = player.bits
             ?? player.entity?.components.get(ControlBitsComponent);
         let pool: ShipData[] = [];
         try {
             await this.load();
+            this.maxEscortsText = await maxEscortsMessage(this.displayAssets);
             const context = await this.hireContext(player);
             this.priceMod = context.priceMod;
             pool = this.rollPool(context);

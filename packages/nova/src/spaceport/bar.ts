@@ -11,6 +11,7 @@ import { LOCATION_BAR } from '../nova_plugin/mission_logic.js';
 import { Button } from './button.js';
 import { commitVenueCredits } from './credit_commit.js';
 import { BAR, LINE_HEIGHT } from './dialog_layout.js';
+import { FleetEscortEntry } from './fleet_cargo.js';
 import { GambleDialog } from './gamble.js';
 import { HireEscortDialog, noShipsForHire } from './hire_escort.js';
 import { Menu } from './menu.js';
@@ -20,7 +21,7 @@ import { rollOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { NewsDialog } from './news_dialog.js';
-import { PendingEscortsComponent } from './pending_escorts.js';
+import { commitPendingEscorts } from './pending_escorts.js';
 
 // The 263x185 Bar dialog (PICT 8503). Geometry lives in
 // dialog_layout.ts, measured against bar/bar_earth.png and
@@ -57,6 +58,13 @@ export class Bar extends Menu<Entity> {
      */
     private creditsBaseline = 0;
     private hired: string[] = [];
+    /**
+     * The client's landed-escort roster and the docked ship's uuid, set
+     * per-landing by the Spaceport (as for the trade center), so the
+     * hire dialog can count the fleet against MAX_ESCORTS.
+     */
+    private landedEscorts?: () => readonly FleetEscortEntry[];
+    private playerUuid?: string;
     private description = new PIXI.Text('', DESC_FONT);
     private news: NewsDialog;
     private gamble: GambleDialog;
@@ -126,6 +134,13 @@ export class Bar extends Menu<Entity> {
             gamble: () => void this.showGamble(),
             depart: this.done.bind(this),
         };
+    }
+
+    /** See the landedEscorts field. */
+    setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
+        playerUuid?: string) {
+        this.landedEscorts = roster;
+        this.playerUuid = playerUuid;
     }
 
     override async show(input: Entity): Promise<Entity> {
@@ -261,8 +276,13 @@ export class Bar extends Menu<Entity> {
                 // The bar's working control bits (a mission accepted this
                 // visit already counts) plus the landed entity, which is
                 // where the hire pool reads the player's outfits, ranks
-                // and the game date from.
-                { entity: this.input, bits: this.session.state.bits });
+                // and the game date from — and the landed roster, for
+                // the escort cap (hire_escort.ts's escortCount).
+                {
+                    entity: this.input, bits: this.session.state.bits,
+                    landedEscorts: this.landedEscorts,
+                    playerUuid: this.playerUuid,
+                });
         if (result === 'empty') {
             // No pilots today: the original says so in a plain popup rather
             // than opening an empty shipyard grid (STR# 2002 index 223 —
@@ -289,13 +309,10 @@ export class Bar extends Menu<Entity> {
             this.creditsBaseline = commitVenueCredits(
                 this.input, this.creditsBaseline, () => session.commit());
         }
-        if (this.hired.length > 0) {
-            const pending =
-                this.input.components.get(PendingEscortsComponent) ?? [];
-            this.input.components.set(PendingEscortsComponent,
-                [...pending, ...this.hired]);
-            this.hired = [];
-        }
+        // Appends this visit's hires to the entity and empties the list
+        // in one step, so the escort cap (which counts both) can never
+        // see a hire twice; see pending_escorts.ts.
+        commitPendingEscorts(this.input, this.hired);
         super.done();
     }
 }

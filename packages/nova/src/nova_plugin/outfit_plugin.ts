@@ -51,8 +51,44 @@ export function sumOutfitField(outfits: OutfitsState,
     return total;
 }
 
+/**
+ * The tonnage ONE unit of `outfit` takes up aboard a hull of `shipMass`
+ * tons: its oütf Mass as written, unless flag 0x0400 says the mass is
+ * proportional to the ship's — "ship class Mass field is multiplied by
+ * this item's Mass field and then divided by 100. Only works for
+ * positive-mass items" (EVN Bible ~:1977).
+ *
+ * ROUNDING RULING: rounded UP to a whole ton. The Bible's formula is
+ * fractional for small hulls (Carbon Fiber, Mass 1, on a mass-25 Heavy
+ * Shuttle is 0.25), and the original-hardware capture
+ * ui_screenshots/original_macos_screenshots/outfitter/
+ * earth_outfitter_carbon_fiber_cant_hold_any_more.png settles it: that
+ * pilot is in a mass-25 hull ("Item Price: 6,250 cr" = 250 x 25), the pane
+ * reads "Item Mass: 1 ton" beside "Available: 0 tons", and the caption is
+ * "Can't hold any more!" — so the installed mass is a full ton, not 0.25
+ * and not the 0 that floor or nearest rounding would give (a zero-mass
+ * item would fit in zero tons and draw no such caption).
+ *
+ * This is THE ONE mass rule: the sim's physics derivation
+ * (applyOutfitPhysics below), the outfitter's free-mass arithmetic and
+ * its "Item Mass:" line all read it, so what the shop quotes is what the
+ * ship flies with.
+ */
+export function installedOutfitMass(outfit: OutfitData,
+    shipMass: number): number {
+    const mass = outfit.physics.freeMass;
+    if (outfit.massScalesWithShipMass && mass > 0) {
+        return Math.ceil(shipMass * mass / 100);
+    }
+    return mass;
+}
+
 export function applyOutfitPhysics(basePhysics: ShipPhysics,
     outfits: Iterable<readonly [OutfitData, number /* count */]>) {
+    // The HULL's mass, read before any outfit is applied: no ModType
+    // touches `mass`, but the proportional-mass rule is about the ship
+    // CLASS's Mass field and must not drift with anything an outfit does.
+    const hullMass = basePhysics.mass;
     return produce(basePhysics, (basePhysics) => {
         for (const [outfit, count] of outfits) {
             if (count <= 0) {
@@ -69,8 +105,10 @@ export function applyOutfitPhysics(basePhysics: ShipPhysics,
                     if (typeof val === 'number') {
                         if (key === 'freeMass') {
                             // An outfit's freeMass is the space it
-                            // occupies, so it consumes the ship's.
-                            basePhysics.freeMass -= val * count;
+                            // occupies, so it consumes the ship's — at
+                            // the hull-scaled tonnage for oütf 0x0400.
+                            basePhysics.freeMass -=
+                                installedOutfitMass(outfit, hullMass) * count;
                         } else {
                             (basePhysics[key] as number) += val * count;
                         }

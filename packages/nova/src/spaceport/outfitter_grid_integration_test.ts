@@ -122,7 +122,7 @@ describe('outfitter grid on a mock planet', () => {
     it('maps a planet with no SpecialTech to a plain tech threshold', () => {
         const world = planet({ techLevel: 3 });
         expect(stellarOf(world)).toEqual({
-            techLevel: 3, specialTech: [], buysAnyOutfit: false,
+            techLevel: 3, specialTech: [], buysAnyOutfit: false, govt: null,
         });
     });
 
@@ -130,16 +130,20 @@ describe('outfitter grid on a mock planet', () => {
         const world = planet({ techLevel: 0, specialTech: [42] },
             { buysAnyOutfit: true });
         expect(stellarOf(world)).toEqual({
-            techLevel: 0, specialTech: [42], buysAnyOutfit: true,
+            techLevel: 0, specialTech: [42], buysAnyOutfit: true, govt: null,
         });
     });
 
-    it('does NOT carry the owning govt: no rank prices this shop', () => {
-        // The outfitter has nothing for a ränk PriceMod to match against —
-        // PriceMod bends ship prices, not outfit prices (price_mod.ts).
-        const world = planet({ techLevel: 3 });
-        world.govt = 'nova:144';
-        expect(Object.keys(stellarOf(world)).sort())
-            .toEqual(['buysAnyOutfit', 'specialTech', 'techLevel']);
-    });
+    it('carries the owning govt for RequireGovt only: no rank prices this '
+        + 'shop', () => {
+            // The govt is for the oütf RequireGovt scoping (which stellars
+            // a Require applies at) and nothing else: the outfitter has
+            // nothing for a ränk PriceMod to match against — PriceMod
+            // bends ship prices, not outfit prices (price_mod.ts).
+            const world = planet({ techLevel: 3 });
+            world.govt = 'nova:144';
+            expect(stellarOf(world).govt).toBe('nova:144');
+            expect(Object.keys(stellarOf(world)).sort())
+                .toEqual(['buysAnyOutfit', 'govt', 'specialTech', 'techLevel']);
+        });
 });

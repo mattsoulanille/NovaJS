@@ -1,4 +1,5 @@
 import { Component } from 'nova_ecs/component';
+import { Entity } from 'nova_ecs/entity';
 
 /**
  * Ship ids of escorts hired in the bar this landing, carried on the
@@ -26,3 +27,27 @@ import { Component } from 'nova_ecs/component';
  */
 export const PendingEscortsComponent =
     new Component<string[]>('PendingEscorts');
+
+/**
+ * Moves a visit's hires (the bar's `hired` list, which hire_escort.ts
+ * appends to) onto the entity's PendingEscortsComponent, and EMPTIES the
+ * visit list in the same step.
+ *
+ * The emptying is the point, not a tidy-up. The escort cap
+ * (hire_escort.ts's `escortCount`) counts the component; the hire dialog
+ * adds the visit list on top to count the pilots hired since the last
+ * commit. That sum is right only while no hire is in both places at once
+ * — so the one operation that copies one into the other also clears the
+ * source, and there is no way to commit that leaves a hire counted twice.
+ * Returns how many were committed.
+ */
+export function commitPendingEscorts(entity: Entity, hired: string[]): number {
+    const count = hired.length;
+    if (count === 0) {
+        return 0;
+    }
+    const pending = entity.components.get(PendingEscortsComponent) ?? [];
+    entity.components.set(PendingEscortsComponent, [...pending, ...hired]);
+    hired.length = 0;
+    return count;
+}

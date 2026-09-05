@@ -4,7 +4,7 @@ import { BaseParse } from "./base_parse.js";
 import { FlagNamespaceMap, resolveResourceFlags } from "../flag_namespace.js";
 import { CloakData, decodeCloakModVal, getDefaultCloakData } from "novadatainterface/cloak_data";
 import { CloakScannerData, decodeCloakScannerModVal, getDefaultCloakScannerData } from "novadatainterface/cloak_scanner_data";
-import { OutfitData, OutfitPhysics } from "novadatainterface/outfit_data";
+import { decodeRequireGovt, OutfitData, OutfitPhysics } from "novadatainterface/outfit_data";
 import { getDefaultPictData } from "novadatainterface/pict_data";
 import { FPS, OutfitTurnRateConversionFactor, ShipAccelerationConversionFactor, ShipSpeedConversionFactor, ShipTurnRateConversionFactor } from "./constants.js";
 
@@ -332,6 +332,18 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         notFoundFunction(desc);
     }
 
+    // oütf RequireGovt (Bible ~:2052): a gövt LOCAL id in one of four
+    // ranges, resolved to its global id through the outfit's own id space
+    // like every other numbered reference. A value naming no gövt (or the
+    // stock editors' 127 / 0 sentinels, which are out of every range)
+    // means the Require bits apply at every outfitter, the pre-decoding
+    // behaviour. Not reported through notFoundFunction: 217 stock outfits
+    // carry 127, and none of them is broken.
+    const { govtLocalId, scope } = decodeRequireGovt(
+        outf.requireBitsApplyTo ?? -1);
+    const requireGovt = govtLocalId === null
+        ? null : (outf.idSpace.gövt?.[govtLocalId]?.globalID ?? null);
+
     return {
         ...base,
         weapons,
@@ -361,6 +373,21 @@ export async function OutfitParse(outf: OutfResource, notFoundFunction: (m: stri
         // Read by the shipyard's purchase rules, not the outfitter's.
         persistent: (outf.flags & 0x4) > 0,
         cantSell: (outf.flags & 0x8) > 0,
+        // 0x10: taken back off the ship right after OnPurchase runs (the
+        // stock ship-upgrade permits). 0x20: survives a mission set
+        // operator's Cxxx/Exxx/Hxxx ship change (NOT a shipyard trade,
+        // which is 0x4 above). 0x2000: listed under Ranks in the player
+        // info dialog. Bible ~:1966-1985.
+        removeAfterPurchase: (outf.flags & 0x10) > 0,
+        persistentOnShipChange: (outf.flags & 0x20) > 0,
+        showAsRank: (outf.flags & 0x2000) > 0,
+        // 0x200 / 0x400: price and (positive) mass scale with the player's
+        // ship's Mass (Bible ~:1974-1979); the arithmetic lives in nova's
+        // spaceport/outfitter_rules.ts so every quote and charge agree.
+        priceScalesWithShipMass: (outf.flags & 0x200) > 0,
+        massScalesWithShipMass: (outf.flags & 0x400) > 0,
+        requireGovt,
+        requireGovtScope: requireGovt === null ? 'all' : scope,
         // A parsed oütf is a real item by definition; only synthesized
         // built-in-weapon outfits set this.
         builtIn: false,

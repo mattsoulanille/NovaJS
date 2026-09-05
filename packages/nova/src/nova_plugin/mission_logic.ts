@@ -1018,6 +1018,23 @@ export interface MissionMachineryContext {
      * bare number stock-first and ignores a number no data set defines.
      */
     systemExists?(globalId: string): boolean;
+    /**
+     * `Cxxx` / `Exxx` / `Hxxx` (change the player's ship to type xxx; the
+     * three outfit treatments are spaceport/shipyard_rules' ShipChangeMode).
+     * The ship is an ENTITY swap, which only the venue holding the docked
+     * entity can perform, so this is supplied by that venue (the
+     * outfitter, for an oütf OnPurchase like stock 314's `H165`) and is
+     * otherwise reported as an unimplemented hook. `globalShipId` is
+     * already resolved stock-first through `shipExists`.
+     */
+    changeShip?(globalShipId: string,
+        mode: 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults'): void;
+    /**
+     * Whether a shïp with this global id exists, so the change-ship
+     * operators resolve their bare number stock-first like every other
+     * numeric reference.
+     */
+    shipExists?(globalId: string): boolean;
 }
 
 /**
@@ -1130,6 +1147,15 @@ export function makeMissionSetHooks(machinery: MissionMachineryContext,
         getRank: id => machinery.getRank?.(id),
     } : undefined, systemDiscoveryOperators(machinery.discovery,
         runningMissionPrefix, machinery.systemExists));
+
+    // Cxxx/Exxx/Hxxx, when the caller can swap the player's hull (the
+    // outfitter can; see MissionMachineryContext.changeShip). The shïp
+    // number resolves stock-first like every sibling operator.
+    const { changeShip } = machinery;
+    if (changeShip) {
+        hooks.changeShip = (id, mode) => changeShip(resolveNumberedResource(
+            id, runningMissionPrefix, machinery.shipExists), mode);
+    }
 
     if (depth > 4) {
         // Guard against Sxxx/Axxx/Fxxx cycles in scripting.

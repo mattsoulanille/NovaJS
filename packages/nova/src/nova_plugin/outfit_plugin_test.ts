@@ -1,8 +1,10 @@
 import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
-import { getDefaultShipData } from 'novadatainterface/ship_data';
+import { getDefaultShipData, getDefaultShipPhysics } from 'novadatainterface/ship_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { applyOutfitPhysics, OutfitsState, sumOutfitField } from './outfit_plugin.js';
+import {
+    applyOutfitPhysics, installedOutfitMass, OutfitsState, sumOutfitField,
+} from './outfit_plugin.js';
 
 /** A gameData stub exposing only Outfit.getCached. */
 function mockGameData(outfits: { [id: string]: OutfitData | undefined }) {
@@ -12,6 +14,52 @@ function mockGameData(outfits: { [id: string]: OutfitData | undefined }) {
 function outfit(id: string, over: Partial<OutfitData>): OutfitData {
     return { ...getDefaultOutfitData(), id, ...over };
 }
+
+describe('installedOutfitMass (oütf flag 0x0400)', () => {
+    /** Carbon Fiber, as stock oütf 180 is written: Mass 1, flags 0x0600. */
+    const carbonFiber = outfit('nova:180', {
+        massScalesWithShipMass: true, physics: { freeMass: 1 },
+    });
+
+    it('is the written mass on an ordinary outfit', () => {
+        const plain = outfit('nova:129', { physics: { freeMass: 8 } });
+        expect(installedOutfitMass(plain, 10_000)).toBe(8);
+    });
+
+    it('is ship mass x item mass / 100 when flagged', () => {
+        // A Leviathan (shïp 131, Mass 10,000) carries 100 tons of it.
+        expect(installedOutfitMass(carbonFiber, 10_000)).toBe(100);
+        // Spun Diamond (Mass 1) on a Starbridge (98): 0.98 -> 1.
+        expect(installedOutfitMass(carbonFiber, 98)).toBe(1);
+    });
+
+    it('rounds a fractional ton UP (the Heavy Shuttle capture)', () => {
+        // earth_outfitter_carbon_fiber_cant_hold_any_more.png: a mass-25
+        // hull reads "Item Mass: 1 ton" and cannot hold it in 0 tons.
+        expect(installedOutfitMass(carbonFiber, 25)).toBe(1);
+    });
+
+    it('leaves a negative or zero mass alone ("positive-mass items only")',
+        () => {
+            const expansion = outfit('nova:190', {
+                massScalesWithShipMass: true, physics: { freeMass: -10 },
+            });
+            expect(installedOutfitMass(expansion, 10_000)).toBe(-10);
+            const weightless = outfit('nova:236', {
+                massScalesWithShipMass: true, physics: { freeMass: 0 },
+            });
+            expect(installedOutfitMass(weightless, 10_000)).toBe(0);
+        });
+
+    it('is what applyOutfitPhysics takes off the hull', () => {
+        const hull = { ...getDefaultShipPhysics(), mass: 10_000, freeMass: 500 };
+        const physics = applyOutfitPhysics(hull, [[carbonFiber, 2]]);
+        expect(physics.freeMass).toBe(300);
+        // ...and the unflagged case is unchanged.
+        const plain = outfit('nova:129', { physics: { freeMass: 8 } });
+        expect(applyOutfitPhysics(hull, [[plain, 2]]).freeMass).toBe(484);
+    });
+});
 
 describe('sumOutfitField', () => {
     it('sums a field across owned outfits weighted by count', () => {

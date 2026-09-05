@@ -18,10 +18,13 @@ import {
 import { CombatRatingComponent } from '../nova_plugin/reputation_plugin.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import {
+    buildChangedShip,
     buildPurchasedShip,
     canBuyShip,
     cargoForNewShip,
+    outfitsAfterShipChange,
     outfitsForNewShip,
+    runShipTradeSetStrings,
     partitionOutfits,
     purchaseContextFrom,
     ShipPurchaseContext,
@@ -137,6 +140,27 @@ describe('shipyard purchase rules', () => {
             // 0.25 * 4002 = 1000.5
             expect(tradeInValue(ctx)).toBe(1000);
         });
+
+        it('values a ship-mass-proportional outfit at what it cost on '
+            + 'THIS hull (oütf 0x0200)', () => {
+                // Carbon Fiber (Cost 250, flag 0x0200) on a Leviathan
+                // (Mass 10,000) cost 2,500,000 cr, and that is its
+                // "original cost" for the 25%.
+                const plating = outfit('nova:180', {
+                    price: 250, priceScalesWithShipMass: true,
+                });
+                const leviathan = ship('nova:131', {
+                    price: 12_000_000,
+                    physics: { ...getDefaultShipData().physics, mass: 10_000 },
+                });
+                const ctx = context({
+                    currentShip: leviathan,
+                    outfits: [['nova:180', 2]],
+                    catalogue: [plating],
+                });
+                // 0.25 * (12,000,000 + 2 * 2,500,000)
+                expect(tradeInValue(ctx)).toBe(4_250_000);
+            });
     });
 
     describe('purchase price', () => {
@@ -557,6 +581,164 @@ describe('shipyard purchase rules', () => {
                 const check = canBuyShip(ship('nova:103', { price: 1 }), ctx);
                 expect(check.allowed ? '' : check.reason)
                     .toBe('fightersDeployed');
+            });
+    });
+
+    /**
+     * shïp OnRetire (~:2639) and OnPurchase (~:2598) at a trade, on the
+     * entity the trade built.
+     */
+    describe('the shïp set strings a trade fires', () => {
+        /** Every stock hull's OnPurchase; Pegasus;rogue's OnRetire. */
+        const rogue = ship('nova:377',
+            { onPurchase: 'b4322', onRetire: '!b4322' });
+        const starbridge = ship('nova:133',
+            { onPurchase: 'b8888 G200', writerPrefix: 'nova' });
+
+        function traded(bits: number[], retired: ShipData, bought: ShipData) {
+            const entity = makeShip(bought);
+            entity.components.set(ControlBitsComponent, new Set(bits));
+            entity.components.set(OutfitsStateComponent, new Map());
+            runShipTradeSetStrings(entity, retired, bought,
+                { outfitExists: id => id === 'nova:200' });
+            return entity;
+        }
+
+        it('runs the old class\'s OnRetire, then the new class\'s OnPurchase',
+            () => {
+                const entity = traded([4322], rogue, starbridge);
+                const bits = entity.components.get(ControlBitsComponent)!;
+                expect(bits.has(4322)).toBe(false);
+                expect(bits.has(8888)).toBe(true);
+            });
+
+        it('retires BEFORE buying, so a shared bit ends up set', () => {
+            // Two hulls that set and clear the same "flying one of ours"
+            // bit: trading between them must leave it set.
+            const a = ship('nova:300', { onPurchase: 'b20289', onRetire: '!b20289' });
+            const b = ship('nova:301', { onPurchase: 'b20289', onRetire: '!b20289' });
+            expect(traded([20289], a, b).components
+                .get(ControlBitsComponent)!.has(20289)).toBe(true);
+        });
+
+        it('writes a NEW bit set, leaving the traded-in entity\'s alone',
+            () => {
+                const old = makeShip(rogue);
+                const shared = new Set([4322]);
+                old.components.set(ControlBitsComponent, shared);
+                const bought = makeShip(starbridge);
+                bought.components.set(ControlBitsComponent, shared);
+                runShipTradeSetStrings(bought, rogue, starbridge);
+                expect(old.components.get(ControlBitsComponent)).toBe(shared);
+                expect(shared.has(4322)).toBe(true);
+                expect(bought.components.get(ControlBitsComponent)!.has(4322))
+                    .toBe(false);
+            });
+
+        it('applies a Gxxx grant to the new hull\'s outfits', () => {
+            const entity = traded([], rogue, starbridge);
+            expect(entity.components.get(OutfitsStateComponent)!.get('nova:200'))
+                .toEqual({ count: 1 });
+        });
+
+        it('is a no-op for blank strings and a missing retired class', () => {
+            const plain = ship('nova:128');
+            const entity = makeShip(plain);
+            entity.components.set(ControlBitsComponent, new Set([1]));
+            runShipTradeSetStrings(entity, undefined, plain);
+            expect([...entity.components.get(ControlBitsComponent)!])
+                .toEqual([1]);
+        });
+    });
+
+    /**
+     * The mission set operators Cxxx / Exxx / Hxxx (EVN Bible ~:230-240),
+     * as an oütf OnPurchase like stock 314's `H165` runs them.
+     */
+    describe('a mission set operator changing the ship', () => {
+        /** 0x0020: survives an H change. NOT 0x0004 (the shipyard's bit). */
+        const vellosBeam = outfit('nova:221',
+            { price: 0, persistentOnShipChange: true });
+        /** 0x0004 only: survives a TRADE, not an H change. */
+        const tradeKeeper = outfit('nova:222', { price: 10, persistent: true });
+        const cannon = outfit('nova:200', { price: 12000 });
+        /** The new class's stock loadout: two cannons and a rack. */
+        const modStarbridge = ship('nova:165', {
+            price: 750000, outfits: { 'nova:200': 2, 'nova:300': 1 },
+        });
+        const owned: [string, number][] =
+            [['nova:221', 1], ['nova:222', 1], ['nova:200', 1]];
+        const catalogue = new Map([
+            ['nova:221', vellosBeam], ['nova:222', tradeKeeper],
+            ['nova:200', cannon],
+        ]);
+        const getOutfit = (id: string) => catalogue.get(id);
+
+        it('Cxxx keeps every outfit and grants none of the defaults', () => {
+            expect(outfitsAfterShipChange(modStarbridge, new Map(owned),
+                getOutfit, 'keep')).toEqual(new Map([
+                    ['nova:221', { count: 1 }],
+                    ['nova:222', { count: 1 }],
+                    ['nova:200', { count: 1 }],
+                ]));
+        });
+
+        it('Exxx keeps every outfit AND grants the defaults', () => {
+            expect(outfitsAfterShipChange(modStarbridge, new Map(owned),
+                getOutfit, 'keepAndGrantDefaults')).toEqual(new Map([
+                    ['nova:200', { count: 3 }],
+                    ['nova:300', { count: 1 }],
+                    ['nova:221', { count: 1 }],
+                    ['nova:222', { count: 1 }],
+                ]));
+        });
+
+        it('Hxxx drops everything but the 0x0020 items and grants the '
+            + 'defaults', () => {
+                // The shipyard's 0x0004 does not save nova:222 here.
+                expect(outfitsAfterShipChange(modStarbridge, new Map(owned),
+                    getOutfit, 'dropAndGrantDefaults')).toEqual(new Map([
+                        ['nova:200', { count: 2 }],
+                        ['nova:300', { count: 1 }],
+                        ['nova:221', { count: 1 }],
+                    ]));
+            });
+
+        it('ignores non-positive counts and unknown outfits under H', () => {
+            expect(outfitsAfterShipChange(modStarbridge,
+                new Map([['nova:221', 0], ['nova:999', 2]]), getOutfit,
+                'dropAndGrantDefaults')).toEqual(new Map([
+                    ['nova:200', { count: 2 }],
+                    ['nova:300', { count: 1 }],
+                ]));
+        });
+
+        it('builds the new hull with the credits carried over unchanged',
+            () => {
+                const bought = makeShip(ship('nova:137', { price: 350000 }));
+                bought.components.set(MultiplayerData, { owner: 'peer-1' });
+                bought.components.set(CreditsComponent, { credits: 123456 });
+                bought.components.set(ControlBitsComponent, new Set([4000]));
+                bought.components.set(OutfitsStateComponent,
+                    new Map(owned.map(([id, count]) => [id, { count }])));
+                const before = bought.components.get(CreditsComponent)!.credits;
+                const changed = buildChangedShip(bought, modStarbridge,
+                    new Map(owned), getOutfit, 'dropAndGrantDefaults');
+                expect(changed).not.toBe(bought);
+                expect(changed.components.get(ShipComponent))
+                    .toEqual({ id: 'nova:165' });
+                // No price, no trade-in: a gift is not a purchase.
+                expect(changed.components.get(CreditsComponent))
+                    .toEqual({ credits: before });
+                expect(changed.components.get(OutfitsStateComponent)!
+                    .get('nova:222')).toBeUndefined();
+                expect(changed.components.get(OutfitsStateComponent)!
+                    .get('nova:221')).toEqual({ count: 1 });
+                // The player-scoped state followed, as on a purchase.
+                expect(changed.components.get(ControlBitsComponent))
+                    .toBe(bought.components.get(ControlBitsComponent));
+                expect(changed.components.get(MultiplayerData))
+                    .toEqual(bought.components.get(MultiplayerData));
             });
     });
 });

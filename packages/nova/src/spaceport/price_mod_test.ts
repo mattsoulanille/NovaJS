@@ -98,12 +98,18 @@ describe('the outfitter item price', () => {
     it('is the oütf Cost as written, with NO PriceMod applied', () => {
         const item = outfit(5_000);
         expect(outfitPrice(item)).toBe(5_000);
-        // outfitPrice takes no modifier at all: there is no argument a
-        // caller could pass to bend an outfit's price. That is the ruling
-        // expressed in the type, not just in the arithmetic.
-        expect(outfitPrice.length).toBe(1);
-        expect(outfitResaleValue.length).toBe(1);
-        expect(sellRefund.length).toBe(2);
+        // outfitPrice takes no MODIFIER at all: the only thing a caller can
+        // pass besides the outfit is the HULL it goes on, which exists for
+        // the oütf 0x0200 ship-mass-proportional rule (a property of the
+        // item, not a discount) and leaves an unflagged item's price
+        // alone. There is still no argument that bends a price. That is
+        // the ruling expressed in the type, not just in the arithmetic.
+        expect(outfitPrice.length).toBe(2);
+        expect(outfitResaleValue.length).toBe(2);
+        expect(sellRefund.length).toBe(3);
+        const heavyHull = { ...getDefaultShipData() };
+        heavyHull.physics = { ...heavyHull.physics, mass: 10_000 };
+        expect(outfitPrice(item, heavyHull)).toBe(5_000);
     });
 
     it('is unaffected by the ranks that make Spica\'s SHIPS free', () => {
