@@ -268,18 +268,23 @@ export class RollbackScreen {
         this.buttons.bits.setLabel('Show bits');
         this.buttons.rewind.setLabel('Rewind');
         this.container.visible = true;
+        // Everything after the bind is inside the try: a throw while the
+        // rows are being built (a history whose patch chain cannot be
+        // applied; issue #91) must not leave the menu controls bound and
+        // the panel visible behind a rejected show() — the title's arrow
+        // and Enter keys were double-handled until reload.
         this.controls.bind();
-        this.status.text = 'Loading galaxy…';
         try {
-            await this.buildPromise;
-        } finally {
-            this.status.text = '';
-        }
-        // Rows are named through the universe, so they wait for it.
-        this.rows = rollbackRows(input.history, this.names());
-        this.refreshAll();
-        void this.resolveNamesForSelection();
-        try {
+            this.status.text = 'Loading galaxy…';
+            try {
+                await this.buildPromise;
+            } finally {
+                this.status.text = '';
+            }
+            // Rows are named through the universe, so they wait for it.
+            this.rows = rollbackRows(input.history, this.names());
+            this.refreshAll();
+            void this.resolveNamesForSelection();
             return await firstValueFrom(this.results);
         } finally {
             this.container.visible = false;

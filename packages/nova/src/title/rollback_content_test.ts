@@ -116,6 +116,26 @@ describe('rollback content', () => {
         expect(checkpointBits(h, 0).size).toBe(data.novaControlBits.length);
     });
 
+    it('renders a checkpoint whose patch chain cannot be applied as an '
+        + 'empty save rather than throwing out of the view (issue #91)', () => {
+            const h = sampleHistory();
+            // An imported history is validated for shape only, so a patch
+            // can point into a container that does not exist.
+            h.checkpoints[1].patch = [
+                { op: 'replace', path: '/data/nowhere/deep/credits', value: 1 },
+            ];
+            const warn = spyOn(console, 'warn');
+            expect(() => checkpointDetails(h, 1, NAMES)).not.toThrow();
+            expect(() => checkpointDetails(h, 2, NAMES)).not.toThrow();
+            expect(() => checkpointSystem(h, 2, NAMES)).not.toThrow();
+            expect(() => rollbackRows(h, NAMES)).not.toThrow();
+            expect(warn).toHaveBeenCalled();
+            // The checkpoint before the break is untouched.
+            expect(checkpointDetails(h, 0, NAMES).system).toBe('Sol');
+            // The broken one falls back to its own metadata for the map.
+            expect(checkpointSystem(h, 1, NAMES)).toBe('nova:131');
+        });
+
     it('derives mission events from the checkpoint label and mission diff', () => {
         const h = sampleHistory();
         const d = checkpointDetails(h, 1, NAMES);
