@@ -7,21 +7,33 @@ import { DisplayAssetDataResource } from "../nova_plugin/game_data_resource.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import { PlayerSoundEvent, SoundEvent } from "../nova_plugin/sound_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
+import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
 
 const PLAYER_UUID = 'player ship';
 const OTHER_UUID = 'other ship';
+
+/** What each play() call asked @pixi/sound for. */
+interface PlayCall {
+    id: string;
+    /** The first argument to play(): options, a complete callback, or nothing. */
+    arg: unknown;
+}
 
 async function makeSoundWorld() {
     const world = new World('sound test');
     const played: string[] = [];
     const stopped: string[] = [];
+    const plays: PlayCall[] = [];
     const fakeAssets = {
         data: {
             Sound: {
                 getCached(id: string) {
                     return {
                         volume: 0,
-                        play() { played.push(id); },
+                        play(arg?: unknown) {
+                            played.push(id);
+                            plays.push({ id, arg });
+                        },
                         stop() { stopped.push(id); },
                     };
                 },
@@ -43,7 +55,7 @@ async function makeSoundWorld() {
     player.components.set(PlayerShipSelector, undefined);
     world.entities.set(PLAYER_UUID, player);
     world.entities.set(OTHER_UUID, new Entity('other'));
-    return { world, played, stopped };
+    return { world, played, stopped, plays };
 }
 
 describe('display sound plugin', () => {
@@ -108,6 +120,63 @@ describe('display sound plugin', () => {
         world.step();
         expect(played.filter(id => id === 'nova:200').length).toEqual(3);
         expect(played.filter(id => id === 'nova:201').length).toEqual(3);
+    });
+
+    /**
+     * `{ loop: true }` has to reach @pixi/sound as a per-play OPTION.
+     * Sound.play(callback) merges `{ complete }` over `{ loop: false }`, so
+     * the old bare callback started every "loop" as a one-shot — the
+     * player's death loop (snd 371, 0.46 s) fell silent for the rest of a
+     * death sequence that can run 8 s.
+     */
+    it('starts a looping sound with the loop option', async () => {
+        const { world, plays } = await makeSoundWorld();
+        world.emit(UiSoundEvent, { id: SOUND_EXPLOSION_LOOP, loop: true });
+        world.step();
+        expect(plays.length).toEqual(1);
+        expect(plays[0].arg).toEqual(jasmine.objectContaining({ loop: true }));
+    });
+
+    it('starts a one-shot sound without the loop option', async () => {
+        const { world, plays } = await makeSoundWorld();
+        world.emit(SoundEvent, { id: 'nova:200' });
+        world.step();
+        expect(plays.length).toEqual(1);
+        expect(plays[0].arg).toBeUndefined();
+    });
+
+    it('starts a loop once, however often it is re-requested', async () => {
+        // The spaceport ambient re-emits its loop every frame; that must
+        // not restart (or stack) a loop that is already running.
+        const { world, played } = await makeSoundWorld();
+        for (let i = 0; i < 5; i++) {
+            world.emit(UiSoundEvent, { id: 'nova:900', loop: true });
+            world.step();
+        }
+        expect(played).toEqual(['nova:900']);
+    });
+
+    it('lets a stopped loop start again', async () => {
+        const { world, played, stopped } = await makeSoundWorld();
+        world.emit(UiSoundEvent, { id: 'nova:900', loop: true });
+        world.step();
+        world.emit(UiSoundEvent, { id: 'nova:900', stop: true });
+        world.step();
+        expect(stopped).toEqual(['nova:900']);
+        world.emit(UiSoundEvent, { id: 'nova:900', loop: true });
+        world.step();
+        expect(played).toEqual(['nova:900', 'nova:900']);
+    });
+
+    it('stops every running loop when the plugin is removed', async () => {
+        // The systems that would stop a loop leave with the world; a loop
+        // that outlived them would ring forever.
+        const { world, stopped } = await makeSoundWorld();
+        world.emit(UiSoundEvent, { id: 'nova:900', loop: true });
+        world.emit(UiSoundEvent, { id: 'nova:901', loop: true });
+        world.step();
+        await world.removePlugin(SoundPlugin);
+        expect(stopped.sort()).toEqual(['nova:900', 'nova:901']);
     });
 
     it('never limits stops, however many arrive at once', async () => {
