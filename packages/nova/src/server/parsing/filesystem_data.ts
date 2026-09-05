@@ -67,7 +67,7 @@ const Paths = {
     SpriteSheetFrames: { path: "SpriteSheetFrames", extension: "json" } as PathInfo,
     StatusBar: { path: "StatusBar", extension: "json" } as PathInfo,
     Explosion: { path: "Explosion", extension: "json" } as PathInfo,
-    SoundFile: { path: "SoundFile", extension: "mp3" } as PathInfo,
+    SoundFile: { path: "SoundFile", extension: "wav" } as PathInfo,
     Rank: { path: "Rank", extension: "json" } as PathInfo,
     StringTable: { path: "StringTable", extension: "json" } as PathInfo,
     Description: { path: "Description", extension: "json" } as PathInfo,

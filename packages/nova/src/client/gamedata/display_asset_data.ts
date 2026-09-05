@@ -17,6 +17,13 @@ import * as sound from '@pixi/sound';
 import urlJoin from 'url-join';
 import { dataPath } from '../../common/game_data_paths.js';
 
+/**
+ * `snd ` resources are served as RIFF/WAVE at their original sample rate —
+ * see novaparse's sound_file_parse.ts for why they are no longer MP3. The
+ * server's data route matches on this extension too (setup_routes.ts).
+ */
+export const SOUND_EXTENSION = '.wav';
+
 export type DisplayAssetDataResources = Pick<NovaDataInterface,
     'Pict' | 'PictImage' | 'Cicn' | 'CicnImage' | 'PpatImage' |
     'TargetCorners' | 'SpriteSheetImage' | 'SpriteSheetFrames' |
@@ -51,7 +58,7 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
             SpriteSheetFrames: this.addFramesGettable<SpriteSheetFramesData>(NovaDataType.SpriteSheetFrames),
             StatusBar: this.addStructuredGettable<StatusBarData>(NovaDataType.StatusBar),
             Explosion: this.addStructuredGettable<ExplosionData>(NovaDataType.Explosion),
-            SoundFile: this.addBinaryGettable<SoundFile>(NovaDataType.SoundFile, '.mp3'),
+            SoundFile: this.addBinaryGettable<SoundFile>(NovaDataType.SoundFile, SOUND_EXTENSION),
             StringTable: this.addStructuredGettable<StringTableData>(NovaDataType.StringTable),
             Description: this.addStructuredGettable<DescriptionData>(NovaDataType.Description),
             Sound: this.addSoundGettable(),
@@ -121,7 +128,7 @@ export class DisplayAssetData implements DisplayAssetDataInterface {
     private addSoundGettable() {
         const dataPrefix = this.getDataPrefix(NovaDataType.SoundFile);
         return new Gettable<sound.Sound>(async (id) => {
-            const soundPath = urlJoin(dataPrefix, id) + '.mp3';
+            const soundPath = urlJoin(dataPrefix, id) + SOUND_EXTENSION;
             return new Promise((fulfill, reject) => {
                 sound.Sound.from({
                     url: soundPath,

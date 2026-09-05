@@ -177,7 +177,7 @@ class GameDataServer {
 
         this.app.get(path.join(dataPath, ":name/:item.png"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item.json"), this.requestFulfiller.bind(this));
-        this.app.get(path.join(dataPath, ":name/:item.mp3"), this.requestFulfiller.bind(this));
+        this.app.get(path.join(dataPath, ":name/:item.wav"), this.requestFulfiller.bind(this));
         this.app.get(path.join(dataPath, ":name/:item"), this.requestFulfiller.bind(this));
         this.app.get(idsPath + ".json", this.idRequestFulfiller.bind(this));
         this.app.get(controlBitNamespacesPath + ".json",
