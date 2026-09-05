@@ -1,5 +1,5 @@
 import 'jasmine';
-import { parsePilotResources } from 'novaparse/pilot/pilot_parse';
+import { parsePilotBytes, parsePilotResources } from 'novaparse/pilot/pilot_parse';
 import {
     buildMacPilotBlobs, buildPltPilotFile, SYNTHETIC,
 } from 'novaparse/pilot/synthetic_pilot';
@@ -91,6 +91,33 @@ describe('original pilot import', () => {
         expect(decodeSave(JSON.stringify({ version: 2, data: save })))
             .toBeDefined();
     });
+
+    it('clamps out-of-range credits, kills and dates from a crafted file',
+        () => {
+            // The fields are raw int16/int32 reads: a corrupt or crafted
+            // file lands them in the save unvalidated otherwise. EV Nova
+            // has no debt (every in-game credit change clamps at 0), and
+            // a month of 13 cannot index the calendar's month table.
+            const pilot = parsePilotBytes(buildPltPilotFile('Ring of Glory'));
+            pilot.player.cash = -5;
+            pilot.player.rating = -1;
+            pilot.player.date = { year: 1183, month: 13, day: 40 };
+            const { save, notes } = convertOriginalPilot(pilot, 'x.plt', CTX);
+            expect(save.credits).toBe(0);
+            expect(save.combatRatings).toEqual([['kills', 0]]);
+            expect(save.date).toEqual({ year: 1183, month: 12, day: 31 });
+            expect(notes.some(n => /credits.*out of range/.test(n))).toBeTrue();
+            expect(notes.some(n => /date.*clamped/.test(n))).toBeTrue();
+            expect(decodeSave(JSON.stringify({ version: 2, data: save })))
+                .toBeDefined();
+
+            // In-range values pass through untouched, with no note.
+            const clean = parsePilotBytes(buildPltPilotFile('Ring of Glory'));
+            const converted = convertOriginalPilot(clean, 'x.plt', CTX);
+            expect(converted.save.credits).toBe(S.cash);
+            expect(converted.notes.some(n => /clamped|out of range/.test(n)))
+                .toBeFalse();
+        });
 
     it('imports the exploration map at its original three levels', () => {
         // The file's `exploration` array is indexed by sÿst id - 128 and
