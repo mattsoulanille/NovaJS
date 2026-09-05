@@ -52,6 +52,15 @@ export function landable(stellar: { flags: LandableFlags }): boolean {
  *    stellar is uninhabited" (stellar_clearance),
  *  - mïsn AvailStel -1, "any inhabited stellar" (mission_logic).
  *
+ * NOT among the consumers: the spaceport's Mission BBS. No spöb flag governs
+ * it — the Flags word has bits for the commodity exchange, outfitter,
+ * shipyard and bar and none for the mission computer — so its button is
+ * unconditional on every landable stellar, uninhabited ones included, and
+ * govt-range AvailStel selectors (unlike -1, "any inhabited stellar") put
+ * real missions on those boards. A stocked BBS therefore says nothing about
+ * habitation; see starmap.ts systemDotColor for the case that made this
+ * worth writing down.
+ *
  * Takes the FLAGS-shaped object rather than the stellar so both a raw
  * PlanetFlags and mission_logic's flattened StellarInfo satisfy it.
  */
