@@ -164,7 +164,10 @@ export class Spaceport extends Menu<Entity> {
 
         this.outfitter = new Outfitter(displayAssets, simulationData, controlEvents);
         const showOutfitter = async () => {
-            if (this.data && !this.data.flags.hasOutfitter) {
+            // No stellar data yet (the spaceport's keys go live before its
+            // build finishes — see show) or no such venue here: nothing
+            // to open. The same rule guards every venue below.
+            if (!this.data?.flags.hasOutfitter) {
                 return;
             }
             this.controls.unbind();
@@ -212,7 +215,7 @@ export class Spaceport extends Menu<Entity> {
         this.bar = new Bar(displayAssets, simulationData, controlEvents,
             this.universe, id);
         const showBar = async () => {
-            if (this.data && !this.data.flags.hasBar) {
+            if (!this.data?.flags.hasBar) {
                 return;
             }
             this.controls.unbind();
@@ -229,7 +232,7 @@ export class Spaceport extends Menu<Entity> {
         this.tradeCenter = new TradeCenter(displayAssets, simulationData,
             controlEvents, id);
         const showTradeCenter = async () => {
-            if (this.data && !this.data.flags.hasCommodityExchange) {
+            if (!this.data?.flags.hasCommodityExchange) {
                 return;
             }
             this.controls.unbind();
@@ -248,7 +251,7 @@ export class Spaceport extends Menu<Entity> {
         this.shipyard.onShipPurchased = ship => this.adoptPurchasedShip(ship);
 
         const showShipyard = async () => {
-            if (this.data && !this.data.flags.hasShipyard) {
+            if (!this.data?.flags.hasShipyard) {
                 return;
             }
             this.controls.unbind();
@@ -371,14 +374,16 @@ export class Spaceport extends Menu<Entity> {
         // input is set first so handlers that read it (e.g. 'p' passing the
         // docked entity to player info) work during the gap too.
         this.setInput(input);
+        this.controls.bind();
         // Built lazily, on the first landing here (display/
         // spaceport_plugin.ts), so the stellar's data may still be on its
-        // way: the venue keys read it (which venues exist, the outfitter's
-        // and shipyard's tech level), so they must not go live before it.
+        // way. The VENUE keys read it — which venues exist, the outfitter's
+        // and shipyard's tech level — and each stands down until it is in
+        // (see showOutfitter and friends); the keys that don't need it
+        // ('p', 'i', 'm', depart) are live from the first frame, as above.
         // Quick — the stellar has been in the display world all along, so
         // its record is cached — unlike the mission-universe load below.
         await this.buildPromise;
-        this.controls.bind();
         let events: MissionEvent[] = [];
         try {
             events = await processEntityLanding(input,

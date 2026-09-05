@@ -305,77 +305,119 @@ describe('display world UI lifecycle', () => {
                 await world.removePlugin(SpaceportPlugin);
             });
 
+        /**
+         * Lands a fresh pilot at `planetId` in a world of its own, and
+         * returns before a single turn of the event loop: the spaceport
+         * is mid-landing (its build and the mission bookkeeping in
+         * flight) until the caller settles.
+         */
+        async function land(gameData: Awaited<ReturnType<
+            typeof getIntegrationGameData>>, planetId: string) {
+            const world = await spaceportWorld([planetId]);
+            const keys = world.resources.get(ControlsSubject)!;
+            let left = 0;
+            world.events.get(LeaveSpaceportEvent).subscribe(() => left++);
+            world.emit(OpenSpaceportEvent,
+                { planetId, ship: pilot((await gameData.ids).Ship[0]) });
+            world.step();
+            const spaceport = world.entities.get(`planet ${planetId}`)!
+                .components.get(SpaceportComponent)!;
+            return { world, spaceport, keys, left: () => left };
+        }
+
+        /**
+         * The stellars with an outfitter, in data order. Some of them
+         * greet a fresh pilot with mission offers (Earth's intro
+         * missions), which sit on the spaceport as popups until answered
+         * and keep it off its main screen; `onOffers` gets those, and the
+         * first landing that reaches its main screen ends the walk.
+         */
+        async function walkOutfitterStellars(
+            onMainScreen: (landing: Awaited<ReturnType<typeof land>>)
+                => Promise<void>,
+            onOffers: (landing: Awaited<ReturnType<typeof land>>)
+                => Promise<void>,
+            press?: (keys: Subject<ControlEvent>) => void) {
+            const gameData = await getIntegrationGameData();
+            await MissionUniverse.shared(gameData).load();
+            for (const planetId of (await gameData.ids).Planet) {
+                if (!(await gameData.data.Planet.get(planetId))
+                    .flags.hasOutfitter) {
+                    continue;
+                }
+                const landing = await land(gameData, planetId);
+                press?.(landing.keys);
+                await settle(100);
+                expect(MenuControls.focused)
+                    .withContext(`docked at ${planetId}`).toBeDefined();
+                if (!landing.spaceport.onMainScreen) {
+                    await onOffers(landing);
+                    continue;
+                }
+                await onMainScreen(landing);
+                return;
+            }
+            fail('no outfitter stellar makes a fresh pilot no offers');
+        }
+
+        /** The transit: nothing the visit bound may survive it. */
+        async function tearDown(landing: Awaited<ReturnType<typeof land>>) {
+            await landing.world.removePlugin(SpaceportPlugin);
+            expect(MenuControls.focused).toBeUndefined();
+            expect(landing.spaceport.container.destroyed).toBe(true);
+            // Including after every continuation has run on: a venue's
+            // caller re-binds the spaceport's keys once the venue
+            // resolves, which used to put the dead spaceport back on the
+            // stack a microtask after it was destroyed.
+            await settle(100);
+            expect(MenuControls.focused).toBeUndefined();
+            // And a teardown is not a departure: no relaunch, no
+            // "Departed" checkpoint.
+            expect(landing.left()).toBe(0);
+        }
+
         it('gives the keyboard back when torn down mid-visit, venue and '
             + 'all, without departing (finding 2)', async () => {
-                const gameData = await getIntegrationGameData();
-                const ids = await gameData.ids;
-                await MissionUniverse.shared(gameData).load();
-
-                /** Lands a fresh pilot at `planetId` in a world of its own. */
-                async function land(planetId: string) {
-                    const world = await spaceportWorld([planetId]);
-                    let left = 0;
-                    world.events.get(LeaveSpaceportEvent)
-                        .subscribe(() => left++);
-                    world.emit(OpenSpaceportEvent,
-                        { planetId, ship: pilot(ids.Ship[0]) });
-                    world.step();
-                    const spaceport = world.entities.get(`planet ${planetId}`)!
-                        .components.get(SpaceportComponent)!;
-                    await settle(100);
-                    return { world, spaceport, left: () => left };
-                }
-
-                /** The transit: nothing the visit bound may survive it. */
-                async function tearDown(landing: Awaited<ReturnType<typeof land>>) {
-                    await landing.world.removePlugin(SpaceportPlugin);
-                    expect(MenuControls.focused).toBeUndefined();
-                    expect(landing.spaceport.container.destroyed).toBe(true);
-                    // Including after every continuation has run on: a
-                    // venue's caller re-binds the spaceport's keys once
-                    // the venue resolves, which used to put the dead
-                    // spaceport back on the stack a microtask after it
-                    // was destroyed.
-                    await settle(100);
-                    expect(MenuControls.focused).toBeUndefined();
-                    // And a teardown is not a departure: no relaunch, no
-                    // "Departed" checkpoint.
-                    expect(landing.left()).toBe(0);
-                }
-
-                // The stellars with an outfitter, in data order. Some of
-                // them greet a fresh pilot with mission offers (Earth's
-                // intro missions), which sit on the spaceport as popups
-                // until answered: those are torn down WITH THE OFFER UP,
-                // the first one that reaches its main screen is torn down
-                // with a VENUE up.
-                let venueCase = false;
-                for (const planetId of ids.Planet) {
-                    if (!(await gameData.data.Planet.get(planetId))
-                        .flags.hasOutfitter) {
-                        continue;
-                    }
-                    const landing = await land(planetId);
-                    const { spaceport, world } = landing;
-                    expect(MenuControls.focused)
-                        .withContext(`docked at ${planetId}`).toBeDefined();
-                    if (!spaceport.onMainScreen) {
-                        await tearDown(landing);
-                        continue;
-                    }
+                // The landings that stall on offers are torn down WITH THE
+                // OFFER UP; the one that reaches its main screen is torn
+                // down with a VENUE up.
+                await walkOutfitterStellars(async landing => {
+                    const { spaceport, keys } = landing;
                     // Into the outfitter: its keys go over the spaceport's.
-                    world.resources.get(ControlsSubject)!
-                        .next({ action: 'outfitter', state: 'start' });
+                    keys.next({ action: 'outfitter', state: 'start' });
                     await waitFor(() => !spaceport.onMainScreen
                         && MenuControls.focused !== undefined,
                         'the outfitter took the keyboard');
                     await tearDown(landing);
-                    venueCase = true;
-                    break;
-                }
-                expect(venueCase)
-                    .withContext('some outfitter stellar makes no offers')
-                    .toBe(true);
+                }, tearDown);
+            });
+
+        it('owns the keyboard from the moment of landing, with the venue '
+            + 'keys standing down until the stellar is in (finding 4)',
+            async () => {
+                // A venue key pressed in the gap before the spaceport's
+                // build resolves must neither fall through to the
+                // in-flight handlers nor open a venue the stellar may not
+                // have; pressed again once the spaceport is up, it opens.
+                await walkOutfitterStellars(async landing => {
+                    const { spaceport, keys } = landing;
+                    expect(spaceport.onMainScreen)
+                        .withContext('the early press opened nothing')
+                        .toBe(true);
+                    keys.next({ action: 'outfitter', state: 'start' });
+                    await waitFor(() => !spaceport.onMainScreen
+                        && MenuControls.focused !== undefined,
+                        'the outfitter opened once the stellar was in');
+                    await tearDown(landing);
+                }, tearDown, keys => {
+                    // Synchronously after the landing: the spaceport
+                    // already holds the keyboard...
+                    expect(MenuControls.focused)
+                        .withContext('bound before the build resolved')
+                        .toBeDefined();
+                    // ...and swallows the venue key.
+                    keys.next({ action: 'outfitter', state: 'start' });
+                });
             });
     });
 
