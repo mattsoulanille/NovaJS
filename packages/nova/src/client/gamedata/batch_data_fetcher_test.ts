@@ -1,5 +1,6 @@
 import 'jasmine';
 import { Gettable } from 'novadatainterface/gettable';
+import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { BatchDataFetcher } from './batch_data_fetcher.js';
 import { BatchRequest, BatchResponse } from '../../server/setup_routes.js';
 
@@ -18,8 +19,10 @@ function makeFakeFetch(tables: { [type: string]: { [id: string]: unknown } }) {
             for (const id of ids) {
                 if (id in table) {
                     result[type][id] = { data: table[id] };
+                } else if (id.startsWith('broken')) {
+                    result[type][id] = { error: `failed to load ${type}:${id}` };
                 } else {
-                    result[type][id] = { error: `missing ${type}:${id}` };
+                    result[type][id] = { error: `missing ${type}:${id}`, notFound: true };
                 }
             }
         }
@@ -93,6 +96,29 @@ describe('BatchDataFetcher', () => {
         await expectAsync(present).toBeResolvedTo('P');
         await expectAsync(absent).toBeRejected();
     });
+
+    it('keeps the server\'s not-found marker as a NovaIDNotFoundError, so a '
+        + 'Gettable above it caches the miss instead of re-fetching', async () => {
+            const { fake, requests } = makeFakeFetch({ Ship: { present: 'P' } });
+            const fetcher = new BatchDataFetcher('', 0, fake);
+
+            await expectAsync(fetcher.fetch('Ship', 'absent'))
+                .toBeRejectedWithError(NovaIDNotFoundError, /absent/);
+            // A plain per-id failure stays a plain Error (a retry may fix it).
+            await expectAsync(fetcher.fetch('Ship', 'broken1'))
+                .toBeRejectedWithError(Error, /broken1/);
+            expect(await fetcher.fetch('Ship', 'broken1').catch(e => e instanceof NovaIDNotFoundError))
+                .toBe(false);
+
+            const gettable = new Gettable<unknown>(id => fetcher.fetch('Ship', id), () => { });
+            await expectAsync(gettable.get('absent')).toBeRejectedWithError(NovaIDNotFoundError);
+            await expectAsync(gettable.get('absent')).toBeRejectedWithError(NovaIDNotFoundError);
+            expect(gettable.getCached('absent')).toBeUndefined();
+            await new Promise(resolve => setTimeout(resolve, 0));
+            const fetchesOfAbsent = requests
+                .filter(r => (r.Ship ?? []).includes('absent')).length;
+            expect(fetchesOfAbsent).toBe(2); // the bare fetch, then the Gettable's one
+        });
 
     it('rejects every id when the transport fails', async () => {
         const failing = (async () => { throw new Error('network down'); }) as unknown as typeof fetch;

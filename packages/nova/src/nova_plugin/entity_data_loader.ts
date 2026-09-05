@@ -1,5 +1,6 @@
 import { Entity } from "nova_ecs/entity";
 import { decodeWireEntity, WireWorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
+import { isNovaIDNotFoundError } from "novadatainterface/nova_id_not_found_error";
 import { deriveEntityComponents } from "./entity_factory.js";
 import { World } from "nova_ecs/world";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
@@ -27,6 +28,35 @@ import { ShipComponent } from "./ship_plugin.js";
  * ("stage, load, then insert"); the insertion tick is an input, so it
  * is allowed to vary.
  */
+/**
+ * `load()`, or undefined when the id does not exist in the data set.
+ *
+ * Dangling references are real in installed plug-ins — ships and outfits
+ * naming wëaps the plug-in never shipped (seven of them in "Advanced
+ * Vell-os Beams", four in "Starbridge Bay"). GameDataAggregator used to
+ * resolve those to a placeholder default weapon; it now rejects with
+ * NovaIDNotFoundError. A missing OUTFIT, WEAPON or GOVT is skipped here,
+ * with a warning: the entity simply does not have it, which is what a
+ * reference to nothing amounts to in the original. The entity's own
+ * ship / planet / asteroid data is required and still propagates.
+ *
+ * Deterministic: "does not exist" is a property of the data set, the
+ * same on every peer, and Gettable caches the miss so the answer never
+ * changes with load timing.
+ */
+async function loadIfDefined<T>(load: () => Promise<T>,
+    label: string): Promise<T | undefined> {
+    try {
+        return await load();
+    } catch (e) {
+        if (isNovaIDNotFoundError(e)) {
+            console.warn(`Skipping ${label}: ${e.message}`);
+            return undefined;
+        }
+        throw e;
+    }
+}
+
 export async function loadShipGameData(gameData: SimulationGameDataInterface,
     shipId: string, weaponIds = new Set<string>(),
     seenShips = new Set<string>()): Promise<Set<string>> {
@@ -38,7 +68,8 @@ export async function loadShipGameData(gameData: SimulationGameDataInterface,
     const ship = await gameData.data.Ship.get(shipId);
     await loadAnimationGameData(gameData, ship.animation);
     for (const outfitId of Object.keys(ship.outfits)) {
-        const outfit = await gameData.data.Outfit.get(outfitId);
+        const outfit = await loadIfDefined(
+            () => gameData.data.Outfit.get(outfitId), `outfit ${outfitId} of ship ${shipId}`);
         if (!outfit?.weapons) {
             continue;
         }
@@ -57,7 +88,8 @@ export async function loadWeaponGameData(gameData: SimulationGameDataInterface,
     }
     weaponIds.add(weaponId);
 
-    const weapon = await gameData.data.Weapon.get(weaponId);
+    const weapon = await loadIfDefined(
+        () => gameData.data.Weapon.get(weaponId), `weapon ${weaponId}`);
     if (!weapon) {
         return weaponIds;
     }
@@ -121,7 +153,8 @@ export async function loadEntityGameData(world: World, entity: Entity) {
     const outfits = entity.components.get(OutfitsStateComponent);
     if (outfits) {
         for (const outfitId of outfits.keys()) {
-            const outfit = await gameData.data.Outfit.get(outfitId);
+            const outfit = await loadIfDefined(
+                () => gameData.data.Outfit.get(outfitId), `owned outfit ${outfitId}`);
             for (const weaponId of Object.keys(outfit?.weapons ?? {})) {
                 await loadWeaponGameData(gameData, weaponId, weaponIds);
             }
@@ -140,7 +173,8 @@ export async function loadEntityGameData(world: World, entity: Entity) {
     // here so the derivation never has to wait mid-simulation.
     const govt = entity.components.get(GovtComponent);
     if (govt) {
-        await gameData.data.Govt.get(govt.id);
+        // Undefined in the cache reads as "no inherent jamming".
+        await loadIfDefined(() => gameData.data.Govt.get(govt.id), `govt ${govt.id}`);
     }
 
     // Prime the lazily-constructed weapon entries so the first shot of

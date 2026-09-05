@@ -24,7 +24,9 @@ import { StatusBarData } from "novadatainterface/status_bar_data";
 import { ExplosionData } from "novadatainterface/explosion_data";
 import { PictImageData } from "novadatainterface/pict_image";
 import { getDefaultNovaIDs, NovaIDs } from "novadatainterface/nova_ids";
-import { Defaults } from "novadatainterface/defaults";
+import {
+    isNovaIDNotFoundError, NovaIDNotFoundError,
+} from "novadatainterface/nova_id_not_found_error";
 import { CicnImageData } from "novadatainterface/cicn_image";
 import { CicnData } from "novadatainterface/cicn_data";
 import { PpatImageData } from "novadatainterface/ppat_image";
@@ -38,7 +40,21 @@ import {
 
 /**
  * Combines multiple GameDataInterface instances into a single GameDataInterface
- * with access to all of their data.
+ * with access to all of their data. Sources are tried in order; the first
+ * that resolves an id wins (server.ts layers the hand-exported objects/
+ * over the parsed Nova data).
+ *
+ * An id NO source defines rejects with NovaIDNotFoundError — the same
+ * contract as NovaParse — rather than resolving to a placeholder. It used
+ * to return `Defaults[dataType]` (id "default"): a dangling plug-in
+ * reference then became a silent default weapon/outfit, an existence
+ * check by truthiness was wrong everywhere, and because Gettable cached
+ * the placeholder under the unknown id, the answer to "does nova:xxx
+ * exist?" flipped between the first and second evaluation (the
+ * second-officer bug in outfitter_rules' outfitReferenceExists). Now the
+ * routes answer 404, the client's Gettable caches the miss, and the
+ * explicit display fallbacks (getDefaultPictData and friends) are the
+ * only place a default stands in for data.
  */
 class GameDataAggregator implements GameDataInterface {
     readonly data: NovaDataInterface;
@@ -47,6 +63,7 @@ class GameDataAggregator implements GameDataInterface {
     readonly controlBitNamespaces: Promise<ControlBitNamespaces>;
     private dataSources: Array<GameDataInterface>;
     private warningReporter: (w: string) => void;
+    private idSets: Promise<Map<NovaDataType, Set<string>>> | null = null;
 
     constructor(dataSources: Array<GameDataInterface>, warningReporter = console.log) {
         this.dataSources = dataSources;
@@ -113,31 +130,52 @@ class GameDataAggregator implements GameDataInterface {
     private makeAggregator<T extends (BaseData | ArrayBuffer | SpriteSheetFramesData)>(dataType: NovaDataType): Gettable<T> {
         // Arrow functions automatically bind this
         return new Gettable<T>(async (id: string): Promise<T> => {
-            var errors: Array<string> = [];
+            const errors: Array<string> = [];
+            // The first rejection that is NOT "this source has no such
+            // id": a source that had the id (or could not tell) and
+            // failed to load it. Later sources still get their turn, as
+            // they always did, but if none resolves the id this is the
+            // answer — a load failure, not a missing resource.
+            let failure: unknown = undefined;
+            let failed = false;
 
-            for (var i in this.getDataSources()) {
-                var dataSource: GameDataInterface = this.dataSources[i];
+            for (const dataSource of this.getDataSources()) {
                 try {
                     return <T>await dataSource.data[dataType].get(id);
                 }
                 catch (e) {
-                    if (e instanceof Error) {
-                        if (e.stack) {
-                            errors.push(e.stack);
-                        }
+                    if (!isNovaIDNotFoundError(e) && !failed) {
+                        failed = true;
+                        failure = e;
                     }
-                    else {
-                        errors.push(String(e));
-                    }
+                    errors.push(e instanceof Error ? (e.stack ?? e.message) : String(e));
                 }
             }
 
-            this.warningReporter(id + " not found under " + dataType + ". Using default instead. "
+            if (failed) {
+                throw failure;
+            }
+            this.warningReporter(dataType + " " + id + " is not defined by any data source."
                 + "\nStacktraces:\n"
                 + errors.join("\n"));
-
-            return <T>Defaults[dataType];
+            throw new NovaIDNotFoundError(
+                dataType + " " + id + " is not defined by any data source");
         });
+    }
+
+    /**
+     * Whether some data source defines `id` under `dataType`. Answered from
+     * the id lists, so it never starts a load and cannot depend on cache
+     * warmth — the existence test to use where truthiness of a `get` was
+     * being used before.
+     */
+    async has(dataType: NovaDataType, id: string): Promise<boolean> {
+        if (!this.idSets) {
+            this.idSets = this.ids.then(ids => new Map(
+                (Object.keys(ids) as NovaDataType[])
+                    .map(type => [type, new Set(ids[type])])));
+        }
+        return (await this.idSets).get(dataType)?.has(id) ?? false;
     }
 
     private async getAllIDs(): Promise<NovaIDs> {

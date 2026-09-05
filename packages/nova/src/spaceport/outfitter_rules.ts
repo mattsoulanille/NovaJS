@@ -684,31 +684,28 @@ function resolveOutfitReference(id: number, from: OutfitData,
  * used to get wrong.
  *
  * The old spelling was `context.getOutfit(id)` truthiness, and against the
- * running menu's lookup that is not an existence test at all. Two
- * behaviours downstream of it turn a miss into a lasting lie:
- *
- *   - Gettable.getCached returns undefined for an id it has not loaded and
- *     STARTS A BACKGROUND LOAD, so the same probe answers differently a
- *     frame later, and
- *   - GameDataAggregator resolves an id no data source defines to
- *     `Defaults[dataType]` rather than rejecting, so that background load
- *     succeeds and caches a placeholder (`{ id: 'default', ... }`) under
- *     the id nothing defines.
- *
- * The result was a purchase rule that flipped between two selections of the
- * same tile: Extra Outfits' officers are oütf 504-521 and stock outfits stop
- * at 443, so a post's `!Oxxx` exclusion resolved to the plug-in's own
- * sibling (owned, refused) on the first evaluation and to a phantom
- * `nova:xxx` (absent, allowed) on every one after — hiring a second officer
- * for the same post, since applyBuy trusts this gate. See
+ * running menu's lookup that is not an existence test at all:
+ * Gettable.getCached returns undefined for an id it has not loaded and
+ * STARTS A BACKGROUND LOAD, so the same probe answers differently a frame
+ * later. Worse, GameDataAggregator then resolved an id no data source
+ * defines to a placeholder (`{ id: 'default', ... }`) and cached it under
+ * the id nothing defines: a purchase rule that flipped between two
+ * selections of the same tile. Extra Outfits' officers are oütf 504-521
+ * and stock outfits stop at 443, so a post's `!Oxxx` exclusion resolved to
+ * the plug-in's own sibling (owned, refused) on the first evaluation and
+ * to a phantom `nova:xxx` (absent, allowed) on every one after — hiring a
+ * second officer for the same post, since applyBuy trusts this gate. See
  * outfitter_officer_reselect_test.ts.
  *
+ * The aggregator now REJECTS an unknown id (NovaIDNotFoundError) and
+ * Gettable caches the miss, so the placeholder half of that is gone; the
+ * warmth half is not, which is why an id-list lookup is still the answer.
  * So: prefer `context.outfitExists`, an id-list lookup that cannot be
  * affected by load order (MissionUniverse.hasOutfit). Without one, fall
  * back to `getOutfit` but demand that what comes back actually IS the
- * outfit asked for — which rejects the aggregator's placeholder and is
- * true by construction for the exhaustive id-keyed maps the headless
- * callers pass.
+ * outfit asked for — true by construction for the exhaustive id-keyed
+ * maps the headless callers pass, and a guard against any fixture that
+ * spreads getDefaultOutfitData() under another id.
  */
 function outfitReferenceExists(globalId: string,
     context: OutfitterContext): boolean {

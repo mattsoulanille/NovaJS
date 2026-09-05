@@ -96,6 +96,8 @@ type NovaDataInterface = {
     Description: Gettable<DescriptionData>,
 }
 
-class NovaIDNotFoundError extends Error { };
+// Re-exported from its own module so that gettable.ts (which this file
+// imports) can also import it without a cycle.
+import { NovaIDNotFoundError } from "./nova_id_not_found_error.js";
 
 export { NovaDataInterface, NovaDataType, NovaIDNotFoundError };
