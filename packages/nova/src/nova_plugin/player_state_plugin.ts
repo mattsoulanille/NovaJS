@@ -227,9 +227,11 @@ export const PendingMissionNoticesComponent =
  * entry (the lift-off), BEFORE the entity is encoded into its insertion
  * record, so it never reaches a peer. Serializer-registered all the same,
  * like PendingMissionNotices, so a rollback snapshot or a docked mirror
- * carries it unchanged. Not part of the pilot save (save_game.ts), also
- * like the notices: a save written while docked with a batch pending
- * loses the batch, which is a documented gap, not a rule.
+ * carries it unchanged. Carried onto a hull bought before lift-off
+ * (shipyard_rules.ts CARRIED_COMPONENTS) and written into the pilot save
+ * while non-empty (save_game.ts `autoAbortShips`), so neither a shipyard
+ * visit nor a save-and-quit between the warning and the lift-off loses
+ * the squad. (The notices are still not saved; that gap stands.)
  */
 export const PendingAutoAbortShipType = t.intersection([t.type({
     /** The auto-aborted mïsn, for the düde / aux / name lookups. */

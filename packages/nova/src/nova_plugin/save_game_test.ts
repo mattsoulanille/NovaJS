@@ -40,6 +40,8 @@ import {
     CronStatesComponent,
     GameDateComponent,
     MissionsComponent,
+    PendingAutoAbortShips,
+    PendingAutoAbortShipsComponent,
 } from './player_state_plugin.js';
 import {
     collectEscortsToSave,
@@ -225,6 +227,57 @@ describe('save_game schema', () => {
         expect(restored.components.get(CombatRatingComponent))
             .toEqual({ kills: 420 });
     });
+
+    it('round-trips a pending auto-abort squad, and writes none when '
+        + 'nothing is queued', () => {
+            // PR #142 review finding 2: a save taken between accepting an
+            // enforcement-squad warning (nova:614, auto-abort at accept)
+            // and lifting off lost the squad — the batch lived only on the
+            // entity. It is now written while non-empty and put back on
+            // restore, for the first system entry to drain.
+            const batch: PendingAutoAbortShips = [{
+                missionId: 'nova:614',
+                shipObjective: {
+                    goal: 0, systemId: null, shipStart: 0, behavior: 0,
+                    dudeId: 'nova:130', total: 4, satisfied: 0,
+                    complete: false, failed: false, shipDonePending: false,
+                    live: new Map([['ship-1', { observed: true }]]),
+                },
+                travelPlanet: null,
+                returnPlanet: 'nova:128',
+                shipName: 'Secession TF',
+            }];
+            const entity = new Entity('player');
+            entity.components.set(ShipComponent, { id: 'nova:164' });
+            entity.components.set(PendingAutoAbortShipsComponent, batch);
+
+            const saved = extractSaveData(entity, 'nova:130')!;
+            expect(saved.autoAbortShips).toEqual(batch);
+            // Survives the JSON envelope (the objective's `live` is a Map).
+            const decoded = decodeSave(encodeSave(saved))!;
+            expect(decoded).toEqual(saved);
+            const restored = new Entity('restored');
+            restorePlayerState(restored, decoded);
+            expect(restored.components.get(PendingAutoAbortShipsComponent))
+                .toEqual(batch);
+            // Restored as a copy: the save is not aliased by the entity.
+            expect(restored.components.get(PendingAutoAbortShipsComponent))
+                .not.toBe(decoded.autoAbortShips!);
+
+            // MissionSession.commit leaves an EMPTIED component behind once
+            // one has existed; that writes no field, so a pilot with nothing
+            // queued writes exactly the payload this build wrote before.
+            entity.components.set(PendingAutoAbortShipsComponent, []);
+            const emptied = extractSaveData(entity, 'nova:130')!;
+            expect(emptied.autoAbortShips).toBeUndefined();
+            expect(emptied).toEqual({
+                ship: 'nova:164', outfits: [], system: 'nova:130',
+            });
+            const bare = new Entity('bare');
+            restorePlayerState(bare, decodeSave(encodeSave(emptied))!);
+            expect(bare.components.has(PendingAutoAbortShipsComponent))
+                .toBe(false);
+        });
 
     it('decodes an active mission saved before <SN> ship names existed',
         () => {
