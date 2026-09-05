@@ -541,18 +541,27 @@ export class Outfitter extends Menu<Entity> {
             shipData: this.shipData,
             outfits: this.outfits,
             // WARMTH PRECONDITION: getCached answers only for ids already
-            // fetched, and resolveOutfitReference (outfitter_rules) reads
-            // a MISS as "no stock outfit n exists" when it probes
-            // `nova:n` stock-first. That is only sound because
-            // makeOutfitsGrid fetches EVERY outfit id (and every weapon
-            // those outfits name) before the grid — and so any context
-            // consumer — can run. Anyone rewiring getOutfit/getWeapon, or
-            // using a context before the grid load completes, must keep
-            // an exhaustive warm-up or swap in a real existence lookup
-            // (MissionUniverse.hasOutfit), or plug-in overrides of stock
-            // outfits silently mis-resolve their Oxxx exclusions.
+            // fetched. makeOutfitsGrid fetches EVERY outfit id (and every
+            // weapon those outfits name) before the grid — and so any
+            // context consumer — can run, so these lookups answer for
+            // everything that exists. Anyone rewiring them must keep that
+            // exhaustive warm-up.
+            //
+            // getCached is NOT an existence test, though, and must never
+            // be used as one: a miss both returns undefined AND starts a
+            // background load, and GameDataAggregator answers an id
+            // nothing defines with a placeholder instead of rejecting, so
+            // the same probe flips from "absent" to "present" a frame
+            // later. That is why `Oxxx` resolution gets `outfitExists`
+            // below rather than being left to infer existence from
+            // getOutfit (see outfitter_rules' outfitReferenceExists, and
+            // outfitter_officer_reselect_test.ts for the bug it caused).
             getOutfit: id => this.simulationData.data.Outfit.getCached(id),
             getWeapon: id => this.simulationData.data.Weapon.getCached(id),
+            // The stock-first id-space lookup for `Oxxx`, off the loaded
+            // oütf id list — the same answer runSetString's Gxxx/Dxxx
+            // resolution uses, and independent of what has been fetched.
+            outfitExists: this.outfitExists(),
             bits: this.controlBits,
             rankContribute: this.rankContribute(),
             credits: this.credits.credits,
@@ -590,6 +599,26 @@ export class Outfitter extends Menu<Entity> {
         const universe = MissionUniverse.shared(this.simulationData);
         return universe.systemsLoaded
             ? (globalId: string) => universe.hasSystem(globalId)
+            : undefined;
+    }
+
+    /**
+     * The oütf existence lookup an `Oxxx` term resolves its bare number
+     * through, or undefined while the shared universe has not loaded.
+     *
+     * The `Oxxx` counterpart of systemExists, undefined for the same
+     * reason: "assume the writing plug-in's own id" is the documented
+     * no-id-space behaviour, whereas answering "no outfit exists" would
+     * send every plug-in `Oxxx` that names a STOCK outfit to a phantom id
+     * under the plug-in's prefix.
+     *
+     * Note what this is NOT allowed to be: `getOutfit(id) !== undefined`.
+     * See outfitter_rules' outfitReferenceExists.
+     */
+    private outfitExists(): ((globalId: string) => boolean) | undefined {
+        const universe = MissionUniverse.shared(this.simulationData);
+        return universe.outfitsLoaded
+            ? (globalId: string) => universe.hasOutfit(globalId)
             : undefined;
     }
 
