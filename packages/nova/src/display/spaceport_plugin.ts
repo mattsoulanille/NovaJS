@@ -42,8 +42,6 @@ import { UiSoundEvent } from './ui_sound.js';
  */
 const SpaceportComponent = new Component<Spaceport>("Spaceport");
 
-const SpaceportQuery = new Query([SpaceportComponent, PlanetComponent] as const);
-
 /** Every stellar in the system, with its Spaceport if one has been built. */
 const PlanetSpaceportQuery = new Query(
     [GetEntity, PlanetComponent, Optional(SpaceportComponent)] as const);
