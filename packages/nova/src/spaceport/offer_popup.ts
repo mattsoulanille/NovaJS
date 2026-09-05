@@ -144,11 +144,29 @@ export class OfferPopup {
     /** Whether the popup now showing offers a Refuse button (see the
      * controls doc: only a one-button NOTICE is Escape-dismissable). */
     private hasRefuse = false;
+    /**
+     * A modal shield under the frame: a full-screen, effectively invisible
+     * interactive rectangle that swallows every pointer event outside the
+     * popup, exactly as FindDialog / QuantityDialog / MissionInfo / the
+     * hail dialog shield themselves. Without it only the frame sprites
+     * stopped PIXI's hit test, and everything of the OWNER'S screen that
+     * the frame did not cover stayed clickable — the spaceport's Leave
+     * pill (y 198..223) lies below every tiled popup, so a misclick there
+     * during a landing popup lifted the ship off with the popup sequence
+     * still running blind (review finding #28). Built once and re-added as
+     * the first child of every show(), since show() clears the container.
+     */
+    private readonly shield: PIXI.Graphics;
 
     constructor(private displayAssets: DisplayAssetDataInterface,
         controlEvents?: Observable<ControlEvent>) {
         this.container.name = 'OfferPopup';
         this.container.visible = false;
+        this.shield = new PIXI.Graphics()
+            .beginFill(0x000000, 0.001)
+            .drawRect(-4000, -4000, 8000, 8000)
+            .endFill();
+        this.shield.interactive = true;
         if (controlEvents) {
             this.controls = new MenuControls(controlEvents, {
                 up: () => this.scrollBy(-POPUP_SCROLL_STEP),
@@ -194,6 +212,8 @@ export class OfferPopup {
         this.scroll = undefined;
         this.hasRefuse = Boolean(buttons.refuse);
 
+        // Modal for the pointer as well as the keyboard (see `shield`).
+        this.container.addChild(this.shield);
         if (options.pict) {
             this.buildWithPict(text, buttons, options.pict);
         } else {

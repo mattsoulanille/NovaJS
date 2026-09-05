@@ -168,7 +168,9 @@ export class Spaceport extends Menu<Entity> {
             if (this.data && !this.data.flags.hasOutfitter) {
                 return;
             }
-            this.controls.unbind();
+            if (!this.enterVenue()) {
+                return;
+            }
             // The outfitter mutates the ship's outfits and the
             // player's control bits.
             this.setLiveStatus(() => this.outfitter.dockedStatus());
@@ -190,7 +192,7 @@ export class Spaceport extends Menu<Entity> {
             // Outfits can change fuel capacity (fuel tanks), which
             // affects the Refuel button.
             this.refreshRefuelButton();
-            this.controls.bind();
+            this.rebindControls();
         };
         buttons.outfitter.click.subscribe(showOutfitter);
 
@@ -201,12 +203,14 @@ export class Spaceport extends Menu<Entity> {
             controlEvents, this.universe, id, LOCATION_MISSION_COMPUTER,
             "nova:8505", "Mission BBS", this.openStarmap);
         const showMissionComputer = async () => {
-            this.controls.unbind();
+            if (!this.enterVenue()) {
+                return;
+            }
             // The board mutates missions, cargo, credits, control
             // bits, and (through Gxxx grants) outfits.
             this.input = await this.missionComputer.show(this.input);
             this.refreshRefuelButton();
-            this.controls.bind();
+            this.rebindControls();
         };
         buttons.missions.click.subscribe(showMissionComputer);
 
@@ -216,14 +220,16 @@ export class Spaceport extends Menu<Entity> {
             if (this.data && !this.data.flags.hasBar) {
                 return;
             }
-            this.controls.unbind();
+            if (!this.enterVenue()) {
+                return;
+            }
             // The bar mutates missions, credits (gambling, hire fees),
             // cargo, bits, and records hired escorts.
             this.setLiveStatus(() => this.bar.dockedStatus());
             this.input = await this.bar.show(this.input);
             this.setLiveStatus(undefined);
             this.refreshRefuelButton();
-            this.controls.bind();
+            this.rebindControls();
         };
         buttons.bar.click.subscribe(showBar);
 
@@ -233,13 +239,15 @@ export class Spaceport extends Menu<Entity> {
             if (this.data && !this.data.flags.hasCommodityExchange) {
                 return;
             }
-            this.controls.unbind();
+            if (!this.enterVenue()) {
+                return;
+            }
             // The trade center mutates cargo and credits.
             this.setLiveStatus(() => this.tradeCenter.dockedStatus());
             this.input = await this.tradeCenter.show(this.input);
             this.setLiveStatus(undefined);
             this.refreshRefuelButton();
-            this.controls.bind();
+            this.rebindControls();
         };
         buttons.tradeCenter.click.subscribe(showTradeCenter);
 
@@ -252,7 +260,9 @@ export class Spaceport extends Menu<Entity> {
             if (this.data && !this.data.flags.hasShipyard) {
                 return;
             }
-            this.controls.unbind();
+            if (!this.enterVenue()) {
+                return;
+            }
             // Any purchase inside the visit has already been adopted (and
             // has already set this.input); this just picks up the entity the
             // menu closes on, which is the same one.
@@ -264,7 +274,7 @@ export class Spaceport extends Menu<Entity> {
             // A traded-in hull's tank is not the new one's: the Refuel
             // button has to be re-judged against the ship now docked.
             this.refreshRefuelButton();
-            this.controls.bind();
+            this.rebindControls();
         };
         buttons.shipyard.click.subscribe(showShipyard);
         this.addButtons(buttons);
@@ -375,12 +385,50 @@ export class Spaceport extends Menu<Entity> {
                 await this.presentLandingPopups(input, events);
             } finally {
                 this.popupBlocker.unbind();
-                this.controls.bind();
+                // Guarded: if the spaceport was departed while the popups
+                // were up, an unconditional bind here left its controls
+                // focused for the rest of the session — no flying, no
+                // hailing, no Escape to the title (#28).
+                this.rebindControls();
             }
         } catch (e) {
             console.warn('Spaceport landing popups failed:', e);
         }
         return result;
+    }
+
+    /**
+     * Takes the spaceport's controls back after a venue or the landing
+     * popups — but only while the spaceport is still on screen. Menu.show()
+     * hides the container and unbinds the controls the moment Leave fires,
+     * and a venue/popup sequence that was still running at that moment
+     * used to rebind them unconditionally on its way out, leaving a
+     * departed spaceport as MenuControls.focused forever: browser.ts routes
+     * every keydown to the focused menu layer, so the ship could not be
+     * flown, hailed, or Escaped from until a page reload (review finding
+     * #28).
+     */
+    private rebindControls() {
+        if (this.container.visible) {
+            this.controls.bind();
+        }
+    }
+
+    /**
+     * Hands the keyboard to a venue: false (and nothing opens) unless the
+     * spaceport is on screen. The controls are bound before super.show()
+     * reveals the frame — from the moment of landing, so 'p'/'i' work while
+     * the mission universe loads — and during that gap a venue key used to
+     * open its venue INVISIBLY over the landing processing (two sessions
+     * committing absolute maps over the same entity), whose exit then
+     * rebound the spaceport's controls whether or not it was still docked.
+     */
+    private enterVenue(): boolean {
+        if (!this.container.visible) {
+            return false;
+        }
+        this.controls.unbind();
+        return true;
     }
 
     /**
