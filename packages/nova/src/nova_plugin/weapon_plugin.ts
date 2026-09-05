@@ -61,6 +61,15 @@ export const ORIGINAL_FRAME_MS = 1000 / 30;
  * tick at or after" name the same tick for all of them; the tolerance
  * only decides the rounding-noise case. Deterministic: pure arithmetic
  * on the shared clock and the fixed step.
+ *
+ * The two do differ for an interval that is NOT a whole number of
+ * ticks, which only a plug-in can produce: the per-mount share of a
+ * reload (effectiveReload) is Reload * 2 / mounts ticks, so Reload 5 on
+ * four mounts is 2.5 ticks. That is reached on tick 2 here (nearest,
+ * halves rounding down) where the plain comparison would wait for tick
+ * 3 — at most one tick early, and never below one frame, since the
+ * share is floored at ORIGINAL_FRAME_MS before it gets here. Pinned by
+ * the intervalElapsed specs in weapon_fire_rules_test.
  */
 export function intervalElapsed(elapsedMs: number, intervalMs: number,
     delta_ms: number): boolean {
