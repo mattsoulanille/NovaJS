@@ -126,6 +126,17 @@ class RledResource extends BaseResource {
                     // frame start), which is what used to be painted
                     // here, smearing the previous colour across every
                     // solid run a tool like ResForge or EVNEW emits.
+                    //
+                    // Half order has no ground truth to pin it against:
+                    // every opcode-4 run in the stock files and in every
+                    // shipped plug-in (7172 runs across 512 16-bit rlëDs,
+                    // census 2026-09) has IDENTICAL halves, so both
+                    // orders decode the same; ResForge's reader paints
+                    // the first two bytes' colour for the whole run and
+                    // its writer never emits opcode 4 at all, so a
+                    // ResForge export cannot distinguish them either.
+                    // Memory order is what a 32-bit store loop on the
+                    // original big-endian engine produced.
                     pixelRun = this.data.getUint32(pointer); pointer += 4;
                     var runHigh = pixelRun >>> 16;
                     var runLow = pixelRun & 0xFFFF;
