@@ -11,6 +11,7 @@ import { BeamDataComponent, BeamStateComponent } from '../nova_plugin/beam_plugi
 import {
     BeamDisplaySystem, BeamGraphicsResource, beamOrigin,
 } from './beam_display_plugin.js';
+import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
 import { CameraFocus } from './space_resource.js';
 
 /**
@@ -49,6 +50,9 @@ function beamWorld(camera: { x: number, y: number },
     } as unknown as PIXI.Graphics;
     world.resources.set(BeamGraphicsResource, recorder);
     world.resources.set(CameraFocus, camera);
+    // The shrink's clock (BeamDisplaySystem reads it even for a beam
+    // with no CreateTime, which draws full length).
+    world.resources.set(SimulationTimeResource, defaultSimulationTime());
     world.addSystem(BeamDisplaySystem);
 
     const rotation = new Angle(0);

@@ -9,7 +9,6 @@ import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
 import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
-import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
@@ -24,7 +23,7 @@ import { isHostileTarget } from './hostility.js';
 import { CreateTime, CreateTimeArgProvider } from './create_time.js';
 import { DamagedEvent } from './death_plugin.js';
 import { applyExitPoint, ExitPointData } from './exit_point.js';
-import { FireSubs, liveTargetMovement, sampleInaccuracy, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
+import { FireSubs, liveTargetMovement, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
 import { OwnerComponent, SourceComponent } from './weapon_components.js';
 import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
@@ -32,7 +31,7 @@ import { DisabledComponent } from './disabled_component.js';
 import { zeroOrderGuidance } from './guidance.js';
 import { SoundEvent } from './sound_plugin.js';
 import { TargetComponent } from './target_component.js';
-import { WeaponsSystem } from './weapon_plugin.js';
+import { intervalElapsed, WeaponsSystem } from './weapon_plugin.js';
 
 
 interface BeamState {
@@ -40,6 +39,18 @@ interface BeamState {
     exitPointData?: ExitPointData,
     hitDist?: number;
     targetHit?: string;
+    /**
+     * The inaccuracy this beam left the ship with, in radians (wëap
+     * Inaccuracy: the error "as it leaves the ship"). A beam is rebuilt
+     * from its firing ship every tick — position, heading, and for a
+     * turret the aim at its target — and this is re-applied on top so
+     * the ray keeps ONE error for its whole life rather than a fresh
+     * random one per tick (which fanned a 5° Solar Lance over a 10°
+     * arc at 60 Hz and cost a PRNG draw per beam per tick). Sampled
+     * once in fireFromEntity; 0 for point defense beams, which the
+     * Bible exempts. Optional: beams from older snapshots have none.
+     */
+    aimOffset?: number;
 }
 
 export const BeamStateComponent = new Component<BeamState>('BeamState');
@@ -72,7 +83,8 @@ class BeamWeaponEntry extends WeaponEntry {
 
     fire(position: Position, angle: Angle, owner?: string, target?: string,
         source?: string, _sourceVelocity?: Vector,
-        exitPointData?: ExitPointData, silent = false): Entity {
+        exitPointData?: ExitPointData, silent = false,
+        aimOffset = 0): Entity {
         const { width, length } = this.data.beamAnimation;
         const beamPoly = new SAT.Polygon(new SAT.Vector(0, 0), [
             new SAT.Vector(-width / 2, 0),
@@ -97,6 +109,7 @@ class BeamWeaponEntry extends WeaponEntry {
                 exitPointData,
                 pointToTarget: this.data.guidance === "beamTurret" ||
                     this.data.guidance === "pointDefenseBeam",
+                aimOffset,
             }).addComponent(BeamDataComponent, this.data);
 
         if (target) {
@@ -143,13 +156,22 @@ export const BeamSystem = new System({
     after: [TimeSystem, MovementSystem, WeaponsSystem],
     args: [BeamDataComponent, BeamStateComponent, MovementStateComponent, FireSubs,
         CreateTimeArgProvider, TimeResource, UUID, Entities, Optional(SourceComponent),
-        Optional(TargetComponent), RandomResource] as const,
-    step(beamData, beamState, movement, fireSubs, fireTime, { time }, uuid,
-        entities, source, target, random) {
+        Optional(TargetComponent)] as const,
+    step(beamData, beamState, movement, fireSubs, fireTime, { time, delta_ms },
+        uuid, entities, source, target) {
+        // A beam of Count frames lives for exactly Count frames of ticks
+        // (two 60 Hz ticks per frame), judged to the nearest tick like a
+        // reload (intervalElapsed): a strict `>` here let a 1-frame beam
+        // straddle a THIRD tick when 2 x 16.67 ms came out a hair under
+        // 33.33 ms, and that tick landed damage. A beam with a Decay
+        // outlives its Count on screen (onScreenDuration); the damage
+        // window below still closes at Count.
         const timeSinceFire = time - fireTime;
-        if (timeSinceFire > beamData.shotDuration) {
+        if (intervalElapsed(timeSinceFire,
+            beamData.onScreenDuration ?? beamData.shotDuration, delta_ms)) {
             fireSubs(beamData.id, uuid, true);
             entities.delete(uuid);
+            return;
         }
 
         if (source) {
@@ -202,7 +224,11 @@ export const BeamSystem = new System({
             movement.rotation = zeroOrderGuidance(movement.position,
                 targetMovement.position);
         }
-        movement.rotation = movement.rotation.add(sampleInaccuracy(beamData.accuracy, random));
+        // The error the beam left the ship with, re-applied after the
+        // rebuild above so it is the same ray every tick (BeamState.aimOffset).
+        if (beamState.aimOffset) {
+            movement.rotation = movement.rotation.add(beamState.aimOffset);
+        }
     }
 });
 
@@ -426,9 +452,22 @@ const BeamDamageSystem = new System({
             return;
         }
 
-        const timeSinceFire = time - fireTime;
-        const lastTimeSinceFire = timeSinceFire - delta_ms;
-        const damageTime = Math.min(delta_ms, beamData.shotDuration - lastTimeSinceFire);
+        // This tick credits the slice [timeSinceFire, timeSinceFire +
+        // delta_ms) of the beam's Count-frame damage window, clipped to
+        // the window's end, so a Count-N beam deals exactly N frames of
+        // its per-frame damage over its life: 1.0 for a 1-frame Polaron
+        // shot (two half-frame ticks), 15.0 for a Pulse Laser. The
+        // window is `shotDuration` (Count) even when a Decay keeps the
+        // beam on screen longer — the shrinking tail does no damage (see
+        // BeamWeaponData.onScreenDuration). `remaining` is judged to
+        // the nearest tick like the beam's own expiry (intervalElapsed),
+        // so float noise in the accumulated clock can neither add a
+        // sliver of a tick nor drop one.
+        const remaining = beamData.shotDuration - (time - fireTime);
+        if (remaining < delta_ms / 2) {
+            return;
+        }
+        const damageTime = Math.min(delta_ms, remaining);
         const scale = damageTime * 30 / 1000;
 
         emitNow(DamagedEvent, { damage: beamData.damage, damager: uuid, scale }, [beamState.targetHit]);

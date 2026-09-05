@@ -49,8 +49,10 @@ async function makeTestWorld({ deathDelay = 1, destroyShipWhenFiring = true }:
     const suicide: ProjectileWeaponData = {
         ...getDefaultProjectileWeaponData(),
         id: SUICIDE_ID,
-        // Reloaded every step, so "it never fired again" is a real claim
-        // rather than an artifact of a long reload.
+        // The shortest reload there is — WeaponsSystem floors it at one
+        // original 30 fps frame, every second 60 Hz step — so "it never
+        // fired again" is a real claim rather than an artifact of a long
+        // reload.
         reload: 1,
         shotDuration: 1e9,
         fireGroup: 'primary',
@@ -151,7 +153,8 @@ describe('a weapon with AmmoType -999', () => {
 
             await stepWorld(world, 5);
 
-            expect(countProjectiles(world)).toEqual(5);
+            // One shot per original frame (steps 1, 3 and 5).
+            expect(countProjectiles(world)).toEqual(3);
             expect(ship.components.get(ArmorComponent)!.current).toEqual(100);
             expect(ship.components.has(ExplodingComponent)).toBeFalse();
         });
