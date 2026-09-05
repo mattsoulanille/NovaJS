@@ -147,7 +147,13 @@ export interface ControlBitSpan {
 // evaluator rejects it either way), and refusing to would leave a
 // half-namespaced string behind if the evaluator ever became more
 // tolerant. Case is irrelevant in both languages, per the Bible.
-const TEST_TOKEN = /\s+|[()!&|]|([bope]?)(\d+)|g/giy;
+//
+// Test expressions also have the Bible's counted sets, `( [b1 b2 b3] = 2 )`:
+// the elements of `[ ]` are ordinary terms, but the bare number after a
+// comparison operator (`=`, `<`, `>`) is a COUNT, not a bit, and must not
+// be renamed (or allocated a phantom private bit).
+const TEST_TOKEN = /\s+|[()!&|\[\]=<>]|([bope]?)(\d+)|g/giy;
+const COMPARISON_TOKEN = /^[=<>]$/;
 const SET_TOKEN = /\s+|([!^]?)b(\d+)|([afsgdmncehklpyuqtx])(\d+)|r\(|\)|[&|]/giy;
 // A dësc conditional opens with "{", optional whitespace, an optional "!",
 // then the term; only a b-term followed by the first quoted string is a
@@ -168,18 +174,30 @@ export function findControlBits(expression: string,
     }
     const pattern = kind === "test" ? TEST_TOKEN : SET_TOKEN;
     let index = 0;
+    // Whether the previous non-blank test token was `=`, `<` or `>`.
+    let afterComparison = false;
     while (index < expression.length) {
         pattern.lastIndex = index;
         const match = pattern.exec(expression);
         if (!match) {
             index++;
+            afterComparison = false;
             continue;
         }
         index = pattern.lastIndex;
         let digits: string | undefined;
         if (kind === "test") {
-            // A bare number is a bit (compatibility rule); so is b<n>.
-            const [, letter, number] = match;
+            // A bare number is a bit (compatibility rule); so is b<n> —
+            // except the bare count after a comparison operator.
+            const [text, letter, number] = match;
+            if (/^\s+$/.test(text)) {
+                continue;
+            }
+            const isCount = afterComparison && number !== undefined && letter === "";
+            afterComparison = COMPARISON_TOKEN.test(text);
+            if (isCount) {
+                continue;
+            }
             if (number !== undefined && (letter === "" || letter.toLowerCase() === "b")) {
                 digits = number;
             }

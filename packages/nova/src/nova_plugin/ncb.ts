@@ -5,7 +5,8 @@
  * word about control bits and scripting in EV Nova"):
  *
  * - Test expressions are boolean expressions over the bits (plus a few
- *   special terms) used by availability fields, e.g. `b1 & (b2 | !b3)`.
+ *   special terms) used by availability fields, e.g. `b1 & (b2 | !b3)`,
+ *   including the counted sets `( [b1 b2 b3] = 2 )`.
  * - Set expressions are lists of operations run when something happens
  *   (a mission completes, an outfit is bought, ...), e.g. `b1 !b2 ^b3
  *   G142 R(b4 !b5)`.
@@ -67,7 +68,19 @@ export type NCBTestExpression =
     | { type: 'registered', days: number }
     | { type: 'not', operand: NCBTestExpression }
     | { type: 'and', operands: NCBTestExpression[] }
-    | { type: 'or', operands: NCBTestExpression[] };
+    | { type: 'or', operands: NCBTestExpression[] }
+    /**
+     * `[ ]`: a counted set — "returns the number of 1s in the set" (EVN
+     * Bible, test expressions). As a boolean it is nonzero, like every
+     * other term ("evaluates to be true (nonzero)").
+     */
+    | { type: 'count', operands: NCBTestExpression[] }
+    /**
+     * `=`, `<`, `>`: "Comparison operators for counted sets. Returns 1 if
+     * the set count is equal to, less than, or greater than the number on
+     * the right." The Bible's example: `( [b1 b2 b3] = 2 )`.
+     */
+    | { type: 'compare', operator: '=' | '<' | '>', count: NCBTestExpression, value: number };
 
 /**
  * Everything a test expression can ask about. `getBit` is the only
@@ -130,16 +143,23 @@ export interface NCBTestContext {
 }
 
 type TestToken =
-    | { kind: '(' | ')' | '!' | '&' | '|' }
-    | { kind: 'term', term: NCBTestExpression };
+    | { kind: '(' | ')' | '!' | '&' | '|' | '[' | ']' | '=' | '<' | '>' }
+    | { kind: 'term', term: NCBTestExpression }
+    /**
+     * A bare number: a control bit by the compatibility rule below, or
+     * the constant on the right of a counted-set comparison. Which one is
+     * the parser's call, so the digits are kept until then.
+     */
+    | { kind: 'number', digits: string };
 
 function tokenizeTest(expression: string): TestToken[] {
     const tokens: TestToken[] = [];
     // Case doesn't matter, per the Bible.
     const lower = expression.toLowerCase();
     // The letter is OPTIONAL: see the bare-number compatibility rule in
-    // parseNCBTest's docs.
-    const pattern = /\s+|[()!&|]|([bope]?)(\d+)|g/gy;
+    // parseNCBTest's docs. This pattern is MIRRORED by novaparse's
+    // ncb_namespace.ts (TEST_TOKEN); keep the two in step.
+    const pattern = /\s+|[()!&|\[\]=<>]|([bope]?)(\d+)|g/gy;
     let index = 0;
     while (index < lower.length) {
         pattern.lastIndex = index;
@@ -159,6 +179,10 @@ function tokenizeTest(expression: string): TestToken[] {
             // A bare number is a control bit (compatibility rule).
             switch (letter || 'b') {
                 case 'b':
+                    if (letter === '') {
+                        tokens.push({ kind: 'number', digits });
+                        break;
+                    }
                     tokens.push({
                         kind: 'term',
                         term: { type: 'bit', bit: parseBitNumber(digits, expression) },
@@ -177,7 +201,7 @@ function tokenizeTest(expression: string): TestToken[] {
         } else if (text === 'g') {
             tokens.push({ kind: 'term', term: { type: 'gender' } });
         } else {
-            tokens.push({ kind: text as '(' | ')' | '!' | '&' | '|' });
+            tokens.push({ kind: text as '(' | ')' | '!' | '&' | '|' | '[' | ']' | '=' | '<' | '>' });
         }
     }
     return tokens;
@@ -265,12 +289,54 @@ export function parseNCBTest(expression: string): NCBTestExpression {
                 position++;
                 return inner;
             }
+            case '[':
+                return parseCountedSet();
             case 'term':
                 position++;
                 return token.term;
+            case 'number':
+                // A bare number in term position is a control bit
+                // (compatibility rule); range-checked here rather than in
+                // the tokenizer because after `=`/`<`/`>` it is a count.
+                position++;
+                return { type: 'bit', bit: parseBitNumber(token.digits, expression) };
             default:
                 fail(`Unexpected "${token.kind}"`);
         }
+    }
+
+    /**
+     * `[ e1 e2 ... ]`, optionally followed by `= n`, `< n` or `> n`.
+     * Elements are whitespace-separated unary expressions (a term, `!term`
+     * or a parenthesised expression); the Bible's examples use bare bits.
+     * The constant on the right must be a bare number: a `b`-prefixed one
+     * is a bit, not a count.
+     */
+    function parseCountedSet(): NCBTestExpression {
+        position++; // '['
+        const operands: NCBTestExpression[] = [];
+        while (tokens[position]?.kind !== ']') {
+            if (!tokens[position]) {
+                fail('Expected "]"');
+            }
+            operands.push(parseUnary());
+        }
+        position++; // ']'
+        const count: NCBTestExpression = { type: 'count', operands };
+        const next = tokens[position];
+        if (next?.kind !== '=' && next?.kind !== '<' && next?.kind !== '>') {
+            return count;
+        }
+        position++;
+        const value = tokens[position];
+        if (value?.kind !== 'number') {
+            fail(`Expected a number after "${next.kind}"`);
+        }
+        position++;
+        return {
+            type: 'compare', operator: next.kind, count,
+            value: parseInt(value.digits, 10),
+        };
     }
 
     const parsed = parseOr();
@@ -304,7 +370,40 @@ export function evaluateParsedNCBTest(expression: NCBTestExpression,
         case 'or':
             return expression.operands.some(
                 operand => evaluateParsedNCBTest(operand, context));
+        case 'count':
+            // "true (nonzero)": a set with at least one 1 in it.
+            return countNCBTest(expression, context) > 0;
+        case 'compare': {
+            const count = countNCBTest(expression.count, context);
+            switch (expression.operator) {
+                case '=':
+                    return count === expression.value;
+                case '<':
+                    return count < expression.value;
+                case '>':
+                    return count > expression.value;
+            }
+        }
     }
+}
+
+/**
+ * The numeric value of a test expression: for a counted set, "the number
+ * of 1s in the set"; for anything else, 1 or 0 — the Bible's evaluator is
+ * numeric throughout ("evaluates to be true (nonzero)").
+ */
+function countNCBTest(expression: NCBTestExpression,
+    context: NCBTestContext): number {
+    if (expression.type === 'count') {
+        let count = 0;
+        for (const operand of expression.operands) {
+            if (evaluateParsedNCBTest(operand, context)) {
+                count++;
+            }
+        }
+        return count;
+    }
+    return evaluateParsedNCBTest(expression, context) ? 1 : 0;
 }
 
 /**
