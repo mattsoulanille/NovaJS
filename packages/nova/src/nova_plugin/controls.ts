@@ -132,10 +132,11 @@ export type ControlAction = t.TypeOf<typeof ControlAction>;
 export type SavedControls = Map<ControlAction, Required<ControlInputRecord>[]>;
 export const SavedControls = new t.Type(
     'SavedControls',
+    // `every`, not a seedless `reduce`: that throws on an empty Map
+    // (#84's class). The value is the record LIST, not one record.
     (u): u is SavedControls => u instanceof Map
-        && [...u.entries()]
-            .map(([k, v]) => ControlAction.is(k) && ControlInputRecord.is(v))
-            .reduce((a, b) => a && b),
+        && [...u.entries()].every(([k, v]) =>
+            ControlAction.is(k) && t.array(ControlInputRecord).is(v)),
     (i, context) => {
         const savedControlsObject = SavedControlsObject.validate(i, context);
         if (isLeft(savedControlsObject)) {
@@ -200,9 +201,8 @@ export type Controls = Map<string, ControlEntry[]>;
 export const Controls = new t.Type(
     'Controls',
     (u): u is Controls => u instanceof Map
-        && [...u.entries()]
-            .map(([k, v]) => t.string.is(k) && ControlEntry.is(v))
-            .reduce((a, b) => a && b),
+        && [...u.entries()].every(([k, v]) =>
+            t.string.is(k) && t.array(ControlEntry).is(v)),
     (savedControls: SavedControls) => {
         const resultMap = new DefaultMap<string, ControlEntry[]>(() => []);
         for (const [action, controlInputs] of savedControls) {

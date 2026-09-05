@@ -58,6 +58,20 @@ describe('SavedControls', () => {
         ]));
     });
 
+    // Finding B on #84: the is-guard was a seedless reduce (throws on
+    // an empty Map) that also tested each value as ONE record rather
+    // than the record list, so it rejected every populated map too.
+    it('is-guard accepts an empty map and a decoded map', () => {
+        expect(SavedControls.is(new Map())).toBe(true);
+        const decoded = SavedControls.decode({ nextTarget: 'Tab' });
+        if (isLeft(decoded)) {
+            throw new Error('Failed to decode');
+        }
+        expect(SavedControls.is(decoded.right)).toBe(true);
+        expect(SavedControls.is(new Map([['nextTarget', 'Tab']]))).toBe(false);
+        expect(SavedControls.is({})).toBe(false);
+    });
+
     it('encodes controls to an object', () => {
         const savedControls = {
             nextTarget: { key: 'Tab', modifiers: ['Control'] },
@@ -118,6 +132,17 @@ describe('Controls', () => {
             ]]
         ]));
     })
+
+    it('is-guard accepts an empty map and a decoded map', () => {
+        expect(Controls.is(new Map())).toBe(true);
+        const controls = Controls.decode(new Map([
+            ['firePrimary', [{ key: 'Space', modifiers: [] }]]]));
+        if (isLeft(controls)) {
+            throw new Error('Failed to decode');
+        }
+        expect(Controls.is(controls.right)).toBe(true);
+        expect(Controls.is(new Map([['Space', 'firePrimary']]))).toBe(false);
+    });
 
     it('encodes Controls to SavedControls', () => {
         const savedControls: SavedControls = new Map([
