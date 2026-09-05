@@ -5,6 +5,7 @@ import {
     guidanceAngle,
     MissileGuidanceMode,
     zeroOrderGuidance,
+    firstOrderGuidance,
     firstOrderWithFallback,
 } from './guidance.js';
 
@@ -80,6 +81,41 @@ describe('guidanceAngle', () => {
             const b = guidanceAngle(MissileGuidanceMode.smart,
                 missilePos, missileVel, targetPos, targetVel, shotSpeed);
             expect(a).toEqual(b);
+        });
+    });
+
+    describe('degenerate intercepts (firstOrderGuidance)', () => {
+        // Relative speed EXACTLY the shot speed makes the quadratic's
+        // leading coefficient zero. The general formula divides by it.
+        it('solves the linear case for a target closing head-on at shot speed', () => {
+            // Target straight up, coming straight down at shotSpeed.
+            const solutions = firstOrderGuidance(missilePos, missileVel,
+                targetPos, new Vector(0, shotSpeed), shotSpeed);
+            expect(solutions.length).toBe(1);
+            expect(Number.isFinite(solutions[0].angle)).toBeTrue();
+            // They meet on the line between them: aim straight up.
+            expect(solutions[0].angle).toBeCloseTo(0, 10);
+        });
+
+        it('finds no intercept for a target fleeing straight away at shot speed', () => {
+            const solutions = firstOrderGuidance(missilePos, missileVel,
+                targetPos, new Vector(0, -shotSpeed), shotSpeed);
+            expect(solutions).toEqual([]);
+        });
+
+        it('never yields a NaN angle in the linear case', () => {
+            const angle = firstOrderWithFallback(missilePos, missileVel,
+                targetPos, new Vector(0, shotSpeed), shotSpeed);
+            expect(Number.isNaN(angle.angle)).toBeFalse();
+        });
+
+        it('has no solution for a shot that does not move', () => {
+            expect(firstOrderGuidance(missilePos, missileVel, targetPos,
+                targetVel, 0)).toEqual([]);
+            // ...and the fallback points at the target rather than NaN.
+            const angle = firstOrderWithFallback(missilePos, missileVel,
+                targetPos, targetVel, 0);
+            expect(angle).toEqual(zeroOrderGuidance(missilePos, targetPos));
         });
     });
 
