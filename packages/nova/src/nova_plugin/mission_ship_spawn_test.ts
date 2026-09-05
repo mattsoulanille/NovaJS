@@ -27,7 +27,9 @@ import {
 } from './mission_ship_state.js';
 import { SystemHoldComponent } from './system_hold.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
-import { ActiveMission, MissionsComponent } from './player_state_plugin.js';
+import {
+    ActiveMission, MissionsComponent, PendingAutoAbortShipsComponent,
+} from './player_state_plugin.js';
 import { TargetComponent } from './target_component.js';
 
 const MISSION_ID = 'nova:500';
@@ -103,6 +105,56 @@ function makePlayer(objective?: ShipObjective,
 }
 
 describe('buildMissionShipSpawns', () => {
+    describe('an auto-aborted mission\'s pending ships '
+        + '(PendingAutoAbortShips)', () => {
+            /** A docked pilot with no missions and one queued batch. */
+            function playerWithBatch(systemId: string | null) {
+                const player = new Entity('player');
+                player.components.set(MissionsComponent, new Map());
+                player.components.set(PendingAutoAbortShipsComponent, [{
+                    missionId: MISSION_ID,
+                    shipObjective: makeObjective({ systemId, total: 2 }),
+                    travelPlanet: null, returnPlanet: null,
+                    shipName: 'Secession TF',
+                }]);
+                return player;
+            }
+
+            it('spawns them at the lift-off, untethered, and takes the batch '
+                + 'off the entity', async () => {
+                    // ShipSyst -6 (null): wherever the owner is.
+                    const player = playerWithBatch(null);
+                    const ships = await buildMissionShipSpawns(player, OWNER,
+                        'nova:128', makeGameData(), makeUniverse());
+                    expect(ships.length).toBe(2);
+                    for (const ship of ships) {
+                        expect(ship.components.get(MissionShipComponent))
+                            .toEqual({
+                                mission: MISSION_ID, owner: OWNER,
+                                untethered: true, name: 'Secession TF',
+                            });
+                    }
+                    // Drained BEFORE the entity is encoded into its
+                    // insertion record: it must not reach a peer, and a
+                    // second entry must not spawn the squad again.
+                    expect(player.components.has(PendingAutoAbortShipsComponent))
+                        .toBe(false);
+                    expect((await buildMissionShipSpawns(player, OWNER,
+                        'nova:128', makeGameData(), makeUniverse())).length)
+                        .toBe(0);
+                });
+
+            it('drops a batch bound for another system (the ruling)',
+                async () => {
+                    const player = playerWithBatch('nova:129');
+                    const ships = await buildMissionShipSpawns(player, OWNER,
+                        'nova:128', makeGameData(), makeUniverse());
+                    expect(ships.length).toBe(0);
+                    expect(player.components.has(PendingAutoAbortShipsComponent))
+                        .toBe(false);
+                });
+        });
+
     it('spawns the remaining ships in the objective system', async () => {
         const objective = makeObjective({ satisfied: 1 });
         const player = makePlayer(objective);

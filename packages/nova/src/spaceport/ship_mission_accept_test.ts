@@ -11,6 +11,8 @@ import {
 } from '../nova_plugin/ncb_plugin.js';
 import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
 import { DisabledComponent } from '../nova_plugin/disabled_component.js';
+import { FuelComponent } from '../nova_plugin/health_plugin.js';
+import { Stat } from '../nova_plugin/stat.js';
 import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
 import {
@@ -177,6 +179,25 @@ describe('buildShipMissionOffer (what a përs is offering right now)', () => {
             expect(await buildShipMissionOffer(
                 await makePlayer({ combatRating: 500, shipId: ARGOSY }),
                 pers, 'hail', gameData, universe, roll)).not.toBeNull();
+        });
+
+    it('is not offered below 100 units of fuel (mïsn Flags 0x0008)',
+        async () => {
+            // "(mission won't be offered if player has less than 100 units
+            // of fuel)": with 30 units the trader would take the 30, pay
+            // 2000 and leave the exploit open.
+            const { gameData, universe } = await universeFor();
+            const pers = await gameData.data.Pers.get('nova:225');
+            const low = await makePlayer();
+            low.components.set(FuelComponent,
+                new Stat({ current: 30, recharge: 0, max: 600 }));
+            expect(await buildShipMissionOffer(low, pers, 'hail',
+                gameData, universe)).toBeNull();
+            const enough = await makePlayer();
+            enough.components.set(FuelComponent,
+                new Stat({ current: 100, recharge: 0, max: 600 }));
+            expect(await buildShipMissionOffer(enough, pers, 'hail',
+                gameData, universe)).not.toBeNull();
         });
 
     it('respects AvailBits: !b424 silences every one of them', async () => {
@@ -355,6 +376,28 @@ describe('buildShipMissionAccept (the input record)', () => {
             expect(player.components.get(GameDateComponent))
                 .toEqual((await gameData.data.PlayerStart.get('nova:128'))
                     .date);
+        });
+
+    it('carries an immediate auto-abort\'s OnAbort ranks (nova:909 '
+        + '"Eamon Boarding", `K152 L138`)', async () => {
+            // The whole consequence of boarding Eamon — Sworn Enemy of the
+            // Wild Geese granted, Knight of Red Branch revoked — lives in
+            // OnAbort, which the immediate auto-abort used to skip.
+            const { gameData, universe } = await universeFor();
+            const player = await makePlayer();
+            player.components.set(ActiveRanksComponent,
+                new Set(['nova:138']));
+            const accept = await buildShipMissionAccept(player, {
+                data: universe.getMission('nova:909')!,
+                travelPlanet: null, returnPlanet: null,
+                cargoType: -1, cargoQty: 0, acceptable: true,
+            }, gameData, universe,
+                { offeredBy: 'npc:eamon', systemId: HERE });
+            expect(accept).not.toBeNull();
+            expect(accept!.record.autoAborted).toBeTrue();
+            expect(accept!.record.bitsSet).toEqual([801]);
+            expect(accept!.record.ranksGranted).toEqual(['nova:152']);
+            expect(accept!.record.ranksRevoked).toEqual(['nova:138']);
         });
 
     it('refuses an accept the machinery itself refuses', async () => {

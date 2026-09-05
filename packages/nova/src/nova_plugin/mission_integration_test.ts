@@ -1,5 +1,6 @@
 import 'jasmine';
 import { MissionData } from 'novadatainterface/mission_data';
+import { Entity } from 'nova_ecs/entity';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { MissionSession, advanceEntityDate, processEntityLanding } from '../spaceport/mission_session.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -25,11 +26,14 @@ import { GOAL_DESTROY, goalSupported } from './mission_ship_state.js';
 import { shipGoalOfferable } from './mission_ship_logic.js';
 import { resetDiscovery } from './discovery_store.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
+import { MissionShipComponent } from './mission_ship_plugin.js';
+import { OutfitsStateComponent } from './outfit_plugin.js';
 import { CombatRatingComponent } from './reputation_plugin.js';
 import {
     CreditsComponent,
     GameDateComponent,
     MissionsComponent,
+    PendingAutoAbortShipsComponent,
     PendingMissionNoticesComponent,
 } from './player_state_plugin.js';
 
@@ -660,6 +664,102 @@ describe('missions against real Nova data', () => {
         expect(entity.components.get(MissionsComponent)!.has('nova:128'))
             .toBe(true);
     });
+
+    it('stops re-offering "Renew darts" (nova:649) while the Vell-os '
+        + 'pilot still holds a Dart (`b371 & !O226`)', async () => {
+            // AvailLoc 3, AvailStel 20033 (any stellar NOT of govt 161),
+            // AvailRandom 100, autoAbort, OnAccept "G226 G226 G226". With
+            // `!O226` blind to the outfits it fired on every landing.
+            const gameData = await getIntegrationGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+            const renew = await gameData.data.Mission.get('nova:649');
+            expect(renew.availBits).toBe('b371 & !O226');
+
+            const start = await gameData.data.PlayerStart.get('nova:128');
+            const shipData = await gameData.data.Ship.get(start.ship);
+            const pilot = (darts: number) => {
+                const entity = makeShip(shipData);
+                entity.components.set(GameDateComponent, { ...start.date });
+                entity.components.set(CreditsComponent, { credits: 0 });
+                entity.components.set(ControlBitsComponent, new Set([371]));
+                entity.components.set(OutfitsStateComponent, new Map(
+                    darts > 0 ? [['nova:226', { count: darts }]] : []));
+                return entity;
+            };
+            const offered = async (entity: Entity) => {
+                const session = await MissionSession.create(
+                    entity, gameData, universe, 'nova:128');
+                return rollOffers(session, universe, LOCATION_MAIN_SPACEPORT)
+                    .some(o => o.data.id === 'nova:649');
+            };
+            expect(await offered(pilot(3))).toBe(false);
+            expect(await offered(pilot(1))).toBe(false);
+            expect(await offered(pilot(0))).toBe(true);
+        });
+
+    it('spawns an enforcement squad at the lift-off after its auto-abort '
+        + 'mission was accepted docked (nova:614)', async () => {
+            // "Avoid Federation Secession Task-Force": AvailLoc 3 at any
+            // Federation stellar, `b6100 & !b9812`, AvailRandom 10,
+            // autoAbort + cantRefuse + invisible, ShipCount 4 of düde
+            // nova:130, ShipSyst -6, ShipBehav 0. The popup warns of the
+            // squad; the squad is the point. Its AvailShipType is 383 —
+            // "must be flying" shïp nova:383, the Vell-os Javelin (real
+            // data: the 614/615 pair is the Javelin pilot's, 616-629 are
+            // unrestricted at 127) — so the pilot flies one.
+            const gameData = await getIntegrationGameData();
+            const universe = MissionUniverse.shared(gameData);
+            await universe.load();
+            const start = await gameData.data.PlayerStart.get('nova:128');
+            const shipData = await gameData.data.Ship.get('nova:383');
+            expect(shipData.name).toContain('Javelin');
+            const entity = makeShip(shipData);
+            entity.components.set(GameDateComponent, { ...start.date });
+            entity.components.set(CreditsComponent, { credits: 0 });
+            entity.components.set(ControlBitsComponent, new Set([6100]));
+            entity.components.set(OutfitsStateComponent, new Map());
+
+            const session = await MissionSession.create(
+                entity, gameData, universe, 'nova:128');
+            const ctx = session.machinery.offerContext();
+            const squad = universe.getMission('nova:614')!;
+            expect(missionMatchesLocation(squad, LOCATION_MAIN_SPACEPORT, ctx))
+                .toBe(true);
+            const offer = makeMissionOffer(squad, ctx)!;
+            expect(offer.shipObjective?.total).toBe(4);
+            expect(acceptOffer(session.machinery, offer, session.outfits)
+                .accepted).toBe(true);
+            session.commit();
+
+            // Never active; the batch waits on the entity for lift-off.
+            expect(entity.components.get(MissionsComponent)!.has('nova:614'))
+                .toBe(false);
+            const pending =
+                entity.components.get(PendingAutoAbortShipsComponent)!;
+            expect(pending.length).toBe(1);
+            expect(pending[0].missionId).toBe('nova:614');
+            // OnAccept AND OnAbort ran (both are "G348 !b6100"): the bit
+            // is clear and the Bureau Bomb was granted by each. (Gxxx
+            // bypasses the oütf Max of 1 by design — ncb.ts.)
+            expect(entity.components.get(ControlBitsComponent)!.has(6100))
+                .toBe(false);
+            expect(entity.components.get(OutfitsStateComponent)!
+                .get('nova:348')?.count).toBe(2);
+
+            // Lift-off into Sol: four untethered Federation ships.
+            const ships = await buildMissionShipSpawns(entity, 'player',
+                'nova:128', gameData, universe);
+            expect(ships.length).toBe(4);
+            for (const ship of ships) {
+                const missionShip = ship.components.get(MissionShipComponent)!;
+                expect(missionShip.mission).toBe('nova:614');
+                expect(missionShip.untethered).toBe(true);
+                expect(missionShip.name).toBe('Secession TF');
+            }
+            expect(entity.components.has(PendingAutoAbortShipsComponent))
+                .toBe(false);
+        });
 
     it('fails an in-flight deadline the moment it passes, on jump',
         async () => {

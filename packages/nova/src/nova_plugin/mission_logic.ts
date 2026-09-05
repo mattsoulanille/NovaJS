@@ -15,7 +15,9 @@ import {
     GOAL_BOARD, GOAL_RESCUE, objectiveAllowsCompletion, ShipObjective,
 } from './mission_ship_state.js';
 import { ActiveRanks } from './ncb_plugin.js';
-import { ActiveMission, MAX_ACTIVE_MISSIONS, Missions } from './player_state_plugin.js';
+import {
+    ActiveMission, MAX_ACTIVE_MISSIONS, Missions, PendingAutoAbortShip,
+} from './player_state_plugin.js';
 import {
     addRecord,
     AVAIL_RECORD_DOMINATED_ANY,
@@ -193,6 +195,45 @@ export interface MissionContext {
      * plug-in's number always means that plug-in's own system.
      */
     systemExists?(globalId: string): boolean;
+    /**
+     * `Oxxx` in AvailBits: the player's owned outfits (global id -> count),
+     * the same map the set-string `Gxxx`/`Dxxx` operators work on. Optional
+     * — absent leaves every `Oxxx` false, which is what the term evaluated
+     * to before this was threaded through (and what left mïsn nova:649
+     * "Renew darts", `b371 & !O226`, firing on EVERY landing: `!O226` was
+     * always true, so a Vell-os pilot holding darts was handed three more
+     * each time). MissionSession supplies its working copy.
+     */
+    ownedOutfits?: ReadonlyMap<string, number>;
+    /**
+     * The player's current fuel, for mïsn Flags 0x0008's offer gate:
+     * "Mission takes away 100 units of fuel upon auto-abort. (mission won't
+     * be offered if player has less than 100 units of fuel)". Optional —
+     * a caller with no fuel reading (the bare test contexts) leaves the gate
+     * open, the pre-existing behaviour, rather than silencing every Refuel
+     * Trader for want of a number.
+     */
+    fuel?: number;
+}
+
+/**
+ * Whether the player owns at least one of the outfit a resource written by
+ * plug-in `prefix` means by the bare number `id` — the `Oxxx` operator's
+ * question, shared by a mïsn's AvailBits (testBits) and a crön's EnableOn
+ * (cron_logic.ts). Resolved through {@link sameNumberedResource}: stock's
+ * outfit n, or the writer's own — never a third plug-in's n.
+ */
+export function ownsOutfit(owned: ReadonlyMap<string, number> | undefined,
+    id: number, prefix: string): boolean {
+    if (!owned) {
+        return false;
+    }
+    for (const [globalId, count] of owned) {
+        if (count > 0 && sameNumberedResource(globalId, id, prefix)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 function intersects(a: number[], b: number[]): boolean {
@@ -340,18 +381,23 @@ export function stellarAdjacencyOf(ctx: MissionContext):
  * fail closed.
  *
  * `Exxx` sees the player's discovery record when the caller supplied one,
- * with the mission's own plug-in prefix scoping the sÿst number — the same
- * rule every other numeric reference in a mission follows.
+ * and `Oxxx` the player's outfits (ctx.ownedOutfits), with the mission's
+ * own plug-in prefix scoping the sÿst / oütf number — the same rule every
+ * other numeric reference in a mission follows.
  */
 function testBits(expression: string, ctx: MissionContext,
     missionPrefix: string): boolean {
     const bits = ctx.bits;
     const discovery = systemDiscoveryOperators(
         ctx.discovery, missionPrefix, ctx.systemExists);
+    const owned = ctx.ownedOutfits;
     try {
         return evaluateNCBTest(expression, {
             getBit: bit => bits.has(bit),
             ...(discovery ? { hasExplored: discovery.hasExplored } : {}),
+            ...(owned
+                ? { hasOutfit: (id: number) => ownsOutfit(owned, id, missionPrefix) }
+                : {}),
         });
     } catch (e) {
         if (e instanceof NCBParseError) {
@@ -463,6 +509,17 @@ export function missionMatchesLocation(mission: MissionData,
     }
     if (!shipTypeMatches(mission.availShipType, ctx.shipId, ctx.shipGovt,
         prefix)) {
+        return false;
+    }
+    // mïsn Flags 0x0008 (EVN Bible): "Mission takes away 100 units of fuel
+    // upon auto-abort. (mission won't be offered if player has less than
+    // 100 units of fuel)". The parenthetical is the offer gate, applied
+    // wherever the flag is set. Stock: the Refuel Traders (nova:141,
+    // 650-652) — without it a pilot on 30 units could hand over "100
+    // units", collect the 2000 credits and lose only the 30. A context
+    // with no fuel reading leaves the gate open (see MissionContext.fuel).
+    if (mission.flags.remove100FuelOnAutoAbort && ctx.fuel !== undefined
+        && ctx.fuel < AUTO_ABORT_FUEL_COST) {
         return false;
     }
     if (!testBits(mission.availBits, ctx, prefix)) {
@@ -804,10 +861,16 @@ export function makeMissionOffer(mission: MissionData,
         acceptable: true,
     };
 
-    // Cargo picked up at mission start must fit now.
-    const loadsNow = cargoQty > 0
-        && (mission.pickupMode === 0 || mission.pickupMode === -1);
-    if (loadsNow && cargoQty > ctx.freeCargoSpace
+    // mïsn Flags2 0x0001 (EVN Bible): "Don't offer mission if the player
+    // doesn't have enough cargo space to hold the mission cargo (even if
+    // the mission cargo won't be picked up until later)". The parenthetical
+    // is why this is NOT conditioned on the cargo loading now: a PickupMode
+    // 1/2 mission (nova:429-433 "Federation Resupply", the United Shipping
+    // deliveries) offered to a hold that cannot take its cargo would be
+    // accepted, flown to its travel stellar, and stall there when
+    // loadMissionCargo fails with no popup to say why. The "must fit NOW"
+    // check for PickupMode 0 is checkAcceptable's, below.
+    if (cargoQty > 0 && cargoQty > ctx.freeCargoSpace
         && mission.flags.notOfferedIfInsufficientCargoSpace) {
         return null;
     }
@@ -913,6 +976,14 @@ export interface MissionWorkingState {
      * was before ranks existed.
      */
     ranks?: ActiveRanks;
+    /**
+     * Special-ship batches of missions that auto-aborted at accept while
+     * docked, waiting for lift-off (PendingAutoAbortShipsComponent).
+     * acceptOffer appends; MissionSession seeds and commits it. Optional so
+     * bare test states keep working — without it an auto-abort's ships are
+     * simply not recorded, as before.
+     */
+    autoAbortShips?: PendingAutoAbortShip[];
 }
 
 export interface MissionMachineryContext {
@@ -1338,6 +1409,28 @@ export function acceptOffer(machinery: MissionMachineryContext,
         // flagged), never becoming active.
         runMissionSetString(machinery, mission.onAccept, prefix,
             outfits, depth);
+        // ...and then OnAbort, because it IS an abort. EVN Bible, Flags
+        // 0x0001: "automatically abort itself after it is accepted ... Any
+        // control bits pointed to by the mission's OnAbort fields will be
+        // automatically set when the mission aborts." OnAccept first, then
+        // OnAbort, is the order the flag's own wording gives, and the
+        // stock data is authored for it: nova:609 "Drop Bear" sets b45 on
+        // accept and clears it on abort so it can score AGAIN (its
+        // AvailBits are `(b42 & !b45) & ...`), nova:610 mirrors that with
+        // b43, and nova:909 "Eamon Boarding" carries its whole consequence
+        // — `K152 L138`, Sworn Enemy of the Wild Geese — in OnAbort alone.
+        //
+        // NOT applied: the CompReward abort reversal (applyOutcomeReputation
+        // 'abort', mïsn Flags 0x0040). The Bible's auto-abort text names
+        // only the OnAbort BITS, and all sixteen stock enforcement-squad
+        // missions (nova:614-629, "Avoid Federation Task Force" and kin)
+        // set 0x0040 with CompRewards up to 30 — applying a -150 Rebel
+        // reversal every time a squad is dispatched cannot be what their
+        // author meant. The DEFERRED auto-abort (runPendingAutoAborts) does
+        // apply it, through abortMission; that asymmetry is deliberate and
+        // recorded here.
+        runMissionSetString(machinery, mission.onAbort, prefix,
+            outfits, depth);
         // mïsn Flags2 0x0002, "Apply mission Pay on auto-abort". The Pay
         // is the WHOLE PayVal, not just a positive one: the stock traps
         // that use this bit are the ones that TAKE — nova:609/610 take 2%
@@ -1354,6 +1447,10 @@ export function acceptOffer(machinery: MissionMachineryContext,
                 decodePayVal(mission.payVal));
         }
         state.dateAdvance += Math.max(0, mission.datePostInc);
+        // An auto-abort mission never becomes active, so its <SN> pick
+        // lives only as long as this popup — and as long as the ships
+        // below, which wear the same name.
+        const shipName = pickSpecialShipName(mission, machinery.random);
         state.events.push({
             missionId: mission.id,
             missionName: mission.name,
@@ -1364,10 +1461,29 @@ export function acceptOffer(machinery: MissionMachineryContext,
             // consistent with the text beside it.
             pict: mission.briefPict,
             payment,
-            // An auto-abort mission never becomes active, so its <SN>
-            // pick lives only as long as this popup.
-            specialShipName: pickSpecialShipName(mission, machinery.random),
+            specialShipName: shipName,
         });
+        // The ships, which are the reason an auto-abort mission has them
+        // ("sometimes useful to create special ships" — EVN Bible, Flags
+        // 0x0001): the mission is gone but its frozen objective is kept
+        // for the lift-off to spawn from, exactly as the in-flight accept
+        // keeps the offer's objective for the Derelict Decoy's ambush
+        // (ship_mission_accept.ts). See PendingAutoAbortShipsComponent.
+        if (offer.shipObjective && state.autoAbortShips) {
+            const shipSubtitle =
+                pickSpecialShipSubtitle(mission, machinery.random);
+            state.autoAbortShips.push({
+                missionId: mission.id,
+                shipObjective: {
+                    ...offer.shipObjective,
+                    live: new Map(offer.shipObjective.live),
+                },
+                travelPlanet: offer.travelPlanet,
+                returnPlanet: offer.returnPlanet,
+                ...(shipName !== undefined ? { shipName } : {}),
+                ...(shipSubtitle !== undefined ? { shipSubtitle } : {}),
+            });
+        }
         return { accepted: true };
     }
 
