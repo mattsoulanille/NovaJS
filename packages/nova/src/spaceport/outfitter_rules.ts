@@ -10,6 +10,7 @@
  * control-bit grants intentionally bypass all of these checks (see
  * makeControlBitHooks in ../nova_plugin/ncb.ts).
  */
+import { GovtData } from 'novadatainterface/govt_data';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
@@ -121,6 +122,27 @@ export interface OutfitterContext {
     day?: number;
     /** See `day`. */
     stellarId?: number | null;
+    /**
+     * Tons of cargo actually in the hold right now (cargo_plugin's
+     * cargoUsed over the docked ship's own CargoComponent, or the mission
+     * session's working copy). Read by the CARGO gate: an outfit that
+     * takes hold space away (a Mass Expansion) cannot be bought, and one
+     * that grants it (a Cargo Expansion) cannot be sold, when the freight
+     * aboard would no longer fit. Absent means an empty hold, the
+     * pre-existing behaviour for every headless caller.
+     *
+     * The docked SHIP's hold only, like freeCargo: escort holds never enter
+     * into what fits on this hull.
+     */
+    cargoUsed?: number;
+    /**
+     * Whether the gövt with global id `stellarGovt` counts as `govt` or
+     * one of its allies, for the oütf RequireGovt scoping (see
+     * requireApplies). Absent means the ally relation is unknown and only
+     * an EXACT govt match counts — which is what a headless caller with
+     * no gövt data gets, and never widens a requirement's reach.
+     */
+    govtAllied?(govt: string, stellarGovt: string): boolean;
 }
 
 /**
@@ -210,6 +232,15 @@ export interface OutfitterStellar extends TechStellar {
      * owns, regardless of tech level (EVN Bible ~:2862).
      */
     buysAnyOutfit: boolean;
+    /**
+     * The global id of the gövt that OWNS this stellar (spöb Govt), or null
+     * for an independent one. Read by the oütf RequireGovt scoping (see
+     * requireApplies) and nothing else. Optional, and absent is read as
+     * "unknown": a govt-scoped requirement then applies here only in the
+     * scopes that need no govt to decide (all / independent-inclusive),
+     * so a caller that cannot name the govt never waives a licence.
+     */
+    govt?: string | null;
 }
 
 /**
@@ -320,17 +351,29 @@ export function stellarStocks(outfit: OutfitData,
  * buys-anything bit is a spöb Flags2 bit that planet_parse decodes into
  * the named flags, so it is read from there rather than from a raw field.
  *
- * The stellar's OWNING gövt is deliberately absent: the only thing the
- * outfitter would have wanted it for is the ränk PriceMod, and PriceMod does
- * not reach outfit prices (price_mod.ts). Tech reach and the buys-anything
- * bit are the whole of what a shop's stock depends on.
+ * The stellar's OWNING gövt is here for ONE reason — the oütf RequireGovt
+ * scoping (requireApplies) — and not for the ränk PriceMod, which does not
+ * reach outfit prices (price_mod.ts).
  */
 export function stellarOf(planet: PlanetData): OutfitterStellar {
     return {
         techLevel: planet.techLevel,
         specialTech: planet.specialTech,
         buysAnyOutfit: planet.flags.buysAnyOutfit,
+        govt: planet.govt,
     };
+}
+
+/**
+ * Whether two govts are the same or allied, as the gövt resource defines
+ * allies: "a ship is allied with any government whose class list
+ * intersects this government's `allies`" (GovtData). Symmetric in
+ * practice for stock data; asked in the direction the Bible phrases the
+ * RequireGovt rule — stellars "belonging to this govt or its allies".
+ */
+export function govtsAllied(govt: GovtData, other: GovtData): boolean {
+    return govt.id === other.id
+        || other.classes.some(cls => govt.allies.includes(cls));
 }
 
 export type BuyDenialReason =
@@ -344,6 +387,8 @@ export type BuyDenialReason =
     | 'turretHardpoints'
     | 'mass'
     | 'cargo'
+    /** shïp Holds < 0: this hull takes no mass expansions (see below). */
+    | 'noMassExpansions'
     | 'credits';
 
 export type SellDenialReason =
@@ -352,6 +397,10 @@ export type SellDenialReason =
     | 'fightersDeployed'
     | 'ammoAboard'
     | 'negativeFreeMass'
+    /** Freight aboard would no longer fit the hold left (see below). */
+    | 'cargoAboard'
+    /** Weapons mounted would exceed the hardpoints left (see below). */
+    | 'hardpoints'
     | 'notStocked';
 
 /**
@@ -789,12 +838,71 @@ export function availabilityTest(outfit: OutfitData,
 }
 
 /**
- * Whether the player's Contribute bits cover this outfit's Require set.
- * Shared by the purchase check and by the 0x0100 visibility rule, which
- * hides an unmet item entirely instead of merely greying it.
+ * Whether this outfit's Require bits are enforced AT THIS STELLAR — the
+ * oütf RequireGovt field (EVN Bible ~:2052):
+ *
+ *   -1          Requirements apply in all outfit shops.
+ *   128-383     ...only on stellars belonging to this govt or its allies.
+ *   1128-1383   ...only on independent stellars and stellars belonging to
+ *               this govt or its allies.
+ *   2128-2383   ...on all stellars except those belonging to this govt or
+ *               its allies.
+ *   3128-3383   ...on all stellars except independent stellars or
+ *               stellars belonging to this govt or its allies.
+ *
+ * (Decoded by novaparse into requireGovt + requireGovtScope; the stock
+ * editors' out-of-range 127 / 0 values are 'all'.) Nine stock outfits are
+ * scoped to the Federation: the Medium Blaster (oütf 129) and its turret,
+ * the IR and Radar missiles and launchers (134-137), the Etheric Wake
+ * launcher (140), the Polaron Cannon (147) and Carbon Fiber (180). At an
+ * Auroran, Polaris, Rebel or independent world that stocks them, they
+ * sell WITHOUT the Federation licence; at Earth they still need it.
+ *
+ * "Independent" is a stellar with no owning gövt (spöb Govt -1). With no
+ * stellar at all (a headless purchase check) the requirement applies,
+ * the pre-existing behaviour. With a stellar whose govt is UNKNOWN
+ * (OutfitterStellar.govt absent) the govt-dependent half of every scope
+ * is read conservatively — as if the stellar did not belong to the govt
+ * — so a caller that cannot name the govt never waives a licence at a
+ * Federation world; it can only, in the two "except" scopes, enforce one
+ * the original would have waived.
+ */
+export function requireApplies(outfit: OutfitData,
+    context: OutfitterContext): boolean {
+    const scope = outfit.requireGovtScope;
+    const govt = outfit.requireGovt;
+    if (scope === 'all' || govt === null || !context.planet) {
+        return true;
+    }
+    const stellarGovt = context.planet.govt;
+    const independent = stellarGovt === null;
+    const belongs = stellarGovt !== null && stellarGovt !== undefined
+        && (stellarGovt === govt
+            || (context.govtAllied?.(govt, stellarGovt) ?? false));
+    switch (scope) {
+        case 'govtOrAllies':
+            return belongs;
+        case 'independentOrGovt':
+            return independent || belongs;
+        case 'exceptGovt':
+            return !belongs;
+        case 'exceptIndependentOrGovt':
+            return !independent && !belongs;
+    }
+}
+
+/**
+ * Whether the player's Contribute bits cover this outfit's Require set —
+ * or the Require set is not enforced at this stellar at all (see
+ * requireApplies). Shared by the purchase check and by the 0x0100
+ * visibility rule, which hides an unmet item entirely instead of merely
+ * greying it.
  */
 export function requirementsMet(outfit: OutfitData,
     context: OutfitterContext): boolean {
+    if (!requireApplies(outfit, context)) {
+        return true;
+    }
     const require = BigInt(outfit.require ?? '0x0');
     return (require & playerContribute(context)) === require;
 }
@@ -866,8 +974,27 @@ export function canBuyOutfit(outfit: OutfitData,
     }
 
     const cargoUse = outfit.physics.freeCargo ?? 0;
-    if (cargoUse < 0 && freeCargo(context) + cargoUse < 0) {
-        return denied('cargo', 'You don\'t have enough cargo space.');
+    if (cargoUse < 0) {
+        // shïp Holds < 0 (EVN Bible ~:2346): "Put a negative sign in front
+        // of this value if you want to prevent the player from purchasing
+        // mass expansions" — read as any outfit that takes hold space
+        // away (a negative ModType 2: stock 190 Mass Expansion, 192/210
+        // Mass Retool, 340 Sigma Mass Expansion), the only thing the sign
+        // can mean once the hold itself is |Holds| tons.
+        if (context.shipData.noMassExpansions) {
+            return denied('noMassExpansions',
+                'This ship can\'t take mass expansions.');
+        }
+        // The hold left must hold the FREIGHT ABOARD, not merely stay at
+        // or above zero: five Mass Expansions on a full 400-ton hold used
+        // to leave 400 tons in a 325-ton hold, which nothing downstream
+        // ever corrected. The shipyard jettisons to fit on a trade
+        // (shipyard_rules' cargoForNewShip); the outfitter refuses, since
+        // the player can sell the freight first.
+        const holdAfter = freeCargo(context) + cargoUse;
+        if (holdAfter < 0 || holdAfter < (context.cargoUsed ?? 0)) {
+            return denied('cargo', 'You don\'t have enough cargo space.');
+        }
     }
 
     // Checked last: structural denials (mass, hardpoints, Max) are
@@ -1035,6 +1162,33 @@ export function canSellOutfit(outfit: OutfitData,
     const mass = installedMass(outfit, context.shipData);
     if (mass < 0 && freeMass(context) + mass < 0) {
         return denied('negativeFreeMass', NEGATIVE_FREE_MASS_REFUSAL);
+    }
+    // The twin of that rule for the other two things an outfit can GRANT
+    // the hull: cargo space (a Cargo Expansion, stock 189, +10 tons) and
+    // hardpoints (stock 335 "Sigma Mount Reinforcement", +4 guns / +2
+    // turrets). Selling the grant with the grant spent — freight filling
+    // the extra hold, guns mounted on the extra points — would leave the
+    // ship over a limit the sim never re-checks. The Bible is silent on
+    // both; the negative-free-mass refusal it does word (STR# 2002 index
+    // 206) is the same shape, so the same answer is given. Neither is
+    // reachable in stock play without the plot's Sigma items.
+    const cargoGrant = outfit.physics.freeCargo ?? 0;
+    if (cargoGrant > 0
+        && freeCargo(context) - cargoGrant < (context.cargoUsed ?? 0)) {
+        return denied('cargoAboard', 'Can\'t sell that item, because your'
+            + ' cargo would no longer fit afterwards.');
+    }
+    for (const kind of ['gun', 'turret'] as const) {
+        const granted = outfit.physics[
+            kind === 'gun' ? 'maxGuns' : 'maxTurrets'] ?? 0;
+        if (granted <= 0) {
+            continue;
+        }
+        const { max, used } = hardpoints(context, kind);
+        if (used > max - granted) {
+            return denied('hardpoints', 'Can\'t sell that item, because your'
+                + ` ship would have too many ${kind}s mounted afterwards.`);
+        }
     }
     if (context.planet && !buysBackOutfit(outfit, context.planet)) {
         return denied('notStocked', 'They don\'t deal in these here.');

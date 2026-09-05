@@ -4,6 +4,8 @@ import { getIntegrationGameData } from '../communication/simulation_test_fixture
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import {
     buysBackOutfit,
+    canBuyOutfit,
+    govtsAllied,
     OutfitterContext,
     OutfitterStellar,
     visibleOutfits,
@@ -212,6 +214,83 @@ describe('outfitter visibility against real Nova data', () => {
                 expect(higher).toEqual([]);
             }
         });
+
+    describe('oütf RequireGovt against the stock licences', () => {
+        /** Medium Blaster: Require 0x100000001, RequireGovt 128. */
+        const MEDIUM_BLASTER = 'nova:129';
+        /** IR Missile: Require 0x200000001, RequireGovt 128. */
+        const IR_MISSILE = 'nova:135';
+        const FEDERATION = 'nova:128';
+        /** Earth (spöb 128): Federation, tech 7. */
+        const earth: OutfitterStellar = {
+            techLevel: 7, specialTech: [], buysAnyOutfit: false,
+            govt: FEDERATION,
+        };
+        /** An Auroran world, and an independent one, at Earth's tech. */
+        const auroran: OutfitterStellar = { ...earth, govt: 'nova:129' };
+        const independent: OutfitterStellar = { ...earth, govt: null };
+
+        async function govtAllied() {
+            const gameData = await getIntegrationGameData();
+            const ids = (await gameData.ids).Govt;
+            const govts = new Map(await Promise.all(ids.map(async id =>
+                [id, await gameData.data.Govt.get(id)] as const)));
+            return (govt: string, other: string) => {
+                const [a, b] = [govts.get(govt), govts.get(other)];
+                return a !== undefined && b !== undefined && govtsAllied(a, b);
+            };
+        }
+
+        it('pins the nine Federation-scoped stock outfits', async () => {
+            const outfits = await allOutfits();
+            const scoped = outfits.filter(o => o.requireGovtScope !== 'all');
+            expect(scoped.map(o => o.id).sort()).toEqual([
+                'nova:129', 'nova:131', 'nova:134', 'nova:135', 'nova:136',
+                'nova:137', 'nova:140', 'nova:147', 'nova:180',
+            ]);
+            for (const outfit of scoped) {
+                expect(outfit.requireGovt).withContext(outfit.id)
+                    .toBe(FEDERATION);
+                expect(outfit.requireGovtScope).withContext(outfit.id)
+                    .toBe('govtOrAllies');
+            }
+        });
+
+        it('demands the Heavy Weapons License at Earth but not at an '
+            + 'Auroran or independent world', async () => {
+                const outfits = await allOutfits();
+                const allied = await govtAllied();
+                const blaster = outfits.find(o => o.id === MEDIUM_BLASTER)!;
+                const missile = outfits.find(o => o.id === IR_MISSILE)!;
+                // A hull contributing only the base bit (no licences),
+                // with hardpoints and space to spare.
+                const hull = getDefaultShipData();
+                hull.contribute = '0x1';
+                hull.physics = {
+                    ...hull.physics, freeMass: 1000, maxGuns: 4, maxTurrets: 2,
+                };
+                const at = (planet: OutfitterStellar): OutfitterContext => ({
+                    ...contextFor(outfits, planet),
+                    shipData: hull,
+                    govtAllied: allied,
+                });
+                expect(canBuyOutfit(blaster, at(earth))).toEqual(
+                    jasmine.objectContaining(
+                        { allowed: false, reason: 'require' }));
+                expect(canBuyOutfit(missile, at(earth))).toEqual(
+                    jasmine.objectContaining(
+                        { allowed: false, reason: 'require' }));
+                expect(canBuyOutfit(blaster, at(auroran)))
+                    .toEqual({ allowed: true });
+                expect(canBuyOutfit(missile, at(independent)))
+                    .toEqual({ allowed: true });
+                // The Vell-os are allied with the Federation's class, so a
+                // Vell-os-owned world still asks for the licence.
+                expect(canBuyOutfit(blaster, at({ ...earth, govt: 'nova:136' })))
+                    .toEqual(jasmine.objectContaining(
+                        { allowed: false, reason: 'require' }));
+            });
+    });
 
     it('pins the stock outfit flag census the rules depend on', async () => {
         const outfits = await allOutfits();

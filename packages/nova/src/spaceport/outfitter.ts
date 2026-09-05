@@ -37,7 +37,8 @@ import { applyMapOutfit } from "./map_outfit.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { rankContribute } from "../nova_plugin/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
-import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, govtsAllied, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
+import { CargoComponent, cargoUsed } from "../nova_plugin/cargo_plugin.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 import { buildChangedShip, ShipChangeMode } from "./shipyard_rules.js";
@@ -642,9 +643,18 @@ export class Outfitter extends Menu<Entity> {
         if (!this.shipData) {
             return undefined;
         }
+        // A plain SNAPSHOT of the owned counts, not the DefaultMap itself:
+        // the rules only read it, but a DefaultMap's get() INSERTS on a
+        // miss, and visibleOutfits probes every outfit in the game — so the
+        // working copy used to grow to every id at count 0 after one grid
+        // refresh, every ownedOutfits walk then iterated all of them, and
+        // countDeployedFighters was handed unowned ammo outfits to
+        // attribute fighters to. Zero counts are dropped here too.
+        const owned = new Map(
+            [...this.outfits].filter(([, count]) => count > 0));
         return {
             shipData: this.shipData,
-            outfits: this.outfits,
+            outfits: owned,
             // WARMTH PRECONDITION: getCached answers only for ids already
             // fetched. makeOutfitsGrid fetches EVERY outfit id (and every
             // weapon those outfits name) before the grid — and so any
@@ -673,8 +683,20 @@ export class Outfitter extends Menu<Entity> {
             // Resolved against the outfits the player owns, because a
             // deployed fighter names only its bay weapon and has to be
             // attributed back to one of the player's ammo outfits.
-            deployedCounts: this.deployedOutfitCounts?.(this.outfits.keys()),
+            deployedCounts: this.deployedOutfitCounts?.(owned.keys()),
             planet: this.stellar(),
+            // The freight in the hold, for the cargo gate — the session's
+            // working copy when there is one (an OnPurchase Sxxx may have
+            // loaded mission cargo this visit), else the entity's own.
+            cargoUsed: cargoUsed(this.missionSession?.state.cargo
+                ?? this.input?.components.get(CargoComponent) ?? new Map()),
+            // gövt allies for the oütf RequireGovt scoping, off the govt
+            // list build() loaded for ModType 21.
+            govtAllied: (govt, stellarGovt) => {
+                const a = this.govts.find(([id]) => id === govt)?.[1];
+                const b = this.govts.find(([id]) => id === stellarGovt)?.[1];
+                return a !== undefined && b !== undefined && govtsAllied(a, b);
+            },
             ammoSellStrings: this.ammoSellStrings,
             // `Exxx` in an Availability: the local pilot's map knowledge,
             // read straight from the store (the shop is a player-local
@@ -834,7 +856,14 @@ export class Outfitter extends Menu<Entity> {
             if (outfit.cleanLegalRecord === -1) {
                 cleanRecords(this.records, 'all', undefined, this.govts);
             } else {
-                const govtId = `nova:${outfit.cleanLegalRecord}`;
+                // The gövt number resolves stock-first under the outfit's
+                // own writer prefix, like every other numbered reference
+                // in this file (see runSetString's resolveId): a plug-in
+                // outfit clearing the record with a plug-in gövt used to
+                // look for `nova:<n>` and clear nothing.
+                const govtId = resolveNumberedResource(outfit.cleanLegalRecord,
+                    setStringPrefix(outfit),
+                    id => this.govts.some(([g]) => g === id));
                 cleanRecords(this.records, 'govt',
                     this.govts.find(([id]) => id === govtId)?.[1],
                     this.govts);
@@ -957,6 +986,9 @@ export class Outfitter extends Menu<Entity> {
                     : "Can't have any of this item!";
             case 'mass':
             case 'cargo':
+            // A hull that takes no mass expansions (shïp Holds < 0)
+            // cannot hold the item at all, in exactly these words.
+            case 'noMassExpansions':
                 return owned > 0
                     ? "Can't hold any more!"
                     : "Can't hold any of this item!";
@@ -1025,6 +1057,11 @@ export class Outfitter extends Menu<Entity> {
             case 'ammoAboard':
             case 'negativeFreeMass':
             case 'fightersDeployed':
+            // The two twins of the negative-free-mass refusal (a granted
+            // hold or hardpoints that are still in use) are captioned for
+            // the same reason it is: surprising, and fixable by the player.
+            case 'cargoAboard':
+            case 'hardpoints':
                 return sellCheck.message;
             default:
                 return '';

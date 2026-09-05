@@ -164,4 +164,26 @@ describe('a ship-upgrade permit bought at the real outfitter', () => {
             expect(departed.components.get(OutfitsStateComponent)!
                 .has(FUEL_TRANSFER)).toBe(false);
         }, 120_000);
+
+    it('keeps its working outfit copy to the outfits actually owned after '
+        + 'a grid refresh', async () => {
+            // The working copy is a DefaultMap; the rules used to be
+            // handed it directly, and visibleOutfits' get() on every
+            // outfit in the game inserted all 242 ids at count 0.
+            const gameData = await getIntegrationGameData();
+            const entity = await dockedValkyrie(1_000);
+            const outfitter = new Outfitter(displayAssets(), gameData,
+                new Subject<ControlEvent>());
+            await outfitter.buildPromise;
+            const shown = outfitter.show(entity);
+            await untilShown(outfitter);
+            (outfitter as any).refreshGrid();
+            (outfitter as any).refreshTradeState();
+            const working: Map<string, number> = (outfitter as any).outfits;
+            expect([...working.keys()]).toEqual([MEDIUM_BLASTER]);
+            const context: OutfitterContext = (outfitter as any).makeContext();
+            expect([...context.outfits.keys()]).toEqual([MEDIUM_BLASTER]);
+            outfitter.dismiss();
+            await shown;
+        }, 120_000);
 });
