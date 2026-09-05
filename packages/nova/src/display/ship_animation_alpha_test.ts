@@ -78,8 +78,8 @@ function movement(x: number, y: number) {
     };
 }
 
-async function alphaWorld({ murk, withMurkSystem = true }: {
-    murk: number, withMurkSystem?: boolean,
+async function alphaWorld({ murk, withMurkSystem = true, murkSystemFirst = false }: {
+    murk: number, withMurkSystem?: boolean, murkSystemFirst?: boolean,
 }) {
     const world = new World('ship alpha test');
     world.resources.set(TimeResource,
@@ -88,10 +88,15 @@ async function alphaWorld({ murk, withMurkSystem = true }: {
     world.resources.set(MurkResource, { systemMurk: murk, murkReduction: 0 });
     // The display derives the player's scanner from their synced outfits.
     await world.addPlugin(CloakDisplayPlugin);
+    // Insertion order is the topological sort's tiebreak, so a world that
+    // adds MurkFadeSystem FIRST (production order: SystemEnvironmentPlugin
+    // precedes ShipAnimationPlugin in Display) only composes last because
+    // of MurkFadeSystem's `after: [ShipAnimationSystem]` edge.
+    if (withMurkSystem && murkSystemFirst) {
+        world.addSystem(MurkFadeSystem);
+    }
     world.addSystem(ShipAnimationSystem);
-    if (withMurkSystem) {
-        // Added AFTER ShipAnimationSystem on purpose: the `after` edge,
-        // not insertion order, has to put the murk composition last.
+    if (withMurkSystem && !murkSystemFirst) {
         world.addSystem(MurkFadeSystem);
     }
 
@@ -158,6 +163,18 @@ describe('ship alpha: murk composed with cloak', () => {
         world.step();
         expect(graphic.container.alpha)
             .toBeCloseTo(0.4 * MURK_ALPHA_AT_100, 6);
+    });
+
+    it('composes last by its `after` edge, not by insertion order', async () => {
+        // Production adds SystemEnvironmentPlugin before ShipAnimationPlugin
+        // (display_plugin.ts), so without MurkFadeSystem's
+        // `after: [ShipAnimationSystem]` the cloak write (1.0 for an
+        // uncloaked ship) would land after the murk fade and erase it.
+        const { world, addShip } =
+            await alphaWorld({ murk: 100, murkSystemFirst: true });
+        const graphic = addShip('ship', 100);
+        world.step();
+        expect(graphic.container.alpha).toBeCloseTo(MURK_ALPHA_AT_100, 6);
     });
 
     it('is stable across frames (no compounding)', async () => {
