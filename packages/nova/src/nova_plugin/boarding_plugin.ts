@@ -1232,6 +1232,23 @@ const BoardingActionSystem = new System({
             // synced state the simulation may read (the client's carried
             // rosters are not — see cappedEscortCount for the window that
             // leaves).
+            //
+            // A REFUSAL CHARGES NOTHING: nothing happened to the hulk. The
+            // piracy crime for this session was charged at the capture
+            // ATTEMPT (the 'plunderCapture' roll below, "either way"), and
+            // that charge stands; this press adds no second one, and
+            // chargeCrime is once-per-session in any case.
+            //
+            // THE SESSION STAYS OPEN, AND THE HULK STAYS PLUNDERABLE. This
+            // is a ruling-adjacent choice, not part of #161's text: the
+            // maintainer ruled the number and what counts, not what the
+            // plunder dialog does when a keep is refused, and it is
+            // unverified against the original. Chosen because the refusal
+            // is about the player's fleet, not the prize — the boarders
+            // have already won the hulk, its cargo, credits, fuel and ammo
+            // are still on offer, and Done releases it exactly as if the
+            // player had declined to keep it. The dialog shows the message
+            // and greys Capture (display/boarding_plugin.ts).
             if (cappedEscortCount(uuid, { world: entities }) >= MAX_ESCORTS) {
                 boarding.capture = 'refused';
                 return;

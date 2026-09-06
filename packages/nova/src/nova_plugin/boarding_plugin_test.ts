@@ -525,6 +525,40 @@ describe('boarding in a live world', () => {
                 expect(target.components.has(PlayerEscortComponent)).toBeFalse();
             });
 
+        /**
+         * Review of PR #212, finding 4: a refused keep is not a crime —
+         * nothing happened to the hulk. What IS charged is the capture
+         * ATTEMPT, at the roll, and that charge stands unchanged through
+         * the refusal (and through a second press of it).
+         */
+        it('charges no crime for the refusal: the attempt\'s charge stands',
+            async () => {
+                const { world, boarder } = await boardingWorld({
+                    boarderCrew: 500, targetCrew: 1,
+                });
+                flock(world, MAX_ESCORTS);
+                forceCaptureRoll(world, true);
+                const record = () =>
+                    boarder.components.get(LegalRecordsComponent)!
+                        .get('nova:128');
+                press(world, BOARDER, 'board');
+                expect(record()).toBeUndefined();
+                press(world, BOARDER, 'plunderCapture');
+                const charged = record();
+                expect(charged).toBeLessThan(0);
+                expect(boarder.components.get(BoardingComponent)?.crimeApplied)
+                    .toBeTrue();
+
+                press(world, BOARDER, 'plunderCaptureEscort');
+                expect(boarder.components.get(BoardingComponent)?.capture)
+                    .toEqual('refused');
+                expect(record()).toEqual(charged);
+                press(world, BOARDER, 'plunderCaptureEscort');
+                expect(record()).toEqual(charged);
+                press(world, BOARDER, 'plunderDone');
+                expect(record()).toEqual(charged);
+            });
+
         it('keeps the prize one under the cap, and it then fills the cap',
             async () => {
                 const { world, boarder, target } = await boardingWorld({
