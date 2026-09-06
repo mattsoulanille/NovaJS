@@ -153,6 +153,52 @@ describe('io-ts to Avro derivation', () => {
             expect(roundTrip(codec, { y: 3 })).toEqual({ y: 3 });
         });
 
+        it('cannot map an array beside a tuple: both are arrays to JavaScript', () => {
+            // A tuple rides as an Avro record, so it looked distinct from
+            // an array to a check that only asked Avro; to the encode
+            // pass both are arrays, and whichever branch claimed the
+            // bucket took every array — a three-element array through
+            // a two-field tuple record came back as two elements, and
+            // the io-ts gate accepted it. Either order.
+            const array = t.array(t.number);
+            const tuple = t.tuple([t.number, t.number]);
+            for (const codec of [t.union([array, tuple]), t.union([tuple, array])]) {
+                const { schema, failures } = deriveAvroSchema(codec, { name: 'U' });
+                expect(node(schema).logicalType).toBe('opaque');
+                expect(summarize(failures)).toEqual(['unmapped $']);
+                expect(failures[0]!.reason).toContain('arrays');
+                // Opaque is lossless, and explain agrees: the receiver
+                // sees exactly what it sees over JSON today. (With the
+                // tuple branch FIRST, io-ts's own tuple decode strips
+                // [1, 2, 3] to [1, 2] on any wire — the codec's
+                // semantics, not the wire's; hence the JSON reference.)
+                const wire = avroWireCodec(schema);
+                for (const value of [[1, 2, 3], [1, 2], []]) {
+                    expect(wire.explain(value)).withContext(JSON.stringify(value)).toBeUndefined();
+                    expect(wire.decode(wire.encode(value))).toEqual(value);
+                    expect(decodeWireOrThrow(wire, codec, wire.encode(value)))
+                        .toEqual(decodeWireOrThrow(jsonWireCodec, codec, jsonWireCodec.encode(value)));
+                }
+            }
+            // The other side of the tuple: a record on the wire, so it
+            // collides with records and maps there.
+            for (const other of [t.type({ a: t.number }), t.record(t.string, t.number)]) {
+                const { failures } = deriveAvroSchema(t.union([other, tuple]), { name: 'U' });
+                expect(summarize(failures)).toEqual(['unmapped $']);
+                expect(failures[0]!.reason).toContain('on the wire');
+            }
+            // And the plan compiler refuses the union the deriver must
+            // never emit, instead of encoding one branch as the other.
+            const tupleRecord: AvroSchemaNode = {
+                type: 'record', name: 'Pair', logicalType: 'tuple',
+                fields: [{ name: '_0', type: 'double' }, { name: '_1', type: 'double' }],
+            };
+            expect(() => avroWireCodec([{ type: 'array', items: 'double' }, tupleRecord]))
+                .toThrowError(/ambiguous union.*array/);
+            expect(() => avroWireCodec([{ type: 'map', values: 'double' }, tupleRecord]))
+                .toThrowError(/ambiguous union.*on the wire/);
+        });
+
         it('maps tuples to records read and written as arrays', () => {
             const codec = t.tuple([t.string, t.number, t.boolean]);
             const { schema } = deriveAvroSchema(codec, { name: 'T' });
@@ -238,6 +284,30 @@ describe('io-ts to Avro derivation', () => {
             expect(() => wire.encode({ tick: 'seven' })).toThrow();
             expect(wire.explain({ tick: 'seven' })).toContain('tick');
             expect(wire.explain({ tick: 7 })).toBeUndefined();
+        });
+
+        it('explain judges the original message by its round trip, not the plan-encoded one', () => {
+            // A message the schema admits can still come back changed:
+            // the plan's transforms and the opaque fallback happen
+            // before avsc validates anything. The opaque node here is
+            // msgpack, which folds −0 (and keeps NaN).
+            const codec = t.type({ tick: WireTick, payload: t.unknown });
+            const { schema } = deriveAvroSchema(codec, { hooks: novaCodecHooks() });
+            const wire = avroWireCodec(schema);
+            expect(wire.explain({ tick: 7, payload: { z: -0 } }))
+                .toMatch(/lossy: \$\.payload\.z: -0 came back as 0/);
+            expect(wire.explain({ tick: 7, payload: { n: NaN, list: [1, 'two', null] } })).toBeUndefined();
+            expect(wire.explain({ tick: 7, payload: undefined })).toBeUndefined();
+            // Shapes the plan reshapes on purpose are not differences: a
+            // Position instance comes back a plain object, an undefined
+            // optional comes back absent, a tuple goes through a record.
+            const shaped = t.type({
+                at: PositionType, pair: t.tuple([t.string, t.number]),
+                maybe: t.union([t.number, t.undefined]),
+            });
+            const shapedWire = avroWireCodec(deriveAvroSchema(shaped, { hooks: novaCodecHooks() }).schema);
+            expect(shapedWire.explain({ at: new Position(1, 2), pair: ['a', 1], maybe: undefined }))
+                .toBeUndefined();
         });
     });
 

@@ -262,36 +262,47 @@ class Deriver {
     private readonly namedKinds = new Map<string, string>();
 
     /**
-     * How a JavaScript value would pick this branch of an UNWRAPPED
-     * union: records, tuples (records) and maps are all objects, so two
-     * of them in one union cannot be told apart without a
-     * discriminator, whatever their Avro names.
+     * How a value would pick this branch of an UNWRAPPED union, on both
+     * sides of the wire: `js` is what the JavaScript value looks like
+     * before the plan transform (wire_codec.ts chooses the encode branch
+     * by it), `avro` what avsc sees after it (it chooses the decode
+     * branch). Records and maps are objects on both sides, so two of
+     * them in one union cannot be told apart without a discriminator,
+     * whatever their Avro names. A tuple is an ARRAY to JavaScript and a
+     * record to Avro, so it collides with arrays on one side and with
+     * records on the other; an opaque node takes anything on the way in
+     * and is bytes on the way out. Mirrors wire_codec.ts `schemaBuckets`.
      */
-    private jsBucket(schema: AvroSchema): string {
+    private buckets(schema: AvroSchema): { js: string, avro: string } {
+        const both = (bucket: string) => ({ js: bucket, avro: bucket });
         if (typeof schema === 'string') {
             switch (schema) {
                 case 'int': case 'long': case 'float': case 'double':
-                    return 'number';
+                    return both('number');
                 case 'null': case 'boolean': case 'string': case 'bytes':
-                    return schema;
+                    return both(schema);
                 default: {
                     const kind = this.namedKinds.get(schema);
-                    return kind === 'enum' ? 'string' : 'object';
+                    return both(kind === 'enum' ? 'string' : 'object');
                 }
             }
         }
         if (Array.isArray(schema)) {
-            return 'union';
+            return both('union');
         }
         switch (schema.type) {
             case 'enum':
-                return 'string';
-            case 'record': case 'map':
-                return 'object';
+                return both('string');
+            case 'record':
+                return schema.logicalType === 'tuple'
+                    ? { js: 'array', avro: 'object' } : both('object');
+            case 'map':
+                return both('object');
             case 'bytes':
-                return schema.logicalType === 'opaque' ? 'any' : 'bytes';
+                return schema.logicalType === 'opaque'
+                    ? { js: 'any', avro: 'bytes' } : both('bytes');
             default:
-                return typeof schema.type === 'string' ? schema.type : 'union';
+                return both(typeof schema.type === 'string' ? schema.type : 'union');
         }
     }
 
@@ -747,29 +758,34 @@ class Deriver {
             branches.push(this.derive(member, path, nameHint));
         }
 
-        // An unwrapped union's branch is chosen by the VALUE's kind, so
-        // two of a kind (two records without a discriminator, two
-        // doubles) cannot be encoded without a wrapper we have no key
-        // for. (Avro itself would also reject two branches of one name.)
-        const seen = new Set<string>();
+        // An unwrapped union's branch is chosen by the VALUE's kind — on
+        // the way in by the JavaScript value, on the way out by what
+        // avsc decoded — so two of a kind on EITHER side (two records
+        // without a discriminator, two doubles, an array beside a tuple)
+        // cannot be encoded without a wrapper we have no key for. (Avro
+        // itself would also reject two branches of one name.)
+        const seenJs = new Set<string>();
+        const seenAvro = new Set<string>();
         const seenNames = new Set<string>();
         const distinctBranches: AvroSchema[] = [];
         for (const branch of branches) {
-            const bucket = this.jsBucket(branch);
+            const { js, avro } = this.buckets(branch);
             const name = branchName(branch);
-            if (seen.has(bucket) || seenNames.has(name)) {
+            if (seenJs.has(js) || seenAvro.has(avro) || seenNames.has(name)) {
                 // Two literals of one primitive (`1 | 2`) are one branch.
                 if (typeof branch === 'string' && seenNames.has(name)) {
                     continue;
                 }
+                const side = seenJs.has(js) ? `${js}s` : `${avro}s on the wire`;
                 return this.opaque('unmapped', path, codec,
-                    `ambiguous union: two branches would both be ${bucket}s`);
+                    `ambiguous union: two branches would both be ${side}`);
             }
-            if (bucket === 'union') {
+            if (js === 'union') {
                 return this.opaque('unmapped', path, codec,
                     'a union branch is itself a union, which Avro forbids');
             }
-            seen.add(bucket);
+            seenJs.add(js);
+            seenAvro.add(avro);
             seenNames.add(name);
             distinctBranches.push(branch);
         }
