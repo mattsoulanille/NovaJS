@@ -205,7 +205,7 @@ export const StarmapPlugin: Plugin = {
             // for debugging: there is no in-game way to hand a pilot a
             // galaxy, and the map's chrome scenarios need one to compare
             // against the reference captures' mid-game pilot.
-            window.novaDiscovery = {
+            const discoveryHooks: DiscoveryHooks = {
                 level: (id: string) => discoveryLevel(id),
                 mark: (ids: string[], level: DiscoveryLevel) =>
                     markManyDiscovered(ids, level),
@@ -214,6 +214,7 @@ export const StarmapPlugin: Plugin = {
                     markManyDiscovered(ids, level);
                 },
             };
+            window.novaDiscovery = discoveryHooks;
         }
         const openStarmap = async (
             options?: OpenStarmapOptions): Promise<string[]> => {
