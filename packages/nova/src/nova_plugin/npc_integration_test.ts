@@ -6,8 +6,11 @@ import { FiringGroupComponent } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
 import { makeSystem } from './make_system.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
-import { NpcSpawnerComponent } from './npc_spawn_plugin.js';
+import { NpcSpawnerComponent, spawnNpc } from './npc_spawn_plugin.js';
+import { IdFactoryResource } from './id_factory.js';
 import { ShipComponent } from './ship_plugin.js';
+import { Entity } from 'nova_ecs/entity';
+import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { World } from 'nova_ecs/world';
 
 /**
@@ -160,35 +163,62 @@ describe('NPC spawning in a parsed system', () => {
 
     it('fleet escorts spawn in formation on their leader', async () => {
         const gameData = await getSyntheticGameData();
-        // Kestrel Drift draws the Raider Wing 40% of the time; rather
-        // than hunt for a fleet roll, assert the invariant across every
-        // system of the scenario: every escort's leader exists and is an
-        // NPC of the same government, sharing one firing group.
-        let escorts = 0;
+        // The invariant: every escort's leader exists and is an NPC of
+        // the same government, sharing one firing group (friendly-fire
+        // immunity; see firing_group.ts).
+        function expectInFormation(world: World, entity: Entity) {
+            const formation = entity.components.get(FormationComponent)!;
+            const leader = world.entities.get(formation.leader);
+            expect(leader).toBeDefined();
+            expect(leader!.components.has(NpcComponent)).toBeTrue();
+            expect(entity.components.get(GovtComponent)?.id)
+                .toEqual(leader!.components.get(GovtComponent)?.id);
+            expect(entity.components.get(FiringGroupComponent))
+                .toEqual({ group: formation.leader });
+            expect(leader!.components.get(FiringGroupComponent))
+                .toEqual({ group: formation.leader });
+        }
+        // Holds for whatever the seeded genesis rolls drew, in every
+        // system of the scenario...
         for (const systemId of Object.values(SYNTHETIC.systems)) {
             const world = await makeSystem(systemId, gameData);
             for (const [, entity] of npcs(world)) {
-                const formation = entity.components.get(FormationComponent);
-                if (!formation) {
-                    continue;
+                if (entity.components.has(FormationComponent)) {
+                    expectInFormation(world, entity);
                 }
-                escorts++;
-                const leader = world.entities.get(formation.leader);
-                expect(leader).toBeDefined();
-                expect(leader!.components.has(NpcComponent)).toBeTrue();
-                expect(entity.components.get(GovtComponent)?.id)
-                    .toEqual(leader!.components.get(GovtComponent)?.id);
-                // The fleet shares one firing group (friendly-fire
-                // immunity; see firing_group.ts).
-                expect(entity.components.get(FiringGroupComponent))
-                    .toEqual({ group: formation.leader });
-                expect(leader!.components.get(FiringGroupComponent))
-                    .toEqual({ group: formation.leader });
             }
         }
-        // The scenario is small enough to say the invariant was tested
-        // on something: with Kestrel's 40% fleet weight, an AvgShips of
-        // 3 and the wing's 1-2 escorts, the seeded roll produces some.
-        expect(escorts).toBeGreaterThan(0);
+        // ...and is exercised for certain, not by hoping the 40% Raider
+        // Wing entry won a roll: Kestrel Drift's spawn TABLE carries the
+        // wing (a Corsair leading 1-2 Corsairs), so draw from that entry
+        // alone with the world's own Random and id factory.
+        const world = await makeSystem(SYNTHETIC.systems.kestrel, gameData);
+        const spawner = world.entities.get('npc spawner')!
+            .components.get(NpcSpawnerComponent)!;
+        // (Twice: once from the sÿst DudeTypes entry, once as a roaming
+        // LinkSyst fleet; both are the wing.)
+        const wings = spawner.entries.filter(entry => entry.fleet);
+        expect(wings.length).toBeGreaterThan(0);
+        for (const { fleet } of wings) {
+            expect(fleet!.leadShip).toBe(SYNTHETIC.ships.corsair);
+            expect(fleet!.escorts).toEqual([
+                { id: SYNTHETIC.ships.corsair, min: 1, max: 2 }]);
+        }
+        const before = new Set(npcs(world).map(([uuid]) => uuid));
+        const spawned = spawnNpc(world, gameData,
+            world.resources.get(IdFactoryResource)!,
+            world.resources.get(RandomResource)!, [wings[0]], true);
+        const fresh = npcs(world).filter(([uuid]) => !before.has(uuid));
+        expect(fresh.length).toBe(spawned);
+        const escorts = fresh.filter(([, entity]) =>
+            entity.components.has(FormationComponent));
+        expect(escorts.length).toBeGreaterThanOrEqual(1);
+        expect(escorts.length).toBeLessThanOrEqual(2);
+        expect(fresh.length).toBe(escorts.length + 1);
+        for (const [, escort] of escorts) {
+            expectInFormation(world, escort);
+            expect(fresh.map(([uuid]) => uuid)).toContain(
+                escort.components.get(FormationComponent)!.leader);
+        }
     }, 240_000);
 });
