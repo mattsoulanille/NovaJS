@@ -39,14 +39,31 @@
 
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
+import { latestVersion, migrateRaw, Migration } from '../common/migrations.js';
 import { openEnum } from '../common/open_enum.js';
 import { GameDateType } from '../nova_plugin/player_state_plugin.js';
 import {
     applyPatch, cloneJson, diffJson, JsonPatchOp, JsonValue,
 } from './json_patch.js';
 
-/** History schema version (bump only on a non-additive change). */
-export const PILOT_HISTORY_VERSION = 1;
+/**
+ * The history's schema version, derived from its migration list the way
+ * the save's is (common/migrations.ts, save_migrations.ts): a shape
+ * change appends a migration that rewrites the RAW stored object, and
+ * PilotHistoryCodec describes only the latest shape. The list is empty
+ * today — version 1 is the first and only shape — so the codec's own
+ * `t.partial` (nextId, the per-checkpoint meta) still describes the
+ * additive growth within it.
+ *
+ * The SAVE ENVELOPES inside (`base`, and every checkpoint's state) are
+ * opaque here and migrate on their own: save_game's decodeSave walks a
+ * checkpoint's envelope up from whatever version it was recorded at, so
+ * a history never needs rewriting when the save's shape moves.
+ */
+export const FIRST_PILOT_HISTORY_VERSION = 1;
+export const PILOT_HISTORY_MIGRATIONS: readonly Migration<unknown>[] = [];
+export const PILOT_HISTORY_VERSION =
+    latestVersion(FIRST_PILOT_HISTORY_VERSION, PILOT_HISTORY_MIGRATIONS);
 
 /** Newest checkpoints kept before the oldest are squashed into the base. */
 export const MAX_CHECKPOINTS = 300;
@@ -358,20 +375,49 @@ export function decodeHistory(raw: string | null | undefined):
     return decodeHistoryValue(parsed);
 }
 
-/** decodeHistory over an already-parsed value (an import file's field). */
-export function decodeHistoryValue(parsed: unknown): PilotHistory | undefined {
-    const decoded = PilotHistoryCodec.decode(parsed);
+/** What reading a stored history produced. */
+export type HistoryDecodeResult =
+    | { readonly ok: true; readonly history: PilotHistory }
+    | { readonly ok: false; readonly reason: string };
+
+/**
+ * decodeHistory over an already-parsed value (an import file's field),
+ * saying why when it cannot: the version is read first, the migrations
+ * run on the raw object, and only then does the codec see it — the same
+ * order as save_game's decodeSaveDetailed.
+ */
+export function decodeHistoryDetailed(parsed: unknown): HistoryDecodeResult {
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)
+        || typeof (parsed as { version?: unknown }).version !== 'number') {
+        return {
+            ok: false,
+            reason: 'The pilot history is not a versioned record.',
+        };
+    }
+    const migrated = migrateRaw('pilot history', FIRST_PILOT_HISTORY_VERSION,
+        PILOT_HISTORY_MIGRATIONS, (parsed as { version: number }).version,
+        parsed);
+    if (!migrated.ok) {
+        return migrated;
+    }
+    const decoded = PilotHistoryCodec.decode(migrated.raw);
     if (isLeft(decoded)) {
-        return undefined;
+        return {
+            ok: false,
+            reason: 'The pilot history does not match this build\'s shape.',
+        };
     }
     const history = decoded.right;
-    if (history.version < 1 || history.version > PILOT_HISTORY_VERSION) {
-        return undefined;
-    }
     if (history.base === undefined || history.base === null) {
-        return undefined;
+        return { ok: false, reason: 'The pilot history has no base save.' };
     }
-    return history;
+    return { ok: true, history };
+}
+
+/** decodeHistoryDetailed without the reason. */
+export function decodeHistoryValue(parsed: unknown): PilotHistory | undefined {
+    const result = decodeHistoryDetailed(parsed);
+    return result.ok ? result.history : undefined;
 }
 
 /**
@@ -396,8 +442,16 @@ export function loadHistory(saveKey: string, storage?: HistoryStorage):
     if (raw == null) {
         return undefined;
     }
-    const history = decodeHistory(raw);
-    if (!history) {
+    let parsed: unknown;
+    try {
+        parsed = JSON.parse(raw);
+    } catch {
+        parsed = undefined;
+    }
+    const result = parsed === undefined
+        ? { ok: false as const, reason: 'The pilot history is not valid JSON.' }
+        : decodeHistoryDetailed(parsed);
+    if (!result.ok) {
         try {
             store.setItem(`${key}:quarantine`, raw);
             store.removeItem(key);
@@ -405,10 +459,10 @@ export function loadHistory(saveKey: string, storage?: HistoryStorage):
             // Best effort.
         }
         console.warn(`Ignoring an unreadable pilot history (moved to `
-            + `'${key}:quarantine').`);
+            + `'${key}:quarantine'): ${result.reason}`);
         return undefined;
     }
-    return history;
+    return result.history;
 }
 
 /** Persists `history` beside `saveKey`. Never throws. */
@@ -419,8 +473,11 @@ export function saveHistory(saveKey: string, history: PilotHistory,
         return;
     }
     try {
-        store.setItem(historyKeyFor(saveKey),
-            JSON.stringify(PilotHistoryCodec.encode(history)));
+        // Always at the current version: a history in memory has been
+        // migrated to it, whatever version it was read at.
+        store.setItem(historyKeyFor(saveKey), JSON.stringify(
+            PilotHistoryCodec.encode(
+                { ...history, version: PILOT_HISTORY_VERSION })));
     } catch (e) {
         console.warn('Failed to write the pilot history', e);
     }

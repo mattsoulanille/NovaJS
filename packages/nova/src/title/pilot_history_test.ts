@@ -5,9 +5,11 @@ import {
 import { cloneJson, jsonEqual, JsonValue } from './json_patch.js';
 import {
     appendCheckpoint, CheckpointKindCodec, checkpointState, decodeHistory,
-    enforceCaps, historyKeyFor, latestState, loadHistory, MAX_CHECKPOINTS,
-    PilotHistory, PilotHistoryCodec, recordCheckpoint, rewindHistory,
-    rewindPilotSave, saveHistory, squashOldest, truncateAfter,
+    decodeHistoryDetailed, enforceCaps, FIRST_PILOT_HISTORY_VERSION,
+    historyKeyFor, latestState, loadHistory, MAX_CHECKPOINTS,
+    PILOT_HISTORY_MIGRATIONS, PILOT_HISTORY_VERSION, PilotHistory,
+    PilotHistoryCodec, recordCheckpoint, rewindHistory, rewindPilotSave,
+    saveHistory, squashOldest, truncateAfter,
 } from './pilot_history.js';
 
 class MemoryStorage {
@@ -187,6 +189,24 @@ describe('pilot history', () => {
             expect(decodeHistory(JSON.stringify(
                 { version: 1, base: { a: 1 }, checkpoints: [] }))).toBeDefined();
         });
+
+        it('derives its version from a (so far empty) migration list, and '
+            + 'names the versions when it refuses a newer build\'s history', () => {
+                expect(FIRST_PILOT_HISTORY_VERSION).toBe(1);
+                expect(PILOT_HISTORY_MIGRATIONS).toEqual([]);
+                expect(PILOT_HISTORY_VERSION).toBe(1);
+                expect(decodeHistoryDetailed(
+                    { version: 2, base: { a: 1 }, checkpoints: [] }))
+                    .toEqual({
+                        ok: false,
+                        reason: 'The pilot history was written by a newer '
+                            + 'build (version 2; this build reads up to 1).',
+                    });
+                expect(decodeHistoryDetailed({ version: 0, base: {}, checkpoints: [] }))
+                    .toEqual({ ok: false, reason: jasmine.stringContaining('older') });
+                expect(decodeHistoryDetailed({ version: 1, base: {}, checkpoints: [] }))
+                    .toEqual({ ok: true, history: { version: 1, base: {}, checkpoints: [] } });
+            });
 
         it('checkpoint kinds decode as stored and an unknown kind is kept, '
             + 'not rejected (the field is open in storage)', () => {

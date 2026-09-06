@@ -1,4 +1,5 @@
 import { Resource } from 'nova_ecs/resource';
+import { latestVersion, migrateRaw, Migration } from '../common/migrations.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, DiscoveryAccess, DiscoveryLevel,
     toDiscoveryLevel,
@@ -75,22 +76,75 @@ interface CacheEntry {
     levels: Map<string, DiscoveryLevel>;
 }
 
-function parseEntries(raw: string | null,
-    into: Map<string, DiscoveryLevel>): boolean {
-    if (!raw) {
-        return false;
-    }
+/**
+ * STORAGE SHAPE, versioned like the save (common/migrations.ts):
+ * `{ version, entries }` where `entries` is the `[systemId, level]` list.
+ * The pre-versioning builds wrote the bare list; that IS version 0, and
+ * the 0 -> 1 migration is the identity on it — the marker was added so
+ * the next change to the record has somewhere to go. A record from a
+ * newer build is refused and parked at `<key>:quarantine` (the save's
+ * discipline), never guessed at.
+ *
+ * FORWARD COMPATIBILITY: the previous build reads only the bare list, so
+ * it sees this build's envelope as unreadable and starts that pilot's
+ * record empty — until the pilot's save loads, whose `discovery` field
+ * merges everything back in (restoreClientSaveState). It loses at most
+ * what was discovered since the last autosave, and its own bare-list
+ * write reads back here as version 0.
+ */
+export const FIRST_DISCOVERY_VERSION = 0;
+export const DISCOVERY_MIGRATIONS: readonly Migration<unknown>[] = [
+    {
+        from: 0, to: 1,
+        summary: 'the bare [systemId, level] list gains a versioned envelope '
+            + '(identity on the entries)',
+        migrate: raw => raw,
+    },
+];
+export const DISCOVERY_VERSION =
+    latestVersion(FIRST_DISCOVERY_VERSION, DISCOVERY_MIGRATIONS);
+
+type StoredRecord =
+    | { readonly ok: true; readonly entries: readonly unknown[] }
+    | { readonly ok: false; readonly reason: string };
+
+/** Reads a stored record at any readable version down to its entries. */
+function readStoredRecord(raw: string): StoredRecord {
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
-    } catch (e) {
-        console.warn('Failed to load system discovery:', e);
-        return false;
+    } catch {
+        return { ok: false, reason: 'The record is not valid JSON.' };
     }
+    // The bare list the pre-versioning builds wrote: version 0.
+    let version = FIRST_DISCOVERY_VERSION;
+    let entries: unknown = parsed;
     if (!Array.isArray(parsed)) {
-        return false;
+        if (typeof parsed !== 'object' || parsed === null
+            || typeof (parsed as { version?: unknown }).version !== 'number') {
+            return {
+                ok: false,
+                reason: 'The record is neither a list nor a versioned record.',
+            };
+        }
+        version = (parsed as { version: number }).version;
+        entries = (parsed as { entries?: unknown }).entries;
     }
-    for (const entry of parsed) {
+    const migrated = migrateRaw('system discovery record',
+        FIRST_DISCOVERY_VERSION, DISCOVERY_MIGRATIONS, version, entries);
+    if (!migrated.ok) {
+        return migrated;
+    }
+    if (!Array.isArray(migrated.raw)) {
+        return { ok: false, reason: 'The record\'s entries are not a list.' };
+    }
+    return { ok: true, entries: migrated.raw };
+}
+
+/** Folds a record's entries into `into`, levels only rising. */
+function mergeEntries(entries: readonly unknown[],
+    into: Map<string, DiscoveryLevel>): void {
+    for (const entry of entries) {
         if (!Array.isArray(entry) || typeof entry[0] !== 'string') {
             continue;
         }
@@ -99,7 +153,6 @@ function parseEntries(raw: string | null,
             into.set(entry[0], level);
         }
     }
-    return true;
 }
 
 /**
@@ -195,9 +248,26 @@ export class DiscoveryStore {
         } catch {
             return levels;
         }
-        if (!parseEntries(raw, levels)) {
-            this.migrateLegacy(store, levels);
+        const record = raw ? readStoredRecord(raw) : undefined;
+        if (record?.ok) {
+            mergeEntries(record.entries, levels);
+            return levels;
         }
+        if (record) {
+            // Present but unreadable (corrupt, or a newer build's): park
+            // it rather than let the next mark overwrite it. The pilot's
+            // save carries the record too, and merges it back on load.
+            const quarantine = `${this.storageKey}:quarantine`;
+            try {
+                store.setItem(quarantine, raw!);
+                store.removeItem(this.storageKey);
+            } catch {
+                // Best effort.
+            }
+            console.warn('Ignoring an unreadable system discovery record '
+                + `(moved to '${quarantine}'): ${record.reason}`);
+        }
+        this.migrateLegacy(store, levels);
         return levels;
     }
 
@@ -208,7 +278,8 @@ export class DiscoveryStore {
             return;
         }
         try {
-            store.setItem(this.storageKey, JSON.stringify([...levels]));
+            store.setItem(this.storageKey, JSON.stringify(
+                { version: DISCOVERY_VERSION, entries: [...levels] }));
         } catch (e) {
             console.warn('Failed to persist system discovery:', e);
         }

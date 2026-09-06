@@ -3,9 +3,10 @@ import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN,
 } from './discovery.js';
 import {
-    defaultDiscoveryStore, discoveryEntries, discoveryKeyFor, discoveryLevel,
-    DiscoveryStorage, DiscoveryStore, LEGACY_EXPLORED_KEY, markDiscovered,
-    playerDiscovery, resetDiscovery, setDiscoveryStorageKey,
+    defaultDiscoveryStore, DISCOVERY_MIGRATIONS, DISCOVERY_VERSION,
+    discoveryEntries, discoveryKeyFor, discoveryLevel, DiscoveryStorage,
+    DiscoveryStore, FIRST_DISCOVERY_VERSION, LEGACY_EXPLORED_KEY,
+    markDiscovered, playerDiscovery, resetDiscovery, setDiscoveryStorageKey,
 } from './discovery_store.js';
 
 class FakeStorage implements DiscoveryStorage {
@@ -17,6 +18,11 @@ class FakeStorage implements DiscoveryStorage {
 
 const LEGACY_KEY = 'novajs:save';
 const OTHER_PILOT_KEY = 'novajs:save:pilot2';
+
+/** The bytes this build writes for `entries`. */
+function stored(entries: [string, number][]): string {
+    return JSON.stringify({ version: DISCOVERY_VERSION, entries });
+}
 
 describe('the discovery store', () => {
     let storage: FakeStorage;
@@ -66,7 +72,10 @@ describe('the discovery store', () => {
         // system has to survive a crash before the next autosave.
         const raw = storage.getItem(discoveryKeyFor(LEGACY_KEY));
         expect(raw).not.toBeNull();
-        expect(JSON.parse(raw!)).toEqual([['nova:130', DISCOVERY_ENTERED]]);
+        expect(JSON.parse(raw!)).toEqual({
+            version: DISCOVERY_VERSION,
+            entries: [['nova:130', DISCOVERY_ENTERED]],
+        });
     });
 
     it('reloads what it wrote', () => {
@@ -92,7 +101,7 @@ describe('the discovery store', () => {
         expect(store.level('nova:200')).toBe(DISCOVERY_UNKNOWN);
         expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
         expect(otherStorage.getItem(discoveryKeyFor(LEGACY_KEY)))
-            .toBe(JSON.stringify([['nova:200', DISCOVERY_ENTERED]]));
+            .toBe(stored([['nova:200', DISCOVERY_ENTERED]]));
     });
 
     it('keeps each pilot\'s knowledge to themselves', () => {
@@ -111,7 +120,7 @@ describe('the discovery store', () => {
         expect(pilot2.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
         pilot2.mark('nova:200', DISCOVERY_ENTERED);
         expect(storage.getItem(discoveryKeyFor(OTHER_PILOT_KEY)))
-            .toBe(JSON.stringify([['nova:200', DISCOVERY_ENTERED]]));
+            .toBe(stored([['nova:200', DISCOVERY_ENTERED]]));
     });
 
     describe('with no storage at all', () => {
@@ -244,5 +253,73 @@ describe('the client\'s discovery store', () => {
         setDiscoveryStorageKey(LEGACY_KEY);
         resetDiscovery();
         expect(discoveryLevel('nova:130')).toBe(DISCOVERY_UNKNOWN);
+    });
+});
+
+/**
+ * The record's version marker (see the STORAGE SHAPE note in
+ * discovery_store.ts): the bare list every earlier build wrote is
+ * version 0 and still reads; a newer build's record is refused and
+ * parked, never guessed at.
+ */
+describe('the discovery store\'s versioned record', () => {
+    let storage: FakeStorage;
+    const key = discoveryKeyFor(LEGACY_KEY);
+
+    beforeEach(() => {
+        storage = new FakeStorage();
+    });
+
+    it('derives its version from the migration list, from 0', () => {
+        expect(FIRST_DISCOVERY_VERSION).toBe(0);
+        expect(DISCOVERY_MIGRATIONS.map(m => [m.from, m.to])).toEqual([[0, 1]]);
+        expect(DISCOVERY_VERSION).toBe(1);
+    });
+
+    it('reads the bare list the previous builds wrote as version 0', () => {
+        // Byte for byte what those builds persisted.
+        storage.setItem(key, JSON.stringify(
+            [['nova:130', DISCOVERY_LANDED], ['nova:131', DISCOVERY_ENTERED]]));
+        const store = new DiscoveryStore(storage);
+        expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
+        expect(store.level('nova:131')).toBe(DISCOVERY_ENTERED);
+        // The next write upgrades the record in place.
+        store.mark('nova:132', DISCOVERY_ENTERED);
+        expect(storage.getItem(key)).toBe(stored([
+            ['nova:130', DISCOVERY_LANDED], ['nova:131', DISCOVERY_ENTERED],
+            ['nova:132', DISCOVERY_ENTERED],
+        ]));
+        expect(storage.getItem(`${key}:quarantine`)).toBeNull();
+    });
+
+    it('reads back what it writes', () => {
+        storage.setItem(key, stored([['nova:130', DISCOVERY_LANDED]]));
+        expect(new DiscoveryStore(storage).level('nova:130'))
+            .toBe(DISCOVERY_LANDED);
+    });
+
+    it('refuses a record from a newer build, parks it, and says why', () => {
+        const future = JSON.stringify(
+            { version: DISCOVERY_VERSION + 1, entries: [['nova:130', 2]] });
+        storage.setItem(key, future);
+        const warn = spyOn(console, 'warn');
+        const store = new DiscoveryStore(storage);
+        expect(store.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        expect(storage.getItem(`${key}:quarantine`)).toBe(future);
+        expect(storage.getItem(key)).toBeNull();
+        expect(warn).toHaveBeenCalledTimes(1);
+        expect(warn.calls.mostRecent().args[0]).toContain('newer build');
+        expect(warn.calls.mostRecent().args[0])
+            .toContain(`version ${DISCOVERY_VERSION + 1}`);
+    });
+
+    it('parks a corrupt record rather than overwriting it on the next mark', () => {
+        storage.setItem(key, '{"version":1,"entries":"nope"}');
+        spyOn(console, 'warn');
+        const store = new DiscoveryStore(storage);
+        store.mark('nova:130', DISCOVERY_ENTERED);
+        expect(storage.getItem(`${key}:quarantine`))
+            .toBe('{"version":1,"entries":"nope"}');
+        expect(storage.getItem(key)).toBe(stored([['nova:130', DISCOVERY_ENTERED]]));
     });
 });
