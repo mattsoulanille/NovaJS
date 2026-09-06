@@ -1,5 +1,6 @@
 import 'jasmine';
 import fs from 'fs';
+import path from 'path';
 import {
     FIRST_PRIVATE_PHYSICAL_CONTROL_BIT, MAX_CONTROL_BIT,
 } from 'novadatainterface/control_bit_namespaces';
@@ -182,7 +183,9 @@ describe('Control bit namespacing across real plug-ins', () => {
 
 /**
  * A real pilot file written before namespacing (bare physical numbers),
- * loaded under the plug-in set it was played with.
+ * loaded under the plug-in set it was played with. The file is a data-fork
+ * JSON pilot (the "novajs-pilot" format), checked in as a fixture like
+ * outfitter_officer_quarters_integration_test's.
  */
 describe('Legacy pilot file under the namespaced plug-in set', () => {
     // extractSaveData reads the module-global discovery cache and
@@ -191,14 +194,12 @@ describe('Legacy pilot file under the namespaced plug-in set', () => {
     beforeEach(() => resetDiscovery());
     afterEach(() => resetDiscovery());
 
-    const PILOT = '/Users/matthew/Projects/NovaJS/pilots_debug/'
-        + 'Shane_Merrol_misisons_bug.plt';
+    // Jasmine runs with cwd = packages/nova (see nova_data_gate.ts).
+    const PILOT = path.join(process.cwd(), 'test_fixtures', 'pilots',
+        'Shane_Merrol_misisons_bug.plt');
     const PLUGINS = ['arpia', 'extra-outfits', 'singularity', 'Planet Rico'];
 
     async function bench() {
-        if (!fs.existsSync(PILOT)) {
-            return undefined;
-        }
         const gameData = await getPluginGameData(PLUGINS);
         if (!gameData) {
             return undefined;
@@ -215,7 +216,7 @@ describe('Legacy pilot file under the namespaced plug-in set', () => {
     it('keeps every stock bit at its number and moves the rest', async () => {
         const b = await bench();
         if (!b) {
-            pending('Pilot file or plug-ins not available');
+            pending('Plug-ins not installed');
             return;
         }
         // The file predates namespacing: numbers only, no pairs.
@@ -261,7 +262,7 @@ describe('Legacy pilot file under the namespaced plug-in set', () => {
     it('round-trips save -> load -> save stably', async () => {
         const b = await bench();
         if (!b) {
-            pending('Pilot file or plug-ins not available');
+            pending('Plug-ins not installed');
             return;
         }
         const entity = new Entity('restored');
@@ -296,7 +297,7 @@ describe('Legacy pilot file under the namespaced plug-in set', () => {
         + 'when it is', async () => {
             const b = await bench();
             if (!b) {
-                pending('Pilot file or plug-ins not available');
+                pending('Plug-ins not installed');
                 return;
             }
             // Written under the full set...
