@@ -19,15 +19,24 @@ import type { DiscoveryHooks } from './display/starmap_plugin.js';
 import type { JumpVisual } from './display/jump_fade_plugin.js';
 import type { GpuParticleSystem } from './display/gpu_particles.js';
 
+/**
+ * The live display settings hung on `window.novaSettings`, e.g.
+ * `novaSettings.jumpVisual = 'fade'`. The plug-in that owns a setting
+ * defines its property (with a getter/setter) when it builds. A new live
+ * setting is declared here and only here, so the console surface grows
+ * in one place.
+ */
+export interface LiveSettings {
+    /** How a hyperspace jump is drawn (jump_fade_plugin). */
+    jumpVisual?: JumpVisual;
+}
+
 declare global {
     interface Window {
         /** The player's ship entity (player_ship_plugin, shipyard, browser.ts). */
         myShip?: Entity;
-        /**
-         * Live display settings, e.g. `novaSettings.jumpVisual = 'fade'`
-         * (jump_fade_plugin defines the property with a getter/setter).
-         */
-        novaSettings?: { jumpVisual?: JumpVisual };
+        /** Live display settings (see LiveSettings). */
+        novaSettings?: LiveSettings;
         /** The comm dialog (hail_dialog_plugin). */
         novaHailDialog?: HailDialog;
         /** The galaxy map (starmap_plugin). */
@@ -40,5 +49,3 @@ declare global {
         novaParticleStats?: () => ReturnType<GpuParticleSystem['stats']>;
     }
 }
-
-export {};
