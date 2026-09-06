@@ -13,12 +13,20 @@ import { completeEntity } from "../nova_plugin/entity_data_loader.js";
 import { makeShip } from "../nova_plugin/make_ship.js";
 import { ControlledByComponent } from "../nova_plugin/ship_control.js";
 import { applyInputRecords, InputRecord } from "./simulation_input.js";
-import { makeDeterminismWorld } from "./determinism_harness.js";
-import { getIntegrationGameData } from "./simulation_test_fixture.js";
+import { makeDeterminismWorld as makeHarnessWorld } from "./determinism_harness.js";
+import { getSyntheticGameData } from "./simulation_test_fixture.js";
 
 type Inputs = InputRecord[];
 
 const PEER = 'test peer';
+
+/**
+ * On the synthetic data set: the rollback contract is about the engine,
+ * not the scenario, and Thessaly Reach's traders and patrol give it a
+ * populated world to converge over.
+ */
+const makeDeterminismWorld = (npcCount: number) =>
+    makeHarnessWorld(npcCount, 'worker', getSyntheticGameData());
 
 function makeRecord(tick: number, events: ControlEvent[],
     peerId: string = PEER): InputRecord {
@@ -68,7 +76,7 @@ async function referenceRun(npcCount: number, schedule: Map<number, InputRecord>
 /** A world with two controlled ships: 'test peer' and 'peer b'. */
 async function makeTwoPeerWorld(): Promise<World> {
     const world = await makeDeterminismWorld(2);
-    const gameData = await getIntegrationGameData();
+    const gameData = await getSyntheticGameData();
     const ids = await gameData.ids;
     const shipData = await gameData.data.Ship.get([...ids.Ship].sort()[0]!);
     const ship = makeShip(shipData);

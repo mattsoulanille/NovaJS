@@ -1,7 +1,7 @@
 import 'jasmine';
 import { NovaIDNotFoundError } from 'novadatainterface/nova_id_not_found_error';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { loadAsteroidGameData } from './asteroid_plugin.js';
 import { loadEntityGameData, loadShipGameData, loadWeaponGameData } from './entity_data_loader.js';
 import { WeaponEntries } from './fire_weapon_plugin.js';
@@ -175,7 +175,10 @@ describe('entity data loader', () => {
 
     it('stages weapons granted by the entity\'s own outfits, not just '
         + 'the ship class\'s stock loadout', async () => {
-        const gameData = await getIntegrationGameData();
+        // On the synthetic data set: the Wren Skiff's stock loadout is a
+        // blaster, and the Harrier Launcher is the purchasable outfit
+        // granting a projectile weapon it lacks.
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         const shipData = await gameData.data.Ship.get([...ids.Ship].sort()[0]!);

@@ -1,8 +1,11 @@
 import 'jasmine';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
 import { runShipBuildWorld } from './ship_build_world.js';
+
+// On the synthetic data set: any purchasable hull exercises the scratch
+// world's resource set.
 
 /**
  * Pins the post-purchase "outfit builder" scratch world: its resource set
@@ -17,7 +20,7 @@ import { runShipBuildWorld } from './ship_build_world.js';
 describe('runShipBuildWorld', () => {
     it('runs a bought ship through SystemPlugin without throwing',
         async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const ids = await gameData.ids;
             const shipData = await gameData.data.Ship.get(ids.Ship[0]);
             const ship = makeShip(shipData);

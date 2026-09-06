@@ -1,7 +1,7 @@
 import 'jasmine';
 import { Sortable } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { makeSystem } from './make_system.js';
 
 /**
@@ -10,6 +10,9 @@ import { makeSystem } from './make_system.js';
  * simulation world's order, and as REACHABILITY in the declared
  * constraint graph — `after` must be a (transitive) successor of
  * `before`, so no registration order could ever flip them.
+ *
+ * On the synthetic data set: the system set is a property of the
+ * platform, not of the scenario the world is built from.
  */
 describe('load-bearing system orderings are declared', () => {
     const pairs: Array<[before: string, after: string, why: string]> = [
@@ -57,7 +60,7 @@ describe('load-bearing system orderings are declared', () => {
     }
 
     async function makeSimWorld(platform: 'worker' | 'node') {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         const world: World = await makeSystem(systemId, gameData, platform, { npcs: false });

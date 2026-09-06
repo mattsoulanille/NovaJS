@@ -7,11 +7,13 @@ import { OutfitsStateComponent } from "../nova_plugin/outfit_plugin.js";
 import { PlanetDataComponent } from "../nova_plugin/planet_plugin.js";
 import { ShipDataComponent, ShipPhysicsComponent } from "../nova_plugin/ship_plugin.js";
 import { WeaponsStateComponent } from "../nova_plugin/weapons_state.js";
-import { getIntegrationGameData } from "./simulation_test_fixture.js";
+import { getSyntheticGameData } from "./simulation_test_fixture.js";
 
+// On the synthetic data set: the sorted-first system (Thessaly Reach, two
+// stellars) and ship (the Wren Skiff) are all these need.
 describe("completeEntity", () => {
     it("attaches derived ship components before the entity enters the world", async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         const shipId = [...ids.Ship].sort()[0]!;
@@ -33,7 +35,7 @@ describe("completeEntity", () => {
     }, 30_000);
 
     it("attaches planet data to planets at system creation", async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         const world = await makeSystem(systemId, gameData, undefined, { npcs: false });

@@ -4,18 +4,19 @@ import { v4 } from "uuid";
 import { DamagedEvent, DeathEvent } from "../nova_plugin/death_plugin.js";
 import { completeEntity } from "../nova_plugin/entity_data_loader.js";
 import { makeNpc } from "../nova_plugin/npc_plugin.js";
-import { makeSimulationBridgeHarness, getIntegrationGameData } from "./simulation_test_fixture.js";
+import { makeSimulationBridgeHarness, getSyntheticGameData } from "./simulation_test_fixture.js";
 
 const LETHAL_DAMAGE = {
     shield: 1e9, armor: 1e9, ionization: 0, ionizationColor: 0,
     knockback: 0, passThroughShield: true, recoil: 0,
 } as never;
 
+// On the synthetic data set: any ship class that can die will do.
 describe("Ship death", () => {
     async function makeWorldWithNpc(owner: string) {
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(getSyntheticGameData());
         const { world } = harness;
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const shipId = [...ids.Ship].sort()[0]!;
         const shipData = await gameData.data.Ship.get(shipId);

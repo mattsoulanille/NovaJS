@@ -3,7 +3,8 @@ import { Position } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { World } from "nova_ecs/world";
-import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
+import { getIntegrationGameData, getSyntheticGameData } from "../communication/simulation_test_fixture.js";
+import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 import { completeEntity } from "./entity_data_loader.js";
 import { FinishJump, FinishJumpEvent, JumpComponent, JumpRouteComponent, MultiJumpContinueComponent, hopIsUnflyableFromHere, reconcileRouteOnArrival, JUMP_ARRIVAL_MARGIN_S, JUMP_DEPART_DELAY_MS, JUMP_DISTANCE, JUMP_SPINUP_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from "./jump_plugin.js";
 import { makeShip } from "./make_ship.js";
@@ -19,8 +20,14 @@ import { DisabledComponent } from "./disabled_component.js";
 
 const SHIP_UUID = 'jump test ship';
 
-async function findLinkedSystems() {
-    const gameData = await getIntegrationGameData();
+/**
+ * The jump sequence itself runs on the SYNTHETIC data set: it needs a
+ * linked pair of systems and an inertial hull that has to slow down to
+ * jump, and Thessaly Reach -> Kestrel Drift in the Wren Skiff is exactly
+ * that. Only the stacked-Sol specs at the end, which pin stock content,
+ * stay on the integration set.
+ */
+async function findLinkedSystems(gameData: GameDataAggregator) {
     const ids = await gameData.ids;
     for (const systemId of [...ids.System].sort()) {
         const system = await gameData.data.System.get(systemId);
@@ -35,9 +42,9 @@ async function findLinkedSystems() {
 }
 
 async function makeJumpHarness() {
-    const gameData = await getIntegrationGameData();
+    const gameData = await getSyntheticGameData();
     const ids = await gameData.ids;
-    const { originId, destinationId } = await findLinkedSystems();
+    const { originId, destinationId } = await findLinkedSystems(gameData);
     const world = await makeSystem(originId, gameData, undefined, { npcs: false });
 
     // Pick a ship with default jump behavior (inertial, must slow
@@ -796,8 +803,8 @@ describe('reconcileRouteOnArrival', () => {
  */
 describe('a route hop naming the system the ship is already in', () => {
     /** A player ship, outside the no-jump zone, in `systemId`'s world. */
-    async function shipInSystem(systemId: string, route: string[]) {
-        const gameData = await getIntegrationGameData();
+    async function shipInSystem(systemId: string, route: string[],
+        gameData: GameDataAggregator) {
         const ids = await gameData.ids;
         const world = await makeSystem(systemId, gameData, undefined,
             { npcs: false });
@@ -880,7 +887,7 @@ describe('a route hop naming the system the ship is already in', () => {
             await gameData.data.System.get(onward);
 
             const { world, ship } = await shipInSystem('nova:130',
-                ['nova:531', onward]);
+                ['nova:531', onward], gameData);
             world.step();
             pressHyperjump(world);
 
@@ -910,8 +917,8 @@ describe('a route hop naming the system the ship is already in', () => {
         }, 60_000);
 
     it('drops a stale head that is not a link of this system', async () => {
-        const gameData = await getIntegrationGameData();
-        const { originId, destinationId } = await findLinkedSystems();
+        const gameData = await getSyntheticGameData();
+        const { originId, destinationId } = await findLinkedSystems(gameData);
         const origin = await gameData.data.System.get(originId);
         // Some system that is neither here nor adjacent: a route planned
         // elsewhere and never re-planned would otherwise sit unflyable at
@@ -920,7 +927,7 @@ describe('a route hop naming the system the ship is already in', () => {
         const far = ids.find(id => id !== originId && !origin.links.includes(id))!;
         expect(far).toBeDefined();
         await gameData.data.System.get(destinationId);
-        const { world, ship } = await shipInSystem(originId, [far, destinationId]);
+        const { world, ship } = await shipInSystem(originId, [far, destinationId], gameData);
         world.step();
         pressHyperjump(world);
         const jump = ship.components.get(JumpComponent);
@@ -929,13 +936,13 @@ describe('a route hop naming the system the ship is already in', () => {
     }, 60_000);
 
     it('is dropped before a multi-jump chain auto-continues', async () => {
-        const gameData = await getIntegrationGameData();
-        const { originId, destinationId } = await findLinkedSystems();
+        const gameData = await getSyntheticGameData();
+        const { originId, destinationId } = await findLinkedSystems(gameData);
         await gameData.data.System.get(destinationId);
         // Arrived in `originId` with the multi-jump continuation marker
         // still set and a route whose head names this very system.
         const { world, ship } = await shipInSystem(originId,
-            [originId, destinationId]);
+            [originId, destinationId], gameData);
         ship.components.set(MultiJumpContinueComponent, { left: 1 });
         world.step();
 
@@ -952,8 +959,9 @@ describe('a route hop naming the system the ship is already in', () => {
             // a jump cancelled at stage 'arriving' has already REACHED its
             // destination, and handing that back points the route at the
             // system the ship is sitting in.
-            const { destinationId } = await findLinkedSystems();
-            const { world, ship } = await shipInSystem(destinationId, []);
+            const gameData = await getSyntheticGameData();
+            const { destinationId } = await findLinkedSystems(gameData);
+            const { world, ship } = await shipInSystem(destinationId, [], gameData);
             // One step to derive the ship's health/physics components.
             world.step();
             ship.components.set(JumpComponent, {

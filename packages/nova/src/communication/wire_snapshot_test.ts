@@ -6,27 +6,34 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { restoreWireWorldSnapshot, SnapshotPoliciesResource, wireSnapshotWorld, WireWorldSnapshot } from 'nova_ecs/plugins/snapshot_plugin';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { completeEntity, loadWireSnapshotGameData } from '../nova_plugin/entity_data_loader.js';
 import { deriveEntityComponents } from '../nova_plugin/entity_factory.js';
 import { makeNpc } from '../nova_plugin/npc_plugin.js';
 import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { compareWorlds, makeDeterminismWorld } from './determinism_harness.js';
 import { applyInputRecords } from './simulation_input.js';
-import { getIntegrationGameData } from './simulation_test_fixture.js';
+import { getSyntheticGameData } from './simulation_test_fixture.js';
 
-/** Two Fed Carriers at close range: guided missiles, turret bolts,
- * damage, and bay fighters within a few hundred ticks. */
-async function addFightingCarriers(world: World) {
-    const gameData = await getIntegrationGameData();
+/**
+ * On the synthetic data set. A Heron Warden and a Gannet Corsair at
+ * close range: the corsair's guided missiles against the warden's point
+ * defence, the warden's beam, turret bolts and bay-launched skiffs,
+ * damage on both — every transient combat entity within a few hundred
+ * ticks.
+ */
+async function addFightingShips(world: World) {
+    const gameData = await getSyntheticGameData();
+    const classes = [SYNTHETIC.ships.warden, SYNTHETIC.ships.corsair];
     for (const [i, x] of [-150, 150].entries()) {
-        const data = await gameData.data.Ship.get('nova:143');
+        const data = await gameData.data.Ship.get(classes[i]);
         const npc = makeNpc(data!);
         const movement = npc.components.get(MovementStateComponent)!;
         movement.position = new Position(x, 0);
         movement.rotation = new Angle(i === 0 ? Math.PI / 2 : -Math.PI / 2);
         movement.velocity = new Vector(0, 0);
         await completeEntity(world, npc);
-        world.entities.set(`carrier ${i}`, npc);
+        world.entities.set(`fighter ${i}`, npc);
     }
 }
 
@@ -38,8 +45,8 @@ async function addFightingCarriers(world: World) {
  */
 describe('Wire snapshots', () => {
     it('a wire-restored world continues in lockstep with the original', async () => {
-        const source = await makeDeterminismWorld(0);
-        await addFightingCarriers(source);
+        const source = await makeDeterminismWorld(0, 'worker', getSyntheticGameData());
+        await addFightingShips(source);
         // Held-control state on the player ship crosses the wire too.
         applyInputRecords(source, [{
             peerId: 'test peer',
@@ -83,7 +90,7 @@ describe('Wire snapshots', () => {
         const onTheWire = JSON.parse(
             JSON.stringify(snapshot)) as WireWorldSnapshot;
 
-        const target = await makeDeterminismWorld(0);
+        const target = await makeDeterminismWorld(0, 'worker', getSyntheticGameData());
         await loadWireSnapshotGameData(target, onTheWire);
         restoreWireWorldSnapshot(target, onTheWire, deriveEntityComponents);
 

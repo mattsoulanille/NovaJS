@@ -70,6 +70,12 @@ npm test                   # turbo run test — every package
 
 Specs that read the real game data mark themselves *pending* when `packages/nova/Nova_Data/Nova Files` is absent, so the suite is green (with several hundred pending specs) on a checkout without data; install it to run them. To run one package with a fixed spec order: `cd packages/nova && npx jasmine --config=jasmine.json --seed=22715`.
 
+#### The synthetic data set
+
+`packages/nova/test_fixtures/synthetic/` is a small, entirely original Nova scenario in the game's own file format — four systems, five stellars (a port, a moon, a hypergate pair, a hidden station), three ship classes with hand-drawn sprites, a blaster / missile / beam / turret / point defence / fighter bay / cloak, two governments, NPC tables, missions, ranks and a default pilot — that loads through the same parser as the real files and needs no copyrighted data. Specs that are about the engine rather than about stock content run on it through `getSyntheticGameData()` (`packages/nova/src/communication/simulation_test_fixture.ts`, whose header has the conversion recipe); `SYNTHETIC` in `packages/novaparse/src/synthetic/universe.ts` names its ids.
+
+The `.ndat` is generated, checked in, and pinned by a spec: after editing the scenario (`packages/novaparse/src/synthetic/`), run `cd packages/novaparse && npm run synthetic-data` and commit the result.
+
 ## Deployment
 
 `docker/Dockerfile` builds a production image of the `nova` package (`turbo prune` keeps only what it needs); `docker/docker-compose.yml` runs it on port 8000 with your `packages/nova/Nova_Data` mounted in:
