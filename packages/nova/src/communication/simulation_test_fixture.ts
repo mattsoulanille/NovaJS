@@ -13,10 +13,8 @@ import { completeEntity } from "../nova_plugin/entity_data_loader.js";
 import { makeShip } from "../nova_plugin/make_ship.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import {
-    SimulationBridgeClient,
-    SimulationBridgeHost,
-} from "./simulation_bridge.js";
+import { SimulationBridgeClient } from "./simulation_bridge_client.js";
+import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
 

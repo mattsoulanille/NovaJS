@@ -9,7 +9,7 @@ process.chdir('/Users/matthew/Projects/NovaJS/packages/nova');
 const { SocketChannelClient } = await import('./dist/src/communication/socket_channel_client.js');
 const { CommunicatorClient } = await import('./dist/src/communication/communicator_client.js');
 const { MultiRoom } = await import('./dist/src/communication/multi_room_communicator.js');
-const { SimulationBridgeHost } = await import('./dist/src/communication/simulation_bridge.js');
+const { SimulationBridgeHost } = await import('./dist/src/communication/simulation_bridge_host.js');
 const { makeSystem } = await import('./dist/src/nova_plugin/make_system.js');
 const { SimulationGameData } = await import('./dist/src/client/gamedata/simulation_game_data.js');
 const { CommunicatorResource } = await import('nova_ecs/plugins/multiplayer_plugin');

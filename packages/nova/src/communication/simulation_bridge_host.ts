@@ -1,28 +1,29 @@
 import { isLeft } from "fp-ts/lib/Either.js";
-import { Entity } from "nova_ecs/entity";
 import { RollbackSimulation } from "nova_ecs/plugins/rollback_plugin";
 import { restoreWireWorldSnapshot, restoreWorld, snapshotWorld, SnapshotPolicies, SnapshotPoliciesResource, wireSnapshotOfSnapshot, WorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { EncodedEntity, Serializer, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
-import { Time, TimeResource } from "nova_ecs/plugins/time_plugin";
+import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
+import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { loadEntityGameData, loadOutfitsGameData, loadWireSnapshotGameData } from "../nova_plugin/entity_data_loader.js";
 import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
-import { warnThrottled } from "../common/log_throttle.js";
 import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { HailAction } from "../nova_plugin/hail_plugin.js";
 import { EscortAction } from "../nova_plugin/escort_action.js";
 import { AcceptedMission } from "../nova_plugin/mission_accept.js";
-import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, PROTOCOL_VERSION, RollbackLogEntry, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
+import { canonicalDesyncHash, DesyncDump, RollbackLogEntry, STATE_HASH_INTERVAL, wrapRollbackMessage } from "./rollback_protocol.js";
+import { relayServer, requestCatchUp, subscribeRollbackMessages } from "./rollback_messages.js";
 import { makeNpc } from "../nova_plugin/npc_plugin.js";
-import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
 import { PEER_LOCAL_COMPONENTS } from "../nova_plugin/ship_control.js";
-import { ControlEvent, ControlsSubject, EcsControlEvent } from "../nova_plugin/controls_plugin.js";
+import { ControlEvent } from "../nova_plugin/controls_plugin.js";
 import { AnalogControlState } from "../nova_plugin/ship_control.js";
 import { EncodedSimulationBridgeEvent, getRegisteredSimulationBridgeEvents } from "./simulation_bridge_events.js";
+import { SimulationBridgeHostApi, SimulationStatus } from "./simulation_bridge_api.js";
+import { DeltaFrameEncoder, SimulationFrame } from "./simulation_frame.js";
+import { RoomClock } from "./room_clock.js";
 
 
 /**
@@ -75,124 +76,6 @@ const CHECKPOINT_SNAPSHOT_RETENTION = 32;
 /** How many rollback-machinery events the black-box ring retains. */
 const ROLLBACK_LOG_CAPACITY = 64;
 
-/**
- * Tick pacing: the peer aims to run this many ticks ahead of the
- * extrapolated server clock, so its input records reach the relay
- * before the relay's clock passes their tick. (A record behind the
- * relay clock gets retimed for the room but not for its sender —
- * a divergence desync detection then has to clean up.)
- */
-const PACING_LEAD_TICKS = 4;
-/** Clock slew per tick of drift: 1% rate change per tick. */
-const PACING_GAIN = 0.01;
-/**
- * The pacing rate stays within ±5% of real time: drift is corrected
- * by running time imperceptibly fast or slow, never by visibly
- * skipping or doubling ticks. (Gross divergence is snapped instead;
- * see the pump.)
- */
-const PACING_MAX_SLEW = 0.05;
-
-export interface EntityDelta {
-    /** Present only when the entity's name changed. */
-    name?: string;
-    /** Components whose encoded form changed since the last snapshot. */
-    changed: [string, unknown][];
-    /** Names of components removed since the last snapshot. */
-    removed: string[];
-}
-
-/**
- * How the sim's clock should track the room's. Present only once a
- * tickSync has arrived (i.e. in a live multiplayer room).
- */
-export interface SimulationPacing {
-    /**
-     * Multiply real elapsed time by this before accumulating
-     * simulation steps: a smooth slew toward the room's clock.
-     */
-    rate: number;
-    /**
-     * Raw drift: how far the sim trails its target tick (negative
-     * when ahead). Small values are corrected by `rate`; the pump
-     * snaps only when this is beyond slewing (e.g. a hidden tab).
-     */
-    behindTicks: number;
-}
-
-/**
- * A delta frame. Entities absent from `added`, `changed`, and `removed`
- * are unchanged since the previous snapshot from the same host.
- */
-export interface SimulationFrame {
-    added: [string, EncodedEntity][];
-    changed: [string, EntityDelta][];
-    removed: string[];
-    time?: Time;
-    events: EncodedSimulationBridgeEvent[];
-    pacing?: SimulationPacing;
-}
-
-export interface SimulationBridgeHostApi {
-    controlEvents(events: ControlEvent[]): void;
-    analogControl(control: AnalogControlState): void;
-    setTarget(target: string | null): void;
-    setPlanetTarget(target: string | null): void;
-    hail(action: HailAction): void;
-    escortAction(action: EscortAction): void | Promise<void>;
-    acceptMission(accepted: AcceptedMission): void | Promise<void>;
-    step(count?: number): void;
-    snapshot(): SimulationFrame;
-    addEntity(uuid: string, entity: EncodedEntity): void | Promise<void>;
-    removeEntity(uuid: string): void;
-    setPlayerJumpRoute(route: string[]): void;
-    spawnNpc(shipId: string): void | Promise<void>;
-    /** Debug/netcode: roll back `ticks` and resimulate. */
-    rewind(ticks: number): boolean;
-    /** Desync recovery: rebuild from genesis plus the room's input log. */
-    resync(): Promise<boolean>;
-    /** Diagnostics: sim tick, desyncs seen, last join result. */
-    status(): SimulationStatus;
-    /** Diagnostics: per-entity world hashes (peer-local excluded),
-     * for diffing against another world's view. */
-    entityHashes(): { tick: number, entities: [string, string][] };
-}
-
-export interface SimulationStatus {
-    tick: number;
-    desyncCount: number;
-    /** Result of the most recent joinRoom, if one ran. */
-    joined?: boolean;
-    /** Recent worker-side log lines, newest last (worker entry only). */
-    logs?: string[];
-}
-
-export interface AsyncSimulationBridgeHostApi {
-    controlEvents(events: ControlEvent[]): Promise<void>;
-    analogControl(control: AnalogControlState): Promise<void>;
-    setTarget(target: string | null): Promise<void>;
-    setPlanetTarget(target: string | null): Promise<void>;
-    hail(action: HailAction): Promise<void>;
-    escortAction(action: EscortAction): Promise<void>;
-    acceptMission(accepted: AcceptedMission): Promise<void>;
-    step(count?: number): Promise<void>;
-    snapshot(): Promise<SimulationFrame>;
-    addEntity(uuid: string, entity: EncodedEntity): Promise<void>;
-    removeEntity(uuid: string): Promise<void>;
-    setPlayerJumpRoute(route: string[]): Promise<void>;
-    spawnNpc(shipId: string): Promise<void>;
-    rewind(ticks: number): Promise<boolean>;
-    resync(): Promise<boolean>;
-    status(): Promise<SimulationStatus>;
-    entityHashes(): Promise<{ tick: number, entities: [string, string][] }>;
-}
-
-interface SentEntityRecord {
-    name: string | undefined;
-    /** Component name -> JSON of the component's encoded form as last sent. */
-    components: Map<string, string>;
-}
-
 export class SimulationBridgeHost implements SimulationBridgeHostApi {
     private queuedEvents: EncodedSimulationBridgeEvent[] = [];
     /**
@@ -214,7 +97,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * is unchanged.
      */
     private eventsForwardedThrough = -1;
-    private lastSent = new Map<string, SentEntityRecord>();
+    private frameEncoder = new DeltaFrameEncoder();
     private rollback: RollbackSimulation<InputRecord[]>;
     /** Inputs that apply at the next stepped tick. */
     private pendingInputs: SimulationInput[] = [];
@@ -230,10 +113,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * The room's clock: the server's canonical tick from its periodic
      * tickSync, and when it arrived — extrapolated between syncs.
      */
-    private lastTickSync?: { tick: number, at: number };
-    /** Lightly smoothed pacing drift; tickSync arrival jitter shifts
-     * the raw estimate by a tick or two frame to frame. */
-    private smoothedDrift?: number;
+    private roomClock = new RoomClock();
     /**
      * The pre-join genesis state. Desync recovery restores it and
      * resimulates the relay's input log — the late-join reconstruction,
@@ -306,52 +186,20 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.eventsForwardedThrough = this.rollback.tick;
         // Receive relayed rollback-protocol messages from the room.
         const communicator = world.resources.get(CommunicatorResource);
-        communicator?.messages.subscribe(({ source, message }) => {
-            // Trust model item 4 (rollback_protocol.ts): every legitimate
-            // rollback message a peer receives is server-originated — the relay is the single
-            // fan-out, and it stamps each record's peerId with the
-            // socket it came from. Anything from another source is a
-            // forgery (a tickSync to derail pacing, a desync naming us,
-            // a record wearing our own peerId/seq to move our applied
-            // inputs, an inputLog steering our ship as "us") and is
-            // dropped. The server also no longer relays client-chosen
-            // destinations (communicator_server.ts), so this is belt
-            // and braces.
-            if (!communicator.servers.value.has(source)) {
-                warnThrottled(`bridge-source:${source}`, () =>
-                    `Ignoring rollback message from non-server peer ${source}`);
-                return;
-            }
-            const rollbackMessage = unwrapRollbackMessage(message);
-            if (!rollbackMessage) {
-                return;
-            }
-            switch (rollbackMessage.kind) {
-                case 'inputs':
-                    this.integrateStaged(rollbackMessage.record);
-                    break;
-                case 'tickSync':
-                    this.lastTickSync = {
-                        tick: rollbackMessage.tick,
-                        at: performance.now(),
-                    };
-                    break;
-                case 'inputLog':
-                    for (const record of rollbackMessage.records) {
+        if (communicator) {
+            subscribeRollbackMessages(communicator, {
+                inputs: record => this.integrateStaged(record),
+                tickSync: tick => this.roomClock.sync(tick),
+                inputLog: records => {
+                    for (const record of records) {
                         this.integrateStaged(record);
                     }
-                    break;
-                case 'desync':
-                    this.handleDesync(rollbackMessage.tick,
-                        rollbackMessage.hashes, rollbackMessage.canonical);
-                    break;
-                case 'desyncDumpRequest':
-                    // The server wants this peer's state history as a
-                    // reference (e.g. its own archive was outvoted).
-                    this.sendDesyncDump();
-                    break;
-            }
-        });
+                },
+                desync: (tick, hashes, canonical) =>
+                    this.handleDesync(tick, hashes, canonical),
+                desyncDumpRequest: () => this.sendDesyncDump(),
+            });
+        }
         for (const registration of getRegisteredSimulationBridgeEvents()) {
             world.events.get(registration.event).subscribe(({ data, entities }) => {
                 const tick = this.steppingTick;
@@ -446,7 +294,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 // tick and apply when the catch-up reaches it; in
                 // steady state the local tick leads the clock and
                 // this is a no-op.
-                const estimated = this.estimatedServerTick();
+                const estimated = this.roomClock.estimatedServerTick();
                 const tick = Math.max(this.rollback.tick + 1,
                     estimated === undefined ? 0 : Math.ceil(estimated) + 1);
                 const communicator = this.world.resources.get(CommunicatorResource);
@@ -491,77 +339,30 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         if (!communicator?.uuid) {
             return false;
         }
-        const catchUp = await new Promise<
-            {
-                tick: number, records: InputRecord[],
-                baseline?: ArchiveBaseline,
-            } | undefined
-        >(resolve => {
-            const subscription = communicator.messages.subscribe(({ source, message }) => {
-                // Only the relay answers a join; a catchUp from anyone
-                // else would hand us a fabricated world to reconstruct.
-                if (!communicator.servers.value.has(source)) {
-                    return;
-                }
-                const rollbackMessage = unwrapRollbackMessage(message);
-                if (rollbackMessage?.kind === 'catchUp') {
-                    clearInterval(retry);
-                    clearTimeout(timeout);
-                    subscription.unsubscribe();
-                    // Records relayed to us before this reply were
-                    // logged by the relay before it built the reply
-                    // (messages are ordered), so they are already in
-                    // the catch-up log: drop them or they apply twice.
-                    this.remoteInputs = [];
-                    this.remoteInputsGeneration++;
-                    // Our published records are all in the catch-up
-                    // log (retimed where the relay retimed them);
-                    // in-flight echoes must not move anything.
-                    this.sentRecords.clear();
-                    // The reply carries the relay's clock: seed the
-                    // estimate now rather than waiting up to a second
-                    // for the first periodic tickSync. Without this,
-                    // inputs recorded right after a join (the arriving
-                    // ship's insertion after a hyperjump) are stamped
-                    // with the local tick, which trails the relay —
-                    // the relay then retimes the record for everyone
-                    // but the sender, and the sender's own ship
-                    // diverges until a resync rebuilds it from the
-                    // log.
-                    this.lastTickSync = {
-                        tick: rollbackMessage.tick,
-                        at: performance.now(),
-                    };
-                    resolve(rollbackMessage);
-                }
+        const catchUp = await requestCatchUp(communicator, { timeoutMs, fresh },
+            reply => {
+                // Records relayed to us before this reply were
+                // logged by the relay before it built the reply
+                // (messages are ordered), so they are already in
+                // the catch-up log: drop them or they apply twice.
+                this.remoteInputs = [];
+                this.remoteInputsGeneration++;
+                // Our published records are all in the catch-up
+                // log (retimed where the relay retimed them);
+                // in-flight echoes must not move anything.
+                this.sentRecords.clear();
+                // The reply carries the relay's clock: seed the
+                // estimate now rather than waiting up to a second
+                // for the first periodic tickSync. Without this,
+                // inputs recorded right after a join (the arriving
+                // ship's insertion after a hyperjump) are stamped
+                // with the local tick, which trails the relay —
+                // the relay then retimes the record for everyone
+                // but the sender, and the sender's own ship
+                // diverges until a resync rebuilds it from the
+                // log.
+                this.roomClock.sync(reply.tick);
             });
-            const request = () => {
-                const server = [...communicator.servers.value][0];
-                if (server) {
-                    // Resyncs ask for a baseline captured now: the log
-                    // tail over a fresh baseline is just the transit
-                    // window, so recovery costs ~200ms instead of the
-                    // 1-2s rebuild of an up-to-30s-old baseline's tail.
-                    communicator.sendMessage(wrapRollbackMessage({
-                        kind: 'joinRequest',
-                        protocol: PROTOCOL_VERSION,
-                        ...(fresh ? { fresh } : {}),
-                    }), server);
-                }
-            };
-            // The relay may not exist yet when the first peer joins.
-            // Space the retries out: every request costs the server a
-            // full catch-up reply (baseline + log, megabytes), and
-            // stacking those drowns exactly the slow links that need
-            // the retry.
-            const retry = setInterval(request, 3000);
-            const timeout = setTimeout(() => {
-                clearInterval(retry);
-                subscription.unsubscribe();
-                resolve(undefined);
-            }, timeoutMs);
-            request();
-        });
         if (!catchUp) {
             console.warn('No rollback relay responded; starting at tick 0');
             this.lastJoinSucceeded = false;
@@ -591,10 +392,10 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // the worker keeps servicing room traffic mid-rebuild, and
         // re-targeted afterward since the clock moves while it runs.
         await this.rollback.fastForward(Math.max(catchUp.tick,
-            Math.ceil(this.estimatedServerTick() ?? 0)),
+            Math.ceil(this.roomClock.estimatedServerTick() ?? 0)),
             FAST_FORWARD_YIELD_TICKS);
         for (let pass = 0; pass < 3; pass++) {
-            const target = Math.ceil(this.estimatedServerTick() ?? 0);
+            const target = Math.ceil(this.roomClock.estimatedServerTick() ?? 0);
             if (target - this.rollback.tick <= 30) {
                 break;
             }
@@ -611,7 +412,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.steppingTick = undefined;
         // The local tick just jumped; stale smoothed drift would slew
         // against the new position.
-        this.smoothedDrift = undefined;
+        this.roomClock.resetDrift();
         this.lastJoinSucceeded = true;
         this.logRollbackEvent('join', {
             catchUpTick: catchUp.tick,
@@ -817,11 +618,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     private publishInputs(record: InputRecord) {
         const communicator = this.world.resources.get(CommunicatorResource);
-        if (!communicator?.uuid) {
-            return;
-        }
-        const server = [...communicator.servers.value][0];
-        if (!server) {
+        const server = relayServer(communicator);
+        if (!communicator || !server) {
             return;
         }
         communicator.sendMessage(wrapRollbackMessage({
@@ -837,8 +635,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     private publishStateHashes() {
         const communicator = this.world.resources.get(CommunicatorResource);
-        const server = communicator?.uuid
-            ? [...communicator.servers.value][0] : undefined;
+        const server = relayServer(communicator);
         for (const [tick, hash] of this.checkpointHashes) {
             if (tick <= this.rollback.tick - STATE_HASH_SETTLE_TICKS) {
                 this.checkpointHashes.delete(tick);
@@ -903,8 +700,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     private sendDesyncDump(desyncTick?: number) {
         const communicator = this.world.resources.get(CommunicatorResource);
-        const server = communicator?.uuid
-            ? [...communicator.servers.value][0] : undefined;
+        const server = relayServer(communicator);
         if (!communicator || !server) {
             return;
         }
@@ -1099,11 +895,11 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      */
     async acceptMission(accepted: AcceptedMission) {
         for (const ship of accepted.ships ?? []) {
-            const decoded = this.serializer.decode(ship.entity as EncodedEntity);
+            const decoded = this.serializer.decode(ship.entity);
             if (isLeft(decoded)) {
                 throw new Error('Failed to decode mission ship: '
                     + this.serializer.describeDecodeFailure(
-                        ship.entity as EncodedEntity, decoded.left));
+                        ship.entity, decoded.left));
             }
             await loadEntityGameData(this.world, decoded.right);
         }
@@ -1115,35 +911,6 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // for every other world applying this record.
         await loadOutfitsGameData(this.world, grantedOutfitIds(accepted));
         this.schedule({ kind: 'acceptMission', accepted });
-    }
-
-    /**
-     * How this peer's clock should slew to track the room's: a rate
-     * factor proportional to the drift between the local tick and the
-     * extrapolated server tick plus a small send-ahead lead, clamped
-     * so correction is a gradual speed change rather than a skip.
-     */
-    /** The room's clock now, extrapolated from the last tickSync. */
-    private estimatedServerTick(): number | undefined {
-        if (!this.lastTickSync) {
-            return undefined;
-        }
-        const elapsed = performance.now() - this.lastTickSync.at;
-        return this.lastTickSync.tick + elapsed / SIMULATION_STEP_MS;
-    }
-
-    private pacing(): SimulationPacing | undefined {
-        const estimatedServerTick = this.estimatedServerTick();
-        if (estimatedServerTick === undefined) {
-            return undefined;
-        }
-        const behindTicks =
-            estimatedServerTick + PACING_LEAD_TICKS - this.rollback.tick;
-        this.smoothedDrift = this.smoothedDrift === undefined ? behindTicks
-            : this.smoothedDrift * 0.9 + behindTicks * 0.1;
-        const rate = 1 + Math.max(-PACING_MAX_SLEW, Math.min(
-            PACING_MAX_SLEW, this.smoothedDrift * PACING_GAIN));
-        return { rate, behindTicks };
     }
 
     snapshot(): SimulationFrame {
@@ -1166,70 +933,8 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         // for — a tick it did not belong to.
         this.eventsForwardedThrough = this.rollback.tick;
         this.steppingTick = undefined;
-        const serializer = this.serializer;
-
-        const added: [string, EncodedEntity][] = [];
-        const changed: [string, EntityDelta][] = [];
-        const seen = new Set<string>();
-
-        for (const [uuid, entity] of this.world.entities) {
-            if (uuid === "singleton") {
-                continue;
-            }
-            seen.add(uuid);
-            const previous = this.lastSent.get(uuid);
-
-            const encodedComponents: [string, unknown][] = [];
-            const record: SentEntityRecord = {
-                name: entity.name,
-                components: new Map(),
-            };
-            for (const [component, data] of entity.components) {
-                if (!serializer.hasComponent(component)) {
-                    continue;
-                }
-                const encoded = serializer.encodeComponent(component, data);
-                encodedComponents.push([component.name, encoded]);
-                record.components.set(component.name,
-                    JSON.stringify(encoded) ?? 'undefined');
-            }
-
-            if (!previous) {
-                added.push([uuid, {
-                    name: entity.name,
-                    components: encodedComponents,
-                } as EncodedEntity]);
-            } else {
-                const delta: EntityDelta = { changed: [], removed: [] };
-                if (previous.name !== entity.name) {
-                    delta.name = entity.name;
-                }
-                for (const [componentName, encoded] of encodedComponents) {
-                    if (previous.components.get(componentName)
-                        !== record.components.get(componentName)) {
-                        delta.changed.push([componentName, encoded]);
-                    }
-                }
-                for (const componentName of previous.components.keys()) {
-                    if (!record.components.has(componentName)) {
-                        delta.removed.push(componentName);
-                    }
-                }
-                if (delta.name !== undefined || delta.changed.length > 0
-                    || delta.removed.length > 0) {
-                    changed.push([uuid, delta]);
-                }
-            }
-            this.lastSent.set(uuid, record);
-        }
-
-        const removed: string[] = [];
-        for (const uuid of this.lastSent.keys()) {
-            if (!seen.has(uuid)) {
-                removed.push(uuid);
-                this.lastSent.delete(uuid);
-            }
-        }
+        const { added, changed, removed } =
+            this.frameEncoder.encode(this.world, this.serializer);
 
         return {
             added,
@@ -1237,7 +942,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             removed,
             time: this.world.resources.get(TimeResource),
             events,
-            pacing: this.pacing(),
+            pacing: this.roomClock.pacing(this.rollback.tick),
         };
     }
 
@@ -1246,7 +951,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
      * every entity in full.
      */
     resetSync() {
-        this.lastSent.clear();
+        this.frameEncoder.reset();
     }
 
     async addEntity(uuid: string, entity: EncodedEntity) {
@@ -1261,7 +966,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 ...entity,
                 components: [...entity.components].filter(
                     ([name]) => !PEER_LOCAL_COMPONENTS.has(name)),
-            } as unknown as EncodedEntity;
+            };
         }
         const decoded = this.serializer.decode(entity);
         if (isLeft(decoded)) {
@@ -1302,233 +1007,7 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.schedule({
             kind: 'addEntity',
             uuid: v4(),
-            entity: structuredClone(this.serializer.encode(npc)) as EncodedEntity,
+            entity: structuredClone(this.serializer.encode(npc)),
         });
-    }
-}
-
-export class SimulationBridgeClient {
-    constructor(
-        private host: SimulationBridgeHostApi,
-        private serializer: Serializer,
-    ) { }
-
-    snapshot(): SimulationFrame {
-        return structuredClone(this.host.snapshot()) as SimulationFrame;
-    }
-
-    step(count = 1) {
-        this.host.step(count);
-    }
-
-    controlEvents(events: ControlEvent[]) {
-        this.host.controlEvents(structuredClone(events));
-    }
-
-    analogControl(control: AnalogControlState) {
-        this.host.analogControl(structuredClone(control));
-    }
-
-    setTarget(target: string | null) {
-        this.host.setTarget(target);
-    }
-
-    setPlanetTarget(target: string | null) {
-        this.host.setPlanetTarget(target);
-    }
-
-    hail(action: HailAction) {
-        this.host.hail(structuredClone(action));
-    }
-
-    escortAction(action: EscortAction) {
-        return this.host.escortAction(structuredClone(action));
-    }
-
-    acceptMission(accepted: AcceptedMission) {
-        return this.host.acceptMission(structuredClone(accepted));
-    }
-
-    addEntity(uuid: string, entity: Entity) {
-        return this.host.addEntity(uuid, structuredClone(this.serializer.encode(entity)) as EncodedEntity);
-    }
-
-    removeEntity(uuid: string) {
-        this.host.removeEntity(uuid);
-    }
-
-    setPlayerJumpRoute(route: string[]) {
-        this.host.setPlayerJumpRoute(structuredClone(route));
-    }
-
-    rewind(ticks: number) {
-        return this.host.rewind(ticks);
-    }
-
-    resync() {
-        return this.host.resync();
-    }
-
-    status() {
-        return this.host.status();
-    }
-
-    entityHashes() {
-        return this.host.entityHashes();
-    }
-
-    spawnNpc(shipId: string) {
-        return this.host.spawnNpc(shipId);
-    }
-
-    getSerializer() {
-        return this.serializer;
-    }
-
-    decodeEntity(entity: EncodedEntity) {
-        const decoded = this.serializer.decode(entity);
-        if (isLeft(decoded)) {
-            throw new Error(`Failed to decode entity: ${this.serializer.describeDecodeFailure(entity, decoded.left)}`);
-        }
-        return decoded.right;
-    }
-}
-
-/**
- * Thrown (as a rejection) by every in-flight or later call on an
- * AsyncSimulationBridgeClient once it has been closed. Callers that
- * race a system transition (the frame pump) catch this and bail out.
- */
-export class SimulationBridgeClosedError extends Error {
-    constructor() {
-        super('Simulation bridge closed');
-        this.name = 'SimulationBridgeClosedError';
-    }
-}
-
-export class AsyncSimulationBridgeClient {
-    /**
-     * Rejects when close() runs. Every host call races against it:
-     * closing a bridge whose worker is terminated mid-call would
-     * otherwise leave the caller's promise unsettled FOREVER (a
-     * message posted to a terminated worker gets no reply), which
-     * wedged the browser's frame pump and froze every transit that
-     * raced it (the hypergate black screen / jump white screen hang).
-     */
-    private closedRejection: Promise<never>;
-    private rejectClosed!: (error: Error) => void;
-    private closed = false;
-
-    constructor(
-        private host: AsyncSimulationBridgeHostApi,
-        private serializer: Serializer,
-        private closeImpl?: () => void | Promise<void>,
-    ) {
-        this.closedRejection = new Promise<never>((_, reject) => {
-            this.rejectClosed = reject;
-        });
-        // If close() runs with no call in flight, the bare rejection
-        // must not surface as an unhandled rejection.
-        this.closedRejection.catch(() => { });
-    }
-
-    /**
-     * Races a worker call against bridge closure so it always settles.
-     */
-    private guard<T>(call: () => Promise<T>): Promise<T> {
-        if (this.closed) {
-            return Promise.reject(new SimulationBridgeClosedError());
-        }
-        return Promise.race([call(), this.closedRejection]);
-    }
-
-    async snapshot(): Promise<SimulationFrame> {
-        return await this.guard(() => this.host.snapshot());
-    }
-
-    async step(count = 1) {
-        await this.guard(() => this.host.step(count));
-    }
-
-    async controlEvents(events: ControlEvent[]) {
-        await this.guard(() => this.host.controlEvents(events));
-    }
-
-    async analogControl(control: AnalogControlState) {
-        await this.guard(() => this.host.analogControl(control));
-    }
-
-    async setTarget(target: string | null) {
-        await this.guard(() => this.host.setTarget(target));
-    }
-
-    async setPlanetTarget(target: string | null) {
-        await this.guard(() => this.host.setPlanetTarget(target));
-    }
-
-    async hail(action: HailAction) {
-        await this.guard(() => this.host.hail(action));
-    }
-
-    async escortAction(action: EscortAction) {
-        await this.guard(() => this.host.escortAction(action));
-    }
-
-    async acceptMission(accepted: AcceptedMission) {
-        await this.guard(() => this.host.acceptMission(accepted));
-    }
-
-    async addEntity(uuid: string, entity: Entity) {
-        await this.guard(() =>
-            this.host.addEntity(uuid, this.serializer.encode(entity)));
-    }
-
-    async removeEntity(uuid: string) {
-        await this.guard(() => this.host.removeEntity(uuid));
-    }
-
-    async setPlayerJumpRoute(route: string[]) {
-        await this.guard(() => this.host.setPlayerJumpRoute(route));
-    }
-
-    async spawnNpc(shipId: string) {
-        await this.guard(() => this.host.spawnNpc(shipId));
-    }
-
-    async rewind(ticks: number) {
-        return this.guard(() => this.host.rewind(ticks));
-    }
-
-    async resync() {
-        return this.guard(() => this.host.resync());
-    }
-
-    async status() {
-        return this.guard(() => this.host.status());
-    }
-
-    async entityHashes() {
-        return this.guard(() => this.host.entityHashes());
-    }
-
-    getSerializer() {
-        return this.serializer;
-    }
-
-    decodeEntity(entity: EncodedEntity) {
-        const decoded = this.serializer.decode(entity);
-        if (isLeft(decoded)) {
-            throw new Error(`Failed to decode entity: ${this.serializer.describeDecodeFailure(entity, decoded.left)}`);
-        }
-        return decoded.right;
-    }
-
-    async close() {
-        // Settle every in-flight (and future) call BEFORE terminating
-        // the worker: terminate() silences the worker, so any call
-        // still awaiting a reply would never settle.
-        this.closed = true;
-        this.rejectClosed(new SimulationBridgeClosedError());
-        await this.closeImpl?.();
     }
 }

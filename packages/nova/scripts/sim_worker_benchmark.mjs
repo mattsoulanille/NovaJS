@@ -37,7 +37,7 @@ import { completeEntity } from '../dist/src/nova_plugin/entity_data_loader.js';
 import { makeNpc } from '../dist/src/nova_plugin/npc_plugin.js';
 import { makeSystem } from '../dist/src/nova_plugin/make_system.js';
 import { GovtComponent } from '../dist/src/nova_plugin/govt_component.js';
-import { SimulationBridgeHost } from '../dist/src/communication/simulation_bridge.js';
+import { SimulationBridgeHost } from '../dist/src/communication/simulation_bridge_host.js';
 
 const args = process.argv.slice(2);
 function argValue(name, fallback) {

@@ -21,7 +21,8 @@ import { makeNpc } from "../nova_plugin/npc_plugin.js";
 import { makeShip } from "../nova_plugin/make_ship.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { SimulationBridgeHost, SimulationFrame } from "./simulation_bridge.js";
+import { SimulationBridgeHost } from "./simulation_bridge_host.js";
+import { SimulationFrame } from "./simulation_frame.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";
 
 const npcCount = Number(process.argv[2] ?? 30);

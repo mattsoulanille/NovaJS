@@ -25,10 +25,8 @@ import { LandEvent, LandEventType } from '../nova_plugin/planet_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ProjectileCollisionEvent, ProjectileCollisionEventType } from '../nova_plugin/projectile_plugin.js';
 import { SoundEvent, SoundEventType } from '../nova_plugin/sound_plugin.js';
-import {
-    SimulationBridgeClient,
-    SimulationBridgeHost,
-} from './simulation_bridge.js';
+import { SimulationBridgeClient } from './simulation_bridge_client.js';
+import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';
 import { wrapRollbackMessage } from './rollback_protocol.js';
 

@@ -23,7 +23,8 @@ import { HailAction } from "../nova_plugin/hail_plugin.js";
 import { EscortAction } from "../nova_plugin/escort_action.js";
 import { AcceptedMission } from "../nova_plugin/mission_accept.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { SimulationBridgeHost, SimulationFrame } from "./simulation_bridge.js";
+import { SimulationBridgeHost } from "./simulation_bridge_host.js";
+import { SimulationFrame } from "./simulation_frame.js";
 import { BrowserSimulationBridgeWorkerApi, BrowserWorkerRoomState } from "./simulation_bridge_browser_worker.js";
 import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
 

@@ -5,7 +5,7 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { SimulationTimeResource } from "../display/simulation_time.js";
-import { EntityDelta, SimulationFrame } from "./simulation_bridge.js";
+import { EntityDelta, SimulationFrame } from "./simulation_frame.js";
 import { emitSimulationBridgeEvent } from "./simulation_bridge_events.js";
 
 /**

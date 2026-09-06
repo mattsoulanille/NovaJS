@@ -4,7 +4,7 @@ import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { parentPort, workerData } from "worker_threads";
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { SimulationBridgeHost } from "./simulation_bridge.js";
+import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";
 
 const nodeEndpoint = nodeEndpointImport as unknown as typeof nodeEndpointImport.default;
