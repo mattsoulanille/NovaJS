@@ -1,5 +1,9 @@
+import { isLeft } from "fp-ts/lib/Either.js";
+import * as t from 'io-ts';
+import { formatIoTsErrors } from "nova_ecs/plugins/serializer_plugin";
 import { WireWorldSnapshot } from "nova_ecs/plugins/snapshot_plugin";
-import { InputRecord } from "./simulation_input.js";
+import { warnThrottled } from "../common/log_throttle.js";
+import { InputRecord, InputRecordType, WireTick } from "./simulation_input.js";
 
 export { InputRecord } from "./simulation_input.js";
 
@@ -41,7 +45,76 @@ export const STATE_HASH_INTERVAL = 60;
 //    toggles 'queueSale' / 'cancelSale' / 'queueUpgrade' / 'cancelUpgrade'
 //    (nova_plugin/escort_action.ts), and PlayerEscort gained the
 //    pendingUpgrade / pendingSale fields the toggles write.
-export const PROTOCOL_VERSION = 4;
+// 5: the trust model (the "Trust model" section below). Validation,
+//    membership, server-only acceptance and sim-side AUTHORISATION of
+//    entity-level inputs. The last is determinism-relevant — a v4 peer
+//    applies a forged removeEntity that a v5 peer drops — hence the
+//    bump; the wire SHAPES are unchanged.
+export const PROTOCOL_VERSION = 5;
+
+/**
+ * ============================================================================
+ * Trust model
+ * ============================================================================
+ *
+ * The single statement of who may say what and who checks it; the code
+ * comments at each enforcement point refer here by item number. The
+ * server is trusted. A client is not: anyone holding the current build
+ * stamp (served publicly at /version) can open a socket and speak this
+ * protocol, so every property below must hold against a hostile client.
+ *
+ *  1. IDENTITY is stamped by the relay. Whatever `peerId` a record
+ *     carries on the wire is discarded: the relay (rollback_relay.ts)
+ *     overwrites it with the socket uuid the record arrived on and
+ *     clamps its tick into the future. No client can speak for another
+ *     peer, or into the past.
+ *
+ *  2. SHAPE is validated at every receiving boundary, before anything
+ *     is dereferenced: RollbackProtocolMessageType (this file) and
+ *     InputRecordType / SimulationInputType (simulation_input.ts) via
+ *     unwrapRollbackMessage. What fails to decode is dropped with a
+ *     rate-limited warning (common/log_throttle.ts). Unknown fields are
+ *     stripped, so junk is never logged, relayed or archived. Below the
+ *     protocol, SocketChannelServer survives unparseable and
+ *     invalid-UTF-8 frames and bounds the frame size.
+ *
+ *  3. The RELAY listens to ROOM MEMBERS only (sockets that sent
+ *     `inRoom` for that room); takes stateHash reports only for
+ *     checkpoint-aligned ticks at or near its own clock; and takes a
+ *     desyncDump only from a peer it convicted or asked (the recorder
+ *     then bounds what it writes and where: server/desync_recorder.ts).
+ *     Client-to-client delivery does not exist: CommunicatorServer
+ *     delivers a client's message to the server alone, whatever
+ *     destination the client named. The relay is the single fan-out.
+ *
+ *  4. A CLIENT accepts rollback-protocol messages — inputs, inputLog,
+ *     tickSync, catchUp, desync, desyncDumpRequest — only from a source
+ *     in `communicator.servers` (simulation_bridge.ts). Every
+ *     legitimate one is relay-originated, so an input record is only
+ *     ever applied with a relay-stamped peerId (or none, in local play
+ *     before any connection exists).
+ *
+ *  5. OWNERSHIP is enforced when a record is APPLIED, deterministically
+ *     (simulation_input.ts). A peer owns its player ship and every
+ *     entity it inserted — hired and carried escorts, mission ships,
+ *     the NPCs it spawned — i.e. the entities whose ControlledBy.peerId
+ *     or MultiplayerData.owner is that peer (browser.ts and the bridge
+ *     stamp each of those with the client's uuid; bay-launched fighters
+ *     inherit their carrier's owner). removeEntity, and addEntity over
+ *     an existing uuid, need ownership of the target; a fresh addEntity
+ *     may not declare another peer as controller or owner; removePeer
+ *     is accepted only from a server uuid; nothing peer-authored may
+ *     name the singleton. A server-stamped record, and a record with no
+ *     peerId, is exempt. Every check reads only synced state plus the
+ *     stamped peer, so all peers drop or apply the same input on the
+ *     same tick — the drop is itself deterministic.
+ *
+ * Deliberately NOT covered: the CONTENT of a peer's own inputs. A peer
+ * may insert whatever it likes as its own (a hull with absurd stats,
+ * an escort it never paid for). The rollback rooms are an input
+ * exchange with integrity, not an anti-cheat layer; that would need a
+ * server-authoritative economy, which is out of scope here.
+ */
 
 /**
  * One notable event in a peer's rollback machinery, for the black-box
@@ -85,7 +158,17 @@ export type RollbackProtocolMessage =
     | { kind: 'inputs', record: InputRecord }
     /** The server's clock, broadcast periodically. */
     | { kind: 'tickSync', tick: number }
-    /** Ask the server for the input log from a tick (late join). */
+    /**
+     * Ask the server for the input log from a tick; answered with an
+     * `inputLog`, which the bridge integrates record by record. DORMANT
+     * ON THE WIRE: no shipped client sends the request — late join and
+     * resync both go through `joinRequest`/`catchUp`, which carry a
+     * baseline as well as the log. The pair is kept as the log-only
+     * resync path the bridge already understands (simulation_bridge.ts)
+     * and the relay tests exercise; it exposes nothing `joinRequest`
+     * does not (the same log, to a room member only, server-stamped).
+     * Removing it is a protocol change: bump PROTOCOL_VERSION with it.
+     */
     | { kind: 'inputLogRequest', fromTick: number }
     | { kind: 'inputLog', records: InputRecord[] }
     /** Join: the input log up to the server's current tick, plus the
@@ -120,13 +203,121 @@ export type RollbackProtocolMessage =
      * before resyncing discards the evidence. */
     | { kind: 'desyncDump', dump: DesyncDump };
 
+/**
+ * ============================================================================
+ * Wire validation
+ * ============================================================================
+ *
+ * `unwrapRollbackMessage` used to be a cast: `{rollback:{kind:'inputs'}}`
+ * (no record) threw a TypeError inside an rxjs subscriber, which rxjs 7
+ * rethrows on a macrotask — an uncaught exception, i.e. the server
+ * process exiting on one message from any admitted client. Everything
+ * the relay and the bridge act on now decodes through these codecs
+ * first; a failure is dropped (and warned about, rate-limited so the
+ * drop path is not itself a log flood).
+ *
+ * The snapshot-bearing messages (catchUp, desyncDump) are validated
+ * STRUCTURALLY — entity/component tuple shapes, not component contents,
+ * which the serializer decodes with its own codecs on restore. A full
+ * deep decode of a megabyte baseline on every join would cost more
+ * than it protects; both messages are server-trusted or gated by the
+ * relay anyway (see simulation_bridge.ts and rollback_relay.ts).
+ */
+
+const WireComponentType = t.tuple([
+    t.string, t.unknown, t.union([t.literal('serializer'), t.literal('wire')]),
+]);
+
+const WireEntityType = t.intersection([
+    t.type({
+        uuid: t.string,
+        components: t.array(WireComponentType),
+    }),
+    t.partial({ name: t.string }),
+]);
+
+const WireWorldSnapshotType: t.Type<WireWorldSnapshot, unknown> = t.type({
+    entities: t.array(WireEntityType),
+    singleton: t.array(WireComponentType),
+    resources: t.array(t.unknown),
+});
+
+const ArchiveBaselineType: t.Type<ArchiveBaseline, unknown> = t.type({
+    tick: WireTick,
+    snapshot: WireWorldSnapshotType,
+});
+
+const RollbackLogEntryType: t.Type<RollbackLogEntry, unknown> = t.intersection([
+    t.type({ event: t.string, atTick: t.number }),
+    t.partial({ detail: t.record(t.string, t.union([t.number, t.string])) }),
+]);
+
+export const DesyncDumpType: t.Type<DesyncDump, unknown> = t.intersection([
+    t.type({
+        tick: WireTick,
+        engine: t.string,
+        checkpoints: t.array(t.type({
+            tick: WireTick,
+            snapshot: WireWorldSnapshotType,
+        })),
+        rollbackLog: t.array(RollbackLogEntryType),
+    }),
+    t.partial({ desyncTick: WireTick }),
+]);
+
+export const RollbackProtocolMessageType: t.Type<RollbackProtocolMessage, unknown> =
+    t.union([
+        t.strict({ kind: t.literal('inputs'), record: InputRecordType }),
+        t.strict({ kind: t.literal('tickSync'), tick: WireTick }),
+        t.strict({ kind: t.literal('inputLogRequest'), fromTick: WireTick }),
+        t.strict({ kind: t.literal('inputLog'), records: t.array(InputRecordType) }),
+        t.exact(t.intersection([
+            t.type({ kind: t.literal('joinRequest') }),
+            t.partial({ fresh: t.boolean, protocol: t.number }),
+        ])),
+        t.exact(t.intersection([
+            t.type({
+                kind: t.literal('catchUp'),
+                tick: WireTick,
+                records: t.array(InputRecordType),
+            }),
+            t.partial({ baseline: ArchiveBaselineType }),
+        ])),
+        t.strict({ kind: t.literal('stateHash'), tick: WireTick, hash: t.string }),
+        t.exact(t.intersection([
+            t.type({
+                kind: t.literal('desync'),
+                tick: WireTick,
+                hashes: t.array(t.tuple([t.string, t.string])),
+            }),
+            t.partial({ canonical: t.string }),
+        ])),
+        t.strict({ kind: t.literal('desyncDumpRequest') }),
+        t.strict({ kind: t.literal('desyncDump'), dump: DesyncDumpType }),
+    ]);
+
 export function wrapRollbackMessage(message: RollbackProtocolMessage): unknown {
     return { rollback: message };
 }
 
+/**
+ * The validated rollback message inside `raw`'s envelope, or undefined
+ * when `raw` carries no envelope (legacy room traffic — silent) or a
+ * malformed one (dropped with a rate-limited warning).
+ */
 export function unwrapRollbackMessage(raw: unknown): RollbackProtocolMessage | undefined {
-    const envelope = raw as { rollback?: RollbackProtocolMessage } | undefined;
-    return envelope?.rollback;
+    if (typeof raw !== 'object' || raw === null || !('rollback' in raw)) {
+        return undefined;
+    }
+    const decoded = RollbackProtocolMessageType.decode(
+        (raw as { rollback: unknown }).rollback);
+    if (isLeft(decoded)) {
+        warnThrottled('rollback-message-malformed', () =>
+            'Dropping malformed rollback message: '
+            + formatIoTsErrors(decoded.left).slice(0, 3).join('; '));
+        return undefined;
+    }
+    return decoded.right;
 }
 
 /**

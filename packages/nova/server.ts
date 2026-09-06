@@ -6,7 +6,7 @@ import { isLeft } from "fp-ts/lib/Either.js";
 import fs from "fs";
 import http from "http";
 import * as t from 'io-ts';
-import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
+import { MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { World } from "nova_ecs/world";
 import path from "path";
 import { fileURLToPath } from 'url';
@@ -146,7 +146,15 @@ async function startGame() {
 
     world = new World();
     world.resources.set(SimulationGameDataResource, gameData);
-    await world.addPlugin(multiplayer(multiRoom.join('main room')));
+    // NO legacy delta-sync multiplayer plugin on this world. Rollback
+    // rooms (ServerPlugin's per-system RollbackRelay + RoomArchive)
+    // replaced it entirely; the 'main room' it joined had no remaining
+    // gameplay purpose, and its message handler applied `remove` and
+    // `state` from ANY peer with its ownership checks commented out
+    // (nova_ecs/plugins/multiplayer_plugin.ts) — an unauthenticated
+    // way to inject entities into this continuously-stepped world and
+    // delete everyone else's. Nothing reads this world's entities any
+    // more; ServerPlugin only needs the resources set here.
     world.resources.set(MultiRoomResource, multiRoom);
     await world.addPlugin(NovaPlugin);
 

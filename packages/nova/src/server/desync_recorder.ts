@@ -17,6 +17,25 @@ const DEFAULT_MAX_INCIDENTS = 50;
 const DEFAULT_ROOM_COOLDOWN_MS = 30_000;
 
 /**
+ * Bounds on what peers can make this write. A dump is peer-supplied
+ * bytes; without these, every distinct desyncTick a peer chose was
+ * another file, as large as the socket frame limit, as fast as it
+ * liked. The relay already drops dumps from peers it neither convicted
+ * nor asked (rollback_relay.ts); these are the disk-side bounds for
+ * the ones that get through.
+ */
+/** Dump files per incident directory (a stuck peer re-convicted every
+ * few checkpoints legitimately writes a few). */
+const DEFAULT_MAX_DUMPS_PER_INCIDENT = 8;
+/** Bytes per dump: the socket layer's frame limit
+ * (socket_channel_server.ts MAX_PAYLOAD_BYTES), restated here so the
+ * recorder is safe on its own. */
+const DEFAULT_MAX_DUMP_BYTES = 16 * 1024 * 1024;
+/** Total dump bytes this recorder will write in its lifetime: the hard
+ * disk-fill bound, whatever the incident count. */
+const DEFAULT_MAX_TOTAL_DUMP_BYTES = 512 * 1024 * 1024;
+
+/**
  * A stable fingerprint of the game data an incident was recorded
  * under. Offline analysis replays incidents against a game-data
  * source; if that source differs from what the live session used
@@ -61,11 +80,18 @@ export class DesyncRecorder {
     private lastRecorded = new Map<string, number>();
     /** Serializes writes so pruning never races directory creation. */
     private queue: Promise<void> = Promise.resolve();
+    /** Dump files accepted per incident directory. */
+    private dumpCounts = new Map<string, number>();
+    /** Dump bytes accepted so far, against the lifetime budget. */
+    private dumpBytes = 0;
 
     constructor(
         private root = path.join(process.cwd(), 'desyncs'),
         private maxIncidents = DEFAULT_MAX_INCIDENTS,
         private roomCooldownMs = DEFAULT_ROOM_COOLDOWN_MS,
+        private maxDumpsPerIncident = DEFAULT_MAX_DUMPS_PER_INCIDENT,
+        private maxDumpBytes = DEFAULT_MAX_DUMP_BYTES,
+        private maxTotalDumpBytes = DEFAULT_MAX_TOTAL_DUMP_BYTES,
     ) { }
 
     /** Chains async work, reporting rather than propagating errors. */
@@ -129,8 +155,20 @@ export class DesyncRecorder {
 
     recordClientDump(roomId: string, peerId: string, dump: DesyncDump) {
         const data = JSON.stringify(dump);
-        // An unsolicited dump (or one arriving after a restart) still
-        // gets recorded, in its own directory.
+        if (data.length > this.maxDumpBytes) {
+            console.warn(`Dropping ${data.length}-byte desync dump from `
+                + `${peerId}: over the ${this.maxDumpBytes}-byte cap`);
+            return;
+        }
+        if (this.dumpBytes + data.length > this.maxTotalDumpBytes) {
+            console.warn(`Dropping desync dump from ${peerId}: the `
+                + `recorder's ${this.maxTotalDumpBytes}-byte lifetime dump `
+                + 'budget is spent');
+            return;
+        }
+        // A dump the relay solicited but that arrives after a restart
+        // (no incident directory yet) still gets recorded, in its own
+        // directory.
         let dir = this.latestIncident.get(roomId);
         if (!dir) {
             dir = path.join(this.root,
@@ -138,14 +176,36 @@ export class DesyncRecorder {
                 + `${sanitize(roomId)}_dump`);
             this.latestIncident.set(roomId, dir);
         }
+        const count = this.dumpCounts.get(dir) ?? 0;
+        if (count >= this.maxDumpsPerIncident) {
+            console.warn(`Dropping desync dump from ${peerId}: ${dir} `
+                + `already holds ${count} dumps`);
+            return;
+        }
         // Keyed by the dump's own conviction tick: a stuck peer whose
         // repeat convictions fall inside the incident cooldown uploads
         // several dumps into this directory, each describing a
         // different divergence episode — overwriting one file lost all
         // but the last (and that last one postdated the incident's
         // recorded log, making the directory self-inconsistent).
+        //
+        // The tick is PEER-SUPPLIED. It is typed as a number, but it
+        // arrives as JSON, and path.join normalises `..` segments: a
+        // string here once wrote `<root>/../../../escaped.json`. Only
+        // a safe integer may name the file, and the resolved path is
+        // checked against the directory regardless.
+        const safeTick = (value: unknown) =>
+            Number.isSafeInteger(value) ? value as number : undefined;
+        const tick = safeTick(dump.desyncTick) ?? safeTick(dump.tick)
+            ?? 'invalid';
         const file = path.join(dir, `client_${sanitize(peerId)}`
-            + `_tick${dump.desyncTick ?? dump.tick}.json`);
+            + `_tick${tick}.json`);
+        if (!file.startsWith(dir + path.sep)) {
+            console.error(`Refusing to write desync dump outside ${dir}: ${file}`);
+            return;
+        }
+        this.dumpCounts.set(dir, count + 1);
+        this.dumpBytes += data.length;
         this.enqueue(async () => {
             await fs.mkdir(dir!, { recursive: true });
             await fs.writeFile(file, data);

@@ -1,5 +1,6 @@
 import 'jasmine';
 import { World } from 'nova_ecs/world';
+import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { RollbackRelay } from './rollback_relay.js';
 import { RoomArchive } from './room_archive.js';
 
@@ -44,9 +45,9 @@ describe('RoomArchive periodic update', () => {
 
         // Jasmine fails the running spec on an unhandled rejection,
         // so reaching this line at all is the guard; the log is the
-        // observable trace.
+        // observable trace. With no world yet, the archive is at tick 0.
         expect(error).toHaveBeenCalledWith(jasmine.stringMatching(
-            /Archive nova:128 update failed: .*düde nova:128/));
+            /Archive nova:128 update failed at tick 0: .*düde nova:128/));
         expect(archive.archiveWorld).toBeUndefined();
     });
 
@@ -71,4 +72,50 @@ describe('RoomArchive periodic update', () => {
         expect(attempts).toBe(2);
         expect(archive.archiveWorld).toBeDefined();
     });
+});
+
+/**
+ * The archive's periodic update ran as `void this.update()`: one
+ * rejection — a record this world could not stage, a plug-in system
+ * throwing on construction — was an unhandled rejection, which exits
+ * the server process under Node's default --unhandled-rejections=throw.
+ * Against a real relay, and listening for the stray rejection itself.
+ */
+describe('RoomArchive', () => {
+    it('a failing periodic update is reported, never an unhandled rejection',
+        async () => {
+            const server = new MockCommunicator('server');
+            const relay = new RollbackRelay(server, { autoClock: false });
+            const unhandled: unknown[] = [];
+            const onUnhandled = (reason: unknown) => { unhandled.push(reason); };
+            process.on('unhandledRejection', onUnhandled);
+            const errors = spyOn(console, 'error');
+            // Real timers are not mocked: let the promise chain of a
+            // failed update settle completely between intervals.
+            const settle = () => new Promise(resolve => setImmediate(resolve));
+            jasmine.clock().install();
+            let attempts = 0;
+            const archive = new RoomArchive(relay, async () => {
+                attempts++;
+                throw new Error('makeSystem exploded');
+            }, { name: 'nova:130' });
+            try {
+                // Two intervals: the first failure must not stop the
+                // second attempt either.
+                jasmine.clock().tick(1001);
+                await settle();
+                jasmine.clock().tick(1001);
+                await settle();
+            } finally {
+                archive.close();
+                jasmine.clock().uninstall();
+            }
+            // Let any stray rejection surface before asserting.
+            await new Promise(resolve => setTimeout(resolve, 5));
+            process.off('unhandledRejection', onUnhandled);
+            relay.close();
+            expect(attempts).toBe(2);
+            expect(unhandled).toEqual([]);
+            expect(errors).toHaveBeenCalledTimes(2);
+        });
 });

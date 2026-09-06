@@ -56,7 +56,7 @@ describe("SocketChannelServer", function () {
         });
 
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
-            ["on", "removeAllListeners"]);
+            ["on", "removeAllListeners", "terminate"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
         (webSocket as any).readyState = WebSocket.CONNECTING;
@@ -67,6 +67,65 @@ describe("SocketChannelServer", function () {
         expect(webSocketCallbacks["open"].length).toBe(1);
         expect(webSocketCallbacks["message"].length).toBe(1);
         expect(webSocketCallbacks["close"].length).toBe(1);
+        // ws emits `error` for protocol violations (invalid UTF-8 in a
+        // text frame, a frame over maxPayload); an EventEmitter with no
+        // error listener throws ERR_UNHANDLED_ERROR — process exit.
+        expect(webSocketCallbacks["error"].length).toBe(1);
+        expect(() => webSocketCallbacks["error"][0](
+            new Error('WS_ERR_INVALID_UTF8'))).not.toThrow();
+    });
+
+    it("bounds the frame size it will buffer", () => {
+        const httpsServer =
+            jasmine.createSpyObj<https.Server>("http.Server Spy", ["on"]);
+        const [, on] = trackOn();
+        httpsServer.on.and.callFake(on);
+        const server = new SocketChannelServer({ server: httpsServer });
+        // ws's default is 100 MiB, fully buffered and JSON.parsed per
+        // frame from any client that passed the version gate.
+        expect(server.wss.options.maxPayload).toBe(16 * 1024 * 1024);
+    });
+
+    describe("hostile frames", () => {
+        it("drops an invalid-JSON text frame and keeps serving", async () => {
+            const warnings: string[] = [];
+            const server = new SocketChannelServer({
+                wss, timeout: 10, warn: m => warnings.push(m),
+            });
+            const client1 = new ClientHarness(server);
+            wssCallbacks["connection"][0](client1.websocket as unknown as WebSocket);
+            client1.open();
+
+            expect(() => client1.sendRaw('{')).not.toThrow();
+            expect(() => client1.sendRaw('')).not.toThrow();
+            expect(() => client1.sendRaw('null')).not.toThrow();
+            expect(() => client1.sendRaw('[1,2]')).not.toThrow();
+            expect(warnings.some(w => /unparseable/.test(w))).toBeTrue();
+
+            // Still a client, still served.
+            expect(server.clients.size).toBe(1);
+            const emitted = firstValueFrom(server.message.pipe(take(1)));
+            client1.sendMessage({ message: { ok: true } });
+            expect((await emitted).message).toEqual({ ok: true });
+        });
+
+        it("a refused socket has an error listener while its close frame is in flight",
+            () => {
+                const server = new SocketChannelServer({
+                    wss, timeout: 10, buildVersion: 'v1', warn: () => { },
+                });
+                const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
+                    ["on", "close", "removeAllListeners", "terminate"]);
+                const [callbacks, on] = trackOn();
+                webSocket.on.and.callFake(on);
+                (webSocket as any).readyState = WebSocket.OPEN;
+                wssCallbacks["connection"][0](webSocket as unknown as WebSocket,
+                    { url: '/?v=v2' } as never);
+                expect(webSocket.close).toHaveBeenCalled();
+                expect(server.clients.size).toBe(0);
+                expect(callbacks["error"]?.length).toBe(1);
+                expect(() => callbacks["error"][0](new Error('x'))).not.toThrow();
+            });
     });
 
     it("creates an entry for a new client in the clients set", () => {
@@ -74,7 +133,7 @@ describe("SocketChannelServer", function () {
             wss, timeout: 10,
         });
         const webSocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
-            ["on", "removeAllListeners"]);
+            ["on", "removeAllListeners", "terminate"]);
         const [webSocketCallbacks, on] = trackOn();
         webSocket.on.and.callFake(on);
         (webSocket as any).readyState = WebSocket.CONNECTING;
@@ -238,6 +297,13 @@ describe("SocketChannelServer", function () {
 
         const peerDisconnect = await peerDisconnectPromise;
         expect(peerDisconnect).toEqual(client1Uuid);
+        // ...and closes the socket: forgetting the map entry alone left
+        // the TCP connection open with no listeners at all (a leaked
+        // descriptor per keepalive cycle, and a crash on a late error).
+        expect(client1.websocket.terminate).toHaveBeenCalled();
+        expect(server.clients.size).toBe(0);
+        // A close event trailing the timeout removal is harmless.
+        expect(() => client1.close()).not.toThrow();
         jasmine.clock().uninstall();
     });
 
@@ -264,7 +330,8 @@ class ClientHarness {
     lastMessage?: SocketMessage;
 
     constructor(private server: SocketChannelServer) {
-        this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy", ["on", "send", "removeAllListeners"]);
+        this.websocket = jasmine.createSpyObj<WebSocket>("WebSocket Spy",
+            ["on", "send", "removeAllListeners", "terminate"]);
         const [callbacks, on] = trackOn();
         this.websocket.on.and.callFake(on);
         (this.websocket as any).readyState = WebSocket.CONNECTING;
@@ -290,6 +357,10 @@ class ClientHarness {
         (this.websocket as any).readyState = WebSocket.CLOSED;
     }
     sendMessage(message: SocketMessage) {
-        this.callbacks["message"][0](JSON.stringify(SocketMessage.encode(message)));
+        this.sendRaw(JSON.stringify(SocketMessage.encode(message)));
+    }
+    /** A text frame's bytes as the server's message listener sees them. */
+    sendRaw(text: string) {
+        this.callbacks["message"][0](text);
     }
 }

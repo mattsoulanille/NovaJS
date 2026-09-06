@@ -9,9 +9,10 @@ import { Time, TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { loadEntityGameData, loadWireSnapshotGameData } from "../nova_plugin/entity_data_loader.js";
+import { loadEntityGameData, loadOutfitsGameData, loadWireSnapshotGameData } from "../nova_plugin/entity_data_loader.js";
 import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
-import { applyInputRecords, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
+import { warnThrottled } from "../common/log_throttle.js";
+import { applyInputRecords, grantedOutfitIds, InputRecord, loadInputRecordsGameData, SimulationInput } from "./simulation_input.js";
 import { HailAction } from "../nova_plugin/hail_plugin.js";
 import { EscortAction } from "../nova_plugin/escort_action.js";
 import { AcceptedMission } from "../nova_plugin/mission_accept.js";
@@ -305,7 +306,22 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
         this.eventsForwardedThrough = this.rollback.tick;
         // Receive relayed rollback-protocol messages from the room.
         const communicator = world.resources.get(CommunicatorResource);
-        communicator?.messages.subscribe(({ message }) => {
+        communicator?.messages.subscribe(({ source, message }) => {
+            // Trust model item 4 (rollback_protocol.ts): every legitimate
+            // rollback message a peer receives is server-originated — the relay is the single
+            // fan-out, and it stamps each record's peerId with the
+            // socket it came from. Anything from another source is a
+            // forgery (a tickSync to derail pacing, a desync naming us,
+            // a record wearing our own peerId/seq to move our applied
+            // inputs, an inputLog steering our ship as "us") and is
+            // dropped. The server also no longer relays client-chosen
+            // destinations (communicator_server.ts), so this is belt
+            // and braces.
+            if (!communicator.servers.value.has(source)) {
+                warnThrottled(`bridge-source:${source}`, () =>
+                    `Ignoring rollback message from non-server peer ${source}`);
+                return;
+            }
             const rollbackMessage = unwrapRollbackMessage(message);
             if (!rollbackMessage) {
                 return;
@@ -481,7 +497,12 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
                 baseline?: ArchiveBaseline,
             } | undefined
         >(resolve => {
-            const subscription = communicator.messages.subscribe(({ message }) => {
+            const subscription = communicator.messages.subscribe(({ source, message }) => {
+                // Only the relay answers a join; a catchUp from anyone
+                // else would hand us a fabricated world to reconstruct.
+                if (!communicator.servers.value.has(source)) {
+                    return;
+                }
                 const rollbackMessage = unwrapRollbackMessage(message);
                 if (rollbackMessage?.kind === 'catchUp') {
                     clearInterval(retry);
@@ -1086,6 +1107,13 @@ export class SimulationBridgeHost implements SimulationBridgeHostApi {
             }
             await loadEntityGameData(this.world, decoded.right);
         }
+        // The outfits the accept GRANTS are staged like the ships: this
+        // worker's cache is its own (the display side warming its
+        // cache does not warm it), and applying the grant rebuilds the
+        // player's weapons/physics from the cache on the very tick the
+        // record lands. Same closure loadInputRecordsGameData stages
+        // for every other world applying this record.
+        await loadOutfitsGameData(this.world, grantedOutfitIds(accepted));
         this.schedule({ kind: 'acceptMission', accepted });
     }
 

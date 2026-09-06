@@ -43,7 +43,7 @@
 
 import { PilotData } from 'novaparse/pilot/pilot_data';
 import { parsePilotBytes } from 'novaparse/pilot/pilot_parse';
-import { dayNumber } from '../nova_plugin/calendar.js';
+import { dayNumber, daysInMonth } from '../nova_plugin/calendar.js';
 import {
     DISCOVERY_UNKNOWN, toDiscoveryLevel,
 } from '../nova_plugin/discovery.js';
@@ -105,6 +105,43 @@ function globalId(index: number): string {
     return `nova:${index + RESOURCE_INDEX_OFFSET}`;
 }
 
+/** The file stores cash as a signed int32; the game only ever shows
+ * [0, 2^31). */
+const MAX_CREDITS = 0x7fffffff;
+
+function clampCredits(cash: number, notes: string[]): number {
+    if (Number.isSafeInteger(cash) && cash >= 0 && cash <= MAX_CREDITS) {
+        return cash;
+    }
+    const clamped = Number.isSafeInteger(cash) && cash > MAX_CREDITS
+        ? MAX_CREDITS : 0;
+    notes.push(`The file's credits (${cash}) were out of range and were `
+        + `set to ${clamped}.`);
+    return clamped;
+}
+
+/**
+ * A calendar date within the proleptic Gregorian calendar calendar.ts
+ * implements: month 1-12, day within the month, a non-negative year.
+ * Out-of-range parts are clamped into range (the year is kept when it
+ * is a year at all — it is what the pilot's crön history hangs on).
+ */
+function clampDate(date: { year: number, month: number, day: number },
+    notes: string[]): { year: number, month: number, day: number } {
+    const year = Number.isSafeInteger(date.year) && date.year >= 0
+        ? date.year : 0;
+    const month = Number.isSafeInteger(date.month)
+        ? Math.min(12, Math.max(1, date.month)) : 1;
+    const day = Number.isSafeInteger(date.day)
+        ? Math.min(daysInMonth(month, year), Math.max(1, date.day)) : 1;
+    if (year !== date.year || month !== date.month || day !== date.day) {
+        notes.push(`The file's date (${date.year}-${date.month}-${date.day}) `
+            + `was not a calendar date and was clamped to `
+            + `${year}-${month}-${day}.`);
+    }
+    return { year, month, day };
+}
+
 /** Maps a parsed original pilot onto a NovaJS save + profile. */
 export function convertOriginalPilot(pilot: PilotData,
     fileName: string, ctx: OriginalPilotContext): OriginalPilotConversion {
@@ -154,10 +191,17 @@ export function convertOriginalPilot(pilot: PilotData,
         system = ctx.fallbackSystem;
     }
 
-    const date = {
-        year: player.date.year, month: player.date.month, day: player.date.day,
-    };
+    // The file's fields are read as raw int16/int32 and land in the save
+    // unvalidated otherwise. A crafted or corrupt pilot can carry a
+    // negative int32 cash (EV Nova has no debt — every in-game credit
+    // change clamps at 0, and a negative starting balance would skip
+    // that) or a month/day outside the calendar, which dayNumber's month
+    // table cannot index (NaN deadlines). Clamp both and say so.
+    const date = clampDate(player.date, notes);
     const today = dayNumber(date);
+    const credits = clampCredits(player.cash, notes);
+    const kills = Number.isSafeInteger(player.rating) && player.rating > 0
+        ? player.rating : 0;
 
     const ranks: string[] = [];
     globals.rankActive.forEach((active, i) => {
@@ -264,14 +308,14 @@ export function convertOriginalPilot(pilot: PilotData,
         ship: shipId,
         outfits,
         system,
-        credits: player.cash,
+        credits,
         date,
         missions,
         novaControlBits,
         ranks: ranks.sort(),
         cargo,
         reputations: [...records],
-        combatRatings: [['kills', player.rating]],
+        combatRatings: [['kills', kills]],
         ...(discovery.length > 0 ? { discovery } : {}),
     };
 

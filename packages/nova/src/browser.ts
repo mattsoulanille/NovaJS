@@ -4,7 +4,6 @@ import { isMuted } from "./client/mute.js";
 import { isLeft } from "fp-ts/lib/Either.js";
 import { UnknownComponent } from "nova_ecs/component";
 import { Entity } from "nova_ecs/entity";
-import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
 import { CommunicatorResource } from "nova_ecs/plugins/multiplayer_plugin";
 import { MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { Serializer, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
@@ -2068,7 +2067,16 @@ async function startGame() {
     resetMostRecentlyActivatedRank();
     world = new World();
     world.resources.set(SimulationGameDataResource, simulationGameData);
-    await world.addPlugin(multiplayer(multiRoom.join('main room')));
+    // NO legacy delta-sync multiplayer plugin on this world (and no
+    // 'main room' lobby). The simulation lives in the worker (a
+    // per-system rollback room) and the picture in displayWorld; this
+    // outer world is stepped for NovaPlugin's bookkeeping only, and
+    // nothing reads its entities. The plugin's message handler
+    // deleted whatever uuid ANY peer named — `remove: ['singleton']`
+    // threw inside world.step() on every subsequent step, freezing
+    // the pump for every peer that received it — and inserted any
+    // entity a peer pushed. See nova_ecs/plugins/multiplayer_plugin.ts
+    // (ownership checks commented out) and server.ts.
     world.resources.set(MultiRoomResource, multiRoom);
     await world.addPlugin(NovaPlugin);
     const controlsJson = await simulationGameData.getSettings?.('controls.json');
@@ -2981,8 +2989,7 @@ async function startGame() {
             }
         }
         await teardownActiveSystem(playerUuid);
-        // Leave the top-level lobby room too and drop the sim world.
-        multiRoom.leave('main room');
+        // (No lobby room to leave: the outer world no longer joins one.)
 
         // Reset the session state so the next entry starts clean.
         displayWorld = undefined;

@@ -1,17 +1,21 @@
 import { isLeft } from "fp-ts/lib/Either.js";
+import * as t from 'io-ts';
+import { Entity } from "nova_ecs/entity";
+import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
-import { ControlEvent, ControlsSubject, EcsControlEvent } from "../nova_plugin/controls_plugin.js";
-import { loadEntityGameData } from "../nova_plugin/entity_data_loader.js";
+import { warnThrottled } from "../common/log_throttle.js";
+import { ControlEvent, ControlEventType, ControlsSubject } from "../nova_plugin/controls_plugin.js";
+import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/entity_data_loader.js";
 import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
 import { JumpRouteComponent } from "../nova_plugin/jump_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import { applyAnalogControl, applyControlEvents, ControlledByComponent } from "../nova_plugin/ship_control.js";
 import { applySetTarget } from "../nova_plugin/target_plugin.js";
 import { applySetPlanetTarget } from "../nova_plugin/planet_plugin.js";
-import { applyHail, HailAction } from "../nova_plugin/hail_plugin.js";
-import { AcceptedMission, applyAcceptMission } from "../nova_plugin/mission_accept.js";
-import { applyEscortAction, EscortAction } from "../nova_plugin/escort_action.js";
+import { applyHail, HailAction, HailActionType } from "../nova_plugin/hail_plugin.js";
+import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/mission_accept.js";
+import { applyEscortAction, EscortAction, EscortActionType } from "../nova_plugin/escort_action.js";
 
 /**
  * Everything that changes the simulation from outside is an input,
@@ -85,6 +89,66 @@ export interface InputRecord {
 }
 
 /**
+ * ============================================================================
+ * Wire validation
+ * ============================================================================
+ *
+ * Records arrive from other peers as JSON that the relay used to cast and
+ * forward verbatim. A record whose `inputs` was not an array threw inside
+ * every peer's `step()` on every subsequent tick (the inputs map still
+ * held it), was archived, and was served to every joiner forever: one
+ * message bricked a room for everyone. These codecs are the boundary; the
+ * relay and the bridge decode with them and drop what fails.
+ *
+ * Every member is `t.strict`, so unknown fields are STRIPPED rather than
+ * carried along: a record is logged, relayed to the room, and served to
+ * every later joiner, so a kilobyte of junk on one would be amplified
+ * for the room's whole life.
+ */
+
+/**
+ * A non-negative safe integer: what a tick or sequence number must be on
+ * the wire. `t.number` would admit 1e300, which the relay's clamp
+ * arithmetic and the tick-keyed maps downstream then choke on.
+ */
+export const WireTick = new t.Type<number, number, unknown>(
+    'WireTick',
+    (u): u is number => typeof u === 'number' && Number.isSafeInteger(u) && u >= 0,
+    (u, c) => typeof u === 'number' && Number.isSafeInteger(u) && u >= 0
+        ? t.success(u) : t.failure(u, c),
+    t.identity,
+);
+
+export const SimulationInputType: t.Type<SimulationInput, unknown> = t.union([
+    t.strict({ kind: t.literal('control'), events: t.array(ControlEventType) }),
+    t.strict({
+        kind: t.literal('analogControl'),
+        heading: t.union([t.number, t.null]),
+        throttle: t.union([t.number, t.null]),
+    }),
+    t.strict({ kind: t.literal('setTarget'), target: t.union([t.string, t.null]) }),
+    t.strict({ kind: t.literal('setPlanetTarget'), target: t.union([t.string, t.null]) }),
+    t.strict({ kind: t.literal('hail'), action: HailActionType }),
+    t.strict({ kind: t.literal('acceptMission'), accepted: AcceptedMissionType }),
+    t.strict({ kind: t.literal('escortAction'), action: EscortActionType }),
+    t.strict({ kind: t.literal('addEntity'), uuid: t.string, entity: EncodedEntity }),
+    t.strict({ kind: t.literal('removeEntity'), uuid: t.string }),
+    t.strict({ kind: t.literal('setJumpRoute'), route: t.array(t.string) }),
+    t.strict({ kind: t.literal('removePeer'), peerId: t.string }),
+]);
+
+export const InputRecordType: t.Type<InputRecord, unknown> = t.exact(t.intersection([
+    t.type({
+        tick: WireTick,
+        inputs: t.array(SimulationInputType),
+    }),
+    t.partial({
+        peerId: t.string,
+        seq: WireTick,
+    }),
+]));
+
+/**
  * Applies a tick's input records. Records sort by peerId so every
  * peer applies the same tick's inputs in the same order regardless of
  * arrival order.
@@ -98,6 +162,14 @@ export function applyInputRecords(world: World, records: InputRecord[]) {
     for (const record of sorted) {
         applySimulationInputs(world, record.inputs, record.peerId);
     }
+}
+
+/** The outfit ids an acceptance GRANTS (positive deltas): the ids whose
+ * game data every world applying the record must have staged. */
+export function grantedOutfitIds(accepted: AcceptedMission): string[] {
+    return (accepted.outfitsDelta ?? [])
+        .filter(([, delta]) => delta > 0)
+        .map(([id]) => id);
 }
 
 /**
@@ -137,98 +209,286 @@ export async function loadInputRecordsGameData(
                     await loadEntityGameData(world, decoded.right);
                 }
             }
+            // Every input that carries a GAME-DATA ID the sim will derive
+            // from must stage that too. An acceptance's OnAccept Gxxx
+            // grants put NEW outfit ids into the player's OutfitsState,
+            // and applying it drops WeaponsState/ShipPhysics for the
+            // providers to rebuild from `Outfit.getCached` /
+            // `Weapon.getCached` — which miss on every world that never
+            // staged those ids, re-attaching at a load-timing-dependent
+            // tick that differs per peer (the "purchased outfits never
+            // staged" desync class, docs/rollback_multiplayer.md (11),
+            // in its third costume).
+            if (input.kind === 'acceptMission') {
+                await loadOutfitsGameData(world,
+                    grantedOutfitIds(input.accepted));
+            }
         }
     }
+}
+
+/**
+ * ============================================================================
+ * Authorisation: which entities a record's peer may act on
+ * ============================================================================
+ *
+ * (Item 5 of the trust model in rollback_protocol.ts; the rest of the
+ * model — relay stamping, validation, server-only acceptance — is what
+ * makes `peerId` here trustworthy.)
+ *
+ * The relay stamps every record with its sender, so `peerId` is trusted
+ * identity — but the PAYLOAD is the sender's to choose, and the
+ * entity-level inputs name their targets by uuid. Without a check, any
+ * peer's record could delete or replace any other peer's ship (and,
+ * being logged and served to every joiner, permanently). The rule:
+ *
+ *  - A peer OWNS an entity whose `ControlledBy.peerId` or
+ *    `MultiplayerData.owner` is that peer: its player ship, the escorts,
+ *    mission ships and NPCs it inserted (browser.ts stamps every one of
+ *    those with its uuid; spawnNpc likewise).
+ *  - `removeEntity` and an `addEntity` that would REPLACE an existing
+ *    uuid need ownership of the target. A fresh `addEntity` may not
+ *    declare another peer as controller or owner either, or the victim's
+ *    control records would steer the attacker's hull (findControlledEntity
+ *    takes the first match).
+ *  - `removePeer` is server-authored (the relay writes it on
+ *    disconnect); only a record stamped with a server's uuid may carry it.
+ *  - The servers themselves are exempt: the relay's own records are the
+ *    room's ground truth.
+ *  - A record with NO peerId is local play before any connection exists
+ *    (there is nobody else to protect), so nothing is checked.
+ *
+ * Deterministic by construction: every input is a pure function of the
+ * world's synced ownership state plus the record's stamped peer, so all
+ * peers drop (or apply) the same input at the same tick.
+ */
+
+/**
+ * The server's uuid when a world has no communicator to ask (the
+ * server's own archive sim, offline log replay in analyze_desync.mjs).
+ * CommunicatorServer refuses any other uuid for itself, so this is the
+ * only value a server-stamped record can ever carry.
+ */
+const DEFAULT_SERVER_PEERS: ReadonlySet<string> = new Set(['server']);
+
+/** The world's singleton entity key (nova_ecs/world.ts). Deleting or
+ * replacing it throws inside step() — the legacy multiplayer plugin's
+ * remove-of-singleton crash — so no peer-authored input may name it. */
+const SINGLETON_UUID = 'singleton';
+
+function isServerPeer(world: World, peerId: string): boolean {
+    const servers = world.resources.get(CommunicatorResource)?.servers.value
+        ?? DEFAULT_SERVER_PEERS;
+    return servers.has(peerId);
+}
+
+function ownsEntity(entity: Entity, peerId: string): boolean {
+    return entity.components.get(ControlledByComponent)?.peerId === peerId
+        || entity.components.get(MultiplayerData)?.owner === peerId;
+}
+
+/** Whether `peerId` may remove (or overwrite) the entity at `uuid`. */
+function mayActOn(world: World, peerId: string | undefined,
+    uuid: string): boolean {
+    if (peerId === undefined || isServerPeer(world, peerId)) {
+        return true;
+    }
+    if (uuid === SINGLETON_UUID) {
+        return false;
+    }
+    const entity = world.entities.get(uuid);
+    return entity !== undefined && ownsEntity(entity, peerId);
+}
+
+/** Whether `peerId` may insert `entity` at `uuid`. */
+function mayInsert(world: World, peerId: string | undefined, uuid: string,
+    entity: Entity): boolean {
+    if (peerId === undefined || isServerPeer(world, peerId)) {
+        return true;
+    }
+    if (uuid === SINGLETON_UUID) {
+        return false;
+    }
+    const existing = world.entities.get(uuid);
+    if (existing && !ownsEntity(existing, peerId)) {
+        return false;
+    }
+    const controller = entity.components.get(ControlledByComponent)?.peerId;
+    if (controller !== undefined && controller !== peerId) {
+        return false;
+    }
+    const owner = entity.components.get(MultiplayerData)?.owner;
+    if (owner !== undefined && owner !== peerId) {
+        return false;
+    }
+    return true;
+}
+
+/**
+ * The acceptance with any special ship the peer may not insert removed
+ * (the same rule as addEntity, applied to the record's batch).
+ */
+function authorizeMissionShips(world: World, peerId: string | undefined,
+    accepted: AcceptedMission): AcceptedMission {
+    const serializer = world.resources.get(SerializerResource);
+    if (!accepted.ships || !serializer) {
+        return accepted;
+    }
+    const ships = accepted.ships.filter(ship => {
+        const decoded = serializer.decode(ship.entity as EncodedEntity);
+        if (isLeft(decoded)) {
+            // applyAcceptMission drops (and reports) undecodable ships.
+            return true;
+        }
+        if (mayInsert(world, peerId, ship.uuid, decoded.right)) {
+            return true;
+        }
+        warnDrop(peerId, 'missionShip', () =>
+            `Dropping mission ship ${ship.uuid} from ${peerId}: `
+            + 'not authorised to insert it');
+        return false;
+    });
+    return ships.length === accepted.ships.length
+        ? accepted : { ...accepted, ships };
+}
+
+/**
+ * Every drop here is a per-input decision, so a peer streaming records
+ * whose inputs are all rejected would otherwise log a line per input at
+ * record rate — the same log flood the relay's drop paths already
+ * throttle (common/log_throttle.ts). One line per second per peer and
+ * kind, with the rest counted. Logging only: the drop itself is
+ * unconditional and deterministic.
+ */
+function warnDrop(peerId: string | undefined, kind: unknown,
+    message: () => string) {
+    warnThrottled(`input-drop:${peerId ?? 'local'}:${String(kind)}`, message);
 }
 
 /**
  * Applies a tick's inputs, in order. Called by the rollback driver
  * immediately before stepping that tick — both live and during
  * resimulation — so it must be deterministic and synchronous.
+ *
+ * Each input is applied in its own try/catch: a throw here would recur
+ * on every later step of every world holding the record (it stays in
+ * the tick's input map), wedging the room. Dropping the offending input
+ * is deterministic — the same input throws identically everywhere.
  */
 export function applySimulationInputs(world: World, inputs: SimulationInput[],
     peerId?: string) {
     for (const input of inputs) {
-        switch (input.kind) {
-            case 'control': {
-                applyControlEvents(world, peerId, input.events);
-                const subject = world.resources.get(ControlsSubject);
-                if (subject) {
-                    for (const event of input.events) {
-                        subject.next(event);
-                    }
+        try {
+            applySimulationInput(world, input, peerId);
+        } catch (error) {
+            const kind = (input as { kind?: unknown })?.kind;
+            warnDrop(peerId, kind, () =>
+                `Dropping ${kind} input from ${peerId ?? 'local'}: ${String(error)}`);
+        }
+    }
+}
+
+function applySimulationInput(world: World, input: SimulationInput,
+    peerId: string | undefined) {
+    switch (input.kind) {
+        case 'control': {
+            applyControlEvents(world, peerId, input.events);
+            const subject = world.resources.get(ControlsSubject);
+            if (subject) {
+                for (const event of input.events) {
+                    subject.next(event);
+                }
+            }
+            break;
+        }
+        case 'analogControl': {
+            applyAnalogControl(world, peerId,
+                { heading: input.heading, throttle: input.throttle });
+            break;
+        }
+        case 'setTarget': {
+            applySetTarget(world, peerId, input.target);
+            break;
+        }
+        case 'setPlanetTarget': {
+            applySetPlanetTarget(world, peerId, input.target);
+            break;
+        }
+        case 'hail': {
+            applyHail(world, peerId, input.action);
+            break;
+        }
+        case 'addEntity': {
+            const serializer = world.resources.get(SerializerResource);
+            if (!serializer) {
+                throw new Error('Expected serializer resource to exist');
+            }
+            const decoded = serializer.decode(input.entity);
+            if (isLeft(decoded)) {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping addEntity input for ${input.uuid}: `
+                    + serializer.describeDecodeFailure(input.entity, decoded.left));
+                break;
+            }
+            if (!mayInsert(world, peerId, input.uuid, decoded.right)) {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping addEntity input for ${input.uuid} `
+                    + `from ${peerId}: not authorised to insert it`);
+                break;
+            }
+            deriveEntityComponents(world, decoded.right);
+            world.entities.set(input.uuid, decoded.right);
+            break;
+        }
+        case 'acceptMission': {
+            applyAcceptMission(world, peerId,
+                authorizeMissionShips(world, peerId, input.accepted));
+            break;
+        }
+        case 'escortAction': {
+            applyEscortAction(world, peerId, input.action);
+            break;
+        }
+        case 'removeEntity': {
+            if (!mayActOn(world, peerId, input.uuid)) {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping removeEntity input for ${input.uuid} `
+                    + `from ${peerId}: not authorised to remove it`);
+                break;
+            }
+            world.entities.delete(input.uuid);
+            break;
+        }
+        case 'removePeer': {
+            if (peerId === undefined || !isServerPeer(world, peerId)) {
+                warnDrop(peerId, input.kind, () =>
+                    `Dropping removePeer input for ${input.peerId} `
+                    + `from ${peerId}: only the server removes peers`);
+                break;
+            }
+            for (const [uuid, entity] of [...world.entities]) {
+                if (entity.components.get(ControlledByComponent)?.peerId
+                    === input.peerId) {
+                    world.entities.delete(uuid);
+                }
+            }
+            break;
+        }
+        case 'setJumpRoute': {
+            for (const entity of world.entities.values()) {
+                const controlled = peerId !== undefined
+                    ? entity.components.get(ControlledByComponent)?.peerId === peerId
+                    : entity.components.has(PlayerShipSelector);
+                if (!controlled) {
+                    continue;
+                }
+                const jumpRoute = entity.components.get(JumpRouteComponent);
+                if (jumpRoute) {
+                    jumpRoute.route = [...input.route];
                 }
                 break;
             }
-            case 'analogControl': {
-                applyAnalogControl(world, peerId,
-                    { heading: input.heading, throttle: input.throttle });
-                break;
-            }
-            case 'setTarget': {
-                applySetTarget(world, peerId, input.target);
-                break;
-            }
-            case 'setPlanetTarget': {
-                applySetPlanetTarget(world, peerId, input.target);
-                break;
-            }
-            case 'hail': {
-                applyHail(world, peerId, input.action);
-                break;
-            }
-            case 'addEntity': {
-                const serializer = world.resources.get(SerializerResource);
-                if (!serializer) {
-                    throw new Error('Expected serializer resource to exist');
-                }
-                const decoded = serializer.decode(input.entity);
-                if (isLeft(decoded)) {
-                    console.warn(`Dropping addEntity input for ${input.uuid}: `
-                        + serializer.describeDecodeFailure(input.entity, decoded.left));
-                    break;
-                }
-                deriveEntityComponents(world, decoded.right);
-                world.entities.set(input.uuid, decoded.right);
-                break;
-            }
-            case 'acceptMission': {
-                applyAcceptMission(world, peerId, input.accepted);
-                break;
-            }
-            case 'escortAction': {
-                applyEscortAction(world, peerId, input.action);
-                break;
-            }
-            case 'removeEntity': {
-                world.entities.delete(input.uuid);
-                break;
-            }
-            case 'removePeer': {
-                for (const [uuid, entity] of [...world.entities]) {
-                    if (entity.components.get(ControlledByComponent)?.peerId
-                        === input.peerId) {
-                        world.entities.delete(uuid);
-                    }
-                }
-                break;
-            }
-            case 'setJumpRoute': {
-                for (const entity of world.entities.values()) {
-                    const controlled = peerId !== undefined
-                        ? entity.components.get(ControlledByComponent)?.peerId === peerId
-                        : entity.components.has(PlayerShipSelector);
-                    if (!controlled) {
-                        continue;
-                    }
-                    const jumpRoute = entity.components.get(JumpRouteComponent);
-                    if (jumpRoute) {
-                        jumpRoute.route = [...input.route];
-                    }
-                    break;
-                }
-                break;
-            }
+            break;
         }
     }
 }

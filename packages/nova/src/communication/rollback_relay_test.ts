@@ -1,5 +1,6 @@
 import 'jasmine';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
+import { resetWarnThrottle } from '../common/log_throttle.js';
 import { RollbackRelay } from './rollback_relay.js';
 import { canonicalDesyncHash, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { SimulationInput } from './simulation_input.js';
@@ -305,6 +306,134 @@ describe('RollbackRelay', () => {
         }
         expect(received(peerA).length).toBe(0);
         expect(received(peerB).length).toBe(0);
+    });
+
+    describe('hostile traffic', () => {
+        // Raw envelopes, bypassing the typed wrapper: what a client that
+        // speaks the wire format but not the contract can send.
+        const raw = (peer: MockCommunicator, rollback: unknown) =>
+            peer.sendMessage({ rollback } as never, 'server');
+
+        it('drops malformed envelopes without throwing or logging them', () => {
+            // The drop path's warning is rate-limited process-wide.
+            resetWarnThrottle();
+            const warn = spyOn(console, 'warn');
+            expect(() => {
+                raw(peerA, { kind: 'inputs' });
+                raw(peerA, { kind: 'inputs', record: { tick: 1, inputs: null } });
+                raw(peerA, { kind: 'inputs', record: { tick: 'x', inputs: [] } });
+                raw(peerA, { kind: 'inputs', record: { tick: 1, inputs: [{ kind: 'control', events: null }] } });
+                raw(peerA, { kind: 'stateHash', tick: 'x' });
+                raw(peerA, { kind: 'stateHash', tick: 60 });
+                raw(peerA, { kind: 'joinRequest', protocol: 'five' });
+                raw(peerA, { kind: 'inputLogRequest' });
+                raw(peerA, { kind: 'desyncDump', dump: { tick: 1 } });
+                raw(peerA, { kind: 'catchUp', tick: 1, records: [] });
+                raw(peerA, null);
+                raw(peerA, 'inputs');
+                raw(peerA, { kind: 'nope' });
+            }).not.toThrow();
+            expect(relay.inputLog.length).toBe(0);
+            expect(received(peerB).length).toBe(0);
+            expect(warn).toHaveBeenCalled();
+        });
+
+        it('strips junk fields before logging and relaying a record', () => {
+            peerA.sendMessage({
+                rollback: {
+                    kind: 'inputs',
+                    record: { tick: 5, inputs: CONTROL, junk: 'x'.repeat(100) },
+                    trailer: 'y',
+                },
+            } as never, 'server');
+            expect(relay.inputLog).toEqual([
+                { peerId: 'a', tick: 5, inputs: CONTROL },
+            ]);
+        });
+
+        it('ignores every message from a socket that is not in the room', () => {
+            const outsider = new MockCommunicator('outsider');
+            outsider.mockPeers = server.mockPeers;
+            // Not added to any peer list: it never sent inRoom.
+            outsider.sendMessage(wrapRollbackMessage({
+                kind: 'inputs',
+                record: { tick: 5, inputs: CONTROL },
+            }) as never, 'server');
+            outsider.sendMessage(wrapRollbackMessage({
+                kind: 'joinRequest',
+            }) as never, 'server');
+            outsider.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: 'x',
+            }) as never, 'server');
+            expect(relay.inputLog.length).toBe(0);
+            expect(received(peerB).length).toBe(0);
+            expect(outsider.allMessages.length).toBe(0);
+            expect(relay.pendingStateHashTicks).toBe(0);
+        });
+
+        it('does not retain stateHash buckets for ticks nobody else can report',
+            () => {
+                relay.advanceTicks(1000);
+                // Far future, off-grid, and a spray of distinct values.
+                for (let i = 0; i < 1000; i++) {
+                    peerA.sendMessage(wrapRollbackMessage({
+                        kind: 'stateHash', tick: 1_000_000 + i * 60, hash: 'x',
+                    }) as never, 'server');
+                    peerA.sendMessage(wrapRollbackMessage({
+                        kind: 'stateHash', tick: 1001 + i * 60, hash: 'x',
+                    }) as never, 'server');
+                }
+                expect(relay.pendingStateHashTicks).toBe(0);
+                // A checkpoint just ahead of the clock (a joiner's
+                // replayed hashes, clock jitter) is held, then swept.
+                peerA.sendMessage(wrapRollbackMessage({
+                    kind: 'stateHash', tick: 1020, hash: 'x',
+                }) as never, 'server');
+                expect(relay.pendingStateHashTicks).toBe(1);
+                relay.advanceTicks(700);
+                expect(relay.pendingStateHashTicks).toBe(0);
+            });
+
+        it('forwards a desync dump only from a peer it convicted or asked', () => {
+            relay.close();
+            const dumps: string[] = [];
+            relay = new RollbackRelay(server, {
+                autoClock: false,
+                desyncThreshold: 1,
+                onDesyncDump: peerId => dumps.push(peerId),
+            });
+            const dump = {
+                tick: 100, engine: 'test', checkpoints: [], rollbackLog: [],
+            };
+            // Unsolicited: nobody convicted b.
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'desyncDump', dump,
+            }) as never, 'server');
+            expect(dumps).toEqual([]);
+
+            // b diverges and is convicted; its unprompted push lands.
+            // Exactly once: the relay's request fallback is deduped by
+            // the peer, and a second push is not honoured either.
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: '11111111',
+            }) as never, 'server');
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'stateHash', tick: 60, hash: '22222222',
+            }) as never, 'server');
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'desyncDump', dump: { ...dump, desyncTick: 60 },
+            }) as never, 'server');
+            peerB.sendMessage(wrapRollbackMessage({
+                kind: 'desyncDump', dump: { ...dump, desyncTick: 61 },
+            }) as never, 'server');
+            expect(dumps).toEqual(['b']);
+            // The healthy peer was not asked (the archive was not
+            // outvoted), so its dump is not taken either.
+            peerA.sendMessage(wrapRollbackMessage({
+                kind: 'desyncDump', dump,
+            }) as never, 'server');
+            expect(dumps).toEqual(['b']);
+        });
     });
 
     it('broadcasts its clock', () => {

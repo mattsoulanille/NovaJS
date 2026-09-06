@@ -72,6 +72,65 @@ describe('DesyncRecorder', () => {
             .toEqual(['client_peer-a_tick180.json']);
     });
 
+    describe('peer-supplied dumps', () => {
+        it('never writes outside the incident directory: a path-traversal '
+            + 'desyncTick names an "invalid" tick file inside it', async () => {
+                const recorder = new DesyncRecorder(root);
+                recorder.recordClientDump('nova:130', 'peer-a', {
+                    ...dump,
+                    desyncTick: '/../../../../escaped' as unknown as number,
+                });
+                recorder.recordClientDump('nova:130', '../peer', {
+                    ...dump,
+                    desyncTick: 1.5,
+                    tick: '../../x' as unknown as number,
+                });
+                await recorder.flush();
+                const [dir] = await fs.readdir(root);
+                // The first falls back to its (valid) capture tick; the
+                // second has no valid tick at all. Both stay inside.
+                expect((await fs.readdir(path.join(root, dir!))).sort())
+                    .toEqual([
+                        'client____peer_tickinvalid.json',
+                        'client_peer-a_tick210.json',
+                    ]);
+                await expectAsync(fs.access(path.join(root, '..', 'escaped.json')))
+                    .toBeRejected();
+            });
+
+        it('caps dumps per incident, bytes per dump, and bytes overall',
+            async () => {
+                const recorder = new DesyncRecorder(root, 50, 30_000,
+                    /* maxDumpsPerIncident */ 2,
+                    /* maxDumpBytes */ 200,
+                    /* maxTotalDumpBytes */ 300);
+                const warn = spyOn(console, 'warn');
+                // Over the per-dump cap: dropped.
+                recorder.recordClientDump('nova:130', 'peer-a', {
+                    ...dump, desyncTick: 1, engine: 'x'.repeat(300),
+                });
+                // Two fit; the third is over the per-incident cap.
+                for (const tick of [2, 3, 4]) {
+                    recorder.recordClientDump('nova:130', 'peer-a',
+                        { ...dump, desyncTick: tick });
+                }
+                // Another room: its own directory, but the two above
+                // (77 bytes each) plus this one's 173 exceed the
+                // 300-byte lifetime budget.
+                recorder.recordClientDump('nova:131', 'peer-b',
+                    { ...dump, desyncTick: 5, engine: 'y'.repeat(100) });
+                await recorder.flush();
+                const dirs = (await fs.readdir(root)).sort();
+                expect(dirs.length).toBe(1);
+                expect((await fs.readdir(path.join(root, dirs[0]!))).sort())
+                    .toEqual([
+                        'client_peer-a_tick2.json',
+                        'client_peer-a_tick3.json',
+                    ]);
+                expect(warn).toHaveBeenCalledTimes(3);
+            });
+    });
+
     it('records the game data fingerprint with the verdict', async () => {
         const recorder = new DesyncRecorder(root);
         recorder.gameDataFingerprint =

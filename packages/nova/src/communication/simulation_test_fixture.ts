@@ -30,28 +30,39 @@ export async function getIntegrationGameData() {
     // for the beforeAll caveat.
     requireNovaData(packageRoot);
     if (!gameDataPromise) {
-        // Base "Nova Files" data ONLY (novaPlugins: null). Tests must not
-        // depend on which plug-ins happen to be installed in the developer's
-        // Nova_Data/Plug-ins directory — otherwise ids, ship/system/outfit
-        // stats and even sorted-first ids change from machine to machine.
-        // The dev server (server.ts / nova_parse_worker.ts) still loads
-        // plug-ins as usual; only tests opt out.
-        const novaParse = new NovaParse(path.join(packageRoot, "Nova_Data"), false,
-            { novaFiles: "Nova Files", novaPlugins: null });
-        novaParse.resourceNotFoundFunction = () => { };
-        const aggregator = new GameDataAggregator([
-            new FilesystemData(path.join(packageRoot, "objects")),
-            novaParse,
-        ], () => { });
-        // The browser fetches settings over HTTP; in node, read them
-        // from disk so worlds can build with the 'worker' platform
-        // (which includes the control systems).
-        (aggregator as { getSettings?(file: string): Promise<unknown> }).getSettings =
-            async (file: string) => JSON.parse(await fs.promises.readFile(
-                path.join(packageRoot, 'settings', file), 'utf8'));
-        gameDataPromise = Promise.resolve(aggregator);
+        gameDataPromise = Promise.resolve(makeIntegrationGameData());
     }
     return gameDataPromise;
+}
+
+/**
+ * A FRESH aggregator over the base data, with a cold cache of its own.
+ * getIntegrationGameData memoizes one per process, so every world in a
+ * spec run shares its cache — which is exactly what a "this world never
+ * staged that id" spec must not share. Loading is lazy per id, so a
+ * second aggregator costs only what the spec then loads through it.
+ */
+export function makeIntegrationGameData(): GameDataAggregator {
+    // Base "Nova Files" data ONLY (novaPlugins: null). Tests must not
+    // depend on which plug-ins happen to be installed in the developer's
+    // Nova_Data/Plug-ins directory — otherwise ids, ship/system/outfit
+    // stats and even sorted-first ids change from machine to machine.
+    // The dev server (server.ts / nova_parse_worker.ts) still loads
+    // plug-ins as usual; only tests opt out.
+    const novaParse = new NovaParse(path.join(packageRoot, "Nova_Data"), false,
+        { novaFiles: "Nova Files", novaPlugins: null });
+    novaParse.resourceNotFoundFunction = () => { };
+    const aggregator = new GameDataAggregator([
+        new FilesystemData(path.join(packageRoot, "objects")),
+        novaParse,
+    ], () => { });
+    // The browser fetches settings over HTTP; in node, read them
+    // from disk so worlds can build with the 'worker' platform
+    // (which includes the control systems).
+    (aggregator as { getSettings?(file: string): Promise<unknown> }).getSettings =
+        async (file: string) => JSON.parse(await fs.promises.readFile(
+            path.join(packageRoot, 'settings', file), 'utf8'));
+    return aggregator;
 }
 
 const pluginDataPromises = new Map<string, Promise<GameDataAggregator | undefined>>();

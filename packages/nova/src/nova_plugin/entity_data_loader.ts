@@ -154,13 +154,7 @@ export async function loadEntityGameData(world: World, entity: Entity) {
     // second real recorded desync.
     const outfits = entity.components.get(OutfitsStateComponent);
     if (outfits) {
-        for (const outfitId of outfits.keys()) {
-            const outfit = await loadIfDefined(
-                () => gameData.data.Outfit.get(outfitId), `owned outfit ${outfitId}`);
-            for (const weaponId of Object.keys(outfit?.weapons ?? {})) {
-                await loadWeaponGameData(gameData, weaponId, weaponIds);
-            }
-        }
+        await loadOutfitWeaponsGameData(gameData, outfits.keys(), weaponIds);
     }
     if (planet) {
         await gameData.data.Planet.get(planet.id);
@@ -179,12 +173,66 @@ export async function loadEntityGameData(world: World, entity: Entity) {
         await loadIfDefined(() => gameData.data.Govt.get(govt.id), `govt ${govt.id}`);
     }
 
-    // Prime the lazily-constructed weapon entries so the first shot of
-    // each weapon does not depend on when its entry finished building.
+    await primeWeaponEntries(world, weaponIds);
+}
+
+/**
+ * Loads outfits (into the cache the derivers read with `getCached`) and
+ * the transitive closure of their weapons. An outfit that fails to load
+ * is reported and skipped rather than failing the whole staging: an id
+ * this game data does not have — which a hostile record can name — is
+ * a not-found (loadIfDefined), and any other rejection (a fetch failure
+ * on a browser worker) is reported the same way, because the providers
+ * then miss it identically on every world, which is deterministic,
+ * whereas a rejected staging wedges the archive on that record forever.
+ */
+async function loadOutfitWeaponsGameData(gameData: SimulationGameDataInterface,
+    outfitIds: Iterable<string>, weaponIds: Set<string>) {
+    for (const outfitId of outfitIds) {
+        let outfit;
+        try {
+            outfit = await loadIfDefined(
+                () => gameData.data.Outfit.get(outfitId), `owned outfit ${outfitId}`);
+        } catch (e) {
+            console.warn(`Outfit ${outfitId} could not be staged: ${String(e)}`);
+            continue;
+        }
+        for (const weaponId of Object.keys(outfit?.weapons ?? {})) {
+            await loadWeaponGameData(gameData, weaponId, weaponIds);
+        }
+    }
+}
+
+/**
+ * Primes the lazily-constructed weapon entries so the first shot of
+ * each weapon does not depend on when its entry finished building.
+ */
+async function primeWeaponEntries(world: World, weaponIds: Set<string>) {
     const weaponEntries = world.resources.get(WeaponEntries);
     if (weaponEntries) {
         await Promise.all([...weaponIds].map(id => weaponEntries.get(id)));
     }
+}
+
+/**
+ * Stages outfits that enter a ship's loadout IN FLIGHT — an accepted
+ * mission's OnAccept Gxxx grants — exactly as loadEntityGameData stages
+ * the outfits an inserted entity already carries: the outfit data
+ * itself (deriveShipPhysics reads it from the cache), its weapons'
+ * closure, and this world's WeaponEntries. Applying the grant drops
+ * WeaponsState/ShipPhysics for the providers to rebuild, and a provider
+ * that misses the cache retries on a later tick — a different tick on
+ * every world whose cache warmed differently, i.e. a desync.
+ */
+export async function loadOutfitsGameData(world: World,
+    outfitIds: Iterable<string>) {
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        throw new Error('Expected SimulationGameDataResource to exist');
+    }
+    const weaponIds = new Set<string>();
+    await loadOutfitWeaponsGameData(gameData, outfitIds, weaponIds);
+    await primeWeaponEntries(world, weaponIds);
 }
 
 /**

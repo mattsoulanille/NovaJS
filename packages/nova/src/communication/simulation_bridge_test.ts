@@ -525,17 +525,98 @@ describe('SimulationBridge', () => {
             world.resources.set(CommunicatorResource, communicator);
             const host = new SimulationBridgeHost(
                 world, makeFakeSimulationData());
-            const sync = (tick: number) => communicator.messages.next({
-                source: 'server',
-                message: wrapRollbackMessage({ kind: 'tickSync', tick }),
-            });
-            return { host, sync };
+            const sync = (tick: number, source = 'server') =>
+                communicator.messages.next({
+                    source,
+                    message: wrapRollbackMessage({ kind: 'tickSync', tick }),
+                });
+            return { host, communicator, sync };
         }
 
         it('reports no pacing before any tickSync', () => {
             const { host } = makePacedHost();
             expect(host.snapshot().pacing).toBeUndefined();
         });
+
+        describe('the trust model: rollback messages come from the server only',
+            () => {
+                it('ignores a tickSync from another peer', () => {
+                    const { host, sync } = makePacedHost();
+                    sync(1e9, 'attacker');
+                    expect(host.snapshot().pacing).toBeUndefined();
+                });
+
+                it('ignores a desync and an inputLog from another peer', async () => {
+                    const { host, communicator } = makePacedHost();
+                    const entity = new Entity('foo')
+                        .addComponent(FooComponent, { x: 1 });
+                    const serializer = world.resources.get(SerializerResource)!;
+                    // Insertion records stage asynchronously before they
+                    // integrate; give that a turn of the event loop.
+                    const staged = () => new Promise(resolve => setTimeout(resolve, 10));
+                    communicator.messages.next({
+                        source: 'attacker',
+                        message: wrapRollbackMessage({
+                            kind: 'desync', tick: 60,
+                            hashes: [['client', 'bad'], ['attacker', 'good']],
+                            canonical: 'good',
+                        }),
+                    });
+                    communicator.messages.next({
+                        source: 'attacker',
+                        message: wrapRollbackMessage({
+                            kind: 'inputLog',
+                            records: [{
+                                peerId: 'client', tick: 1,
+                                inputs: [{
+                                    kind: 'addEntity', uuid: 'forged',
+                                    entity: serializer.encode(entity),
+                                }],
+                            }],
+                        }),
+                    });
+                    await staged();
+                    host.step(3);
+                    expect(host.desyncCount).toBe(0);
+                    expect(world.entities.has('forged')).toBeFalse();
+                    // The same record from the server is integrated.
+                    communicator.messages.next({
+                        source: 'server',
+                        message: wrapRollbackMessage({
+                            kind: 'inputs',
+                            record: {
+                                peerId: 'client', tick: host.status().tick + 1,
+                                inputs: [{
+                                    kind: 'addEntity', uuid: 'genuine',
+                                    entity: serializer.encode(entity),
+                                }],
+                            },
+                        }),
+                    });
+                    await staged();
+                    host.step(2);
+                    expect(world.entities.has('genuine')).toBeTrue();
+                });
+
+                it('drops a malformed record from the server without wedging',
+                    () => {
+                        const { host, communicator } = makePacedHost();
+                        communicator.messages.next({
+                            source: 'server',
+                            message: { rollback: { kind: 'inputs' } },
+                        });
+                        communicator.messages.next({
+                            source: 'server',
+                            message: {
+                                rollback: {
+                                    kind: 'inputs',
+                                    record: { tick: 1, inputs: null },
+                                },
+                            },
+                        });
+                        expect(() => host.step(3)).not.toThrow();
+                    });
+            });
 
         it('speeds up when behind, clamped to the slew limit', () => {
             const { host, sync } = makePacedHost();
