@@ -1,7 +1,8 @@
-import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
+import * as t from 'io-ts';
+import { EncodedComponentList, EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { Time } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
-import { EncodedSimulationBridgeEvent } from "./simulation_bridge_events.js";
+import { EncodedSimulationBridgeEvent, EncodedSimulationBridgeEventType } from "./simulation_bridge_events.js";
 
 /**
  * The simulation → display frame: the wire shape the bridge host
@@ -51,6 +52,45 @@ export interface SimulationFrame {
 
 /** The entity part of a frame: everything but time, events and pacing. */
 export type EntityFrame = Pick<SimulationFrame, 'added' | 'changed' | 'removed'>;
+
+/**
+ * Codecs for the frame shapes above. The frame crosses the worker
+ * bridge by structuredClone today and is never validated; these exist
+ * so its wire schema can be derived (wire_schemas.ts) and so a frame
+ * arriving as bytes can be gated like every other boundary.
+ */
+export const TimeType: t.Type<Time> = t.type({
+    time: t.number,
+    delta_s: t.number,
+    delta_ms: t.number,
+    frame: t.number,
+});
+
+export const EntityDeltaType: t.Type<EntityDelta> = t.intersection([
+    t.type({
+        changed: EncodedComponentList,
+        removed: t.array(t.string),
+    }),
+    t.partial({ name: t.string }),
+]);
+
+export const SimulationPacingType: t.Type<SimulationPacing> = t.type({
+    rate: t.number,
+    behindTicks: t.number,
+});
+
+export const SimulationFrameType: t.Type<SimulationFrame> = t.intersection([
+    t.type({
+        added: t.array(t.tuple([t.string, EncodedEntity])),
+        changed: t.array(t.tuple([t.string, EntityDeltaType])),
+        removed: t.array(t.string),
+        events: t.array(EncodedSimulationBridgeEventType),
+    }),
+    t.partial({
+        time: TimeType,
+        pacing: SimulationPacingType,
+    }),
+]);
 
 interface SentEntityRecord {
     name: string | undefined;

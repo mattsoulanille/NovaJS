@@ -2,6 +2,7 @@ import { EcsEvent } from "nova_ecs/events";
 import { Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { isLeft } from "fp-ts/lib/Either.js";
+import * as t from 'io-ts';
 
 export interface EncodedSimulationBridgeEvent {
     name: string;
@@ -19,6 +20,17 @@ export interface EncodedSimulationBridgeEvent {
      */
     tick?: number;
 }
+
+/**
+ * The event's wire shape. `data` is whatever the event's serializer
+ * codec emits; it is decoded by name on the display side
+ * (decodeSimulationBridgeEvent), so it stays untyped here.
+ */
+export const EncodedSimulationBridgeEventType: t.Type<EncodedSimulationBridgeEvent> =
+    t.intersection([
+        t.type({ name: t.string, data: t.unknown }),
+        t.partial({ entityUuids: t.array(t.string), tick: t.number }),
+    ]);
 
 interface SimulationBridgeEventRegistration<Data, Encoded = Data> {
     event: EcsEvent<Data>;
