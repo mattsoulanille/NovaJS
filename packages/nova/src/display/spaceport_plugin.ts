@@ -123,8 +123,10 @@ const OpenSpaceportSystem = new System({
 
         // The same roster feeds the trade center's fleet cargo: escorts
         // that landed with the player and can carry cargo (shïp
-        // InherentAI 1/2) trade out of their own holds.
-        spaceport.setLandedEscorts(landedEscorts, uuid);
+        // InherentAI 1/2) trade out of their own holds — and, with the
+        // live display world (the escorts still flying down), the bar's
+        // escort cap.
+        spaceport.setLandedEscorts(landedEscorts, uuid, entities);
 
         // Publish the held ship so the status bar (out-of-world while docked)
         // keeps drawing its credits/fuel/cargo, and let the spaceport push

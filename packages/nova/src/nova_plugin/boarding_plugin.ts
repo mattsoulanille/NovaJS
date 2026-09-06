@@ -35,7 +35,7 @@ import {
 } from './bay_plugin.js';
 import { DisabledComponent, isBelowDisableThreshold, repairedArmor } from './disabled_component.js';
 import { EscortCommandComponent } from './escort_command.js';
-import { cappedEscortsInWorld, MAX_ESCORTS } from './escort_cap.js';
+import { cappedEscortCount, MAX_ESCORTS } from './escort_cap.js';
 import { OwnerComponent, SourceComponent } from './weapon_components.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { isInFlock } from './flock.js';
@@ -1225,11 +1225,14 @@ const BoardingActionSystem = new System({
             // THE ESCORT CAP (ruling #161): a captured prize is an escort
             // the player keeps, so it is counted like a hire — and refused
             // like one, with the same STR# 2002 #123 message, when the
-            // player already has MAX_ESCORTS hired-or-captured escorts in
-            // the world. Mission escorts and bay fighters do not count
-            // (escort_cap.ts). The session stays open: the hulk can still
-            // be plundered, and Done releases it.
-            if (cappedEscortsInWorld(entities, uuid) >= MAX_ESCORTS) {
+            // player already has MAX_ESCORTS hired-or-captured escorts.
+            // Mission escorts and bay fighters do not count. The count is
+            // escort_cap.ts's one counting function, the same one the bar
+            // uses; here it is given the world only, because that is all
+            // synced state the simulation may read (the client's carried
+            // rosters are not — see cappedEscortCount for the window that
+            // leaves).
+            if (cappedEscortCount(uuid, { world: entities }) >= MAX_ESCORTS) {
                 boarding.capture = 'refused';
                 return;
             }

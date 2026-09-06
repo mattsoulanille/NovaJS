@@ -807,11 +807,12 @@ export class Spaceport extends Menu<Entity> {
      * the docked ship's uuid.
      */
     setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
-        playerUuid?: string) {
+        playerUuid?: string, world?: Iterable<[string, Entity]>) {
         this.tradeCenter.setLandedEscorts(roster, playerUuid);
         // ...and the bar, whose hire dialog counts the fleet against the
-        // escort cap (hire_escort.ts's MAX_ESCORTS).
-        this.bar.setLandedEscorts(roster, playerUuid);
+        // escort cap (nova_plugin/escort_cap.ts) — from the roster AND
+        // the display world, where the escorts still on approach are.
+        this.bar.setLandedEscorts(roster, playerUuid, world);
     }
 
     /**

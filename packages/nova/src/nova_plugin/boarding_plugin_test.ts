@@ -39,7 +39,7 @@ import {
 } from './collision_interaction.js';
 import { DisabledComponent } from './disabled_component.js';
 import { completeEntity } from './entity_data_loader.js';
-import { cappedEscortsInWorld, MAX_ESCORTS } from './escort_cap.js';
+import { cappedEscortCount, MAX_ESCORTS } from './escort_cap.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { escortParent } from './escort_command_plugin.js';
 import { OwnerComponent, SourceComponent } from './fire_weapon_plugin.js';
@@ -535,7 +535,7 @@ describe('boarding in a live world', () => {
                 boarder.components.set(ControlledByComponent,
                     { peerId: 'me' } as any);
                 flock(world, MAX_ESCORTS - 1);
-                expect(cappedEscortsInWorld(world.entities, BOARDER))
+                expect(cappedEscortCount(BOARDER, { world: world.entities }))
                     .toBe(MAX_ESCORTS - 1);
                 captureAsEscort(world, boarder);
                 expect(target.components.get(PlayerEscortComponent))
@@ -543,7 +543,7 @@ describe('boarding in a live world', () => {
                         { player: BOARDER, provenance: 'captured' }));
                 expect(boarder.components.has(BoardingComponent)).toBeFalse();
                 // Captured escorts count: the cap is now full.
-                expect(cappedEscortsInWorld(world.entities, BOARDER))
+                expect(cappedEscortCount(BOARDER, { world: world.entities }))
                     .toBe(MAX_ESCORTS);
             });
 
@@ -558,7 +558,7 @@ describe('boarding in a live world', () => {
             flock(world, MAX_ESCORTS - 1);
             flock(world, 3, 'mission');
             flock(world, 8, 'fighter');
-            expect(cappedEscortsInWorld(world.entities, BOARDER))
+            expect(cappedEscortCount(BOARDER, { world: world.entities }))
                 .toBe(MAX_ESCORTS - 1);
             captureAsEscort(world, boarder);
             expect(target.components.get(PlayerEscortComponent)?.player)

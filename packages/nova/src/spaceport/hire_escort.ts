@@ -9,11 +9,10 @@ import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
 import {
-    countsTowardEscortCap, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
+    cappedEscortCount, CarriedEscortEntry, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
 } from '../nova_plugin/escort_cap.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { Button } from './button.js';
@@ -78,8 +77,9 @@ export const MAX_ESCORTS_INDEX = 123;
  * Why a hire is refused, if it is — the cap first (it is the structural
  * refusal, STR# 2002 #123, and money cannot fix it), then the fee.
  * `held` is the player's escort count as the dialog sees it
- * (escortCount plus this visit's hires). Pure, so the "seventh escort is
- * refused" rule is pinned without the PIXI dialog.
+ * (escortsHeld: the shared cappedEscortCount, this visit's hires
+ * included). Pure, so the "seventh escort is refused" rule is pinned
+ * without the PIXI dialog.
  */
 export function hireRefusal(held: number, credits: number,
     price: number): 'cap' | 'credits' | undefined {
@@ -109,41 +109,6 @@ export async function maxEscortsMessage(
 }
 
 /**
- * How many escorts the player has, counted against {@link MAX_ESCORTS}:
- *
- *   - the escorts on the client's landed roster that count against the
- *     cap (escort_cap.ts's countsTowardEscortCap: neither bay fighters
- *     nor mission ships — so hired AND captured; a captured prize draws
- *     no wage, so it is in no payroll mirror, but it is an escort),
- *   - or, if that is fewer, the EscortPayrollComponent mirror of the
- *     hired escorts that were in the world with the player — the roster
- *     fills as they touch down, a few seconds behind the player, and the
- *     mirror already knows about all of them;
- *   - plus the pilots hired THIS landing and not yet spawned
- *     (PendingEscortsComponent), the list `hire()` appends to.
- *
- * The two roster/mirror figures are not summed: a hired escort is on
- * both once it has landed.
- */
-export function escortCount(entity: Entity | undefined,
-    roster?: () => readonly { player: string, entity: Entity }[],
-    playerUuid?: string): number {
-    let landed = 0;
-    for (const { player, entity: escort } of roster?.() ?? []) {
-        if (playerUuid !== undefined && player !== playerUuid) {
-            continue;
-        }
-        if (!countsTowardEscortCap(escort)) {
-            continue;
-        }
-        landed++;
-    }
-    const payroll = entity?.components.get(EscortPayrollComponent)?.length ?? 0;
-    const pending = entity?.components.get(PendingEscortsComponent)?.length ?? 0;
-    return Math.max(landed, payroll) + pending;
-}
-
-/**
  * The one-time fee to hire an escort — see escort_fees.ts, which owns every
  * escort price (the daily wage, the upgrade cost and the resale value are
  * all derived from the same rule there) so none of them can drift apart, and
@@ -167,11 +132,18 @@ export interface HirePlayer {
     entity?: Entity;
     bits?: ReadonlySet<number>;
     /**
-     * The client's landed-escort roster and the docked ship's uuid, for
-     * the escort cap ({@link escortCount}). Absent counts only the payroll
-     * mirror and this landing's hires.
+     * What the escort cap is counted from (escort_cap.ts's
+     * cappedEscortCount, the one count the bar and the plunder session
+     * share): the display world the docked ship was pulled out of — its
+     * escorts are still flying down to the port for some seconds after
+     * it docks — and the client's landed roster they touch down into,
+     * both attributed to the docked ship by `playerUuid`. Without the
+     * uuid there is no fleet to attribute, and only this landing's hires
+     * count: browser.ts always supplies it, so that is the headless
+     * harness's case, not the game's.
      */
-    landedEscorts?: () => readonly { player: string, entity: Entity }[];
+    world?: Iterable<[string, Entity]>;
+    landedEscorts?: () => readonly CarriedEscortEntry[];
     playerUuid?: string;
 }
 
@@ -392,17 +364,26 @@ export class HireEscortDialog {
     }
 
     /**
-     * Escorts the player has right now, counting this visit's hires
-     * (`hired` is the entity's PendingEscortsComponent-to-be, appended
-     * here and committed by the bar at Leave). escortCount already
-     * counts the component, so this sum is right only while no hire is
-     * in both `hired` and the component: pending_escorts.ts's
-     * commitPendingEscorts, the one way hires move across, empties
-     * `hired` as it copies — hire_escort_test pins the invariant.
+     * Escorts the player has right now — the shared count over the
+     * display world and the landed roster (see HirePlayer), plus this
+     * landing's hires: the entity's PendingEscortsComponent (earlier
+     * commits this landing) and `hired`, the list this dialog appends to
+     * and the bar commits at Leave. That sum is right only while no hire
+     * is in both: pending_escorts.ts's commitPendingEscorts, the one way
+     * hires move across, empties `hired` as it copies — hire_escort_test
+     * pins the invariant.
      */
     private escortsHeld(): number {
-        return escortCount(this.player.entity, this.player.landedEscorts,
-            this.player.playerUuid) + this.hired.length;
+        const { entity, world, landedEscorts, playerUuid } = this.player;
+        const pending =
+            (entity?.components.get(PendingEscortsComponent)?.length ?? 0)
+            + this.hired.length;
+        if (playerUuid === undefined) {
+            return pending;
+        }
+        return cappedEscortCount(playerUuid, {
+            world, carried: landedEscorts?.(), pending,
+        });
     }
 
     private refreshButtons() {

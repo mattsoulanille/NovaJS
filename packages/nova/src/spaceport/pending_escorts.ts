@@ -34,9 +34,10 @@ export const PendingEscortsComponent =
  * visit list in the same step.
  *
  * The emptying is the point, not a tidy-up. The escort cap
- * (hire_escort.ts's `escortCount`) counts the component; the hire dialog
- * adds the visit list on top to count the pilots hired since the last
- * commit. That sum is right only while no hire is in both places at once
+ * (hire_escort.ts's `escortsHeld`, feeding escort_cap.ts's
+ * cappedEscortCount as its `pending`) counts the component; the hire
+ * dialog adds the visit list on top to count the pilots hired since the
+ * last commit. That sum is right only while no hire is in both places at once
  * — so the one operation that copies one into the other also clears the
  * source, and there is no way to commit that leaves a hire counted twice.
  * Returns how many were committed.
