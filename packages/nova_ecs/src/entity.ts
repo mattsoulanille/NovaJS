@@ -60,7 +60,7 @@ export class Entity {
     /**
      * Set a component to a given value. Can be chained.
      */
-    addComponent<Data>(component: Component<Data>, data: Data): this {
+    addComponent<Data>(component: Component<Data>, data: NoInfer<Data>): this {
         this.components.set(component as UnknownComponent, data);
         return this;
     }

@@ -7,7 +7,7 @@ export interface ReadonlyComponentMap extends ReadonlyMap<UnknownComponent, unkn
 
 export interface ComponentMap extends EventMap<UnknownComponent, unknown> {
     get<Data>(component: Component<Data>): Data | undefined;
-    set<Data>(component: Component<Data>, data: Data): this;
+    set<Data>(component: Component<Data>, data: NoInfer<Data>): this;
     has<Data>(component: Component<Data>): boolean;
     delete(component: Component<any>): boolean;
 }

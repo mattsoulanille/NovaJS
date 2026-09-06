@@ -479,7 +479,7 @@ describe('where the two readers legitimately differ', () => {
             const hulk = new Entity(OTHER)
                 .addComponent(ShipComponent, { id: 'nova:1' })
                 .addComponent(GovtComponent, { id: 'nova:137' })
-                .addComponent(DisabledComponent, undefined);
+                .addComponent(DisabledComponent, { repairAt: null, hulk: true });
             const root = new Entity(ROOT);
             const entities = entitiesOf(hulk, root);
 
