@@ -110,6 +110,7 @@ import {
 } from "./nova_plugin/mission_ship_spawn.js";
 import { advanceEntityDate, ensurePlayerStateComponents } from "./spaceport/mission_session.js";
 import { clearShipDoneTextShown } from "./spaceport/ship_done_shown.js";
+import { resetOfferRolls } from "./spaceport/mission_offers.js";
 import { resetMostRecentlyActivatedRank } from "./nova_plugin/rank_logic.js";
 import { PendingEscortsComponent } from "./spaceport/pending_escorts.js";
 import {
@@ -1482,6 +1483,12 @@ async function enterSystem({ entity, to, uuid }:
     // of around the gate they emerge from (see gateArrivalPending).
     const holdBatch = carriedBatchMustHold(entity);
     clientSlotFloor = undefined; // Fresh world, fresh slot run.
+    // "Mission randomizing values are recalculated each time you warp
+    // into a system" (EVN Bible, AvailRandom). The spaceport keys its
+    // visit rolls by system id, which cannot see a jump out and straight
+    // back in with no landing between; this is the system-entry hook
+    // that closes that gap (spaceport/mission_offers.ts).
+    resetOfferRolls();
     document.body.classList.remove('nova-docked');
     pendingDockedShip = undefined;
     dockedShip = undefined;

@@ -108,5 +108,23 @@ describe('rollOffers and the visit\'s AvailRandom rolls', () => {
             resetOfferRolls();
             expect(offerRollsForSystem('nova:128').size).toBe(0);
         });
+
+        it('a jump out and straight back in is a fresh visit (the '
+            + 'system-entry reset)', () => {
+                // Land in Sol, roll. Jump to Kane and back WITHOUT
+                // landing there: the spaceport never asks about Kane, so
+                // keying by system id alone would hand the old Sol rolls
+                // to the second visit. browser.ts's enterSystem calls
+                // resetOfferRolls on every system entry, which is what
+                // makes "recalculated each time you warp in" hold.
+                offerRollsForSystem('nova:128').set('nova:1', 5);
+                resetOfferRolls(); // enterSystem(Kane)
+                resetOfferRolls(); // enterSystem(Sol)
+                const back = offerRollsForSystem('nova:128');
+                expect(back.has('nova:1')).toBe(false);
+                // Several landings within the new visit still share it.
+                back.set('nova:1', 7);
+                expect(offerRollsForSystem('nova:128').get('nova:1')).toBe(7);
+            });
     });
 });
