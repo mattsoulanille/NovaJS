@@ -386,14 +386,13 @@ async function reenter(runtime: ClientRuntime, plan: TransitPlan,
 
 /**
  * Records that the ship is in no world. Only from a transit that holds
- * nothing (origin torn down, claim released); a "lost" verdict reached
+ * no claim (the failed transition released it); a "lost" verdict reached
  * while a world is still up leaves that world as it is, which is what
  * the pump running shipless always meant.
  */
 function markStranded(runtime: ClientRuntime, reason: string): void {
     const current = runtime.state.state;
-    if (current.kind === 'transit' && current.origin === undefined
-        && current.claim === undefined) {
+    if (current.kind === 'transit' && current.claim === undefined) {
         runtime.state.apply(s => strand(s, reason));
     }
 }

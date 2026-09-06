@@ -6,7 +6,7 @@ import {
     closeTitleDialog, describeState, dock, dockAtGate, dockedShip,
     DockedShip, enterFailed, enterGame, gateLaunched, IllegalTransitionError,
     isDockedForExit, isInGame, land, landAtGate, launched, launchingEntity,
-    liveSystem, LiveSystem, openRollback, openTitleDialog, originTornDown,
+    liveSystem, LiveSystem, openRollback, openTitleDialog,
     releaseClaim, requestGateLaunch, requestLaunch, returnToGate, strand,
     swapDockedShip, tornDown, TransitPlan,
 } from './client_state.js';
@@ -80,30 +80,30 @@ describe('client state machine', () => {
         const inSpaceA = arrive(claimSystem(beginTransit(enterGame(title),
             plan(undefined, 'A', 'startup')), { systemId: 'A' }), system('A'));
 
-        it('the startup transit has no origin; a jump carries the origin '
-            + 'system until it is torn down', () => {
+        it('a transit leaves the system behind at once: the pump must not '
+            + 'step a world on its way out', () => {
             const startup = beginTransit(enterGame(title),
                 plan(undefined, 'A', 'startup'));
             expect(startup.kind).toBe('transit');
             expect(liveSystem(startup)).toBeUndefined();
             expect(activeSystemId(startup)).toBeUndefined();
 
-            const jump = beginTransit(inSpaceA, plan('A', 'B'));
-            expect(liveSystem(jump)?.systemId).toBe('A');
-            expect(activeSystemId(jump)).toBe('A');
-            const between = originTornDown(jump);
-            expect(liveSystem(between)).toBeUndefined();
-            expect(activeSystemId(between)).toBeUndefined();
-            expectIllegal(() => originTornDown(between), 'originTornDown');
+            const toB = plan('A', 'B');
+            const jump = beginTransit(inSpaceA, toB);
+            expect(liveSystem(jump)).toBeUndefined();
+            expect(activeSystemId(jump)).toBeUndefined();
+            expect(jump).toEqual({ kind: 'transit', transit: toB });
+            expectIllegal(() => beginTransit(title, plan('A', 'B')),
+                'beginTransit');
+            expectIllegal(() => beginTransit({ kind: 'tearingDown' },
+                plan('A', 'B')), 'beginTransit');
         });
 
-        it('a claim needs the origin gone, names the destination, and is '
-            + 'held once', () => {
-            const jump = beginTransit(inSpaceA, plan('A', 'B'));
-            expectIllegal(() => claimSystem(jump, { systemId: 'B' }),
-                'claimSystem');
-            const between = originTornDown(jump);
+        it('a claim names the destination and is held once', () => {
+            const between = beginTransit(inSpaceA, plan('A', 'B'));
             expectIllegal(() => claimSystem(between, { systemId: 'C' }),
+                'claimSystem');
+            expectIllegal(() => claimSystem(inSpaceA, { systemId: 'B' }),
                 'claimSystem');
             const claimed = claimSystem(between, { systemId: 'B' });
             // The claim is what `activeSystemId` used to mean before a
@@ -117,12 +117,11 @@ describe('client state machine', () => {
         });
 
         it('a world is published only over its own claim', () => {
-            const between = originTornDown(beginTransit(inSpaceA, plan('A', 'B')));
+            const between = beginTransit(inSpaceA, plan('A', 'B'));
             expectIllegal(() => arrive(between, system('B')), 'arrive');
             const claimed = claimSystem(between, { systemId: 'B' });
             expectIllegal(() => arrive(claimed, system('C')), 'arrive');
-            expectIllegal(() => arrive(
-                beginTransit(inSpaceA, plan('A', 'B')), system('B')), 'arrive');
+            expectIllegal(() => arrive(inSpaceA, system('B')), 'arrive');
             const arrived = arrive(claimed, system('B'));
             expect(arrived).toEqual({ kind: 'inSpace', system: system('B') });
             expect(activeSystemId(arrived)).toBe('B');
@@ -130,8 +129,8 @@ describe('client state machine', () => {
 
         it('a new transit cannot start over a held claim, but can retry '
             + 'once the claim is released (the recovery re-entry)', () => {
-            const claimed = claimSystem(originTornDown(
-                beginTransit(inSpaceA, plan('A', 'B'))), { systemId: 'B' });
+            const claimed = claimSystem(
+                beginTransit(inSpaceA, plan('A', 'B')), { systemId: 'B' });
             expectIllegal(() => beginTransit(claimed, plan('A', 'A', 'reenter')),
                 'beginTransit');
             const retry = beginTransit(releaseClaim(claimed),
@@ -144,29 +143,29 @@ describe('client state machine', () => {
         });
 
         it('a gate transit that fails while the origin is up goes back to '
-            + 'the gate, armed to lift off; once the origin is gone it '
+            + 'the gate, armed to lift off; once a transit has begun it '
             + 'cannot', () => {
-            const departing = beginTransit(inSpaceA, plan('A', 'B', 'gate'));
             const entity = new Entity();
             const gate = ship('gate');
-            const back = returnToGate(departing, gate, entity);
+            // A wormhole aborts out of flight: the sim transited the ship
+            // and the client never docked it.
+            const back = returnToGate(inSpaceA, gate, entity);
             expect(back).toEqual({
                 kind: 'gateMap', system: system('A'), ship: gate,
                 launching: entity,
             });
             expect(launchingEntity(back)).toBe(entity);
-            expectIllegal(() => returnToGate(originTornDown(departing),
-                ship('gate'), entity), 'returnToGate');
-            // A wormhole aborts out of flight: the sim transited the ship
-            // and the client never docked it.
-            expect(returnToGate(inSpaceA, ship('worm'), entity).kind)
-                .toBe('gateMap');
+            // A hypergate pick whose lookup threw aborts out of the map.
+            expect(returnToGate(dockAtGate(landAtGate(inSpaceA, gate)), gate,
+                entity)).toEqual(back);
+            expectIllegal(() => returnToGate(
+                beginTransit(inSpaceA, plan('A', 'B', 'gate')), gate, entity),
+                'returnToGate');
         });
 
-        it('stranding is only ever from a transit holding nothing', () => {
-            const departing = beginTransit(inSpaceA, plan('A', 'B'));
-            expectIllegal(() => strand(departing, 'x'), 'strand');
-            const between = originTornDown(departing);
+        it('stranding is only ever from a transit holding no claim', () => {
+            expectIllegal(() => strand(inSpaceA, 'x'), 'strand');
+            const between = beginTransit(inSpaceA, plan('A', 'B'));
             expectIllegal(() => strand(claimSystem(between, { systemId: 'B' }),
                 'x'), 'strand');
             const lost = strand(between, 'the origin system is unknown');
@@ -182,7 +181,7 @@ describe('client state machine', () => {
             const docked = dock(land(inSpaceA, ship()));
             const jump = beginTransit(docked, plan('A', 'B', 'gate'));
             expect(dockedShip(jump)).toBeUndefined();
-            expect(liveSystem(jump)?.systemId).toBe('A');
+            expect(liveSystem(jump)).toBeUndefined();
         });
     });
 
@@ -269,7 +268,8 @@ describe('client state machine', () => {
                 for (const from of [
                     inSpaceA, land(inSpaceA, ship()), dock(land(inSpaceA, ship())),
                     beginTransit(inSpaceA, plan('A', 'B')),
-                    originTornDown(beginTransit(inSpaceA, plan('A', 'B'))),
+                    claimSystem(beginTransit(inSpaceA, plan('A', 'B')),
+                        { systemId: 'B' }),
                     { kind: 'entering' } as ClientState,
                     { kind: 'stranded', reason: 'x' } as ClientState,
                 ]) {
@@ -317,9 +317,9 @@ describe('client state machine', () => {
         expect(describeState(requestLaunch(dock(land(inSpaceA, ship('p'))),
             new Entity()))).toBe('landed(A @ p, launching)');
         const jump = beginTransit(inSpaceA, plan('A', 'B'));
-        expect(describeState(jump)).toBe('transit(hyper A -> B, origin up)');
-        expect(describeState(claimSystem(originTornDown(jump),
-            { systemId: 'B' }))).toBe('transit(hyper A -> B, claimed)');
+        expect(describeState(jump)).toBe('transit(hyper A -> B)');
+        expect(describeState(claimSystem(jump, { systemId: 'B' })))
+            .toBe('transit(hyper A -> B, claimed)');
         expect(describeState({ kind: 'rollback', pilotId: 'p1' }))
             .toBe('rollback(p1)');
     });
@@ -347,11 +347,10 @@ describe('client state machine', () => {
             slot.apply(launched);
             expect(slot.state).toEqual({ kind: 'inSpace', system: system('A') });
 
-            // Jump A -> B: the origin stays up until torn down, the
-            // destination is claimed before its world exists.
+            // Jump A -> B: the origin is left at once, the destination is
+            // claimed before its world exists.
             slot.apply(s => beginTransit(s, plan('A', 'B')));
-            expect(liveSystem(slot.state)?.systemId).toBe('A');
-            slot.apply(originTornDown);
+            expect(liveSystem(slot.state)).toBeUndefined();
             slot.apply(s => claimSystem(s, { systemId: 'B' }));
             expect(activeSystemId(slot.state)).toBe('B');
             expect(liveSystem(slot.state)).toBeUndefined();
@@ -366,7 +365,7 @@ describe('client state machine', () => {
             expect(kinds).toEqual([
                 'entering', 'transit', 'transit', 'inSpace',
                 'landing', 'landed', 'landed', 'inSpace',
-                'transit', 'transit', 'transit', 'inSpace',
+                'transit', 'transit', 'inSpace',
                 'tearingDown', 'title',
             ]);
         });
@@ -379,7 +378,6 @@ describe('client state machine', () => {
             slot.apply(s => claimSystem(s, { systemId: 'A' }));
             slot.apply(s => arrive(s, system('A')));
             slot.apply(s => beginTransit(s, plan('A', 'B')));
-            slot.apply(originTornDown);
             slot.apply(s => claimSystem(s, { systemId: 'B' }));
             // The session ends: the transition's failure cleanup releases
             // its claim, and the teardown finds no live system.
@@ -399,7 +397,6 @@ describe('client state machine', () => {
             slot.apply(s => claimSystem(s, { systemId: 'A' }));
             slot.apply(s => arrive(s, system('A')));
             slot.apply(s => beginTransit(s, plan('A', 'B')));
-            slot.apply(originTornDown);
             slot.apply(s => claimSystem(s, { systemId: 'B' }));
             slot.apply(releaseClaim); // The destination world build rejected.
             slot.apply(s => beginTransit(s, plan('A', 'A', 'reenter')));

@@ -11,7 +11,7 @@
  * builds the display world, waits for the server peer, inserts the
  * player and its fleet, and publishes the whole thing as ONE
  * {@link LiveSystem} on the client state machine (client/client_state.ts):
- * `beginTransit` -> `originTornDown` -> `claimSystem` -> `arrive`.
+ * `beginTransit` -> `claimSystem` -> `arrive`.
  *
  * Under a session generation (client/session_transitions.ts): an
  * exit-to-title mid-way invalidates the scope, the next `check()` throws,
@@ -59,7 +59,7 @@ import { resetOfferRolls } from '../spaceport/mission_offers.js';
 import { claimActiveSystem } from './active_system_claim.js';
 import {
     arrive, beginTransit, claimSystem, ClientState, liveSystem, LiveSystem,
-    originTornDown, releaseClaim, TransitPlan,
+    releaseClaim, TransitPlan,
 } from './client_state.js';
 import { insertPlayerAndFleet } from './fleet_insertion.js';
 import { prepareMissionShips } from './fleet_ledger.js';
@@ -226,12 +226,14 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // back in with no landing between; this is the system-entry hook
     // that closes that gap (spaceport/mission_offers.ts).
     resetOfferRolls();
-    // LEAVE: the docked handles (if any) go with the system being left;
-    // the origin rides the transit state until it is torn down.
-    const origin = liveSystem(state.apply(s => beginTransit(s, plan)));
+    // LEAVE: the system being left (and any docked handle) goes out of
+    // the state BEFORE its teardown, so the pump — which reads the live
+    // system off the state each frame — never steps a world on its way
+    // out or starts a frame against a closing bridge.
+    const origin = liveSystem(state.state);
+    state.apply(s => beginTransit(s, plan));
     if (origin) {
         await teardownLiveSystem(runtime, origin);
-        state.apply(originTornDown);
     }
     scope.check();
     // Name the destination and join its room, with the undo registered on

@@ -48,11 +48,13 @@
  *                                                      (`pendingGateLaunch`)
  *   transit      between systems: a hyperspace jump, a gate/wormhole
  *                transit, the startup entry, or a recovery re-entry. The
- *                origin system stays in `origin` for as long as it is still
- *                up (the white screen shows it stepping underneath); the
- *                destination's room claim sits in `claim` from the moment
- *                the room is joined until the world is published
- *                (`activeSystemId` with no world behind it, made honest)
+ *                system being left is gone from the state the moment the
+ *                transit begins (the pump must not step a world that is
+ *                being torn down — browser.ts cleared its bridge handle
+ *                synchronously for the same reason); the destination's
+ *                room claim sits in `claim` from the moment the room is
+ *                joined until the world is published (`activeSystemId`
+ *                with no world behind it, made honest)
  *   stranded     a transit whose recovery also failed: no ship anywhere
  *                (the pump "left to run shipless")
  *   tearingDown  teardownGame in progress
@@ -161,8 +163,6 @@ export type ClientState =
     }
     | {
         readonly kind: 'transit', readonly transit: TransitPlan,
-        /** The system being left, until it is torn down. */
-        readonly origin?: LiveSystem,
         /** The destination's room, once joined and until published. */
         readonly claim?: SystemClaim,
     }
@@ -210,7 +210,6 @@ export function describeState(state: ClientState): string {
         case 'transit':
             return `transit(${state.transit.kind} ${state.transit.from ?? '?'}`
                 + ` -> ${state.transit.to}`
-                + `${state.origin ? ', origin up' : ''}`
                 + `${state.claim ? ', claimed' : ''})`;
         case 'stranded':
             return `stranded(${state.reason})`;
@@ -220,8 +219,7 @@ export function describeState(state: ClientState): string {
 // ── Selectors ──────────────────────────────────────────────────────────
 // The questions browser.ts used to answer by testing four or five handles.
 
-/** The live system, if the state has one: the origin of a transit counts
- * for as long as it is still up (the pump keeps stepping it). */
+/** The live system, if the state has one: the world the pump steps. */
 export function liveSystem(state: ClientState): LiveSystem | undefined {
     switch (state.kind) {
         case 'inSpace':
@@ -230,8 +228,6 @@ export function liveSystem(state: ClientState): LiveSystem | undefined {
         case 'gateLanding':
         case 'gateMap':
             return state.system;
-        case 'transit':
-            return state.origin;
         default:
             return undefined;
     }
@@ -359,65 +355,44 @@ export function enterFailed(state: ClientState): ClientState {
 
 /**
  * Leaves for another system. From `entering` it is the startup entry;
- * from any live state it is a jump / gate / wormhole, and the docked
- * handles go with the system being left (a hypergate pick transits FROM
- * the gate map; enterSystem always cleared every docked handle). From a
- * transit that has nothing left (origin torn down, claim released — a
- * failed jump) or a stranded state it is a recovery re-entry.
+ * from any live state it is a jump / gate / wormhole, and the system
+ * being left goes out of the state with its docked handles (a hypergate
+ * pick transits FROM the gate map; enterSystem always cleared every
+ * docked handle) — the caller reads `liveSystem` BEFORE this and tears
+ * it down after, so the pump never steps a world that is on its way
+ * out. From a transit that holds no claim (a failed jump) or a stranded
+ * state it is a recovery re-entry.
  */
 export function beginTransit(state: ClientState, transit: TransitPlan):
     ClientState {
     switch (state.kind) {
         case 'entering':
-            return { kind: 'transit', transit };
         case 'inSpace':
         case 'landing':
         case 'landed':
         case 'gateLanding':
         case 'gateMap':
-            return { kind: 'transit', transit, origin: state.system };
+        case 'stranded':
+            return { kind: 'transit', transit };
         case 'transit':
             if (state.claim !== undefined) {
                 throw new IllegalTransitionError('beginTransit', state,
                     'the previous transit still holds a room claim');
             }
-            // A re-entry after a failed transit: the origin (if it is still
-            // up — a recovery planned while the origin world was alive)
-            // rides along to be torn down by the new transit.
-            return state.origin
-                ? { kind: 'transit', transit, origin: state.origin }
-                : { kind: 'transit', transit };
-        case 'stranded':
             return { kind: 'transit', transit };
         default:
             throw new IllegalTransitionError('beginTransit', state);
     }
 }
 
-/** The origin system has been torn down; the transit is between worlds. */
-export function originTornDown(state: ClientState): ClientState {
-    if (state.kind !== 'transit' || state.origin === undefined) {
-        throw new IllegalTransitionError('originTornDown', state);
-    }
-    return state.claim
-        ? { kind: 'transit', transit: state.transit, claim: state.claim }
-        : { kind: 'transit', transit: state.transit };
-}
-
 /**
  * The destination is named and its room joined, ahead of its world
- * (client/active_system_claim.ts). Only once the origin is gone: a claim
- * on the next system while the previous one is still up is exactly the
- * "two systems at once" browser.ts's teardown-then-claim order forbade.
+ * (client/active_system_claim.ts).
  */
 export function claimSystem(state: ClientState, claim: SystemClaim):
     ClientState {
     if (state.kind !== 'transit') {
         throw new IllegalTransitionError('claimSystem', state);
-    }
-    if (state.origin !== undefined) {
-        throw new IllegalTransitionError('claimSystem', state,
-            'the origin system is still up');
     }
     if (state.claim !== undefined) {
         throw new IllegalTransitionError('claimSystem', state,
@@ -435,23 +410,17 @@ export function releaseClaim(state: ClientState): ClientState {
     if (state.kind !== 'transit' || state.claim === undefined) {
         throw new IllegalTransitionError('releaseClaim', state);
     }
-    return state.origin
-        ? { kind: 'transit', transit: state.transit, origin: state.origin }
-        : { kind: 'transit', transit: state.transit };
+    return { kind: 'transit', transit: state.transit };
 }
 
 /**
  * The destination world is up and the player is in it. Requires the
  * claim on that very system: a world is never published for a system
- * whose room was not joined, nor over an origin still standing.
+ * whose room was not joined.
  */
 export function arrive(state: ClientState, system: LiveSystem): ClientState {
     if (state.kind !== 'transit') {
         throw new IllegalTransitionError('arrive', state);
-    }
-    if (state.origin !== undefined) {
-        throw new IllegalTransitionError('arrive', state,
-            'the origin system is still up');
     }
     if (state.claim?.systemId !== system.systemId) {
         throw new IllegalTransitionError('arrive', state,
@@ -465,36 +434,28 @@ export function arrive(state: ClientState, system: LiveSystem): ClientState {
 }
 
 /**
- * A gate transit that could not be completed while the origin world was
+ * A gate transit that could not be completed while the origin world is
  * still up puts the ship back at the gate it left, armed to lift off —
  * the hypergate lift-off path (transit_recovery.ts's 'gate' plan).
  *
- * From `inSpace` and `gateMap` as well as from a transit whose origin is
- * up: a destination is resolved BEFORE the transit state is entered, so
- * an unresolvable exit aborts out of flight (a wormhole: the simulation
- * has already transited the ship and the client never docked it) or
- * out of the gate map (a hypergate pick whose lookup threw).
+ * The destination is resolved BEFORE the transit state is entered, so
+ * this applies out of flight (a wormhole: the simulation has already
+ * transited the ship and the client never docked it) or out of the gate
+ * map (a hypergate pick whose lookup threw). Once a transit has begun
+ * the origin is gone, and the recovery is a re-entry instead.
  */
 export function returnToGate(state: ClientState, ship: DockedShip,
     launching: Entity): ClientState {
-    if (state.kind === 'inSpace' || state.kind === 'gateMap') {
-        return { kind: 'gateMap', system: state.system, ship, launching };
-    }
-    if (state.kind !== 'transit' || state.origin === undefined) {
+    if (state.kind !== 'inSpace' && state.kind !== 'gateMap') {
         throw new IllegalTransitionError('returnToGate', state,
             'the origin world is not up');
     }
-    if (state.claim !== undefined) {
-        throw new IllegalTransitionError('returnToGate', state,
-            'a destination claim is held');
-    }
-    return { kind: 'gateMap', system: state.origin, ship, launching };
+    return { kind: 'gateMap', system: state.system, ship, launching };
 }
 
 /** Nothing further can be tried: the ship is in no world. */
 export function strand(state: ClientState, reason: string): ClientState {
-    if (state.kind !== 'transit' || state.origin !== undefined
-        || state.claim !== undefined) {
+    if (state.kind !== 'transit' || state.claim !== undefined) {
         throw new IllegalTransitionError('strand', state);
     }
     return { kind: 'stranded', reason };
