@@ -14,12 +14,23 @@ import * as t from 'io-ts';
  * harmless once decoded.
  *
  * This codec keeps exactly that contract while giving producers a real
- * type: the TypeScript type is the union of `members`, so writing a name
- * this build does not know is a compile error, while decoding accepts ANY
- * string and carries an unknown one through untouched — it is neither
- * rejected nor remapped, so a re-encode writes back the bytes it read.
- * Non-strings are rejected as `t.string` rejected them. The encoded form
- * is the member itself, byte-identical to the `t.string` it replaces.
+ * type: the TypeScript type is the union of `members`, while decoding
+ * accepts ANY string and carries an unknown one through untouched — it
+ * is neither rejected nor remapped, so a re-encode writes back the bytes
+ * it read. Non-strings are rejected as `t.string` rejected them. The
+ * encoded form is the member itself, byte-identical to the `t.string` it
+ * replaces.
+ *
+ * What the union buys a producer is exactly what the SITE's annotation
+ * enforces. A value declared or returned as the member type is checked;
+ * so is a fresh literal handed to `ComponentMap.set` / `Entity.addComponent`,
+ * whose data parameter is `NoInfer<Data>` precisely so the component's
+ * declared type wins (without it TypeScript infers `Data` from both
+ * arguments and quietly widens `{reason: 'typo'}` to `{reason: string}`;
+ * system_hold_test pins the error). Any other generic sink that infers
+ * from the literal as well as from a typed argument can still widen the
+ * same way, so a name unknown to this build is a compile error at the
+ * annotated and component-set sites, not unconditionally.
  *
  * The cost is honest and bounded: a value decoded from a newer build may
  * hold a name outside the union, so switches over it must keep a default
@@ -32,9 +43,15 @@ import * as t from 'io-ts';
  */
 export function openEnum<M extends string>(name: string,
     members: readonly M[]): OpenEnum<M> {
-    // `is` mirrors t.string too (any string passes), so a record holding an
-    // unknown name behaves identically to before wherever a codec's guard
-    // is consulted (union discrimination, validation before encode).
+    // `is` mirrors t.string too: ANY string passes, not only the declared
+    // members, so a record holding an unknown name behaves identically to
+    // before wherever a codec's guard is consulted (io-ts union
+    // discrimination, validation before encode). That is the same
+    // additive contract as `validate`, stated once more for the guard.
+    // Consequently `SomeEnum.is(x)` is NOT a membership test and must not
+    // be used to validate a name against this build's members — use
+    // `members.includes(x)` for that. Nothing in production calls `.is`
+    // on these codecs today; this note is here for whoever is tempted.
     const codec = new t.Type<M, string, unknown>(
         name,
         (u): u is M => typeof u === 'string',
