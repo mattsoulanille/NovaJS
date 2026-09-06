@@ -8,7 +8,6 @@ import { escortParent } from './escort_command_plugin.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { flockParent } from './flock.js';
 import { GovtComponent } from './govt_component.js';
-import { PlayerEscort } from './player_escort.js';
 import {
     ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
 } from './health_plugin.js';
@@ -17,7 +16,8 @@ import { NpcComponent } from './npc_ai_plugin.js';
 import { FormationComponent } from './npc_ai_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import {
-    EscortLandingComponent, escortProvenance, PlayerEscortComponent,
+    EscortDeal, escortDeal, EscortLandingComponent, escortProvenance,
+    NO_DEAL, PlayerEscortComponent, withEscortDeal,
 } from './player_escort.js';
 import { ControlledByComponent, findControlledEntity } from './ship_control.js';
 import {
@@ -373,30 +373,22 @@ export function replaceEscortShipClass(escort: Entity, shipId: string,
 }
 
 /**
- * Rewrites the escort's ownership marker with `changes` applied, leaving
- * every other field alone.
+ * Rewrites the escort's ownership marker with its queued deal set to
+ * `deal`, leaving every other field alone (player_escort.ts's
+ * withEscortDeal, which is also what keeps the two deal kinds exclusive
+ * and an unqueued deal ABSENT rather than undefined).
  *
  * `set(...)` rather than a field assignment: the marker is a plain
  * serialized object, and writing a whole new value is what the delta maker
- * and the desync hash see. A field set to `undefined` is DELETED rather
- * than written, so cancelling a deal restores exactly the encoded shape the
- * marker had before it was queued — an undefined-valued key would hash
- * differently on a peer that had never queued anything.
+ * and the desync hash see.
  */
-function setEscortDeal(escort: Entity,
-    changes: { pendingUpgrade?: string, pendingSale?: boolean }): void {
+function setEscortDeal(escort: Entity, deal: EscortDeal): void {
     const existing = escort.components.get(PlayerEscortComponent);
     if (!existing) {
         return;
     }
-    const next: PlayerEscort = { ...existing, ...changes };
-    if (next.pendingUpgrade === undefined) {
-        delete next.pendingUpgrade;
-    }
-    if (!next.pendingSale) {
-        delete next.pendingSale;
-    }
-    escort.components.set(PlayerEscortComponent, next);
+    escort.components.set(PlayerEscortComponent,
+        withEscortDeal(existing, deal));
 }
 
 /**
@@ -438,11 +430,16 @@ export function applyEscortAction(world: World, peerId: string | undefined,
             // Always honoured: un-queueing must never be refusable, or a
             // player whose circumstances changed (they sold the outfit that
             // unlocked the target class, they went broke) would be stuck
-            // with a deal they cannot cancel.
-            setEscortDeal(escort, { pendingUpgrade: undefined });
+            // with a deal they cannot cancel. Cancels ONLY an upgrade: a
+            // queued sale is a different deal and stays.
+            if (escortDeal(owned).kind === 'upgrade') {
+                setEscortDeal(escort, NO_DEAL);
+            }
             return;
         case 'cancelSale':
-            setEscortDeal(escort, { pendingSale: false });
+            if (escortDeal(owned).kind === 'sale') {
+                setEscortDeal(escort, NO_DEAL);
+            }
             return;
         case 'queueSale': {
             // ONLY A CAPTURED HULL IS THE PLAYER'S TO SELL. A hired pilot's
@@ -459,8 +456,7 @@ export function applyEscortAction(world: World, peerId: string | undefined,
             // keeps the other button LIVE rather than greying it
             // (hail/sell_captured_escort.png still offers Upgrade Escort),
             // so pressing one CANCELS the other rather than being refused.
-            setEscortDeal(escort,
-                { pendingSale: true, pendingUpgrade: undefined });
+            setEscortDeal(escort, { kind: 'sale' });
             return;
         }
         case 'queueUpgrade': {
@@ -477,8 +473,7 @@ export function applyEscortAction(world: World, peerId: string | undefined,
             // NOT gated on credits, and nothing is staged: no ship is built
             // on this tick. The target class is loaded (and the money
             // checked) by the client that settles the deal at the pad.
-            setEscortDeal(escort,
-                { pendingUpgrade: upgradeTo, pendingSale: false });
+            setEscortDeal(escort, { kind: 'upgrade', toShip: upgradeTo });
             return;
         }
     }

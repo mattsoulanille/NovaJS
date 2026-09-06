@@ -26,7 +26,9 @@ import { MissionShipComponent } from './mission_ship_plugin.js';
 import { FormationComponent } from './npc_ai_plugin.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from './planet_plugin.js';
 import {
-    EscortLandingComponent, EscortPayrollComponent, PlayerEscortComponent,
+    durableEscortFields, escortDeal, escortDealFields, EscortLandingComponent,
+    EscortPayrollComponent, NO_DEAL, PlayerEscort, PlayerEscortComponent,
+    withEscortDeal,
 } from './player_escort.js';
 import {
     escortFollows, EscortJump, EscortJumpEvent, EscortLanded,
@@ -980,5 +982,76 @@ describe('steerToStellar', () => {
         expect(target.subtract(movement.position).length)
             .toBeLessThan(50);
         expect(movement.velocity.length).toBeLessThan(20);
+    });
+});
+
+/**
+ * ============================================================================
+ * The queued deal as one explicit state over the flag pair
+ * ============================================================================
+ *
+ * `pendingUpgrade` / `pendingSale` are the WIRE encoding of EscortDeal
+ * (player_escort.ts); these pin the decode, the encode, the exclusivity
+ * the single writer enforces, and that the encoding is byte-for-byte what
+ * the previous build wrote — so nothing on the wire, in the desync hash,
+ * or in an existing save moves.
+ */
+describe('EscortDeal over the PlayerEscort marker', () => {
+    const base: PlayerEscort = { player: 'p', parent: 'p', provenance: 'captured' };
+
+    it('decodes each encoding, and an escort from before deals existed as none', () => {
+        expect(escortDeal(undefined)).toEqual(NO_DEAL);
+        expect(escortDeal({ player: 'p', parent: 'p' })).toEqual(NO_DEAL);
+        expect(escortDeal({ ...base, pendingUpgrade: 'test:better' }))
+            .toEqual({ kind: 'upgrade', toShip: 'test:better' });
+        expect(escortDeal({ ...base, pendingSale: true })).toEqual({ kind: 'sale' });
+        // A false flag is "not queued", as escortSaleQueued always read it.
+        expect(escortDeal({ ...base, pendingSale: false })).toEqual(NO_DEAL);
+    });
+
+    it('encodes to exactly the flag pair the previous build wrote', () => {
+        expect(escortDealFields(NO_DEAL)).toEqual({});
+        expect(escortDealFields({ kind: 'upgrade', toShip: 'test:better' }))
+            .toEqual({ pendingUpgrade: 'test:better' });
+        expect(escortDealFields({ kind: 'sale' })).toEqual({ pendingSale: true });
+        // Round trip, both ways.
+        for (const deal of [NO_DEAL, { kind: 'upgrade', toShip: 'x' } as const,
+            { kind: 'sale' } as const]) {
+            expect(escortDeal({ ...base, ...escortDealFields(deal) })).toEqual(deal);
+        }
+    });
+
+    it('writes ONE deal at a time, removing the other rather than falsing it', () => {
+        const selling = withEscortDeal(
+            { ...base, pendingUpgrade: 'test:better' }, { kind: 'sale' });
+        // The key is GONE, not undefined: an undefined-valued key would
+        // hash differently on a peer that never queued anything.
+        expect(selling).toEqual({ ...base, pendingSale: true });
+        expect('pendingUpgrade' in selling).toBeFalse();
+        const upgrading = withEscortDeal(selling,
+            { kind: 'upgrade', toShip: 'test:better' });
+        expect(upgrading).toEqual({ ...base, pendingUpgrade: 'test:better' });
+        expect('pendingSale' in upgrading).toBeFalse();
+        // Cancelling restores the pre-deal shape exactly, other fields intact.
+        expect(withEscortDeal({ ...upgrading, detached: true }, NO_DEAL))
+            .toEqual({ ...base, detached: true });
+    });
+
+    it('reads a marker carrying BOTH flags (which no writer produces) as the '
+        + 'sale, which is what the settlement would do with it', () => {
+            const both: PlayerEscort =
+                { ...base, pendingUpgrade: 'test:better', pendingSale: true };
+            expect(escortDeal(both)).toEqual({ kind: 'sale' });
+            // durableEscortFields re-stamps it in the one-deal shape.
+            expect(durableEscortFields(both))
+                .toEqual({ provenance: 'captured', pendingSale: true });
+        });
+
+    it('durableEscortFields carries provenance and the deal, never detached', () => {
+        expect(durableEscortFields(undefined)).toEqual({});
+        expect(durableEscortFields({ player: 'p', parent: 'p', detached: true }))
+            .toEqual({});
+        expect(durableEscortFields({ ...base, detached: true, pendingUpgrade: 'x' }))
+            .toEqual({ provenance: 'captured', pendingUpgrade: 'x' });
     });
 });
