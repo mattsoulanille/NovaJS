@@ -59,11 +59,15 @@ export class Bar extends Menu<Entity> {
     private creditsBaseline = 0;
     private hired: string[] = [];
     /**
-     * The client's landed-escort roster and the docked ship's uuid, set
-     * per-landing by the Spaceport (as for the trade center), so the
-     * hire dialog can count the fleet against MAX_ESCORTS.
+     * The client's landed-escort roster, the display world the docked
+     * ship came out of, and the docked ship's uuid, set per-landing by
+     * the Spaceport (as for the trade center), so the hire dialog can
+     * count the fleet against MAX_ESCORTS — escorts still flying down
+     * are in the world, the ones that have touched down are on the
+     * roster (escort_cap.ts's cappedEscortCount).
      */
     private landedEscorts?: () => readonly FleetEscortEntry[];
+    private world?: Iterable<[string, Entity]>;
     private playerUuid?: string;
     private description = new PIXI.Text('', DESC_FONT);
     private news: NewsDialog;
@@ -138,9 +142,10 @@ export class Bar extends Menu<Entity> {
 
     /** See the landedEscorts field. */
     setLandedEscorts(roster?: () => readonly FleetEscortEntry[],
-        playerUuid?: string) {
+        playerUuid?: string, world?: Iterable<[string, Entity]>) {
         this.landedEscorts = roster;
         this.playerUuid = playerUuid;
+        this.world = world;
     }
 
     override async show(input: Entity): Promise<Entity> {
@@ -280,10 +285,11 @@ export class Bar extends Menu<Entity> {
                 // The bar's working control bits (a mission accepted this
                 // visit already counts) plus the landed entity, which is
                 // where the hire pool reads the player's outfits, ranks
-                // and the game date from — and the landed roster, for
-                // the escort cap (hire_escort.ts's escortCount).
+                // and the game date from — and the world and landed
+                // roster, for the escort cap (HirePlayer's doc).
                 {
                     entity: this.input, bits: this.session.state.bits,
+                    world: this.world,
                     landedEscorts: this.landedEscorts,
                     playerUuid: this.playerUuid,
                 });

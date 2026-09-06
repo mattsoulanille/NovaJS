@@ -6,7 +6,9 @@ import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { Entity } from 'nova_ecs/entity';
 import { DisabledComponent } from './disabled_component.js';
+import { countsTowardEscortCap, MAX_ESCORTS } from './escort_cap.js';
 import { FiringGroupComponent } from './firing_group.js';
+import { EscortPayrollComponent } from './player_escort.js';
 import { ArmorComponent } from './health_plugin.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import { ShipComponent } from './ship_plugin.js';
@@ -343,6 +345,26 @@ describe('buildMissionShipSpawns', () => {
                 .toEqual({ group: OWNER });
         }
     });
+
+    it('forms mission escorts on an owner already at the escort cap (#161)',
+        async () => {
+            // Six hired escorts on the payroll: the bar would refuse a
+            // seventh hire, but a mission's escorts are not the player's
+            // hires — they join, all of them, and are not counted.
+            const player = makePlayer(makeObjective(
+                { behavior: 1, total: 3 }));
+            player.components.set(EscortPayrollComponent,
+                Array(MAX_ESCORTS).fill(SHIP));
+            const ships = await buildMissionShipSpawns(player, OWNER,
+                'nova:128', makeGameData(), makeUniverse(), 6);
+            expect(ships.length).toBe(3);
+            for (const ship of ships) {
+                expect(ship.components.get(FormationComponent)?.leader)
+                    .toBe(OWNER);
+                expect(ship.components.has(MissionShipComponent)).toBeTrue();
+                expect(countsTowardEscortCap(ship)).toBeFalse();
+            }
+        });
 
     it('keeps natural departure timers on chase-off targets', async () => {
         const player = makePlayer(makeObjective(
