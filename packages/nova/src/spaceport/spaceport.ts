@@ -208,8 +208,8 @@ export class Spaceport extends Menu<Entity> {
             // Anything that must show outfitted physics WHILE STILL
             // LANDED therefore has to re-derive it for display rather
             // than read the component — see player_info.ts's
-            // dialogShipPhysics.
-            // TODO: Find a better way to do this.
+            // dialogShipPhysics. (Tracker issue: Provide re-derivation on
+            // in-place mutation would make this delete unnecessary.)
             this.input.components.delete(WeaponsStateComponent);
             this.input.components.delete(ShipPhysicsComponent);
             // Outfits can change fuel capacity (fuel tanks), which

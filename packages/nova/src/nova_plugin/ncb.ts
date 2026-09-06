@@ -662,8 +662,8 @@ export function parseNCBSet(expression: string): NCBSetOperation[] {
 
 const warnedMissingHooks = new Set<string>();
 function missingHook(name: string) {
-    // TODO: Implement the remaining hooks (missions, ranks, stellar
-    // destruction, ...) as their game features land.
+    // Tracker issue: implement the remaining hooks (missions, ranks,
+    // stellar destruction, ...) as their game features land.
     if (!warnedMissingHooks.has(name)) {
         warnedMissingHooks.add(name);
         console.warn(`NCB set operation ${name} is not implemented here; ignoring.`);

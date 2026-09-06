@@ -136,7 +136,8 @@ export class ItemTile<I extends Item> {
         } as const,
     };
 
-    // TODO: Use the colr resource
+    // Tracker issue: these are cölr gridDim / gridBright, but cölr is
+    // not exposed through NovaDataInterface yet.
     private colors = {
         dim: 0x404040,
         bright: 0xFF0000,

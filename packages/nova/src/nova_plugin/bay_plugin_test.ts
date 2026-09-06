@@ -520,7 +520,7 @@ describe('bay weapons', () => {
             // REASSIGNMENT (nova_ecs/provide.ts), so WeaponsState is not
             // re-derived and the WeaponsComponent local state (reload
             // timers, burst counters) survives — the hazard behind the
-            // WeaponsComponentProvider TODO in fire_weapon_plugin.ts.
+            // tracker note on WeaponsComponentProvider in fire_weapon_plugin.ts.
             expect(carrier.components.get(WeaponsStateComponent))
                 .toBe(weaponsStateBefore);
             expect(carrier.components.get(localStateBefore!) as unknown)

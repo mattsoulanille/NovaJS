@@ -89,7 +89,10 @@ export function defaultWeaponLocalState(): WeaponLocalState {
         exitIndex: 0,
     };
 }
-// TODO: This doesn't update if the set or count of weapons changes.
+// Tracker issue: the local weapon state map is only rebuilt when
+// WeaponsStateComponent is REASSIGNED (Provide change detection); an
+// in-place change to the set or count of weapons leaves it stale. See
+// bay_plugin.ts for why consumeAmmo deliberately relies on that.
 export const WeaponsComponentProvider = Provide({
     name: "WeaponsComponentProvider",
     provided: WeaponsComponent,
@@ -470,8 +473,8 @@ export abstract class WeaponEntry {
     }
 
     fireFromEntity(source: string, inaccuracy = true): Entity | undefined {
-        // TODO: This is expensive. Cache queries for different sources in nova_ecs or
-        // add a 'number of shots' argument.
+        // A per-entity runQuery is answered from nova_ecs's query cache
+        // (QueryCacheEntry.getResultForEntity), so this is cheap per shot.
         const results = this.runQuery(FireFromEntityQuery, source);
         if (!results[0]) {
             return undefined;

@@ -257,8 +257,8 @@ export const ShipAnimationSystem = new System({
         ActiveBeamsQuery] as const,
     step(ship, weaponStates, gameData, animation, time, ionized, ionizationColor,
         cloakActive, disabled, playerScanners, entity, uuid, activeBeams) {
-        // For now, always hide the ship's shield.
-        // TODO: Blink this when hit.
+        // For now, always hide the ship's shield. Tracker issue: flash
+        // the shän shieldImage when the shields take a hit.
         const shield = animation.sprites.get('shieldImage');
         if (shield) {
             shield.pixiSprite.visible = false;

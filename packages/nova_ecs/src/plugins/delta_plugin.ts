@@ -163,8 +163,9 @@ export class DeltaMaker {
             entityDelta.removeComponents = removedComponents;
         }
 
+        // Returned unencoded: multiplayer_plugin encodes the whole
+        // per-entity delta map as one message.
         if (Object.keys(entityDelta).length > 0) {
-            // TODO: Encode this here???
             return entityDelta;
         }
         return;
@@ -282,6 +283,9 @@ export function immerGetDelta<T>(_a: T, _b: T, patches: Patch[]) {
 }
 
 export function immerApplyDelta<T>(componentData: T, delta: Patch[]) {
-    // TODO: Fix this type
+    // Cast rather than `T extends Objectish`: this is the default
+    // applyDelta for any registered component, whose Data type is
+    // unconstrained. The runtime requirement (draftable data) is the
+    // one the tracker issue on non-object component data covers.
     return applyPatches(componentData as Objectish, delta) as T;
 }

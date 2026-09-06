@@ -20,7 +20,10 @@ const BUTTON_IDS = new Map([
     }],
 ]);
 
-const LEFT_POS = 13.2 // TODO: infer from texture width
+// The cap sprites' inset. Tracker issue: derive this and the button
+// height below from the cap textures instead of constants (mirrored
+// as shipyard_content.ts BUTTON_CAP_WIDTH).
+const LEFT_POS = 13.2
 
 /** Modifier state of a button click. `option` is the option/alt key,
  * which the original uses for bulk buy/sell quantity entry. */
@@ -140,7 +143,7 @@ export class Button {
             this.text.style as PIXI.TextStyle); // This required cast may be a types bug
         this.width = width ?? textMetrics.width;
 
-        const height = 25; // TODO: infer from texture height
+        const height = 25; // See the LEFT_POS note (tracker issue).
         this.text.position.x = LEFT_POS + this.width / 2;
         this.text.position.y = height / 2;
 

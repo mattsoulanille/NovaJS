@@ -39,8 +39,8 @@ export const ManageClientsSystem = new System({
     args: [RemovedPeerEvent, new Query([MultiplayerData, UUID] as const),
         Entities, SingletonComponent] as const,
     step: (removedPeer, multiplayerEntities, entities) => {
-        // Remove entities of peers who have disconnected
-        // TODO: Save them for when they reconnect.
+        // Remove entities of peers who have disconnected. Tracker issue:
+        // keep them for a reconnecting peer instead.
         for (const [multiplayerData, uuid] of multiplayerEntities) {
             if (multiplayerData.owner === removedPeer) {
                 entities.delete(uuid);

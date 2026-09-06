@@ -54,7 +54,8 @@ export const TimeSystem = new System({
             time.frame++;
             return;
         }
-        // TODO: performance.now for node?
+        // Wall-clock path (display worlds): epoch ms via Date, which
+        // jasmine's mockDate can drive (performance.now cannot be).
         const now = new Date().getTime();
         time.delta_ms = now - time.time;
         time.delta_s = time.delta_ms / 1000;

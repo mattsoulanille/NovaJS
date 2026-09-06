@@ -52,9 +52,9 @@ describe('Movement Plugin', () => {
             name: 'ReportSystem',
             args: [MovementStateComponent],
             step: (state) => {
-                // Copy the position since it's a draft
-                // TODO: Why doe TypeScript think it's a vector and not a position?
-                positions.push(state.position.scale(1) as Position);
+                // Copy the position since it's a draft. scale() is typed
+                // as returning `this`, so the copy is already a Position.
+                positions.push(state.position.scale(1));
             },
             after: [MovementSystem],
         });

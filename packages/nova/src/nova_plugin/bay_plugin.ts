@@ -84,7 +84,7 @@ export const BayFighterComponent =
  *    consumeAmmo does — leaves WeaponsStateComponent and the
  *    WeaponsComponent local state (reload timers, burst counters)
  *    alone. Reassigning would re-derive both and reset every weapon's
- *    reload clock mid-flight, which is the live TODO at
+ *    reload clock mid-flight, which is the tracker issue noted at
  *    fire_weapon_plugin.ts WeaponsComponentProvider.
  *  - It never pushes the magazine past capacity (the bay's MaxAmmo
  *    times the number of bays the carrier mounts), so a carrier that
@@ -204,7 +204,8 @@ class BayWeaponEntry extends WeaponEntry {
         if (sourceVelocity) {
             velocity = velocity.add(sourceVelocity);
         }
-        // TODO: Add exit velocity to bay weapons.
+        // Tracker issue: BayWeaponData carries no launch speed, so every
+        // bay uses the EXIT_KICK constant rather than its wëap's field.
         velocity = velocity.add(angle.getUnitVector().scale(EXIT_KICK));
 
         const ship = this.makeShip();

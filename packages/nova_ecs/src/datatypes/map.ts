@@ -1,8 +1,9 @@
 import { isLeft, right } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 
-// TODO(mattsoulanille): Maybe optimize string and number keys by serializing
-// them as objects instead of tuples?
+// Encodes a Map as an array of [key, value] tuples. Tracker issue: string-
+// and number-keyed maps could encode as plain objects instead (a wire-
+// format change, so it needs a PROTOCOL_VERSION bump).
 export function map<Key, KeyEncode, Value, ValueEncode>(key: t.Type<Key, KeyEncode>,
     value: t.Type<Value, ValueEncode>) {
     return new t.Type(`Map<${key.name}, ${value.name}>`,

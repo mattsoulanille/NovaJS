@@ -28,8 +28,9 @@ import { getDefaultSystemData } from "./system_data.js";
 import { getDefaultTargetCornersData } from "./target_corners_data.js";
 import { getDefaultProjectileWeaponData } from "./weapon_data.js";
 
-// TODO: Make gettable an interface so you
-// don't have to do this awkward extension
+// Overrides Gettable.get rather than passing a real Builder so the map can
+// be edited between gets; tracker issue: give Gettable an interface so a
+// mock need not extend the caching class.
 class MockGettable<T> extends Gettable<T> {
     map = new Map<string, T>();
     getIds(): string[] {

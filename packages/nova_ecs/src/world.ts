@@ -1,6 +1,6 @@
-import { Either, isLeft, left, Right, right } from "fp-ts/lib/Either.js";
+import { Either, isLeft, left, right } from "fp-ts/lib/Either.js";
 import { ArgModifier, UnknownArgModifier } from "./arg_modifier.js";
-import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types.js";
+import { ArgData, ArgTypes, Components, Emit, EmitFunction, EmitNow, Entities, GetArg, GetArgFunction, GetEntity, GetWorld, RunQuery, RunQueryFunction, UUID } from "./arg_types.js";
 import { ProvideAsyncPlugin } from "./provide_async.js";
 import { AsyncSystemPlugin } from "./async_system.js";
 import { Component, UnknownComponent } from "./component.js";
@@ -169,7 +169,9 @@ export class World {
             entities,
         };
         this.eventQueue.push(eraseEventWithEntities(eventWithEntities));
-        // TODO: Should this emit now, or once the event runs?
+        // Outside subscribers (`world.events.get(E).subscribe`) hear the
+        // event as soon as it is emitted, before the systems queued for
+        // it run.
         this.events.get(event).next(eventWithEntities);
     }
 
@@ -216,11 +218,12 @@ export class World {
 
     private async addPluginInternal(plugin: Plugin,
         parentFrame?: Promise<void>[]): Promise<void> {
-        // TODO: Namespace component and system names? Perhaps use ':' or '/' to
-        // denote namespace vs name. Use a proxy like NovaData uses.
+        // Component and system names are a single global namespace; see
+        // the tracker issue on per-plugin namespacing (also noted at
+        // component.ts).
         if (this.plugins.has(plugin)) {
-            // TODO: Should this warning be re-enabled?
-            // console.warn(`Not adding plugin ${plugin.name} since it is already added`);
+            // Re-adding is routine (plugins add the plugins they depend
+            // on), so it is silent rather than a warning.
             const existing = this.pluginPromises.get(plugin);
             // Only wait on a build that has already finished (to report its
             // failure). Waiting on one that is still building risks
@@ -315,9 +318,9 @@ export class World {
      * plugin does not implement a `remove` function, this does nothing.
      */
     async removePlugin(plugin: Plugin): Promise<boolean> {
-        // TODO: Track what systems and resources a plugin adds and remove them
-        // automatically (if a plugin does not implement `removePlugin`) as long
-        // as no other plugins use them?
+        // Tracker issue: track what systems and resources a plugin adds and
+        // remove them automatically (if a plugin does not implement `remove`)
+        // as long as no other plugin uses them.
 
         // Wait for the plugin to finish building before removing it since this
         // can not be interrupted.
@@ -474,8 +477,7 @@ export class World {
     addSystemSet(systemSet: SystemSet): this {
         this.addPhase(systemSet.phase);
 
-        // TODO? This is not as efficient as it could be (it sorts every time),
-        // but that probably doesn't matter since it's very rarely called.
+        // Each addSystem re-sorts; fine, this is very rarely called.
         for (const system of systemSet.systems) {
             this.addSystem(system);
         }
@@ -534,7 +536,7 @@ export class World {
         // Not a for loop because more events may be added as prior
         // ones are resolved.
         while (this.eventQueue.length > 0) {
-            // TODO: Maybe use an actual queue for better time order.
+            // FIFO: events run in emission order.
             const ecsEvent = this.eventQueue.shift()!;
             this.runEvent(ecsEvent);
         }
@@ -631,9 +633,11 @@ export class World {
         } else if (arg === GetEntity) {
             return right(entity as ArgData<T>);
         } else if (arg === GetArg) {
-            // TODO: Why don't these types work?
-            return right(<T extends ArgTypes = ArgTypes>(arg: T) =>
-                this.getArg<T>(arg, entity, event)) as Right<ArgData<T>>;
+            // Cast like the branches above: a runtime `arg === X` check
+            // cannot narrow the generic T.
+            const getArg: GetArgFunction = <A extends ArgTypes = ArgTypes>(a: A) =>
+                this.getArg<A>(a, entity, event);
+            return right(getArg as ArgData<T>);
         } else if (arg instanceof EcsEvent) {
             if (!event) {
                 return left(undefined);

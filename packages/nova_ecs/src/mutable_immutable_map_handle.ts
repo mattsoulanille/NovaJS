@@ -74,7 +74,7 @@ export class MutableImmutableMapHandle<K, V> implements Map<K, V> {
         }
     }
 
-    // TODO: Fix
-    // @ts-ignore
-    [Symbol.toStringTag]: string;
+    // Required by the Map interface; declared only (no runtime property),
+    // so Object.prototype.toString still reports '[object Object]'.
+    declare [Symbol.toStringTag]: string;
 }

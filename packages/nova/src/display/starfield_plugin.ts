@@ -78,7 +78,8 @@ class Starfield {
         const texture = this.textures[
             Math.floor(this.random() * this.textures.length)];
         const sprite = new PIXI.Sprite(texture);
-        // TODO: not uniform
+        // Tracker issue: stars with a larger parallax factor are packed
+        // into a smaller square, so density is not uniform across layers.
         const factor = this.sampleRange(...this.positionFactorRange);
 
         const maxDistance = BOUNDARY * (1 - factor);

@@ -205,7 +205,8 @@ const ShipZeroArmorSystem = new System({
             || armorFullyRestored(armor)) {
             return;
         }
-        // TODO: Normalize all times to ms
+        // ShipData.deathDelay is in seconds; sim time is ms (tracker
+        // issue: normalize novadatainterface durations to ms).
         const deathTime = ship.deathDelay * 1000 + zeroArmorTime.time;
         components.set(ExplodingComponent, deathTime);
     }
@@ -318,8 +319,9 @@ const KnockbackSystem = new System({
     }
 });
 
-// TODO: Put statuses of ship all in the same variable and make it
-// easy to reset?
+// Tracker issue: the respawn resets shield, armor and ionization one
+// component at a time; a new per-ship status would have to be added
+// here by hand. A shared "reset to full" would keep them in step.
 export const PlayerDeathSystem = new System({
     name: 'PlayerDeathSystem',
     // Gated on ControlledBy (synced), NOT PlayerShipSelector

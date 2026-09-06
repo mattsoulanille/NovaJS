@@ -4,7 +4,8 @@ import { BaseData, getDefaultBaseData } from "./base_data.js";
 
 export interface ExplosionData extends BaseData {
     animation: Animation,
-    sound: string | null, // TODO: Implement sound
+    /** Global "snd " id played when the explosion spawns, or null. */
+    sound: string | null,
     /**
      * Animation speed in sprite frames per GAME frame, where a game
      * frame is 1/30 s: bööm FrameAdvance / 100. EVN Bible (bööm): "100
@@ -20,7 +21,7 @@ export function getDefaultExplosionData(): ExplosionData {
     return {
         ...getDefaultBaseData(),
         animation: getDefaultAnimation(),
-        sound: null, // TODO: Make a sound interface
+        sound: null,
         rate: 1
     }
 }

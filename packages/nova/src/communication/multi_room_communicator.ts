@@ -92,7 +92,8 @@ export class MultiRoom {
         });
 
         this.roomMap = new DefaultMap(key => {
-            // TODO: Correctly clean up subscriptions
+            // `cleanup` (run by leave()) fires `finish`, which tears down
+            // every subscription piped through takeUntil(finish) below.
             const finish = new Subject();
             const cleanup = () => {
                 finish.next(true);

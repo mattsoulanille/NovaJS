@@ -19,7 +19,9 @@ import { Component } from 'nova_ecs/component';
  * fire_weapon_plugin removes the back edge outright.
  */
 
-// TODO: Fix delta system to allow stuff that isn't an object.
+// An object wrapper around one string because DeltaMaker drafts every
+// registered component with immer, which needs draftable data. Tracker
+// issue: let the delta system carry primitive component data.
 export const OwnerComponentType = t.type({ owner: t.string });
 export type OwnerComponentType = t.TypeOf<typeof OwnerComponentType>;
 

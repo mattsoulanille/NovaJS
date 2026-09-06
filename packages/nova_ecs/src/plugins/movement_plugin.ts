@@ -160,9 +160,7 @@ function inertialControls(state: MovementState, physics: MovementPhysics,
     state.velocity = state.velocity.shortenToLength(physics.maxVelocity);
 
     // Velocity
-    // TODO: Make it so you don't have to cast
-    state.position = state.position
-        .add(state.velocity.scale(time.delta_s)) as Position;
+    updatePosition(state, time);
 }
 
 function inertialessControls(state: MovementState, physics: MovementPhysics,
@@ -184,8 +182,7 @@ function inertialessControls(state: MovementState, physics: MovementPhysics,
 }
 
 function updatePosition(state: MovementState, time: Time) {
-    state.position = state.position
-        .add(state.velocity.scale(time.delta_s)) as Position;
+    state.position = state.position.add(state.velocity.scale(time.delta_s));
 }
 function handleTurning(state: MovementState, physics: MovementPhysics,
     time: Time, entities: EntityMap) {

@@ -15,16 +15,13 @@ export function SystemParseClosure(backlinks: SystemBacklinkMap) {
         SystemParse(syst, notFoundFunction, backlinks);
 }
 
-// TODO: Refactor redundant code
 export async function SystemParse(syst: SystResource,
     notFoundFunction: (m: string) => void,
     backlinks?: SystemBacklinkMap): Promise<SystemData> {
     var base: BaseData = await BaseParse(syst, notFoundFunction);
 
     var links: Array<string> = [];
-    for (let i in [...syst.links]) {
-        let linkLocal = [...syst.links][i];
-
+    for (const linkLocal of syst.links) {
         let systLinkedTo = syst.idSpace.sÿst[linkLocal];
         if (systLinkedTo) {
             links.push(systLinkedTo.globalID);
@@ -55,10 +52,7 @@ export async function SystemParse(syst: SystResource,
     }
 
     var planets: Array<string> = [];
-
-    for (let i in syst.spobs) {
-        let planetLocal = syst.spobs[i];
-
+    for (const planetLocal of syst.spobs) {
         let planetGlobal = syst.idSpace.spöb[planetLocal];
         if (planetGlobal) {
             planets.push(planetGlobal.globalID);

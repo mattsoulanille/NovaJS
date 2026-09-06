@@ -65,7 +65,14 @@ type Asdf = TupleToString<['foo', 'bar', 'baz']>;
 
 type StructCodeToArray<T> = T extends `${'<' | '>'}${infer Code}` ? Decode<Code> : never;
 
-// TODO: This type combinatorially explodes.
+// Tracker issue (struct.ts template-literal type recursion depth): Decode
+// recurses one character per step and is not tail-recursive, so a code of
+// roughly 50+ characters fails with TS2589 "excessively deep and possibly
+// infinite" (probed: 45 chars type-checks, 60 does not). The original note
+// called this a combinatorial explosion; whether there is also a cost
+// blowup for non-literal or union codes has not been characterised. Every
+// code in use today is at most 7 characters (parse.ts), so it is a latent
+// hazard, not a live one.
 type Decode<T> = T extends `${infer C}${infer Rest}`
     ? C extends CodeChar
     ? CodeMap[C] extends null ? Decode<Rest>

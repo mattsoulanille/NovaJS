@@ -98,11 +98,10 @@ export async function ShipParse(ship: ShipResource,
     const infoPict = infoGraphic > 0
         ? (ship.idSpace.PICT[infoGraphic]?.globalID ?? null) : null;
 
-    // TODO: Parse Explosions
+    // The ship's two bööm references, resolved through its own id space.
     var initialExplosionID: string | null = null;
     var finalExplosionID: string | null = null;
 
-    // Refactor into a function? Eh, there's only 2 of them.
     if (ship.initialExplosion !== null) {
         let boom = ship.idSpace.bööm[ship.initialExplosion]
         if (boom) {

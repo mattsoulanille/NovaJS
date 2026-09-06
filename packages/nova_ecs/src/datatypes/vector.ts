@@ -42,11 +42,17 @@ export class Vector implements VectorLike {
         return new Vector(v.x, v.y);
     }
 
-    protected factory(x: number, y: number) {
-        return new Vector(x, y);
+    /**
+     * Builds the result of an operation. Subclasses (Position) override
+     * it to stay closed under add/scale/etc; the `this` return type on
+     * the operations below is what lets a Position.add() be typed as a
+     * Position without a cast at every call site.
+     */
+    protected factory(x: number, y: number): this {
+        return new Vector(x, y) as this;
     }
 
-    private apply(other: VectorLike, f: (a: number, b: number) => number) {
+    private apply(other: VectorLike, f: (a: number, b: number) => number): this {
         return this.factory(f(this.x, other.x), f(this.y, other.y));
     }
 

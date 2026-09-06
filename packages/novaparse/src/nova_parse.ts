@@ -296,7 +296,7 @@ export class NovaParse implements GameDataInterface {
             Pers: this.buildIDsForResource(idSpace.përs),
             Cron: this.buildIDsForResource(idSpace.crön),
             PlayerStart: this.buildIDsForResource(idSpace.chär),
-            TargetCorners: [], // TODO: parse these
+            TargetCorners: [], // Tracker issue: parse the target-corner cicns
             SpriteSheet: this.buildIDsForResource(idSpace.rlëD),
             SpriteSheetImage: this.buildIDsForResource(idSpace.rlëD),
             SpriteSheetFrames: this.buildIDsForResource(idSpace.rlëD),
@@ -318,7 +318,7 @@ export class NovaParse implements GameDataInterface {
             Weapon: this.makeGettable<WeapResource, WeaponData>(NovaResourceType.wëap, WeaponParse),
             Pict: this.pictGettable,
             PictImage: this.pictImageGettable,
-            Cicn: new Gettable(async () => Defaults.Cicn), // TODO: parse cicn metadata
+            Cicn: new Gettable(async () => Defaults.Cicn), // Tracker issue: parse cicn metadata
             CicnImage: this.makeGettable<CicnResource, CicnImageData>(NovaResourceType.cicn, CicnImageParse),
             PpatImage: this.makeGettable<PpatResource, PpatImageData>(NovaResourceType.ppat, PpatImageParse),
             Rank: this.makeGettable<RankResource, RankData>(NovaResourceType.ränk,

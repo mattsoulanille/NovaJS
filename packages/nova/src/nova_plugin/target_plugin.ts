@@ -141,38 +141,31 @@ const ChooseTargetSystem = new System({
             return;
         }
 
-        // index ranges from [-1, ships.length) with -1 being no target.
-        index.index = (index.index + 2) % (ships.length + 1) - 1;
+        // The cycle cursor runs over [-1, ships.length), where -1 is the
+        // "no target" step, and wraps from the last ship back to -1.
+        const advance = (i: number) => (i + 2) % (ships.length + 1) - 1;
+        // A ship the tab cycle may land on:
+        // Not yourself
+        // Not your flock (escorts and their spawn),
+        //   UNLESS a flock member is disabled (hiddenFromCycle)
+        // Not cloaked (unless a cloak scanner allows it)
+        // Not exploding (death sequence started)
+        const cycleable = ([targetUuid, _targetMovement, targetOwner, _targetShip,
+            targetCloak, targetExploding]: typeof ships[number]) =>
+            targetUuid !== uuid
+            && !hiddenFromCycle(targetUuid, targetOwner?.owner)
+            && isTargetable(targetCloak, myScanner)
+            && targetExploding === undefined;
 
-        if (index.index !== -1) {
-            // TODO; This is obtuse. Rewrite.
-            while (true) {
-                if (index.index === -1) {
-                    break;
-                }
-
-                const [targetUuid, _targetMovement, targetOwner, _targetShip,
-                    targetCloak, targetExploding] = ships[index.index];
-                // Don't target yourself
-                // Don't target your flock (escorts and their spawn),
-                //   UNLESS a flock member is disabled (hiddenFromCycle)
-                // Don't target cloaked ships (unless a cloak scanner allows it)
-                // Don't target exploding ships (death sequence started)
-                if (targetUuid !== uuid
-                    && !hiddenFromCycle(targetUuid, targetOwner?.owner)
-                    && isTargetable(targetCloak, myScanner)
-                    && targetExploding === undefined) {
-                    break;
-                }
-                index.index = (index.index + 2) % (ships.length + 1) - 1;
-            }
+        // Step once, then keep stepping past ships that can't be cycled
+        // to. Reaching -1 (a full lap with nothing cycleable) clears the
+        // target.
+        let next = advance(index.index);
+        while (next !== -1 && !cycleable(ships[next])) {
+            next = advance(next);
         }
-
-        if (index.index === -1) {
-            target.target = undefined;
-        } else {
-            target.target = ships[index.index][0];
-        }
+        index.index = next;
+        target.target = next === -1 ? undefined : ships[next][0];
         emit(CycleTargetEvent, target);
     }
 });
