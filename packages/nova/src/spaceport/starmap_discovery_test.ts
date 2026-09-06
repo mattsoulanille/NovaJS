@@ -1,6 +1,7 @@
 import 'jasmine';
 import { SystemData } from 'novadatainterface/system_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
     drawnSystems, knownSystemProperties, linkKnown,
@@ -41,7 +42,9 @@ describe('the star map and what the pilot knows', () => {
     let adjacency: ReturnType<typeof buildAdjacency>;
     let kania: SystemData;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const ids = (await gameData.ids).System;
         systems = await Promise.all(
@@ -56,6 +59,7 @@ describe('the star map and what the pilot knows', () => {
         let drawn: Set<string>;
 
         beforeAll(() => {
+            if (!novaDataInstalled()) return; // each spec pends instead
             drawn = drawnSystems([KANIA], adjacency, [], KANIA);
         });
 
@@ -145,6 +149,7 @@ describe('the star map and what the pilot knows', () => {
         let far: string;
 
         beforeAll(() => {
+            if (!novaDataInstalled()) return; // each spec pends instead
             const near = drawnSystems([KANIA], adjacency, [], KANIA);
             far = systems.find(s => !near.has(s.id))!.id;
         });

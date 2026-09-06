@@ -149,6 +149,15 @@ Instead:
 
 ### SimulationGameDataInterface
 
+> **Superseded by code.** The shipped `SimulationGameData`
+> (`packages/nova/src/client/gamedata/simulation_game_data.ts`) exposes
+> seventeen gettables, not the seven sketched below: Ship, Outfit, Weapon,
+> Planet, System, Govt, Dude, Fleet, Junk, Oops, SpriteSheet, Asteroid,
+> Mission, Pers, Cron, PlayerStart and Rank (everything the simulation
+> plug-ins read — NPC spawning, missions, cröns, ranks — and no
+> `SpriteSheetFrames`, which is display-only). The sketch is kept for the
+> reasoning; the file is the contract.
+
 ```ts
 interface SimulationGameDataInterface {
     ids: Promise<NovaIDs>;

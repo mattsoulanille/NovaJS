@@ -93,9 +93,15 @@ async function run() {
                         continue;
                     }
                     // Copy the reference full frame next to the report so it is
-                    // self-contained.
+                    // self-contained. The reference directory is read-only
+                    // (-r--r--r-- files) and copyFile preserves the source
+                    // mode, so a copy from a previous run is 0444 and the
+                    // next copyFile onto it throws EACCES; remove it first.
                     const refFullOut = `ref__${ref.name}__full.png`;
-                    fs.copyFileSync(refAbs, path.join(OUTPUT_DIR, refFullOut));
+                    const refFullOutAbs = path.join(OUTPUT_DIR, refFullOut);
+                    fs.rmSync(refFullOutAbs, { force: true });
+                    fs.copyFileSync(refAbs, refFullOutAbs);
+                    fs.chmodSync(refFullOutAbs, 0o644);
                     const refPng = readPng(refAbs);
 
                     const regionResults = [];

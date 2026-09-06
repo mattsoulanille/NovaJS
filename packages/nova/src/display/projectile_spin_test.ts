@@ -11,6 +11,7 @@ import { CreateTime } from '../nova_plugin/create_time.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import { ProjectileComponent, ProjectileDataComponent } from '../nova_plugin/projectile_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { AnimationGraphic } from './animation_graphic.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
 import {
@@ -162,7 +163,9 @@ describe('shot spin (real Nova data)', () => {
     let nonSpinning: ProjectileWeaponData;
     let slowSpinning: ProjectileWeaponData;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const f = await gameData.data.Weapon.get('nova:143');
         const n = await gameData.data.Weapon.get('nova:128'); // Light Blaster
@@ -432,7 +435,9 @@ describe('shot spin sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;

@@ -1,8 +1,11 @@
 FROM node:22-alpine AS builder
 WORKDIR /app
 
-# Install turbo globally
-RUN npm install -g turbo
+# Install turbo at the range the repo declares: `turbo prune`'s output
+# layout is tied to the turbo major, so an unpinned global install could
+# drift from the local one.
+COPY package.json ./
+RUN npm install -g "turbo@$(node -p "require('./package.json').devDependencies.turbo")"
 
 # Prune the workspace to only include the nova package and its dependencies
 COPY . .

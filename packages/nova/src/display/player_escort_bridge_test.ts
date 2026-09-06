@@ -14,6 +14,7 @@ import {
 import {
     makeSimulationBridgeHarness,
 } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { completeEntity } from '../nova_plugin/entity_data_loader.js';
 import { EscortCommandComponent } from '../nova_plugin/escort_command.js';
 import { ArmorComponent } from '../nova_plugin/health_plugin.js';
@@ -47,7 +48,9 @@ import {
 describe('player escort sim -> client wiring', () => {
     let serializer: Serializer;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const harness = await makeSimulationBridgeHarness();
         serializer = harness.world.resources.get(SerializerResource)!;
     });

@@ -14,12 +14,11 @@
                 "build"
             ],
             "inputs": [
-                "src/**/*.ts",
-                "test/**/*.ts"
+                "$TURBO_DEFAULT$",
+                "!README.md",
+                "!design/**",
+                "!visual_compare/**"
             ]
-        },
-        "lint": {
-            "outputs": []
         },
         "dev": {
             "cache": false,

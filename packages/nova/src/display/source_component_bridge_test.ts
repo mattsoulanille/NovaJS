@@ -11,6 +11,7 @@ import {
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { BeamDataComponent } from '../nova_plugin/beam_plugin.js';
 import {
     OwnerComponent, SourceComponent,
@@ -49,7 +50,9 @@ describe('SourceComponent sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         // A real simulation world plus the bridge that mirrors it, built
         // the way the browser builds them.
         const harness = await makeSimulationBridgeHarness();

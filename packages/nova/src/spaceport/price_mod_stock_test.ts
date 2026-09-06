@@ -2,6 +2,7 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
@@ -57,7 +58,9 @@ describe('ränk PriceMod at real stock stellars', () => {
     let federationWorld: PlanetData;
     let universe: MissionUniverse;
 
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         universe = MissionUniverse.shared(gameData);
         await universe.load();

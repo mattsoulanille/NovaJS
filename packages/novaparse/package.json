@@ -21,11 +21,18 @@
     "test": "jasmine --config=jasmine.json"
   },
   "dependencies": {
+    "hull.js": "^1.0.3",
     "novadatainterface": "^0.1.6",
-    "resource_fork": "^0.1.0"
+    "pngjs": "^7.0.0",
+    "resource_fork": "^0.1.0",
+    "ts-enum-util": "^4.0.2"
   },
   "devDependencies": {
     "@evn/tsconfig": "0.1.0",
+    "@types/jasmine": "^5.1.13",
+    "@types/node": "^24.9.2",
+    "@types/pngjs": "^6.0.1",
+    "jasmine": "^5.12.0",
     "rimraf": "^5.0.5",
     "typescript": "5.9.3"
   }
