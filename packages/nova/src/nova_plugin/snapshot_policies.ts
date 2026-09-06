@@ -45,17 +45,6 @@ function passthroughWire<Data = unknown>() {
 }
 
 /**
- * Clones a DefaultMap, preserving its default factory.
- */
-function cloneDefaultMap<K, V>(map: DefaultMap<K, V>, cloneValue: (v: V) => V) {
-    const copy = new DefaultMap<K, V>(map.factory);
-    for (const [key, value] of map) {
-        copy.set(key, cloneValue(value));
-    }
-    return copy;
-}
-
-/**
  * Registers how each kind of simulation state is captured in rollback
  * snapshots. Serializer-registered components default to a codec
  * roundtrip and are not listed here; this configures the exceptions:
@@ -135,11 +124,11 @@ export function configureSnapshotPolicies(world: World) {
     // Mutable unregistered simulation state: explicit clones.
     policies.set(WeaponsComponent, {
         policy: 'clone',
-        clone: map => cloneDefaultMap(map, state => ({ ...state })),
+        clone: map => map.cloneWith(state => ({ ...state })),
     });
     policies.set(SubCounts, {
         policy: 'clone',
-        clone: map => cloneDefaultMap(map, count => count),
+        clone: map => map.cloneWith(),
     });
     policies.set(CollisionHitterComponent, {
         policy: 'clone',

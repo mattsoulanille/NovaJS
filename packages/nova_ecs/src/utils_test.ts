@@ -1,6 +1,6 @@
 import 'jasmine';
 import { Marker, Sortable } from './system.js';
-import { setEqual, sortableNameOrder, subset, topologicalSort, topologicalSortList } from './utils.js';
+import { DefaultMap, setEqual, sortableNameOrder, subset, topologicalSort, topologicalSortList } from './utils.js';
 
 describe('utils', () => {
     describe('topologicalSort', () => {
@@ -258,5 +258,31 @@ describe('utils', () => {
         expect(setEqual(a, new Set([...a]))).toBeTrue();
         expect(setEqual(c, new Set([...c]))).toBeTrue();
         expect(setEqual(a, c)).toBeFalse();
+    });
+
+    describe('DefaultMap.cloneWith', () => {
+        it('copies the entries through cloneValue', () => {
+            const map = new DefaultMap<string, { n: number }>(() => ({ n: 0 }));
+            map.get('a').n = 1;
+            map.get('b').n = 2;
+
+            const copy = map.cloneWith(v => ({ ...v }));
+
+            expect([...copy]).toEqual([['a', { n: 1 }], ['b', { n: 2 }]]);
+            expect(copy.get('a')).not.toBe(map.get('a'));
+            copy.get('a').n = 5;
+            expect(map.get('a').n).toBe(1);
+        });
+
+        it('keeps the default factory for keys the copy has not seen', () => {
+            const map = new DefaultMap<string, number>(key => key.length);
+            map.get('ab');
+
+            const copy = map.cloneWith();
+
+            expect(copy.get('xyz')).toBe(3);
+            expect(map.has('xyz')).toBeFalse();
+            expect(copy.get('ab')).toBe(2);
+        });
     });
 });
