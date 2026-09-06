@@ -547,7 +547,7 @@ describe('Input-driven rooms', () => {
         await archive.update();
 
         const bays = (world: World) =>
-            [...world.entities.keys()].filter(key => key.startsWith('bay:')).length;
+            [...world.entities.keys()].filter(key => key.includes(':bay:')).length;
         const launched = bays(peerA.world);
         expect(launched).toBeGreaterThan(0);
         expect(bays(peerB.world)).toBe(launched);
@@ -574,7 +574,7 @@ describe('Input-driven rooms', () => {
         // unregistered) escort-state components were lost in rollbacks
         // and resync baselines live.
         const returning = (world: World) => [...world.entities]
-            .filter(([uuid]) => uuid.startsWith('bay:'))
+            .filter(([uuid]) => uuid.includes(':bay:'))
             .filter(([, entity]) => [...entity.components.keys()]
                 .some(component => component.name === 'ReturnComponent'))
             .length;
@@ -608,7 +608,13 @@ describe('Input-driven rooms', () => {
         for (const comm of comms.values()) {
             comm.peers.current.next(new Set(comms.keys()));
         }
-        const peerC = await makePeer('c');
+        // The late joiner builds the ROOM's system: a room is one system,
+        // and every sim-minted uuid now carries its system id (IdFactory),
+        // so a peer that built a different system's world would mint a
+        // different id for the same projectile and diverge on contact.
+        // (It used to pass by accident: bare `projectile:N` ids were
+        // system-agnostic.)
+        const peerC = await makePeer('c', 'nova:226');
         expect(await peerC.host.joinRoom()).toBeTrue();
         {
             const { TimeResource } =

@@ -30,9 +30,13 @@ describe("SimulationBridge worker integration", () => {
             // Planets, the asteroid field, and the NPC population
             // (with its spawner) are loaded before the world ever
             // steps, so the initial frame already contains them.
+            // Sim-minted ids carry the system id as a prefix (IdFactory:
+            // `nova:1124:asteroid:0`); the field and the spawner
+            // themselves are named entities ('asteroid field', 'npc
+            // spawner').
             const isSystemFurniture = (uuid: string) =>
-                uuid.includes('planet') || uuid.startsWith('asteroid')
-                || uuid.startsWith('npc');
+                uuid.includes('planet') || uuid.includes('asteroid')
+                || uuid.includes('npc');
             const initialFrame = await client.snapshot();
             for (const [uuid] of initialFrame.added) {
                 expect(isSystemFurniture(uuid)).withContext(uuid).toBeTrue();

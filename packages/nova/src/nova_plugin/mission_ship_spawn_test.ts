@@ -278,6 +278,18 @@ describe('buildMissionShipSpawns', () => {
         expect(ships.length).toBe(0);
     });
 
+    it('builds nothing for an entity with no missions component: the '
+        + 'enterSystem call is safe for any entity', async () => {
+        // browser.ts's enterSystem calls prepareMissionShips without a
+        // PlayerShipSelector guard (every jumpTo entity IS the player's
+        // ship); this is the fallback that would make a non-player entity
+        // harmless anyway (review of PR #145, finding 1).
+        const nobody = new Entity('not a player');
+        const ships = await buildMissionShipSpawns(nobody, OWNER,
+            'nova:128', makeGameData(), makeUniverse());
+        expect(ships).toEqual([]);
+    });
+
     it('spawns follow-the-player objectives in any system', async () => {
         const player = makePlayer(makeObjective({ systemId: null }));
         const ships = await buildMissionShipSpawns(player, OWNER,

@@ -17,27 +17,36 @@ import { GateArrivalComponent } from './gate_transit_plugin.js';
  *
  * So every one of those paths needs an answer to "and if that fails?", and
  * "return without doing anything" is never it: that answer deletes the
- * player's ship from the game. The two answers are:
+ * player's ship from the game. The answers are:
  *
  *  - 'gate': the ship was AT a gate (a hypergate/wormhole transit, or a map
- *    pick made while docked). It goes back to that gate and lifts off from
- *    it, which is precisely the path a player takes when they open a gate
- *    map and close it again — slot bookkeeping, landed escorts and mission
- *    ships all already right.
- *  - 'reenter': the ship was IN FLIGHT (a hyperspace jump). There is no gate
- *    to stand on, so it re-enters the system it left. The entity still
- *    carries the arrival kinematics JumpSequenceSystem stamped on it at
- *    departure — teleported to the rim, coasting inward at top speed, stage
- *    'arriving' — so it drops out of hyperspace at the ORIGIN's rim exactly
- *    as it would have at the destination's. The jump "didn't take".
+ *    pick made while docked) AND THE ORIGIN WORLD IS STILL UP. It goes back
+ *    to that gate and lifts off from it, which is precisely the path a
+ *    player takes when they open a gate map and close it again — slot
+ *    bookkeeping, landed escorts and mission ships all already right.
+ *  - 'reenter': the ship has NO WORLD TO STAND IN. A hyperspace jump was
+ *    never at a gate; and a gate transit whose jumpTo failed AFTER tearing
+ *    the origin down (which is where every realistic rejection happens: the
+ *    destination world build, the worker, the room join — issue #13) has
+ *    had the origin's bridge closed, its display stripped from the stage
+ *    and its room left. There is nothing for a lift-off block to add the
+ *    ship to, so it re-enters the system it left the way a failed jump
+ *    does. The entity still carries whatever kinematics it had at
+ *    departure (a jumper: teleported to the rim, coasting inward, stage
+ *    'arriving'; a gate ship: sitting at the gate), so it comes back at
+ *    the origin's rim or at the origin gate respectively. The transit
+ *    "didn't take".
  *
  * The fuel is not refunded in either case: it was spent at departure, in the
  * simulation, on every peer, and a client-local refund would be a rewrite of
  * synced state that no other peer replays.
  *
  * 'lost' is the honest third answer for the one case with no destination to
- * name — a jump whose origin system id was never captured. Nothing can be
- * done, and saying so beats pretending.
+ * name — a transit whose origin system id was never captured, or a gate
+ * transit whose origin is gone and unknown. Nothing can be done, and saying
+ * so beats pretending: before issue #13, the gate abort armed a lift-off
+ * block that could never run (no bridge, forever) and the player got a
+ * black screen with no ship and no save.
  *
  * These functions are pure over the entity (they only strip the arrival
  * marker, which is a claim about a system the ship never reached) and hand
@@ -46,10 +55,24 @@ import { GateArrivalComponent } from './gate_transit_plugin.js';
 export type TransitRecovery =
     /** Put the ship back at `planetId` (a gate) and lift it off from there. */
     | { kind: 'gate', planetId: string }
-    /** Re-enter system `to` with the ship's existing arrival kinematics. */
+    /** Re-enter system `to` with the ship's existing kinematics. */
     | { kind: 'reenter', to: string }
     /** Nothing can be done; `reason` says why. */
     | { kind: 'lost', reason: string };
+
+/**
+ * Where the ship came from, as the abort site knows it.
+ */
+export interface TransitOrigin {
+    /** The system the ship left, captured before the transition cleared it. */
+    systemId: string | undefined;
+    /**
+     * Whether that system's world is still the live one: its bridge open
+     * and its display on the stage. False once enterSystem has torn it
+     * down for the destination.
+     */
+    worldAlive: boolean;
+}
 
 /**
  * Strips the claim that this ship arrived anywhere. A GateArrivalComponent
@@ -63,12 +86,22 @@ function clearArrivalClaim(entity: Entity): void {
 
 /**
  * A hypergate or wormhole transit that could not be completed: back to the
- * gate it left from.
+ * gate it left from while the origin world is still up; back INTO the
+ * origin system once it is not.
  */
 export function planGateTransitRecovery(entity: Entity,
-    fromSpob: string): TransitRecovery {
+    fromSpob: string, origin: TransitOrigin): TransitRecovery {
     clearArrivalClaim(entity);
-    return { kind: 'gate', planetId: fromSpob };
+    if (origin.worldAlive) {
+        return { kind: 'gate', planetId: fromSpob };
+    }
+    if (!origin.systemId) {
+        return {
+            kind: 'lost',
+            reason: 'the origin world is gone and its system is unknown',
+        };
+    }
+    return { kind: 'reenter', to: origin.systemId };
 }
 
 /**

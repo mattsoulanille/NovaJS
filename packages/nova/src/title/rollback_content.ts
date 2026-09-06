@@ -99,9 +99,27 @@ interface SaveLike {
     escorts?: unknown;
 }
 
+/**
+ * The save at a checkpoint, or an EMPTY save when the history's patch
+ * chain cannot be applied there. An imported pilot file's history is
+ * validated for shape only (a patch op is `{op, path}`), so a hand-edited
+ * or cross-build file can carry a pointer into a container that does not
+ * exist; `applyPatch` throws on it. That used to escape through every
+ * row's details into `RollbackScreen.show()` — after the controls were
+ * bound — and the title's arrow keys were double-handled until reload
+ * (issue #91). A broken checkpoint now renders as a row with no details,
+ * the same way `loadHistory` quarantines a history it cannot read at all.
+ */
 function saveOf(history: PilotHistory, index: number): SaveLike {
-    const envelope = checkpointState(history, index) as { data?: SaveLike };
-    return envelope?.data ?? {};
+    try {
+        const envelope = checkpointState(history, index) as
+            { data?: SaveLike };
+        return envelope?.data ?? {};
+    } catch (e) {
+        console.warn(`Pilot history checkpoint ${index} cannot be `
+            + 'reconstructed:', e);
+        return {};
+    }
 }
 
 function isDate(v: unknown): v is { day: number, month: number, year: number } {
