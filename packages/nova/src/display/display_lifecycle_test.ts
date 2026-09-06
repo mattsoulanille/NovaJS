@@ -4,8 +4,9 @@ import { TimePlugin } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { ControlEvent, ControlsSubject } from '../nova_plugin/controls_plugin.js';
 import {
@@ -92,6 +93,11 @@ import { TargetCornersPlugin } from './target_corners_plugin.js';
  * the stage, and by reading the focus stack. Headless: the fixture's stub
  * canvas lets Text exist, and the asset layer hands out empty
  * sprites/textures, so nothing here measures how anything looks.
+ *
+ * On the SYNTHETIC data set: what the UI builds and frees is a property
+ * of the venues, not of which stellars a scenario has, and Port
+ * Amberline (an outfitter that greets a fresh pilot with no offers) is
+ * the landing the walk below needs.
  */
 describe('display world UI lifecycle', () => {
     beforeAll(() => installHeadlessPixi());
@@ -138,7 +144,7 @@ describe('display world UI lifecycle', () => {
      * is never reached.
      */
     async function assets() {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const displayAssets = {
             data: {
                 ...gameData.data,
@@ -168,9 +174,10 @@ describe('display world UI lifecycle', () => {
         world.resources.set(DisplayAssetDataResource, displayAssets);
         world.resources.set(ControlsSubject, new Subject<ControlEvent>());
         world.resources.set(SystemIdResource, (await gameData.ids).System[0]);
-        // Every transit here enters Sol (nova:128), which StarmapPlugin
-        // marks discovered: in a store of this world's own, so nothing
-        // reaches the client's record other spec files read.
+        // Every transit here enters the first system (Thessaly Reach,
+        // nova:128), which StarmapPlugin marks discovered: in a store of
+        // this world's own, so nothing reaches the client's record other
+        // spec files read.
         world.resources.set(DiscoveryStoreResource, new DiscoveryStore());
         world.resources.set(PixiAppResource, {
             renderer: { events: { cursorStyles: {} } }, view: {},
@@ -225,12 +232,14 @@ describe('display world UI lifecycle', () => {
 
         it('builds nothing at system entry, one spaceport on the first '
             + 'landing, and frees it with the world', async () => {
-                const gameData = await getIntegrationGameData();
-                // The five-stellar systems (Sol, Aldebaran, Aurora, K-003)
-                // are the worst case; any five stellars reproduce the
-                // count, and what matters is that none is built for free.
+                const gameData = await getSyntheticGameData();
+                // Stock's five-stellar systems (Sol, Aldebaran, Aurora,
+                // K-003) are the worst case; the scenario's five stellars
+                // reproduce the count, and what matters is that none is
+                // built for free.
                 const ids = await gameData.ids;
-                const planets = ids.Planet.slice(0, 5);
+                const planets = Object.values(SYNTHETIC.planets);
+                expect(planets.length).toBe(5);
                 const shipId = ids.Ship[0];
                 await MissionUniverse.shared(gameData).load();
 
@@ -243,9 +252,10 @@ describe('display world UI lifecycle', () => {
                 expect(spaceportsOn(world)).toBe(0);
                 expect(cachedTextures()).toBe(before);
 
-                // Landing at the second stellar builds ITS spaceport and
-                // nobody else's.
-                const landedAt = planets[1];
+                // Landing at one stellar (the uninhabited moon, named
+                // rather than taken by position in the id list) builds
+                // ITS spaceport and nobody else's.
+                const landedAt = SYNTHETIC.planets.moon;
                 let left = 0;
                 world.events.get(LeaveSpaceportEvent).subscribe(() => left++);
                 world.emit(OpenSpaceportEvent,
@@ -281,7 +291,7 @@ describe('display world UI lifecycle', () => {
                     return left > 1 && MenuControls.focused === undefined;
                 }, 'the spaceport let the pilot leave again');
                 world.emit(OpenSpaceportEvent,
-                    { planetId: planets[3], ship: pilot(shipId) });
+                    { planetId: SYNTHETIC.planets.vaelGate, ship: pilot(shipId) });
                 world.step();
                 expect(spaceportsOn(world)).toBe(2);
                 expect(cachedTextures() - before)
@@ -302,7 +312,7 @@ describe('display world UI lifecycle', () => {
 
         it('ignores a landing at a stellar the world does not have',
             async () => {
-                const gameData = await getIntegrationGameData();
+                const gameData = await getSyntheticGameData();
                 const ids = await gameData.ids;
                 const world = await spaceportWorld(ids.Planet.slice(0, 2));
                 world.emit(OpenSpaceportEvent,
@@ -319,7 +329,7 @@ describe('display world UI lifecycle', () => {
          * flight) until the caller settles.
          */
         async function land(gameData: Awaited<ReturnType<
-            typeof getIntegrationGameData>>, planetId: string) {
+            typeof getSyntheticGameData>>, planetId: string) {
             const world = await spaceportWorld([planetId]);
             const keys = world.resources.get(ControlsSubject)!;
             let left = 0;
@@ -334,8 +344,8 @@ describe('display world UI lifecycle', () => {
 
         /**
          * The stellars with an outfitter, in data order. Some of them
-         * greet a fresh pilot with mission offers (Earth's intro
-         * missions), which sit on the spaceport as popups until answered
+         * may greet a fresh pilot with mission offers (stock Earth's
+         * intro missions do), which sit on the spaceport as popups until answered
          * and keep it off its main screen; `onOffers` gets those, and the
          * first landing that reaches its main screen ends the walk.
          */
@@ -345,7 +355,7 @@ describe('display world UI lifecycle', () => {
             onOffers: (landing: Awaited<ReturnType<typeof land>>)
                 => Promise<void>,
             press?: (keys: Subject<ControlEvent>) => void) {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             await MissionUniverse.shared(gameData).load();
             for (const planetId of (await gameData.ids).Planet) {
                 if (!(await gameData.data.Planet.get(planetId))
@@ -531,7 +541,7 @@ describe('display world UI lifecycle', () => {
 
         it('destroys every object the UI plugins built, so N transits '
             + 'leave PIXI\'s texture cache where it started', async () => {
-                const gameData = await getIntegrationGameData();
+                const gameData = await getSyntheticGameData();
                 // Warm the shared caches (the mission universe, the
                 // parsed systems the starmap reads) so the measured
                 // transits are not racing their own first data reads.

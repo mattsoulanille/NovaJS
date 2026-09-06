@@ -3,7 +3,8 @@ import { Entity } from 'nova_ecs/entity';
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
@@ -31,14 +32,14 @@ import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
  * credit escort sale settle mid-visit, press Done, and the sale was gone
  * though the escort had already left the roster for good.
  *
- * These drive the REAL menus (headless PIXI, real Nova data) through exactly
- * that sequence.
+ * These drive the REAL menus (headless PIXI, parsed Nova data — the
+ * synthetic set) through exactly that sequence.
  */
 describe('venue credit commits compose with concurrent writers', () => {
     beforeAll(() => installHeadlessPixi());
 
-    /** Earth: a stellar with a trade centre, an outfitter and a shipyard. */
-    const EARTH = 'nova:128';
+    /** Port Amberline: a stellar with a trade centre, an outfitter and a shipyard. */
+    const PORT = SYNTHETIC.planets.port;
     /** What an escort sale settling mid-visit pays into the live component. */
     const SALE_PAYOUT = 40_000;
 
@@ -54,10 +55,10 @@ describe('venue credit commits compose with concurrent writers', () => {
         } as unknown as DisplayAssetDataInterface;
     }
 
-    /** A landed pilot in the stock starting ship, holding `credits`. */
+    /** A landed pilot in the default starting ship, holding `credits`. */
     async function dockedPilot(credits: number): Promise<Entity> {
-        const gameData = await getIntegrationGameData();
-        const start = await gameData.data.PlayerStart.get(EARTH);
+        const gameData = await getSyntheticGameData();
+        const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
         const entity = makeShip(await gameData.data.Ship.get(start.ship));
         entity.components.set(CreditsComponent, { credits });
         entity.components.set(CargoComponent, new Map());
@@ -90,15 +91,15 @@ describe('venue credit commits compose with concurrent writers', () => {
 
     it('keeps a mid-visit escort sale AND the goods cost at the exchange',
         async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const entity = await dockedPilot(100_000);
             const exchange = new TradeCenter(displayAssets(), gameData,
-                new Subject<ControlEvent>(), EARTH);
+                new Subject<ControlEvent>(), PORT);
             await exchange.buildPromise;
 
             const shown = exchange.show(entity);
             await untilShown(exchange);
-            // Buy the first commodity Earth trades: the working copy is
+            // Buy the first commodity the port trades: the working copy is
             // charged, the entity is not (that is what Done is for).
             (exchange as any).buy();
             const spent = 100_000 - (exchange as any).state.credits.credits;
@@ -121,7 +122,7 @@ describe('venue credit commits compose with concurrent writers', () => {
 
     it('keeps a mid-visit escort sale AND the outfit cost at the outfitter',
         async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const entity = await dockedPilot(100_000);
             const outfitter = new Outfitter(displayAssets(), gameData,
                 new Subject<ControlEvent>());

@@ -101,5 +101,57 @@ describe("resourceFork", () => {
             expect(icns[-1].id).toEqual(-1);
             expect(icns[49081]).toBeUndefined();
         });
+
+        /**
+         * The whole map, not a sample of it: every type, every id, every
+         * name (MacRoman and empty) and every byte comes back exactly as
+         * written, across the full signed 16-bit id range and a payload
+         * bigger than one resource-data length word's low half. This is
+         * the contract the synthetic Nova data set (novaparse's
+         * src/synthetic) is built on.
+         */
+        it("round-trips a whole ResourceMap exactly", () => {
+            const bigPayload = Array.from({ length: 70000 },
+                (_, i) => (i * 7 + 3) & 0xff);
+            const specs = [
+                { type: "sÿst", id: 128, name: "Thessaly Reach", data: [1, 2] },
+                { type: "sÿst", id: 32767, name: "", data: [] },
+                { type: "sÿst", id: -32768, name: "Ålesund–Æther", data: [255] },
+                { type: "spöb", id: 128, name: "Port", data: [9, 8, 7] },
+                { type: "rlëD", id: 1000, name: "Skiff sprite", data: bigPayload },
+                { type: "STR#", id: 4000, data: [0, 1, 3, 65, 66, 67] },
+                { type: "snd ", id: 200, name: "x", data: [0] },
+            ];
+            const parsed = parseResourceFork(buildResourceFork(specs));
+
+            const asMap = (map: ResourceMap) => Object.fromEntries(
+                Object.keys(map).sort().map(type => [type,
+                    Object.values(map[type])
+                        .sort((a, b) => a.id - b.id)
+                        .map(r => ({ id: r.id, name: r.name, data: r.shortArray })),
+                ]));
+            const expected = Object.fromEntries(
+                [...new Set(specs.map(s => s.type))].sort().map(type => [type,
+                    specs.filter(s => s.type === type)
+                        .sort((a, b) => a.id - b.id)
+                        .map(s => ({ id: s.id, name: s.name ?? "", data: [...s.data] })),
+                ]));
+            expect(asMap(parsed)).toEqual(expected);
+        });
+
+        it("is deterministic: the same specs give the same bytes", () => {
+            const specs = [
+                { type: "wëap", id: 128, name: "blaster", data: [1, 2, 3] },
+                { type: "shïp", id: 130, name: "Skiff", data: [4] },
+            ];
+            const a = new Uint8Array(buildResourceFork(specs));
+            const b = new Uint8Array(buildResourceFork(specs));
+            expect([...a]).toEqual([...b]);
+        });
+
+        it("refuses a resource type that is not four MacRoman bytes", () => {
+            expect(() => buildResourceFork([{ type: "abc", id: 1, data: [] }]))
+                .toThrowError(/must be 4 bytes/);
+        });
     });
 });

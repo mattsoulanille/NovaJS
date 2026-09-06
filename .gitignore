@@ -61,6 +61,10 @@ Nova Plug*
 Nova Ship*
 !packages/novaparse/test/fixtures/**/Nova Files
 !packages/novaparse/test/fixtures/**/Plug-ins
+# The SYNTHETIC data set is original, generated content (see
+# packages/novaparse/src/synthetic) and is checked in.
+!packages/nova/test_fixtures/synthetic/Nova Files
+!packages/nova/test_fixtures/synthetic/Plug-ins
 build/
 
 dist

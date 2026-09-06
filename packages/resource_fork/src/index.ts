@@ -6,8 +6,10 @@ import { parseResourceFork, ResourceMap } from "./parse.js";
 // for info on resource fork
 
 export {
-    decode_macroman, isRez, parseResourceFork, readRez, Resource, ResourceMap,
+    decode_macroman, encode_macroman, isRez, parseResourceFork, readRez,
+    Resource, ResourceMap,
 } from "./parse.js";
+export { buildResourceFork, ResourceSpec } from "./write.js";
 
 async function readResourceFork(p: string, readResourceFork = true): Promise<ResourceMap> {
     let filePath: string;

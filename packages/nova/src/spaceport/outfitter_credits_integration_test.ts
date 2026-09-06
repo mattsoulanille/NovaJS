@@ -1,5 +1,6 @@
 import 'jasmine';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { makeShip } from '../nova_plugin/make_ship.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
@@ -10,22 +11,24 @@ import { outfitResaleValue } from './outfitter_rules.js';
 /**
  * The outfitter charges/credits the docked entity's CreditsComponent
  * through the same MissionSession working-copy + commit path the outfit
- * mutations use. These tests drive that path against real Nova data,
- * covering the two properties hardest to check in the (PIXI) UI class:
- * that a buy/sell reaches CreditsComponent across the depart commit, and
- * that mission-granted outfits (Gxxx) never route through the charge.
+ * mutations use. These tests drive that path against parsed Nova data
+ * (the synthetic set: a default pilot in a Wren Skiff docked at Port
+ * Amberline), covering the two properties hardest to check in the (PIXI)
+ * UI class: that a buy/sell reaches CreditsComponent across the depart
+ * commit, and that mission-granted outfits (Gxxx) never route through
+ * the charge.
  */
-describe('outfitter credits against real Nova data', () => {
+describe('outfitter credits against parsed Nova data', () => {
     async function dockedPilot(credits: number) {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
-        const start = await gameData.data.PlayerStart.get('nova:128');
+        const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
         const shipData = await gameData.data.Ship.get(start.ship);
         const entity = makeShip(shipData);
         entity.components.set(CreditsComponent, { credits });
         const session = await MissionSession.create(
-            entity, gameData, universe, '<outfitter>');
+            entity, gameData, universe, SYNTHETIC.planets.port);
         return { gameData, universe, entity, session };
     }
 

@@ -5,6 +5,7 @@ import { getIntegrationGameData } from '../communication/simulation_test_fixture
 import { CloakComponent, CloakScannerComponent } from '../nova_plugin/cloak_plugin.js';
 import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { CloakDisplayPlugin } from './cloak_display_plugin.js';
 import { radarHidesShip } from './status_bar_radar.js';
 
@@ -27,7 +28,11 @@ const ORGAN_V1_1 = 'nova:269';
 describe('CloakDisplayPlugin (real stock cloaks)', () => {
     let world: World;
 
+    // Without Nova_Data each spec pends; pending() thrown from a
+    // beforeAll would instead fail the whole suite (nova_data_gate.ts).
+    beforeEach(requireNovaData);
     beforeAll(async () => {
+        if (!novaDataInstalled()) return; // each spec pends instead
         const gameData = await getIntegrationGameData();
         // The providers read getCached; warm the outfits first, as the
         // entity data loader does for every ship it inserts.

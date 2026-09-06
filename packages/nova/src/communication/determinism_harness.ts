@@ -18,6 +18,13 @@ import { ControlledByComponent } from "../nova_plugin/ship_control.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { Platform } from "../nova_plugin/platform_plugin.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";
+import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
+
+/**
+ * Which data set a harness world is built from. The integration set
+ * unless a spec passes `getSyntheticGameData()` (simulation_test_fixture).
+ */
+export type GameDataSource = Promise<GameDataAggregator>;
 
 export interface DeterminismCheckResult {
     /** Tick of the first hash mismatch, or undefined if none. */
@@ -41,8 +48,9 @@ async function settle(world: World, steps: number) {
  * nondeterminism (Math.random weapon spread, random targeting, v4 uuids).
  */
 export async function makeDeterminismWorld(npcCount: number,
-    platform: Platform | undefined = 'worker'): Promise<World> {
-    const gameData = await getIntegrationGameData();
+    platform: Platform | undefined = 'worker',
+    gameDataSource: GameDataSource = getIntegrationGameData()): Promise<World> {
+    const gameData = await gameDataSource;
     const ids = await gameData.ids;
     const systemId = [...ids.System].sort()[0]!;
     const shipIds = [...ids.Ship].sort();
@@ -122,11 +130,12 @@ export async function compareWorlds(worldA: World, worldB: World, steps: number,
  * and no warmup is needed; warmupSteps remains for stress variations.
  */
 export async function runDeterminismCheck(npcCount: number, steps: number,
-    warmupSteps = 0, log?: (message: string) => void): Promise<DeterminismCheckResult> {
+    warmupSteps = 0, log?: (message: string) => void,
+    gameDataSource: GameDataSource = getIntegrationGameData()): Promise<DeterminismCheckResult> {
 
-    const worldA = await makeDeterminismWorld(npcCount);
+    const worldA = await makeDeterminismWorld(npcCount, 'worker', gameDataSource);
     await settle(worldA, warmupSteps);
-    const worldB = await makeDeterminismWorld(npcCount);
+    const worldB = await makeDeterminismWorld(npcCount, 'worker', gameDataSource);
     await settle(worldB, warmupSteps);
 
     return compareWorlds(worldA, worldB, steps, log);

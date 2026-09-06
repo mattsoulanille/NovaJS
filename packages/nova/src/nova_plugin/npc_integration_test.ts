@@ -1,21 +1,28 @@
 import 'jasmine';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { GovtComponent } from './govt_component.js';
 import { makeSystem } from './make_system.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
-import { NpcSpawnerComponent } from './npc_spawn_plugin.js';
+import { NpcSpawnerComponent, spawnNpc } from './npc_spawn_plugin.js';
+import { IdFactoryResource } from './id_factory.js';
 import { ShipComponent } from './ship_plugin.js';
+import { Entity } from 'nova_ecs/entity';
+import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { World } from 'nova_ecs/world';
 
 /**
- * NPC population against real Nova data. nova:130 (Sol) has AvgShips 6
- * and an 8-entry dude table (Federation warship/interceptor dudes plus
- * civilian/merchant traders), so both trader and combat AI types
- * appear.
+ * NPC population against parsed Nova data — the synthetic set. Thessaly
+ * Reach has AvgShips 6 and a two-entry dude table (Meridian traders in
+ * skiffs, a Meridian patrol in wardens), so both trader and combat AI
+ * types appear and every spawn is governed; Kestrel Drift adds a raider
+ * dude and the Raider Wing fleet, so fleet spawns with escorts appear.
  */
-describe('NPC spawning in a real system', () => {
+describe('NPC spawning in a parsed system', () => {
+    const THESSALY = SYNTHETIC.systems.thessaly;
+
     function npcs(world: World) {
         return [...world.entities]
             .filter(([, entity]) => entity.components.has(NpcComponent));
@@ -23,9 +30,9 @@ describe('NPC spawning in a real system', () => {
 
     it('spawns a deterministic population: same seed, same ships',
         async () => {
-            const gameData = await getIntegrationGameData();
-            const worldA = await makeSystem('nova:130', gameData);
-            const worldB = await makeSystem('nova:130', gameData);
+            const gameData = await getSyntheticGameData();
+            const worldA = await makeSystem(THESSALY, gameData);
+            const worldB = await makeSystem(THESSALY, gameData);
 
             const describeNpcs = (world: World) => npcs(world)
                 .map(([uuid, entity]) => ({
@@ -53,42 +60,41 @@ describe('NPC spawning in a real system', () => {
         }, 120_000);
 
     it('rolls the population target within AvgShips +/- 50%', async () => {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:130', gameData);
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(THESSALY, gameData);
         const spawner = world.entities.get('npc spawner')!
             .components.get(NpcSpawnerComponent)!;
-        // Sol: AvgShips 6.
+        // Thessaly Reach: AvgShips 6.
         expect(spawner.targetCount).toBeGreaterThanOrEqual(3);
         expect(spawner.targetCount).toBeLessThanOrEqual(9);
         expect(spawner.entries.length).toBeGreaterThan(0);
     }, 120_000);
 
     it('gives NPCs their dude class govt and a valid AI type', async () => {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:130', gameData);
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(THESSALY, gameData);
         for (const [, entity] of npcs(world)) {
             const npc = entity.components.get(NpcComponent)!;
             expect(npc.aiType).toBeGreaterThanOrEqual(1);
             expect(npc.aiType).toBeLessThanOrEqual(4);
         }
-        // Sol's dude table is entirely governed (Federation, merchant
-        // govts, ...): every dude spawn carries a GovtComponent. Fleet
-        // spawns need not — stock flët nova:214 and nova:215
-        // ("Leviathan + Escorts") are bound to Sol with Govt -1, so
-        // their members legitimately fly independent. Fleet membership
-        // is the FiringGroupComponent every fleet spawn shares.
+        // Thessaly's dude table is entirely Meridian: every dude spawn
+        // carries a GovtComponent. Fleet spawns need not in general (a
+        // flët may fly under Govt -1); fleet membership is the
+        // FiringGroupComponent every fleet spawn shares.
         for (const [, entity] of npcs(world)) {
             if (entity.components.has(FiringGroupComponent)) {
                 continue;
             }
-            expect(entity.components.get(GovtComponent)).toBeDefined();
+            expect(entity.components.get(GovtComponent))
+                .toEqual({ id: SYNTHETIC.govts.meridian });
         }
     }, 120_000);
 
     it('traders pick planets and set off; ships stay simulated',
         async () => {
-            const gameData = await getIntegrationGameData();
-            const world = await makeSystem('nova:130', gameData);
+            const gameData = await getSyntheticGameData();
+            const world = await makeSystem(THESSALY, gameData);
 
             // Step past the first decision interval.
             for (let i = 0; i < 120; i++) {
@@ -104,10 +110,10 @@ describe('NPC spawning in a real system', () => {
             }
             const traders = states.filter(
                 npc => npc.aiType === 1 || npc.aiType === 2);
-            // Sol's table is trader-heavy; expect at least one, and
+            // Thessaly's table is trader-heavy; expect at least one, and
             // every trader to be working the planet loop (or already
-            // fleeing/departing if a warship picked on it, which Sol's
-            // all-allied govts don't do).
+            // fleeing/departing if a warship picked on it, which the
+            // patrol, the traders' own government, does not).
             expect(traders.length).toBeGreaterThan(0);
             for (const trader of traders) {
                 expect(['travel', 'dwell', 'depart'])
@@ -119,8 +125,8 @@ describe('NPC spawning in a real system', () => {
         }, 120_000);
 
     it('replaces departed NPCs at the system edge', async () => {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:130', gameData);
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(THESSALY, gameData);
         const spawner = world.entities.get('npc spawner')!
             .components.get(NpcSpawnerComponent)!;
         const before = npcs(world).map(([uuid]) => uuid);
@@ -156,30 +162,63 @@ describe('NPC spawning in a real system', () => {
     }, 120_000);
 
     it('fleet escorts spawn in formation on their leader', async () => {
-        const gameData = await getIntegrationGameData();
-        // Tichel (nova:229; Auroran space) draws from fleet-bearing
-        // tables; rather than hunt for a fleet roll, assert the
-        // invariant across the galaxy sample below: every escort's
-        // leader exists and is an NPC.
-        for (const systemId of ['nova:130', 'nova:229', 'nova:226']) {
+        const gameData = await getSyntheticGameData();
+        // The invariant: every escort's leader exists and is an NPC of
+        // the same government, sharing one firing group (friendly-fire
+        // immunity; see firing_group.ts).
+        function expectInFormation(world: World, entity: Entity) {
+            const formation = entity.components.get(FormationComponent)!;
+            const leader = world.entities.get(formation.leader);
+            expect(leader).toBeDefined();
+            expect(leader!.components.has(NpcComponent)).toBeTrue();
+            expect(entity.components.get(GovtComponent)?.id)
+                .toEqual(leader!.components.get(GovtComponent)?.id);
+            expect(entity.components.get(FiringGroupComponent))
+                .toEqual({ group: formation.leader });
+            expect(leader!.components.get(FiringGroupComponent))
+                .toEqual({ group: formation.leader });
+        }
+        // Holds for whatever the seeded genesis rolls drew, in every
+        // system of the scenario...
+        for (const systemId of Object.values(SYNTHETIC.systems)) {
             const world = await makeSystem(systemId, gameData);
             for (const [, entity] of npcs(world)) {
-                const formation = entity.components.get(FormationComponent);
-                if (!formation) {
-                    continue;
+                if (entity.components.has(FormationComponent)) {
+                    expectInFormation(world, entity);
                 }
-                const leader = world.entities.get(formation.leader);
-                expect(leader).toBeDefined();
-                expect(leader!.components.has(NpcComponent)).toBeTrue();
-                expect(entity.components.get(GovtComponent)?.id)
-                    .toEqual(leader!.components.get(GovtComponent)?.id);
-                // The fleet shares one firing group (friendly-fire
-                // immunity; see firing_group.ts).
-                expect(entity.components.get(FiringGroupComponent))
-                    .toEqual({ group: formation.leader });
-                expect(leader!.components.get(FiringGroupComponent))
-                    .toEqual({ group: formation.leader });
             }
+        }
+        // ...and is exercised for certain, not by hoping the 40% Raider
+        // Wing entry won a roll: Kestrel Drift's spawn TABLE carries the
+        // wing (a Corsair leading 1-2 Corsairs), so draw from that entry
+        // alone with the world's own Random and id factory.
+        const world = await makeSystem(SYNTHETIC.systems.kestrel, gameData);
+        const spawner = world.entities.get('npc spawner')!
+            .components.get(NpcSpawnerComponent)!;
+        // (Twice: once from the sÿst DudeTypes entry, once as a roaming
+        // LinkSyst fleet; both are the wing.)
+        const wings = spawner.entries.filter(entry => entry.fleet);
+        expect(wings.length).toBeGreaterThan(0);
+        for (const { fleet } of wings) {
+            expect(fleet!.leadShip).toBe(SYNTHETIC.ships.corsair);
+            expect(fleet!.escorts).toEqual([
+                { id: SYNTHETIC.ships.corsair, min: 1, max: 2 }]);
+        }
+        const before = new Set(npcs(world).map(([uuid]) => uuid));
+        const spawned = spawnNpc(world, gameData,
+            world.resources.get(IdFactoryResource)!,
+            world.resources.get(RandomResource)!, [wings[0]], true);
+        const fresh = npcs(world).filter(([uuid]) => !before.has(uuid));
+        expect(fresh.length).toBe(spawned);
+        const escorts = fresh.filter(([, entity]) =>
+            entity.components.has(FormationComponent));
+        expect(escorts.length).toBeGreaterThanOrEqual(1);
+        expect(escorts.length).toBeLessThanOrEqual(2);
+        expect(fresh.length).toBe(escorts.length + 1);
+        for (const [, escort] of escorts) {
+            expectInFormation(world, escort);
+            expect(fresh.map(([uuid]) => uuid)).toContain(
+                escort.components.get(FormationComponent)!.leader);
         }
     }, 240_000);
 });
