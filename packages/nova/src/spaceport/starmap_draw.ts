@@ -160,7 +160,7 @@ export function drawSystem(graphics: PIXI.Graphics,
     x: number, y: number, explored: boolean, inhabited: boolean) {
     const outColor = systemDotColor(explored, inhabited);
     graphics.lineStyle(1, outColor);
-    graphics.beginFill(outColor)
+    graphics.beginFill(outColor);
     graphics.drawCircle(x, y, SYSTEM_RADIUS);
     graphics.beginFill(SYSTEM_INTERIOR_COLOR);
     graphics.drawCircle(x, y, 1.8 * BASE_SCALE);
