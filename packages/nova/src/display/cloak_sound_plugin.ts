@@ -1,6 +1,6 @@
 import { Plugin } from "nova_ecs/plugin";
-import { CLOAK_OFF_SOUND, CLOAK_ON_SOUND } from "../nova_plugin/cloak_plugin.js";
-import { DisplayAssetDataResource } from "../nova_plugin/game_data_resource.js";
+import { CLOAK_OFF_SOUND, CLOAK_ON_SOUND } from "../nova_plugin/ship/cloak_plugin.js";
+import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
 
 /**
  * Pre-warms the cloak sounds. The sounds themselves are emitted by the

@@ -1,7 +1,7 @@
 import { MovementPhysicsComponent, MovementStateComponent, MovementType } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
-import { ControlEvent } from './nova_plugin/controls_plugin.js';
-import { AnalogControlState, ControlledByComponent } from './nova_plugin/ship_control.js';
+import { ControlEvent } from './nova_plugin/core/controls_plugin.js';
+import { AnalogControlState, ControlledByComponent } from './nova_plugin/player/ship_control.js';
 
 /**
  * Client-side autopilot: flies the player's ship to a tapped planet

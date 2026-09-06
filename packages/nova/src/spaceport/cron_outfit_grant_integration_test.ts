@@ -2,14 +2,14 @@ import 'jasmine';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
 import { getPluginGameData } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { idPrefix } from '../nova_plugin/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { idPrefix } from '../nova_plugin/missions/mission_logic.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CreditsComponent, GameDateComponent,
-} from '../nova_plugin/player_state_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
+} from '../nova_plugin/player/player_state_plugin.js';
+import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
 import { advanceEntityDate, MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 

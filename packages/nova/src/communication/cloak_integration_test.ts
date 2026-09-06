@@ -2,21 +2,21 @@ import "jasmine";
 import { Emit } from "nova_ecs/arg_types";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
-import { completeEntity } from "../nova_plugin/entity_data_loader.js";
+import { completeEntity } from "../nova_plugin/spawn/entity_data_loader.js";
 import {
     CLOAK_OFF_SOUND,
     CLOAK_ON_SOUND,
     CloakActiveComponent,
     CloakComponent,
-} from "../nova_plugin/cloak_plugin.js";
-import { PlayerSoundEvent } from "../nova_plugin/sound_plugin.js";
-import { DamagedEvent } from "../nova_plugin/death_plugin.js";
-import { ShieldComponent } from "../nova_plugin/health_plugin.js";
-import { makeShip } from "../nova_plugin/make_ship.js";
+} from "../nova_plugin/ship/cloak_plugin.js";
+import { PlayerSoundEvent } from "../nova_plugin/core/sound_plugin.js";
+import { DamagedEvent } from "../nova_plugin/ship/death_plugin.js";
+import { ShieldComponent } from "../nova_plugin/ship/health_plugin.js";
+import { makeShip } from "../nova_plugin/ship/make_ship.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { applyControlEvents } from "../nova_plugin/ship_control.js";
-import { ControlledByComponent } from "../nova_plugin/ship_control.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
+import { applyControlEvents } from "../nova_plugin/player/ship_control.js";
+import { ControlledByComponent } from "../nova_plugin/player/ship_control.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";
 
 // A ship carrying the Polaris Cloaking Organ v1.1 (outfit nova:269) with

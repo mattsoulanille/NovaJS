@@ -2,7 +2,7 @@ import "jasmine";
 import fs from "fs";
 import path from "path";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
-import { landable } from "../nova_plugin/landable.js";
+import { landable } from "../nova_plugin/core/landable.js";
 import {
     DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,
     hypergateNetworkComponents, parseHypergateTransitivity, reachableGates,

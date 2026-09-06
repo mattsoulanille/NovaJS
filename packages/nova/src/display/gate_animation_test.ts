@@ -10,12 +10,12 @@ import { getDefaultGovtData } from "novadatainterface/govt_data";
 import { MockGameData } from "novadatainterface/mock_game_data";
 import { getDefaultPlanetData } from "novadatainterface/planet_data";
 import { getDefaultRankData, getDefaultRankFlags } from "novadatainterface/rank_data";
-import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { ActiveRanksComponent } from "../nova_plugin/ncb_plugin.js";
-import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
-import { GATE_EMERGENCE_DISTANCE } from "../nova_plugin/gate_transit_plugin.js";
-import { PlanetComponent, PlanetDataComponent, PlanetTargetComponent } from "../nova_plugin/planet_plugin.js";
-import { ShipComponent } from "../nova_plugin/ship_plugin.js";
+import { SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
+import { ActiveRanksComponent } from "../nova_plugin/ncb/ncb_plugin.js";
+import { LegalRecordsComponent } from "../nova_plugin/reputation/reputation_plugin.js";
+import { GATE_EMERGENCE_DISTANCE } from "../nova_plugin/travel/gate_transit_plugin.js";
+import { PlanetComponent, PlanetDataComponent, PlanetTargetComponent } from "../nova_plugin/travel/planet_plugin.js";
+import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import {
     GateAnimationComponent, GateAnimationPlugin, GateAnimationState,

@@ -1,6 +1,6 @@
 import { EcsEvent } from 'nova_ecs/events';
 import { World } from 'nova_ecs/world';
-import { SoundEventData } from '../nova_plugin/sound_plugin.js';
+import { SoundEventData } from '../nova_plugin/core/sound_plugin.js';
 
 /**
  * The shared local-UI-sound channel.

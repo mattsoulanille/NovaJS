@@ -25,12 +25,12 @@ import { v4 } from 'uuid';
 import { DockedShipResource } from '../display/docked_ship.js';
 import { OpenGateMapEvent } from '../display/gate_map_plugin.js';
 import { OpenSpaceportEvent } from '../display/spaceport_plugin.js';
-import { DISCOVERY_LANDED } from '../nova_plugin/discovery.js';
-import { markDiscovered } from '../nova_plugin/discovery_store.js';
-import { PlanetTargetComponent } from '../nova_plugin/planet_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
-import { TargetComponent } from '../nova_plugin/target_component.js';
+import { DISCOVERY_LANDED } from '../nova_plugin/player/discovery.js';
+import { markDiscovered } from '../nova_plugin/player/discovery_store.js';
+import { PlanetTargetComponent } from '../nova_plugin/travel/planet_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { TargetComponent } from '../nova_plugin/ship/target_component.js';
 import { spendableBalance } from '../spaceport/credit_commit.js';
 import {
     queuedUpgradeTargets, settleEscortDeals,

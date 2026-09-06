@@ -2,9 +2,9 @@ import { StatusBarData, StatusBarDataArea } from "novadatainterface/status_bar_d
 import { Optional } from "nova_ecs/optional";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { ArmorComponent, FuelComponent, FUEL_PER_JUMP, ShieldComponent } from "../nova_plugin/health_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { Stat } from "../nova_plugin/stat.js";
+import { ArmorComponent, FuelComponent, FUEL_PER_JUMP, ShieldComponent } from "../nova_plugin/ship/health_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
+import { Stat } from "../nova_plugin/core/stat.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 
 /**

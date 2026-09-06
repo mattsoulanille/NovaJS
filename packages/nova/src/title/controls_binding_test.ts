@@ -2,7 +2,7 @@ import 'jasmine';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import {
     Controls, getActions, SavedControls,
-} from '../nova_plugin/controls.js';
+} from '../nova_plugin/core/controls.js';
 import {
     bindControl, ControlsOverride, mergeControls, primaryBinding,
 } from './client_prefs.js';

@@ -57,7 +57,7 @@ describe('Extra Outfits crew requirements against real plug-in data', () => {
                 credits: 100000000,
             });
         // The plug-in's own bit numbers, as NovaParse renumbered them (see
-        // nova_plugin/control_bit_namespaces.ts).
+        // nova_plugin/ncb/control_bit_namespaces.ts).
         const [B9009, B9010] = await Promise.all(
             [9009, 9010].map(raw => pluginControlBit(gameData, PLUGIN, raw)));
         return { outfits, context, shipData, B9009, B9010 };

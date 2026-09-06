@@ -19,12 +19,12 @@
  * ship). Client-local: the simulation is never involved.
  */
 import type { Entity } from 'nova_ecs/entity';
-import type { ControlBitPair, ControlBitResolver } from '../nova_plugin/control_bit_namespaces.js';
-import { displayName } from '../nova_plugin/display_name.js';
+import type { ControlBitPair, ControlBitResolver } from '../nova_plugin/ncb/control_bit_namespaces.js';
+import { displayName } from '../nova_plugin/core/display_name.js';
 import {
     decodeSave, encodeSave, extractSaveData, extractSavedEscorts,
     getActiveSaveKey, resetSave, SaveData, writeSave,
-} from '../nova_plugin/save_game.js';
+} from '../nova_plugin/session/save_game.js';
 import {
     CheckpointRequest, checkpointRequests, describeFlightChanges,
 } from '../spaceport/checkpoint_requests.js';
@@ -46,7 +46,7 @@ import type { SimulationGameData } from './gamedata/simulation_game_data.js';
  * the save writes bits as (namespace, bit) pairs through the resolver
  * and carries the parked pairs along unchanged, so a pilot's progress in
  * a plug-in survives a stint on a server without it
- * (nova_plugin/control_bit_namespaces.ts).
+ * (nova_plugin/ncb/control_bit_namespaces.ts).
  */
 export interface ControlBitContext {
     readonly resolver: ControlBitResolver;

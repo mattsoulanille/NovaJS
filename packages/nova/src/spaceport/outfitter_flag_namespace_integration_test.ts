@@ -64,7 +64,7 @@ describe('Require/Contribute namespacing across plug-ins', () => {
         }
         // Extra Outfits' b9009, as NovaParse renumbered it (plug-in
         // control bits are namespaced too; see
-        // nova_plugin/control_bit_namespaces.ts).
+        // nova_plugin/ncb/control_bit_namespaces.ts).
         const B9009 = await pluginControlBit(gameData, EXTRA, 9009);
         return {
             outfits, shipData, B9009,

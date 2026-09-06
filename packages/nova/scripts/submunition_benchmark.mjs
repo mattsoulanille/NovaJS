@@ -33,12 +33,12 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { GameDataAggregator } from '../dist/src/server/parsing/game_data_aggregator.js';
 import { FilesystemData } from '../dist/src/server/parsing/filesystem_data.js';
-import { completeEntity } from '../dist/src/nova_plugin/entity_data_loader.js';
-import { makeShip } from '../dist/src/nova_plugin/make_ship.js';
+import { completeEntity } from '../dist/src/nova_plugin/spawn/entity_data_loader.js';
+import { makeShip } from '../dist/src/nova_plugin/ship/make_ship.js';
 import { makeSystem } from '../dist/src/nova_plugin/make_system.js';
-import { WeaponEntries } from '../dist/src/nova_plugin/fire_weapon_plugin.js';
-import { TargetComponent } from '../dist/src/nova_plugin/target_component.js';
-import { ArmorComponent, ShieldComponent } from '../dist/src/nova_plugin/health_plugin.js';
+import { WeaponEntries } from '../dist/src/nova_plugin/combat/fire_weapon_plugin.js';
+import { TargetComponent } from '../dist/src/nova_plugin/ship/target_component.js';
+import { ArmorComponent, ShieldComponent } from '../dist/src/nova_plugin/ship/health_plugin.js';
 
 const args = process.argv.slice(2);
 function argValue(name, fallback) {

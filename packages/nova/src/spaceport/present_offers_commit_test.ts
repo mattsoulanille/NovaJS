@@ -1,11 +1,11 @@
 import 'jasmine';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { MissionOffer } from '../nova_plugin/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { MissionOffer } from '../nova_plugin/missions/mission_logic.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import { commitVenueCredits } from './credit_commit.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';

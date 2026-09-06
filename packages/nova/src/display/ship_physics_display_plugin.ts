@@ -1,7 +1,7 @@
 import { Plugin } from 'nova_ecs/plugin';
 import {
     ShipPhysicsComponent, ShipPhysicsProvider,
-} from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/ship/ship_plugin.js';
 
 /**
  * Derives ShipPhysicsComponent in the DISPLAY world.

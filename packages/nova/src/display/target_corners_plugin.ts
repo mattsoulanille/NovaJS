@@ -6,11 +6,11 @@ import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
 import * as PIXI from "pixi.js";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
-import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { styleForTarget } from "../nova_plugin/hostility.js";
-import { TargetCornerStyle } from "../nova_plugin/iff_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { TargetComponent } from "../nova_plugin/target_component.js";
+import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
+import { styleForTarget } from "../nova_plugin/combat/hostility.js";
+import { TargetCornerStyle } from "../nova_plugin/reputation/iff_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
+import { TargetComponent } from "../nova_plugin/ship/target_component.js";
 import { mod } from "../util/mod.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
@@ -121,7 +121,7 @@ const TargetCornersResource = new Resource<TargetCorners>('TargetCornersResource
 
 /**
  * The corner set for the player's current ship target. THE HOSTILITY
- * RULE now lives in nova_plugin/hostility.ts, because the simulation
+ * RULE now lives in nova_plugin/combat/hostility.ts, because the simulation
  * needs it too (the 'r' key targets the nearest ship this rule calls
  * hostile); re-exported here so display code and the existing specs can
  * keep importing it from where it grew up.

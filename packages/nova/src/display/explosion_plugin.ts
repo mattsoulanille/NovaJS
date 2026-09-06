@@ -16,20 +16,20 @@ import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
 import { v4 } from "uuid";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
-import { ExplosionDataComponent } from "../nova_plugin/animation_plugin.js";
-import { DisplayAssetDataResource } from "../nova_plugin/game_data_resource.js";
-import { ProjectileExplodeEvent } from "../nova_plugin/projectile_plugin.js";
-import { SoundEvent } from "../nova_plugin/sound_plugin.js";
+import { ExplosionDataComponent } from "../nova_plugin/core/animation_plugin.js";
+import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
+import { ProjectileExplodeEvent } from "../nova_plugin/combat/projectile_plugin.js";
+import { SoundEvent } from "../nova_plugin/core/sound_plugin.js";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
-import { armorFullyRestored, DeathEvent, PlayerDeathSystem, ZeroArmorEvent } from "../nova_plugin/death_plugin.js";
-import { ArmorComponent } from "../nova_plugin/health_plugin.js";
-import { ShipComponent, ShipDataComponent } from "../nova_plugin/ship_plugin.js";
-import { DeathAISystem } from "../nova_plugin/npc_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
+import { armorFullyRestored, DeathEvent, PlayerDeathSystem, ZeroArmorEvent } from "../nova_plugin/ship/death_plugin.js";
+import { ArmorComponent } from "../nova_plugin/ship/health_plugin.js";
+import { ShipComponent, ShipDataComponent } from "../nova_plugin/ship/ship_plugin.js";
+import { DeathAISystem } from "../nova_plugin/npc/npc_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
 import {
     finalExplosionScale, MAX_SECONDARY_EXPLOSIONS_PER_STEP,
     secondaryExplosionsDue, secondaryExplosionTotal,
-} from "../nova_plugin/ship_explosion.js";
+} from "../nova_plugin/ship/ship_explosion.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
 

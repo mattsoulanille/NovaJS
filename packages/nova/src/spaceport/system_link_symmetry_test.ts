@@ -3,7 +3,7 @@ import { SystemData } from 'novadatainterface/system_data';
 import {
     getIntegrationGameData, getPluginGameData,
 } from '../communication/simulation_test_fixture.js';
-import { evaluateNCBTest } from '../nova_plugin/ncb.js';
+import { evaluateNCBTest } from '../nova_plugin/ncb/ncb.js';
 import { buildAdjacency, shortestPath } from './route.js';
 
 type GameData = Awaited<ReturnType<typeof getIntegrationGameData>>;

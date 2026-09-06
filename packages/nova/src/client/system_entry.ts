@@ -39,18 +39,18 @@ import { Display } from '../display/display_plugin.js';
 import { GateArrivalAnticipationEvent } from '../display/gate_animation_plugin.js';
 import { PixiAppResource } from '../display/pixi_app_resource.js';
 import { DisplayRoot } from '../display/stage_resource.js';
-import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
+import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
-import { GateArrivalComponent } from '../nova_plugin/gate_transit_plugin.js';
-import { reconcileRouteOnArrival } from '../nova_plugin/jump_plugin.js';
+} from '../nova_plugin/core/game_data_resource.js';
+import { GateArrivalComponent } from '../nova_plugin/travel/gate_transit_plugin.js';
+import { reconcileRouteOnArrival } from '../nova_plugin/travel/jump_plugin.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { restoreSavedEscorts } from '../nova_plugin/save_game.js';
-import { SystemIdResource } from '../nova_plugin/system_id_resource.js';
+import { restoreSavedEscorts } from '../nova_plugin/session/save_game.js';
+import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
 import {
     prepareCarriedEntitiesForFreshWorld,
-} from '../nova_plugin/transition_prep.js';
+} from '../nova_plugin/session/transition_prep.js';
 import {
     carriedBatchMustHold, CarriedEscort, restoreFailedTransitionBatch,
     takeEscortsForTransition,

@@ -4,20 +4,20 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { DisabledComponent } from '../nova_plugin/disabled_component.js';
-import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
-import { FuelComponent, FUEL_PER_JUMP } from '../nova_plugin/health_plugin.js';
+import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
+import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { FuelComponent, FUEL_PER_JUMP } from '../nova_plugin/ship/health_plugin.js';
 import {
     JumpComponent, JumpRouteComponent, JUMP_DISTANCE,
-} from '../nova_plugin/jump_plugin.js';
+} from '../nova_plugin/travel/jump_plugin.js';
 import {
     PlanetDataComponent, PlanetTargetComponent,
-} from '../nova_plugin/planet_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
-import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/travel/planet_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import { ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
-} from '../nova_plugin/discovery.js';
+} from '../nova_plugin/player/discovery.js';
 import {
     DiscoveryLevelResource, DrawStatusBarNavigation,
 } from './status_bar_navigation.js';

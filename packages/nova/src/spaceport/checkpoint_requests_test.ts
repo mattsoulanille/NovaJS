@@ -1,18 +1,18 @@
 import 'jasmine';
 import { Subscription } from 'rxjs';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
     abortMission, startMissionById,
-} from '../nova_plugin/mission_logic.js';
-import { CreditsComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/missions/mission_logic.js';
+import { CreditsComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import {
     CheckpointRequest, checkpointRequests, describeFlightChanges,
     describeOutfitChanges, missionEventLabel, truncateLabel,
 } from './checkpoint_requests.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
-import { displayName } from '../nova_plugin/display_name.js';
+import { displayName } from '../nova_plugin/core/display_name.js';
 
 describe('checkpoint labels', () => {
     it('names mission events, and skips progress notices', () => {

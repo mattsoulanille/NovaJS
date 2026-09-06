@@ -3,8 +3,8 @@
 // and what is reachable. Pure (no PIXI) so every rule here is unit-testable
 // (starmap_test.ts); SystemGraph (system_graph.ts) builds itself from these.
 import { SystemData } from "novadatainterface/system_data";
-import { DiscoveryLevel, linkKnown } from "../nova_plugin/discovery.js";
-import { evaluateNCBTest } from "../nova_plugin/ncb.js";
+import { DiscoveryLevel, linkKnown } from "../nova_plugin/player/discovery.js";
+import { evaluateNCBTest } from "../nova_plugin/ncb/ncb.js";
 
 /**
  * Whether a system exists for the player according to its visibility NCB

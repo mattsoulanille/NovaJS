@@ -1,11 +1,11 @@
 import { Entity } from 'nova_ecs/entity';
 import { getDefaultGameDate } from 'novadatainterface/player_start_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { addDays, dayNumber } from '../nova_plugin/calendar.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { runCronsForDays } from '../nova_plugin/cron_logic.js';
-import { playerDiscovery } from '../nova_plugin/discovery_store.js';
-import { FuelComponent } from '../nova_plugin/health_plugin.js';
+import { addDays, dayNumber } from '../nova_plugin/player/calendar.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { runCronsForDays } from '../nova_plugin/missions/cron_logic.js';
+import { playerDiscovery } from '../nova_plugin/player/discovery_store.js';
+import { FuelComponent } from '../nova_plugin/ship/health_plugin.js';
 import {
     failExpiredMissions,
     MissionContext,
@@ -17,12 +17,12 @@ import {
     runPendingAutoAborts,
     runPendingShipDone,
     stellarInfoOf,
-} from '../nova_plugin/mission_logic.js';
+} from '../nova_plugin/missions/mission_logic.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
     commitActiveRanks, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CreditsComponent,
     CronStatesComponent,
@@ -30,12 +30,12 @@ import {
     MissionsComponent,
     PendingAutoAbortShipsComponent,
     PendingMissionNoticesComponent,
-} from '../nova_plugin/player_state_plugin.js';
-import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
+} from '../nova_plugin/player/player_state_plugin.js';
+import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
+import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
 import { MissionUniverse } from './mission_universe.js';
-import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
+import { EscortPayrollComponent } from '../nova_plugin/player/player_escort.js';
 import { ShipData } from 'novadatainterface/ship_data';
 import { settleDailyBudget } from './daily_budget.js';
 import { PendingEscortsComponent } from './pending_escorts.js';

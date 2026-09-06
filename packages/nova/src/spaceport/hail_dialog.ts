@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
 import { Button } from './button.js';
 import {
     buttonRowY, commButtonSlots, COMM_ESCORT, COMM_HAGGLE, COMM_LINE_HEIGHT,
@@ -22,7 +22,7 @@ import { MenuControls } from './menu_controls.js';
  * text, plus context-appropriate buttons.
  *
  * This class is presentation only: what to show and which buttons to offer is
- * decided by hail_dialog_plugin (from the pure logic in nova_plugin/hail.ts),
+ * decided by hail_dialog_plugin (from the pure logic in nova_plugin/reputation/hail.ts),
  * and every button that has a SIMULATION effect calls back into the plugin,
  * which routes it through the deterministic input path (bridge.hail /
  * escort-command control events). The dialog never mutates the sim directly.
@@ -36,7 +36,7 @@ import { MenuControls } from './menu_controls.js';
  * (Sell Escort for a HIRED escort, whose ship the player never owned). All
  * three functions are live: they price themselves off the escort's current
  * ship class (spaceport/escort_fees.ts) and dispatch through the deterministic
- * input path (nova_plugin/escort_action.ts).
+ * input path (nova_plugin/escorts/escort_action.ts).
  *
  * UPGRADE AND SELL ARE TOGGLES, not deals struck on the spot: they QUEUE the
  * deal for the next shipyard, the channel stays open, and the pressed button
@@ -113,7 +113,7 @@ export interface HailContext {
  * what the readout says about it — everything the escort box needs, already
  * priced. Computed by hail_dialog_plugin from the escort's CURRENT ship
  * class through spaceport/escort_fees.ts, so the numbers shown here are
- * exactly the ones the simulation charges (nova_plugin/escort_action.ts
+ * exactly the ones the simulation charges (nova_plugin/escorts/escort_action.ts
  * re-derives them from the same class).
  */
 export interface EscortManagement {
@@ -274,7 +274,7 @@ export interface HailCallbacks {
 
 /**
  * The escort actions a press can resolve to — the wire-side vocabulary of
- * nova_plugin/escort_action.ts, minus the record's target/toShip fields
+ * nova_plugin/escorts/escort_action.ts, minus the record's target/toShip fields
  * (which the plugin fills in).
  */
 export type EscortPressAction =

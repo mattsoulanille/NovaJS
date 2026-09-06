@@ -1,7 +1,7 @@
 import "jasmine";
 import { restoreWorld, snapshotWorld, SnapshotPoliciesResource } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
-import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
+import { deriveEntityComponents } from "../nova_plugin/core/entity_factory.js";
 import { makeDeterminismWorld } from "./determinism_harness.js";
 
 describe("World snapshot", () => {

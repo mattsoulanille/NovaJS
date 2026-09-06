@@ -7,9 +7,9 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import * as PIXI from 'pixi.js';
 import { Subscription } from 'rxjs';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
-import { FinishJumpEvent, JumpComponent, JUMP_DEPART_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from '../nova_plugin/jump_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { FinishJumpEvent, JumpComponent, JUMP_DEPART_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from '../nova_plugin/travel/jump_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 
 /**

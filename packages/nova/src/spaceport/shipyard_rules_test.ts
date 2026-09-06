@@ -3,22 +3,22 @@ import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data'
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
+import { EscortPayrollComponent } from '../nova_plugin/player/player_escort.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CreditsComponent,
     GameDateComponent,
     PendingAutoAbortShips,
     PendingAutoAbortShipsComponent,
-} from '../nova_plugin/player_state_plugin.js';
-import { CombatRatingComponent } from '../nova_plugin/reputation_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
+import { CombatRatingComponent } from '../nova_plugin/reputation/reputation_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import {
     buildChangedShip,
     buildPurchasedShip,

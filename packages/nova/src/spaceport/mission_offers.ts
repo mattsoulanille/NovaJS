@@ -1,11 +1,11 @@
-import { dateFromDayNumber, formatDate } from '../nova_plugin/calendar.js';
+import { dateFromDayNumber, formatDate } from '../nova_plugin/player/calendar.js';
 import {
     cargoName,
     makeMissionOffer,
     MissionOffer,
     missionMatchesLocation,
-} from '../nova_plugin/mission_logic.js';
-import { ActiveMission } from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/missions/mission_logic.js';
+import { ActiveMission } from '../nova_plugin/player/player_state_plugin.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 

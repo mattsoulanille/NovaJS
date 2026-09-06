@@ -43,12 +43,12 @@
 
 import { PilotData } from 'novaparse/pilot/pilot_data';
 import { parsePilotBytes } from 'novaparse/pilot/pilot_parse';
-import { dayNumber, daysInMonth } from '../nova_plugin/calendar.js';
+import { dayNumber, daysInMonth } from '../nova_plugin/player/calendar.js';
 import {
     DISCOVERY_UNKNOWN, toDiscoveryLevel,
-} from '../nova_plugin/discovery.js';
-import { ActiveMission } from '../nova_plugin/player_state_plugin.js';
-import { SaveData } from '../nova_plugin/save_game.js';
+} from '../nova_plugin/player/discovery.js';
+import { ActiveMission } from '../nova_plugin/player/player_state_plugin.js';
+import { SaveData } from '../nova_plugin/session/save_game.js';
 import { PilotProfile } from './client_prefs.js';
 
 /** Arrays in a pilot file are indexed by resource id - 128. */

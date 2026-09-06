@@ -8,31 +8,31 @@ import { World } from 'nova_ecs/world';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { PersData } from 'novadatainterface/pers_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { dayNumber } from '../nova_plugin/calendar.js';
-import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { makeDescTextContext, playerGender } from '../nova_plugin/desc_text.js';
-import { DisabledComponent } from '../nova_plugin/disabled_component.js';
+import { dayNumber } from '../nova_plugin/player/calendar.js';
+import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
+import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.js';
+import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
-import { GovtComponent } from '../nova_plugin/govt_component.js';
-import { shipDisposition } from '../nova_plugin/iff_plugin.js';
+} from '../nova_plugin/core/game_data_resource.js';
+import { GovtComponent } from '../nova_plugin/core/govt_component.js';
+import { shipDisposition } from '../nova_plugin/reputation/iff_plugin.js';
 import {
     AcceptedMission, ShipOfferSpentComponent,
-} from '../nova_plugin/mission_accept.js';
-import { MissionOffer } from '../nova_plugin/mission_logic.js';
-import { buildAcceptedMissionShips } from '../nova_plugin/mission_ship_spawn.js';
-import { expandMissionText } from '../nova_plugin/mission_text.js';
-import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
-import { PersComponent } from '../nova_plugin/pers_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
-import { GameDateComponent } from '../nova_plugin/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import { ShootAllWeaponsComponent } from '../nova_plugin/npc_plugin.js';
-import { SystemIdResource } from '../nova_plugin/system_id_resource.js';
-import { TargetComponent } from '../nova_plugin/target_component.js';
+} from '../nova_plugin/missions/mission_accept.js';
+import { MissionOffer } from '../nova_plugin/missions/mission_logic.js';
+import { buildAcceptedMissionShips } from '../nova_plugin/missions/mission_ship_spawn.js';
+import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
+import { PersComponent } from '../nova_plugin/spawn/pers_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import { GameDateComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { ShootAllWeaponsComponent } from '../nova_plugin/npc/npc_plugin.js';
+import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
+import { TargetComponent } from '../nova_plugin/ship/target_component.js';
 import { offerSubstitutions } from '../spaceport/mission_offers.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
@@ -82,7 +82,7 @@ import { showStatusMessage } from './status_message_plugin.js';
  * (spaceport/ship_mission_accept.ts), builds the mission's special ships,
  * and emits AcceptShipMissionEvent; browser.ts encodes the ships and hands
  * the pair to bridge.acceptMission, which is the deterministic input record
- * every peer replays (nova_plugin/mission_accept.ts). Nothing here mutates
+ * every peer replays (nova_plugin/missions/mission_accept.ts). Nothing here mutates
  * the display world's mirror of the player.
  *
  * REFUSING DOES NOTHING, deliberately. The Bible gives a mission an OnRefuse

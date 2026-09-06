@@ -68,7 +68,7 @@ export interface HypergateNetwork {
     /**
      * Spöbs that must never be offered as a destination nor traversed as an
      * intermediate hop: the DESTROYED gates, which fail the shared
-     * `landable()` predicate (nova_plugin/landable.ts). In stock data these
+     * `landable()` predicate (nova_plugin/core/landable.ts). In stock data these
      * are the 16 gates of the collapsed network, each with the spöb "can
      * land" bit clear and zero HyperLinks. Anything not listed is usable.
      */

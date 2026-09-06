@@ -5,17 +5,17 @@ import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multipla
 import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
-import { ControlEvent, ControlEventType, ControlsSubject } from "../nova_plugin/controls_plugin.js";
-import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/entity_data_loader.js";
-import { deriveEntityComponents } from "../nova_plugin/entity_factory.js";
-import { JumpRouteComponent } from "../nova_plugin/jump_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { applyAnalogControl, applyControlEvents, ControlledByComponent } from "../nova_plugin/ship_control.js";
-import { applySetTarget } from "../nova_plugin/target_plugin.js";
-import { applySetPlanetTarget } from "../nova_plugin/planet_plugin.js";
-import { applyHail, HailAction, HailActionType } from "../nova_plugin/hail_plugin.js";
-import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/mission_accept.js";
-import { applyEscortAction, EscortAction, EscortActionType } from "../nova_plugin/escort_action.js";
+import { ControlEvent, ControlEventType, ControlsSubject } from "../nova_plugin/core/controls_plugin.js";
+import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/spawn/entity_data_loader.js";
+import { deriveEntityComponents } from "../nova_plugin/core/entity_factory.js";
+import { JumpRouteComponent } from "../nova_plugin/travel/jump_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
+import { applyAnalogControl, applyControlEvents, ControlledByComponent } from "../nova_plugin/player/ship_control.js";
+import { applySetTarget } from "../nova_plugin/combat/target_plugin.js";
+import { applySetPlanetTarget } from "../nova_plugin/travel/planet_plugin.js";
+import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/hail_plugin.js";
+import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/missions/mission_accept.js";
+import { applyEscortAction, EscortAction, EscortActionType } from "../nova_plugin/escorts/escort_action.js";
 
 /**
  * Everything that changes the simulation from outside is an input,

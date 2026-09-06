@@ -9,10 +9,10 @@ import {
 import { World } from 'nova_ecs/world';
 import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
-import { BayFighterComponent } from '../nova_plugin/bay_plugin.js';
+import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
 import {
     OwnerComponent, SourceComponent,
-} from '../nova_plugin/fire_weapon_plugin.js';
+} from '../nova_plugin/combat/fire_weapon_plugin.js';
 import { countDeployedFighters, mergeDeployedCounts } from '../spaceport/deployed_outfits.js';
 
 /**

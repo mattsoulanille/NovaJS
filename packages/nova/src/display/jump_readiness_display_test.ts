@@ -12,20 +12,20 @@ import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
-import { ControlEvent, ControlsSubject } from '../nova_plugin/controls_plugin.js';
+import { ControlEvent, ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
-import { FuelComponent, FUEL_PER_JUMP } from '../nova_plugin/health_plugin.js';
-import { JumpRouteComponent, JUMP_DISTANCE } from '../nova_plugin/jump_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+} from '../nova_plugin/core/game_data_resource.js';
+import { FuelComponent, FUEL_PER_JUMP } from '../nova_plugin/ship/health_plugin.js';
+import { JumpRouteComponent, JUMP_DISTANCE } from '../nova_plugin/travel/jump_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     ShipDataComponent, ShipPhysicsComponent,
-} from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/ship/ship_plugin.js';
 import { ShipPhysicsDisplayPlugin } from './ship_physics_display_plugin.js';
 import { SoundPlugin } from './sound_plugin.js';
-import { DISCOVERY_ENTERED } from '../nova_plugin/discovery.js';
+import { DISCOVERY_ENTERED } from '../nova_plugin/player/discovery.js';
 import {
     DiscoveryLevelResource, DrawStatusBarNavigation,
 } from './status_bar_navigation.js';

@@ -6,10 +6,10 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { OwnerComponent } from '../nova_plugin/fire_weapon_plugin.js';
-import { FormationComponent } from '../nova_plugin/npc_ai_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
-import { ControlledByComponent } from '../nova_plugin/ship_control.js';
+import { OwnerComponent } from '../nova_plugin/combat/fire_weapon_plugin.js';
+import { FormationComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import { ControlledByComponent } from '../nova_plugin/player/ship_control.js';
 import { CarriedEscort } from '../spaceport/landed_escorts.js';
 import {
     buildHiredEscort, FleetBridge, insertEscortBatch, insertPlayerAndFleet,

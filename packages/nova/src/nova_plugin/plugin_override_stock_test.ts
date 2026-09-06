@@ -2,7 +2,7 @@ import 'jasmine';
 import { SystemData } from 'novadatainterface/system_data';
 import { getPluginGameData } from '../communication/simulation_test_fixture.js';
 import { GameDataAggregator } from '../server/parsing/game_data_aggregator.js';
-import { evaluateNCBTest } from './ncb.js';
+import { evaluateNCBTest } from './ncb/ncb.js';
 
 /**
  * A plug-in resource whose id collides with an existing one REPLACES it:

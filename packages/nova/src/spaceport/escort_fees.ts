@@ -181,7 +181,7 @@ export function escortDailyFee(ship: ShipData, priceMod?: number): number {
 
 /**
  * The whole flock's daily wage bill: {@link escortDailyFee} summed over the
- * escorts on the player's payroll (nova_plugin/player_escort.ts's
+ * escorts on the player's payroll (nova_plugin/player/player_escort.ts's
  * EscortPayrollComponent holds their ship-class ids).
  *
  * A ship class the data set cannot produce is skipped rather than guessed

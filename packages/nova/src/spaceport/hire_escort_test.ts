@@ -1,14 +1,14 @@
 import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { BayFighterComponent } from '../nova_plugin/bay_plugin.js';
+import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
 import {
     cappedEscortCount, CarriedEscortEntry,
-} from '../nova_plugin/escort_cap.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
+} from '../nova_plugin/escorts/escort_cap.js';
+import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
 import {
     EscortPayrollComponent, PlayerEscortComponent,
-} from '../nova_plugin/player_escort.js';
+} from '../nova_plugin/player/player_escort.js';
 import {
     hirePrice, hireRefusal, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
     NO_SHIPS_FOR_HIRE,
@@ -26,7 +26,7 @@ function makeShip(ship: Partial<ShipData>): ShipData {
  * have the maximum possible number of escorts."), as the BAR counts it:
  * hired and captured escorts, not bay fighters and not mission ships
  * (maintainer ruling #161), through the one count in
- * nova_plugin/escort_cap.ts — given the display world (escorts still on
+ * nova_plugin/escorts/escort_cap.ts — given the display world (escorts still on
  * approach), the landed roster, and this landing's hires. escort_cap_test
  * pins the count itself; this pins how the bar feeds and applies it.
  */

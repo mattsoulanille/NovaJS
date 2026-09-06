@@ -1,6 +1,6 @@
 import 'jasmine';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { deriveShipPhysics } from '../nova_plugin/ship_plugin.js';
+import { deriveShipPhysics } from '../nova_plugin/ship/ship_plugin.js';
 import {
     canBuyOutfit, freeMass, installedMass, outfitPrice, OutfitterContext,
 } from './outfitter_rules.js';

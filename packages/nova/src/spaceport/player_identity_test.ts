@@ -1,6 +1,6 @@
 import 'jasmine';
 import { PilotProfile } from '../title/client_prefs.js';
-import { expandMissionText } from '../nova_plugin/mission_text.js';
+import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
 import { MissionUniverse } from './mission_universe.js';
 import { playerIdentitySubs } from './player_identity.js';
 

@@ -5,12 +5,12 @@ import { getDefaultPlanetData } from 'novadatainterface/planet_data';
 import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     ActiveMission, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { DockedShip, DockedShipResource } from './docked_ship.js';
 import { playerComponent, playerMissionMarks } from './starmap_plugin.js';

@@ -7,9 +7,9 @@ import { Provide } from "nova_ecs/provide";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
-import { AsteroidBreakEvent } from "../nova_plugin/asteroid_plugin.js";
-import { ProjectileCollisionEvent } from "../nova_plugin/projectile_plugin.js";
-import { ProjectileDataComponent } from "../nova_plugin/projectile_data.js";
+import { AsteroidBreakEvent } from "../nova_plugin/combat/asteroid_plugin.js";
+import { ProjectileCollisionEvent } from "../nova_plugin/combat/projectile_plugin.js";
+import { ProjectileDataComponent } from "../nova_plugin/core/projectile_data.js";
 import { GpuParticleSystem, PARTICLE_CAPACITY } from "./gpu_particles.js";
 import {
     advanceEmission, BurstConfig, dustBurst, spawnBurst, spawnTrailSegment,

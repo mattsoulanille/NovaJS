@@ -6,18 +6,18 @@ import { Entity } from 'nova_ecs/entity';
 import {
     getPluginGameData, pluginControlBit,
 } from '../communication/simulation_test_fixture.js';
-import { ControlBitResolver } from '../nova_plugin/control_bit_namespaces.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { idPrefix } from '../nova_plugin/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { ControlBitResolver } from '../nova_plugin/ncb/control_bit_namespaces.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { idPrefix } from '../nova_plugin/missions/mission_logic.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CreditsComponent, GameDateComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
-} from '../nova_plugin/save_game.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/session/save_game.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { advanceEntityDate, MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { canBuyOutfit, OutfitterContext } from './outfitter_rules.js';

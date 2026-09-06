@@ -1,10 +1,10 @@
 import { ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { replaceEscortShipClass } from '../nova_plugin/escort_action.js';
+import { replaceEscortShipClass } from '../nova_plugin/escorts/escort_action.js';
 import {
     escortProvenance, PlayerEscort, PlayerEscortComponent,
-} from '../nova_plugin/player_escort.js';
-import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/player/player_escort.js';
+import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
 
 /**
@@ -16,7 +16,7 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  * the button over the comm channel only queues the deal ("Will be upgraded
  * at next shipyard" / "Will be sold off at next shipyard" — STR# 2002 291
  * and 294), and nothing happens until the player next puts down somewhere
- * with a shipyard. nova_plugin/escort_action.ts writes the two flags; THIS
+ * with a shipyard. nova_plugin/escorts/escort_action.ts writes the two flags; THIS
  * module is the other end, where the money moves.
  *
  * ---------------------------------------------------------------------------

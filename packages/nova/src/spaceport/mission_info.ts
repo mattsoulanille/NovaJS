@@ -3,17 +3,17 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { dayNumber } from '../nova_plugin/calendar.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
-import { abortMission } from '../nova_plugin/mission_logic.js';
-import { expandMissionText, missionDisplayName } from '../nova_plugin/mission_text.js';
-import { makeDescTextContext, playerGender } from '../nova_plugin/desc_text.js';
+import { dayNumber } from '../nova_plugin/player/calendar.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { abortMission } from '../nova_plugin/missions/mission_logic.js';
+import { expandMissionText, missionDisplayName } from '../nova_plugin/missions/mission_text.js';
+import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.js';
 import { PlayerIdentitySubs, playerIdentitySubs } from './player_identity.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import { ActiveMission, GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { ActiveMission, GameDateComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
 import { activeAsOffer, offerSubstitutions } from './mission_offers.js';

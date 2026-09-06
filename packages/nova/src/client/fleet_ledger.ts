@@ -27,13 +27,13 @@ import type {
 } from '../communication/async_simulation_bridge_client.js';
 import {
     buildMissionShipSpawns, liveMissionShips,
-} from '../nova_plugin/mission_ship_spawn.js';
-import { FormationComponent } from '../nova_plugin/npc_ai_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+} from '../nova_plugin/missions/mission_ship_spawn.js';
+import { FormationComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     collectEscortsToSave, EscortToSave, SavedEscort,
-} from '../nova_plugin/save_game.js';
+} from '../nova_plugin/session/save_game.js';
 import { restockCarriedEscorts } from '../spaceport/escort_restock.js';
 import {
     carriedBatchSettled, CarriedEscort, escortsAccountedFor,

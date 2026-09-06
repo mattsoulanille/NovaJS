@@ -2,27 +2,27 @@ import { Entity } from 'nova_ecs/entity';
 import { PersData } from 'novadatainterface/pers_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { AcceptedMission } from '../nova_plugin/mission_accept.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { AcceptedMission } from '../nova_plugin/missions/mission_accept.js';
 import {
     acceptOffer, LOCATION_SHIP, makeMissionOffer, MissionEvent, MissionOffer,
     missionMatchesLocation,
-} from '../nova_plugin/mission_logic.js';
-import { ShipObjective } from '../nova_plugin/mission_ship_state.js';
+} from '../nova_plugin/missions/mission_logic.js';
+import { ShipObjective } from '../nova_plugin/player/mission_ship_state.js';
 import {
     ActiveMissionType, CreditsComponent,
     GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
     ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CombatRatingComponent, LegalRecordsComponent,
-} from '../nova_plugin/reputation_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import { dayNumber } from '../nova_plugin/calendar.js';
+} from '../nova_plugin/reputation/reputation_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { dayNumber } from '../nova_plugin/player/calendar.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import {

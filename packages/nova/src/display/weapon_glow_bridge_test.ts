@@ -10,7 +10,7 @@ import { makeSimulationBridgeHarness } from '../communication/simulation_test_fi
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     WeaponsState, WeaponsStateComponent,
-} from '../nova_plugin/weapons_state.js';
+} from '../nova_plugin/ship/weapons_state.js';
 import { latestRealFire } from './ship_animation_plugin.js';
 
 /**

@@ -40,7 +40,7 @@
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 import { openEnum } from '../common/open_enum.js';
-import { GameDateType } from '../nova_plugin/player_state_plugin.js';
+import { GameDateType } from '../nova_plugin/player/player_state_plugin.js';
 import {
     applyPatch, cloneJson, diffJson, JsonPatchOp, JsonValue,
 } from './json_patch.js';

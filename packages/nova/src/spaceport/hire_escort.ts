@@ -5,15 +5,15 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/desc_text.js';
+    from '../nova_plugin/ncb/desc_text.js';
 import {
     cappedEscortCount, CarriedEscortEntry, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
-} from '../nova_plugin/escort_cap.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/escorts/escort_cap.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';
@@ -62,7 +62,7 @@ export async function noShipsForHire(
 
 /**
  * THE MOST ESCORTS A PLAYER CAN HAVE: six, hired or captured, by
- * maintainer ruling #161 — see nova_plugin/escort_cap.ts, which owns the
+ * maintainer ruling #161 — see nova_plugin/escorts/escort_cap.ts, which owns the
  * number, the STR# 2002 index 123 wording, and the rule for what counts
  * (not mission escorts, not bay fighters). Re-exported here because this
  * dialog is where the refusal is quoted, and so the bar's callers and the
@@ -171,7 +171,7 @@ export interface HirePlayer {
  * session commits) and records the ship id for browser.ts to spawn
  * on launch (see pending_escorts.ts). Once spawned, the escort is an
  * ordinary escort: it follows through hyperspace and gates
- * (nova_plugin/player_escort_plugin.ts) and is persisted in the save
+ * (nova_plugin/escorts/player_escort_plugin.ts) and is persisted in the save
  * (save_game.ts `escorts`).
  */
 export class HireEscortDialog {

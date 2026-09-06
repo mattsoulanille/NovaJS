@@ -7,10 +7,10 @@ import { restoreWireWorldSnapshot, SnapshotPoliciesResource, wireSnapshotWorld, 
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
-import { completeEntity, loadWireSnapshotGameData } from '../nova_plugin/entity_data_loader.js';
-import { deriveEntityComponents } from '../nova_plugin/entity_factory.js';
-import { makeNpc } from '../nova_plugin/npc_plugin.js';
-import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
+import { completeEntity, loadWireSnapshotGameData } from '../nova_plugin/spawn/entity_data_loader.js';
+import { deriveEntityComponents } from '../nova_plugin/core/entity_factory.js';
+import { makeNpc } from '../nova_plugin/npc/npc_plugin.js';
+import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { compareWorlds, makeDeterminismWorld } from './determinism_harness.js';
 import { applyInputRecords } from './simulation_input.js';
 import { getSyntheticGameData } from './simulation_test_fixture.js';

@@ -6,25 +6,25 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/desc_text.js';
+    from '../nova_plugin/ncb/desc_text.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
-import { ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/health_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/ship/health_plugin.js';
+import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT,
     LOCATION_SHIPYARD, LOCATION_TRADING, MissionEvent, MissionMapMark,
     missionMapMarks,
-} from '../nova_plugin/mission_logic.js';
-import { expandMissionText } from '../nova_plugin/mission_text.js';
+} from '../nova_plugin/missions/mission_logic.js';
+import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation_plugin.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
+import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
 import { Bar } from './bar.js';
 import { Button } from './button.js';
@@ -204,7 +204,7 @@ export class Spaceport extends Menu<Entity> {
             // Delete these so they are re-created with the new outfits.
             // Nothing re-derives them while docked (the entity is out of
             // the world, so no ChangeEvent can fire — see the note in
-            // nova_plugin/ship_plugin.ts): the relaunch rebuilds both.
+            // nova_plugin/ship/ship_plugin.ts): the relaunch rebuilds both.
             // Anything that must show outfitted physics WHILE STILL
             // LANDED therefore has to re-derive it for display rather
             // than read the component — see player_info.ts's
@@ -810,7 +810,7 @@ export class Spaceport extends Menu<Entity> {
         playerUuid?: string, world?: Iterable<[string, Entity]>) {
         this.tradeCenter.setLandedEscorts(roster, playerUuid);
         // ...and the bar, whose hire dialog counts the fleet against the
-        // escort cap (nova_plugin/escort_cap.ts) — from the roster AND
+        // escort cap (nova_plugin/escorts/escort_cap.ts) — from the roster AND
         // the display world, where the escorts still on approach are.
         this.bar.setLandedEscorts(roster, playerUuid, world);
     }

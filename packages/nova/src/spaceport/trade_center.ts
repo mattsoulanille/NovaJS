@@ -7,19 +7,19 @@ import { Observable } from 'rxjs';
 import { DockedLiveStatus } from '../display/docked_ship.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { dayNumber } from '../nova_plugin/calendar.js';
-import { CreditsComponent, GameDateComponent } from '../nova_plugin/player_state_plugin.js';
-import { activePriceEvents, applyPriceEvents } from '../nova_plugin/price_events.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { dayNumber } from '../nova_plugin/player/calendar.js';
+import { CreditsComponent, GameDateComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { activePriceEvents, applyPriceEvents } from '../nova_plugin/economy/price_events.js';
 import {
     junkTradeGood,
     otherCargoNames,
     standardTradeGoods,
     TradeGood,
     TradeWorkingState,
-} from '../nova_plugin/trade_logic.js';
+} from '../nova_plugin/economy/trade_logic.js';
 import { Button, ButtonClick } from './button.js';
 import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import {

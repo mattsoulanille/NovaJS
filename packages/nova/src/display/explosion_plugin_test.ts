@@ -11,19 +11,19 @@ import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { ExplosionDataComponent } from '../nova_plugin/animation_plugin.js';
+import { ExplosionDataComponent } from '../nova_plugin/core/animation_plugin.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
-import { DeathEvent, ZeroArmorEvent } from '../nova_plugin/death_plugin.js';
-import { DisplayAssetDataResource } from '../nova_plugin/game_data_resource.js';
-import { ArmorComponent } from '../nova_plugin/health_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+import { DeathEvent, ZeroArmorEvent } from '../nova_plugin/ship/death_plugin.js';
+import { DisplayAssetDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { ArmorComponent } from '../nova_plugin/ship/health_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     finalExplosionScale, MAX_SECONDARY_EXPLOSIONS_PER_STEP,
     secondaryExplosionTotal,
-} from '../nova_plugin/ship_explosion.js';
-import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
-import { SoundEvent, SoundEventData } from '../nova_plugin/sound_plugin.js';
-import { Stat } from '../nova_plugin/stat.js';
+} from '../nova_plugin/ship/ship_explosion.js';
+import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { SoundEvent, SoundEventData } from '../nova_plugin/core/sound_plugin.js';
+import { Stat } from '../nova_plugin/core/stat.js';
 import {
     ExplosionPlugin, GAME_FRAME_MS, makeExplosion, MAX_EXPLOSION_SPARKS,
     MIN_EXPLOSION_SPARKS, randomSparkCount, SecondaryExplosionComponent,

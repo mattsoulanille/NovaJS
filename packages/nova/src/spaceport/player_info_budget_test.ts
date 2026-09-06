@@ -3,16 +3,16 @@ import { Entity } from 'nova_ecs/entity';
 import {
     getIntegrationGameData, getPluginGameData,
 } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { ActiveRanksComponent } from '../nova_plugin/ncb_plugin.js';
-import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { ActiveRanksComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { EscortPayrollComponent } from '../nova_plugin/player/player_escort.js';
 import {
     CreditsComponent, GameDateComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import { getDefaultGovtData } from 'novadatainterface/govt_data';
 import {
     legalStatusInSystem, legalStatusName,
-} from '../nova_plugin/reputation.js';
+} from '../nova_plugin/reputation/reputation.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { dailyBudget } from './daily_budget.js';
 import {

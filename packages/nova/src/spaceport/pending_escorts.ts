@@ -13,11 +13,11 @@ import { Entity } from 'nova_ecs/entity';
  * player already had are a different mechanism: they follow the player's
  * lifecycle (landing with them, departing with them, jumping with them)
  * through PlayerEscortComponent and the carried-escort roster — see
- * nova_plugin/player_escort_plugin.ts and landed_escorts.ts.
+ * nova_plugin/escorts/player_escort_plugin.ts and landed_escorts.ts.
  *
  * PERSISTENCE. Once spawned, hired escorts are ordinary escorts: they
  * follow the player through jumps and gates (PlayerEscortComponent and
- * the sweep systems in nova_plugin/player_escort_plugin.ts) and are
+ * the sweep systems in nova_plugin/escorts/player_escort_plugin.ts) and are
  * written into the save as whole serialized entities (`escorts`, added
  * in SAVE_VERSION 2 — see save_game.ts, `SavedEscort`). What is NOT
  * saved is this component itself: it is display-side bookkeeping on the

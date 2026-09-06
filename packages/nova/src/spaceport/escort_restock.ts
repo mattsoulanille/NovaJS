@@ -1,14 +1,14 @@
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
 import { Entity } from 'nova_ecs/entity';
-import { DisabledComponent } from '../nova_plugin/disabled_component.js';
+import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
 import {
     ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
-} from '../nova_plugin/health_plugin.js';
-import { IsIonizedComponent } from '../nova_plugin/ionization_plugin.js';
+} from '../nova_plugin/ship/health_plugin.js';
+import { IsIonizedComponent } from '../nova_plugin/ship/ionization_plugin.js';
 import {
     OutfitsState, OutfitsStateComponent,
-} from '../nova_plugin/outfit_plugin.js';
+} from '../nova_plugin/ship/outfit_plugin.js';
 import { deployedFightersByBay } from './landed_escorts.js';
 
 /**

@@ -8,11 +8,11 @@ import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 import { FilesystemData } from "../server/parsing/filesystem_data.js";
 import { NovaParse } from "novaparse";
-import { ControlBitResolver } from "../nova_plugin/control_bit_namespaces.js";
-import { completeEntity } from "../nova_plugin/entity_data_loader.js";
-import { makeShip } from "../nova_plugin/make_ship.js";
+import { ControlBitResolver } from "../nova_plugin/ncb/control_bit_namespaces.js";
+import { completeEntity } from "../nova_plugin/spawn/entity_data_loader.js";
+import { makeShip } from "../nova_plugin/ship/make_ship.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
 import { SimulationBridgeClient } from "./simulation_bridge_client.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
@@ -176,7 +176,7 @@ const pluginDataPromises = new Map<string, Promise<GameDataAggregator | undefine
 /**
  * Base "Nova Files" data PLUS exactly one named plug-in directory from
  * Nova_Data/Plug-ins — for specs that pin behaviour against real
- * third-party scenario data (the compatibility rules in nova_plugin/ncb.ts,
+ * third-party scenario data (the compatibility rules in nova_plugin/ncb/ncb.ts,
  * say). Resolves to undefined when that plug-in is not installed, so such a
  * spec can skip itself instead of failing on a machine (or CI) without it.
  *
@@ -214,7 +214,7 @@ export async function getPluginGameData(
 /**
  * The PHYSICAL control bit that plug-in `namespace`'s raw bit `bit` was
  * given under `gameData`'s plug-in set (see
- * nova_plugin/control_bit_namespaces.ts). Specs that drive a plug-in's
+ * nova_plugin/ncb/control_bit_namespaces.ts). Specs that drive a plug-in's
  * gates by its own bit numbers (`b9009` in Extra Outfits, say) must go
  * through this, because NovaParse renumbers plug-in-private bits.
  */

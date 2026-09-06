@@ -1,7 +1,7 @@
 import { ArgumentParser } from 'argparse';
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as fs from 'fs';
-import { Controls, SavedControls } from '../src/nova_plugin/controls.js';
+import { Controls, SavedControls } from '../src/nova_plugin/core/controls.js';
 
 
 const parser = new ArgumentParser({

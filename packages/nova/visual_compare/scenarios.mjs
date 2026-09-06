@@ -1499,7 +1499,7 @@ export const scenarios = [
             + 'MANAGEMENT panel (Upgrade Escort / Sell Escort / Release / Close '
             + 'Channel), not a fleet-command panel — commanding escorts is the '
             + 'keyboard escort-controls\' job. All three functions are live '
-            + '(nova_plugin/escort_action.ts); Sell Escort renders GREYED for a '
+            + '(nova_plugin/escorts/escort_action.ts); Sell Escort renders GREYED for a '
             + 'HIRED escort, exactly as the reference greys it, because the '
             + 'player never owned that hull. '
             + 'The 8513 frame is shared by every escort reference, so this one '

@@ -1,4 +1,4 @@
-import { TradeGood } from '../nova_plugin/trade_logic.js';
+import { TradeGood } from '../nova_plugin/economy/trade_logic.js';
 import {
     missionCargoTons, priceEventSentence, tradeSlot,
 } from './trade_center.js';

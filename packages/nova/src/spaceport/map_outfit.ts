@@ -1,11 +1,11 @@
 import { OutfitData } from 'novadatainterface/outfit_data';
 import {
     DISCOVERY_LANDED, MapOutfitSystem, mapOutfitSystems, SystemAdjacency,
-} from '../nova_plugin/discovery.js';
+} from '../nova_plugin/player/discovery.js';
 import {
     defaultDiscoveryStore, DiscoveryStore,
-} from '../nova_plugin/discovery_store.js';
-import { systemIsInhabited } from '../nova_plugin/landable.js';
+} from '../nova_plugin/player/discovery_store.js';
+import { systemIsInhabited } from '../nova_plugin/core/landable.js';
 import { MissionUniverse } from './mission_universe.js';
 
 /**

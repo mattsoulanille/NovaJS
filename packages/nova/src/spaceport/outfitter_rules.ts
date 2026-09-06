@@ -8,19 +8,19 @@
  *
  * Pure logic; the Outfitter menu supplies the context. Note that Gxxx
  * control-bit grants intentionally bypass all of these checks (see
- * makeControlBitHooks in ../nova_plugin/ncb.ts).
+ * makeControlBitHooks in ../nova_plugin/ncb/ncb.ts).
  */
 import { GovtData } from 'novadatainterface/govt_data';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
-import { DiscoveryAccess } from '../nova_plugin/discovery.js';
+import { DiscoveryAccess } from '../nova_plugin/player/discovery.js';
 import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
-} from '../nova_plugin/mission_logic.js';
-import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb.js';
-import { installedOutfitMass } from '../nova_plugin/outfit_plugin.js';
+} from '../nova_plugin/missions/mission_logic.js';
+import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb/ncb.js';
+import { installedOutfitMass } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     dayRoll, passesDayRoll, resourceNumber as resourceNumberOf,
 } from './day_roll.js';
@@ -454,7 +454,7 @@ export function outfitPrice(outfit: OutfitData, ship?: ShipData): number {
 /**
  * The tonnage one unit of `outfit` occupies aboard `ship` — the oütf Mass,
  * or for flag 0x0400 the ship-mass-proportional figure. The rule and its
- * rounding ruling live in nova_plugin/outfit_plugin.ts's
+ * rounding ruling live in nova_plugin/ship/outfit_plugin.ts's
  * installedOutfitMass, which is also what the sim's physics derivation
  * uses, so the free mass this shop shows is the free mass the ship
  * flies with. Like outfitPrice, a missing ship means "as written".

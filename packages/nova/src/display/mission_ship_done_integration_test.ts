@@ -9,22 +9,22 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import {
     getIntegrationGameData, getPluginGameData,
 } from '../communication/simulation_test_fixture.js';
-import { BoardedComponent } from '../nova_plugin/boarding_component.js';
-import { ControlEvent, ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { completeEntity } from '../nova_plugin/entity_data_loader.js';
+import { BoardedComponent } from '../nova_plugin/ship/boarding_component.js';
+import { ControlEvent, ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
+import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+} from '../nova_plugin/core/game_data_resource.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { startMissionById } from '../nova_plugin/mission_logic.js';
-import { buildMissionShipSpawns } from '../nova_plugin/mission_ship_spawn.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+import { startMissionById } from '../nova_plugin/missions/mission_logic.js';
+import { buildMissionShipSpawns } from '../nova_plugin/missions/mission_ship_spawn.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
     PendingMissionNoticesComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import { GameDataAggregator } from '../server/parsing/game_data_aggregator.js';
 import {
     advanceEntityDate, MissionSession,

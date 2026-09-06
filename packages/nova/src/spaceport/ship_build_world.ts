@@ -6,14 +6,14 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import {
     DisplayAssetDataResource,
     SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
+} from '../nova_plugin/core/game_data_resource.js';
 import {
     DEFAULT_MISSILE_GUIDANCE,
     MissileGuidanceResource,
-} from '../nova_plugin/guidance.js';
-import { IdFactory, IdFactoryResource } from '../nova_plugin/id_factory.js';
+} from '../nova_plugin/combat/guidance.js';
+import { IdFactory, IdFactoryResource } from '../nova_plugin/core/id_factory.js';
 import { AsyncSystemResource } from 'nova_ecs/async_system';
-import { SystemIdResource } from '../nova_plugin/system_id_resource.js';
+import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
 import { SystemPlugin } from '../nova_plugin/system_plugin.js';
 
 /**

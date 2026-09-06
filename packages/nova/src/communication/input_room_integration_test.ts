@@ -3,13 +3,13 @@ import { CommunicatorResource } from 'nova_ecs/plugins/multiplayer_plugin';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { World } from 'nova_ecs/world';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { makeNpc } from '../nova_plugin/npc_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { makeNpc } from '../nova_plugin/npc/npc_plugin.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { completeEntity } from '../nova_plugin/entity_data_loader.js';
-import { ControlledByComponent, PEER_LOCAL_COMPONENTS } from '../nova_plugin/ship_control.js';
-import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/target_component.js';
+import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
+import { ControlledByComponent, PEER_LOCAL_COMPONENTS } from '../nova_plugin/player/ship_control.js';
+import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { TargetComponent } from '../nova_plugin/ship/target_component.js';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Angle } from 'nova_ecs/datatypes/angle';
@@ -95,7 +95,7 @@ describe('Input-driven rooms', () => {
         // archive-vs-everyone desync class.
         const shipA = await makePeerShip('a', peerA.world);
         const { ActiveSecondaryWeapon } =
-            await import('../nova_plugin/weapon_plugin.js');
+            await import('../nova_plugin/combat/weapon_plugin.js');
         shipA.components.set(ActiveSecondaryWeapon,
             { secondary: 'bogus:999' });
         await peerA.client.addEntity('ship a', shipA);
@@ -127,7 +127,7 @@ describe('Input-driven rooms', () => {
         expect(hashA.hash).toEqual(hashB.hash);
         // The stale secondary created no phantom weapon entry.
         const { WeaponsStateComponent } =
-            await import('../nova_plugin/weapons_state.js');
+            await import('../nova_plugin/ship/weapons_state.js');
         for (const peer of [peerA, peerB]) {
             const weapons = peer.world.entities.get('ship a')!
                 .components.get(WeaponsStateComponent)!;
@@ -518,7 +518,7 @@ describe('Input-driven rooms', () => {
         await step(5);
         const shipA = () => peerA.world.entities.get('ship a')!;
         const { ActiveSecondaryWeapon } =
-            await import('../nova_plugin/weapon_plugin.js');
+            await import('../nova_plugin/combat/weapon_plugin.js');
         let foundBay = false;
         for (let cycle = 0; cycle < 8 && !foundBay; cycle++) {
             peerA.host.controlEvents([{ action: 'nextSecondary', state: 'start' }]);
@@ -661,7 +661,7 @@ describe('Input-driven rooms', () => {
         // anything. Watch the shield during the volley: it recharges,
         // so a check after the quiet tail can miss real hits.
         const { ShieldComponent } =
-            await import('../nova_plugin/health_plugin.js');
+            await import('../nova_plugin/ship/health_plugin.js');
         let minVictimShield = Infinity;
         const watchVictim = () => {
             const shield = peerA.world.entities.get('ship b')

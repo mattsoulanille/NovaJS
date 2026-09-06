@@ -8,8 +8,8 @@ import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { DisplayAssetDataResource } from '../nova_plugin/game_data_resource.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+import { DisplayAssetDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { pickNearest } from '../tap_targeting.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 import {

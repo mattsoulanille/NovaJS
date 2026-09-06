@@ -7,11 +7,11 @@
 // one place.
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
-import { DiscoveryLevel, knownSystemProperties } from "../nova_plugin/discovery.js";
-import { displayName } from "../nova_plugin/display_name.js";
-import { isPort } from "../nova_plugin/landable.js";
-import { STANDARD_CARGO_NAMES } from "../nova_plugin/mission_logic.js";
-import { legalStatusInSystem } from "../nova_plugin/reputation.js";
+import { DiscoveryLevel, knownSystemProperties } from "../nova_plugin/player/discovery.js";
+import { displayName } from "../nova_plugin/core/display_name.js";
+import { isPort } from "../nova_plugin/core/landable.js";
+import { STANDARD_CARGO_NAMES } from "../nova_plugin/missions/mission_logic.js";
+import { legalStatusInSystem } from "../nova_plugin/reputation/reputation.js";
 import { MissionUniverse } from "./mission_universe.js";
 import { hazardDescription } from "./route.js";
 

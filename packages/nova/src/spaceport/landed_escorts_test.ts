@@ -8,30 +8,30 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
-import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/bay_plugin.js';
-import { completeEntity } from '../nova_plugin/entity_data_loader.js';
-import { EscortCommandComponent } from '../nova_plugin/escort_command.js';
+import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/bay_plugin.js';
+import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
+import { EscortCommandComponent } from '../nova_plugin/player/escort_command.js';
 import {
     OwnerComponent, SourceComponent,
-} from '../nova_plugin/fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../nova_plugin/firing_group.js';
-import { ArmorComponent } from '../nova_plugin/health_plugin.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+} from '../nova_plugin/combat/fire_weapon_plugin.js';
+import { FiringGroupComponent } from '../nova_plugin/ship/firing_group.js';
+import { ArmorComponent } from '../nova_plugin/ship/health_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import {
     formationSlotPosition, FormationComponent,
-} from '../nova_plugin/npc_ai_plugin.js';
+} from '../nova_plugin/npc/npc_ai_plugin.js';
 import {
     EscortLandingComponent, PlayerEscortComponent,
-} from '../nova_plugin/player_escort.js';
-import { EscortLandedEvent } from '../nova_plugin/player_escort_plugin.js';
-import { deriveEntityComponents } from '../nova_plugin/entity_factory.js';
-import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
-import { Stat } from '../nova_plugin/stat.js';
+} from '../nova_plugin/player/player_escort.js';
+import { EscortLandedEvent } from '../nova_plugin/escorts/player_escort_plugin.js';
+import { deriveEntityComponents } from '../nova_plugin/core/entity_factory.js';
+import { ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { Stat } from '../nova_plugin/core/stat.js';
 import {
     JumpComponent, MultiJumpContinueComponent,
-} from '../nova_plugin/jump_plugin.js';
-import { GateArrivalComponent } from '../nova_plugin/gate_transit_plugin.js';
+} from '../nova_plugin/travel/jump_plugin.js';
+import { GateArrivalComponent } from '../nova_plugin/travel/gate_transit_plugin.js';
 import {
     CarriedEscort, deployedFightersBySource, escortsAccountedFor,
     carriedBatchMustHold, carriedBatchSettled, gateArrivalPending,
@@ -48,13 +48,13 @@ import {
 import {
     BayWeaponData, getDefaultBayWeaponData,
 } from 'novadatainterface/weapon_data';
-import { BayFighterComponent, startReturnHome } from '../nova_plugin/bay_plugin.js';
-import { CollisionEvent } from '../nova_plugin/collision_interaction.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/weapons_state.js';
+import { BayFighterComponent, startReturnHome } from '../nova_plugin/escorts/bay_plugin.js';
+import { CollisionEvent } from '../nova_plugin/core/collision_interaction.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
 import {
     extractSavedEscorts, restoreSavedEscorts,
-} from '../nova_plugin/save_game.js';
+} from '../nova_plugin/session/save_game.js';
 
 const PLAYER = 'player';
 const SHIP_ID = 'test:ship';

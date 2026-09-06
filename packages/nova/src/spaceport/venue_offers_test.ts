@@ -1,21 +1,21 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
     LOCATION_OUTFIT, LOCATION_SHIPYARD, LOCATION_TRADING,
     missionCargoKey,
-} from '../nova_plugin/mission_logic.js';
+} from '../nova_plugin/missions/mission_logic.js';
 import { ActiveRanksComponent, ControlBitsComponent }
-    from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+    from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import {
     CombatRatingComponent, LegalRecordsComponent,
-} from '../nova_plugin/reputation_plugin.js';
+} from '../nova_plugin/reputation/reputation_plugin.js';
 import { OfferRolls, rollOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';

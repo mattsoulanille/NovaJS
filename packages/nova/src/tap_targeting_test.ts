@@ -4,8 +4,8 @@ import { Angle } from 'nova_ecs/datatypes/angle';
 import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { MovementState, MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
-import { PlanetComponent } from './nova_plugin/planet_plugin.js';
-import { ShipComponent } from './nova_plugin/ship_plugin.js';
+import { PlanetComponent } from './nova_plugin/travel/planet_plugin.js';
+import { ShipComponent } from './nova_plugin/ship/ship_plugin.js';
 import { pickNearest } from './tap_targeting.js';
 
 function makeMovement(x: number, y: number): MovementState {

@@ -5,25 +5,25 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { MissionData } from 'novadatainterface/mission_data';
-import { dayNumber } from '../nova_plugin/calendar.js';
-import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { makeDescTextContext, playerGender } from '../nova_plugin/desc_text.js';
+import { dayNumber } from '../nova_plugin/player/calendar.js';
+import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
+import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
-import { expandMissionText } from '../nova_plugin/mission_text.js';
-import { MissionShip, MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
+} from '../nova_plugin/core/game_data_resource.js';
+import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
+import { MissionShip, MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
 import {
     GOAL_BOARD, GOAL_RESCUE, ShipObjective,
-} from '../nova_plugin/mission_ship_state.js';
+} from '../nova_plugin/player/mission_ship_state.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { activeAsOffer, offerSubstitutions } from '../spaceport/mission_offers.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';

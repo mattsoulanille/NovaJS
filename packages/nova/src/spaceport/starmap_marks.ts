@@ -2,7 +2,7 @@
 // placed beside active-mission and BBS-viewed destination systems.
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
-import { MissionMapMark } from "../nova_plugin/mission_logic.js";
+import { MissionMapMark } from "../nova_plugin/missions/mission_logic.js";
 import { scalePos, SYSTEM_RADIUS } from "./starmap_viewport.js";
 
 // Active-mission markers use the original game's own icons: the ORANGE

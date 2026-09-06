@@ -15,19 +15,19 @@ import {
     makeSimulationBridgeHarness,
 } from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
-import { completeEntity } from '../nova_plugin/entity_data_loader.js';
-import { EscortCommandComponent } from '../nova_plugin/escort_command.js';
-import { ArmorComponent } from '../nova_plugin/health_plugin.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { FormationComponent } from '../nova_plugin/npc_ai_plugin.js';
-import { PlanetComponent } from '../nova_plugin/planet_plugin.js';
-import { Stat } from '../nova_plugin/stat.js';
+import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
+import { EscortCommandComponent } from '../nova_plugin/player/escort_command.js';
+import { ArmorComponent } from '../nova_plugin/ship/health_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { FormationComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
+import { PlanetComponent } from '../nova_plugin/travel/planet_plugin.js';
+import { Stat } from '../nova_plugin/core/stat.js';
 import {
     EscortLandingComponent, PlayerEscortComponent,
-} from '../nova_plugin/player_escort.js';
+} from '../nova_plugin/player/player_escort.js';
 import {
     EscortLanded, EscortLandedEvent,
-} from '../nova_plugin/player_escort_plugin.js';
+} from '../nova_plugin/escorts/player_escort_plugin.js';
 
 /**
  * The escort lifecycle relies on two pieces of sim -> client wiring, and

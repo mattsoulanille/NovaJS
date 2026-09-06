@@ -6,15 +6,15 @@ import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { DisabledComponent } from "../nova_plugin/disabled_component.js";
-import { DISCOVERY_ENTERED, DiscoveryLevel } from "../nova_plugin/discovery.js";
-import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { FuelComponent, FUEL_PER_JUMP } from "../nova_plugin/health_plugin.js";
-import { JumpComponent, JumpRouteComponent, JUMP_DISTANCE } from "../nova_plugin/jump_plugin.js";
-import { canJump, jumpRadiusFor } from "../nova_plugin/jump_readiness.js";
-import { PlanetDataComponent, PlanetTargetComponent } from "../nova_plugin/planet_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
-import { ShipPhysicsComponent } from "../nova_plugin/ship_plugin.js";
+import { DisabledComponent } from "../nova_plugin/ship/disabled_component.js";
+import { DISCOVERY_ENTERED, DiscoveryLevel } from "../nova_plugin/player/discovery.js";
+import { SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
+import { FuelComponent, FUEL_PER_JUMP } from "../nova_plugin/ship/health_plugin.js";
+import { JumpComponent, JumpRouteComponent, JUMP_DISTANCE } from "../nova_plugin/travel/jump_plugin.js";
+import { canJump, jumpRadiusFor } from "../nova_plugin/travel/jump_readiness.js";
+import { PlanetDataComponent, PlanetTargetComponent } from "../nova_plugin/travel/planet_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
+import { ShipPhysicsComponent } from "../nova_plugin/ship/ship_plugin.js";
 import { navReadout, NavReadout } from "./status_bar_content.js";
 import { NAV_HEADER_Y, NAV_VALUE_Y, StatusBarFonts } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
@@ -167,7 +167,7 @@ export const DrawStatusBarNavigation = new System({
         }
 
         // DIM UNTIL JUMP-READY, off the shared readiness predicate
-        // (nova_plugin/jump_readiness.ts) that PlayerJumpControl gates on
+        // (nova_plugin/travel/jump_readiness.ts) that PlayerJumpControl gates on
         // and the nova:154 cue fires from — the destination brightens
         // exactly when pressing the jump key would work.
         //

@@ -1,12 +1,12 @@
 import "jasmine";
 import { MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
-import { completeEntity } from "../nova_plugin/entity_data_loader.js";
-import { makeShip } from "../nova_plugin/make_ship.js";
+import { completeEntity } from "../nova_plugin/spawn/entity_data_loader.js";
+import { makeShip } from "../nova_plugin/ship/make_ship.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { OutfitsStateComponent } from "../nova_plugin/outfit_plugin.js";
-import { PlanetDataComponent } from "../nova_plugin/planet_plugin.js";
-import { ShipDataComponent, ShipPhysicsComponent } from "../nova_plugin/ship_plugin.js";
-import { WeaponsStateComponent } from "../nova_plugin/weapons_state.js";
+import { OutfitsStateComponent } from "../nova_plugin/ship/outfit_plugin.js";
+import { PlanetDataComponent } from "../nova_plugin/travel/planet_plugin.js";
+import { ShipDataComponent, ShipPhysicsComponent } from "../nova_plugin/ship/ship_plugin.js";
+import { WeaponsStateComponent } from "../nova_plugin/ship/weapons_state.js";
 import { getSyntheticGameData } from "./simulation_test_fixture.js";
 
 // On the synthetic data set: the sorted-first system (Thessaly Reach, two

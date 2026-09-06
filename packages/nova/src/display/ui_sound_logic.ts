@@ -5,7 +5,7 @@
  * audio) so the edge semantics are unit-testable in isolation.
  */
 
-import { canJump, JumpReadinessInputs } from '../nova_plugin/jump_readiness.js';
+import { canJump, JumpReadinessInputs } from '../nova_plugin/travel/jump_readiness.js';
 
 /** A target selection changed to a new, non-empty target this tick. */
 export function targetChangedEdge(prev: string | undefined,

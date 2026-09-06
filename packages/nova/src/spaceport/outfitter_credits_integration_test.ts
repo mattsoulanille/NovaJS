@@ -1,9 +1,9 @@
 import 'jasmine';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { outfitResaleValue } from './outfitter_rules.js';

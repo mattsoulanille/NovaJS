@@ -36,20 +36,20 @@ import { LeaveSpaceportEvent } from '../display/spaceport_plugin.js';
 import { SetJumpRouteEvent } from '../display/starmap_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
 import { isTextEntryActive } from '../input_focus.js';
-import { ControlEvent, EcsControlEvent } from '../nova_plugin/controls_plugin.js';
-import { Controls, getActions } from '../nova_plugin/controls.js';
-import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
-import { GateTransitEvent } from '../nova_plugin/gate_transit_plugin.js';
-import { FinishJumpEvent } from '../nova_plugin/jump_plugin.js';
-import type { AcceptedMission } from '../nova_plugin/mission_accept.js';
+import { ControlEvent, EcsControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { Controls, getActions } from '../nova_plugin/core/controls.js';
+import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { GateTransitEvent } from '../nova_plugin/travel/gate_transit_plugin.js';
+import { FinishJumpEvent } from '../nova_plugin/travel/jump_plugin.js';
+import type { AcceptedMission } from '../nova_plugin/missions/mission_accept.js';
 import { MultiRoomResource, NovaPlugin } from '../nova_plugin/nova_plugin.js';
-import { LandEvent } from '../nova_plugin/planet_plugin.js';
+import { LandEvent } from '../nova_plugin/travel/planet_plugin.js';
 import {
     EscortJumpEvent, EscortLandedEvent,
-} from '../nova_plugin/player_escort_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
-import { resetMostRecentlyActivatedRank } from '../nova_plugin/rank_logic.js';
-import { AnalogControlState } from '../nova_plugin/ship_control.js';
+} from '../nova_plugin/escorts/player_escort_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import { resetMostRecentlyActivatedRank } from '../nova_plugin/ncb/rank_logic.js';
+import { AnalogControlState } from '../nova_plugin/player/ship_control.js';
 import type { CarriedEscort } from '../spaceport/landed_escorts.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -151,7 +151,7 @@ function wireWorld(runtime: ClientRuntime, pump: FramePump): WorldWiring {
             sendToBridge(bridge.hail(data.action), 'Hail');
         });
         // The escort comm dialog's MANAGEMENT functions (release / sell /
-        // upgrade — nova_plugin/escort_action.ts) take the same road, on
+        // upgrade — nova_plugin/escorts/escort_action.ts) take the same road, on
         // their own bridge call for the shape of the record rather than
         // for any staging: NOTHING is staged here. A release only drops
         // components, and queueing an upgrade only writes the target

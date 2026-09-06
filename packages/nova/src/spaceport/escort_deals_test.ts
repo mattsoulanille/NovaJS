@@ -1,9 +1,9 @@
 import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
-import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import {
     EscortDealEntry, queuedUpgradeTargets, settleEscortDeals,
 } from './escort_deals.js';
@@ -14,7 +14,7 @@ import {
  * ============================================================================
  *
  * The far end of the deferred flow: the comm dialog queued an upgrade or a
- * sale (nova_plugin/escort_action.ts) and the player has now landed
+ * sale (nova_plugin/escorts/escort_action.ts) and the player has now landed
  * somewhere with a shipyard. These specs drive the settlement over a landed
  * roster exactly as browser.ts does — a plain array of CarriedEscort-shaped
  * entries, mutated in place — and check the money, the hull, and what is

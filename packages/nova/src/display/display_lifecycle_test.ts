@@ -7,22 +7,22 @@ import { Subject } from 'rxjs';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { ControlEvent, ControlsSubject } from '../nova_plugin/controls_plugin.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { ControlEvent, ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
     DiscoveryStore, DiscoveryStoreResource,
-} from '../nova_plugin/discovery_store.js';
+} from '../nova_plugin/player/discovery_store.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/game_data_resource.js';
-import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { PlanetComponent } from '../nova_plugin/planet_plugin.js';
+} from '../nova_plugin/core/game_data_resource.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { PlanetComponent } from '../nova_plugin/travel/planet_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import { SystemIdResource } from '../nova_plugin/system_id_resource.js';
+} from '../nova_plugin/player/player_state_plugin.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
 import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';

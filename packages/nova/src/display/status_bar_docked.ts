@@ -1,11 +1,11 @@
 import { System } from "nova_ecs/system";
 import { SingletonComponent } from "nova_ecs/world";
-import { CargoComponent } from "../nova_plugin/cargo_plugin.js";
-import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
-import { ArmorComponent, FuelComponent, ShieldComponent } from "../nova_plugin/health_plugin.js";
-import { OutfitsStateComponent } from "../nova_plugin/outfit_plugin.js";
-import { CreditsComponent } from "../nova_plugin/player_state_plugin.js";
-import { ShipComponent } from "../nova_plugin/ship_plugin.js";
+import { CargoComponent } from "../nova_plugin/ship/cargo_plugin.js";
+import { SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
+import { ArmorComponent, FuelComponent, ShieldComponent } from "../nova_plugin/ship/health_plugin.js";
+import { OutfitsStateComponent } from "../nova_plugin/ship/outfit_plugin.js";
+import { CreditsComponent } from "../nova_plugin/player/player_state_plugin.js";
+import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
 import { sumFleetCargo } from "../spaceport/fleet_cargo.js";
 import { DockedShipResource } from "./docked_ship.js";
 import { cargoCapacityOf, cargoDisplayOf, fleetCargoMembers } from "./status_bar_cargo.js";

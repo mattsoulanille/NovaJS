@@ -8,8 +8,8 @@ import { CommunicatorResource, MultiplayerData, MultiplayerDataType } from 'nova
 import { SerializerPlugin, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
 import { Component } from 'nova_ecs/component';
-import { ActiveMissionType, MissionsComponent } from '../nova_plugin/player_state_plugin.js';
-import { ControlledByComponent, ControlledByType } from '../nova_plugin/ship_control.js';
+import { ActiveMissionType, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { ControlledByComponent, ControlledByType } from '../nova_plugin/player/ship_control.js';
 import { applyInputRecords, InputRecordType, SimulationInput, SimulationInputType } from './simulation_input.js';
 
 /**

@@ -13,8 +13,8 @@ const { SimulationBridgeHost } = await import('./dist/src/communication/simulati
 const { makeSystem } = await import('./dist/src/nova_plugin/make_system.js');
 const { SimulationGameData } = await import('./dist/src/client/gamedata/simulation_game_data.js');
 const { CommunicatorResource } = await import('nova_ecs/plugins/multiplayer_plugin');
-const { makeShip } = await import('./dist/src/nova_plugin/make_ship.js');
-const { ControlledByComponent } = await import('./dist/src/nova_plugin/ship_control.js');
+const { makeShip } = await import('./dist/src/nova_plugin/ship/make_ship.js');
+const { ControlledByComponent } = await import('./dist/src/nova_plugin/player/ship_control.js');
 const { SerializerResource } = await import('nova_ecs/plugins/serializer_plugin');
 // The server refuses any client that does not announce its build stamp.
 const { connectUrlWithVersion } = await import('./dist/src/common/version_handshake.js');

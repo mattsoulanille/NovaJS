@@ -5,10 +5,10 @@ import {
     acceptOffer,
     MissionOffer,
     refuseOffer,
-} from '../nova_plugin/mission_logic.js';
-import { expandMissionText } from '../nova_plugin/mission_text.js';
-import { makeDescTextContext, playerGender } from '../nova_plugin/desc_text.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
+} from '../nova_plugin/missions/mission_logic.js';
+import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
+import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
 import { offerSubstitutions } from './mission_offers.js';

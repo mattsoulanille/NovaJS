@@ -1,6 +1,6 @@
 import 'jasmine';
 import { Subject } from 'rxjs';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
 import { MenuControls } from './menu_controls.js';
 
 describe('MenuControls focus stack', () => {

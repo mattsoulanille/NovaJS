@@ -1,12 +1,12 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { BoardingState } from '../nova_plugin/boarding_component.js';
-import { DisabledComponent } from '../nova_plugin/disabled_component.js';
-import { GovtComponent } from '../nova_plugin/govt_component.js';
-import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/target_component.js';
+import { BoardingState } from '../nova_plugin/ship/boarding_component.js';
+import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
+import { GovtComponent } from '../nova_plugin/core/govt_component.js';
+import { NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import { TargetComponent } from '../nova_plugin/ship/target_component.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { showsHailQuote } from '../spaceport/ship_mission_offer.js';
 import { boardingDialogPhase } from './boarding_plugin.js';

@@ -5,8 +5,8 @@ import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_ga
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
     drawnSystems, knownSystemProperties, linkKnown,
-} from '../nova_plugin/discovery.js';
-import { systemIsInhabited } from '../nova_plugin/landable.js';
+} from '../nova_plugin/player/discovery.js';
+import { systemIsInhabited } from '../nova_plugin/core/landable.js';
 import { buildAdjacency } from './route.js';
 import {
     SYSTEM_INHABITED_COLOR, SYSTEM_UNEXPLORED_COLOR,

@@ -1,9 +1,9 @@
 import "jasmine";
 import { MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { v4 } from "uuid";
-import { DamagedEvent, DeathEvent } from "../nova_plugin/death_plugin.js";
-import { completeEntity } from "../nova_plugin/entity_data_loader.js";
-import { makeNpc } from "../nova_plugin/npc_plugin.js";
+import { DamagedEvent, DeathEvent } from "../nova_plugin/ship/death_plugin.js";
+import { completeEntity } from "../nova_plugin/spawn/entity_data_loader.js";
+import { makeNpc } from "../nova_plugin/npc/npc_plugin.js";
 import { makeSimulationBridgeHarness, getSyntheticGameData } from "./simulation_test_fixture.js";
 
 const LETHAL_DAMAGE = {

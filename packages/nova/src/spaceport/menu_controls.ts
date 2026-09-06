@@ -1,6 +1,6 @@
 import { Observable, Subscription } from "rxjs";
-import { ControlAction } from "../nova_plugin/controls.js";
-import { ControlEvent } from "../nova_plugin/controls_plugin.js";
+import { ControlAction } from "../nova_plugin/core/controls.js";
+import { ControlEvent } from "../nova_plugin/core/controls_plugin.js";
 
 /**
  * Key handling for one landed-UI surface (a menu or dialog).

@@ -1,9 +1,9 @@
 import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
-import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 import {
     closeFleetHolds, commitFleetHolds, FleetHold, fleetHoldOpen,

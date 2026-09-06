@@ -1,13 +1,13 @@
 import { ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/bay_plugin.js';
-import { Cargo, CargoComponent, cargoUsed } from '../nova_plugin/cargo_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
-import { ShipComponent } from '../nova_plugin/ship_plugin.js';
+import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/bay_plugin.js';
+import { Cargo, CargoComponent, cargoUsed } from '../nova_plugin/ship/cargo_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
+import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import {
     TradeGood, TradeWorkingState, freeCargoSpace,
-} from '../nova_plugin/trade_logic.js';
+} from '../nova_plugin/economy/trade_logic.js';
 import { computeCargoCapacity } from './mission_session.js';
 
 /**
@@ -65,7 +65,7 @@ import { computeCargoCapacity } from './mission_session.js';
  * ---------------------------------------------------------------------------
  * In the escort's OWN `CargoComponent`. Escorts are carried as whole
  * serialized entities (spaceport/landed_escorts.ts) and saved that way
- * (nova_plugin/save_game.ts's SavedEscort), and CargoComponent is
+ * (nova_plugin/session/save_game.ts's SavedEscort), and CargoComponent is
  * serializer-registered, so escort cargo needs no new persisted shape and
  * no new save version: it rides inside the record that already exists.
  *

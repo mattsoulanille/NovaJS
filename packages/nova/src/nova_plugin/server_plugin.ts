@@ -15,8 +15,8 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { RollbackRelay } from "../communication/rollback_relay.js";
 import { RoomArchive } from "../communication/room_archive.js";
 import { DesyncRecorder, fingerprintGameData } from "../server/desync_recorder.js";
-import { PEER_LOCAL_COMPONENTS } from "./ship_control.js";
-import { SimulationGameDataResource } from "./game_data_resource.js";
+import { PEER_LOCAL_COMPONENTS } from "./player/index.js";
+import { SimulationGameDataResource } from "./core/index.js";
 import { makeSystem } from './make_system.js';
 import { MultiRoomResource, SystemComponent } from "./nova_plugin.js";
 

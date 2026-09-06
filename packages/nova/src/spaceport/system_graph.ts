@@ -9,9 +9,9 @@ import * as PIXI from 'pixi.js';
 import { Subject } from "rxjs";
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, drawnSystems,
-} from "../nova_plugin/discovery.js";
-import { displayName } from "../nova_plugin/display_name.js";
-import { MissionMapMark } from "../nova_plugin/mission_logic.js";
+} from "../nova_plugin/player/discovery.js";
+import { displayName } from "../nova_plugin/core/display_name.js";
+import { MissionMapMark } from "../nova_plugin/missions/mission_logic.js";
 import {
     Adjacency, adjacentSystems, buildAdjacency, cycleSingle, effectiveRoute,
     expandRoute, RouteState, SamePlace,

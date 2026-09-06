@@ -6,7 +6,7 @@
 // which systems exist or which are selected — SystemGraph decides that.
 import { SystemData } from "novadatainterface/system_data";
 import * as PIXI from 'pixi.js';
-import { displayName } from "../nova_plugin/display_name.js";
+import { displayName } from "../nova_plugin/core/display_name.js";
 import { BASE_SCALE, scalePos, SYSTEM_RADIUS } from "./starmap_viewport.js";
 
 const GREY = 0x666666;

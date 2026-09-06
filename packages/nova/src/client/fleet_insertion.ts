@@ -3,14 +3,14 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { ShipData } from 'novadatainterface/ship_data';
-import { EscortCommandComponent } from '../nova_plugin/escort_command.js';
-import { FiringGroupComponent } from '../nova_plugin/firing_group.js';
+import { EscortCommandComponent } from '../nova_plugin/player/escort_command.js';
+import { FiringGroupComponent } from '../nova_plugin/ship/firing_group.js';
 import {
     FormationComponent, formationSlotPosition,
-} from '../nova_plugin/npc_ai_plugin.js';
-import { makeNpcShip } from '../nova_plugin/npc_spawn_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
-import { ControlledByComponent } from '../nova_plugin/ship_control.js';
+} from '../nova_plugin/npc/npc_ai_plugin.js';
+import { makeNpcShip } from '../nova_plugin/spawn/npc_spawn_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import { ControlledByComponent } from '../nova_plugin/player/ship_control.js';
 import {
     CarriedEscort, prepareCarriedEscorts,
 } from '../spaceport/landed_escorts.js';

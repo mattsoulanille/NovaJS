@@ -1,10 +1,10 @@
 import { Plugin } from 'nova_ecs/plugin';
 import {
     CloakComponent, CloakScannerComponent, deriveCloak, deriveCloakScanner,
-} from '../nova_plugin/cloak_plugin.js';
-import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { ProvideFromCache } from '../nova_plugin/provide_from_cache.js';
+} from '../nova_plugin/ship/cloak_plugin.js';
+import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { ProvideFromCache } from '../nova_plugin/core/provide_from_cache.js';
 
 /**
  * Derives CloakComponent and CloakScannerComponent in the DISPLAY world.

@@ -1,9 +1,9 @@
 import { EncodedEntity } from "nova_ecs/plugins/serializer_plugin";
-import { ControlEvent } from "../nova_plugin/controls_plugin.js";
-import { EscortAction } from "../nova_plugin/escort_action.js";
-import { HailAction } from "../nova_plugin/hail_plugin.js";
-import { AcceptedMission } from "../nova_plugin/mission_accept.js";
-import { AnalogControlState } from "../nova_plugin/ship_control.js";
+import { ControlEvent } from "../nova_plugin/core/controls_plugin.js";
+import { EscortAction } from "../nova_plugin/escorts/escort_action.js";
+import { HailAction } from "../nova_plugin/encounters/hail_plugin.js";
+import { AcceptedMission } from "../nova_plugin/missions/mission_accept.js";
+import { AnalogControlState } from "../nova_plugin/player/ship_control.js";
 import { SimulationFrame } from "./simulation_frame.js";
 
 /**

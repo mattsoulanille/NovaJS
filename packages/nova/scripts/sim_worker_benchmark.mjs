@@ -33,10 +33,10 @@ import { Position } from 'nova_ecs/datatypes/position';
 import { Vector } from 'nova_ecs/datatypes/vector';
 import { GameDataAggregator } from '../dist/src/server/parsing/game_data_aggregator.js';
 import { FilesystemData } from '../dist/src/server/parsing/filesystem_data.js';
-import { completeEntity } from '../dist/src/nova_plugin/entity_data_loader.js';
-import { makeNpc } from '../dist/src/nova_plugin/npc_plugin.js';
+import { completeEntity } from '../dist/src/nova_plugin/spawn/entity_data_loader.js';
+import { makeNpc } from '../dist/src/nova_plugin/npc/npc_plugin.js';
 import { makeSystem } from '../dist/src/nova_plugin/make_system.js';
-import { GovtComponent } from '../dist/src/nova_plugin/govt_component.js';
+import { GovtComponent } from '../dist/src/nova_plugin/core/govt_component.js';
 import { SimulationBridgeHost } from '../dist/src/communication/simulation_bridge_host.js';
 
 const args = process.argv.slice(2);

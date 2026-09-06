@@ -3,11 +3,11 @@ import { Plugin } from "nova_ecs/plugin";
 import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { AnimationPlugin } from "../nova_plugin/animation_plugin.js";
+import { AnimationPlugin } from "../nova_plugin/core/animation_plugin.js";
 import {
     defaultDiscoveryStore, DiscoveryStoreResource,
-} from "../nova_plugin/discovery_store.js";
-import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
+} from "../nova_plugin/player/discovery_store.js";
+import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin.js";
 import { AsteroidDisplayPlugin } from "./asteroid_display_plugin.js";
 import { BeamDisplayPlugin } from "./beam_display_plugin.js";

@@ -1,13 +1,13 @@
 import 'jasmine';
 import { CronData, getDefaultCronData } from 'novadatainterface/cron_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { dayNumber } from '../nova_plugin/calendar.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
+import { dayNumber } from '../nova_plugin/player/calendar.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { ActiveRanksComponent, ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { EscortPayrollComponent } from '../nova_plugin/player/player_escort.js';
 import {
     CreditsComponent, CronStatesComponent, GameDateComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import { advanceEntityDate, MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 

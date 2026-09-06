@@ -3,13 +3,13 @@ import { Entity } from 'nova_ecs/entity';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb_plugin.js';
+} from '../nova_plugin/ncb/ncb_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import { hirePrice } from './hire_escort.js';
 import { MissionUniverse } from './mission_universe.js';
 import { outfitPrice, outfitResaleValue, stellarOf } from './outfitter_rules.js';

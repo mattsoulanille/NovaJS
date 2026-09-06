@@ -3,7 +3,7 @@
  * ECS so the rules are unit-testable. The rendering systems resolve components
  * and game data, then hand plain values to these helpers.
  */
-import type { GateKind, LandingBlockReason } from '../nova_plugin/planet_plugin.js';
+import type { GateKind, LandingBlockReason } from '../nova_plugin/travel/planet_plugin.js';
 
 /** One line of the cargo manifest: an (abbreviated) name and a quantity. */
 export interface CargoLine {
@@ -45,7 +45,7 @@ export const UNEXPLORED_SYSTEM = 'Unexplored System';
  *
  * `jumpReady` dims the HYPERSPACE destination until the ship can actually
  * jump to it — the answer of the shared readiness predicate
- * (nova_plugin/jump_readiness.ts), the same one that gates the jump itself
+ * (nova_plugin/travel/jump_readiness.ts), the same one that gates the jump itself
  * and fires the nova:154 cue, so the readout brightens exactly when pressing
  * the key would work. It defaults to true so callers that cannot see the
  * ship's state (and the stellar/no-destination cases, where jump readiness is

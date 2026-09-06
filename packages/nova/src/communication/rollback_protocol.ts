@@ -43,7 +43,7 @@ export const STATE_HASH_INTERVAL = 60;
 // 4: escortAction's sell/upgrade became DEFERRED — the immediate
 //    'sellEscort' / 'upgradeEscort' kinds were replaced by the queue
 //    toggles 'queueSale' / 'cancelSale' / 'queueUpgrade' / 'cancelUpgrade'
-//    (nova_plugin/escort_action.ts), and PlayerEscort gained the
+//    (nova_plugin/escorts/escort_action.ts), and PlayerEscort gained the
 //    pendingUpgrade / pendingSale fields the toggles write.
 // 5: the trust model (the "Trust model" section below). Validation,
 //    membership, server-only acceptance and sim-side AUTHORISATION of
@@ -53,7 +53,7 @@ export const STATE_HASH_INTERVAL = 60;
 //    Also under 5, no further bump (both composed with it in the same
 //    wave, and both are additive on the shapes the strict codecs accept):
 //    - acceptMission's `accepted` gained the OPTIONAL missionsStarted /
-//      missionsEnded / recordsDelta fields (nova_plugin/mission_accept.ts;
+//      missionsEnded / recordsDelta fields (nova_plugin/missions/mission_accept.ts;
 //      an older record simply carries none of them), and
 //    - wire snapshots carry the `$negzero` / `$nonfinite` sentinels
 //      (nova_ecs snapshot_plugin toJsonSafe) so a joiner restores the

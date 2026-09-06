@@ -31,9 +31,9 @@ import {
 } from '../communication/async_simulation_bridge_client.js';
 import type { SimulationPacing } from '../communication/simulation_frame.js';
 import { shouldExtrapolate } from '../display/movement_extrapolation_plugin.js';
-import { JumpComponent, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
+import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/jump_plugin.js';
 import { SIMULATION_STEP_MS } from '../nova_plugin/make_system.js';
-import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
+import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { liveSystem, LiveSystem } from './client_state.js';
 import { runDockingFrame } from './docking.js';
 import { flushCarriedJumpEscorts, flushLandedEscorts } from './fleet_ledger.js';

@@ -2,8 +2,8 @@ import { loadPilotProfile, PilotProfile } from '../title/client_prefs.js';
 import {
     mostRecentlyActivatedRank, rankConversationName,
     rankConversationNamesForGovt,
-} from '../nova_plugin/rank_logic.js';
-import { displayName } from '../nova_plugin/display_name.js';
+} from '../nova_plugin/ncb/rank_logic.js';
+import { displayName } from '../nova_plugin/core/display_name.js';
 import { MissionUniverse } from './mission_universe.js';
 
 /**

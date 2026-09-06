@@ -3,8 +3,8 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
-import { displayName } from '../nova_plugin/display_name.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { displayName } from '../nova_plugin/core/display_name.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
 

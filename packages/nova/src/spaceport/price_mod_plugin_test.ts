@@ -6,8 +6,8 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { GameDataAggregator }
     from '../server/parsing/game_data_aggregator.js';
 import { getPluginGameData } from '../communication/simulation_test_fixture.js';
-import { makeControlBitHooks, runNCBSet } from '../nova_plugin/ncb.js';
-import { rankPriceMod } from '../nova_plugin/rank_logic.js';
+import { makeControlBitHooks, runNCBSet } from '../nova_plugin/ncb/ncb.js';
+import { rankPriceMod } from '../nova_plugin/ncb/rank_logic.js';
 import { hirePrice } from './hire_escort.js';
 import { outfitPrice, outfitResaleValue } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
@@ -28,7 +28,7 @@ import { shipListPrice, ShipPurchaseContext } from './shipyard_rules.js';
  *     b20001 N800 K167 K168 K169 K170 K171
  *
  * (b20001 is how NovaParse renumbered the plug-in's own b2000 — see
- * nova_plugin/control_bit_namespaces.ts). That bit swaps the empty shell
+ * nova_plugin/ncb/control_bit_namespaces.ts). That bit swaps the empty shell
  * spöb extra-outfits:801 for the built station spöb extra-outfits:802, which
  * is gövt extra-outfits:302 "SSC" / "Spica Shipyard Corp." and carries
  * SpecialTech 10002/10003/10006 — the tech levels of the hulls the station

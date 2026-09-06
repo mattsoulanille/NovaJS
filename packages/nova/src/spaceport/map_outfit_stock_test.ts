@@ -3,8 +3,8 @@ import { getIntegrationGameData } from '../communication/simulation_test_fixture
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import {
     DISCOVERY_LANDED, DISCOVERY_UNKNOWN,
-} from '../nova_plugin/discovery.js';
-import { discoveryLevel } from '../nova_plugin/discovery_store.js';
+} from '../nova_plugin/player/discovery.js';
+import { discoveryLevel } from '../nova_plugin/player/discovery_store.js';
 import { applyMapOutfit, applyOwnedMapOutfits } from './map_outfit.js';
 import { MissionUniverse } from './mission_universe.js';
 

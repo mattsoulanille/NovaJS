@@ -2,7 +2,7 @@ import 'jasmine';
 import { getDefaultPersData, PersData } from 'novadatainterface/pers_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { deferredAutoAbort } from '../nova_plugin/mission_logic.js';
+import { deferredAutoAbort } from '../nova_plugin/missions/mission_logic.js';
 import {
     shipOfferConsequence, ShipOfferContext, ShipOfferGates, shipOffers,
     shipOfferTrigger, showsHailQuote,

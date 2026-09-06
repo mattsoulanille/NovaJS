@@ -9,7 +9,7 @@
  * these handlers runs the player entity exists only as the object the
  * event carried. Everything here is about carrying that object to the
  * right system — through {@link jumpTo} — and, when that fails, putting
- * it SOMEWHERE (nova_plugin/transit_recovery.ts holds the choice: back at
+ * it SOMEWHERE (nova_plugin/travel/transit_recovery.ts holds the choice: back at
  * the gate while the origin world is up, back INTO the origin once it is
  * not, and 'lost' only when there is nothing to name).
  *
@@ -21,12 +21,12 @@
  * into, and the save that stands is the last one written".
  */
 import type { Entity } from 'nova_ecs/entity';
-import { daysPerJump } from '../nova_plugin/calendar.js';
-import { GateArrivalComponent } from '../nova_plugin/gate_transit_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
+import { daysPerJump } from '../nova_plugin/player/calendar.js';
+import { GateArrivalComponent } from '../nova_plugin/travel/gate_transit_plugin.js';
+import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
 import {
     planGateTransitRecovery, planHyperspaceJumpRecovery,
-} from '../nova_plugin/transit_recovery.js';
+} from '../nova_plugin/travel/transit_recovery.js';
 import { advanceEntityDate } from '../spaceport/mission_session.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {

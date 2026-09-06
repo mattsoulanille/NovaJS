@@ -1,9 +1,9 @@
 import 'jasmine';
-import { discoveryKeyFor } from '../nova_plugin/discovery_store.js';
+import { discoveryKeyFor } from '../nova_plugin/player/discovery_store.js';
 import {
     encodeSave, getActiveSaveKey, quarantineKeyFor, resetSave, SAVE_KEY,
     SaveData, setActiveSaveKey,
-} from '../nova_plugin/save_game.js';
+} from '../nova_plugin/session/save_game.js';
 import {
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, PilotProfile, PrefsStorage,
 } from './client_prefs.js';

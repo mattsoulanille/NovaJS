@@ -5,11 +5,11 @@ import { PlanetData } from 'novadatainterface/planet_data';
 import { RankData } from 'novadatainterface/rank_data';
 import { SystemData } from 'novadatainterface/system_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { displayName } from '../nova_plugin/display_name.js';
-import { isInhabited } from '../nova_plugin/landable.js';
-import { evaluateNCBTest } from '../nova_plugin/ncb.js';
-import { StellarInfo, stellarInfoOf } from '../nova_plugin/mission_logic.js';
-import { SystemInfo } from '../nova_plugin/mission_ship_logic.js';
+import { displayName } from '../nova_plugin/core/display_name.js';
+import { isInhabited } from '../nova_plugin/core/landable.js';
+import { evaluateNCBTest } from '../nova_plugin/ncb/ncb.js';
+import { StellarInfo, stellarInfoOf } from '../nova_plugin/missions/mission_logic.js';
+import { SystemInfo } from '../nova_plugin/missions/mission_ship_logic.js';
 
 /** A system's Visibility test against the player's bits (blank = visible;
  * a malformed expression fails open, like stellarVisible). */

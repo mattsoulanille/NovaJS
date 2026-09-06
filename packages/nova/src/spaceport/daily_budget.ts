@@ -1,5 +1,5 @@
 import { ShipData } from 'novadatainterface/ship_data';
-import { RankLookup, rankSalaryBreakdown } from '../nova_plugin/rank_logic.js';
+import { RankLookup, rankSalaryBreakdown } from '../nova_plugin/ncb/rank_logic.js';
 import { escortPayrollFee } from './escort_fees.js';
 
 /**
@@ -49,7 +49,7 @@ export interface DailyBudgetInputs {
     /**
      * Ship-class ids of the escorts on the player's payroll — the mirror
      * EscortPayrollSystem keeps on the player entity
-     * (nova_plugin/player_escort.ts's EscortPayrollComponent).
+     * (nova_plugin/player/player_escort.ts's EscortPayrollComponent).
      */
     escortShips?: Iterable<string>;
     /** Ship data for those ids; a miss contributes no fee (see escort_fees). */

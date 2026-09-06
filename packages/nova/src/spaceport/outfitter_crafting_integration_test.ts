@@ -2,11 +2,11 @@ import 'jasmine';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
 import { getPluginGameData, pluginControlBit } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { idPrefix } from '../nova_plugin/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { idPrefix } from '../nova_plugin/missions/mission_logic.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { canBuyOutfit, OutfitterContext } from './outfitter_rules.js';
@@ -14,7 +14,7 @@ import { canBuyOutfit, OutfitterContext } from './outfitter_rules.js';
 /**
  * The Extra Outfits plug-in's "Self-Made Energon Cannon" crafting chain,
  * run end to end against the plug-in's real data. It is the sharpest test
- * of nova_plugin/ncb.ts's two plug-in-compatibility rules, because the
+ * of nova_plugin/ncb/ncb.ts's two plug-in-compatibility rules, because the
  * chain needs BOTH of them and produces nothing at all without either:
  *
  *   oütf 468 Control Computer         Avail !b9001   OnPurchase b9002
@@ -84,7 +84,7 @@ describe('Extra Outfits crafting chain against real plug-in data', () => {
 
         // The plug-in's own bit numbers, as NovaParse renumbered them
         // (plug-in-private control bits live in their own namespace; see
-        // nova_plugin/control_bit_namespaces.ts).
+        // nova_plugin/ncb/control_bit_namespaces.ts).
         const bit = (raw: number) => pluginControlBit(gameData, PLUGIN, raw);
         const [B9001, B9002, B9003, B9004] = await Promise.all(
             [9001, 9002, 9003, 9004].map(bit));

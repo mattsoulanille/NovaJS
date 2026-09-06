@@ -2,7 +2,7 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { WireWorldSnapshot, wireSnapshotWorld } from "nova_ecs/plugins/snapshot_plugin";
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { World } from "nova_ecs/world";
-import { PEER_LOCAL_COMPONENTS } from "../nova_plugin/ship_control.js";
+import { PEER_LOCAL_COMPONENTS } from "../nova_plugin/player/ship_control.js";
 import { ArchiveBaseline, STATE_HASH_INTERVAL } from "./rollback_protocol.js";
 import { RollbackRelay } from "./rollback_relay.js";
 import { applyInputRecords, InputRecord, loadInputRecordsGameData } from "./simulation_input.js";

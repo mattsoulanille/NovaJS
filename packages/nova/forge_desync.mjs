@@ -38,8 +38,8 @@ const joined = await host.joinRoom();
 console.error('joined:', joined, 'tick:', host.status().tick);
 
 // Insert a ship so there is per-peer state to diverge.
-const { makeShip } = await import('./dist/src/nova_plugin/make_ship.js');
-const { ControlledByComponent } = await import('./dist/src/nova_plugin/ship_control.js');
+const { makeShip } = await import('./dist/src/nova_plugin/ship/make_ship.js');
+const { ControlledByComponent } = await import('./dist/src/nova_plugin/player/ship_control.js');
 const shipData = await gameData.data.Ship.get('nova:164');
 const ship = makeShip(shipData);
 ship.components.set(ControlledByComponent, { peerId: room.uuid });

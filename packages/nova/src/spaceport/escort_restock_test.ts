@@ -6,17 +6,17 @@ import {
 import { Entity } from 'nova_ecs/entity';
 import {
     BayFighterComponent, ReturnWhenTargetRemovedComponent,
-} from '../nova_plugin/bay_plugin.js';
-import { DisabledComponent } from '../nova_plugin/disabled_component.js';
-import { SourceComponent } from '../nova_plugin/fire_weapon_plugin.js';
+} from '../nova_plugin/escorts/bay_plugin.js';
+import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
+import { SourceComponent } from '../nova_plugin/combat/fire_weapon_plugin.js';
 import {
     ArmorComponent, FuelComponent, IonizationComponent, ShieldComponent,
-} from '../nova_plugin/health_plugin.js';
-import { IsIonizedComponent } from '../nova_plugin/ionization_plugin.js';
+} from '../nova_plugin/ship/health_plugin.js';
+import { IsIonizedComponent } from '../nova_plugin/ship/ionization_plugin.js';
 import {
     OutfitsState, OutfitsStateComponent,
-} from '../nova_plugin/outfit_plugin.js';
-import { Stat } from '../nova_plugin/stat.js';
+} from '../nova_plugin/ship/outfit_plugin.js';
+import { Stat } from '../nova_plugin/core/stat.js';
 import {
     RestockGameData, restockCarriedEscorts, restockEscortEntity,
 } from './escort_restock.js';

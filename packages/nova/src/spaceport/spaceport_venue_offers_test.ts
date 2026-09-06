@@ -4,18 +4,18 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { ActiveRanksComponent, ControlBitsComponent }
-    from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
+    from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player_state_plugin.js';
+} from '../nova_plugin/player/player_state_plugin.js';
 import {
     CombatRatingComponent, LegalRecordsComponent,
-} from '../nova_plugin/reputation_plugin.js';
+} from '../nova_plugin/reputation/reputation_plugin.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';
 import { offerRollsForSystem, resetOfferRolls } from './mission_offers.js';

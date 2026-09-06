@@ -8,9 +8,9 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { EcsEvent } from 'nova_ecs/events';
 import { SingletonComponent } from 'nova_ecs/world';
-import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
-import { PlanetComponent, PlanetDataComponent } from '../nova_plugin/planet_plugin.js';
+import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
+import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
+import { PlanetComponent, PlanetDataComponent } from '../nova_plugin/travel/planet_plugin.js';
 import {
     countDeployedFighters, countLandedFighters, mergeDeployedCounts,
 } from '../spaceport/deployed_outfits.js';

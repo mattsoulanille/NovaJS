@@ -5,19 +5,19 @@ import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/controls_plugin.js';
-import { makeShip } from '../nova_plugin/make_ship.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
+import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { commitVenueCredits, creditBalance, spendableBalance } from './credit_commit.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Outfitter } from './outfitter.js';
 import { TradeCenter } from './trade_center.js';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
-import { PlayerEscortComponent } from '../nova_plugin/player_escort.js';
-import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship_plugin.js';
+import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 
 /**
