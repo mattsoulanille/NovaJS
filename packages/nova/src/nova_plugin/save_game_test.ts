@@ -66,9 +66,7 @@ import {
     SAVE_VERSION,
     writeSave,
 } from './save_game.js';
-import {
-    discoveryLevel, markDiscovered, resetDiscovery,
-} from './discovery_store.js';
+import { discoveryLevel, markDiscovered } from './discovery_store.js';
 import { ShipComponent } from './ship_plugin.js';
 import {
     ControlBitNamespaces, FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
@@ -97,35 +95,11 @@ const SAMPLE: SaveData = {
 };
 
 describe('save_game schema', () => {
-    // extractSaveData reads the MODULE-GLOBAL discovery cache
-    // (discovery_store.ts), so a spec elsewhere that marked a system
-    // discovered leaks `save.discovery` into these whole-object
-    // comparisons — purely a function of jasmine's random seed (22715
-    // put discovery_store_test first and failed two `toEqual(SAMPLE)`
-    // specs with a stray `discovery: [['nova:130', 1]]`). Both fix-wave
-    // branches added this guard independently; kept is the fuller form
-    // that also pins the save key and storage, like the sibling
-    // `save_game discovery` describe always has.
-    // extractSaveData reads the process-global discovery store, so these
-    // specs have to own it: without this, a system another spec file left
-    // in the store (levels only ever rise, and the store outlives a spec)
-    // showed up as an unexpected `discovery` field here, depending purely
-    // on the order jasmine happened to shuffle the suite into. The sibling
-    // `save_game discovery` describe below has always done this.
-    beforeEach(() => {
-        setActiveSaveKey(SAVE_KEY);
-        resetDiscovery(new FakeStorage());
-        // Also the DEFAULT store, the one extractSaveData actually reads
-        // (storeless in node: a FakeStorage reset does not touch it).
-        resetDiscovery();
-    });
-    afterEach(() => {
-        setActiveSaveKey(SAVE_KEY);
-        resetDiscovery(new FakeStorage());
-        // Also the DEFAULT store, the one extractSaveData actually reads
-        // (storeless in node: a FakeStorage reset does not touch it).
-        resetDiscovery();
-    });
+    // extractSaveData reads the client's discovery store, so a system
+    // another spec file marked would show up as a stray `discovery` field
+    // in the whole-object comparisons here. Every spec starts with that
+    // store empty and the save key on the legacy slot
+    // (spec_support/fresh_client_state.ts).
 
     it('round-trips a save through encode and decode', () => {
         const decoded = decodeSave(encodeSave(SAMPLE));
@@ -1244,17 +1218,14 @@ describe('save_game escort version skew', () => {
  * payload, and the store is what actually answers at runtime.
  */
 describe('save_game discovery', () => {
+    // The save envelope goes through a storage of the spec's own; the
+    // discovery side of every save function acts on the CLIENT'S store
+    // (the one extractSaveData reads), which every spec starts with empty
+    // and on the legacy save key (spec_support/fresh_client_state.ts).
     let storage: FakeStorage;
 
     beforeEach(() => {
         storage = new FakeStorage();
-        setActiveSaveKey(SAVE_KEY);
-        resetDiscovery(storage);
-    });
-
-    afterEach(() => {
-        setActiveSaveKey(SAVE_KEY);
-        resetDiscovery(storage);
     });
 
     it('round-trips the discovery field', () => {
@@ -1276,28 +1247,38 @@ describe('save_game discovery', () => {
     });
 
     it('restores a save\'s discovery into the live store', () => {
-        restoreClientSaveState(
-            { ...SAMPLE, discovery: [['nova:130', 2]] }, storage);
-        expect(discoveryLevel('nova:130', storage)).toBe(2);
+        restoreClientSaveState({ ...SAMPLE, discovery: [['nova:130', 2]] });
+        expect(discoveryLevel('nova:130')).toBe(2);
     });
 
     it('never lowers what the store already knows', () => {
-        markDiscovered('nova:130', 2, storage);
+        markDiscovered('nova:130', 2);
         // Rolling back to an older checkpoint must not un-learn a system.
-        restoreClientSaveState(
-            { ...SAMPLE, discovery: [['nova:130', 1]] }, storage);
-        expect(discoveryLevel('nova:130', storage)).toBe(2);
+        restoreClientSaveState({ ...SAMPLE, discovery: [['nova:130', 1]] });
+        expect(discoveryLevel('nova:130')).toBe(2);
     });
 
     it('gives each pilot their own record when the save key moves', () => {
-        markDiscovered('nova:130', 1, storage);
+        markDiscovered('nova:130', 1);
         setActiveSaveKey('novajs:save:pilot2');
-        expect(discoveryLevel('nova:130', storage)).toBe(0);
+        expect(discoveryLevel('nova:130')).toBe(0);
     });
 
     it('clears the record with the save', () => {
-        markDiscovered('nova:130', 2, storage);
+        markDiscovered('nova:130', 2);
         resetSave(storage);
-        expect(discoveryLevel('nova:130', storage)).toBe(0);
+        expect(discoveryLevel('nova:130')).toBe(0);
+    });
+
+    it('writes what the client\'s store knows into the save', () => {
+        // The half of #158 the old spec never covered: extractSaveData's
+        // discovery comes from the same store restoreClientSaveState
+        // fills, not from whatever storage the envelope is written to.
+        restoreClientSaveState({ ...SAMPLE, discovery: [['nova:131', 1]] });
+        markDiscovered('nova:130', 2);
+        const entity = new Entity('player');
+        entity.components.set(ShipComponent, { id: SAMPLE.ship });
+        expect(extractSaveData(entity, SAMPLE.system)!.discovery)
+            .toEqual([['nova:130', 2], ['nova:131', 1]]);
     });
 });

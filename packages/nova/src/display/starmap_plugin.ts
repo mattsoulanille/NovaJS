@@ -10,9 +10,7 @@ import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
 import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
 } from '../nova_plugin/discovery.js';
-import {
-    discoveryLevel, markDiscovered, markManyDiscovered,
-} from '../nova_plugin/discovery_store.js';
+import { DiscoveryStoreResource } from '../nova_plugin/discovery_store.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
 import { JumpComponent, JumpRouteComponent } from '../nova_plugin/jump_plugin.js';
@@ -132,12 +130,16 @@ export const StarmapPlugin: Plugin = {
         if (!screenSize) {
             throw new Error('Expected ScreenSize to exist');
         }
+        const discovery = world.resources.get(DiscoveryStoreResource);
+        if (!discovery) {
+            throw new Error('Expected DiscoveryStoreResource to exist');
+        }
 
         // Being here discovers this system: a display world only exists for
         // the system the player is in (including the starting one). Level 1
         // — you see what is inhabited, not what the ports sell; landing is
         // what raises it to 2 (browser.ts, discovery.ts).
-        markDiscovered(systemId, DISCOVERY_ENTERED);
+        discovery.mark(systemId, DISCOVERY_ENTERED);
 
         // NCB system visibility uses the player's real control bits.
         const getPlayerBits = (): ReadonlySet<number> =>
@@ -174,13 +176,13 @@ export const StarmapPlugin: Plugin = {
                 }
             }
             applyOwnedMapOutfits(mapOutfits.keys(), systemId, universe,
-                id => mapOutfits.get(id));
+                id => mapOutfits.get(id), discovery);
         }).catch(e => console.warn('Failed to apply map outfits:', e));
         const getMissionMarks = () => playerMissionMarks(world, universe);
 
         const starmap = new Starmap(displayAssets, simulationData, systemId,
             controls, getPlayerBits, getMissionMarks, persistentRouteStore,
-            id => discoveryLevel(id),
+            id => discovery.level(id),
             () => playerComponent(world, GameDateComponent),
             () => playerComponent(world, LegalRecordsComponent));
         let opening = false;
@@ -199,12 +201,12 @@ export const StarmapPlugin: Plugin = {
             // galaxy, and the map's chrome scenarios need one to compare
             // against the reference captures' mid-game pilot.
             (window as unknown as { novaDiscovery: unknown }).novaDiscovery = {
-                level: (id: string) => discoveryLevel(id),
+                level: (id: string) => discovery.level(id),
                 mark: (ids: string[], level: DiscoveryLevel) =>
-                    markManyDiscovered(ids, level),
+                    discovery.markMany(ids, level),
                 markAll: async (level: DiscoveryLevel = DISCOVERY_LANDED) => {
                     const ids = (await simulationData.ids).System;
-                    markManyDiscovered(ids, level);
+                    discovery.markMany(ids, level);
                 },
             };
         }

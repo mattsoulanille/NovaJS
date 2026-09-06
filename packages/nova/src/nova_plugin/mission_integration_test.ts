@@ -24,7 +24,6 @@ import { expandMissionText } from './mission_text.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
 import { GOAL_DESTROY, goalSupported } from './mission_ship_state.js';
 import { shipGoalOfferable } from './mission_ship_logic.js';
-import { resetDiscovery } from './discovery_store.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
@@ -46,15 +45,6 @@ import {
  * Earth (completion, payment, cargo removal).
  */
 describe('missions against real Nova data', () => {
-    // Real MissionSessions bind the module-global discovery store
-    // (playerDiscovery in mission_session.ts): offers and set strings
-    // mark systems discovered in its process-wide cache. Left in place,
-    // that record leaks into any later spec that reads the store —
-    // save_game's extractSaveData started reporting a phantom
-    // `discovery: [['nova:130', 1]]` whenever jasmine's shuffle ran it
-    // after this suite (first seen with --seed=11111).
-    afterEach(() => resetDiscovery());
-
     it('parses the "Delivery to Earth" mission (nova:128)', async () => {
         const gameData = await getIntegrationGameData();
         const misn = await gameData.data.Mission.get('nova:128');

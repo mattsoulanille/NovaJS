@@ -14,7 +14,6 @@ import { ControlBitsComponent } from './ncb_plugin.js';
 import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
 } from './save_game.js';
-import { resetDiscovery } from './discovery_store.js';
 import { ShipComponent } from './ship_plugin.js';
 
 const P0 = FIRST_PRIVATE_PHYSICAL_CONTROL_BIT;
@@ -188,12 +187,6 @@ describe('Control bit namespacing across real plug-ins', () => {
  * outfitter_officer_quarters_integration_test's.
  */
 describe('Legacy pilot file under the namespaced plug-in set', () => {
-    // extractSaveData reads the module-global discovery cache and
-    // restorePlayerState writes it — see save_game_test's 'save_game
-    // schema' note on the seed-dependent leak that causes.
-    beforeEach(() => resetDiscovery());
-    afterEach(() => resetDiscovery());
-
     // Jasmine runs with cwd = packages/nova (see nova_data_gate.ts).
     const PILOT = path.join(process.cwd(), 'test_fixtures', 'pilots',
         'Shane_Merrol_misisons_bug.plt');

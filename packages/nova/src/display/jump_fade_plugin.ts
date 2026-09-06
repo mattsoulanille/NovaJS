@@ -48,24 +48,51 @@ const FLASH_DECAY_MS = 150;
  * arrival ramp (units of full-fades per second; fade mode only). */
 const FALLBACK_FADE_RATE = 2;
 
-// The overlay is a module-level singleton attached to the PIXI app's
-// root stage rather than the per-system display world's stage: display
-// worlds are torn down and rebuilt across a system transition, and the
-// screen must stay white from the moment the departing world vanishes
-// until the destination world has loaded and the arriving ship is
-// visible again. Display-only state; never part of the simulation.
-let overlay: PIXI.Graphics | undefined;
-function getOverlay(): PIXI.Graphics {
-    if (!overlay) {
-        overlay = new PIXI.Graphics();
-        overlay.name = 'JumpFadeOverlay';
-        overlay.beginFill(0xffffff);
-        overlay.drawRect(0, 0, 1, 1);
-        overlay.endFill();
-        overlay.alpha = 0;
-        overlay.eventMode = 'none';
+/** The overlay's name on the app stage, which is where it is found. */
+const JUMP_FADE_OVERLAY_NAME = 'JumpFadeOverlay';
+
+/**
+ * The white overlay is OWNED BY THE PIXI APP'S ROOT STAGE, not by the
+ * per-system display world: display worlds are torn down and rebuilt
+ * across a system transition, and the screen must stay white from the
+ * moment the departing world vanishes until the destination world has
+ * loaded and the arriving ship is visible again. So it lives exactly as
+ * long as it is attached there — found by name on every world build,
+ * made on the first, and taken down by {@link resetJumpFade} when the
+ * session ends (browser.ts's teardownGame). No module state: a second
+ * app, or a session after a reset, starts with no overlay at all.
+ * Display-only; never part of the simulation.
+ */
+function jumpFadeOverlay(app: PIXI.Application): PIXI.Graphics {
+    const existing = app.stage.getChildByName(JUMP_FADE_OVERLAY_NAME);
+    if (existing instanceof PIXI.Graphics) {
+        return existing;
     }
+    const overlay = new PIXI.Graphics();
+    overlay.name = JUMP_FADE_OVERLAY_NAME;
+    overlay.beginFill(0xffffff);
+    overlay.drawRect(0, 0, 1, 1);
+    overlay.endFill();
+    overlay.alpha = 0;
+    overlay.eventMode = 'none';
+    app.stage.addChild(overlay);
     return overlay;
+}
+
+/**
+ * Clears the white-out and takes the overlay off `app`'s stage: for the
+ * end of a session. An exit to the title during the white screen has no
+ * destination world to clear it, so the title would otherwise come back
+ * under a full-white cover until the next Enter Ship (issue #30). A no-op
+ * when no session ever jumped.
+ */
+export function resetJumpFade(app: PIXI.Application): void {
+    const overlay = app.stage.getChildByName(JUMP_FADE_OVERLAY_NAME);
+    if (overlay) {
+        overlay.alpha = 0;
+        overlay.visible = false;
+        app.stage.removeChild(overlay);
+    }
 }
 
 function clamp01(value: number) {
@@ -73,6 +100,8 @@ function clamp01(value: number) {
 }
 
 const JumpFlashSubscription = new Resource<Subscription>('JumpFlashSubscription');
+/** This world's handle on the app stage's overlay (see jumpFadeOverlay). */
+const JumpFadeOverlayResource = new Resource<PIXI.Graphics>('JumpFadeOverlay');
 
 /**
  * Drives the white overlay from the player ship's synced jump stages.
@@ -85,10 +114,9 @@ const JumpFlashSubscription = new Resource<Subscription>('JumpFlashSubscription'
  */
 const JumpFadeSystem = new System({
     name: 'JumpFadeSystem',
-    args: [TimeResource, PixiAppResource, Optional(JumpComponent),
-        PlayerShipSelector] as const,
-    step(time, app, jump) {
-        const overlay = getOverlay();
+    args: [TimeResource, PixiAppResource, JumpFadeOverlayResource,
+        Optional(JumpComponent), PlayerShipSelector] as const,
+    step(time, app, overlay, jump) {
         // Keep the overlay above every display world's stage.
         if (app.stage.children[app.stage.children.length - 1] !== overlay) {
             app.stage.addChild(overlay);
@@ -121,7 +149,11 @@ export const JumpFadePlugin: Plugin = {
         if (!app) {
             throw new Error('Expected PixiAppResource to exist');
         }
-        app.stage.addChild(getOverlay());
+        // The app stage's overlay (made on the first world), re-added so
+        // it starts this world on top; JumpFadeSystem keeps it there.
+        const overlay = jumpFadeOverlay(app);
+        app.stage.addChild(overlay);
+        world.resources.set(JumpFadeOverlayResource, overlay);
         world.addSystem(JumpFadeSystem);
 
         // The departure instant: the sim removed the jumping ship this
@@ -134,7 +166,6 @@ export const JumpFadePlugin: Plugin = {
                 if (!data.entity.components.has(PlayerShipSelector)) {
                     return;
                 }
-                const overlay = getOverlay();
                 overlay.width = app.screen.width;
                 overlay.height = app.screen.height;
                 overlay.alpha = 1;
@@ -181,8 +212,10 @@ export const JumpFadePlugin: Plugin = {
         world.resources.get(JumpFlashSubscription)?.unsubscribe();
         world.resources.delete(JumpFlashSubscription);
         world.removeSystem(JumpFadeSystem);
+        world.resources.delete(JumpFadeOverlayResource);
         // The overlay intentionally stays attached to the app stage:
         // the display world is removed mid-jump, and the white cover
-        // must persist until the destination world clears it.
+        // must persist until the destination world clears it (or the
+        // session's end does, with resetJumpFade).
     }
 };

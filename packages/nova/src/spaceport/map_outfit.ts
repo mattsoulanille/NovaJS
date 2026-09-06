@@ -2,7 +2,9 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import {
     DISCOVERY_LANDED, MapOutfitSystem, mapOutfitSystems, SystemAdjacency,
 } from '../nova_plugin/discovery.js';
-import { markManyDiscovered } from '../nova_plugin/discovery_store.js';
+import {
+    defaultDiscoveryStore, DiscoveryStore,
+} from '../nova_plugin/discovery_store.js';
 import { systemIsInhabited } from '../nova_plugin/landable.js';
 import { MissionUniverse } from './mission_universe.js';
 
@@ -42,9 +44,14 @@ import { MissionUniverse } from './mission_universe.js';
  * two jumps around wherever they arrive, which is what the power is for.
  */
 
-/** Reveals everything within one map outfit's reach. Returns the systems. */
+/**
+ * Reveals everything within one map outfit's reach, in `discovery` (the
+ * client's store unless the caller — a display world — holds another).
+ * Returns the systems.
+ */
 export function applyMapOutfit(modVal: number, fromSystem: string,
-    universe: MissionUniverse): string[] {
+    universe: MissionUniverse,
+    discovery: DiscoveryStore = defaultDiscoveryStore()): string[] {
     const infos = universe.systemInfos;
     const systems: MapOutfitSystem[] = infos.map(info => ({
         id: info.id,
@@ -56,7 +63,7 @@ export function applyMapOutfit(modVal: number, fromSystem: string,
         new Map(infos.map(info => [info.id, info.links]));
     const revealed = mapOutfitSystems(modVal, fromSystem, systems, adjacency,
         govtId => universe.getGovt(govtId)?.classes ?? []);
-    markManyDiscovered(revealed, DISCOVERY_LANDED);
+    discovery.markMany(revealed, DISCOVERY_LANDED);
     return revealed;
 }
 
@@ -68,14 +75,16 @@ export function applyMapOutfit(modVal: number, fromSystem: string,
  */
 export function applyOwnedMapOutfits(outfitIds: Iterable<string>,
     fromSystem: string, universe: MissionUniverse,
-    getOutfit: (id: string) => OutfitData | undefined): string[] {
+    getOutfit: (id: string) => OutfitData | undefined,
+    discovery: DiscoveryStore = defaultDiscoveryStore()): string[] {
     const revealed = new Set<string>();
     for (const id of outfitIds) {
         const modVal = getOutfit(id)?.map;
         if (modVal === undefined || modVal === null) {
             continue;
         }
-        for (const systemId of applyMapOutfit(modVal, fromSystem, universe)) {
+        for (const systemId of applyMapOutfit(modVal, fromSystem, universe,
+            discovery)) {
             revealed.add(systemId);
         }
     }

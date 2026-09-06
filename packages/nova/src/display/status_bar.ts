@@ -5,7 +5,7 @@ import * as PIXI from "pixi.js";
 import { Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { ControlAction } from "../nova_plugin/controls.js";
-import { discoveryLevel } from "../nova_plugin/discovery_store.js";
+import { DiscoveryStoreResource } from "../nova_plugin/discovery_store.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 import { SystemIdResource } from "../nova_plugin/system_id_resource.js";
 import { Button, ButtonClick } from "../spaceport/button.js";
@@ -261,7 +261,11 @@ export const StatusBarPlugin: Plugin = {
         world.resources.set(StatusBarResource, statusBar);
         // The navigation readout's unexplored-destination gate, over the
         // same per-pilot record the star map and gate map read.
-        world.resources.set(DiscoveryLevelResource, id => discoveryLevel(id));
+        const discovery = world.resources.get(DiscoveryStoreResource);
+        if (!discovery) {
+            throw new Error('Expected DiscoveryStoreResource to exist');
+        }
+        world.resources.set(DiscoveryLevelResource, id => discovery.level(id));
         // The docked-ship holder is created here if the spaceport plugin
         // hasn't already; both plugins set-if-absent so build order is moot.
         if (!world.resources.get(DockedShipResource)) {

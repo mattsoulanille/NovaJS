@@ -35,6 +35,7 @@ import { SocketChannelClient } from "./communication/socket_channel_client.js";
 import { DebugSettings } from "./debug_settings.js";
 import { Display } from "./display/display_plugin.js";
 import { SimulationTimeResource } from "./display/simulation_time.js";
+import { resetJumpFade } from "./display/jump_fade_plugin.js";
 import { PixiAppResource } from "./display/pixi_app_resource.js";
 import {
     DisplayScaleResource, ResizeEvent,
@@ -3231,20 +3232,14 @@ async function startGame() {
         // owns) for every other peer: the server authors a removePeer
         // record (see teardownActiveSystem).
         await teardownActiveSystem();
-        // The hyperspace white-out (display/jump_fade_plugin.ts) is a
-        // singleton on the APP stage by design: it has to outlive the
-        // display world that is torn down mid-jump, and only the
-        // destination world's JumpFadeSystem clears it. An exit-to-title
-        // during the white screen has no destination world, so the title
-        // would come back under a full-white cover until the next Enter
-        // Ship (issue #30). Cleared here by name: nothing else of a
-        // session's is left on the app stage.
-        const jumpFade = app.stage.getChildByName('JumpFadeOverlay');
-        if (jumpFade) {
-            jumpFade.alpha = 0;
-            jumpFade.visible = false;
-            app.stage.removeChild(jumpFade);
-        }
+        // The hyperspace white-out (display/jump_fade_plugin.ts) lives on
+        // the APP stage by design: it has to outlive the display world
+        // that is torn down mid-jump, and only the destination world's
+        // JumpFadeSystem clears it. An exit-to-title during the white
+        // screen has no destination world, so the title would come back
+        // under a full-white cover until the next Enter Ship (issue #30).
+        // Nothing else of a session's is left on the app stage.
+        resetJumpFade(app);
         // (No lobby room to leave: the outer world no longer joins one,
         // and the active system was torn down above.)
 

@@ -8,7 +8,9 @@ import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
 import { ControlEvent, ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { resetDiscovery } from '../nova_plugin/discovery_store.js';
+import {
+    DiscoveryStore, DiscoveryStoreResource,
+} from '../nova_plugin/discovery_store.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
 } from '../nova_plugin/game_data_resource.js';
@@ -93,13 +95,6 @@ import { TargetCornersPlugin } from './target_corners_plugin.js';
  */
 describe('display world UI lifecycle', () => {
     beforeAll(() => installHeadlessPixi());
-    // Every transit here enters Sol (nova:128), which the system-entry
-    // path marks discovered in the process-global discovery store
-    // (discovery_store.ts). Left there, it leaks a `discovery` field into
-    // save_game_test's whole-object extractions under some random orders
-    // (seed 35823 put this file first). Own the store like the other
-    // system-entering spec files do.
-    afterEach(() => resetDiscovery());
 
     /** How many textures PIXI is holding process-wide. */
     const cachedTextures = () => Object.keys(PIXI.utils.TextureCache).length;
@@ -173,6 +168,10 @@ describe('display world UI lifecycle', () => {
         world.resources.set(DisplayAssetDataResource, displayAssets);
         world.resources.set(ControlsSubject, new Subject<ControlEvent>());
         world.resources.set(SystemIdResource, (await gameData.ids).System[0]);
+        // Every transit here enters Sol (nova:128), which StarmapPlugin
+        // marks discovered: in a store of this world's own, so nothing
+        // reaches the client's record other spec files read.
+        world.resources.set(DiscoveryStoreResource, new DiscoveryStore());
         world.resources.set(PixiAppResource, {
             renderer: { events: { cursorStyles: {} } }, view: {},
         } as unknown as PIXI.Application);

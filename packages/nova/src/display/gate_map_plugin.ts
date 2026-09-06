@@ -6,7 +6,7 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
 import { ControlsSubject } from '../nova_plugin/controls_plugin.js';
-import { discoveryLevel } from '../nova_plugin/discovery_store.js';
+import { DiscoveryStoreResource } from '../nova_plugin/discovery_store.js';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { MissionMapMark, missionMapMarks } from '../nova_plugin/mission_logic.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
@@ -100,12 +100,14 @@ export const GateMapPlugin: Plugin = {
         const simulationData = world.resources.get(SimulationGameDataResource);
         const controls = world.resources.get(ControlsSubject);
         const stage = world.resources.get(Stage);
-        if (!displayAssets || !simulationData || !controls || !stage) {
+        const discovery = world.resources.get(DiscoveryStoreResource);
+        if (!displayAssets || !simulationData || !controls || !stage
+            || !discovery) {
             throw new Error('Expected display assets, game data, controls, '
-                + 'and stage resources for the gate map');
+                + 'stage, and discovery store resources for the gate map');
         }
         const gateMap = new GateMap(displayAssets, simulationData, controls,
-            id => discoveryLevel(id));
+            id => discovery.level(id));
         stage.addChild(gateMap.container);
         world.resources.set(GateMapResource, gateMap);
         // Idempotent and shared with the starmap / mission board; kicked

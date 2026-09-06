@@ -22,9 +22,9 @@ import { StatusBarResource } from "./status_bar_resource.js";
 /**
  * How much the pilot knows about a system, for the navigation readout's
  * unexplored-destination gate. This is THE SAME display-side handle the
- * star map and the gate map are built with — `id => discoveryLevel(id)`
- * over the per-pilot record in discovery_store.ts — passed as a resource
- * because the readout lives in a System rather than in a constructed
+ * star map and the gate map are built with — `id => store.level(id)` over
+ * the world's DiscoveryStoreResource (discovery_store.ts) — passed as a
+ * resource because the readout lives in a System rather than in a constructed
  * object. REQUIRED, not Optional: a world that installs the readout without
  * a discovery record would silently name every system, which is the exact
  * leak this gate exists to close — better a loud "Missing resource" the
