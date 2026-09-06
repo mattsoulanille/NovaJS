@@ -93,11 +93,17 @@ export const BoardingState = t.type({
      *              the write. The literal is kept in the codec because
      *              the wire shape is additive-only.
      *  'succeeded' the ship was captured; the assignment dialog is up,
-     *  'assigned'  the captured ship has been taken as an escort.
+     *  'assigned'  the captured ship has been taken as an escort,
+     *  'refused'   the player tried to keep it but already has the most
+     *              escorts allowed (escort_cap.ts, ruling #161): the prize
+     *              is not converted, the session stays open on the plunder
+     *              dialog (which says why, and greys Capture), and the
+     *              hulk is released at Done. Additive literal.
      */
     capture: t.union([
         t.literal('none'), t.literal('failed'),
-        t.literal('succeeded'), t.literal('assigned')]),
+        t.literal('succeeded'), t.literal('assigned'),
+        t.literal('refused')]),
     /** Whether the BoardPenalty crime has been charged this session. */
     crimeApplied: t.boolean,
 });

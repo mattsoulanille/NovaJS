@@ -8,8 +8,9 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { ControlEvent } from '../nova_plugin/controls_plugin.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
-import { BayFighterComponent } from '../nova_plugin/bay_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import {
+    countsTowardEscortCap, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
+} from '../nova_plugin/escort_cap.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb_plugin.js';
 import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
@@ -61,29 +62,35 @@ export async function noShipsForHire(
 }
 
 /**
- * THE MOST ESCORTS A PLAYER CAN HAVE.
- *
- * The original refuses a hire past a cap — stock STR# 2002 index 123 is
- * "You already have the maximum possible number of escorts." — but the
- * Bible never states the number. The pilot file does: it records the
- * player's escorts in fixed arrays of SIXTY-FOUR slots (escortClass[64],
- * escortUpgrade[64], escortSale[64], escortVoiceMode[64] — see
- * novaparse/docs/pilot_file_format.md), with a separate fighterClass[64]
- * for bay fighters. Sixty-four is therefore the most the original could
- * ever record, and it is the ceiling used here. RULING: if the engine's
- * own cap is lower (folk memory says it is, without a source), lower this
- * constant; the wording and the counting rule below stand either way.
- *
- * What COUNTS is what the pilot file's escort array records: hired and
- * captured escorts, not bay fighters (their own array) and not mission
- * ships (never the player's). See {@link escortCount}.
+ * THE MOST ESCORTS A PLAYER CAN HAVE: six, hired or captured, by
+ * maintainer ruling #161 — see nova_plugin/escort_cap.ts, which owns the
+ * number, the STR# 2002 index 123 wording, and the rule for what counts
+ * (not mission escorts, not bay fighters). Re-exported here because this
+ * dialog is where the refusal is quoted, and so the bar's callers and the
+ * specs are unchanged. (The pilot file's sixty-four-slot escort arrays
+ * were the previous ceiling; they bound what the file can RECORD, not
+ * what the engine allows.)
  */
-export const MAX_ESCORTS = 64;
-
-/** STR# 2002 index 123, verbatim, as the fallback for a short table. */
-export const MAX_ESCORTS_MESSAGE =
-    'You already have the maximum possible number of escorts.';
+export { MAX_ESCORTS, MAX_ESCORTS_MESSAGE };
 export const MAX_ESCORTS_INDEX = 123;
+
+/**
+ * Why a hire is refused, if it is — the cap first (it is the structural
+ * refusal, STR# 2002 #123, and money cannot fix it), then the fee.
+ * `held` is the player's escort count as the dialog sees it
+ * (escortCount plus this visit's hires). Pure, so the "seventh escort is
+ * refused" rule is pinned without the PIXI dialog.
+ */
+export function hireRefusal(held: number, credits: number,
+    price: number): 'cap' | 'credits' | undefined {
+    if (held >= MAX_ESCORTS) {
+        return 'cap';
+    }
+    if (credits < price) {
+        return 'credits';
+    }
+    return undefined;
+}
 
 /**
  * The "maximum possible number of escorts" refusal, read from STR# 2002
@@ -104,9 +111,10 @@ export async function maxEscortsMessage(
 /**
  * How many escorts the player has, counted against {@link MAX_ESCORTS}:
  *
- *   - the escorts on the client's landed roster that are neither bay
- *     fighters nor mission ships (hired AND captured — a captured prize
- *     draws no wage, so it is in no payroll mirror, but it is an escort),
+ *   - the escorts on the client's landed roster that count against the
+ *     cap (escort_cap.ts's countsTowardEscortCap: neither bay fighters
+ *     nor mission ships — so hired AND captured; a captured prize draws
+ *     no wage, so it is in no payroll mirror, but it is an escort),
  *   - or, if that is fewer, the EscortPayrollComponent mirror of the
  *     hired escorts that were in the world with the player — the roster
  *     fills as they touch down, a few seconds behind the player, and the
@@ -125,8 +133,7 @@ export function escortCount(entity: Entity | undefined,
         if (playerUuid !== undefined && player !== playerUuid) {
             continue;
         }
-        if (escort.components.has(BayFighterComponent)
-            || escort.components.has(MissionShipComponent)) {
+        if (!countsTowardEscortCap(escort)) {
             continue;
         }
         landed++;
@@ -402,8 +409,8 @@ export class HireEscortDialog {
         this.text.count.text = `${this.credits.credits.toLocaleString()} cr`;
         const ship = this.itemGrid?.selection;
         this.buttons.hire.state =
-            ship && this.credits.credits >= hirePrice(ship, this.priceMod)
-                && this.escortsHeld() < MAX_ESCORTS
+            ship && hireRefusal(this.escortsHeld(), this.credits.credits,
+                hirePrice(ship, this.priceMod)) === undefined
                 ? 'normal' : 'grey';
     }
 
@@ -412,16 +419,14 @@ export class HireEscortDialog {
         if (!ship) {
             return;
         }
-        // The cap first: it is the structural refusal (STR# 2002 #123),
-        // and money cannot fix it.
-        if (this.escortsHeld() >= MAX_ESCORTS) {
-            this.text.status.text = this.maxEscortsText;
-            return;
-        }
         const price = hirePrice(ship, this.priceMod);
-        if (this.credits.credits < price) {
-            this.text.status.text = 'You cannot afford this pilot\'s fee.';
-            return;
+        switch (hireRefusal(this.escortsHeld(), this.credits.credits, price)) {
+            case 'cap':
+                this.text.status.text = this.maxEscortsText;
+                return;
+            case 'credits':
+                this.text.status.text = 'You cannot afford this pilot\'s fee.';
+                return;
         }
         this.credits.credits -= price;
         this.hired.push(ship.id);

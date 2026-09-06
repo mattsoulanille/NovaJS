@@ -9,7 +9,10 @@ import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { Stat } from '../nova_plugin/stat.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { STANDARD_CARGO_NAMES } from '../nova_plugin/mission_logic.js';
-import { cargoKeyDisplayName, plunderDialogContent } from './boarding_plugin.js';
+import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escort_cap.js';
+import {
+    boardingDialogPhase, cargoKeyDisplayName, plunderDialogContent,
+} from './boarding_plugin.js';
 
 /**
  * The plunder dialog's rules, read off the synced boarding state and the
@@ -231,7 +234,8 @@ describe('plunder dialog content', () => {
      * belt-and-braces rendering of a state nothing should linger in.
      */
     describe('the capture row after the one attempt', () => {
-        for (const capture of ['failed', 'succeeded', 'assigned'] as const) {
+        for (const capture of
+            ['failed', 'succeeded', 'assigned', 'refused'] as const) {
             it(`is grey once capture is '${capture}'`, () => {
                 expect(plunderDialogContent(
                     boardingState({ capture }), victim(), 100)
@@ -247,6 +251,21 @@ describe('plunder dialog content', () => {
             expect(enabledByAction['plunderCargo']).toBeTrue();
             expect(enabledByAction['plunderCapture']).toBeFalse();
         });
+
+        it('says why a kept prize was refused at the escort cap (#161), '
+            + 'on the plunder dialog, with the booty still on offer', () => {
+                const { enabledByAction, notes } = plunderDialogContent(
+                    boardingState({ capture: 'refused' }), victim(), 100);
+                // The bar's own refusal, verbatim.
+                expect(notes).toEqual([MAX_ESCORTS_MESSAGE]);
+                expect(enabledByAction['plunderCargo']).toBeTrue();
+                expect(enabledByAction['plunderCapture']).toBeFalse();
+                // The assignment dialog is not re-opened for a refusal.
+                expect(boardingDialogPhase(boardingState({ capture: 'refused' }),
+                    false)).toBe('plunder');
+                expect(boardingDialogPhase(boardingState({ capture: 'succeeded' }),
+                    false)).toBe('capture');
+            });
     });
 
     it('greys a booty already taken, and Capture after it succeeded', () => {

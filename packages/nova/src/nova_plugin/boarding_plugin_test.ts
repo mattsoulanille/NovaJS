@@ -39,6 +39,7 @@ import {
 } from './collision_interaction.js';
 import { DisabledComponent } from './disabled_component.js';
 import { completeEntity } from './entity_data_loader.js';
+import { cappedEscortsInWorld, MAX_ESCORTS } from './escort_cap.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { escortParent } from './escort_command_plugin.js';
 import { OwnerComponent, SourceComponent } from './fire_weapon_plugin.js';
@@ -463,6 +464,107 @@ describe('boarding in a live world', () => {
         expect(target.components.has(DisabledComponent)).toBeFalse();
         // Session ended.
         expect(boarder.components.has(BoardingComponent)).toBeFalse();
+    });
+
+    /**
+     * ========================================================================
+     * THE ESCORT CAP (maintainer ruling #161)
+     * ========================================================================
+     * A captured prize the player keeps is an escort, so keeping it is
+     * refused — with the bar's own STR# 2002 #123 message, via
+     * capture 'refused' — once the player already has MAX_ESCORTS
+     * hired-or-captured escorts in the world. Mission escorts and bay
+     * fighters do not count.
+     */
+    describe('the escort cap on a capture', () => {
+        function flock(world: World, n: number,
+            ...extra: ('fighter' | 'mission')[]) {
+            for (let i = 0; i < n; i++) {
+                const escort = new Entity();
+                escort.components.set(PlayerEscortComponent,
+                    { player: BOARDER, provenance: 'hired' });
+                if (extra.includes('fighter')) {
+                    escort.components.set(BayFighterComponent,
+                        { bayWeaponId: 'nova:150', slot: i } as any);
+                }
+                if (extra.includes('mission')) {
+                    escort.components.set(MissionShipComponent, {} as any);
+                }
+                world.entities.set(`flock ${extra.join('+')} ${i}`, escort);
+            }
+        }
+
+        it('refuses to keep the prize at the cap, and keeps the session open',
+            async () => {
+                const { world, boarder, target } = await boardingWorld({
+                    boarderCrew: 500, targetCrew: 1,
+                });
+                flock(world, MAX_ESCORTS);
+                forceCaptureRoll(world, true);
+                press(world, BOARDER, 'board');
+                press(world, BOARDER, 'plunderCapture');
+                expect(boarder.components.get(BoardingComponent)?.capture)
+                    .toEqual('succeeded');
+
+                press(world, BOARDER, 'plunderCaptureEscort');
+                expect(boarder.components.get(BoardingComponent)?.capture)
+                    .toEqual('refused');
+                // Not converted: no escort link, still the hulk it was.
+                expect(target.components.has(PlayerEscortComponent)).toBeFalse();
+                expect(target.components.has(FormationComponent)).toBeFalse();
+                expect(target.components.has(GovtComponent)).toBeTrue();
+                expect(target.components.has(DisabledComponent)).toBeTrue();
+                // The refusal is a plunder-dialog note, not the end of the
+                // session: pressing again changes nothing, Done releases.
+                press(world, BOARDER, 'plunderCaptureEscort');
+                expect(boarder.components.get(BoardingComponent)?.capture)
+                    .toEqual('refused');
+                expect(target.components.has(PlayerEscortComponent)).toBeFalse();
+                press(world, BOARDER, 'plunderDone');
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                expect(target.components.has(PlayerEscortComponent)).toBeFalse();
+            });
+
+        it('keeps the prize one under the cap, and it then fills the cap',
+            async () => {
+                const { world, boarder, target } = await boardingWorld({
+                    boarderCrew: 500, targetCrew: 1,
+                });
+                // A player-flown captor, so the prize is stamped as the
+                // player's captured escort on the spot.
+                boarder.components.set(ControlledByComponent,
+                    { peerId: 'me' } as any);
+                flock(world, MAX_ESCORTS - 1);
+                expect(cappedEscortsInWorld(world.entities, BOARDER))
+                    .toBe(MAX_ESCORTS - 1);
+                captureAsEscort(world, boarder);
+                expect(target.components.get(PlayerEscortComponent))
+                    .toEqual(jasmine.objectContaining(
+                        { player: BOARDER, provenance: 'captured' }));
+                expect(boarder.components.has(BoardingComponent)).toBeFalse();
+                // Captured escorts count: the cap is now full.
+                expect(cappedEscortsInWorld(world.entities, BOARDER))
+                    .toBe(MAX_ESCORTS);
+            });
+
+        it('does not count mission escorts or bay fighters', async () => {
+            const { world, boarder, target } = await boardingWorld({
+                boarderCrew: 500, targetCrew: 1,
+            });
+            boarder.components.set(ControlledByComponent,
+                { peerId: 'me' } as any);
+            // Five hired, a mission's three, and a wing of eight: the
+            // capped count is five, so the prize is kept.
+            flock(world, MAX_ESCORTS - 1);
+            flock(world, 3, 'mission');
+            flock(world, 8, 'fighter');
+            expect(cappedEscortsInWorld(world.entities, BOARDER))
+                .toBe(MAX_ESCORTS - 1);
+            captureAsEscort(world, boarder);
+            expect(target.components.get(PlayerEscortComponent)?.player)
+                .toEqual(BOARDER);
+            expect(boarder.components.has(BoardingComponent)).toBeFalse();
+        });
     });
 
     /**

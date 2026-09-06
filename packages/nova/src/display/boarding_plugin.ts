@@ -15,6 +15,7 @@ import {
     BoardingComponent, BoardingState, capturable, captureChance,
 } from '../nova_plugin/boarding_component.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
+import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escort_cap.js';
 import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
@@ -240,6 +241,10 @@ export function plunderDialogContent(boarding: BoardingState,
         notes.push('You have no crew to send across: cannot capture.');
     } else if (boarding.capture === 'failed') {
         notes.push('You were repelled while attempting to capture!');
+    } else if (boarding.capture === 'refused') {
+        // The escort cap (ruling #161): the same STR# 2002 #123 refusal
+        // the bar's hire dialog gives, off the same constant.
+        notes.push(MAX_ESCORTS_MESSAGE);
     }
     const lines = [
         ...rows.map(r => `${r.label}  ${r.value}`

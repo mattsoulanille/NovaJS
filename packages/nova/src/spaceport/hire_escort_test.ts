@@ -5,7 +5,7 @@ import { BayFighterComponent } from '../nova_plugin/bay_plugin.js';
 import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
 import { EscortPayrollComponent } from '../nova_plugin/player_escort.js';
 import {
-    escortCount, hirePrice, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
+    escortCount, hirePrice, hireRefusal, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
     NO_SHIPS_FOR_HIRE,
 } from './hire_escort.js';
 import {
@@ -18,9 +18,9 @@ function makeShip(ship: Partial<ShipData>): ShipData {
 
 /**
  * The escort cap the original enforces (STR# 2002 index 123: "You already
- * have the maximum possible number of escorts."), counted the way the
- * pilot file records escorts: hired and captured, not bay fighters and not
- * mission ships.
+ * have the maximum possible number of escorts."), as the BAR counts it:
+ * hired and captured escorts, not bay fighters and not mission ships
+ * (maintainer ruling #161; nova_plugin/escort_cap.ts owns the rule).
  */
 describe('the escort cap', () => {
     const PLAYER = 'player-uuid';
@@ -36,11 +36,50 @@ describe('the escort cap', () => {
         return { player, entity };
     }
 
-    it('is the pilot file\'s sixty-four escort slots', () => {
-        expect(MAX_ESCORTS).toBe(64);
+    it('is six (#161), with the stock refusal', () => {
+        expect(MAX_ESCORTS).toBe(6);
         expect(MAX_ESCORTS_MESSAGE)
             .toBe('You already have the maximum possible number of escorts.');
     });
+
+    it('refuses the seventh hire at the cap, before money is considered',
+        () => {
+            const entity = new Entity();
+            entity.components.set(EscortPayrollComponent,
+                Array(6).fill('nova:136'));
+            const held = escortCount(entity, () => [], PLAYER);
+            expect(held).toBe(6);
+            expect(hireRefusal(held, Number.MAX_SAFE_INTEGER, 1)).toBe('cap');
+            // Five in the world plus one hired this visit is six too.
+            expect(hireRefusal(5 + 1, Number.MAX_SAFE_INTEGER, 1)).toBe('cap');
+            // Under the cap, only the fee can refuse.
+            expect(hireRefusal(5, 100, 1)).toBeUndefined();
+            expect(hireRefusal(5, 0, 1)).toBe('credits');
+            expect(hireRefusal(0, 0, 0)).toBeUndefined();
+        });
+
+    it('does not count mission escorts or bay fighters toward the seven',
+        () => {
+            // Six hired on the payroll, and a landed roster of those six
+            // plus three mission escorts and a wing of four fighters:
+            // still exactly at the cap, no further.
+            const entity = new Entity();
+            entity.components.set(EscortPayrollComponent,
+                Array(6).fill('nova:136'));
+            const roster = [
+                ...Array.from({ length: 6 }, () => escort()),
+                ...Array.from({ length: 3 }, () => escort(PLAYER, 'mission')),
+                ...Array.from({ length: 4 }, () => escort(PLAYER, 'fighter')),
+            ];
+            expect(escortCount(entity, () => roster, PLAYER)).toBe(6);
+            // ...and with one hired escort released, there is room again
+            // however many mission ships and fighters fly along.
+            expect(escortCount(entity, () => roster.slice(1), PLAYER)).toBe(6);
+            entity.components.set(EscortPayrollComponent,
+                Array(5).fill('nova:136'));
+            expect(escortCount(entity, () => roster.slice(1), PLAYER)).toBe(5);
+            expect(hireRefusal(5, 100, 1)).toBeUndefined();
+        });
 
     it('counts the landed roster\'s escorts, not its fighters or mission '
         + 'ships, and not another player\'s', () => {
