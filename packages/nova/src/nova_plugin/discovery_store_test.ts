@@ -322,4 +322,26 @@ describe('the discovery store\'s versioned record', () => {
             .toBe('{"version":1,"entries":"nope"}');
         expect(storage.getItem(key)).toBe(stored([['nova:130', DISCOVERY_ENTERED]]));
     });
+
+    it('re-seeds the legacy slot from `novajs:explored` after parking a '
+        + 'corrupt record, and no other slot', () => {
+            // A parked record is an absent one from then on, legacy seeding
+            // included: the old set is the legacy-slot pilot's own entered
+            // systems (a subset of what the unreadable record held), so it
+            // recovers true knowledge. Any other pilot never inherits it.
+            storage.setItem(LEGACY_EXPLORED_KEY, JSON.stringify(['nova:131']));
+            storage.setItem(key, '{"version":1,"entries":"nope"}');
+            storage.setItem(discoveryKeyFor(OTHER_PILOT_KEY),
+                '{"version":1,"entries":"nope"}');
+            spyOn(console, 'warn');
+            const legacy = new DiscoveryStore(storage);
+            expect(legacy.level('nova:131')).toBe(DISCOVERY_ENTERED);
+            expect(storage.getItem(`${key}:quarantine`))
+                .toBe('{"version":1,"entries":"nope"}');
+            const other = new DiscoveryStore(storage);
+            other.setSaveKey(OTHER_PILOT_KEY);
+            expect(other.level('nova:131')).toBe(DISCOVERY_UNKNOWN);
+            expect(storage.getItem(`${discoveryKeyFor(OTHER_PILOT_KEY)}:quarantine`))
+                .toBe('{"version":1,"entries":"nope"}');
+        });
 });

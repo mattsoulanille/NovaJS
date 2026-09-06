@@ -267,6 +267,12 @@ export class DiscoveryStore {
             console.warn('Ignoring an unreadable system discovery record '
                 + `(moved to '${quarantine}'): ${record.reason}`);
         }
+        // A parked record is an absent one from here on, legacy seeding
+        // included: on the legacy slot the `novajs:explored` set is that
+        // same pilot's own entered systems (a subset of whatever the
+        // unreadable record held, since discovery only ever grows and a
+        // reset deletes the set), so re-seeding from it recovers true
+        // knowledge, never another pilot's or a forgotten one's.
         this.migrateLegacy(store, levels);
         return levels;
     }
