@@ -17,8 +17,37 @@ import { SimulationBridgeClient } from "./simulation_bridge_client.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
+import { fileURLToPath } from "url";
 
-const packageRoot = process.cwd();
+/**
+ * The nearest directory at or above `from` holding a package.json.
+ * This module runs from dist/src/communication/ (jasmine, the built
+ * tree) or src/communication/ (an editor's ts runner), so the package
+ * root is found by walking up rather than by counting levels.
+ */
+function findPackageRoot(from: string): string {
+    let dir = from;
+    for (; ;) {
+        if (fs.existsSync(path.join(dir, "package.json"))) {
+            return dir;
+        }
+        const parent = path.dirname(dir);
+        if (parent === dir) {
+            throw new Error(`No package.json at or above ${from}`);
+        }
+        dir = parent;
+    }
+}
+
+/**
+ * packages/nova, anchored to THIS module rather than to process.cwd(),
+ * so the fixtures (the synthetic set under test_fixtures, Nova_Data,
+ * objects/, settings/) resolve from any cwd: a jasmine run from the repo
+ * root, a scratch script, a debugger. Under packages/nova's jasmine.json
+ * the two agree, so nothing changes for the suite; the data gate keeps
+ * its own cwd default and is handed this root explicitly.
+ */
+const packageRoot = findPackageRoot(path.dirname(fileURLToPath(import.meta.url)));
 
 let gameDataPromise: Promise<GameDataAggregator> | undefined;
 
