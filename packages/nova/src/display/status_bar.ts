@@ -47,7 +47,7 @@ import { ControlAction } from "../nova_plugin/controls.js";
 import {
     DISCOVERY_ENTERED, DiscoveryLevel,
 } from "../nova_plugin/discovery.js";
-import { discoveryLevel } from "../nova_plugin/discovery_store.js";
+import { DiscoveryStoreResource } from "../nova_plugin/discovery_store.js";
 import { displayName, govtTargetName } from "../nova_plugin/display_name.js";
 import { STANDARD_CARGO_NAMES } from "../nova_plugin/mission_logic.js";
 import { ShipComponent, ShipPhysicsComponent } from "../nova_plugin/ship_plugin.js";
@@ -991,10 +991,10 @@ export const StatusBarResource = new Resource<StatusBar>('StatusBar');
 /**
  * How much the pilot knows about a system, for the navigation readout's
  * unexplored-destination gate. This is THE SAME display-side handle the
- * star map and the gate map are built with — `id => discoveryLevel(id)`
- * over the per-pilot record in discovery_store.ts — passed as a resource
- * because the readout lives in a System rather than in a constructed
- * object. REQUIRED, not Optional: a world that installs the readout without
+ * star map and the gate map are built with — `id => store.level(id)` over
+ * the world's DiscoveryStoreResource (discovery_store.ts) — passed as a
+ * resource of its own because the readout lives in a System rather than in
+ * a constructed object. REQUIRED, not Optional: a world that installs the readout without
  * a discovery record would silently name every system, which is the exact
  * leak this gate exists to close — better a loud "Missing resource" the
  * first step than a quiet one nobody notices. StatusBarPlugin sets it.
@@ -1788,7 +1788,11 @@ export const StatusBarPlugin: Plugin = {
         world.resources.set(StatusBarResource, statusBar);
         // The navigation readout's unexplored-destination gate, over the
         // same per-pilot record the star map and gate map read.
-        world.resources.set(DiscoveryLevelResource, id => discoveryLevel(id));
+        const discovery = world.resources.get(DiscoveryStoreResource);
+        if (!discovery) {
+            throw new Error('Expected DiscoveryStoreResource to exist');
+        }
+        world.resources.set(DiscoveryLevelResource, id => discovery.level(id));
         // The docked-ship holder is created here if the spaceport plugin
         // hasn't already; both plugins set-if-absent so build order is moot.
         if (!world.resources.get(DockedShipResource)) {

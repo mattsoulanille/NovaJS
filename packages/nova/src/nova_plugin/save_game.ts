@@ -976,8 +976,10 @@ export function resetSave(storage?: SaveStorage): void {
         // Ignore.
     }
     // A new pilot starts knowing nothing. The discovery record is
-    // client-local UI state kept beside the save (discovery_store.ts).
-    resetDiscovery(storage);
+    // client-local UI state kept beside the save (discovery_store.ts) in
+    // the client's one store, whatever `storage` the save envelope came
+    // from — like extractSaveData, which reads that same store.
+    resetDiscovery();
 }
 
 /**
@@ -989,7 +991,6 @@ export function resetSave(storage?: SaveStorage): void {
  * Merges rather than replaces (levels only rise), so restoring an older
  * rollback checkpoint never un-learns a system.
  */
-export function restoreClientSaveState(save: SaveData,
-    storage?: SaveStorage): void {
-    loadDiscoveryEntries(save.discovery, storage);
+export function restoreClientSaveState(save: SaveData): void {
+    loadDiscoveryEntries(save.discovery);
 }

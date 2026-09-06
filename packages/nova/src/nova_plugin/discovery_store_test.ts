@@ -3,10 +3,9 @@ import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN,
 } from './discovery.js';
 import {
-    discoveredSystems, discoveryEntries, discoveryKeyFor, discoveryLevel,
-    DiscoveryStorage, LEGACY_EXPLORED_KEY, loadDiscoveryEntries,
-    markDiscovered, markManyDiscovered, resetDiscovery, resetDiscoveryCache,
-    setDiscoveryStorageKey,
+    defaultDiscoveryStore, discoveryEntries, discoveryKeyFor, discoveryLevel,
+    DiscoveryStorage, DiscoveryStore, LEGACY_EXPLORED_KEY, markDiscovered,
+    playerDiscovery, resetDiscovery, setDiscoveryStorageKey,
 } from './discovery_store.js';
 
 class FakeStorage implements DiscoveryStorage {
@@ -21,55 +20,48 @@ const OTHER_PILOT_KEY = 'novajs:save:pilot2';
 
 describe('the discovery store', () => {
     let storage: FakeStorage;
+    let store: DiscoveryStore;
 
     beforeEach(() => {
-        // A fresh storage per spec: the store caches PER STORAGE INSTANCE
-        // (and per key), so a new FakeStorage starts from an empty record
-        // whatever an earlier spec — or another spec file — wrote.
+        // A store of the spec's own, over a fresh storage: nothing an
+        // earlier spec — or another spec file — did can reach it.
         storage = new FakeStorage();
-        setDiscoveryStorageKey(LEGACY_KEY);
-        resetDiscovery(storage);
-    });
-
-    afterEach(() => {
-        setDiscoveryStorageKey(LEGACY_KEY);
-        resetDiscovery(storage);
+        store = new DiscoveryStore(storage);
     });
 
     it('starts out knowing nothing', () => {
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
-        expect(discoveredSystems(storage)).toEqual([]);
+        expect(store.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        expect(store.systems()).toEqual([]);
     });
 
     it('records entering and then landing in a system', () => {
-        expect(markDiscovered('nova:130', DISCOVERY_ENTERED, storage)).toBeTrue();
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_ENTERED);
-        expect(markDiscovered('nova:130', DISCOVERY_LANDED, storage)).toBeTrue();
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
+        expect(store.mark('nova:130', DISCOVERY_ENTERED)).toBeTrue();
+        expect(store.level('nova:130')).toBe(DISCOVERY_ENTERED);
+        expect(store.mark('nova:130', DISCOVERY_LANDED)).toBeTrue();
+        expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
     });
 
     it('never lowers a level', () => {
-        markDiscovered('nova:130', DISCOVERY_LANDED, storage);
+        store.mark('nova:130', DISCOVERY_LANDED);
         // Flying back through a system you have landed in must not make
         // the map forget its shipyard.
-        expect(markDiscovered('nova:130', DISCOVERY_ENTERED, storage))
-            .toBeFalse();
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
+        expect(store.mark('nova:130', DISCOVERY_ENTERED)).toBeFalse();
+        expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
     });
 
     it('raises a batch at once (a map outfit\'s reach)', () => {
-        markDiscovered('nova:131', DISCOVERY_LANDED, storage);
-        expect(markManyDiscovered(['nova:130', 'nova:131', 'nova:132'],
-            DISCOVERY_LANDED, storage)).toBeTrue();
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
-        expect(discoveryLevel('nova:132', storage)).toBe(DISCOVERY_LANDED);
+        store.mark('nova:131', DISCOVERY_LANDED);
+        expect(store.markMany(['nova:130', 'nova:131', 'nova:132'],
+            DISCOVERY_LANDED)).toBeTrue();
+        expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
+        expect(store.level('nova:132')).toBe(DISCOVERY_LANDED);
         // Nothing left to raise the second time round.
-        expect(markManyDiscovered(['nova:130', 'nova:131'],
-            DISCOVERY_LANDED, storage)).toBeFalse();
+        expect(store.markMany(['nova:130', 'nova:131'], DISCOVERY_LANDED))
+            .toBeFalse();
     });
 
     it('persists the instant something changes', () => {
-        markDiscovered('nova:130', DISCOVERY_ENTERED, storage);
+        store.mark('nova:130', DISCOVERY_ENTERED);
         // Written straight through, without waiting for a save: entering a
         // system has to survive a crash before the next autosave.
         const raw = storage.getItem(discoveryKeyFor(LEGACY_KEY));
@@ -78,56 +70,84 @@ describe('the discovery store', () => {
     });
 
     it('reloads what it wrote', () => {
-        markDiscovered('nova:130', DISCOVERY_LANDED, storage);
-        markDiscovered('nova:131', DISCOVERY_ENTERED, storage);
-        // Drop the in-memory cache without clearing storage, the way a
-        // page reload would.
-        resetDiscoveryCache(storage);
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
-        expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_ENTERED);
+        store.mark('nova:130', DISCOVERY_LANDED);
+        store.mark('nova:131', DISCOVERY_ENTERED);
+        // A new store over the same storage is what a page reload is: no
+        // in-memory copy, only what was persisted.
+        const reloaded = new DiscoveryStore(storage);
+        expect(reloaded.level('nova:130')).toBe(DISCOVERY_LANDED);
+        expect(reloaded.level('nova:131')).toBe(DISCOVERY_ENTERED);
     });
 
     it('keeps each storage\'s record apart under the same key', () => {
-        // Every call takes its storage explicitly, but the memoised
-        // record used to be one module-level map per KEY, so a second
-        // storage under the same key read the first one's levels — and
-        // specs had to toggle the key back and forth to flush it (review
-        // finding #78).
-        const other = new FakeStorage();
-        markDiscovered('nova:130', DISCOVERY_LANDED, storage);
-        expect(discoveryLevel('nova:130', other)).toBe(DISCOVERY_UNKNOWN);
-        markDiscovered('nova:200', DISCOVERY_ENTERED, other);
-        expect(discoveryLevel('nova:200', storage)).toBe(DISCOVERY_UNKNOWN);
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
-        expect(other.getItem(discoveryKeyFor(LEGACY_KEY)))
+        // The memoised record used to be one module-level map per KEY, so
+        // a second storage under the same key read the first one's levels
+        // — and specs had to toggle the key back and forth to flush it
+        // (review finding #78). Now a store owns its storage.
+        const otherStorage = new FakeStorage();
+        const other = new DiscoveryStore(otherStorage);
+        store.mark('nova:130', DISCOVERY_LANDED);
+        expect(other.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        other.mark('nova:200', DISCOVERY_ENTERED);
+        expect(store.level('nova:200')).toBe(DISCOVERY_UNKNOWN);
+        expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
+        expect(otherStorage.getItem(discoveryKeyFor(LEGACY_KEY)))
             .toBe(JSON.stringify([['nova:200', DISCOVERY_ENTERED]]));
     });
 
     it('keeps each pilot\'s knowledge to themselves', () => {
-        markDiscovered('nova:130', DISCOVERY_LANDED, storage);
-        setDiscoveryStorageKey(OTHER_PILOT_KEY);
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
-        markDiscovered('nova:200', DISCOVERY_ENTERED, storage);
-        setDiscoveryStorageKey(LEGACY_KEY);
-        expect(discoveryLevel('nova:200', storage)).toBe(DISCOVERY_UNKNOWN);
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
+        store.mark('nova:130', DISCOVERY_LANDED);
+        store.setSaveKey(OTHER_PILOT_KEY);
+        expect(store.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        store.mark('nova:200', DISCOVERY_ENTERED);
+        store.setSaveKey(LEGACY_KEY);
+        expect(store.level('nova:200')).toBe(DISCOVERY_UNKNOWN);
+        expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
+    });
+
+    it('can be built pointed at a pilot', () => {
+        store.mark('nova:130', DISCOVERY_LANDED);
+        const pilot2 = new DiscoveryStore(storage, OTHER_PILOT_KEY);
+        expect(pilot2.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        pilot2.mark('nova:200', DISCOVERY_ENTERED);
+        expect(storage.getItem(discoveryKeyFor(OTHER_PILOT_KEY)))
+            .toBe(JSON.stringify([['nova:200', DISCOVERY_ENTERED]]));
+    });
+
+    describe('with no storage at all', () => {
+        // Node, or a browser with localStorage disabled: the in-memory
+        // record is the whole record.
+        it('still coheres within the process', () => {
+            const storeless = new DiscoveryStore();
+            expect(storeless.storage).toBeUndefined();
+            storeless.mark('nova:130', DISCOVERY_ENTERED);
+            expect(storeless.level('nova:130')).toBe(DISCOVERY_ENTERED);
+            expect(storeless.entries()).toEqual([['nova:130', DISCOVERY_ENTERED]]);
+        });
+
+        it('starts a switched-to pilot from nothing', () => {
+            const storeless = new DiscoveryStore();
+            storeless.mark('nova:130', DISCOVERY_ENTERED);
+            storeless.setSaveKey(OTHER_PILOT_KEY);
+            expect(storeless.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        });
     });
 
     describe('legacy `novajs:explored` migration', () => {
         it('adopts a pre-discovery pilot\'s explored set as "entered"', () => {
             storage.setItem(LEGACY_EXPLORED_KEY,
                 JSON.stringify(['nova:130', 'nova:131']));
-            resetDiscoveryCache(storage);
-            expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_ENTERED);
-            expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_ENTERED);
+            const fresh = new DiscoveryStore(storage);
+            expect(fresh.level('nova:130')).toBe(DISCOVERY_ENTERED);
+            expect(fresh.level('nova:131')).toBe(DISCOVERY_ENTERED);
         });
 
         it('does not hand the old set to a pilot created later', () => {
             // The legacy key was client-GLOBAL. Only the legacy save slot
             // — the pilot that set migrated from — may inherit it.
             storage.setItem(LEGACY_EXPLORED_KEY, JSON.stringify(['nova:130']));
-            setDiscoveryStorageKey(OTHER_PILOT_KEY);
-            expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
+            store.setSaveKey(OTHER_PILOT_KEY);
+            expect(store.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
         });
 
         it('stops consulting it once the pilot has a record of their own', () => {
@@ -135,57 +155,94 @@ describe('the discovery store', () => {
             // written discovery: once it has, the old set is stale and
             // must not resurrect systems the pilot has since forgotten
             // (a reset, a rollback to a fresh start).
-            markDiscovered('nova:131', DISCOVERY_ENTERED, storage);
+            store.mark('nova:131', DISCOVERY_ENTERED);
             storage.setItem(LEGACY_EXPLORED_KEY, JSON.stringify(['nova:130']));
-            resetDiscoveryCache(storage);
-            expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_ENTERED);
-            expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
+            const reloaded = new DiscoveryStore(storage);
+            expect(reloaded.level('nova:131')).toBe(DISCOVERY_ENTERED);
+            expect(reloaded.level('nova:130')).toBe(DISCOVERY_UNKNOWN);
         });
     });
 
     describe('the save round trip', () => {
         it('writes sorted [id, level] pairs', () => {
-            markDiscovered('nova:131', DISCOVERY_ENTERED, storage);
-            markDiscovered('nova:130', DISCOVERY_LANDED, storage);
-            expect(discoveryEntries(storage)).toEqual([
+            store.mark('nova:131', DISCOVERY_ENTERED);
+            store.mark('nova:130', DISCOVERY_LANDED);
+            expect(store.entries()).toEqual([
                 ['nova:130', DISCOVERY_LANDED],
                 ['nova:131', DISCOVERY_ENTERED],
             ]);
         });
 
         it('merges a loaded save instead of replacing the record', () => {
-            markDiscovered('nova:130', DISCOVERY_LANDED, storage);
-            loadDiscoveryEntries([['nova:130', 1], ['nova:131', 2]], storage);
+            store.mark('nova:130', DISCOVERY_LANDED);
+            store.merge([['nova:130', 1], ['nova:131', 2]]);
             // Restoring an older checkpoint must not un-learn nova:130.
-            expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
-            expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_LANDED);
+            expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
+            expect(store.level('nova:131')).toBe(DISCOVERY_LANDED);
         });
 
         it('leaves the record alone for a save with no discovery field', () => {
-            markDiscovered('nova:130', DISCOVERY_ENTERED, storage);
-            loadDiscoveryEntries(undefined, storage);
-            expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_ENTERED);
+            store.mark('nova:130', DISCOVERY_ENTERED);
+            store.merge(undefined);
+            expect(store.level('nova:130')).toBe(DISCOVERY_ENTERED);
         });
 
         it('clamps a corrupt level rather than trusting it', () => {
-            loadDiscoveryEntries([['nova:130', 99], ['nova:131', -3]], storage);
-            expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_LANDED);
-            expect(discoveryLevel('nova:131', storage)).toBe(DISCOVERY_UNKNOWN);
+            store.merge([['nova:130', 99], ['nova:131', -3]]);
+            expect(store.level('nova:130')).toBe(DISCOVERY_LANDED);
+            expect(store.level('nova:131')).toBe(DISCOVERY_UNKNOWN);
         });
     });
 
     it('survives unreadable stored data', () => {
         storage.setItem(discoveryKeyFor(LEGACY_KEY), 'not json');
-        resetDiscoveryCache(storage);
-        expect(discoveryLevel('nova:130', storage)).toBe(DISCOVERY_UNKNOWN);
+        expect(new DiscoveryStore(storage).level('nova:130'))
+            .toBe(DISCOVERY_UNKNOWN);
     });
 
     it('forgets everything on reset (a brand-new pilot)', () => {
         storage.setItem(LEGACY_EXPLORED_KEY, JSON.stringify(['nova:130']));
-        markDiscovered('nova:131', DISCOVERY_LANDED, storage);
-        resetDiscovery(storage);
-        expect(discoveredSystems(storage)).toEqual([]);
+        store.mark('nova:131', DISCOVERY_LANDED);
+        store.reset();
+        expect(store.systems()).toEqual([]);
         // The legacy set would otherwise migrate itself straight back in.
         expect(storage.getItem(LEGACY_EXPLORED_KEY)).toBeNull();
+    });
+
+    it('exposes the NCB operators\' view of itself', () => {
+        store.access.markVisited('nova:130');
+        expect(store.access.level('nova:130')).toBe(DISCOVERY_ENTERED);
+        store.mark('nova:130', DISCOVERY_LANDED);
+        // Raises only: a visit never demotes a landing.
+        store.access.markVisited('nova:130');
+        expect(store.access.level('nova:130')).toBe(DISCOVERY_LANDED);
+    });
+});
+
+describe('the client\'s discovery store', () => {
+    // The module functions, playerDiscovery and defaultDiscoveryStore() are
+    // one object: what the spaceport marks through the functions, a display
+    // world reads through the store (and vice versa). Every spec starts
+    // with it empty (spec_support/fresh_client_state.ts).
+
+    it('is one store behind the module functions', () => {
+        expect(defaultDiscoveryStore()).toBe(defaultDiscoveryStore());
+        expect(discoveryLevel('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        markDiscovered('nova:130', DISCOVERY_ENTERED);
+        expect(defaultDiscoveryStore().level('nova:130'))
+            .toBe(DISCOVERY_ENTERED);
+        playerDiscovery.markVisited('nova:131');
+        expect(discoveryEntries()).toEqual([
+            ['nova:130', DISCOVERY_ENTERED], ['nova:131', DISCOVERY_ENTERED],
+        ]);
+    });
+
+    it('follows the active save key', () => {
+        markDiscovered('nova:130', DISCOVERY_LANDED);
+        setDiscoveryStorageKey(OTHER_PILOT_KEY);
+        expect(discoveryLevel('nova:130')).toBe(DISCOVERY_UNKNOWN);
+        setDiscoveryStorageKey(LEGACY_KEY);
+        resetDiscovery();
+        expect(discoveryLevel('nova:130')).toBe(DISCOVERY_UNKNOWN);
     });
 });

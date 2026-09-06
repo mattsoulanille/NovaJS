@@ -4,6 +4,9 @@ import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movemen
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { AnimationPlugin } from "../nova_plugin/animation_plugin.js";
+import {
+    defaultDiscoveryStore, DiscoveryStoreResource,
+} from "../nova_plugin/discovery_store.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin.js";
 import { AsteroidDisplayPlugin } from "./asteroid_display_plugin.js";
@@ -109,6 +112,15 @@ export const Display: Plugin = {
         // Seeded before AnimationGraphicPlugin/StatusBarPlugin add the draw
         // systems that read it; CenterShipSystem refreshes it each frame.
         world.resources.set(CameraFocus, { x: 0, y: 0 });
+        // The pilot's discovery record, for the star map, the gate map
+        // and the navigation readout (StatusBarPlugin). The client's one
+        // store unless whoever built this world already gave it another
+        // (a spec's throwaway): the record outlives this world by design
+        // (discovery_store.ts), so it is looked up, never made, here.
+        if (!world.resources.get(DiscoveryStoreResource)) {
+            world.resources.set(DiscoveryStoreResource,
+                defaultDiscoveryStore());
+        }
         await world.addPlugin(ScreenSizePlugin);
         // Before StatusBarPlugin and UiSoundTriggersPlugin: both read the
         // derived ShipPhysicsComponent, which does not cross the bridge.

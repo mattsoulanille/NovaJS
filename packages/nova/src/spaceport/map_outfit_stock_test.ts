@@ -4,9 +4,7 @@ import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_ga
 import {
     DISCOVERY_LANDED, DISCOVERY_UNKNOWN,
 } from '../nova_plugin/discovery.js';
-import {
-    discoveryLevel, resetDiscovery, setDiscoveryStorageKey,
-} from '../nova_plugin/discovery_store.js';
+import { discoveryLevel } from '../nova_plugin/discovery_store.js';
 import { applyMapOutfit, applyOwnedMapOutfits } from './map_outfit.js';
 import { MissionUniverse } from './mission_universe.js';
 
@@ -52,17 +50,9 @@ describe('stock map outfits', () => {
         await universe.load();
     });
 
-    // map_outfit.ts writes through the store's DEFAULT storage (none under
-    // node: the process-local record), so the read-backs below go through
-    // the same one. This spec used to hand the reads a FakeStorage and got
-    // away with it only because the cache was shared across storages
-    // (review finding #78).
-    beforeEach(() => {
-        setDiscoveryStorageKey('novajs:save');
-        resetDiscovery();
-    });
-
-    afterEach(() => resetDiscovery());
+    // map_outfit.ts writes to the client's store when handed no other, so
+    // the read-backs below go through the same one; it starts every spec
+    // empty (spec_support/fresh_client_state.ts).
 
     it('is exactly the six ModType 16 items the game ships', async () => {
         const gameData = await getIntegrationGameData();
