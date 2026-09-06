@@ -17,7 +17,8 @@ import { Vector } from 'nova_ecs/datatypes/vector';
 import { DesyncInfo, RollbackRelay } from './rollback_relay.js';
 import { RoomArchive } from './room_archive.js';
 import { DesyncDump, InputRecord, unwrapRollbackMessage } from './rollback_protocol.js';
-import { SimulationBridgeClient, SimulationBridgeHost } from './simulation_bridge.js';
+import { SimulationBridgeClient } from './simulation_bridge_client.js';
+import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { getIntegrationGameData } from './simulation_test_fixture.js';
 
 /**

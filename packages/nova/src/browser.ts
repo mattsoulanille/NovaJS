@@ -29,8 +29,8 @@ import { makeBrowserSimulationBridgeClient } from "./communication/simulation_br
 import {
     AsyncSimulationBridgeClient,
     SimulationBridgeClosedError,
-    SimulationPacing,
-} from "./communication/simulation_bridge.js";
+} from "./communication/async_simulation_bridge_client.js";
+import { SimulationPacing } from "./communication/simulation_frame.js";
 import { SocketChannelClient } from "./communication/socket_channel_client.js";
 import { DebugSettings } from "./debug_settings.js";
 import { Display } from "./display/display_plugin.js";

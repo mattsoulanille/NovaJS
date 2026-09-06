@@ -2,9 +2,9 @@ import 'jasmine';
 import { Serializer } from 'nova_ecs/plugins/serializer_plugin';
 import {
     AsyncSimulationBridgeClient,
-    AsyncSimulationBridgeHostApi,
     SimulationBridgeClosedError,
-} from './simulation_bridge.js';
+} from './async_simulation_bridge_client.js';
+import { AsyncSimulationBridgeHostApi } from './simulation_bridge_api.js';
 
 /**
  * Regression coverage for the transit hang (hypergate black screen /
