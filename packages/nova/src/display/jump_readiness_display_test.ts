@@ -131,7 +131,9 @@ describe('jump readiness in the display world', () => {
         world.resources.set(TimeResource,
             { time: 0, delta_ms: 0, delta_s: 0 } as never);
         world.resources.set(StatusBarResource, {
-            drawNavigation: (readout: NavReadout) => { drawn.push(readout); },
+            navigation: {
+                drawNavigation: (readout: NavReadout) => { drawn.push(readout); },
+            },
         } as never);
         // The readout withholds an unexplored destination's name, so it
         // needs the pilot's record; this suite is about the DIM rule, so

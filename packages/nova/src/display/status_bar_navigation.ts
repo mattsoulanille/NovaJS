@@ -1,9 +1,11 @@
+import { StatusBarData } from "novadatainterface/status_bar_data";
 import { RunQuery } from "nova_ecs/arg_types";
 import { Optional } from "nova_ecs/optional";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Query } from "nova_ecs/query";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
+import * as PIXI from "pixi.js";
 import { DisabledComponent } from "../nova_plugin/disabled_component.js";
 import { DISCOVERY_ENTERED, DiscoveryLevel } from "../nova_plugin/discovery.js";
 import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
@@ -13,7 +15,8 @@ import { canJump, jumpRadiusFor } from "../nova_plugin/jump_readiness.js";
 import { PlanetDataComponent, PlanetTargetComponent } from "../nova_plugin/planet_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import { ShipPhysicsComponent } from "../nova_plugin/ship_plugin.js";
-import { navReadout } from "./status_bar_content.js";
+import { navReadout, NavReadout } from "./status_bar_content.js";
+import { NAV_HEADER_Y, NAV_VALUE_Y, StatusBarFonts } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 
 /**
@@ -33,6 +36,83 @@ import { StatusBarResource } from "./status_bar_resource.js";
  */
 export const DiscoveryLevelResource =
     new Resource<(systemId: string) => DiscoveryLevel>('DiscoveryLevel');
+
+/**
+ * The "Stellar Navigation" pane: a dim header and the destination /
+ * selected-stellar line beneath it, bright once a jump there would work.
+ */
+export class NavigationPane {
+    /** Per-build; undefined between an ïntf reload's teardown and rebuild. */
+    private texts?: { header: PIXI.Text, value: PIXI.Text };
+    private fonts?: StatusBarFonts;
+    private lastNav?: string;
+
+    build(parent: PIXI.Container, data: StatusBarData, fonts: StatusBarFonts) {
+        const nav = data.dataAreas.navigation;
+        const container = new PIXI.Container();
+        parent.addChild(container);
+        container.position.set(nav.position[0], nav.position[1]);
+
+        const header = new PIXI.Text("Stellar Navigation", fonts.dim);
+        header.anchor.x = 0.5;
+        header.anchor.y = 0;
+        header.position.x = nav.size[0] / 2;
+        header.position.y = NAV_HEADER_Y;
+        container.addChild(header);
+
+        const value = new PIXI.Text("No Destination", fonts.dim);
+        value.anchor.x = 0.5;
+        value.anchor.y = 0;
+        value.position.x = nav.size[0] / 2;
+        value.position.y = NAV_VALUE_Y;
+        container.addChild(value);
+
+        this.texts = { header, value };
+        this.fonts = fonts;
+    }
+
+    /**
+     * Destroys this build's texts (each owns a canvas texture) ahead of a
+     * rebuild; the container they sat in is destroyed by StatusBar.reload
+     * with the rest of the outgoing tree.
+     */
+    reset() {
+        for (const text of Object.values(this.texts ?? {})) {
+            text.destroy();
+        }
+        this.texts = undefined;
+        this.lastNav = undefined;
+    }
+
+    destroy() {
+        for (const text of Object.values(this.texts ?? {})) {
+            if (!text.destroyed) {
+                text.destroy();
+            }
+        }
+        this.texts = undefined;
+    }
+
+    drawNavigation(readout: NavReadout) {
+        if (!this.texts || !this.fonts) {
+            return;
+        }
+        // `dim` belongs in the memo key, not just the text: becoming
+        // able to jump changes ONLY the colour of an unchanged
+        // destination name, so a header+value key would memoize the
+        // restyle away and the readout would never brighten.
+        // (The separator was a stray NUL byte, which made this whole
+        // source file read as binary to grep and friends.)
+        const key = `${readout.header}|${readout.value}|${readout.dim}`;
+        if (key === this.lastNav) {
+            return;
+        }
+        this.lastNav = key;
+        this.texts.header.text = readout.header;
+        this.texts.value.text = readout.value;
+        this.texts.value.style = readout.dim ? this.fonts.dim : this.fonts.bright;
+    }
+}
 
 const PlanetNavQuery = new Query([PlanetDataComponent] as const);
 /** Exported for status_bar_navigation_test (the dim / in-flight rules). */
@@ -111,7 +191,7 @@ export const DrawStatusBarNavigation = new System({
                 })
                 : true);
 
-        statusBar.drawNavigation(navReadout(
+        statusBar.navigation.drawNavigation(navReadout(
             destinationName, stellarName, jumpReady, destinationExplored));
     }
 });

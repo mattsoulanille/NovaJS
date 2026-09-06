@@ -1,3 +1,45 @@
+import { StatusBarData } from "novadatainterface/status_bar_data";
+import * as PIXI from "pixi.js";
+
+/** The three text styles every pane draws with, from the ïntf resource. */
+export interface StatusBarFonts {
+    bright: PIXI.TextStyle;
+    dim: PIXI.TextStyle;
+    subtitle: PIXI.TextStyle;
+}
+
+/**
+ * Text sizes and colours come from the parsed ïntf resource
+ * (StatFontSize / SubtitleSize and the bright/dim text colours).
+ */
+export function statusBarFonts(data: StatusBarData): StatusBarFonts {
+    const fontFamily = 'Geneva';
+    const fontSize = data.fontSize || 12;
+    const subtitleSize = data.subtitleSize || 10;
+    const bright = new PIXI.TextStyle({
+        fontFamily,
+        fontSize,
+        align: 'center',
+        fill: data.colors.brightText,
+    });
+    const dim = new PIXI.TextStyle({
+        fontFamily,
+        fontSize,
+        align: 'center',
+        fill: data.colors.dimText,
+    });
+    // The ship-class subtitle is BRIGHT, not dim: "31d Model" under
+    // "Leviathan" is the same white as the name in in_space.png (its ink
+    // reads 765 on the probe's 0-765 scale, the dim grey reads 408).
+    const subtitle = new PIXI.TextStyle({
+        fontFamily,
+        fontSize: subtitleSize,
+        align: 'center',
+        fill: data.colors.brightText,
+    });
+    return { bright, dim, subtitle };
+}
+
 /**
  * Left edge (StatusBar-container x) of the debug-button stack (Add Enemy /
  * Give 1M Credits / Clear Legal Record). Pulled left of its old x=65 by about

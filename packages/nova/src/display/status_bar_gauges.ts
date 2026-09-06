@@ -1,7 +1,10 @@
+import { StatusBarData, StatusBarDataArea } from "novadatainterface/status_bar_data";
 import { Optional } from "nova_ecs/optional";
 import { System } from "nova_ecs/system";
-import { ArmorComponent, FuelComponent, ShieldComponent } from "../nova_plugin/health_plugin.js";
+import * as PIXI from "pixi.js";
+import { ArmorComponent, FuelComponent, FUEL_PER_JUMP, ShieldComponent } from "../nova_plugin/health_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
+import { Stat } from "../nova_plugin/stat.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 
 /**
@@ -17,11 +20,64 @@ export function statFullness({ current, max }: { current: number, max: number })
     return Math.max(0, current / max);
 }
 
+/**
+ * The shield / armor / fuel bars: one Graphics, redrawn every frame from
+ * the ïntf's three data areas and bar colours.
+ */
+export class GaugesPane {
+    /** Class-owned, so it survives an ïntf reload (StatusBar.reload keeps it). */
+    readonly graphics = new PIXI.Graphics();
+
+    constructor(private data: StatusBarData) { }
+
+    /** A different ïntf: new data areas and colours from the next draw on. */
+    reset(data: StatusBarData) {
+        this.data = data;
+    }
+
+    build(parent: PIXI.Container) {
+        parent.addChild(this.graphics);
+    }
+
+    private drawLine(dataArea: StatusBarDataArea, color: number, fullness: number) {
+        var pos = [dataArea.position[0], dataArea.position[1]];
+        var size = [dataArea.size[0], dataArea.size[1]];
+        pos[1] += size[1] / 2;
+
+        this.graphics.lineStyle(size[1], color);
+        this.graphics.moveTo(pos[0], pos[1]);
+        this.graphics.lineTo(pos[0] + size[0] * fullness, pos[1]);
+    }
+
+    drawStats(shield: Stat, armor: Stat,
+        fuel?: { current: number, max: number }) {
+        this.graphics.clear();
+
+        this.drawLine(this.data.dataAreas.shield,
+            this.data.colors.shield, statFullness(shield));
+
+        this.drawLine(this.data.dataAreas.armor,
+            this.data.colors.armor, statFullness(armor));
+
+        if (fuel && fuel.max > 0) {
+            // Partial-jump fuel in the dim color, with the whole jumps'
+            // worth (100 units each) drawn over it in the full color.
+            const fuelFullness = statFullness(fuel);
+            this.drawLine(this.data.dataAreas.fuel,
+                this.data.colors.fuelPartial, fuelFullness);
+            const fullJumps = Math.max(0, Math.floor(
+                fuel.current / FUEL_PER_JUMP) * FUEL_PER_JUMP / fuel.max);
+            this.drawLine(this.data.dataAreas.fuel,
+                this.data.colors.fuelFull, fullJumps);
+        }
+    }
+}
+
 export const DrawStatusBarStats = new System({
     name: 'DrawStatusBarStats',
     args: [StatusBarResource, ShieldComponent, ArmorComponent,
         Optional(FuelComponent), PlayerShipSelector] as const,
     step(statusBar, shield, armor, fuel) {
-        statusBar.drawStats(shield, armor, fuel);
+        statusBar.gauges.drawStats(shield, armor, fuel);
     }
 })

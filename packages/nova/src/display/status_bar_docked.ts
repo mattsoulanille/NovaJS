@@ -38,7 +38,7 @@ export const DrawDockedStatus = new System({
         const armor = entity.components.get(ArmorComponent);
         if (shield && armor) {
             const fuel = live.fuel ?? entity.components.get(FuelComponent);
-            statusBar.drawStats(shield, armor, fuel ?? undefined);
+            statusBar.gauges.drawStats(shield, armor, fuel ?? undefined);
         }
 
         // Credits + cargo: the open venue's working values win over the
@@ -72,6 +72,6 @@ export const DrawDockedStatus = new System({
             ]);
         const { free, lines, special } =
             cargoDisplayOf(fleet.cargo, fleet.capacity, gameData);
-        statusBar.drawCargo(free, credits, lines, special);
+        statusBar.cargo.drawCargo(free, credits, lines, special);
     }
 });

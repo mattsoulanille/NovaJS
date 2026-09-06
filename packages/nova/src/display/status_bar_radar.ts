@@ -1,16 +1,20 @@
+import { PlanetData } from "novadatainterface/planet_data";
+import { StatusBarData } from "novadatainterface/status_bar_data";
 import { GetEntity, UUID } from "nova_ecs/arg_types";
 import { Component } from "nova_ecs/component";
-import { wrapNearestDelta } from "nova_ecs/datatypes/position";
+import { Position, wrapNearestDelta } from "nova_ecs/datatypes/position";
+import { Vector } from "nova_ecs/datatypes/vector";
 import { Optional } from "nova_ecs/optional";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MovementState, MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
+import * as PIXI from "pixi.js";
 import { CloakActiveComponent, CloakActiveState, CloakCapability, CloakComponent, deriveCloakScanner } from "../nova_plugin/cloak_plugin.js";
 import { DisabledComponent } from "../nova_plugin/disabled_component.js";
 import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 import { GovtComponent } from "../nova_plugin/govt_component.js";
-import { deriveIff, planetBlipColor, planetDisposition, shipBlipColor, shipDisposition } from "../nova_plugin/iff_plugin.js";
+import { deriveIff, planetBlipColor, planetDisposition, PLANET_FLAT_COLOR, shipBlipColor, shipDisposition } from "../nova_plugin/iff_plugin.js";
 import { landable } from "../nova_plugin/landable.js";
 import { ActiveRanksComponent } from "../nova_plugin/ncb_plugin.js";
 import { isPacifiedToward, NpcComponent } from "../nova_plugin/npc_ai_plugin.js";
@@ -34,12 +38,234 @@ const CENTER_ARROW_BLINK_MS = 700;
  * exact rate isn't recorded in the reference notes.
  */
 export const TARGET_FLASH_MS = 800;
-export const TARGET_FLASH_COLOR = 0xffffff;
-export const TARGET_FLASH_SIZE = 2;
+const TARGET_FLASH_COLOR = 0xffffff;
+const TARGET_FLASH_SIZE = 2;
 
 /** Whether the target blip is in the ON half of its flash at `time`. */
 export function targetFlashOn(time: number): boolean {
     return (time % TARGET_FLASH_MS) < TARGET_FLASH_MS / 2;
+}
+
+/**
+ * The radar: the player's bright dot, ship and stellar blips, the blinking
+ * system-centre arrow, and — under sensor interference — ppat static.
+ */
+export class RadarPane {
+    private radarScale = new Vector(6000, 6000);
+    /** Blip graphics; class-owned, so it survives an ïntf reload. */
+    readonly graphics = new PIXI.Graphics();
+    /** How often DrawRadar redraws the blips, in display ms. */
+    period = 200;
+
+    /**
+     * The system's sensor interference (0-100), from the sÿst resource. Zero
+     * is a clear radar; 100 is a complete sensor blackout. Static per system,
+     * so it is read display-side and never affects the simulation.
+     */
+    systemInterference = 0;
+    /**
+     * Interference removed by outfits (the "Radar Interference" outfit
+     * modifier, EVN Bible / ResForge outf case 24). A radar-interference
+     * outfit hook can raise this to clear up the radar; the effective
+     * interference is clamped so it never drops below zero.
+     */
+    interferenceReduction = 0;
+    /**
+     * The sensor-static pixel patterns (the ppat resources from Nova
+     * Graphics 1). Each radar tick is replaced wholesale by one of these,
+     * tiled, with probability interference / 100 — matching the original
+     * engine's static, rather than per-blip noise.
+     */
+    staticTextures: PIXI.Texture[] = [];
+    /** Per-build: sized to the ïntf's radar area. */
+    private staticSprite?: PIXI.TilingSprite;
+
+    constructor(private data: StatusBarData) { }
+
+    /** The effective interference after outfit reductions, clamped 0-100. */
+    private get interference(): number {
+        return Math.max(0, Math.min(100,
+            this.systemInterference - this.interferenceReduction));
+    }
+
+    /**
+     * Half the radar's world span on each axis: a stellar within this of the
+     * player shows as a blip. Used to decide when to draw the system-center
+     * arrow (when nothing stellar is on the radar).
+     */
+    get range(): Vector {
+        return this.radarScale.scale(0.5);
+    }
+
+    /**
+     * A different ïntf: new data area and colours from the next draw on.
+     * The static sprite was sized for the old area and is destroyed by
+     * StatusBar.reload with the rest of the outgoing tree.
+     */
+    reset(data: StatusBarData) {
+        this.data = data;
+        this.staticSprite = undefined;
+    }
+
+    build(parent: PIXI.Container) {
+        const radar = this.data.dataAreas.radar;
+        [this.graphics.position.x, this.graphics.position.y] = radar.position;
+        parent.addChild(this.graphics);
+        this.staticSprite = new PIXI.TilingSprite(PIXI.Texture.EMPTY,
+            radar.size[0], radar.size[1]);
+        [this.staticSprite.position.x, this.staticSprite.position.y] =
+            radar.position;
+        this.staticSprite.visible = false;
+        parent.addChild(this.staticSprite);
+    }
+
+    drawRadar(source: Position,
+        ships: Iterable<readonly [string, MovementState, ...unknown[]]>,
+        planets: Iterable<readonly [string, MovementState, PlanetData,
+            ...unknown[]]>,
+        /**
+         * Per-ship blip colour by uuid. When the map is absent or a ship is
+         * missing from it, that blip uses the flat dimRadar colour. DrawRadar
+         * fills it in for two reasons (iff_plugin's shipBlipColor): a DISABLED
+         * ship is always grey, and — when the player owns an IFF outfit
+         * (ModType 14) — every ship takes its disposition's colour (EVN Bible:
+         * an IFF outfit overrides the radar colours).
+         */
+        shipColors?: ReadonlyMap<string, number>,
+        /**
+         * When set, the toroidal-nearest direction from the player to the
+         * system centre. The radar draws a blinking white arrow at its edge
+         * pointing that way — the original's cue that you are so far out no
+         * stellar shows on the radar. The DrawRadar system passes this only
+         * while the arrow should be visible (nothing stellar on radar, and the
+         * blink is in its ON phase); otherwise it is omitted.
+         */
+        centerArrow?: { x: number, y: number } | null,
+        /**
+         * The uuid of the ship the player has targeted, passed only on the
+         * ON phase of its blink: that ship's blip is drawn white and larger
+         * over its normal colour, so the selected target flashes on the
+         * radar (Matthew's playtest, 2026-08-15 — the original's radar
+         * flashes the selected target white).
+         */
+        flashTarget?: string | null,
+        /**
+         * Per-stellar blip colour by uuid. Stellars are yellow
+         * (PLANET_FLAT_COLOR, measured off the original captures) until the
+         * player owns an IFF outfit, at which point DrawRadar fills this in
+         * with the landing-clearance palette (iff_plugin's planetBlipColor) —
+         * the same rule ship blips follow. Missing entries fall back to the
+         * flat colour.
+         */
+        planetColors?: ReadonlyMap<string, number>) {
+        this.graphics.clear();
+
+        // Interference (0-100) makes sensors unreliable: on each radar tick,
+        // with probability interference / 100, the whole radar is replaced by
+        // one of the ppat static patterns, tiled — the original engine's
+        // behavior. At 100 the radar is pure static (a complete sensor
+        // blackout); otherwise this tick draws normally.
+        if (this.drawSensorStatic()) {
+            return;
+        }
+
+        this.drawDot(source, this.data.colors.brightRadar, source);
+
+        for (const [uuid, { position }] of ships) {
+            const color = shipColors?.get(uuid)
+                ?? this.data.colors.dimRadar;
+            if (uuid === flashTarget) {
+                this.drawDot(position, TARGET_FLASH_COLOR, source,
+                    TARGET_FLASH_SIZE);
+                continue;
+            }
+            this.drawDot(position, color, source);
+        }
+
+        for (const [uuid, { position }] of planets) {
+            this.drawDot(position,
+                planetColors?.get(uuid) ?? PLANET_FLAT_COLOR, source, 2);
+        }
+
+        if (centerArrow) {
+            this.drawCenterArrow(centerArrow.x, centerArrow.y);
+        }
+    }
+
+    /**
+     * Draws a white arrowhead at the radar's edge pointing along (dx, dy) —
+     * toward the system centre. Called only when the DrawRadar system has
+     * decided the arrow should show this tick.
+     */
+    private drawCenterArrow(dx: number, dy: number) {
+        const radarSize = new Vector(...this.data.dataAreas.radar.size);
+        const len = Math.hypot(dx, dy);
+        if (len === 0) {
+            return;
+        }
+        const nx = dx / len;
+        const ny = dy / len;
+        const cx = radarSize.x / 2;
+        const cy = radarSize.y / 2;
+        // Sit the arrowhead just inside the radar's edge (min half-dimension).
+        const edge = Math.min(radarSize.x, radarSize.y) / 2;
+        const tipR = edge * 0.95;
+        const tipX = cx + nx * tipR;
+        const tipY = cy + ny * tipR;
+        // Arrowhead triangle: a tip along (nx, ny) and a base behind it.
+        const length = 8;
+        const halfWidth = 4;
+        const baseX = cx + nx * (tipR - length);
+        const baseY = cy + ny * (tipR - length);
+        const px = -ny;
+        const py = nx;
+        this.graphics.beginFill(0xFFFFFF);
+        this.graphics.moveTo(tipX, tipY);
+        this.graphics.lineTo(baseX + px * halfWidth, baseY + py * halfWidth);
+        this.graphics.lineTo(baseX - px * halfWidth, baseY - py * halfWidth);
+        this.graphics.lineTo(tipX, tipY);
+        this.graphics.endFill();
+    }
+
+    /**
+     * Probabilistically replaces this radar tick with static. Returns whether
+     * it did, in which case no blips should be drawn.
+     */
+    private drawSensorStatic(): boolean {
+        if (!this.staticSprite || this.staticTextures.length === 0 ||
+            Math.random() * 100 >= this.interference) {
+            if (this.staticSprite) {
+                this.staticSprite.visible = false;
+            }
+            return false;
+        }
+        this.staticSprite.texture = this.staticTextures[
+            Math.floor(Math.random() * this.staticTextures.length)];
+        this.staticSprite.visible = true;
+        return true;
+    }
+
+    private drawDot(dotPos: Position, color: number, source = new Position(0, 0), size = 1) {
+        // draws a dot from nova position. The offset from the player uses the
+        // toroidal-nearest delta so an object just across the loop boundary
+        // still blips near the player instead of falling off the far edge.
+        const radarSize = new Vector(...this.data.dataAreas.radar.size);
+        const delta = new Vector(wrapNearestDelta(dotPos.x - source.x),
+            wrapNearestDelta(dotPos.y - source.y));
+        const pixiPos = delta
+            .times(radarSize).div(this.radarScale).add(radarSize.scale(0.5));
+
+        if (pixiPos.x <= radarSize.x && pixiPos.x >= 0 &&
+            pixiPos.y <= radarSize.y && pixiPos.y >= 0) {
+            // TODO: Make this work with any sizes
+            this.graphics.moveTo(pixiPos.x, pixiPos.y);
+            this.graphics.beginFill(color);
+            this.graphics.lineTo(pixiPos.x + size, pixiPos.y);
+            this.graphics.lineTo(pixiPos.x + size, pixiPos.y + size);
+            this.graphics.lineTo(pixiPos.x, pixiPos.y + size);
+            this.graphics.endFill()
+        }
+    }
 }
 
 const RadarTime = new Component<{ lastTime: number }>('RadarTime');
@@ -81,7 +307,7 @@ export const DrawRadar = new System({
             radarTime = { lastTime: 0 };
             entity.components.set(RadarTime, radarTime);
         }
-        if (time - radarTime.lastTime > statusBar.radarPeriod) {
+        if (time - radarTime.lastTime > statusBar.radar.period) {
             // Hide ships that are actively cloaked with a radar-hiding
             // cloak (bit 0x0002 "visible on radar" clear), unless the
             // player has a cloak scanner that reveals cloaked ships on
@@ -186,7 +412,7 @@ export const DrawRadar = new System({
             // "no stellar within the radar's range" (radarScale/2 on each
             // axis) — i.e. nothing stellar is on the radar. Blinks on a
             // wall-clock cadence, like the running lights.
-            const range = statusBar.radarRange;
+            const range = statusBar.radar.range;
             let stellarOnRadar = false;
             for (const [, { position: planetPos }] of planets) {
                 if (Math.abs(wrapNearestDelta(planetPos.x - position.x)) <= range.x
@@ -205,7 +431,7 @@ export const DrawRadar = new System({
                 : null;
             // The selected target flashes white on the radar.
             const targetUuid = entity.components.get(TargetComponent)?.target;
-            statusBar.drawRadar(position, visibleShips, planets, shipColors,
+            statusBar.radar.drawRadar(position, visibleShips, planets, shipColors,
                 centerArrow,
                 targetUuid && targetFlashOn(time) ? targetUuid : null,
                 planetColors);
@@ -231,7 +457,7 @@ export const DrawStatusBarInterference = new System({
         const reduction = sumOutfitField(
             outfits, gameData, o => o.interferenceReduction);
         if (reduction !== undefined) {
-            statusBar.interferenceReduction = reduction;
+            statusBar.radar.interferenceReduction = reduction;
         }
     },
 });
