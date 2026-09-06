@@ -58,21 +58,46 @@ describe("FactoryQueue", function() {
         expect(count).toEqual(3);
     });
 
-    // TODO: Fix this test. The test is broken.
-    xit("builds items at the same time", async function() {
-        const c = new FactoryQueue(buildFunction, 50);
+    it("builds items at the same time", async function() {
+        // The old version of this spec asserted the exact dequeue order
+        // (value i + 2), which is not what a FactoryQueue promises: the
+        // 50 prebuilt items come out first, and the item the first empty
+        // dequeue() built synchronously is enqueued after the whole batch.
+        // What it promises is that buildToCount builds its deficit
+        // concurrently, and that dequeueGuaranteed hands out every item
+        // exactly once.
+        const minimum = 50;
         const count = 10000;
+        let built = 0;
+        let inFlight = 0;
+        let maxInFlight = 0;
+        async function concurrentBuild() {
+            built += 1;
+            const myCount = built;
+            inFlight += 1;
+            maxInFlight = Math.max(maxInFlight, inFlight);
+            await sleep(0);
+            inFlight -= 1;
+            return new NumberHolder(myCount);
+        }
+
+        const c = new FactoryQueue(concurrentBuild, minimum);
         const promise = c.buildToCount(count);
         const items: NumberHolder[] = Array(count);
-
         for (let i = 0; i < count; i++) {
             items[i] = await c.dequeueGuaranteed();
         }
         await promise;
 
-        for (let i = 0; i < count; i++) {
-            expect(items[i].value).toBe(i + 2);
-        }
+        // The deficit after the prebuild was built in one concurrent batch
+        // (plus, depending on timer ordering, the stopgap item the first
+        // empty dequeue() built synchronously, hence >=).
+        expect(maxInFlight).toBeGreaterThanOrEqual(count - minimum);
+        // Every item was handed out once, and nothing was invented.
+        const values = items.map(item => item.value);
+        expect(new Set(values).size).toBe(count);
+        expect(Math.min(...values)).toBeGreaterThanOrEqual(1);
+        expect(Math.max(...values)).toBeLessThanOrEqual(built);
     });
 });
 

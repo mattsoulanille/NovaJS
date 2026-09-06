@@ -46,12 +46,17 @@ describe("Gettable", () => {
         expect(g.getCached("hello")).toEqual("hellocats");
     });
 
-    it("getOrFail requests the resource if not cached", async () => {
-        // TODO: This test is flaky and implementation-dependant
-        const spy = spyOn(g, "get");
-        spy.and.callThrough();
-        expect(g.getCached("hello")).toBeUndefined();
-        expect(spy).toHaveBeenCalledWith("hello");
+    it("getCached starts a background load of an uncached id", async () => {
+        // Observed through the getter, not by spying on `get`: the miss
+        // asks the getter once, and a later `get` reuses that load rather
+        // than starting a second one.
+        const getter = jasmine.createSpy("getter").and.callFake(getFunc);
+        const g2 = new Gettable<string>(getter, warn);
+        expect(g2.getCached("hello")).toBeUndefined();
+        expect(getter).toHaveBeenCalledOnceWith("hello", 0);
+        await expectAsync(g2.get("hello")).toBeResolvedTo("hellocats");
+        expect(getter).toHaveBeenCalledTimes(1);
+        expect(g2.getCached("hello")).toEqual("hellocats");
     });
 });
 
