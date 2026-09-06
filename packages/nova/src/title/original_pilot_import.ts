@@ -49,6 +49,7 @@ import {
 } from '../nova_plugin/discovery.js';
 import { ActiveMission } from '../nova_plugin/player_state_plugin.js';
 import { SaveData } from '../nova_plugin/save_game.js';
+import { saveDefaults } from '../nova_plugin/save_migrations.js';
 import { PilotProfile } from './client_prefs.js';
 
 /** Arrays in a pilot file are indexed by resource id - 128. */
@@ -304,7 +305,11 @@ export function convertOriginalPilot(pilot: PilotData,
         }
     });
 
+    // The fields the file has nothing for take the save's own defaults:
+    // no cron progress (crons are NovaJS's own record), no escorts (not
+    // imported; see the note above), no auto-abort squad pending.
     const save: SaveData = {
+        ...saveDefaults(),
         ship: shipId,
         outfits,
         system,
@@ -316,7 +321,7 @@ export function convertOriginalPilot(pilot: PilotData,
         cargo,
         reputations: [...records],
         combatRatings: [['kills', kills]],
-        ...(discovery.length > 0 ? { discovery } : {}),
+        discovery,
     };
 
     const baseName = fileName.replace(/\.[^.]*$/, '').trim();

@@ -5,7 +5,7 @@ import {
 } from 'novaparse/pilot/synthetic_pilot';
 import { simpleCrypt } from 'novaparse/pilot/simple_crypt';
 import { dayNumber } from '../nova_plugin/calendar.js';
-import { decodeSave } from '../nova_plugin/save_game.js';
+import { decodeSave, SAVE_VERSION } from '../nova_plugin/save_game.js';
 import { PrefsStorage } from './client_prefs.js';
 import {
     convertOriginalPilot, convertOriginalPilotBytes, looksLikeOriginalPilot,
@@ -88,7 +88,7 @@ describe('original pilot import', () => {
             strict: false,
         });
         // And it is a save this build accepts.
-        expect(decodeSave(JSON.stringify({ version: 2, data: save })))
+        expect(decodeSave(JSON.stringify({ version: SAVE_VERSION, data: save })))
             .toBeDefined();
     });
 
@@ -108,7 +108,7 @@ describe('original pilot import', () => {
             expect(save.date).toEqual({ year: 1183, month: 12, day: 31 });
             expect(notes.some(n => /credits.*out of range/.test(n))).toBeTrue();
             expect(notes.some(n => /date.*clamped/.test(n))).toBeTrue();
-            expect(decodeSave(JSON.stringify({ version: 2, data: save })))
+            expect(decodeSave(JSON.stringify({ version: SAVE_VERSION, data: save })))
                 .toBeDefined();
 
             // In-range values pass through untouched, with no note.
@@ -130,7 +130,7 @@ describe('original pilot import', () => {
         expect(save.discovery)
             .toEqual([[`nova:${S.exploredSystem + 128}`, 2]]);
         // And it is still a save this build accepts (additive field).
-        expect(decodeSave(JSON.stringify({ version: 2, data: save })))
+        expect(decodeSave(JSON.stringify({ version: SAVE_VERSION, data: save })))
             .toBeDefined();
     });
 

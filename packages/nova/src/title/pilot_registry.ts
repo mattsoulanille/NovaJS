@@ -27,7 +27,7 @@ import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 import { discoveryKeyFor } from '../nova_plugin/discovery_store.js';
 import {
-    decodeSave, encodeSave, quarantineKeyFor, SaveEnvelope, SAVE_KEY,
+    decodeSave, encodeSave, quarantineKeyFor, RawSaveEnvelope, SAVE_KEY,
     setActiveSaveKey,
 } from '../nova_plugin/save_game.js';
 import {
@@ -140,8 +140,14 @@ export const PilotFile = t.intersection([
         profile: PilotProfileCodec,
         controls: ControlsOverrideCodec,
         settings: t.record(t.string, t.union([t.boolean, t.string])),
-        /** The pilot's SaveEnvelope, or null for a pilot that never played. */
-        save: t.union([SaveEnvelope, t.null]),
+        /**
+         * The pilot's save envelope, or null for a pilot that never
+         * played. RAW at this level — a version and an unknown payload —
+         * because the file may hold any version save_game can still read;
+         * importPilot runs it through decodeSave, which migrates and
+         * validates it, before anything is written.
+         */
+        save: t.union([RawSaveEnvelope, t.null]),
         /**
          * The pilot's checkpoint history (pilot_history.ts), added in a
          * later build. ADDITIVE and unvalidated at this level: an older

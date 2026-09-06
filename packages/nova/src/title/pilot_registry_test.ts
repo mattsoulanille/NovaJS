@@ -4,6 +4,7 @@ import {
     encodeSave, getActiveSaveKey, quarantineKeyFor, resetSave, SAVE_KEY,
     SaveData, setActiveSaveKey,
 } from '../nova_plugin/save_game.js';
+import { saveDefaults } from '../nova_plugin/save_migrations.js';
 import {
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, PilotProfile, PrefsStorage,
 } from './client_prefs.js';
@@ -30,6 +31,7 @@ class MemoryStorage implements PrefsStorage {
 }
 
 const SAMPLE_SAVE: SaveData = {
+    ...saveDefaults(),
     ship: 'nova:128',
     outfits: [['nova:200', 2]],
     system: 'nova:130',
@@ -38,6 +40,7 @@ const SAMPLE_SAVE: SaveData = {
 
 /** A second, distinguishable save payload. */
 const OTHER_SAVE: SaveData = {
+    ...saveDefaults(),
     ship: 'nova:129',
     outfits: [],
     system: 'nova:131',

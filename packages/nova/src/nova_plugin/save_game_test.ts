@@ -67,6 +67,7 @@ import {
     writeSave,
 } from './save_game.js';
 import { discoveryLevel, markDiscovered } from './discovery_store.js';
+import { saveDefaults } from './save_migrations.js';
 import { ShipComponent } from './ship_plugin.js';
 import {
     ControlBitNamespaces, FIRST_PRIVATE_PHYSICAL_CONTROL_BIT,
@@ -88,11 +89,23 @@ class FakeStorage implements SaveStorage {
     }
 }
 
-const SAMPLE: SaveData = {
+/**
+ * Byte for byte the payload the FIRST build (SAVE_VERSION 1, 2026-07-07)
+ * wrote: identity only. The legacy specs below feed this in under old
+ * version numbers; save_migrations_test.ts pins every later shape.
+ */
+const LEGACY_MINIMAL = {
     ship: 'nova:164',
-    outfits: [['nova:200', 1], ['nova:201', 4]],
+    outfits: [['nova:200', 1], ['nova:201', 4]] as [string, number][],
     system: 'nova:130',
 };
+
+/**
+ * The same pilot in the CURRENT shape: what LEGACY_MINIMAL migrates to,
+ * and what extractSaveData writes for an entity carrying nothing but a
+ * ship — the defaults an older build used to fill in after restore.
+ */
+const SAMPLE: SaveData = { ...saveDefaults(), ...LEGACY_MINIMAL };
 
 describe('save_game schema', () => {
     // extractSaveData reads the client's discovery store, so a system
@@ -133,7 +146,9 @@ describe('save_game schema', () => {
         const entity = new Entity('player');
         entity.components.set(ShipComponent, { id: 'nova:164' });
         const data = extractSaveData(entity, 'nova:131');
-        expect(data).toEqual({ ship: 'nova:164', outfits: [], system: 'nova:131' });
+        expect(data).toEqual({
+            ...saveDefaults(), ship: 'nova:164', outfits: [], system: 'nova:131',
+        });
     });
 
     it('returns undefined when the entity has no ship component', () => {
@@ -245,13 +260,15 @@ describe('save_game schema', () => {
                 .not.toBe(decoded.autoAbortShips!);
 
             // MissionSession.commit leaves an EMPTIED component behind once
-            // one has existed; that writes no field, so a pilot with nothing
-            // queued writes exactly the payload this build wrote before.
+            // one has existed; that writes the empty list an entity with no
+            // component writes, so a pilot with nothing queued writes
+            // exactly the payload a batchless pilot does.
             entity.components.set(PendingAutoAbortShipsComponent, []);
             const emptied = extractSaveData(entity, 'nova:130')!;
-            expect(emptied.autoAbortShips).toBeUndefined();
+            expect(emptied.autoAbortShips).toEqual([]);
             expect(emptied).toEqual({
-                ship: 'nova:164', outfits: [], system: 'nova:130',
+                ...saveDefaults(), ship: 'nova:164', outfits: [],
+                system: 'nova:130',
             });
             const bare = new Entity('bare');
             restorePlayerState(bare, decodeSave(encodeSave(emptied))!);
@@ -293,20 +310,23 @@ describe('save_game schema', () => {
 
     it('decodes a save written before ranks existed, and one with them',
         () => {
-            // SaveData.ranks is a t.partial addition: a pilot file written by
-            // an older build has no such key and must still decode, reading
-            // as "no active ranks" — which is exactly the state a pre-rank
-            // pilot was in. SAVE_VERSION deliberately does not move.
-            const legacy = { ...SAMPLE, credits: 1000 };
-            const decoded = decodeSave(encodeSave(legacy))!;
-            expect(decoded.ranks).toBeUndefined();
+            // A v2 pilot file written before `ranks` existed has no such
+            // key. The v2 -> v3 migration reads that as "no active ranks"
+            // — exactly the state a pre-rank pilot was in — and the
+            // restore commits that empty set, as ensurePlayerStateComponents
+            // used to after the old restore had skipped the absent field.
+            const legacy = JSON.stringify({
+                version: 2, data: { ...LEGACY_MINIMAL, credits: 1000 },
+            });
+            const decoded = decodeSave(legacy)!;
+            expect(decoded.ranks).toEqual([]);
             const entity = new Entity('restored');
             restorePlayerState(entity, decoded);
             expect(entity.components.get(ActiveRanksComponent))
-                .toBeUndefined();
+                .toEqual(new Set());
 
             const withRanks = decodeSave(encodeSave(
-                { ...legacy, ranks: ['nova:147'] }))!;
+                { ...decoded, ranks: ['nova:147'] }))!;
             expect(withRanks.ranks).toEqual(['nova:147']);
             const ranked = new Entity('ranked');
             restorePlayerState(ranked, withRanks);
@@ -536,17 +556,20 @@ describe('save_game schema', () => {
     });
 
     it('loads a v1 save written before player state existed', () => {
-        // Exactly what an old build wrote: only ship/outfits/system.
+        // Exactly what the first build wrote: only ship/outfits/system.
+        // The migrations materialise the defaults that build's readers
+        // (ensurePlayerStateComponents, after a restore that skipped every
+        // absent field) filled in, so restoring gives the same pilot.
         const legacy = JSON.stringify({
-            version: SAVE_VERSION,
-            data: SAMPLE,
+            version: 1,
+            data: LEGACY_MINIMAL,
         });
         const decoded = decodeSave(legacy);
         expect(decoded).toEqual(SAMPLE);
-        // Restoring applies nothing (fields absent) and doesn't throw.
         const entity = new Entity('restored');
         restorePlayerState(entity, decoded!);
-        expect(entity.components.get(CreditsComponent)).toBeUndefined();
+        expect(entity.components.get(CreditsComponent))
+            .toEqual({ credits: 0 });
     });
 });
 
@@ -982,8 +1005,10 @@ describe('save_game escorts', () => {
 
     it('reads a save with no escorts field as zero escorts', () => {
         const { serializer } = fixture;
-        const decoded = decodeSave(encodeSave(SAMPLE))!;
-        expect(decoded.escorts).toBeUndefined();
+        // A v2 save written by an escortless pilot left the field out.
+        const decoded = decodeSave(JSON.stringify(
+            { version: 2, data: LEGACY_MINIMAL }))!;
+        expect(decoded.escorts).toEqual([]);
         expect(restoreSavedEscorts(decoded.escorts, serializer)).toEqual([]);
     });
 });
@@ -1148,22 +1173,22 @@ describe('savedFleetArmament', () => {
 describe('save_game escort version skew', () => {
     it('loads a v1 save (written before escorts existed) with no escorts',
         () => {
-            // Byte for byte what the previous build wrote.
+            // Byte for byte what the first build wrote.
             const v1 = JSON.stringify({
                 version: MIN_READABLE_SAVE_VERSION,
-                data: SAMPLE,
+                data: LEGACY_MINIMAL,
             });
             expect(MIN_READABLE_SAVE_VERSION).toBeLessThan(SAVE_VERSION);
             const decoded = decodeSave(v1);
             expect(decoded).toEqual(SAMPLE);
-            expect(decoded!.escorts).toBeUndefined();
+            expect(decoded!.escorts).toEqual([]);
         });
 
     it('does not quarantine a v1 save', () => {
         const storage = new FakeStorage();
         storage.setItem(SAVE_KEY, JSON.stringify({
             version: MIN_READABLE_SAVE_VERSION,
-            data: SAMPLE,
+            data: LEGACY_MINIMAL,
         }));
         expect(loadSave(storage)).toEqual(SAMPLE);
         expect(storage.getItem(SAVE_QUARANTINE_KEY)).toBeNull();
@@ -1237,13 +1262,13 @@ describe('save_game discovery', () => {
     });
 
     it('reads a save written before discovery existed', () => {
-        // Purely additive: the field's absence is a pilot who knows
-        // nothing, which is exactly what a pre-discovery save meant.
+        // The field's absence is a pilot who knows nothing, which is
+        // exactly what a pre-discovery save meant; the migration says so.
         const decoded = decodeSave(JSON.stringify({
-            version: MIN_READABLE_SAVE_VERSION, data: SAMPLE,
+            version: MIN_READABLE_SAVE_VERSION, data: LEGACY_MINIMAL,
         }));
         expect(decoded).toBeDefined();
-        expect(decoded!.discovery).toBeUndefined();
+        expect(decoded!.discovery).toEqual([]);
     });
 
     it('restores a save\'s discovery into the live store', () => {
