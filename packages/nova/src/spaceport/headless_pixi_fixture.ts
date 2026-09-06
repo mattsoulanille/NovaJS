@@ -73,6 +73,8 @@ function stubContext(): CanvasRenderingContext2D {
             properties.set(String(key), value);
             return true;
         },
+        // cast: a Proxy that answers every member is the whole point of
+        // the stub; no declared type describes "anything PIXI asks for".
     }) as unknown as CanvasRenderingContext2D;
 }
 
@@ -107,6 +109,9 @@ export function installHeadlessPixi() {
     globals['HTMLCanvasElement'] ??= StubCanvas;
     PIXI.settings.ADAPTER = {
         ...PIXI.settings.ADAPTER,
+        // cast (both): the adapter is typed against the DOM classes, and
+        // StubCanvas deliberately implements only the members PIXI.Text
+        // reaches, not HTMLCanvasElement's hundreds.
         createCanvas: (width?: number, height?: number) =>
             new StubCanvas(width ?? 1, height ?? 1) as unknown as
             HTMLCanvasElement,

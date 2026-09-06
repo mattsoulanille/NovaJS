@@ -178,6 +178,8 @@ void main(void) {
  * which TypeScript 5.7+ no longer accepts a typed array for (ArrayBuffer
  * grew `resizable` / `transfer` / ... members). A typed array is exactly
  * what PIXI wants at runtime, so the cast is confined to this helper.
+ *
+ * cast: PIXI 7's IArrayBuffer typing (see above); the one place it lives.
  */
 function pixiBuffer(data: Float32Array | Uint16Array,
     isStatic: boolean, index: boolean): PIXI.Buffer {
