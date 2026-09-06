@@ -43,17 +43,20 @@ export function Provide<Data, Args extends readonly ArgTypes[]>({ name, provided
 
 // Keeps track of whether entity change events are being re-emitted into
 // the world.
-// TODO: Should this be moved to World and always happen?
 const ChangeEventsSubscription =
     new Resource<SyncSubscription>('ChangeEventsSubscription');
 
 export const ProvidePlugin: Plugin = {
     name: 'ProvidePlugin',
     build: (world) => {
-        // Subscribe to change events of components on entities.
-        // TODO: This change detection only detects when a component is
-        // reassigned, not when it's modified (no deep change detection).
-        // Is this useful in its current state?
+        // Subscribe to change events of components on entities. This
+        // only fires when a component is REASSIGNED (components.set), not
+        // when its data is mutated in place, so a provider's `update`
+        // dependencies re-derive on reassignment only. Callers that
+        // mutate in place and need a re-derive must delete or reassign
+        // the provided component themselves (spaceport.ts after the
+        // outfitter, fire_weapon_plugin WeaponsComponentProvider); the
+        // tracker issue on Provide re-derivation covers doing better.
         if (!world.resources.has(ChangeEventsSubscription)) {
             const unsubscribe = world.entities.events.changeComponent.subscribe(
                 ([uuid, _entity, component]) => {

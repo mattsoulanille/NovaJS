@@ -89,7 +89,10 @@ export function defaultWeaponLocalState(): WeaponLocalState {
         exitIndex: 0,
     };
 }
-// TODO: This doesn't update if the set or count of weapons changes.
+// Tracker issue: the local weapon state map is only rebuilt when
+// WeaponsStateComponent is REASSIGNED (Provide change detection); an
+// in-place change to the set or count of weapons leaves it stale. See
+// bay_plugin.ts for why consumeAmmo deliberately relies on that.
 export const WeaponsComponentProvider = Provide({
     name: "WeaponsComponentProvider",
     provided: WeaponsComponent,

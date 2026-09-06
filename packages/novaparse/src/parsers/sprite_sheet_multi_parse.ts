@@ -167,7 +167,6 @@ function makeVisibleArray(mask: Mask): Array<[number, number]> {
 function makeConvexHull(mask: Mask): ConvexHull {
     // No concavity. Convex hull.
     var visibleArray = makeVisibleArray(mask);
-    // TODO: Maybe replace this with rust's fast convex hull
     var hullWithRepeat = hull(visibleArray, Infinity) as ConvexHull;
     // If the hull is empty, return the default conved hull instead.
     if (hullWithRepeat.length === 0 || hullWithRepeat[0] === undefined) {

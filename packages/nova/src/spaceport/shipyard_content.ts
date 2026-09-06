@@ -99,7 +99,7 @@ export interface ShipyardButtonSpec {
 
 /**
  * Button.LEFT_POS -- the cap sprites' inset, which stands in for the cap
- * texture's width (see the TODO in button.ts). Mirrored here so the
+ * texture's width (a tracker issue, noted at button.ts). Mirrored here so the
  * layout specs can reason about a pill's rendered extent.
  */
 export const BUTTON_CAP_WIDTH = 13.2;

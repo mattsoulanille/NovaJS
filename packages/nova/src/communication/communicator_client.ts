@@ -15,7 +15,9 @@ export class CommunicatorClient implements Communicator {
         this.connected = channel.connected;
         channel.message.subscribe(this.onMessage.bind(this));
     }
-    servers = new BehaviorSubject(new Set(['server'])); // TODO: Get this from the server
+    // Both ends hardcode 'server' (CommunicatorServer rejects any other
+    // uuid). Tracker issue: have the server announce its uuid set.
+    servers = new BehaviorSubject(new Set(['server']));
 
     private onMessage(message: unknown) {
         const maybeMessage = CommunicatorMessage.decode(message);

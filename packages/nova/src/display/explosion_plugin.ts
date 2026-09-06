@@ -489,8 +489,11 @@ function prefetchExplosionSound(gameData: DisplayAssetDataInterface,
  * from the same two synced inputs because that component does not cross
  * the bridge. So the display's explosion cadence is a function of synced
  * state rather than of this peer's frame rate.
+ *
+ * Tracker issue: the secondary explosions are placed in a circle
+ * (SecondaryExplosionSystem's randomPointInCircle) rather than sampled
+ * within the ship's convex hull.
  */
-// TODO: Sample collisions in the convex hull of the ship
 const ShipSecondaryExplosionSystem = new System({
     name: 'ShipSecondaryExplosionSystem',
     events: [ZeroArmorEvent],
@@ -529,7 +532,8 @@ const ShipSecondaryExplosionSystem = new System({
             return;
         }
 
-        // TODO: Normalize all times to ms (as ShipZeroArmorSystem says).
+        // ShipData.deathDelay is in seconds; sim time is ms (tracker
+        // issue: normalize novadatainterface durations to ms).
         const durationMs = ship.deathDelay * 1000;
         components.set(SecondaryExplosionComponent, {
             explosion,

@@ -7,7 +7,7 @@ const componentSymbol = Symbol('Component');
  * A `Component` represents a type of data that can be attached to an
  * entity. Two components can have the same datatype, and they will appear
  * separately on the entity.  Components must have globally unique names
- * (TODO(mattSoulanille): Add namespacing to plugins).
+ * (per-plugin namespacing is a tracker issue).
  */
 export class Component<Data> implements TypedNamedSymbol<Data> {
     // This symbol makes the component type and resource type not assignable to

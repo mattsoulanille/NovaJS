@@ -28,7 +28,9 @@ export function getDefaultAnimationFrames(): AnimationFrames {
 
 export interface AnimationImage {
     id: string;
-    // TODO: Add a datatype for using picts here.
+    // Always SpriteSheetImage today (every parser writes it; nothing
+    // reads it). Kept so a PICT-backed animation image could be added
+    // without a shape change.
     dataType: NovaDataType.SpriteSheetImage;
     blendMode: BLEND_MODES;
     frames: AnimationFrames;

@@ -318,9 +318,9 @@ export class World {
      * plugin does not implement a `remove` function, this does nothing.
      */
     async removePlugin(plugin: Plugin): Promise<boolean> {
-        // TODO: Track what systems and resources a plugin adds and remove them
-        // automatically (if a plugin does not implement `removePlugin`) as long
-        // as no other plugins use them?
+        // Tracker issue: track what systems and resources a plugin adds and
+        // remove them automatically (if a plugin does not implement `remove`)
+        // as long as no other plugin uses them.
 
         // Wait for the plugin to finish building before removing it since this
         // can not be interrupted.

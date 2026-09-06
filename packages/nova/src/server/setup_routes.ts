@@ -261,7 +261,8 @@ class GameDataServer {
             // Object.hasOwn keeps inherited keys such as 'constructor'
             // (reachable straight from the URL path) from passing the
             // check and yielding a non-Gettable value.
-            // TODO: Replace with protobufs
+            // (Responses are io-ts-encoded JSON; a compact binary encoding
+            // such as protobufs is a tracker issue.)
             const dataGettable = Object.hasOwn(this.gameData.data, name)
                 ? this.gameData.data[name as NovaDataType] : undefined;
 

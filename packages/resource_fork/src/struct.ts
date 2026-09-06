@@ -65,7 +65,8 @@ type Asdf = TupleToString<['foo', 'bar', 'baz']>;
 
 type StructCodeToArray<T> = T extends `${'<' | '>'}${infer Code}` ? Decode<Code> : never;
 
-// TODO: This type combinatorially explodes.
+// Recursive over one character per step, so a long struct code can hit
+// TypeScript's instantiation-depth limit; every code in use is short.
 type Decode<T> = T extends `${infer C}${infer Rest}`
     ? C extends CodeChar
     ? CodeMap[C] extends null ? Decode<Rest>

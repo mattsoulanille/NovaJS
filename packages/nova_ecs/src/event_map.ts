@@ -40,7 +40,6 @@ export class SyncSubject<V> {
  * A map that emits events when its contents are changed.
  */
 export class EventMap<K, V> extends Map<K, V> {
-    // TODO(mattsoulanille): Add more events.
     readonly events = {
         delete: new SyncSubject<Set<[K, V]>>(),
         set: new SyncSubject<[K, V]>(),

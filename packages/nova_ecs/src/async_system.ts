@@ -108,7 +108,9 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
                     return arg;
                 }) as typeof stepArgs;
 
-                // TODO: This error handling is wrong.
+                // Tracker issue: a rejected step() has no catch here, so
+                // entityStatus.running is never cleared for that entity
+                // and the rejection propagates into asyncSystemData.done.
                 entityStatus.promise = systemArgs.step(...draftArgs)
                     .then(apply => {
                         if (apply != null && !apply) {
