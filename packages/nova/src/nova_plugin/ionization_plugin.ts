@@ -21,13 +21,22 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * negative recharge, ship_plugin ShipIonizationProvider); oütf ModTypes
  * 39/40 add dissipation and capacity.
  *
- * So "ionized" is a STATE with hysteresis, not a level:
- *  - it begins when the charge reaches IonizeMax (the stat's max);
- *  - it lasts "until the ionization charge dissipates" — back to the
- *    stat's min (0) — however many hits land in between;
- *  - while it lasts the ship is nearly immobilized (ION_FACTOR), the
- *    wëap IonizeColor tint is painted (ship_animation_plugin reads
- *    IsIonizedComponent), and wëap Flags 0x0020 weapons can't fire.
+ * "Ionized" is a LEVEL test: a ship is ionized while its charge is above
+ * HALF of IonizeMax, and free again the tick it decays to half or below
+ * — however it got there. While it holds, the ship is slowed
+ * (ION_FACTOR), the wëap IonizeColor tint is painted
+ * (ship_animation_plugin reads IsIonizedComponent), and wëap Flags
+ * 0x0020 weapons can't fire.
+ *
+ * MAINTAINER RULING #153: this is the reading the game shipped with
+ * before PR #124, restored. #124 had replaced it with a full-charge /
+ * full-dissipate hysteresis ("ionized at IonizeMax, until the charge is
+ * gone") and a 0.1 slowdown, from the Bible's "nearly immobilized until
+ * the ionization charge dissipates"; the maintainer reverted both to the
+ * half-capacity level and the 0.6 factor, and will playtest from there.
+ * Everything else #124 fixed stays: the IonizeMax-0 guard below, the
+ * stat's percent guard (health_plugin), the IonizeColor tint, and the
+ * ordering before the decay-and-clamp.
  *
  * The state lives in IsIonizedComponent, which is serializer-registered
  * and so carried in rollback snapshots and wire baselines like
@@ -44,33 +53,32 @@ import { IonizationComponent, IonizationRechargeSystem } from "./health_plugin.j
  * How much ionization slows a ship — the multiplier on speed,
  * acceleration and turn rate while IsIonizedComponent is true (applied
  * by EffectiveMovementPhysicsSystem in afterburner_plugin.ts). The
- * Bible gives no number, only "nearly immobilized"; TUNABLE, kept low
- * enough that a fully ionized ship visibly crawls.
+ * Bible gives no number; 0.6 is the pre-#124 value, restored by ruling
+ * #153 (the maintainer will playtest). TUNABLE.
  */
-export const ION_FACTOR = 0.1;
+export const ION_FACTOR = 0.6;
 
 export const IonizedEvent = new EcsEvent<boolean>('IonizedEvent');
 export const IsIonizedComponent = new Component<boolean>('IsIonizedComponent');
 
 /**
- * Whether a ship is ionized this tick, given its charge and whether it
- * was ionized last tick (hysteresis; see the module comment).
+ * Whether a ship is ionized this tick, from its charge alone: above half
+ * of IonizeMax (see the module comment; ruling #153). A hull with no ion
+ * capacity is never ionized.
  */
-export function ionizedNow(ionization: { current: number, max: number, min: number },
-    wasIonized: boolean): boolean {
+export function ionizedNow(
+    ionization: { current: number, max: number, min: number }): boolean {
     if (ionization.max <= 0) {
         return false;
     }
-    return wasIonized
-        ? ionization.current > ionization.min
-        : ionization.current >= ionization.max;
+    return ionization.current > ionization.max / 2;
 }
 
 const IonizedSystem = new System({
     name: 'IonizedSystem',
     args: [IonizationComponent, Optional(IsIonizedComponent), GetEntity, UUID, Emit] as const,
     step(ionization, wasIonized, entity, uuid, emit) {
-        const isIonized = ionizedNow(ionization, wasIonized ?? false);
+        const isIonized = ionizedNow(ionization);
         if (isIonized === wasIonized) {
             return;
         }

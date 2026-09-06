@@ -11,13 +11,12 @@ import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
 
 /**
- * EVN Bible: IonizeMax is "the amount of ion charge at which a ship of
- * this type will be considered 'fully ionized'", and "when a ship is
- * ionized it becomes nearly immobilized until the ionization charge
- * dissipates". These specs pin that reading (ionization_plugin.ts):
- * ionized at IonizeMax, not before; ionized until the charge is gone,
- * not until it drops below some level; nearly immobilized meanwhile;
- * and a hull with no ion capacity is never ionized.
+ * Maintainer ruling #153 (ionization_plugin.ts): "ionized" is a LEVEL
+ * test — the charge is above half of IonizeMax — with no hysteresis, and
+ * the slowdown factor is 0.6. Both are the pre-PR-#124 values, restored;
+ * the maintainer will playtest from there. What #124 fixed alongside
+ * stays pinned here: a hull with no ion capacity is never ionized and
+ * never shows a NaN percent.
  */
 
 const SHIP_ID = 'test:ship';
@@ -57,68 +56,69 @@ function steps(world: World, n: number) {
     }
 }
 
-describe('ionizedNow (the state rule)', () => {
+describe('ionizedNow (the level rule, #153)', () => {
     const stat = (current: number, max = 100) => ({ current, max, min: 0 });
 
-    it('begins only at IonizeMax', () => {
-        expect(ionizedNow(stat(51), false)).toBeFalse();
-        expect(ionizedNow(stat(99.9), false)).toBeFalse();
-        expect(ionizedNow(stat(100), false)).toBeTrue();
-        expect(ionizedNow(stat(140), false)).toBeTrue();
-    });
-
-    it('lasts until the charge has dissipated', () => {
-        expect(ionizedNow(stat(99), true)).toBeTrue();
-        expect(ionizedNow(stat(1), true)).toBeTrue();
-        expect(ionizedNow(stat(0), true)).toBeFalse();
+    it('holds above half of IonizeMax, and not at or below it', () => {
+        expect(ionizedNow(stat(0))).toBeFalse();
+        expect(ionizedNow(stat(49))).toBeFalse();
+        expect(ionizedNow(stat(50))).toBeFalse();
+        expect(ionizedNow(stat(50.01))).toBeTrue();
+        expect(ionizedNow(stat(100))).toBeTrue();
+        expect(ionizedNow(stat(140))).toBeTrue();
     });
 
     it('never holds for a hull with no ion capacity', () => {
-        expect(ionizedNow(stat(0, 0), false)).toBeFalse();
-        expect(ionizedNow(stat(20, 0), false)).toBeFalse();
-        expect(ionizedNow(stat(20, 0), true)).toBeFalse();
+        expect(ionizedNow(stat(0, 0))).toBeFalse();
+        expect(ionizedNow(stat(20, 0))).toBeFalse();
+        expect(ionizedNow(stat(20, -5))).toBeFalse();
     });
 });
 
 describe('ionization in a live world', () => {
-    it('is not ionized below IonizeMax, even past half of it', async () => {
+    it('is not ionized at a charge below half of IonizeMax', async () => {
         const { world, hit, ionized } = await ionWorld();
-        hit(60);
+        hit(0.4 * BASE.ionization);
         steps(world, 2);
         expect(ionized()).toBeFalse();
     });
 
-    it('is fully ionized once the charge reaches IonizeMax', async () => {
-        const { world, hit, ionized, charge } = await ionWorld();
-        hit(BASE.ionization);
-        steps(world, 2);
+    it('is ionized once the charge is past half of IonizeMax', async () => {
+        const { world, hit, ionized } = await ionWorld();
+        hit(0.6 * BASE.ionization);
+        world.step();
         expect(ionized()).toBeTrue();
-        // The stat clamps the charge to its capacity.
-        expect(charge().current).toBeLessThanOrEqual(BASE.ionization);
     });
 
-    it('stays ionized until the charge has fully dissipated', async () => {
-        const { world, hit, ionized, charge } = await ionWorld();
-        hit(BASE.ionization);
-        world.step();
-        expect(ionized()).toBeTrue();
-        // Well under half capacity: still ionized.
-        while (charge().current > 0.3 * BASE.ionization) {
+    it('is ionized at IonizeMax, and the stat clamps the charge there',
+        async () => {
+            const { world, hit, ionized, charge } = await ionWorld();
+            hit(BASE.ionization);
+            steps(world, 2);
+            expect(ionized()).toBeTrue();
+            expect(charge().current).toBeLessThanOrEqual(BASE.ionization);
+        });
+
+    it('frees the ship the tick its charge decays to half, not when it '
+        + 'is gone (no hysteresis)', async () => {
+            const { world, hit, ionized, charge } = await ionWorld();
+            hit(BASE.ionization);
             world.step();
-        }
-        expect(ionized()).toBeTrue();
-        // Down to the last of it: still ionized, every tick of the way.
-        let droppedEarly = false;
-        while (charge().current > 0) {
-            droppedEarly ||= !ionized();
+            expect(ionized()).toBeTrue();
+            const half = BASE.ionization / 2;
+            // Above half, every tick of the way: still ionized.
+            let droppedEarly = false;
+            while (charge().current > half) {
+                droppedEarly ||= !ionized();
+                world.step();
+            }
+            expect(droppedEarly).toBeFalse();
+            // At or below half: free (one tick for the state to follow),
+            // with plenty of charge still on the hull.
             world.step();
-        }
-        expect(droppedEarly).toBeFalse();
-        // Gone: the ship is free again (one tick for the state to follow).
-        world.step();
-        expect(charge().current).toBe(0);
-        expect(ionized()).toBeFalse();
-    });
+            expect(charge().current).toBeGreaterThan(0);
+            expect(ionized()).toBeFalse();
+        });
 
     it('a hull with IonizeMax 0 is never ionized and never shows NaN',
         async () => {
@@ -134,7 +134,7 @@ describe('ionization in a live world', () => {
             expect(charge().percent).toBe(0);
         });
 
-    it('nearly immobilizes an ionized ship', async () => {
+    it('slows an ionized ship by ION_FACTOR', async () => {
         const { world, ship, hit } = await ionWorld();
         hit(BASE.ionization);
         steps(world, 2);
@@ -143,8 +143,10 @@ describe('ionization in a live world', () => {
         expect(physics.acceleration)
             .toBeCloseTo(BASE.acceleration * ION_FACTOR, 6);
         expect(physics.turnRate).toBeCloseTo(BASE.turnRate * ION_FACTOR, 6);
-        // "Nearly immobilized" — a crawl, not a mild slowdown.
-        expect(ION_FACTOR).toBeLessThanOrEqual(0.25);
-        expect(ION_FACTOR).toBeGreaterThan(0);
     });
+
+    it('slows by the pre-#124 factor, 0.6 (ruling #153; maintainer will '
+        + 'playtest)', () => {
+            expect(ION_FACTOR).toBe(0.6);
+        });
 });
