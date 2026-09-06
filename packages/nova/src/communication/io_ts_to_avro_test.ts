@@ -505,5 +505,33 @@ describe('io-ts to Avro derivation', () => {
             // JSON.stringify(NaN) is "null", which the codec then rejects.
             expect(jsonBack.velocity.x).toBeNull();
         });
+
+        it('loses −0 inside an opaque component (the msgpack fallback), and explain says so', () => {
+            // The caveat behind "avro keeps −0": only where the schema
+            // types the field. A component the derivation could not map
+            // rides as msgpack bytes, and msgpack folds −0 to +0. The
+            // `failures` list is therefore also the list of where −0
+            // does not survive; nothing else reports it.
+            const serializer = world.resources.get(SerializerResource)!;
+            const derivation = simulationFrameDerivation(serializer);
+            expect(summarize(derivation.failures))
+                .toContain('unmapped $.added[][1].components[].ShipData');
+            const avro = avroWireCodec(derivation.schema);
+            const [uuid, entity] = frame.added.find(([, delta]) =>
+                delta.components.some(([name]) => name === 'ShipData'))!;
+            const [name, data] = entity.components.find(([name]) => name === 'ShipData')!;
+            expect(typeof (data as { deathDelay: unknown }).deathDelay).toBe('number');
+            const tweaked: SimulationFrame = {
+                added: [[uuid, { components: [[name, { ...(data as object), deathDelay: -0 }]] }]],
+                changed: [], removed: [], events: [],
+            };
+            expect(avro.explain(frame)).toBeUndefined();
+            expect(avro.explain(tweaked))
+                .toMatch(/lossy: \$\.added\[0\]\[1\]\.components\[0\]\[1\]\.deathDelay: -0 came back as 0/);
+            const back = decodeWireOrThrow(avro, SimulationFrameType, avro.encode(tweaked));
+            const shipData = back.added[0]![1].components[0]![1] as { deathDelay: number };
+            expect(Object.is(shipData.deathDelay, -0)).toBeFalse();
+            expect(shipData.deathDelay).toBe(0);
+        });
     });
 });

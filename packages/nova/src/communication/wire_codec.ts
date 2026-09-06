@@ -22,6 +22,15 @@ import { AvroSchema, AvroSchemaNode } from './io_ts_to_avro.js';
  *            second schema language — and both ends of a socket derive
  *            it from the same build.
  *
+ * Number fidelity: avro keeps −0 and NaN ONLY in schema'd fields (IEEE
+ * doubles on the wire). A node the derivation could not type is carried
+ * opaquely as msgpack bytes, and inherits msgpack's loss: a −0 inside an
+ * opaque node comes back as +0 (NaN survives). The derivation's
+ * `failures` list names every opaque node — today the seven game-data
+ * components (ShipData, PlanetData, ...) and the `t.unknown` payloads —
+ * so it is also the list of where −0 does not survive; `explain` reports
+ * such a message as lossy. json keeps neither −0 nor NaN anywhere.
+ *
  * None of them replaces validation. The io-ts `decode` that gates every
  * receiving boundary today (rollback_protocol.ts "Trust model" item 2)
  * runs AFTER the wire decode on every implementation: `decodeWire`.
