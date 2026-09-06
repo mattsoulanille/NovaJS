@@ -1,6 +1,7 @@
 // Pure pointer hit-testing / click-vs-drag decision logic for the starmap.
 // Kept free of PIXI so it can be unit tested in isolation (starmap_hit_test.ts)
-// and reused by SystemGraph in starmap.ts.
+// and reused by the map pane's pointer binding (starmap_input.ts) and
+// viewport (starmap_viewport.ts) under SystemGraph (system_graph.ts).
 //
 // BACKGROUND (the "swallowed first click" bug): PIXI's EventBoundary always
 // synthesizes a `pointertap` for a pointerdown -> pointerup on the same target,
