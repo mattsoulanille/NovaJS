@@ -21,7 +21,6 @@
     "test": "jasmine --config=jasmine.json"
   },
   "dependencies": {
-    "hull.js": "^1.0.3",
     "novadatainterface": "^0.1.6",
     "pngjs": "^7.0.0",
     "resource_fork": "^0.1.0",
