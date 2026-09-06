@@ -464,7 +464,7 @@ class PlunderDialog {
                     PLUNDER_FRAME.height).endFill();
             const tex = new PIXI.Sprite();
             tex.addChild(g);
-            return tex as unknown as PIXI.Sprite;
+            return tex;
         }
     }
 

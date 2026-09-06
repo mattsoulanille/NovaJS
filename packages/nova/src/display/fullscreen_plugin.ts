@@ -11,8 +11,11 @@ const FullscreenSystem = new System({
     args: [EcsControlEvent, PixiAppResource, SingletonComponent] as const,
     step(events, app) {
         for (const { action, state } of events) {
-            if (action === "fullscreen" && state === "start") {
-                (app.view as unknown as HTMLElement).requestFullscreen();
+            // PIXI types its view as an ICanvas (which may be an
+            // OffscreenCanvas); only a DOM canvas can go fullscreen.
+            if (action === "fullscreen" && state === "start"
+                && app.view instanceof HTMLCanvasElement) {
+                app.view.requestFullscreen();
             }
         }
     }
