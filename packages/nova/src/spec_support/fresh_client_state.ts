@@ -6,6 +6,11 @@ import { SAVE_KEY, setActiveSaveKey } from '../nova_plugin/save_game.js';
  * Every spec starts as a fresh client. Jasmine helper (jasmine.json), run
  * before each spec in the suite.
  *
+ * NOTE: jasmine.json lists `helpers: ["spec_support/*.js"]`, which is
+ * suite-global — ANY file in this directory is loaded before EVERY spec in
+ * the package, whether or not the spec imports it. Put only things here
+ * that every spec should see.
+ *
  * The pieces of client state that outlive a game session BY DESIGN — the
  * active save key and the pilot's discovery record (discovery_store.ts:
  * localStorage-backed in the browser, so it must still answer after an
