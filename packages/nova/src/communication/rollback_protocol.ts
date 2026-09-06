@@ -50,6 +50,11 @@ export const STATE_HASH_INTERVAL = 60;
 //    entity-level inputs. The last is determinism-relevant — a v4 peer
 //    applies a forged removeEntity that a v5 peer drops — hence the
 //    bump; the wire SHAPES are unchanged.
+//    Also under 5, no further bump (both composed with it in the same
+//    wave, and both are additive on the shapes the strict codecs accept):
+//    - acceptMission's `accepted` gained the OPTIONAL missionsStarted /
+//      missionsEnded / recordsDelta fields (nova_plugin/mission_accept.ts;
+//      an older record simply carries none of them).
 export const PROTOCOL_VERSION = 5;
 
 /**

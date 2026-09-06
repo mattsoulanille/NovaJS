@@ -298,4 +298,52 @@ describe('malformed inputs', () => {
                 .toBeTrue();
             expect(isLeft(InputRecordType.decode({ tick: 1 }))).toBeTrue();
         });
+
+    it('an accept record keeps its optional OnAccept side-effect fields '
+        + 'through the strict codec', () => {
+            // The strict members strip UNKNOWN fields. The three optional
+            // fields mission_accept.ts added for an OnAccept that starts
+            // or ends sibling missions and touches legal records
+            // (missionsStarted / missionsEnded / recordsDelta) are
+            // declared on AcceptedMissionType's partial, exactly like
+            // outfitsDelta: a relayed record must deliver them intact, or
+            // the accepting peer applies the cascade and every other peer
+            // does not. Same PROTOCOL_VERSION: additive on the shape.
+            const accepted = {
+                missionId: 'nova:1014',
+                mission: null,
+                outfitsDelta: [['nova:300', 1]],
+                missionsStarted: [['nova:1015', { id: 'nova:1015', started: 3 }]],
+                missionsEnded: ['nova:1013'],
+                recordsDelta: [['nova:128', -3]],
+            };
+            const record = {
+                peerId: 'a', tick: 5, seq: 2,
+                inputs: [{ kind: 'acceptMission', accepted, extra: 'junk' }],
+            };
+            const decoded = InputRecordType.decode(record);
+            expect(isRight(decoded)).toBeTrue();
+            if (isRight(decoded)) {
+                const input = decoded.right.inputs[0];
+                expect(input.kind).toBe('acceptMission');
+                expect('extra' in input).toBeFalse();
+                if (input.kind === 'acceptMission') {
+                    expect(input.accepted.outfitsDelta).toEqual([['nova:300', 1]]);
+                    expect(input.accepted.missionsStarted)
+                        .toEqual([['nova:1015', { id: 'nova:1015', started: 3 }]]);
+                    expect(input.accepted.missionsEnded).toEqual(['nova:1013']);
+                    expect(input.accepted.recordsDelta).toEqual([['nova:128', -3]]);
+                }
+            }
+            // And their shapes are checked, not merely passed through.
+            for (const bad of [
+                { missionsStarted: [[1015, {}]] },
+                { missionsEnded: [1015] },
+                { recordsDelta: [['nova:128', 'x']] },
+            ]) {
+                const inputs = [{ kind: 'acceptMission', accepted: { ...accepted, ...bad } }];
+                expect(isLeft(InputRecordType.decode({ ...record, inputs })))
+                    .withContext(JSON.stringify(bad)).toBeTrue();
+            }
+        });
 });
