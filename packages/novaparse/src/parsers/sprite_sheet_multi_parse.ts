@@ -4,9 +4,8 @@ import { SpriteSheetData, SpriteSheetFramesData, SpriteSheetImageData, Hull, Fra
 import { RledResource } from "../resource_parsers/rled_resource.js";
 import { PNG } from "pngjs";
 import * as path from "path";
-import hull from 'hull.js';
 import { bufferToArrayBuffer } from "./buffer_to_array_buffer.js";
-import { decomposePolygon, Point } from "../hull/convex_decomposition.js";
+import { convexHull, decomposePolygon, Point } from "../hull/convex_decomposition.js";
 import { Mask, simplifyPolygon, traceOutline } from "../hull/trace_outline.js";
 import {
     HullOverlayMap, overlayFramesForBaseFrame,
@@ -39,11 +38,11 @@ export class DimensionError extends Error { };
  * block, i.e. cropped (or overwritten by the next row of frames).
  */
 export function getWH(frames: Array<PNG>): { singleFrameWidth: number, singleFrameHeight: number, fullPixelWidth: number, fullPixelHeight: number } {
-    var singleFrameWidth = frames[0].width;
-    var singleFrameHeight = frames[0].height;
+    const singleFrameWidth = frames[0].width;
+    const singleFrameHeight = frames[0].height;
 
-    var fullPixelWidth: number = Math.min(SHEET_LOOP, frames.length) * singleFrameWidth;
-    var fullPixelHeight: number = Math.ceil(frames.length / SHEET_LOOP) * singleFrameHeight;
+    const fullPixelWidth = Math.min(SHEET_LOOP, frames.length) * singleFrameWidth;
+    const fullPixelHeight = Math.ceil(frames.length / SHEET_LOOP) * singleFrameHeight;
 
     return {
         fullPixelHeight,
@@ -55,16 +54,16 @@ export function getWH(frames: Array<PNG>): { singleFrameWidth: number, singleFra
 
 /** Packs the frames into one sheet image, SHEET_LOOP frames per row. */
 export function buildPNG(frames: Array<PNG>): PNG {
-    var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
+    const { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
 
-    var outPNG = new PNG({
+    const outPNG = new PNG({
         filterType: 4,
         width: fullPixelWidth,
         height: fullPixelHeight
     });
 
     for (let f = 0; f < frames.length; f++) {
-        let frame = frames[f];
+        const frame = frames[f];
 
         // Every frame must fit the row pitch computed from frame 0: a
         // larger one would write into (or past) its neighbours' pixels.
@@ -75,14 +74,14 @@ export function buildPNG(frames: Array<PNG>): PNG {
                 + ". Expected " + singleFrameWidth + " by " + singleFrameHeight + ".");
         }
 
-        var col = f % SHEET_LOOP;
-        var row = Math.floor(f / SHEET_LOOP);
+        const col = f % SHEET_LOOP;
+        const row = Math.floor(f / SHEET_LOOP);
 
-        for (var y = 0; y < frame.height; y++) {
-            for (var x = 0; x < frame.width; x++) {
-                var frameIDX = (frame.width * y + x) << 2;
+        for (let y = 0; y < frame.height; y++) {
+            for (let x = 0; x < frame.width; x++) {
+                const frameIDX = (frame.width * y + x) << 2;
 
-                var pngIDX = (outPNG.width * y +       // skip to next row of pixels
+                const pngIDX = (outPNG.width * y +       // skip to next row of pixels
 
                     outPNG.width *           // skip to next row of frames
                     singleFrameHeight * row +
@@ -105,7 +104,7 @@ export function buildPNG(frames: Array<PNG>): PNG {
 
 
 /** A sprite frame's fully-opaque pixels, for hull tracing. */
-function pngMask(png: PNG): Mask {
+export function pngMask(png: PNG): Mask {
     return {
         width: png.width,
         height: png.height,
@@ -147,34 +146,58 @@ export function unionMask(masks: Mask[]): Mask {
     };
 }
 
-// Includes in its output any points that are not black
-function makeVisibleArray(mask: Mask): Array<[number, number]> {
-    var visibleArray: Array<[number, number]> = [];
-
-    var origin = [mask.width / 2, mask.height / 2];
-
-    for (var y = 0; y < mask.height; y++) {
-        for (var x = 0; x < mask.width; x++) {
+/**
+ * The filled pixels of the mask as points in the hull frame: centred on
+ * the mask, y up. Row-major, so the order is a pure function of the mask.
+ */
+function makeVisibleArray(mask: Mask): Point[] {
+    const visibleArray: Point[] = [];
+    const originX = mask.width / 2;
+    const originY = mask.height / 2;
+    for (let y = 0; y < mask.height; y++) {
+        for (let x = 0; x < mask.width; x++) {
             if (mask.isFilled(x, y)) {
-                visibleArray.push([x - origin[0], -(y - origin[1])]);
+                visibleArray.push([x - originX, -(y - originY)]);
             }
-
         }
     }
     return visibleArray;
 }
 
-function makeConvexHull(mask: Mask): ConvexHull {
-    // No concavity. Convex hull.
-    var visibleArray = makeVisibleArray(mask);
-    // TODO: Maybe replace this with rust's fast convex hull
-    var hullWithRepeat = hull(visibleArray, Infinity) as ConvexHull;
-    // If the hull is empty, return the default conved hull instead.
-    if (hullWithRepeat.length === 0 || hullWithRepeat[0] === undefined) {
+/** Ascending by x, then by y. */
+function comparePoints(a: Point, b: Point): number {
+    return a[0] - b[0] || a[1] - b[1];
+}
+
+/**
+ * The convex hull of the mask's filled pixels, or the default box when
+ * there are none. The fallback for a sprite whose traced outline cannot
+ * be decomposed (makeHull).
+ *
+ * The vertex order is part of the hashed collision geometry, so it is
+ * pinned to what the previous implementation (hull.js with infinite
+ * concavity) produced — see sprite_sheet_stock_identity_test:
+ *  - four or more pixels: the monotone-chain hull, counterclockwise,
+ *    starting from the (x, y)-greatest pixel;
+ *  - fewer: the pixels themselves in (x, y) order, whatever shape they
+ *    make. (hull.js skipped the hull for so few points.)
+ */
+export function makeConvexHull(mask: Mask): ConvexHull {
+    const visibleArray = makeVisibleArray(mask);
+    if (visibleArray.length === 0) {
         return getDefaultConvexHull();
     }
-    // Cut off the last point since it's the same as the first.
-    return hullWithRepeat.slice(0, hullWithRepeat.length - 1);
+    if (visibleArray.length < 4) {
+        return visibleArray.sort(comparePoints);
+    }
+    const hull = convexHull(visibleArray);
+    let start = 0;
+    for (let i = 1; i < hull.length; i++) {
+        if (comparePoints(hull[i], hull[start]) > 0) {
+            start = i;
+        }
+    }
+    return [...hull.slice(start), ...hull.slice(0, start)];
 }
 
 // Simplification tolerance for the traced pixel outline, in pixels.
@@ -243,11 +266,11 @@ export function makeHulls(frames: Array<PNG>,
  */
 export function buildSpriteSheetFrames(rled: Pick<RledResource, 'globalID'>,
     frames: Array<PNG>): SpriteSheetFramesData {
-    var { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
+    const { fullPixelHeight, fullPixelWidth, singleFrameHeight, singleFrameWidth } = getWH(frames);
 
-    var imagePath = path.join(DefaultImageLocation, rled.globalID + ".png");
+    const imagePath = path.join(DefaultImageLocation, rled.globalID + ".png");
 
-    var meta = {
+    const meta = {
         format: "RGBA8888",
         size: {
             w: fullPixelWidth,
@@ -257,11 +280,11 @@ export function buildSpriteSheetFrames(rled: Pick<RledResource, 'globalID'>,
         image: imagePath
     }
 
-    var frameInfoObj: { [index: string]: FrameInfo } = {};
+    const frameInfoObj: { [index: string]: FrameInfo } = {};
 
-    for (var f = 0; f < frames.length; f++) {
-        var col = f % SHEET_LOOP;
-        var row = Math.floor(f / SHEET_LOOP);
+    for (let f = 0; f < frames.length; f++) {
+        const col = f % SHEET_LOOP;
+        const row = Math.floor(f / SHEET_LOOP);
 
         frameInfoObj[rled.globalID + " " + f + ".png"] = {
             frame: {
