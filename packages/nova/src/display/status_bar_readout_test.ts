@@ -6,10 +6,10 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import {
-    CARGO_READOUT_PERIOD_MS, DrawStatusBarCargo, statFullness, StatusBar,
-    StatusBarResource,
-} from './status_bar.js';
+import { StatusBar } from './status_bar.js';
+import { CARGO_READOUT_PERIOD_MS, DrawStatusBarCargo } from './status_bar_cargo.js';
+import { statFullness } from './status_bar_gauges.js';
+import { StatusBarResource } from './status_bar_resource.js';
 
 /**
  * The stat bars' fullness. A stat whose max is 0 — the stock Escape Pod,

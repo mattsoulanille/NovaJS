@@ -1,7 +1,7 @@
 import 'jasmine';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { OutfitsState } from '../nova_plugin/outfit_plugin.js';
-import { cargoCapacityOf, cargoDisplayOf } from './status_bar.js';
+import { cargoCapacityOf, cargoDisplayOf } from './status_bar_cargo.js';
 
 /**
  * The status bar's credits/cargo readout while DOCKED is driven by the same

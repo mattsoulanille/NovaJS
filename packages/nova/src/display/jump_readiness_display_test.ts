@@ -27,8 +27,9 @@ import { ShipPhysicsDisplayPlugin } from './ship_physics_display_plugin.js';
 import { SoundPlugin } from './sound_plugin.js';
 import { DISCOVERY_ENTERED } from '../nova_plugin/discovery.js';
 import {
-    DiscoveryLevelResource, DrawStatusBarNavigation, StatusBarResource,
-} from './status_bar.js';
+    DiscoveryLevelResource, DrawStatusBarNavigation,
+} from './status_bar_navigation.js';
+import { StatusBarResource } from './status_bar_resource.js';
 import { NavReadout } from './status_bar_content.js';
 import { BEEP_CANT_DO } from './ui_sound.js';
 import { UiSoundTriggersPlugin } from './ui_sound_triggers_plugin.js';

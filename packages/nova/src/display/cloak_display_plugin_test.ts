@@ -6,7 +6,7 @@ import { CloakComponent, CloakScannerComponent } from '../nova_plugin/cloak_plug
 import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { OutfitsStateComponent } from '../nova_plugin/outfit_plugin.js';
 import { CloakDisplayPlugin } from './cloak_display_plugin.js';
-import { radarHidesShip } from './status_bar.js';
+import { radarHidesShip } from './status_bar_radar.js';
 
 /**
  * The display world derives CloakComponent / CloakScannerComponent from

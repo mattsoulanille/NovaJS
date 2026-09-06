@@ -19,8 +19,9 @@ import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
 } from '../nova_plugin/discovery.js';
 import {
-    DiscoveryLevelResource, DrawStatusBarNavigation, StatusBarResource,
-} from './status_bar.js';
+    DiscoveryLevelResource, DrawStatusBarNavigation,
+} from './status_bar_navigation.js';
+import { StatusBarResource } from './status_bar_resource.js';
 import { NavReadout, UNEXPLORED_SYSTEM } from './status_bar_content.js';
 
 /**
