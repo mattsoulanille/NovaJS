@@ -213,9 +213,8 @@ const SecondaryExplosionSystem = new System({
         Entities, MovementStateComponent, GetEntity] as const,
     step(explosion, time, simTime, entities, { position }, { components }) {
         const spawn = (silent: boolean) => {
-            // TODO: Fix these types in position.ts
             const pos = position.add(
-                randomPointInCircle(explosion.radius ?? SPARK_RADIUS)) as Position;
+                randomPointInCircle(explosion.radius ?? SPARK_RADIUS));
             entities.set(v4(), makeExplosion({
                 ...explosion.explosion,
                 sound: silent ? null : explosion.explosion.sound,

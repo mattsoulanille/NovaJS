@@ -55,8 +55,8 @@ export class Position extends Vector {
         super(wrap(x), wrap(y));
     }
 
-    protected override factory(x: number, y: number): Position {
-        return new Position(x, y);
+    protected override factory(x: number, y: number): this {
+        return new Position(x, y) as this;
     }
 
     getClosestRelativeTo(other: Position) {
