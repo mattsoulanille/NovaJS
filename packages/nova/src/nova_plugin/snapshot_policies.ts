@@ -48,8 +48,7 @@ function passthroughWire<Data = unknown>() {
  * Clones a DefaultMap, preserving its default factory.
  */
 function cloneDefaultMap<K, V>(map: DefaultMap<K, V>, cloneValue: (v: V) => V) {
-    const factory = (map as unknown as { factory: (key: K) => V }).factory;
-    const copy = new DefaultMap<K, V>(factory);
+    const copy = new DefaultMap<K, V>(map.factory);
     for (const [key, value] of map) {
         copy.set(key, cloneValue(value));
     }

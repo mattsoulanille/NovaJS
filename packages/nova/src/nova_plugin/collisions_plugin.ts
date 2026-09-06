@@ -19,6 +19,18 @@ import { AnimationComponent } from "./animation_plugin.js";
 import { CollisionEvent, CollisionHitter, CollisionHitterComponent, CollisionVulnerability, CollisionVulnerabilityComponent } from "./collision_interaction.js";
 import { SimulationGameDataResource } from "./game_data_resource.js";
 
+// @types/sat (0.0.35) predates SAT 0.9's getAABBAsBox, which every shape
+// has at runtime (SAT.js: Circle.prototype.getAABBAsBox and
+// Polygon.prototype.getAABBAsBox); getBoundingBox below reads it.
+declare module "sat" {
+    interface Polygon {
+        getAABBAsBox(): SAT.Box;
+    }
+    interface Circle {
+        getAABBAsBox(): SAT.Box;
+    }
+}
+
 type Shape = SAT.Polygon | SAT.Circle;
 export abstract class Hull {
     abstract shapes: Shape[];
@@ -101,7 +113,8 @@ export class MultiFrameHull extends Hull {
     private activeHull: Hull;
     public pos = new SAT.Vector(0, 0);
     private wrappedAngle = 0;
-    constructor(private hulls: Hull[]) {
+    /** One hull per animation frame (readable for encodeHull). */
+    constructor(readonly hulls: readonly Hull[]) {
         super();
         this.activeHull = hulls[0];
         this.activeHull.pos = this.pos;
@@ -170,8 +183,7 @@ function decodeShape(wire: WireShape): Shape {
 
 export function encodeHull(hull: Hull): WireHull {
     if (hull instanceof MultiFrameHull) {
-        const frames = (hull as unknown as { hulls: Hull[] }).hulls;
-        return { frames: frames.map(frame => frame.shapes.map(encodeShape)) };
+        return { frames: hull.hulls.map(frame => frame.shapes.map(encodeShape)) };
     }
     return { shapes: hull.shapes.map(encodeShape) };
 }
@@ -228,8 +240,7 @@ type RBushEntry = BBox & {
 export const RBushResource = new Resource<RBush<RBushEntry>>("RBushResource");
 
 export function getBoundingBox(shapes: Shape[]): BBox {
-    return shapes.map(
-        p => (p as unknown as { getAABBAsBox(): SAT.Box }).getAABBAsBox())
+    return shapes.map(p => p.getAABBAsBox())
         .map(box => ({
             minX: box.pos.x,
             minY: box.pos.y,
