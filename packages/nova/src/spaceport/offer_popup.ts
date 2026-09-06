@@ -179,8 +179,7 @@ export class OfferPopup {
         // visual-comparison scenarios raise a popup with crafted mission
         // text instead of having to reach the mission state that offers it.
         if (typeof window !== 'undefined') {
-            const w = window as unknown as { novaOfferPopups?: OfferPopup[] };
-            const popups = (w.novaOfferPopups ??= []);
+            const popups = (window.novaOfferPopups ??= []);
             popups.push(this);
             // Bounded: the harness only drives recent instances, and a
             // new display world is built per system transit — retaining

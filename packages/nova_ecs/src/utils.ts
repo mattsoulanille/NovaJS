@@ -243,7 +243,7 @@ export function setIntersection<T>(a: ReadonlySet<T>, b: ReadonlySet<T>): Set<T>
 }
 
 export class DefaultMap<K, V> extends Map<K, V> {
-    constructor(private factory: (key: K) => V, entries: Iterable<readonly [K, V]> = []) {
+    constructor(private readonly factory: (key: K) => V, entries: Iterable<readonly [K, V]> = []) {
         super(entries);
     }
 
@@ -252,6 +252,20 @@ export class DefaultMap<K, V> extends Map<K, V> {
             super.set(key, this.factory(key));
         }
         return super.get(key)!;
+    }
+
+    /**
+     * A new DefaultMap with the same default factory, holding
+     * `cloneValue` of each entry (identity by default, i.e. a shallow
+     * copy). Missing keys in the copy get fresh defaults, not the
+     * original's.
+     */
+    cloneWith(cloneValue: (value: V, key: K) => V = v => v): DefaultMap<K, V> {
+        const copy = new DefaultMap<K, V>(this.factory);
+        for (const [key, value] of this) {
+            copy.set(key, cloneValue(value, key));
+        }
+        return copy;
     }
 }
 

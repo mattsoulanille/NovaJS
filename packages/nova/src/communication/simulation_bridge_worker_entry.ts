@@ -1,13 +1,11 @@
 import * as Comlink from "comlink";
-import nodeEndpointImport from "comlink/dist/umd/node-adapter.js";
 import { multiplayer } from "nova_ecs/plugins/multiplayer_plugin";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { parentPort, workerData } from "worker_threads";
 import { makeSystem } from "../nova_plugin/make_system.js";
+import { nodeEndpoint } from "../util/comlink_node_endpoint.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";
-
-const nodeEndpoint = nodeEndpointImport as unknown as typeof nodeEndpointImport.default;
 
 export interface SimulationBridgeWorkerData {
     systemId: string;

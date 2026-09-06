@@ -57,7 +57,7 @@ export function makeIntegrationGameData(): GameDataAggregator {
     // The browser fetches settings over HTTP; in node, read them
     // from disk so worlds can build with the 'worker' platform
     // (which includes the control systems).
-    (aggregator as { getSettings?(file: string): Promise<unknown> }).getSettings =
+    aggregator.getSettings =
         async (file: string) => JSON.parse(await fs.promises.readFile(
             path.join(packageRoot, 'settings', file), 'utf8'));
     return aggregator;

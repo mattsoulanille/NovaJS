@@ -1,8 +1,7 @@
 import * as Comlink from 'comlink';
-import nodeEndpointImport from 'comlink/dist/umd/node-adapter.js';
-const nodeEndpoint = nodeEndpointImport as unknown as typeof nodeEndpointImport.default;
 import { NovaParse } from "novaparse";
 import { parentPort } from "worker_threads";
+import { nodeEndpoint } from "../../util/comlink_node_endpoint.js";
 
 let novaParse: NovaParse | undefined;
 const api = {

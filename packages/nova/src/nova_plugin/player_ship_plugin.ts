@@ -24,7 +24,7 @@ const SetControlledShip = new System({
             // For convenience when debugging in the browser. Also
             // runs in workers and on the server, which have no window.
             if (typeof window !== 'undefined') {
-                (window as any).myShip = entity;
+                window.myShip = entity;
             }
         }
     }

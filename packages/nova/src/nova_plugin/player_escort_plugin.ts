@@ -545,22 +545,35 @@ function escortCarryEventType<Rest extends object>(
             if (isLeft(encoded)) {
                 return encoded;
             }
-            const { entity, ...rest } = encoded.right;
+            const { entity, rest } = splitCarry(encoded.right);
             const decoded = serializer.decode(entity);
             if (isLeft(decoded)) {
                 return t.failure(entity, context,
                     serializer.describeDecodeFailure(entity, decoded.left));
             }
-            return t.success({
-                ...(rest as unknown as Rest),
-                entity: decoded.right,
-            });
+            return t.success({ ...rest, entity: decoded.right });
         },
-        ({ entity, ...rest }) => ({
-            ...restType.encode(rest as unknown as Rest),
-            entity: serializer.encode(entity),
-        }),
+        carry => {
+            const { entity, rest } = splitCarry(carry);
+            return {
+                ...restType.encode(rest),
+                entity: serializer.encode(entity),
+            };
+        },
     );
+}
+
+/**
+ * Separates a carried entity from the plain fields it travels with (the
+ * fields keep their order; the entity is re-attached last by the caller).
+ */
+function splitCarry<Rest extends object, E>(
+    carry: Rest & { entity: E }): { entity: E, rest: Rest } {
+    const { entity, ...rest } = carry;
+    // cast: a rest destructure of a generic intersection is typed
+    // Omit<Rest & { entity: E }, 'entity'>, which TypeScript cannot relate
+    // back to Rest; at runtime it holds exactly Rest's own fields.
+    return { entity, rest: rest as unknown as Rest };
 }
 
 const EscortJumpRest = t.type({

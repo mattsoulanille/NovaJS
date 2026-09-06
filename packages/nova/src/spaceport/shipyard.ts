@@ -458,7 +458,7 @@ export class Shipyard extends Menu<Entity> {
         // For convenience. Guarded: the menus are driven headlessly by
         // their specs, where there is no window to hang it on.
         if (typeof window !== 'undefined') {
-            (window as any).myShip = this.input;
+            window.myShip = this.input;
         }
     }
 }

@@ -910,8 +910,7 @@ export const HailDialogPlugin: Plugin = {
         stage.addChild(dialog.container);
         world.resources.set(HailDialogResource, dialog);
         if (typeof window !== 'undefined') {
-            (window as unknown as { novaHailDialog: HailDialog })
-                .novaHailDialog = dialog;
+            window.novaHailDialog = dialog;
         }
 
         /**

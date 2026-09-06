@@ -61,6 +61,13 @@ class GameDataAggregator implements GameDataInterface {
     readonly ids: Promise<NovaIDs>;
     readonly preloadData: Promise<PreloadData>;
     readonly controlBitNamespaces: Promise<ControlBitNamespaces>;
+    /**
+     * The settings/ file reader of SimulationGameDataInterface. The
+     * browser's SimulationGameData fetches these over HTTP; an aggregator
+     * has no such path of its own, so node contexts that build worlds
+     * with the control systems (the test fixture) install one.
+     */
+    getSettings?: (file: string) => Promise<unknown>;
     private dataSources: Array<GameDataInterface>;
     private warningReporter: (w: string) => void;
     private idSets: Promise<Map<NovaDataType, Set<string>>> | null = null;

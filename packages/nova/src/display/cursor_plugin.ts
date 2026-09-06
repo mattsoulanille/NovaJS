@@ -162,9 +162,10 @@ function setOsCursorHidden(app: PIXI.Application | undefined, hidden: boolean) {
     }
     const styles = app.renderer.events.cursorStyles;
     styles.default = hidden ? 'none' : 'inherit';
-    const view = app.view as unknown as { style?: { cursor: string } };
-    if (view.style) {
-        view.style.cursor = hidden ? 'none' : '';
+    // ICanvas's style is optional: an OffscreenCanvas has none.
+    const style = app.view.style;
+    if (style) {
+        style.cursor = hidden ? 'none' : '';
     }
 }
 

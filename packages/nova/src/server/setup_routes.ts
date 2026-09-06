@@ -271,11 +271,9 @@ class GameDataServer {
                 return;
             }
 
-            let data = await dataGettable.get(item);
-            if (data instanceof ArrayBuffer) {
-                data = Buffer.from(data) as unknown as ArrayBuffer;
-            }
-            res.send(data);
+            const data = await dataGettable.get(item);
+            // Raw resources (sounds, images) go out as a Buffer, not JSON.
+            res.send(data instanceof ArrayBuffer ? Buffer.from(data) : data);
         } catch (e) {
             if (!res.headersSent) {
                 if (isNovaIDNotFoundError(e)) {
