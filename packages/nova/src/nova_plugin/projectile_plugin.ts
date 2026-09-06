@@ -528,8 +528,6 @@ const ProjectileBlastSystem = new System({
     step(projectileData, blastHull, hitter, movement, owner, firingGroup,
         entities, ids, explosion, createTime, time, source) {
         const blastIgnore = new Set<string>();
-        // TODO: Tag ship that was hit as immune to explosion, since it's already hit.
-
         if (explosion.otherUuid) {
             // The projectile already damaged this entity, so
             // the blast should ignore it.

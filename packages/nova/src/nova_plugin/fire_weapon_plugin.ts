@@ -470,8 +470,8 @@ export abstract class WeaponEntry {
     }
 
     fireFromEntity(source: string, inaccuracy = true): Entity | undefined {
-        // TODO: This is expensive. Cache queries for different sources in nova_ecs or
-        // add a 'number of shots' argument.
+        // A per-entity runQuery is answered from nova_ecs's query cache
+        // (QueryCacheEntry.getResultForEntity), so this is cheap per shot.
         const results = this.runQuery(FireFromEntityQuery, source);
         if (!results[0]) {
             return undefined;

@@ -73,9 +73,9 @@ export function ProvideAsync<Data, Args extends readonly ArgTypes[]>({ name, pro
                 // then apply the provided data.
                 if (originalDataForProvider.get(uuid) === runningSymbol) {
 
-                    // If the provided value is changed while the provider is running,
-                    // don't set the value.
-                    // TODO: Is this desirable?
+                    // If the provided value is changed while the provider is
+                    // running, don't set the value: whoever wrote it in the
+                    // meantime wins (asserted by provide_async_test).
                     if (entity.components.get(provided) !== originalProvidedValue) {
                         return;
                     }

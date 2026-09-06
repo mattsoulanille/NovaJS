@@ -31,8 +31,8 @@ function modFunction(modType: number, modVal: number): OutfitFunction | null {
         case 14: return ["IFF", true];
         case 15: return ["afterburner", modVal];
         case 16: return ["map", modVal];
-        // Cloaking device. TODO: decode the cloak flags (see the "oütf.ModTypes"
-        // sub-template) into the various cloaking device types.
+        // Cloaking device. The ModVal bitfield is decoded by outfit_parse
+        // via novadatainterface/cloak_data decodeCloakModVal.
         case 17: return ["cloak", modVal];
         case 18: return ["energyRecharge", modVal];
         case 19: return ["auto refuel", true];
