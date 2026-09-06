@@ -1354,7 +1354,9 @@ export class Outfitter extends Menu<Entity> {
      * outfit, but that is left to the entity baseline.)
      */
     dockedStatus(): DockedLiveStatus {
-        return { credits: this.credits.credits };
+        // No visit (it failed to open): nothing to override, so the bar
+        // reads the entity.
+        return { credits: this.transaction?.credits.credits };
     }
 
     /**

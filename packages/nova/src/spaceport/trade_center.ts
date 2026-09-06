@@ -598,6 +598,9 @@ export class TradeCenter extends Menu<Entity> {
      * which stays the hull's alone.
      */
     dockedStatus(): DockedLiveStatus {
+        if (!this.transaction) {
+            return {}; // No visit (it failed to open): the bar reads the entity.
+        }
         const fleet = sumFleetCargo([
             { cargo: this.state.cargo, capacity: this.state.cargoCapacity },
             ...this.holds,
