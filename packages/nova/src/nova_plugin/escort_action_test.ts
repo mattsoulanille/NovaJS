@@ -259,7 +259,7 @@ describe('releasing an escort', () => {
         // A hold is exactly what departByJump refuses to jump through, so
         // a held ship would be released into the system and stay forever.
         const escort = await fixture.addEscort();
-        escort.components.set(SystemHoldComponent, { reason: 'test' });
+        escort.components.set(SystemHoldComponent, { reason: 'missionGoal' });
         release();
         expect(escort.components.has(SystemHoldComponent)).toBeFalse();
     });
