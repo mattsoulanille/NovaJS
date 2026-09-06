@@ -15,11 +15,10 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { registerSimulationBridgeEvent } from '../communication/simulation_bridge_events.js';
 import { mod } from '../util/mod.js';
 import { ControlledByComponent, ShipControlEvent, ShipControlStateComponent } from './ship_control.js';
-import { CloakActiveComponent, CLOAK_OFF_SOUND, isCloaked } from './cloak_plugin.js';
+import { CloakActiveComponent, isCloaked } from './cloak_plugin.js';
 import { ExplodingComponent, ZeroArmorEvent } from './death_plugin.js';
 import { IsIonizedComponent } from './ionization_plugin.js';
 import { ShipDataComponent } from './ship_plugin.js';
-import { PlayerSoundEvent } from './sound_plugin.js';
 import { TargetComponent } from './target_component.js';
 import { DisabledComponent } from './disabled_component.js';
 import { FoldStateComponent, foldBlocksFiring } from './fold_state.js';
@@ -391,21 +390,15 @@ export const WeaponsSystem = new System({
 
             // wëap Flags2 0x4000 "Weapon can be fired while cloaked" —
             // the per-weapon OPT-IN, so by default firing and cloaking
-            // do not mix. Which way the original resolves it is not
-            // spelled out on the weapon, but the shïp AI flags settle it:
-            // "AI ships will not uncloak until close to their target"
-            // (Flags2 0x1000, ~:2583) and "AI ships ... will cloak when
-            // their weapon goes into burst reload" (0x0100, ~:2578) both
-            // presuppose that a ship UNCLOAKS TO FIRE and cloaks again
-            // when it stops. So a triggered weapon without the flag
-            // fires and drops the cloak (below, once a shot actually
-            // leaves; a targetless turret or an empty magazine gives
-            // nothing away). Point defense is the exception ruled here:
-            // it fires on its own, and an automatic system must not blow
-            // the pilot's cloak for them, so an unflagged PD weapon is
-            // simply held while cloaked.
-            const cloaked = isCloaked(cloakActive);
-            if (cloaked && !weapon.data.fireWhileCloaked && isPointDefense) {
+            // do not mix. Maintainer ruling #152, tested in the original
+            // game: a weapon without the flag REFUSES to fire while the
+            // ship is cloaked, and the cloak stays up — the trigger does
+            // not decloak the ship, and nothing (ammo, energy, reload) is
+            // spent on the refused shot. The pilot (or the AI's cloak
+            // control) has to drop the cloak first. Point defense is the
+            // same: an automatic system neither fires through the cloak
+            // nor blows it. A flagged weapon fires and keeps the cloak.
+            if (isCloaked(cloakActive) && !weapon.data.fireWhileCloaked) {
                 continue;
             }
 
@@ -459,14 +452,6 @@ export const WeaponsSystem = new System({
 
                 if (weapon.data.exclusive) {
                     exclusiveLock = id;
-                }
-
-                // Firing gave the ship away (see the cloak ruling above).
-                // The same sound CloakControlSystem plays for a manual
-                // decloak, to the firing ship's own pilot only.
-                if (cloaked && !weapon.data.fireWhileCloaked && cloakActive) {
-                    cloakActive.active = false;
-                    emit(PlayerSoundEvent, { id: CLOAK_OFF_SOUND }, [uuid]);
                 }
 
                 // wëap AmmoType -999: the shot left, and it took the ship

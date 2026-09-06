@@ -20,7 +20,7 @@ import { completeEntity } from './entity_data_loader.js';
 import {
     defaultWeaponLocalState, OwnerComponent, VulnerableToPD, WeaponsComponent,
 } from './fire_weapon_plugin.js';
-import { IonizationComponent } from './health_plugin.js';
+import { FuelComponent, IonizationComponent } from './health_plugin.js';
 import { IsIonizedComponent } from './ionization_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem, SIMULATION_STEP_MS } from './make_system.js';
@@ -49,7 +49,7 @@ import { WeaponsStateComponent, WeaponState } from './weapons_state.js';
  * for weapons that do not fire simultaneously and "independent of how
  * many of the weapon the ship has" for those that do.
  *
- * Cloak (#49, Flags2 0x4000), ionization (Seeker 0x0020), the AI-only
+ * Cloak (#152, Flags2 0x4000), ionization (Seeker 0x0020), the AI-only
  * rules (Flags2 0x0100, Flags 0x0008), one-in-flight (Flags3 0x0004),
  * exclusive (Flags3 0x0020) and the fixed side angle (Inaccuracy < 0,
  * #99, #100): see weapon_plugin.ts / fire_weapon_plugin.ts for each
@@ -355,20 +355,55 @@ describe('WeaponsSystem burst cycles (#48)', () => {
         });
 });
 
-describe('firing while cloaked (#49, wëap Flags2 0x4000)', () => {
-    async function cloakedWorld(weaponData: ProjectileWeaponData) {
-        const made = await makeTestWorld({ weapons: [[weaponData, 1]] });
+/**
+ * Maintainer ruling #152, tested in the original game: a weapon that
+ * cannot fire while cloaked REFUSES to fire and does NOT decloak the
+ * ship. (PR #133 had an unflagged trigger fire and drop the cloak; that
+ * reading is gone.) Point defense is refused the same way; a weapon
+ * flagged fire-while-cloaked fires and keeps the cloak.
+ */
+describe('firing while cloaked (#152, wëap Flags2 0x4000)', () => {
+    async function cloakedWorld(weaponData: ProjectileWeaponData,
+        ship: Partial<ShipData> = {}) {
+        const made = await makeTestWorld({ weapons: [[weaponData, 1]], ship });
         made.ship.components.set(CloakActiveComponent, { active: true });
         return made;
     }
 
-    it('an ordinary weapon fires, and firing drops the cloak', async () => {
-        const { world, ship } = await cloakedWorld(weapon('test:gun'));
-        setFiring(ship, 'test:gun', true);
-        await stepWorld(world, 1);
-        expect(projectiles(world).length).toEqual(1);
-        expect(ship.components.get(CloakActiveComponent)!.active).toBeFalse();
-    });
+    it('an ordinary weapon is refused: nothing fires and the cloak holds',
+        async () => {
+            const { world, ship } = await cloakedWorld(weapon('test:gun'));
+            setFiring(ship, 'test:gun', true);
+            await stepWorld(world, 5);
+            expect(projectiles(world).length).toEqual(0);
+            expect(ship.components.get(CloakActiveComponent)!.active).toBeTrue();
+        });
+
+    it('a refused shot spends nothing, and the trigger is honoured the '
+        + 'moment the cloak drops', async () => {
+            // The stock hull trickle-recharges fuel (ShipFuelProvider
+            // re-derives the rate every step); a hull with none, so the
+            // tank reads the shot's cost and nothing else.
+            const { world, ship } = await cloakedWorld(
+                weapon('test:gun', { ammoType: ['energy', 10] }), {
+                    physics: {
+                        ...getDefaultShipPhysics(), armorRecharge: 0,
+                        energyRecharge: 0, autoRefuel: false,
+                    },
+                });
+            const fuel = ship.components.get(FuelComponent)!;
+            fuel.current = 100;
+            setFiring(ship, 'test:gun', true);
+            await stepWorld(world, 5);
+            expect(projectiles(world).length).toEqual(0);
+            expect(fuel.current).toEqual(100);
+            // No reload clock was started by the refusal: the first tick
+            // out of the cloak fires.
+            ship.components.get(CloakActiveComponent)!.active = false;
+            await stepWorld(world, 1);
+            expect(projectiles(world).length).toEqual(1);
+            expect(fuel.current).toEqual(90);
+        });
 
     it('a weapon that can be fired while cloaked keeps the cloak', async () => {
         const { world, ship } = await cloakedWorld(
@@ -376,16 +411,6 @@ describe('firing while cloaked (#49, wëap Flags2 0x4000)', () => {
         setFiring(ship, 'test:torp', true);
         await stepWorld(world, 5);
         expect(projectiles(world).length).toEqual(3);
-        expect(ship.components.get(CloakActiveComponent)!.active).toBeTrue();
-    });
-
-    it('a held trigger that fires nothing gives nothing away', async () => {
-        // A turret with no target fires nothing, so the cloak holds.
-        const { world, ship } = await cloakedWorld(
-            weapon('test:turret', { guidance: 'turret' }));
-        setFiring(ship, 'test:turret', true);
-        await stepWorld(world, 5);
-        expect(projectiles(world).length).toEqual(0);
         expect(ship.components.get(CloakActiveComponent)!.active).toBeTrue();
     });
 
@@ -413,7 +438,7 @@ describe('firing while cloaked (#49, wëap Flags2 0x4000)', () => {
             expect(projectiles(world).length).toBeGreaterThan(0);
         });
 
-        it('is held while cloaked rather than blowing the cloak', async () => {
+        it('is refused while cloaked rather than blowing the cloak', async () => {
             const { world, ship } = await cloakedWorld(pointDefense());
             addIncoming(world);
             await stepWorld(world, 5);
