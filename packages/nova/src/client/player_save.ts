@@ -201,7 +201,7 @@ export class PlayerPersistence {
             recordCheckpoint(getActiveSaveKey(), envelope, {
                 label: request.label,
                 kind: request.kind,
-                ...(data.date ? { date: { ...data.date } } : {}),
+                date: { ...data.date },
                 ...(system ? { system } : {}),
                 ...(stellar ? { stellar } : {}),
                 at: Date.now(),
