@@ -159,8 +159,7 @@ export const JumpFadePlugin: Plugin = {
             }).catch(e => console.warn('Failed to load settings.json', e));
             // Console-discoverable live toggle.
             if (typeof window !== 'undefined') {
-                const settingsObject =
-                    ((window as any).novaSettings ??= {});
+                const settingsObject = (window.novaSettings ??= {});
                 Object.defineProperty(settingsObject, 'jumpVisual', {
                     get: getJumpVisual,
                     set: setJumpVisual,

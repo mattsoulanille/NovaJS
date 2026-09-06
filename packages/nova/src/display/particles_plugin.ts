@@ -195,7 +195,7 @@ export const ParticlesPlugin: Plugin = {
         // Test lever, matching the other window handles the game exposes
         // (novaSim, novaAutopilot, ...): live budget counters.
         if (typeof window !== 'undefined') {
-            (window as any).novaParticleStats = () => particles.stats();
+            window.novaParticleStats = () => particles.stats();
         }
 
         world.addSystem(TrailParticlesProvider);

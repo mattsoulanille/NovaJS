@@ -36,6 +36,14 @@ const StarmapControlsSubscription = new Resource<Subscription>('StarmapControlsS
 /** Marks the plugin's openStarmap as torn down (see remove). */
 const StarmapDisposer = new Resource<() => void>('StarmapDisposer');
 export const SetJumpRouteEvent = new EcsEvent<{ route: string[] }>('SetJumpRouteEvent');
+
+/** The `window.novaDiscovery` levers (see window_hooks.ts). */
+export interface DiscoveryHooks {
+    level(id: string): DiscoveryLevel;
+    mark(ids: string[], level: DiscoveryLevel): void;
+    markAll(level?: DiscoveryLevel): Promise<void>;
+}
+
 /**
  * Opens the starmap over whatever is on screen and resolves with the
  * chosen route when it closes. Landed menus (the spaceport) call this
@@ -192,13 +200,12 @@ export const StarmapPlugin: Plugin = {
         world.resources.set(StarmapResource, starmap);
         // Debug/headless-driving handle, like window.displayWorld.
         if (typeof window !== 'undefined') {
-            (window as unknown as { novaStarmap: Starmap }).novaStarmap =
-                starmap;
+            window.novaStarmap = starmap;
             // The discovery record, for the visual-comparison harness and
             // for debugging: there is no in-game way to hand a pilot a
             // galaxy, and the map's chrome scenarios need one to compare
             // against the reference captures' mid-game pilot.
-            (window as unknown as { novaDiscovery: unknown }).novaDiscovery = {
+            window.novaDiscovery = {
                 level: (id: string) => discoveryLevel(id),
                 mark: (ids: string[], level: DiscoveryLevel) =>
                     markManyDiscovered(ids, level),
