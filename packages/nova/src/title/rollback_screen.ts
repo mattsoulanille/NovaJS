@@ -29,7 +29,7 @@ import { Button } from '../spaceport/button.js';
 import { wrapIndex } from '../spaceport/list_selection.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
-import { SystemGraph } from '../spaceport/starmap.js';
+import { SystemGraph } from '../spaceport/system_graph.js';
 import { checkpointState, PilotHistory } from './pilot_history.js';
 import {
     checkpointBits, checkpointDetails, checkpointPath, checkpointSystem,

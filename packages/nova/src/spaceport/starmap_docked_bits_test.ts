@@ -155,4 +155,29 @@ describe('the docked starmap\'s control bits', () => {
             starmap.dismiss();
             await shown;
         });
+
+    // The column is cleared before its lines are computed, so a lookup
+    // that throws part-way (here the Legal Status line's records) leaves
+    // it BLANK rather than still showing the previous system.
+    it('leaves the properties column empty when a line\'s lookup throws',
+        async () => {
+            let armed = false;
+            const starmap = await dockedMap(() => {
+                if (armed) throw new Error('records unavailable');
+                return new Map([['nova:128', 30]]);
+            });
+            const shown = starmap.show([]);
+            await new Promise(resolve => setTimeout(resolve, 0));
+            expect(propertyLines(starmap)).toContain('Legal Status:');
+
+            armed = true;
+            const showProperties = (starmap as unknown as {
+                showProperties(systemId: string): void,
+            }).showProperties.bind(starmap);
+            expect(() => showProperties(KANIA))
+                .toThrowError('records unavailable');
+            expect(propertyLines(starmap)).toEqual([]);
+            starmap.dismiss();
+            await shown;
+        });
 });

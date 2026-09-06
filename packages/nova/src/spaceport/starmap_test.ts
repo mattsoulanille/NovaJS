@@ -1,6 +1,8 @@
 import "jasmine";
 import * as PIXI from "pixi.js";
-import { computeHypergateSystemLinks, representativeSystems } from "./starmap.js";
+import {
+    computeHypergateSystemLinks, representativeSystems,
+} from "./system_graph_data.js";
 import {
     clickRadiusWorld, DragTracker, nearestTargetIndex, screenToWorld,
 } from "./starmap_hit.js";

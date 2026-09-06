@@ -11,7 +11,7 @@ import { buildAdjacency } from './route.js';
 import {
     SYSTEM_INHABITED_COLOR, SYSTEM_UNEXPLORED_COLOR,
     SYSTEM_UNINHABITED_COLOR, systemDotColor,
-} from './starmap.js';
+} from './starmap_draw.js';
 
 /**
  * ============================================================================

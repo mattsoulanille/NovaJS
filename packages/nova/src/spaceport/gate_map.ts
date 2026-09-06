@@ -16,10 +16,9 @@ import {
 } from "./hypergate_network.js";
 import { Menu } from "./menu.js";
 import { MenuControls } from "./menu_controls.js";
-import {
-    computeHypergateSystemLinks, MISSION_MARK_ACTIVE_CICN, SystemGraph,
-    SystemGraphOptions,
-} from "./starmap.js";
+import { MISSION_MARK_ACTIVE_CICN } from "./starmap_marks.js";
+import { SystemGraph, SystemGraphOptions } from "./system_graph.js";
+import { computeHypergateSystemLinks } from "./system_graph_data.js";
 
 /**
  * What the hypergate map is asked to pick, and its answer. `destinationSpob`

@@ -10,7 +10,7 @@ import { isPort, systemIsInhabited } from "../nova_plugin/landable.js";
 import {
     SYSTEM_INHABITED_COLOR, SYSTEM_UNEXPLORED_COLOR,
     SYSTEM_UNINHABITED_COLOR, systemDotColor,
-} from "./starmap.js";
+} from "./starmap_draw.js";
 
 /**
  * The star map's blue-vs-grey system dots, against the real resource data.
