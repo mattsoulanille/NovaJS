@@ -33,6 +33,7 @@ import { VersResource } from "./resource_parsers/vers_resource.js";
 import { WeapResource } from "./resource_parsers/weap_resource.js";
 import { SndResource } from "./resource_parsers/snd_resource.js";
 import { $enum } from "ts-enum-util";
+import * as path from "path";
 
 
 // Reads a single plugin or nova file
@@ -89,18 +90,22 @@ async function readNovaFile(filePath: string, localIDSpace: NovaResources): Prom
     return resourceCount;
 }
 
-function read(path: string) {
-    // Whether or not to use resource fork
-    var useRF = path.slice(-5) !== ".ndat" && path.slice(-5) !== ".npif"
-        && path.slice(-4) !== ".rez";
-    return readResourceFork(path, useRF);
+// Files whose resources live in the DATA fork: the Nova Data files and
+// Windows-style plug-in containers. Everything else (a classic Mac plug-in,
+// usually with no extension at all) is read from its resource fork.
+const DATA_FORK_EXTENSIONS: ReadonlySet<string> =
+    new Set([".ndat", ".npif", ".rez"]);
+
+function read(filePath: string) {
+    const useRF = !DATA_FORK_EXTENSIONS.has(path.extname(filePath).toLowerCase());
+    return readResourceFork(filePath, useRF);
 }
 
 
 // Since we're storing subclasses, not instances of subclasses.
 // Still missing: DITL, DLOG (classic Mac UI resources) and rlë8
 // (8-bit sprites; Nova's data has a single one, unused by the game).
-var parserMap: { [index: string]: typeof BaseResource } = {};
+const parserMap: { [index: string]: typeof BaseResource } = {};
 parserMap[NovaResourceType.bööm] = BoomResource;
 parserMap[NovaResourceType.chär] = CharResource;
 parserMap[NovaResourceType.cicn] = CicnResource;

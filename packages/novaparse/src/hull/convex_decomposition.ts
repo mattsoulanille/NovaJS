@@ -83,9 +83,11 @@ function convexHullIndices(points: Point[]): number[] {
 }
 
 /**
- * Convex hull of `points` in the same counterclockwise (for y-up
- * coordinates) winding that hull.js produces, without the repeated final
- * point, so it can be consumed anywhere a hull.js ConvexHull is.
+ * Convex hull of `points`: counterclockwise (for y-up coordinates) from
+ * the (x, y)-least point, with no repeated final point. Collinear points
+ * are dropped. This is the winding the retired hull.js produced (up to
+ * rotation), which the pinned collision geometry still carries — see
+ * sprite_sheet_multi_parse's makeConvexHull.
  */
 export function convexHull(points: Point[]): Point[] {
     return convexHullIndices(points).map(i => points[i]);

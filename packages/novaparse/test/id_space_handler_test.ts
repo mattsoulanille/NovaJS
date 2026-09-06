@@ -5,6 +5,7 @@ import {
 import { NovaParse } from "../src/nova_parse.js";
 import { NovaResources } from "../src/resource_parsers/resource_holder_base.js";
 import { resolveFixture } from "./fixtures.js";
+import * as path from "path";
 
 
 describe("pluginPrefixFor", () => {
@@ -130,6 +131,22 @@ describe("IDSpaceHandler", () => {
         // Built twice from the same data: identical.
         const again = await new IDSpaceHandler(dataPath).getFlagMap();
         expect(again.report).toEqual(map.report);
+    });
+
+    it("skips media files whatever the case of their extension", async () => {
+        // The disallowed-extension check runs before any I/O, so a path that
+        // does not exist is the proof: a skipped file returns false without
+        // touching the filesystem, while a non-media file of the same
+        // (non)existence rejects on the read. Case-insensitive volumes
+        // happily hold "Intro.MP3" next to "intro.mp3".
+        const dataPath = resolveFixture("IDSpaceHandlerTestFilesystem");
+        const handler = new IDSpaceHandler(dataPath);
+        const missing = path.join(dataPath, "Plug-ins", "not a real file");
+        expect(await handler.addPlugin(missing + ".mp3", "x")).toBe(false);
+        expect(await handler.addPlugin(missing + ".MP3", "x")).toBe(false);
+        expect(await handler.addPlugin(missing + ".Mov", "x")).toBe(false);
+        await expectAsync(handler.addPlugin(missing + ".NDAT", "x"))
+            .toBeRejected();
     });
 
     it("should defer errors to when a specific idSpace is requested", async () => {

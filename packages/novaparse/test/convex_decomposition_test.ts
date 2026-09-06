@@ -1,5 +1,4 @@
 import "jasmine";
-import hull from "hull.js";
 import { convexHull, decomposePolygon, isConvex, Point, signedArea2 } from "../src/hull/convex_decomposition.js";
 import { simplifyPolygon, traceOutline } from "../src/hull/trace_outline.js";
 
@@ -60,11 +59,13 @@ function expectCovered(polygon: Point[], components: Point[][],
 }
 
 describe("convexHull", () => {
-    it("matches hull.js's winding", () => {
+    it("matches the winding hull.js produced", () => {
         const points: Point[] = [
             [0, 0], [4, 1], [2, 5], [0, 4], [4, 4], [1, 2], [3, 0]];
-        const expected = hull(points.map(p => [...p] as Point), Infinity);
-        expected.pop(); // hull.js repeats the first point at the end.
+        // hull(points, Infinity) from hull.js 1.0.6, minus its repeated
+        // final point: counterclockwise from the (x, y)-greatest point.
+        const expected: Point[] = [
+            [4, 4], [2, 5], [0, 4], [0, 0], [3, 0], [4, 1]];
         // Rotation-invariant comparison: same cycle, same direction.
         const actual = convexHull(points);
         expect(actual.length).toEqual(expected.length);

@@ -160,7 +160,7 @@ class IDSpaceHandler {
      * Rejects like getIDSpace when the core data failed to load.
      */
     public async getFlagMap(): Promise<FlagNamespaceMap> {
-        var result = await this.globalResources;
+        const result = await this.globalResources;
         if (result instanceof Error) {
             throw result;
         }
@@ -176,7 +176,7 @@ class IDSpaceHandler {
      * data failed to load.
      */
     public async getControlBitMap(): Promise<ControlBitNamespaceMap> {
-        var result = await this.globalResources;
+        const result = await this.globalResources;
         if (result instanceof Error) {
             throw result;
         }
@@ -188,7 +188,7 @@ class IDSpaceHandler {
 
     /** Plug-in prefixes in load (= flag namespace allocation) order. */
     public async getPluginPrefixOrder(): Promise<string[]> {
-        var result = await this.globalResources;
+        const result = await this.globalResources;
         if (result instanceof Error) {
             throw result;
         }
@@ -197,7 +197,7 @@ class IDSpaceHandler {
 
     // Returns the IDSpace of namespace 'prefix'
     public async getIDSpace(prefix: string | null = null): Promise<NovaResources> {
-        var result = await this.globalResources; // May be an error
+        const result = await this.globalResources; // May be an error
         if (result instanceof Error) {
             throw result;
         }
@@ -211,7 +211,7 @@ class IDSpaceHandler {
     // namespace. It is used by nova resource parsers to reference other nova resources because those
     // references must occur in the correct namespace.
     private getIDSpaceUnsafe(prefix: string | null = null): NovaResources {
-        var globalResources = this.tmpBuildingResources;
+        const globalResources = this.tmpBuildingResources;
 
         if (prefix == null) {
             return globalResources;
@@ -224,10 +224,10 @@ class IDSpaceHandler {
                     return Reflect.get(target, resourceType);
                 }
 
-                var idList = Reflect.get(target, resourceType);
+                let idList = Reflect.get(target, resourceType);
                 if (!idList) {
                     Reflect.set(target, resourceType, {});
-                    var idList = Reflect.get(target, resourceType);
+                    idList = Reflect.get(target, resourceType);
                 }
 
                 return new Proxy(idList, {
@@ -239,13 +239,12 @@ class IDSpaceHandler {
                             console.warn("accessing ids by symbol");
                             return Reflect.get(target, localID);
                         }
-                        var novaScopeValue = Reflect.get(target, "nova:" + localID);
+                        const novaScopeValue = Reflect.get(target, "nova:" + localID);
                         if (novaScopeValue) {
                             return novaScopeValue;
                         }
                         else {
-                            var globalID = prefix + ":" + localID;
-                            return Reflect.get(target, globalID);
+                            return Reflect.get(target, prefix + ":" + localID);
                         }
                     },
 
@@ -257,8 +256,8 @@ class IDSpaceHandler {
                         }
 
                         // Assume it exists in the nova prefix
-                        var usedPrefix = "nova";
-                        var globalID = usedPrefix + ":" + localID;
+                        let usedPrefix = "nova";
+                        let globalID = usedPrefix + ":" + localID;
                         if (!Reflect.get(target, globalID)) {
                             // It doesn't, so use its own prefix.
                             usedPrefix = prefix;
@@ -326,7 +325,7 @@ class IDSpaceHandler {
         // volumes the original game's data lives on, with the raw name as a
         // tie-break so the result is still a total, locale-independent
         // order.
-        var fileNames = (await readdir(pluginsPath)).sort(comparePluginNames);
+        const fileNames = (await readdir(pluginsPath)).sort(comparePluginNames);
         // The prefixes claimed outright by entries whose names are NOT
         // reserved, so pluginPrefixFor can re-key a reserved name without
         // colliding with a real plug-in called e.g. "nova-plugin".
@@ -335,10 +334,9 @@ class IDSpaceHandler {
         const claimedPrefixes = new Set(fileNames
             .map(n => n.split(".")[0])
             .filter(p => !RESERVED_PLUGIN_PREFIXES.has(p)));
-        for (let i in fileNames) {
-            var name = fileNames[i];
-            var currentPath = path.join(pluginsPath, name);
-            var prefix = pluginPrefixFor(name, claimedPrefixes);
+        for (const name of fileNames) {
+            const currentPath = path.join(pluginsPath, name);
+            const prefix = pluginPrefixFor(name, claimedPrefixes);
             if (!this.pluginPrefixOrder.includes(prefix)) {
                 this.pluginPrefixOrder.push(prefix);
             }
@@ -395,10 +393,9 @@ class IDSpaceHandler {
         // Sorted the same way, and for the same reason, as in
         // addNovaPluginsDirectory: which file's copy of a shared id wins
         // must not depend on the filesystem, and the last name wins.
-        var fileNames = (await readdir(dirPath)).sort(comparePluginNames);
-        for (let i in fileNames) {
-            var name = fileNames[i];
-            var currentPath = path.join(dirPath, name);
+        const fileNames = (await readdir(dirPath)).sort(comparePluginNames);
+        for (const name of fileNames) {
+            const currentPath = path.join(dirPath, name);
             if (fatalOnError) {
                 await this.addPlugin(currentPath, prefix);
             } else {
@@ -424,8 +421,8 @@ class IDSpaceHandler {
         // Can't await this.getIDSpace because that causes an infinite loop
         // (getIDSpace awaits this.globalResources which depends on this function)
 
-        var disallowedExtensions = new Set([".mp3", ".mov"]);
-        if (disallowedExtensions.has(path.extname(filePath))) {
+        const disallowedExtensions = new Set([".mp3", ".mov"]);
+        if (disallowedExtensions.has(lowerExtname(filePath))) {
             return false;
         }
 
@@ -465,9 +462,16 @@ class IDSpaceHandler {
 // one of these is suspicious (empty/stripped resource fork).
 function likelyHasResources(filePath: string): boolean {
     const resourceExtensions = new Set([".plug", ".ndat", ".rez", ".npif"]);
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = lowerExtname(filePath);
     // Classic Mac resource-fork plug-ins often have no extension at all.
     return resourceExtensions.has(ext) || ext === "";
+}
+
+// The extension the file-type checks above compare against. Lowercased so a
+// plug-in folder from a case-insensitive volume ("Music.MP3", "Intro.MOV")
+// is classified the same way as its lowercase twin.
+function lowerExtname(filePath: string): string {
+    return path.extname(filePath).toLowerCase();
 }
 
 // The loud "this plug-in was skipped" report: names the exact file and the
@@ -499,40 +503,25 @@ function errorDetail(e: unknown): string {
     return String(e);
 }
 
-function isDirectory(path: string): Promise<boolean> {
-    return new Promise(function(fulfill, reject) {
-        fs.stat(path, (err, stats): void => {
-            if (err) {
-                if (err.code == "ENOENT") {
-                    fulfill(false);
-                    return;
-                }
-                reject(err);
-            }
-            else {
-                fulfill(stats.isDirectory());
-            }
-        });
-    });
+// Whether `entryPath` is a directory. A missing entry is simply "not a
+// directory"; any other stat failure (EACCES, ELOOP, EIO) propagates, which
+// addNovaPluginsDirectory relies on to skip an unreadable plug-in.
+async function isDirectory(entryPath: string): Promise<boolean> {
+    try {
+        return (await fs.promises.stat(entryPath)).isDirectory();
+    } catch (e) {
+        if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+            return false;
+        }
+        throw e;
+    }
 }
 
-
-// Returns a list of files or directories in a directory.
-function readdir(path: string): Promise<Array<string>> {
-    return new Promise(function(fulfill, reject) {
-        fs.readdir(path, function(err, files) {
-            if (err) {
-                reject(err);
-            }
-            else {
-                fulfill(files.filter(function(p) {
-                    return p[0] !== '.';
-                }));
-            }
-        });
-    });
+// The entries of a directory, minus dotfiles (.DS_Store and friends), in
+// whatever order the filesystem returns them: callers sort.
+async function readdir(dirPath: string): Promise<Array<string>> {
+    return (await fs.promises.readdir(dirPath)).filter(p => p[0] !== '.');
 }
-
 
 
 
