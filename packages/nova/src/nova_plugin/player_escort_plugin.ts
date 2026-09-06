@@ -32,7 +32,7 @@ import { GateDepartureSystem } from './gate_transit_plugin.js';
 import { FuelComponent } from './health_plugin.js';
 import {
     beginFollowJump, InitiateJumpEvent, JumpComponent, JumpFromSystem,
-    JumpSequenceSystem,
+    JumpSequenceSystem, TransitKind,
 } from './jump_plugin.js';
 import { MissionShipComponent } from './mission_ship_plugin.js';
 import {
@@ -326,10 +326,11 @@ export function playerEscortLink(uuid: string,
 }
 
 /**
- * The two ways a player leaves a system taking their flock with them. They
- * differ in exactly one rule, so they share one predicate.
+ * The two ways a player leaves a system taking their flock with them
+ * (jump_plugin's TransitKind). They differ in exactly one rule, so they
+ * share one predicate.
  */
-export type EscortTransition = 'jump' | 'gate';
+export type EscortTransition = TransitKind;
 
 /**
  * Whether `escort` follows its player through a `kind` transition —

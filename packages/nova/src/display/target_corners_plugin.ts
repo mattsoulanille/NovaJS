@@ -8,6 +8,7 @@ import * as PIXI from "pixi.js";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 import { styleForTarget } from "../nova_plugin/hostility.js";
+import { TargetCornerStyle } from "../nova_plugin/iff_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";
 import { TargetComponent } from "../nova_plugin/target_component.js";
 import { mod } from "../util/mod.js";
@@ -85,7 +86,7 @@ export class TargetCorners {
         this.container.visible = v;
     }
 
-    setStyle(style: string) {
+    setStyle(style: TargetCornerStyle) {
         const texture = this.textures.get(style);
         if (texture) {
             for (const sprite of this.sprites) {

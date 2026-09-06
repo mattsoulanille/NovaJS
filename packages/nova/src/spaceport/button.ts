@@ -2,7 +2,15 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 
-const BUTTON_IDS = new Map([
+/**
+ * A button's visual state: enabled, held down (pressed sprite, grey text),
+ * or greyed out. Each has its own cap/middle PICTs (BUTTON_IDS) and font.
+ */
+export type ButtonState = 'normal' | 'clicked' | 'grey';
+
+const BUTTON_IDS = new Map<ButtonState, {
+    left: string, middle: string, right: string,
+}>([
     ['normal', {
         left: 'nova:7500',
         middle: 'nova:7501',
@@ -38,8 +46,8 @@ export type PressEvent = 'down' | 'up' | 'upoutside';
 
 /** What a press event does to a button. `state` undefined = unchanged. */
 export interface PressResult {
-    state: string | undefined;
-    pressedFrom: string | undefined;
+    state: ButtonState | undefined;
+    pressedFrom: ButtonState | undefined;
     /** Whether this release fires the click. */
     fire: boolean;
 }
@@ -58,8 +66,8 @@ export interface PressResult {
  * than 'normal', so a button greyed mid-press stays grey; without an
  * active press it changes nothing.
  */
-export function pressTransition(currentState: string,
-    pressedFrom: string | undefined, event: PressEvent,
+export function pressTransition(currentState: ButtonState,
+    pressedFrom: ButtonState | undefined, event: PressEvent,
     /** Let a GREY button take the press anyway (debug override). */
     pressGrey = false): PressResult {
     const unchanged = { state: undefined, pressedFrom, fire: false };
@@ -90,7 +98,7 @@ export function pressTransition(currentState: string,
 
 export class Button {
     container = new PIXI.Container();
-    private states = new Map<string, PIXI.Container>();
+    private states = new Map<ButtonState, PIXI.Container>();
     /**
      * When set, a press on a GREYED button is accepted if this returns true
      * for the pointer event (the outfitter's shift+click debug override).
@@ -104,9 +112,9 @@ export class Button {
      */
     readonly press = new Subject<void>();
     private text: PIXI.Text;
-    private wrappedState = 'normal';
+    private wrappedState: ButtonState = 'normal';
     /** The state to restore if this press is cancelled off the button. */
-    private pressedFrom?: string;
+    private pressedFrom?: ButtonState;
 
     /** Applies a {@link pressTransition} result; returns its `fire`. */
     private applyPress(result: PressResult): boolean {
@@ -119,7 +127,7 @@ export class Button {
     private width: number;
 
     // See colr resource                                                              
-    private font = new Map([
+    private font = new Map<ButtonState, Partial<PIXI.ITextStyle>>([
         ["normal", { fontFamily: "Geneva", fontSize: 12, fill: 0xffffff, align: 'center' } as const],
         ["clicked", { fontFamily: "Geneva", fontSize: 12, fill: 0x808080, align: 'center' } as const],
         ["grey", { fontFamily: "Geneva", fontSize: 12, fill: 0x262626, align: 'center' } as const],
@@ -222,7 +230,7 @@ export class Button {
         this.text.text = label;
     }
 
-    set state(state: string) {
+    set state(state: ButtonState) {
         for (const container of this.states.values()) {
             container.visible = false;
         }

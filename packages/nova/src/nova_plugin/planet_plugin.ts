@@ -90,24 +90,28 @@ registerSimulationBridgeEvent({ event: LandEvent });
  * message names the stellar; both are optional so the window reasons stay
  * exactly the shape they always were.
  */
-export const LandingBlockedEvent =
-    new EcsEvent<{
-        reason: 'tooFar' | 'tooFast' | 'unlandable' | 'denied',
-        isStation: boolean,
-        stellarName?: string,
-        gateKind?: 'hypergate' | 'wormhole',
-    }>('LandingBlockedEvent');
+/** Why a land attempt was refused (see LandingBlockedEvent). Closed: the
+ * event is sim-to-display within one build, never persisted. */
+export const LandingBlockReasonType = t.keyof({
+    tooFar: null, tooFast: null, unlandable: null, denied: null,
+});
+export type LandingBlockReason = t.TypeOf<typeof LandingBlockReasonType>;
+/** Which kind of gate an `unlandable` stellar is, when it is one. */
+export const GateKindType = t.keyof({ hypergate: null, wormhole: null });
+export type GateKind = t.TypeOf<typeof GateKindType>;
 export const LandingBlockedEventType = t.intersection([
     t.type({
-        reason: t.union([t.literal('tooFar'), t.literal('tooFast'),
-        t.literal('unlandable'), t.literal('denied')]),
+        reason: LandingBlockReasonType,
         isStation: t.boolean,
     }),
     t.partial({
         stellarName: t.string,
-        gateKind: t.union([t.literal('hypergate'), t.literal('wormhole')]),
+        gateKind: GateKindType,
     }),
 ]);
+export type LandingBlocked = t.TypeOf<typeof LandingBlockedEventType>;
+export const LandingBlockedEvent =
+    new EcsEvent<LandingBlocked>('LandingBlockedEvent');
 
 /**
  * Per-player temporary landing clearance bought with a bribe: the stellar's

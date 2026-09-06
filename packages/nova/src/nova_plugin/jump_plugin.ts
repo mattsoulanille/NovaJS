@@ -104,6 +104,14 @@ export type JumpRoute = {
 export const JumpRouteComponent = new Component<JumpRoute>('JumpRouteComponent');
 
 /**
+ * The two ways a ship moves between systems: a hyperspace JUMP of its own,
+ * or a hypergate / wormhole GATE transit. The route reconciliation below
+ * and the escort sweeps (player_escort_plugin's EscortTransition) branch
+ * on the same pair.
+ */
+export type TransitKind = 'jump' | 'gate';
+
+/**
  * Reconciles the entity's jump route with the system it just ARRIVED in.
  *
  * Two arrival kinds, two rules:
@@ -135,7 +143,7 @@ export const JumpRouteComponent = new Component<JumpRoute>('JumpRouteComponent')
  * into its insertion record, so every peer sees the same route.
  */
 export function reconcileRouteOnArrival(entity: Entity, arrivedSystem: string,
-    arrival: 'jump' | 'gate'): void {
+    arrival: TransitKind): void {
     const jumpRoute = entity.components.get(JumpRouteComponent);
     if (!jumpRoute || jumpRoute.route.length === 0) {
         return;

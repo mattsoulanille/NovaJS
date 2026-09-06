@@ -3,6 +3,7 @@
  * ECS so the rules are unit-testable. The rendering systems resolve components
  * and game data, then hand plain values to these helpers.
  */
+import type { GateKind, LandingBlockReason } from '../nova_plugin/planet_plugin.js';
 
 /** One line of the cargo manifest: an (abbreviated) name and a quantity. */
 export interface CargoLine {
@@ -176,18 +177,23 @@ export function jumpArrivalMessage(systemName: string,
  * 0x10), matching stock Nova's strings verbatim.
  */
 export function landingBlockedMessage(
-    reason: 'tooFar' | 'tooFast' | 'unlandable' | 'denied', isStation: boolean,
-    stellarName?: string, gateKind?: 'hypergate' | 'wormhole'): string {
-    if (reason === 'unlandable') {
-        return unlandableMessage(isStation, stellarName, gateKind);
-    }
-    if (reason === 'denied') {
-        return clearanceDeniedMessage(isStation);
-    }
+    reason: LandingBlockReason, isStation: boolean,
+    stellarName?: string, gateKind?: GateKind): string {
     const place = isStation ? 'dock at this station' : 'land on this planet';
-    const cause = reason === 'tooFar'
-        ? "You're too far away to" : "You're moving too fast to";
-    return `${cause} ${place}.`;
+    switch (reason) {
+        case 'unlandable':
+            return unlandableMessage(isStation, stellarName, gateKind);
+        case 'denied':
+            return clearanceDeniedMessage(isStation);
+        case 'tooFar':
+            return `You're too far away to ${place}.`;
+        case 'tooFast':
+            return `You're moving too fast to ${place}.`;
+        default: {
+            const unknownReason: never = reason;
+            throw new Error(`Unknown landing block reason ${unknownReason}`);
+        }
+    }
 }
 
 /**
@@ -228,7 +234,7 @@ export function clearanceDeniedMessage(isStation: boolean): string {
  * so the sentence never reads "dock at ." .
  */
 function unlandableMessage(isStation: boolean, stellarName?: string,
-    gateKind?: 'hypergate' | 'wormhole'): string {
+    gateKind?: GateKind): string {
     if (gateKind === 'hypergate') {
         return 'Your ship is unable to enter this hypergate - it is offline.';
     }

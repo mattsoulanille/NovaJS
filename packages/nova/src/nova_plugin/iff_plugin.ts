@@ -281,8 +281,14 @@ export function planetBlipColor(disposition: PlanetDisposition,
  * Planets use their own corner instance (planet_corners_plugin) and are
  * unaffected.
  */
+/**
+ * The target-corner set drawn around a selected ship: a political
+ * disposition, or the gray "dead in space" set for a disabled hulk. Keys
+ * the TargetCorners images (display/target_corners_plugin).
+ */
+export type TargetCornerStyle = Disposition | 'disabled';
 export function targetCornerStyle(disposition: Disposition,
-    attackingPlayer: boolean, disabled = false): Disposition | 'disabled' {
+    attackingPlayer: boolean, disabled = false): TargetCornerStyle {
     if (disabled) {
         return 'disabled';
     }

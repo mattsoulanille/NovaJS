@@ -8,7 +8,7 @@ import { DisabledComponent } from './disabled_component.js';
 import { OwnerComponent } from './weapon_components.js';
 import { isInFlock } from './flock.js';
 import { GovtComponent } from './govt_component.js';
-import { shipDisposition, targetCornerStyle } from './iff_plugin.js';
+import { shipDisposition, TargetCornerStyle, targetCornerStyle } from './iff_plugin.js';
 import { isPacifiedToward, NpcComponent } from './npc_ai_plugin.js';
 import { EscortCommandComponent } from './escort_command.js';
 import { ShootAllWeaponsComponent } from './npc_plugin.js';
@@ -115,7 +115,7 @@ export function styleForTarget(targetUuid: string, targetEntity: Entity,
     playerUuid: string, playerEntity: Entity,
     gameData: SimulationGameDataInterface,
     getEntity: (uuid: string) => Entity | undefined,
-    now: number): string {
+    now: number): TargetCornerStyle {
     // Disabled beats everything, own flock included: gray corners mean
     // "dead in space" whoever the hulk belongs to.
     if (targetEntity.components.has(DisabledComponent)) {

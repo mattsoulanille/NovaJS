@@ -81,8 +81,9 @@ export const MAX_ESCORTS_INDEX = 123;
  * included). Pure, so the "seventh escort is refused" rule is pinned
  * without the PIXI dialog.
  */
+export type HireRefusal = 'cap' | 'credits';
 export function hireRefusal(held: number, credits: number,
-    price: number): 'cap' | 'credits' | undefined {
+    price: number): HireRefusal | undefined {
     if (held >= MAX_ESCORTS) {
         return 'cap';
     }
@@ -401,13 +402,21 @@ export class HireEscortDialog {
             return;
         }
         const price = hirePrice(ship, this.priceMod);
-        switch (hireRefusal(this.escortsHeld(), this.credits.credits, price)) {
+        const refusal =
+            hireRefusal(this.escortsHeld(), this.credits.credits, price);
+        switch (refusal) {
             case 'cap':
                 this.text.status.text = this.maxEscortsText;
                 return;
             case 'credits':
                 this.text.status.text = 'You cannot afford this pilot\'s fee.';
                 return;
+            case undefined:
+                break;
+            default: {
+                const unknownRefusal: never = refusal;
+                throw new Error(`Unknown hire refusal ${unknownRefusal}`);
+            }
         }
         this.credits.credits -= price;
         this.hired.push(ship.id);
