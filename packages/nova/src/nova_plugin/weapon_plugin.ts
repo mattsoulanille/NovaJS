@@ -394,10 +394,14 @@ export const WeaponsSystem = new System({
             // game: a weapon without the flag REFUSES to fire while the
             // ship is cloaked, and the cloak stays up — the trigger does
             // not decloak the ship, and nothing (ammo, energy, reload) is
-            // spent on the refused shot. The pilot (or the AI's cloak
-            // control) has to drop the cloak first. Point defense is the
-            // same: an automatic system neither fires through the cloak
-            // nor blows it. A flagged weapon fires and keeps the cloak.
+            // spent on the refused shot. The pilot has to drop the cloak
+            // first. (Only the pilot: no NPC manages a cloak yet — the AI
+            // reads cloaks for targetability alone, and spawning a mïsn
+            // ship pre-cloaked is a documented gap in mission_ship_spawn
+            // — so a cloaked NPC with unflagged weapons would simply
+            // never fire until that lands.) Point defense is the same: an
+            // automatic system neither fires through the cloak nor blows
+            // it. A flagged weapon fires and keeps the cloak.
             if (isCloaked(cloakActive) && !weapon.data.fireWhileCloaked) {
                 continue;
             }
