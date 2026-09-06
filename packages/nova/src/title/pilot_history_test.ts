@@ -6,10 +6,10 @@ import { cloneJson, jsonEqual, JsonValue } from './json_patch.js';
 import {
     appendCheckpoint, CheckpointKindCodec, checkpointState, decodeHistory,
     decodeHistoryDetailed, enforceCaps, FIRST_PILOT_HISTORY_VERSION,
-    historyKeyFor, latestState, loadHistory, MAX_CHECKPOINTS,
-    PILOT_HISTORY_MIGRATIONS, PILOT_HISTORY_VERSION, PilotHistory,
-    PilotHistoryCodec, recordCheckpoint, rewindHistory, rewindPilotSave,
-    saveHistory, squashOldest, truncateAfter,
+    historyKeyFor, historyQuarantineKeyFor, latestState, loadHistory,
+    MAX_CHECKPOINTS, PILOT_HISTORY_MIGRATIONS, PILOT_HISTORY_VERSION,
+    PilotHistory, PilotHistoryCodec, recordCheckpoint, removeHistory,
+    rewindHistory, rewindPilotSave, saveHistory, squashOldest, truncateAfter,
 } from './pilot_history.js';
 
 class MemoryStorage {
@@ -179,6 +179,23 @@ describe('pilot history', () => {
             expect(store.getItem('novajs:save:history')).toBeNull();
             expect(store.getItem('novajs:save:history:quarantine'))
                 .toBe('{not json');
+            expect(historyQuarantineKeyFor('novajs:save'))
+                .toBe('novajs:save:history:quarantine');
+        });
+
+        it('removeHistory takes the quarantined history with it', () => {
+            // Nothing else ever cleans the quarantine up, so a deleted
+            // pilot would otherwise leave its unreadable bytes behind.
+            const store = new MemoryStorage();
+            store.setItem(historyKeyFor('novajs:save:pilot-x'), '{not json');
+            expect(loadHistory('novajs:save:pilot-x', store)).toBeUndefined();
+            recordCheckpoint('novajs:save:pilot-x', SAVE_A, { label: 'x' }, store);
+            store.setItem(historyKeyFor('novajs:save:pilot-y'), '{not json');
+            expect(loadHistory('novajs:save:pilot-y', store)).toBeUndefined();
+            removeHistory('novajs:save:pilot-x', store);
+            expect(store.keys()).toEqual([
+                historyQuarantineKeyFor('novajs:save:pilot-y'),
+            ]);
         });
 
         it('rejects an unknown version or a missing base', () => {

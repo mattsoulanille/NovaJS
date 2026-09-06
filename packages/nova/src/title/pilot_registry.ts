@@ -420,9 +420,10 @@ export function createPilot(profile: PilotProfile, storage?: PrefsStorage):
  * remaining pilot becomes active (or none).
  *
  * "Its save data" is every key derived from the pilot's save key: the
- * save itself, its checkpoint history, its discovery record
- * (`<saveKey>:discovery`, discovery_store.ts) and any quarantined
- * unreadable save (`<saveKey>:quarantine`, save_game.ts). Pilot ids are
+ * save itself, its checkpoint history (and an unreadable one parked at
+ * `<saveKey>:history:quarantine`, which removeHistory covers), its
+ * discovery record (`<saveKey>:discovery`, discovery_store.ts) and any
+ * quarantined unreadable save (`<saveKey>:quarantine`, save_game.ts). Pilot ids are
  * time+random, so a later pilot never inherits an orphan — but the
  * discovery record is a whole explored-galaxy map per pilot, and a stale
  * quarantine entry reads as a ghost in the "quarantined save" diagnostics

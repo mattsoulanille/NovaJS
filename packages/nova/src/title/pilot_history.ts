@@ -154,6 +154,15 @@ export function historyKeyFor(saveKey: string): string {
     return `${saveKey}:history`;
 }
 
+/**
+ * Where loadHistory parks an unreadable history (`<historyKey>:quarantine`,
+ * the save's discipline). Removed with the history, so a deleted pilot
+ * leaves no quarantined bytes behind either.
+ */
+export function historyQuarantineKeyFor(saveKey: string): string {
+    return `${historyKeyFor(saveKey)}:quarantine`;
+}
+
 /** Number of checkpoints in a history (0 for none). */
 export function checkpointCount(history: PilotHistory | undefined): number {
     return history?.checkpoints.length ?? 0;
@@ -452,14 +461,15 @@ export function loadHistory(saveKey: string, storage?: HistoryStorage):
         ? { ok: false as const, reason: 'The pilot history is not valid JSON.' }
         : decodeHistoryDetailed(parsed);
     if (!result.ok) {
+        const quarantine = historyQuarantineKeyFor(saveKey);
         try {
-            store.setItem(`${key}:quarantine`, raw);
+            store.setItem(quarantine, raw);
             store.removeItem(key);
         } catch {
             // Best effort.
         }
         console.warn(`Ignoring an unreadable pilot history (moved to `
-            + `'${key}:quarantine'): ${result.reason}`);
+            + `'${quarantine}'): ${result.reason}`);
         return undefined;
     }
     return result.history;
@@ -483,17 +493,24 @@ export function saveHistory(saveKey: string, history: PilotHistory,
     }
 }
 
-/** Removes the history beside `saveKey` (a deleted pilot). Never throws. */
+/**
+ * Removes the history beside `saveKey` (a deleted pilot), and any
+ * unreadable one loadHistory parked at its quarantine key: both are the
+ * pilot's bytes, and nothing else ever cleans the quarantine up. Never
+ * throws.
+ */
 export function removeHistory(saveKey: string, storage?: HistoryStorage):
     void {
     const store = getStorage(storage);
     if (!store) {
         return;
     }
-    try {
-        store.removeItem(historyKeyFor(saveKey));
-    } catch {
-        // Best effort.
+    for (const key of [historyKeyFor(saveKey), historyQuarantineKeyFor(saveKey)]) {
+        try {
+            store.removeItem(key);
+        } catch {
+            // Best effort.
+        }
     }
 }
 
