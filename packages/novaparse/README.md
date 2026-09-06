@@ -6,6 +6,10 @@ In contrast to how EV Nova parsed files, NovaParse separates Plug-ins into their
 The same namespacing applies to the two things EV Nova shares globally by number rather than by resource id: the 64 Require/Contribute flag bits (`src/flag_namespace.ts`) and the 10,000 control bits (`src/ncb_namespace.ts`). Every bit that the stock `Nova Files` themselves use anywhere is a shared "base set" bit that keeps its number for everyone; every other bit a plug-in references is private to the plug-in that wrote the resource, and is renumbered (control bits into `b20000` and up) before any consumer sees the expression. Plug-ins that share a subdirectory share those bits too. NovaParse logs a diagnostic at load for each bit two plug-ins were both using privately (now separated) and for each plug-in Require or control-bit test that nothing can ever satisfy.
 
 
+## The synthetic data set
+
+`src/synthetic/` generates a small, original Nova scenario in the game's own resource format (`universe.ts` describes it; `art.ts` draws its sprites; `resources.ts` lays each resource out in its parser's field order; `data_set.ts` writes the `.ndat`). `npm run synthetic-data` regenerates the checked-in copy at `packages/nova/test_fixtures/synthetic/`, byte-identically — `test/synthetic/` pins that, and parses the set strictly with nothing missing. It exists so the test suites can run on parsed Nova data without the copyrighted files.
+
 ## Prerequisites
 git, npm
 
