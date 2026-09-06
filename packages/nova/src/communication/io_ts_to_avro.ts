@@ -438,6 +438,13 @@ class Deriver {
                 const keys = Object.keys((codec as t.KeyofType<Props>).keys);
                 return this.enumeration(keys, path, codec, nameHint, codec);
             }
+            case 'OpenEnumType':
+                // common/open_enum.ts: the persisted form is deliberately
+                // OPEN — a name this build does not know must decode and
+                // re-encode untouched — so it is a string on the wire, not
+                // an Avro enum of this build's members (which would reject
+                // a newer peer's name at decode).
+                return 'string';
             case 'UndefinedType':
             case 'NullType':
             case 'VoidType':

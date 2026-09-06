@@ -6,6 +6,7 @@ import { set } from 'nova_ecs/datatypes/set';
 import { EncodedEntity, markerType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
+import { openEnum } from '../common/open_enum.js';
 import { makeDeterminismWorld } from './determinism_harness.js';
 import { AvroSchema, AvroSchemaNode, DerivationFailure, DerivationOptions, deriveAvroSchema } from './io_ts_to_avro.js';
 import { DeltaFrameEncoder, SimulationFrame, SimulationFrameType } from './simulation_frame.js';
@@ -103,6 +104,18 @@ describe('io-ts to Avro derivation', () => {
             for (const value of [false, 'start', 'repeat'] as const) {
                 expect(roundTrip(state, value)).toBe(value);
             }
+        });
+
+        it('maps an open enum to a plain string so unknown members survive', () => {
+            // common/open_enum.ts: the members are this build's; a newer
+            // peer may send one this build does not know, and it must
+            // round-trip untouched — an Avro enum would reject it.
+            const reason = openEnum('Reason', ['shipOffer', 'rescue'] as const);
+            const { schema, failures } = deriveAvroSchema(reason, { name: 'Reason' });
+            expect(failures).toEqual([]);
+            plain(schema).toBe('string');
+            expect(roundTrip(reason, 'rescue')).toBe('rescue');
+            expect(roundTrip(reason, 'fromANewerBuild' as never)).toBe('fromANewerBuild');
         });
 
         it('maps t.keyof to an enum and rejects symbols Avro cannot name', () => {

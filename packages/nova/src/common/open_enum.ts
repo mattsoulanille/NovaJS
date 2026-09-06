@@ -58,10 +58,19 @@ export function openEnum<M extends string>(name: string,
         (u, c) => typeof u === 'string' ? t.success(u as M) : t.failure(u, c),
         m => m,
     );
-    return Object.assign(codec, { members: [...members] as readonly M[] });
+    // `_tag` lets reflective consumers of a codec tree (the io-ts → Avro
+    // schema derivation in communication/io_ts_to_avro.ts) recognise an
+    // open enum and put a plain string on the wire — an Avro enum of this
+    // build's members would REJECT the unknown name the contract above
+    // promises to carry through.
+    return Object.assign(codec, {
+        _tag: 'OpenEnumType' as const,
+        members: [...members] as readonly M[],
+    });
 }
 
 /** The codec `openEnum` builds, with its declared members for specs. */
 export interface OpenEnum<M extends string> extends t.Type<M, string, unknown> {
+    readonly _tag: 'OpenEnumType';
     readonly members: readonly M[];
 }
