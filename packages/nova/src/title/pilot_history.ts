@@ -65,6 +65,15 @@ export const MAX_HISTORY_BYTES = 1_500_000;
  * written by a newer build with a kind this build does not know still
  * loads, and its rows simply take the blank marker (kindMarker's default
  * arm), exactly as they always did.
+ *
+ * It stays open ON PURPOSE — do not narrow it to a strict `t.keyof`.
+ * The whole history goes through one `PilotHistoryCodec.decode`
+ * (decodeHistoryValue below), so a strict kind would make a single
+ * unknown name from a newer build fail the ENTIRE decode: loadHistory
+ * returns undefined, the file is parked at `:quarantine`, and the pilot
+ * loses their rollback history over a display-only field. The
+ * pilot_history spec that keeps an unknown 'teleport' and re-encodes it
+ * byte-for-byte pins this (PR #218 review, finding 4).
  */
 export const CheckpointKindCodec = openEnum('CheckpointKind', [
     'depart', 'mission', 'purchase', 'capture', 'rewind', 'import', 'other',
