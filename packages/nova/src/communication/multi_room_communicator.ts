@@ -6,7 +6,7 @@ import { DefaultMap } from "nova_ecs/utils";
 import { BehaviorSubject, EMPTY, Observable, of, Subject } from "rxjs";
 import { filter, map, mergeMap, takeUntil, tap } from "rxjs/operators";
 
-const RoomMessage = t.intersection([
+export const RoomMessage = t.intersection([
     t.type({
         room: t.string,
     }),

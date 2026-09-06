@@ -276,9 +276,20 @@ export const markerType = new t.Type<undefined, null, unknown>(
 );
 
 export type EncodedEntity = ReturnType<Serializer['Entity']['encode']>;
+
+/**
+ * The wire shape of a list of encoded components: [name, encoded data]
+ * pairs. One shared codec instance (rather than an inline
+ * `t.array(t.tuple(...))` at each use) so the wire-schema reflection in
+ * nova's communication layer can recognise it by identity and type each
+ * pair's data with the component's own registered codec.
+ */
+export const EncodedComponentList = t.array(t.tuple([t.string, t.unknown]));
+export type EncodedComponentList = t.TypeOf<typeof EncodedComponentList>;
+
 export const EncodedEntity: t.Type<EncodedEntity> = t.intersection([
     t.type({
-        components: t.array(t.tuple([t.string, t.unknown])),
+        components: EncodedComponentList,
     }), t.partial({
         name: t.string,
     })
