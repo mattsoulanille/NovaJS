@@ -30,7 +30,7 @@ import { wrapIndex } from '../spaceport/list_selection.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { SystemGraph } from '../spaceport/system_graph.js';
-import { checkpointState, PilotHistory } from './pilot_history.js';
+import { CheckpointKind, checkpointState, PilotHistory } from './pilot_history.js';
 import {
     checkpointBits, checkpointDetails, checkpointPath, checkpointSystem,
     CheckpointRow, controlBitsText, detailLines, RollbackNames,
@@ -84,8 +84,14 @@ const SELECTION_COLOR = 0x800000;
 const PANEL_FILL = 0x0c0c14;
 const PANEL_BORDER = 0x606070;
 
-/** A one-character marker per checkpoint kind, for the list rows. */
-export function kindMarker(kind: string): string {
+/**
+ * A one-character marker per checkpoint kind, for the list rows. The
+ * default arm stays: a history from a newer build may carry a kind this
+ * build does not know (CheckpointKind is open in storage), and it takes
+ * the blank marker like 'other'. The `never` check only pins that every
+ * kind THIS build declares has been considered.
+ */
+export function kindMarker(kind: CheckpointKind): string {
     switch (kind) {
         case 'depart': return '>';
         case 'mission': return '*';
@@ -93,7 +99,12 @@ export function kindMarker(kind: string): string {
         case 'capture': return '!';
         case 'rewind': return '<';
         case 'import': return '+';
-        default: return ' ';
+        case 'other': return ' ';
+        default: {
+            const unknownKind: never = kind;
+            void unknownKind;
+            return ' ';
+        }
     }
 }
 

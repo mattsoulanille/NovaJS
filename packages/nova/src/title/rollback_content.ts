@@ -11,7 +11,7 @@
  */
 
 import { formatDate } from '../nova_plugin/calendar.js';
-import { checkpointState, PilotHistory } from './pilot_history.js';
+import { CheckpointKind, checkpointState, PilotHistory } from './pilot_history.js';
 
 /**
  * The list's compact date ("1 Feb 1177"): calendar.ts's formatDate minus
@@ -57,12 +57,12 @@ export interface CheckpointRow {
     /** Stellar name where it happened, else the system name, else "—". */
     place: string;
     label: string;
-    kind: string;
+    kind: CheckpointKind;
 }
 
 export interface CheckpointDetails {
     label: string;
-    kind: string;
+    kind: CheckpointKind;
     day: string;
     place: string;
     /** "In <system>" when the checkpoint knows its system. */

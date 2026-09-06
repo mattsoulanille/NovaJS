@@ -4,6 +4,8 @@ import { MissionData } from 'novadatainterface/mission_data';
 import { Cargo } from './cargo_plugin.js';
 import { DiscoveryAccess } from './discovery.js';
 import { MissionContext } from './mission_context.js';
+import { MissionEventType } from './mission_event_type.js';
+import { ShipChangeMode } from './ncb.js';
 import { ActiveRanks } from './ncb_plugin.js';
 import { Missions, PendingAutoAbortShip } from './player_state_plugin.js';
 import { LegalRecords } from './reputation.js';
@@ -19,8 +21,7 @@ import { LegalRecords } from './reputation.js';
 export interface MissionEvent {
     missionId: string;
     missionName: string;
-    type: 'completed' | 'failed' | 'aborted' | 'accepted' | 'autoAborted'
-        | 'shipDone' | 'cargoLoaded' | 'cargoDropped';
+    type: MissionEventType;
     /** The mission's dësc text for this event ('' if none). */
     text: string;
     /**
@@ -150,15 +151,14 @@ export interface MissionMachineryContext {
     systemExists?(globalId: string): boolean;
     /**
      * `Cxxx` / `Exxx` / `Hxxx` (change the player's ship to type xxx; the
-     * three outfit treatments are spaceport/shipyard_rules' ShipChangeMode).
+     * three outfit treatments are ncb.ts's ShipChangeMode).
      * The ship is an ENTITY swap, which only the venue holding the docked
      * entity can perform, so this is supplied by that venue (the
      * outfitter, for an oütf OnPurchase like stock 314's `H165`) and is
      * otherwise reported as an unimplemented hook. `globalShipId` is
      * already resolved stock-first through `shipExists`.
      */
-    changeShip?(globalShipId: string,
-        mode: 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults'): void;
+    changeShip?(globalShipId: string, mode: ShipChangeMode): void;
     /**
      * Whether a shïp with this global id exists, so the change-ship
      * operators resolve their bare number stock-first like every other

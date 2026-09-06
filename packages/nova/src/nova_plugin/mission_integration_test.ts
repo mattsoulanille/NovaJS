@@ -33,7 +33,7 @@ import {
     GameDateComponent,
     MissionsComponent,
     PendingAutoAbortShipsComponent,
-    PendingMissionNoticesComponent,
+    PendingMissionNotice, PendingMissionNoticesComponent,
 } from './player_state_plugin.js';
 
 /**
@@ -1086,7 +1086,7 @@ describe('missions against real Nova data', () => {
  * gone from the entity and never shown to anybody.
  */
 describe('processEntityLanding and the in-flight notice queue', () => {
-    const NOTICE = {
+    const NOTICE: PendingMissionNotice = {
         missionId: 'nova:128', missionName: 'Delivery to Earth',
         type: 'failed', text: 'You were too slow.',
     };

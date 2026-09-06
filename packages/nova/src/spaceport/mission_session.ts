@@ -579,7 +579,7 @@ export function drainPendingMissionNotices(entity: Entity): MissionEvent[] {
     return pending.map(notice => ({
         missionId: notice.missionId,
         missionName: notice.missionName,
-        type: notice.type as MissionEvent['type'],
+        type: notice.type,
         text: notice.text,
         pict: notice.pict,
         payment: notice.payment,

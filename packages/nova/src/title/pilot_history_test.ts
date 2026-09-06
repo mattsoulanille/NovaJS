@@ -4,10 +4,10 @@ import {
 } from './fixtures/sample_pilot_files.js';
 import { cloneJson, jsonEqual, JsonValue } from './json_patch.js';
 import {
-    appendCheckpoint, checkpointState, decodeHistory, enforceCaps,
-    historyKeyFor, latestState, loadHistory, MAX_CHECKPOINTS,
-    PilotHistory, recordCheckpoint, rewindHistory, rewindPilotSave,
-    saveHistory, squashOldest, truncateAfter,
+    appendCheckpoint, CheckpointKindCodec, checkpointState, decodeHistory,
+    enforceCaps, historyKeyFor, latestState, loadHistory, MAX_CHECKPOINTS,
+    PilotHistory, PilotHistoryCodec, recordCheckpoint, rewindHistory,
+    rewindPilotSave, saveHistory, squashOldest, truncateAfter,
 } from './pilot_history.js';
 
 class MemoryStorage {
@@ -187,6 +187,33 @@ describe('pilot history', () => {
             expect(decodeHistory(JSON.stringify(
                 { version: 1, base: { a: 1 }, checkpoints: [] }))).toBeDefined();
         });
+
+        it('checkpoint kinds decode as stored and an unknown kind is kept, '
+            + 'not rejected (the field is open in storage)', () => {
+                const checkpoint = (kind: string) =>
+                    ({ id: '1', label: 'x', patch: [], kind });
+                for (const kind of CheckpointKindCodec.members) {
+                    const history = decodeHistory(JSON.stringify({
+                        version: 1, base: { a: 1 },
+                        checkpoints: [checkpoint(kind)],
+                    }));
+                    expect(history?.checkpoints[0].kind).toBe(kind);
+                }
+                // A history written by a newer build.
+                const raw = JSON.stringify({
+                    version: 1, base: { a: 1 },
+                    checkpoints: [checkpoint('teleport')],
+                });
+                const history = decodeHistory(raw);
+                expect(history?.checkpoints[0].kind as string).toBe('teleport');
+                // ...and re-encodes byte-for-byte.
+                expect(JSON.stringify(PilotHistoryCodec.encode(history!)))
+                    .toBe(raw);
+                expect(decodeHistory(JSON.stringify({
+                    version: 1, base: { a: 1 },
+                    checkpoints: [{ id: '1', label: 'x', patch: [], kind: 7 }],
+                }))).toBeUndefined();
+            });
 
         it('rewindPilotSave installs the exact earlier save and keeps '
             + 'the pre-rewind save reachable', () => {

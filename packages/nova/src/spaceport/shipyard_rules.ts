@@ -53,7 +53,7 @@ import { DiscoveryAccess } from '../nova_plugin/discovery.js';
 import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
 } from '../nova_plugin/mission_logic.js';
-import { makeControlBitHooks, NCBParseError, runNCBSet } from '../nova_plugin/ncb.js';
+import { makeControlBitHooks, NCBParseError, runNCBSet, ShipChangeMode } from '../nova_plugin/ncb.js';
 import { commitActiveRanks } from '../nova_plugin/ncb_plugin.js';
 import { RankData } from 'novadatainterface/rank_data';
 import { ShipPhysicsComponent } from '../nova_plugin/ship_plugin.js';
@@ -640,25 +640,11 @@ function buildShipEntity(oldShip: Entity, newShip: ShipData,
 }
 
 /**
- * How a mission set operator's ship change treats the player's outfits
- * (EVN Bible, control bit set operators ~:230-240):
- *
- *   'keep'                  Cxxx — "The player will keep all of his previous
- *                           outfit items and won't be given any of the
- *                           default weapons or items that come with ship
- *                           type xxx."
- *   'keepAndGrantDefaults'  Exxx — "...will keep all of his previous outfit
- *                           items and will also be given all of the default
- *                           weapons and items that come with ship type xxx."
- *   'dropAndGrantDefaults'  Hxxx — "The player will lose any nonpersistent
- *                           outfit items he previously had, but will be
- *                           given all of the default weapons and items that
- *                           come with ship type xxx."
- *
- * The same three names ncb.ts's parser produces for the C/E/H letters.
+ * How a Cxxx / Exxx / Hxxx ship change treats the player's outfits: the
+ * three names ncb.ts's parser produces for the C/E/H letters, defined
+ * there (with the Bible text) and re-exported here for the venues.
  */
-export type ShipChangeMode =
-    | 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults';
+export type { ShipChangeMode } from '../nova_plugin/ncb.js';
 
 /**
  * The outfits aboard after a Cxxx/Exxx/Hxxx ship change (see

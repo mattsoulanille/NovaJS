@@ -417,6 +417,29 @@ export function evaluateNCBTest(expression: string,
 
 // --- Set expressions ---
 
+/**
+ * How a mission set operator's ship change treats the player's outfits
+ * (EVN Bible, control bit set operators ~:230-240):
+ *
+ *   'keep'                  Cxxx — "The player will keep all of his previous
+ *                           outfit items and won't be given any of the
+ *                           default weapons or items that come with ship
+ *                           type xxx."
+ *   'keepAndGrantDefaults'  Exxx — "...will keep all of his previous outfit
+ *                           items and will also be given all of the default
+ *                           weapons and items that come with ship type xxx."
+ *   'dropAndGrantDefaults'  Hxxx — "The player will lose any nonpersistent
+ *                           outfit items he previously had, but will be
+ *                           given all of the default weapons and items that
+ *                           come with ship type xxx."
+ *
+ * Produced here by the C/E/H parser, consumed by the changeShip hooks
+ * (NCBSetHooks, mission_machinery's MissionMachineryContext) and by the
+ * shipyard's outfit carry-over (spaceport/shipyard_rules).
+ */
+export type ShipChangeMode =
+    | 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults';
+
 export type NCBSetOperation =
     /** bxxx: set control bit xxx. */
     | { type: 'set', bit: number }
@@ -465,10 +488,7 @@ export type NCBSetOperation =
      * defaults; E keeps the player's outfits and also grants the
      * defaults; H drops nonpersistent outfits and grants the defaults.
      */
-    | {
-        type: 'changeShip', id: number,
-        outfits: 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults',
-    }
+    | { type: 'changeShip', id: number, outfits: ShipChangeMode }
     /** Kxxx: activate rank ID xxx. */
     | { type: 'activateRank', id: number }
     /** Lxxx: deactivate rank ID xxx. */
@@ -519,8 +539,7 @@ export interface NCBSetHooks {
     /** Mxxx / Nxxx */
     moveToSystem?(id: number, keepCoordinates: boolean): void;
     /** Cxxx / Exxx / Hxxx */
-    changeShip?(id: number,
-        outfits: 'keep' | 'keepAndGrantDefaults' | 'dropAndGrantDefaults'): void;
+    changeShip?(id: number, outfits: ShipChangeMode): void;
     /** Kxxx */
     activateRank?(id: number): void;
     /** Lxxx */

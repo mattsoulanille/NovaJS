@@ -3,6 +3,7 @@ import { Component } from 'nova_ecs/component';
 import { map } from 'nova_ecs/datatypes/map';
 import { Plugin } from 'nova_ecs/plugin';
 import { DeltaResource } from 'nova_ecs/plugins/delta_plugin';
+import { MissionEventTypeType } from './mission_event_type.js';
 import { ShipObjectiveType } from './mission_ship_state.js';
 
 /**
@@ -195,7 +196,9 @@ export const CronStatesComponent = new Component<CronStates>('CronStates');
 export const PendingMissionNoticeType = t.intersection([t.type({
     missionId: t.string,
     missionName: t.string,
-    type: t.string,
+    /** The event this notice stands in for (open on the wire; see
+     * mission_event_type.ts). */
+    type: MissionEventTypeType,
     text: t.string,
 }), t.partial({
     payment: t.number,

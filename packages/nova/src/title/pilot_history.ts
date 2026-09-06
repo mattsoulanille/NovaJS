@@ -39,6 +39,7 @@
 
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
+import { openEnum } from '../common/open_enum.js';
 import { GameDateType } from '../nova_plugin/player_state_plugin.js';
 import {
     applyPatch, cloneJson, diffJson, JsonPatchOp, JsonValue,
@@ -58,10 +59,17 @@ export const MAX_CHECKPOINTS = 300;
  */
 export const MAX_HISTORY_BYTES = 1_500_000;
 
-/** A checkpoint kind, for the rollback view's icons/filters (free-form). */
-export type CheckpointKind =
-    | 'depart' | 'mission' | 'purchase' | 'capture' | 'rewind' | 'import'
-    | 'other';
+/**
+ * A checkpoint kind, for the rollback view's markers. OPEN in storage
+ * (openEnum): the stored field was always a plain string, so a history
+ * written by a newer build with a kind this build does not know still
+ * loads, and its rows simply take the blank marker (kindMarker's default
+ * arm), exactly as they always did.
+ */
+export const CheckpointKindCodec = openEnum('CheckpointKind', [
+    'depart', 'mission', 'purchase', 'capture', 'rewind', 'import', 'other',
+] as const);
+export type CheckpointKind = t.TypeOf<typeof CheckpointKindCodec>;
 
 const JsonPatchOpCodec = t.intersection([
     t.type({ op: t.string, path: t.string }),
@@ -78,7 +86,7 @@ export const CheckpointCodec = t.intersection([
         patch: t.array(JsonPatchOpCodec),
     }),
     t.partial({
-        kind: t.string,
+        kind: CheckpointKindCodec,
         /** The pilot's calendar date at the checkpoint. */
         date: GameDateType,
         /** System global id where it happened (e.g. 'nova:130'). */

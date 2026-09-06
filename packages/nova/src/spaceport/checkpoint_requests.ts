@@ -65,7 +65,17 @@ export function missionEventLabel(
         case 'failed': return truncateLabel(`Failed: ${name}`);
         case 'aborted': return truncateLabel(`Aborted: ${name}`);
         case 'autoAborted': return truncateLabel(`Auto-aborted: ${name}`);
-        default: return undefined;
+        case 'shipDone':
+        case 'cargoLoaded':
+        case 'cargoDropped':
+            return undefined;
+        default: {
+            // An event kind from a newer build (MissionEventType is open on
+            // the wire) is a progress notice as far as this build knows.
+            const unknownType: never = event.type;
+            void unknownType;
+            return undefined;
+        }
     }
 }
 
