@@ -54,7 +54,12 @@ export const STATE_HASH_INTERVAL = 60;
 //    wave, and both are additive on the shapes the strict codecs accept):
 //    - acceptMission's `accepted` gained the OPTIONAL missionsStarted /
 //      missionsEnded / recordsDelta fields (nova_plugin/mission_accept.ts;
-//      an older record simply carries none of them).
+//      an older record simply carries none of them), and
+//    - wire snapshots carry the `$negzero` / `$nonfinite` sentinels
+//      (nova_ecs snapshot_plugin toJsonSafe) so a joiner restores the
+//      exact -0 / NaN bits the room holds, which hashWorld now
+//      distinguishes from +0 / finite — a desync report between peers
+//      that differ only there is real, not a hash artifact.
 export const PROTOCOL_VERSION = 5;
 
 /**
