@@ -9,11 +9,11 @@ import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
 import { LOCATION_BAR } from '../nova_plugin/mission_logic.js';
 import { Button } from './button.js';
-import { commitVenueCredits } from './credit_commit.js';
 import { BAR, LINE_HEIGHT } from './dialog_layout.js';
 import { FleetEscortEntry } from './fleet_cargo.js';
 import { GambleDialog } from './gamble.js';
 import { HireEscortDialog, noShipsForHire } from './hire_escort.js';
+import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
@@ -21,7 +21,6 @@ import { offerRollsForSystem, rollOffers } from './mission_offers.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { NewsDialog } from './news_dialog.js';
-import { commitPendingEscorts } from './pending_escorts.js';
 
 // The 263x185 Bar dialog (PICT 8503). Geometry lives in
 // dialog_layout.ts, measured against bar/bar_earth.png and
@@ -43,21 +42,27 @@ const FALLBACK_DESC = 'The bar is quiet tonight. A tired bartender '
  * open automatically; the Holovid button (or the 'n' key) shows it.
  *
  * All money movement (gambling, hire fees, mission Sxxx/payment
- * effects) happens in one MissionSession working copy, committed when
- * the player leaves the bar — the outfitter pattern.
+ * effects) happens in the landing's ONE working copy — the transaction
+ * (landed_transaction.ts) — under this visit's savepoint, released when
+ * the player leaves the bar. The gamble and hire dialogs are handed the
+ * transaction's own credits object and hire list, so a fee and a bet come
+ * off the same balance the outfitter next door spends from.
  *
  * The Holovid's QuickTime short ("Race N.mov") is unplayable in the
  * browser (documented gap), so its button shows the news feed the
  * original played alongside it.
  */
 export class Bar extends Menu<Entity> {
-    private session?: MissionSession;
     /**
-     * The balance the session's working credits were seeded from at show().
-     * done() commits the DIFFERENCE from it (credit_commit.ts).
+     * The landing's transaction, attached by the Spaceport; a standalone
+     * show() opens one of its own and releases it at Leave.
      */
-    private creditsBaseline = 0;
-    private hired: string[] = [];
+    transaction?: LandedTransaction;
+    private visit?: Savepoint;
+    private ownsTransaction = false;
+    private get session(): MissionSession | undefined {
+        return this.transaction?.session;
+    }
     /**
      * The client's landed-escort roster, the display world the docked
      * ship came out of, and the docked ship's uuid, set per-landing by
@@ -150,25 +155,28 @@ export class Bar extends Menu<Entity> {
 
     override async show(input: Entity): Promise<Entity> {
         try {
-            this.session = await MissionSession.create(input,
-                this.simulationData, this.universe, this.planetId);
+            if (!this.transaction) {
+                this.transaction = await LandedTransaction.open(input,
+                    this.simulationData, this.universe, this.planetId);
+                this.ownsTransaction = true;
+            } else {
+                await this.transaction.refresh();
+            }
         } catch (e) {
             console.warn('Bar failed to load:', e);
             return input;
         }
-        // The balance the session's working copy was seeded from: done()
-        // commits the difference from THIS rather than the absolute, so a
-        // concurrent writer (an escort deal settling mid-visit, the refuel
-        // button) survives the commit. See credit_commit.ts.
-        this.creditsBaseline = this.session.state.credits.credits;
-        this.hired = [];
+        if (!this.alive) {
+            return input; // Torn down while opening; nothing edited yet.
+        }
+        const session = this.transaction.session;
+        this.visit = this.transaction.savepoint('bar');
         try {
             const planet = await this.simulationData.data.Planet
                 .get(this.planetId);
             this.description.text = resolveConditionalBlocks(
                 planet.barDesc || FALLBACK_DESC,
-                makeDescTextContext(this.session.state.bits,
-                    playerGender()));
+                makeDescTextContext(session.state.bits, playerGender()));
             this.setBarPict(planet.barPict);
         } catch {
             this.description.text = FALLBACK_DESC;
@@ -266,29 +274,32 @@ export class Bar extends Menu<Entity> {
     }
 
     private async showGamble() {
-        if (!this.session) {
+        const transaction = this.transaction;
+        if (!transaction) {
             return;
         }
         this.controls.unbind();
-        await this.gamble.show(this.session.state.credits);
+        // Bets settle straight into the landing's ledger.
+        await this.gamble.show(transaction.credits);
         this.rebindControls();
     }
 
     private async showHireEscort() {
-        if (!this.session) {
+        const transaction = this.transaction;
+        if (!transaction) {
             return;
         }
         this.controls.unbind();
         const result =
-            await this.hireEscort.show(this.session.state.credits,
-                this.hired,
-                // The bar's working control bits (a mission accepted this
-                // visit already counts) plus the landed entity, which is
-                // where the hire pool reads the player's outfits, ranks
+            await this.hireEscort.show(transaction.credits,
+                transaction.hired,
+                // The landing's working control bits (a mission accepted
+                // this visit already counts) plus the landed entity, which
+                // is where the hire pool reads the player's outfits, ranks
                 // and the game date from — and the world and landed
                 // roster, for the escort cap (HirePlayer's doc).
                 {
-                    entity: this.input, bits: this.session.state.bits,
+                    entity: this.input, bits: transaction.state.bits,
                     world: this.world,
                     landedEscorts: this.landedEscorts,
                     playerUuid: this.playerUuid,
@@ -306,23 +317,30 @@ export class Bar extends Menu<Entity> {
 
     /**
      * The live working credit balance for the docked status bar: gambling and
-     * hire fees settle into the bar session's working credits, so the Credits
-     * readout follows them before Leave commits the session.
+     * hire fees settle into the landing's working credits, so the Credits
+     * readout follows them before Leave releases the visit.
      */
     dockedStatus(): DockedLiveStatus {
-        return { credits: this.session?.state.credits.credits };
+        return { credits: this.transaction?.credits.credits };
     }
 
+    /**
+     * Leave: the visit's edits become the landing's. The release writes
+     * the entity (the outermost visit's does) — the session's state, the
+     * credits as a delta, and this landing's hires moved onto
+     * PendingEscortsComponent in the one step that empties the list, so
+     * the escort cap (which counts both) can never see a hire twice
+     * (pending_escorts.ts).
+     */
     protected override done() {
-        const session = this.session;
-        if (session) {
-            this.creditsBaseline = commitVenueCredits(
-                this.input, this.creditsBaseline, () => session.commit());
+        if (this.transaction && this.visit) {
+            this.transaction.release(this.visit);
         }
-        // Appends this visit's hires to the entity and empties the list
-        // in one step, so the escort cap (which counts both) can never
-        // see a hire twice; see pending_escorts.ts.
-        commitPendingEscorts(this.input, this.hired);
+        this.visit = undefined;
+        if (this.ownsTransaction) {
+            this.transaction = undefined;
+            this.ownsTransaction = false;
+        }
         super.done();
     }
 }

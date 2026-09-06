@@ -9,28 +9,23 @@ import { Observable, Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { ControlEvent } from "../nova_plugin/controls_plugin.js";
-import { makeControlBitHooks, NCBParseError, NCBSetOperation, parseNCBSet, runNCBSet } from "../nova_plugin/ncb.js";
-import { ControlBits, ControlBitsComponent } from "../nova_plugin/ncb_plugin.js";
+import { NCBParseError, NCBSetOperation, parseNCBSet } from "../nova_plugin/ncb.js";
+import { ControlBits } from "../nova_plugin/ncb_plugin.js";
 import { playerDiscovery } from "../nova_plugin/discovery_store.js";
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/desc_text.js';
-import { OutfitsStateComponent } from "../nova_plugin/outfit_plugin.js";
 import { cleanRecords, LegalRecords } from "../nova_plugin/reputation.js";
-import { LegalRecordsComponent } from "../nova_plugin/reputation_plugin.js";
 import { ShipComponent } from "../nova_plugin/ship_plugin.js";
 import {
     numericId, resolveNumberedResource, setStringPrefix,
-    systemDiscoveryOperators,
 } from "../nova_plugin/mission_logic.js";
 import { dayNumber } from "../nova_plugin/calendar.js";
-import {
-    CreditsComponent, GameDateComponent,
-} from "../nova_plugin/player_state_plugin.js";
+import { GameDateComponent } from "../nova_plugin/player_state_plugin.js";
 import { Button, ButtonClick } from "./button.js";
-import { commitVenueCredits, creditBalance } from "./credit_commit.js";
 import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
 import { ItemGrid, ItemTile } from "./item_grid.js";
+import { LandedTransaction, Savepoint } from "./landed_transaction.js";
 import { Menu } from "./menu.js";
 import { MissionSession } from "./mission_session.js";
 import { applyMapOutfit } from "./map_outfit.js";
@@ -45,6 +40,16 @@ import { buildChangedShip, ShipChangeMode } from "./shipyard_rules.js";
 
 
 const descWidth = 190;
+
+/**
+ * What the working-copy views read before a visit has opened its
+ * transaction (the grid is built, and setPlanet refreshes it, before the
+ * first show). Empty and never written: nothing edits outside a visit.
+ */
+const NO_OUTFITS: Map<string, number> = new Map();
+const NO_CREDITS = { credits: 0 };
+const NO_BITS: ControlBits = new Set();
+const NO_RECORDS: LegalRecords = new Map();
 /**
  * The body-text line pitch of every spaceport description pane. The
  * original runs Geneva 10 on a 12px pitch: successive lines' ink tops are
@@ -177,54 +182,80 @@ export class Outfitter extends Menu<Entity> {
     private planetData?: PlanetData;
     private quantityDialog: QuantityDialog;
     private pictContainer = new PIXI.Container();
-    /** Working copies, committed to the ship entity on done. */
-    private outfits: DefaultMap<string, number>;
+    /**
+     * THE LANDING'S TRANSACTION (landed_transaction.ts). Attached by the
+     * Spaceport for the landing; a standalone show() (every headless spec)
+     * opens one of its own and releases it at Done. Every working value
+     * this shop edits — the outfits aboard, the credits, the control bits,
+     * the legal records — is a VIEW onto it: `outfits`, `credits`,
+     * `controlBits` and `records` below are the transaction's own objects,
+     * and an OnPurchase set string runs through the same session
+     * (transaction.session), so a Gxxx grant, an Sxxx mission start and a
+     * Buy all edit one copy.
+     */
+    transaction?: LandedTransaction;
+    /** This visit's savepoint on the transaction; released at Done. */
+    private visit?: Savepoint;
+    /** Whether show() opened the transaction itself (see transaction). */
+    private ownsTransaction = false;
     /**
      * How many units of each outfit id were BOUGHT during the current
      * outfitter visit (per outfit id). Selling drains these first at a
      * full refund (you get back exactly what you just paid); once the
      * same-visit purchases are used up, further sells fall back to the
      * 50% pre-owned resale value. Reset to empty on every show() — each
-     * visit starts with a clean slate (see setInput).
+     * visit starts with a clean slate (see setInput). Visit-local by
+     * nature: it is a receipt book, not a copy of state.
      */
     private visitPurchases = new DefaultMap<string, number>(() => 0);
-    private controlBits: ControlBits = new Set();
-    private records: LegalRecords = new Map();
-    /**
-     * The player's working credit balance. Buys deduct the outfit price;
-     * sells refund the full price for a unit bought this same visit, else
-     * 50% of it (see applySell / outfitResaleValue). In the mission
-     * session path this is the SAME object as the session's working
-     * credits, so session.commit() persists it (and a mission set string
-     * that pays out is reflected here); in the fallback path done()
-     * writes it to the entity's CreditsComponent itself. EITHER WAY the
-     * write is rebased into a delta over {@link creditsBaseline} before it
-     * lands, so a concurrent writer is not erased (credit_commit.ts).
-     */
-    private credits: { credits: number } = { credits: 0 };
-    /**
-     * The balance {@link credits} was seeded from in setInput. done()
-     * commits the DIFFERENCE from it rather than the absolute, so an escort
-     * deal settling mid-visit (or the spaceport's refuel button) is not
-     * erased — see credit_commit.ts, which documents the whole seam.
-     */
-    private creditsBaseline = 0;
     /** Every govt, sorted by id, loaded in build() for ModType 21. */
     private govts: (readonly [string, GovtData])[] = [];
     private shipData?: ShipData;
+
+    /** The outfits aboard, as the transaction holds them: id -> count > 0. */
+    private get outfits(): Map<string, number> {
+        return this.transaction?.outfits ?? NO_OUTFITS;
+    }
+
+    /** Units of `id` aboard (the working count; 0 when none). */
+    private owned(id: string): number {
+        return this.outfits.get(id) ?? 0;
+    }
+
     /**
-     * Built per-visit so outfit purchase/sell set strings can run the
-     * mission operators Sxxx/Axxx/Fxxx (start/fail/abort a mission), not
-     * just control-bit ops. Undefined until show() has built it (or if
-     * the build failed — then set strings fall back to bit-only hooks).
+     * The player's working credit balance. Buys deduct the outfit price;
+     * sells refund the full price for a unit bought this same visit, else
+     * 50% of it (see applySell / outfitResaleValue). The SAME object as
+     * the transaction's ledger, so a mission set string that pays out is
+     * reflected here and the release at Done lands the visit's spend as a
+     * delta over whatever else moved the balance (credit_commit.ts).
      */
-    private missionSession?: MissionSession;
+    private get credits(): { credits: number } {
+        return this.transaction?.credits ?? NO_CREDITS;
+    }
+
+    private get controlBits(): ControlBits {
+        return this.transaction?.state.bits ?? NO_BITS;
+    }
+
+    private get records(): LegalRecords {
+        return this.transaction?.state.records ?? NO_RECORDS;
+    }
+
+    /**
+     * The landing's session, through which an outfit's OnPurchase / OnSell
+     * runs the mission operators Sxxx/Axxx/Fxxx (start/fail/abort a
+     * mission), not just control-bit ops.
+     */
+    private get missionSession(): MissionSession | undefined {
+        return this.transaction?.session;
+    }
+
     /**
      * The union of the active ranks' Contribute sets, for the Require test
-     * (see outfitter_rules' playerContribute). Read off the mission
-     * session's working rank set so a rank granted by an OnPurchase set
-     * string takes effect on the very next grid refresh, before commit.
-     * Zero without a session, which is the pre-rank behaviour.
+     * (see outfitter_rules' playerContribute). Read off the working rank
+     * set so a rank granted by an OnPurchase set string takes effect on
+     * the very next grid refresh, before the visit is released.
      */
     private rankContribute(): bigint {
         const ranks = this.missionSession?.state.ranks;
@@ -311,7 +342,6 @@ export class Outfitter extends Menu<Entity> {
         this.container.addChild(this.scrollUpArrow.container,
             this.scrollDownArrow.container);
 
-        this.outfits = new DefaultMap(() => 0);
         // Measured against outfitter/earth_outfitter.png. A Button's red
         // face starts 5px right of its container x and runs (width + 15)px
         // -- calibrated on the shipyard row, whose pills land on the
@@ -554,37 +584,32 @@ export class Outfitter extends Menu<Entity> {
      * siblings.
      *
      * The swap is the shipyard's hull swap with no price
-     * (shipyard_rules' buildChangedShip), applied to the mission session's
+     * (shipyard_rules' buildChangedShip), applied to the transaction's
      * WORKING outfits — which are ahead of the entity's component: the
      * permit whose OnPurchase is running has just been added to them, and
      * an `H` change drops it along with everything else that is not
-     * 0x0020-persistent. The session is then re-pointed at the new entity
-     * so Done commits onto the hull that lifts off, and the new hull is
-     * published through onShipChanged exactly as a shipyard purchase is.
+     * 0x0020-persistent. The transaction then adopts the new hull
+     * (adoptChangedShip: the session is re-pointed and the working outfits
+     * become the new hull's, so the rest of the running set string reads
+     * them) and it is published through onShipChanged exactly as a
+     * shipyard purchase is.
      *
      * Credits are untouched by the change itself: the new entity carries
-     * the OLD entity's live balance, and the visit's spend still lands
-     * through the session commit + commitVenueCredits delta at Done.
+     * the OLD entity's live balance, and the visit's spend still lands as
+     * the transaction's delta when the visit is released.
      */
     private changeShip(globalId: string, mode: ShipChangeMode) {
-        const session = this.missionSession;
+        const transaction = this.transaction;
         const newShip = this.simulationData.data.Ship.getCached(globalId);
-        if (!session || !newShip) {
+        if (!transaction || !newShip) {
             console.warn(`Change-ship to ${globalId} ignored: `
-                + (session ? 'ship data not loaded' : 'no mission session'));
+                + (transaction ? 'ship data not loaded' : 'no transaction'));
             return;
         }
-        const entity = buildChangedShip(this.input, newShip, session.outfits,
+        const entity = buildChangedShip(this.input, newShip,
+            transaction.outfits,
             id => this.simulationData.data.Outfit.getCached(id), mode);
-        // The rest of the running set string, and the re-seed of the grid
-        // copy after it, read the session's outfits: make them the new
-        // hull's.
-        session.outfits.clear();
-        for (const [id, { count }] of
-            entity.components.get(OutfitsStateComponent) ?? []) {
-            session.outfits.set(id, count);
-        }
-        session.retarget(entity, newShip.id);
+        transaction.adoptChangedShip(entity, newShip.id);
         // Swapping this.input is how a ship change is communicated:
         // Menu.done() emits it, exactly as the shipyard's buyShip does.
         this.input = entity;
@@ -643,13 +668,11 @@ export class Outfitter extends Menu<Entity> {
         if (!this.shipData) {
             return undefined;
         }
-        // A plain SNAPSHOT of the owned counts, not the DefaultMap itself:
-        // the rules only read it, but a DefaultMap's get() INSERTS on a
-        // miss, and visibleOutfits probes every outfit in the game — so the
-        // working copy used to grow to every id at count 0 after one grid
-        // refresh, every ownedOutfits walk then iterated all of them, and
-        // countDeployedFighters was handed unowned ammo outfits to
-        // attribute fighters to. Zero counts are dropped here too.
+        // A plain SNAPSHOT of the owned counts: the rules only read it,
+        // and visibleOutfits probes every outfit in the game, so the
+        // working copy itself is never handed to them (a DefaultMap here
+        // once grew to every id at count 0 after one grid refresh). Zero
+        // counts are dropped too.
         const owned = new Map(
             [...this.outfits].filter(([, count]) => count > 0));
         return {
@@ -760,76 +783,32 @@ export class Outfitter extends Menu<Entity> {
     }
 
     /**
-     * Runs an outfit's OnPurchase / OnSell control bit set string
-     * against the working outfits and control bits. Gxxx grants here
-     * intentionally bypass the purchase checks.
+     * Runs an outfit's OnPurchase / OnSell set string through the
+     * landing's mission machinery, so Sxxx/Axxx/Fxxx (start/fail/abort a
+     * mission) take effect, not just control-bit ops, and a Gxxx/Dxxx
+     * grant lands straight in the working outfits the grid reads. Gxxx
+     * grants here intentionally bypass the purchase checks.
      */
     private runSetString(expression: string, resourcePrefix = 'nova') {
-        if (!expression) {
+        const session = this.missionSession;
+        if (!expression || !session) {
             return;
         }
-        // When a mission session is available, run the string through the
-        // full mission machinery so Sxxx/Axxx/Fxxx (start/fail/abort a
-        // mission) take effect, not just control-bit ops. The session
-        // shares this.outfits' contents and this.controlBits, so sync the
-        // outfit counts into it first (buy/sell mutate this.outfits).
-        if (this.missionSession) {
-            this.missionSession.outfits.clear();
-            for (const [id, count] of this.outfits) {
-                if (count > 0) {
-                    this.missionSession.outfits.set(id, count);
-                }
-            }
-            // Buying/selling a freeCargo outfit changes the hold; refresh
-            // the session's cargo capacity so an OnPurchase/OnSell Sxxx that
-            // starts a cargo mission checks against the current hold (L6).
-            const context = this.makeContext();
-            if (context) {
-                this.missionSession.setCargoCapacity(freeCargo(context));
-            }
-            try {
-                this.missionSession.runMissionSet(expression, resourcePrefix);
-            } catch (error) {
-                if (error instanceof NCBParseError) {
-                    console.warn('Bad outfit mission set string:', error);
-                } else {
-                    throw error;
-                }
-            }
-            // Reflect any Gxxx/Dxxx outfit grants back into the grid copy.
-            this.outfits = new DefaultMap(() => 0,
-                [...this.missionSession.outfits]);
-            return;
+        // Buying/selling a freeCargo outfit changes the hold; refresh
+        // the session's cargo capacity so an OnPurchase/OnSell Sxxx that
+        // starts a cargo mission checks against the current hold (L6).
+        const context = this.makeContext();
+        if (context) {
+            session.setCargoCapacity(freeCargo(context));
         }
         try {
-            // The purchase itself is a player decision, not simulation
-            // logic, so plain randomness is fine for R(a b) here: only
-            // the resulting state reaches the simulation.
-            runNCBSet(expression, makeControlBitHooks(this.controlBits, {
-                outfits: this.outfits,
-                // Numeric ids in an outfit's own set string resolve
-                // exactly as the mission path resolves them
-                // (resolveNumberedResource: the stock outfit if stock
-                // defines that number, else the writer plug-in's own).
-                // Hard-coding "nova" here once made a plug-in's `G472`
-                // grant the STOCK outfit 472; writer-only made a plug-in
-                // cron's `G135` miss the stock IR Missile (review r14 L2).
-                resolveId: id => resolveNumberedResource(id, resourcePrefix,
-                    globalId => MissionUniverse.shared(this.simulationData)
-                        .hasOutfit(globalId)),
-                // Xxxx ("make system xxx be explored"), against the same
-                // player-local record the star map draws from. Wired on
-                // this fallback path too, so an outfit whose mission
-                // session failed to build still reveals its map.
-            }, undefined, systemDiscoveryOperators(
-                playerDiscovery, resourcePrefix, this.systemExists())),
-                Math.random);
+            session.runMissionSet(expression, resourcePrefix);
         } catch (error) {
             if (error instanceof NCBParseError) {
-                console.warn('Bad control bit set string:', error);
-                return;
+                console.warn('Bad outfit mission set string:', error);
+            } else {
+                throw error;
             }
-            throw error;
         }
     }
 
@@ -844,7 +823,7 @@ export class Outfitter extends Menu<Entity> {
         // The same price the grid quotes and canBuyOutfit checked against
         // (ship-mass-proportional for oütf 0x0200, hence the hull).
         this.credits.credits -= outfitPrice(outfit, this.shipData) * units;
-        this.outfits.set(outfit.id, this.outfits.get(outfit.id) + units);
+        this.outfits.set(outfit.id, this.owned(outfit.id) + units);
         // Record the same-visit purchase so selling it back before
         // leaving refunds the full price (see applySell).
         this.visitPurchases.set(outfit.id,
@@ -877,14 +856,14 @@ export class Outfitter extends Menu<Entity> {
         if (outfit.map !== null) {
             this.applyMapPurchase(outfit.map);
             this.outfits.set(outfit.id,
-                Math.max(0, this.outfits.get(outfit.id) - units));
+                Math.max(0, this.owned(outfit.id) - units));
             this.visitPurchases.set(outfit.id,
                 Math.max(0, this.visitPurchases.get(outfit.id) - units));
         }
         // What was aboard as the OnPurchase starts, for every outfit with
         // a receipt from this visit (see the Dxxx note below).
         const ownedBefore = new Map([...this.visitPurchases.keys()]
-            .map(id => [id, this.outfits.get(id)] as const));
+            .map(id => [id, this.owned(id)] as const));
         this.runSetString(outfit.onPurchase, setStringPrefix(outfit));
         // A `Dxxx` in the set string (its own or a build order's, e.g.
         // BYOM:455 "Dismantle ir missile" `D455 D135`), or an `Hxxx`
@@ -897,7 +876,7 @@ export class Outfitter extends Menu<Entity> {
         // outfit being bought is not the only one a build order can
         // spend: BYOM:455's `D135` spends an IR Missile's).
         for (const [id, before] of ownedBefore) {
-            const removed = before - this.outfits.get(id);
+            const removed = before - this.owned(id);
             if (removed > 0) {
                 this.visitPurchases.set(id,
                     Math.max(0, this.visitPurchases.get(id) - removed));
@@ -912,13 +891,13 @@ export class Outfitter extends Menu<Entity> {
         // `H` change in the OnPurchase may already have dropped it.
         if (outfit.removeAfterPurchase) {
             this.outfits.set(outfit.id,
-                Math.max(0, this.outfits.get(outfit.id) - units));
+                Math.max(0, this.owned(outfit.id) - units));
             this.visitPurchases.set(outfit.id,
                 Math.max(0, this.visitPurchases.get(outfit.id) - units));
         }
         // ...and, whatever happened above, never a receipt for more units
         // than are aboard.
-        const owned = this.outfits.get(outfit.id);
+        const owned = this.owned(outfit.id);
         if (this.visitPurchases.get(outfit.id) > owned) {
             this.visitPurchases.set(outfit.id, owned);
         }
@@ -956,8 +935,8 @@ export class Outfitter extends Menu<Entity> {
             this.shipData);
         this.credits.credits += refund.credited;
         this.visitPurchases.set(outfit.id, refund.boughtThisVisit);
-        this.outfits.set(outfit.id, Math.max(0, this.outfits.get(outfit.id) - 1));
-        if (this.outfits.get(outfit.id) === 0) {
+        this.outfits.set(outfit.id, Math.max(0, this.owned(outfit.id) - 1));
+        if (this.owned(outfit.id) === 0) {
             this.outfits.delete(outfit.id);
         }
         this.runSetString(outfit.onSell, setStringPrefix(outfit));
@@ -1307,25 +1286,40 @@ export class Outfitter extends Menu<Entity> {
     }
 
     override async show(input: Entity): Promise<Entity> {
-        // Build a mission session so outfit set strings can run the
-        // mission operators. Built before setInput seeds the working
-        // copies; a failure just leaves set strings on the bit-only path.
-        this.missionSession = undefined;
+        // The visit's savepoint on the landing's transaction — or, shown
+        // standalone, on a transaction of this shop's own over `input`.
+        // Opened before setInput seeds the views from it; a failure means
+        // no visit (the bar and the BBS refuse the same way).
         try {
-            const universe = MissionUniverse.shared(this.simulationData);
-            // The planet id is only used for offer context (Sxxx
-            // destination resolution); the entity carries the accepted-at
-            // stellar, so a placeholder is fine for outfitter-run scripts.
-            this.missionSession = await MissionSession.create(
-                input, this.simulationData, universe, '<outfitter>');
-            // The change-ship operators need the docked entity, which only
-            // this menu holds (see changeShip).
-            this.missionSession.setChangeShipHook(
-                (id, mode) => this.changeShip(id, mode),
-                id => this.shipIds.has(id));
+            if (!this.transaction) {
+                // The planet id only feeds offer context (Sxxx destination
+                // resolution); the entity carries the accepted-at stellar,
+                // so a placeholder is fine for a standalone visit.
+                this.transaction = await LandedTransaction.open(input,
+                    this.simulationData,
+                    MissionUniverse.shared(this.simulationData),
+                    this.planetData?.id ?? '<outfitter>');
+                this.ownsTransaction = true;
+            } else {
+                // The per-hull facts an OnPurchase's mission operators
+                // gate on (capacity, Contribute, the payroll) as of now.
+                await this.transaction.refresh();
+            }
         } catch (e) {
             console.warn('Outfitter mission session unavailable:', e);
+            return input;
         }
+        if (!this.alive) {
+            // Torn down while the visit was opening: nothing to show, and
+            // nothing was edited yet.
+            return input;
+        }
+        // The change-ship operators need the docked entity, which only
+        // this menu holds (see changeShip).
+        this.transaction.session.setChangeShipHook(
+            (id, mode) => this.changeShip(id, mode),
+            id => this.shipIds.has(id));
+        this.visit = this.transaction.savepoint('outfitter');
         return super.show(input);
     }
 
@@ -1334,60 +1328,14 @@ export class Outfitter extends Menu<Entity> {
         // A fresh visit: clear same-visit purchase tracking so no prior
         // visit's purchases still qualify for the full refund.
         this.visitPurchases.clear();
-        // Share the mission session's working copies so purchases and
-        // mission set strings mutate the same bits/outfits/records.
-        if (this.missionSession) {
-            const session = this.missionSession;
-            this.outfits = new DefaultMap(() => 0, [...session.outfits]);
-            this.controlBits = session.state.bits;
-            this.records = session.state.records ?? new Map();
-            // Share the session's working credits so buys/sells and any
-            // mission-set payout mutate the same balance session.commit()
-            // persists (mirrors the outfits/bits sharing above).
-            this.credits = session.state.credits;
-            // The balance the working copy was seeded from, whichever path
-            // seeded it: done() commits the difference from THIS, not the
-            // absolute (credit_commit.ts). Read off the working copy rather
-            // than the entity, because the session snapshotted it in show()
-            // — a frame (and an escort-deal settlement) may have passed
-            // between the two.
-            this.creditsBaseline = this.credits.credits;
-            this.updateCreditsText();
-            this.shipData = undefined;
-            const shipId = input.components.get(ShipComponent)?.id;
-            if (shipId) {
-                this.simulationData.data.Ship.get(shipId).then(shipData => {
-                    if (this.input === input) {
-                        this.shipData = shipData;
-                        this.refreshGrid();
-                        this.setFreeMassText();
-                        this.refreshTradeState();
-                    }
-                });
-            }
-            this.text.status.text = "";
-            this.refreshGrid();
-            return;
-        }
-        const outfitsState = input.components.get(OutfitsStateComponent)
-            ?? new Map();
-        this.outfits = new DefaultMap(() => 0, [...outfitsState].map(
-            ([k, v]) => [k, v.count]));
-        this.controlBits = new Set(
-            input.components.get(ControlBitsComponent) ?? []);
-        this.records = new Map(
-            input.components.get(LegalRecordsComponent) ?? []);
-        this.creditsBaseline = creditBalance(input);
-        this.credits = { credits: this.creditsBaseline };
         this.updateCreditsText();
-        this.text.status.text = "";
-
         this.shipData = undefined;
         const shipId = input.components.get(ShipComponent)?.id;
         if (shipId) {
             this.simulationData.data.Ship.get(shipId).then(shipData => {
-                // Ignore stale loads after the input changes.
-                if (this.input === input) {
+                // Ignore stale loads after the input changes, and a load
+                // that lands after the world was torn down.
+                if (this.input === input && this.alive) {
                     this.shipData = shipData;
                     this.refreshGrid();
                     this.setFreeMassText();
@@ -1395,6 +1343,7 @@ export class Outfitter extends Menu<Entity> {
                 }
             });
         }
+        this.text.status.text = "";
         this.refreshGrid();
     }
 
@@ -1409,40 +1358,22 @@ export class Outfitter extends Menu<Entity> {
     }
 
     /**
-     * Commits the visit. Both paths route the credit write through
-     * {@link commitVenueCredits}, so what lands on the entity is what this
-     * visit SPENT or EARNED applied over whatever the balance is now —
-     * never the stale absolute the working copy started from. An escort
-     * deal that settled while the outfitter was open wrote the live
-     * component directly; credit_commit.ts documents the whole seam.
+     * Done: the visit's edits become the landing's. Releasing the
+     * savepoint is what writes the entity when this was the outermost
+     * visit (always, for the venues) — outfits, bits, records, and any
+     * mission / cargo / credits / date change an Sxxx/Axxx/Fxxx caused,
+     * the credits as a delta over whatever else moved the balance
+     * meanwhile (landed_transaction.ts, credit_commit.ts).
      */
     protected override done() {
-        if (this.missionSession) {
-            // Push the final outfit counts into the session, then commit
-            // it — that writes outfits, bits, records, and any mission /
-            // cargo / credits / date changes an Sxxx/Axxx/Fxxx caused.
-            const session = this.missionSession;
-            session.outfits.clear();
-            for (const [id, count] of this.outfits) {
-                if (count > 0) {
-                    session.outfits.set(id, count);
-                }
-            }
-            this.creditsBaseline = commitVenueCredits(
-                this.input, this.creditsBaseline, () => session.commit());
-            super.done();
-            return;
+        if (this.transaction && this.visit) {
+            this.transaction.release(this.visit);
         }
-        this.input.components.set(OutfitsStateComponent, new Map(
-            [...this.outfits]
-                .filter(([, count]) => count > 0)
-                .map(([id, count]) => [id, { count }])));
-        this.input.components.set(ControlBitsComponent, this.controlBits);
-        this.input.components.set(LegalRecordsComponent, this.records);
-        this.creditsBaseline = commitVenueCredits(
-            this.input, this.creditsBaseline,
-            () => this.input.components.set(CreditsComponent,
-                { credits: this.credits.credits }));
+        this.visit = undefined;
+        if (this.ownsTransaction) {
+            this.transaction = undefined;
+            this.ownsTransaction = false;
+        }
         super.done();
     }
 }

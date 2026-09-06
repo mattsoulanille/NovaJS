@@ -29,9 +29,10 @@ export const PendingEscortsComponent =
     new Component<string[]>('PendingEscorts');
 
 /**
- * Moves a visit's hires (the bar's `hired` list, which hire_escort.ts
- * appends to) onto the entity's PendingEscortsComponent, and EMPTIES the
- * visit list in the same step.
+ * Moves a landing's hires (the transaction's `hired` list, which
+ * hire_escort.ts appends to) onto the entity's PendingEscortsComponent,
+ * and EMPTIES the list in the same step. Run by the transaction's flush
+ * (landed_transaction.ts), so the bar's Leave is what moves them.
  *
  * The emptying is the point, not a tidy-up. The escort cap
  * (hire_escort.ts's `escortsHeld`, feeding escort_cap.ts's

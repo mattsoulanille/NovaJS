@@ -22,7 +22,7 @@
 import type { Entity } from 'nova_ecs/entity';
 import type { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
-import { DockedShipResource } from '../display/docked_ship.js';
+import { DockedShip as DockedShipHandle, DockedShipResource } from '../display/docked_ship.js';
 import { OpenGateMapEvent } from '../display/gate_map_plugin.js';
 import { OpenSpaceportEvent } from '../display/spaceport_plugin.js';
 import { DISCOVERY_LANDED } from '../nova_plugin/discovery.js';
@@ -33,9 +33,9 @@ import { CreditsComponent } from '../nova_plugin/player_state_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';
 import { spendableBalance } from '../spaceport/credit_commit.js';
 import {
-    queuedUpgradeTargets, settleEscortDeals,
+    EscortDealSettlement, queuedUpgradeTargets, settleEscortDeals,
 } from '../spaceport/escort_deals.js';
-import { fleetHoldOpen } from '../spaceport/fleet_cargo.js';
+import { settleVisitEscortDeals } from '../spaceport/landed_transaction.js';
 import { PendingEscortsComponent } from '../spaceport/pending_escorts.js';
 import {
     dock, dockAtGate, gateLaunched, land, landAtGate, launched, LiveSystem,
@@ -156,27 +156,29 @@ export function onLeaveSpaceport(runtime: ClientRuntime, launching: Entity):
  * peers with the `addEntity` record that puts that entity back at
  * lift-off — exactly as every purchase made in the spaceport does.
  *
- * THAT MAKES THIS A CONCURRENT WRITER of the docked entity's credits,
- * since an open venue is holding a working copy of the same balance.
- * Both halves of composing with it are documented in
- * spaceport/credit_commit.ts: the venues commit a DELTA rather than the
- * absolute they snapshotted, and an escort whose HOLD is checked out by
- * the open exchange has its deals frozen until Done (fleet_cargo's
- * fleetHoldOpen, passed below).
+ * THROUGH THE LANDING'S TRANSACTION once the spaceport has opened one
+ * (spaceport/landed_transaction.ts, reached by the display's docked
+ * handle): gated on the working balance the open venue is spending from,
+ * frozen for an escort whose hold the trade center has checked out, and
+ * paid into the one ledger every venue is a view onto — so there is no
+ * second copy for the settlement to race. Before the transaction exists
+ * (the frames between the dock and the landing's data arriving) it is a
+ * writer of the live component, which the transaction then seeds from;
+ * credit_commit.ts documents how a venue's delta composes with that.
  */
 async function settleDockedEscortDeals(runtime: ClientRuntime, player: string,
-    docked: { entity: Entity },
-    liveStatus?: () => { credits?: number }): Promise<void> {
+    docked: { entity: Entity }, handle?: DockedShipHandle): Promise<void> {
     const { fleet, gameData } = runtime;
     // The target classes have to be BUILT to refit against, and the
     // settlement itself is synchronous (it mutates the roster the frame
     // loop owns), so they are loaded first.
     await Promise.all(queuedUpgradeTargets(fleet.landed, player)
         .map(id => gameData.data.Ship.get(id).catch(() => undefined)));
-    // Read the HANDLE's entity after the await, not the one it named
-    // before: a shipyard purchase during that fetch repoints the docked
-    // entity at the new hull (swapDockedShip), and the money must land on
-    // the hull that lifts off, not the one just traded in.
+    // Read the HANDLE's entity (and transaction) after the await, not
+    // what it named before: a shipyard purchase during that fetch
+    // repoints the docked entity at the new hull (swapDockedShip), and
+    // the money must land on the hull that lifts off, not the one just
+    // traded in.
     const entity = docked.entity;
     const credits = entity.components.get(CreditsComponent);
     if (!credits) {
@@ -187,17 +189,21 @@ async function settleDockedEscortDeals(runtime: ClientRuntime, player: string,
         // deals just wait.
         return;
     }
-    // Affordability is gated on what the player is ABOUT to have — the
-    // open venue's working balance when one is open — not the live
-    // component a venue has already spent from in its working copy. See
-    // credit_commit.ts's spendableBalance for the negative-balance case
-    // this closes. The debit itself still lands on the live component,
-    // which the venue's delta commit composes with.
-    const settled = settleEscortDeals(fleet.landed, player,
-        spendableBalance(entity, liveStatus),
-        id => gameData.data.Ship.getCached(id),
-        fleetHoldOpen);
-    credits.credits += settled.credits;
+    const getShip = (id: string) => gameData.data.Ship.getCached(id);
+    let settled: EscortDealSettlement;
+    const transaction = handle?.transaction;
+    if (transaction && transaction.ship === entity) {
+        settled = settleVisitEscortDeals(transaction, fleet.landed, player,
+            getShip);
+    } else {
+        // No transaction yet: gated on the open venue's working balance
+        // if there is one (credit_commit.ts's spendableBalance), debited
+        // on the live component. No venue can be leasing a hold without a
+        // transaction, so nothing is frozen.
+        settled = settleEscortDeals(fleet.landed, player,
+            spendableBalance(entity, handle?.liveStatus), getShip);
+        credits.credits += settled.credits;
+    }
     for (const sale of settled.sold) {
         console.log(`Escort ${sale.uuid} sold off for `
             + `${sale.value} credits at the shipyard.`);
@@ -274,10 +280,11 @@ export async function runDockingFrame(runtime: ClientRuntime,
         && gameData.data.Planet.getCached(current.ship.planetId)
             ?.flags.hasShipyard) {
         // The handle, not its entity (a purchase may repoint it during
-        // the settlement's await), and the open venue's working balance
-        // for the affordability gate.
+        // the settlement's await), and the display's docked handle for
+        // the landing's transaction (or, before one exists, the open
+        // venue's working balance for the affordability gate).
         await settleDockedEscortDeals(runtime, current.ship.uuid, current.ship,
-            world.resources.get(DockedShipResource)?.current?.liveStatus);
+            world.resources.get(DockedShipResource)?.current);
         current = state.state;
     }
     if (current.kind === 'landed' && current.launching) {

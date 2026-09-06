@@ -36,9 +36,10 @@ const RACE_DURATION_MS = 3500;
  * verified against the original game (Matthew, 2026-07-27: bet 1000,
  * deducted immediately; the win then paid 4000).
  *
- * Bets settle into the caller's credits working copy (the bar
- * session), which commits on leaving the bar — the outfitter pattern.
- * The race outcome uses plain Math.random: this is landed,
+ * Bets settle into the caller's credits working copy — the landing's one
+ * ledger (landed_transaction.ts), the same object the hire dialog charges
+ * and the outfitter spends from — which lands on the entity when the
+ * player leaves the bar. The race outcome uses plain Math.random: this is landed,
  * player-local UI (like mission offer rolls); only the resulting
  * credit balance ever reaches the simulation.
  */
