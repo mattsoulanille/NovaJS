@@ -20,7 +20,7 @@ import { isInFlock } from './flock.js';
 import { GovtComponent } from './govt_component.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';
 import { PlayerEscortComponent } from './player_escort.js';
 import {

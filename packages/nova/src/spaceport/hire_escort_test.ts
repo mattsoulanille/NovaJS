@@ -5,7 +5,7 @@ import { BayFighterComponent } from '../nova_plugin/bay_plugin.js';
 import {
     cappedEscortCount, CarriedEscortEntry,
 } from '../nova_plugin/escort_cap.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import {
     EscortPayrollComponent, PlayerEscortComponent,
 } from '../nova_plugin/player_escort.js';

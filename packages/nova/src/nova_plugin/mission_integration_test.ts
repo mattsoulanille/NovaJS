@@ -25,7 +25,7 @@ import { buildMissionShipSpawns } from './mission_ship_spawn.js';
 import { GOAL_DESTROY, goalSupported } from './mission_ship_state.js';
 import { shipGoalOfferable } from './mission_ship_logic.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { CombatRatingComponent } from './reputation_plugin.js';
 import {

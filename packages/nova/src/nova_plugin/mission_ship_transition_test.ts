@@ -10,7 +10,7 @@ import { completeEntity } from './entity_data_loader.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { OwnerComponent, SourceComponent } from './weapon_components.js';
 import {
     buildMissionShipSpawns, liveMissionShips,

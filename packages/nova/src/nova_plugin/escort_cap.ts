@@ -1,6 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { BayFighterComponent } from './bay_plugin.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { PlayerEscortComponent } from './player_escort.js';
 
 /**

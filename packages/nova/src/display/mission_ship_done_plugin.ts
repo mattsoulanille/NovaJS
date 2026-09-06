@@ -12,7 +12,7 @@ import {
     DisplayAssetDataResource, SimulationGameDataResource,
 } from '../nova_plugin/game_data_resource.js';
 import { expandMissionText } from '../nova_plugin/mission_text.js';
-import { MissionShip, MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShip, MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import {
     GOAL_BOARD, GOAL_RESCUE, ShipObjective,
 } from '../nova_plugin/mission_ship_state.js';

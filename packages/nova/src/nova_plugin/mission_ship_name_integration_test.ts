@@ -7,7 +7,7 @@ import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { makeShip } from './make_ship.js';
 import { startMissionById } from './mission_logic.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,

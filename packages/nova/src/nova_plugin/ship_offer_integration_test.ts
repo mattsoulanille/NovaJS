@@ -24,7 +24,7 @@ import {
     applyAcceptMission, ShipOfferSpentComponent,
 } from './mission_accept.js';
 import { buildAcceptedMissionShips } from './mission_ship_spawn.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { GOAL_RESCUE } from './mission_ship_state.js';
 import { ActiveRanksComponent, ControlBitsComponent } from './ncb_plugin.js';
 import { makeNpcShip } from './npc_spawn_plugin.js';

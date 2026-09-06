@@ -5,7 +5,7 @@ import {
     cappedEscortCount, CarriedEscortEntry, countsTowardEscortCap,
     MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
 } from './escort_cap.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { EscortProvenance, PlayerEscortComponent } from './player_escort.js';
 
 /**

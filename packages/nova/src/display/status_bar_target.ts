@@ -9,7 +9,7 @@ import { displayName, govtTargetName } from "../nova_plugin/display_name.js";
 import { SimulationGameDataResource } from "../nova_plugin/game_data_resource.js";
 import { GovtComponent } from "../nova_plugin/govt_component.js";
 import { ArmorComponent, ShieldComponent } from "../nova_plugin/health_plugin.js";
-import { MissionShipComponent } from "../nova_plugin/mission_ship_plugin.js";
+import { MissionShipComponent } from "../nova_plugin/mission_ship_component.js";
 import { PersComponent } from "../nova_plugin/pers_plugin.js";
 import { PlayerEscortComponent } from "../nova_plugin/player_escort.js";
 import { PlayerShipSelector } from "../nova_plugin/player_ship_plugin.js";

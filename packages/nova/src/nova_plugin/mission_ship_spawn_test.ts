@@ -10,7 +10,7 @@ import { countsTowardEscortCap, MAX_ESCORTS } from './escort_cap.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { EscortPayrollComponent } from './player_escort.js';
 import { ArmorComponent } from './health_plugin.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { ShipComponent } from './ship_plugin.js';
 import {
     buildMissionShipSpawns,

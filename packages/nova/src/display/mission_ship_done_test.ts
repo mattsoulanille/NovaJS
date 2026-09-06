@@ -9,7 +9,7 @@ import { ControlEvent, ControlsSubject } from '../nova_plugin/controls_plugin.js
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
 } from '../nova_plugin/game_data_resource.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {
     GOAL_BOARD, GOAL_DESTROY, GOAL_RESCUE, ShipObjective,

@@ -9,7 +9,7 @@ import { expandMissionText } from '../nova_plugin/mission_text.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
 } from '../nova_plugin/ncb_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import { DisabledComponent } from '../nova_plugin/disabled_component.js';
 import { FuelComponent } from '../nova_plugin/health_plugin.js';
 import { Stat } from '../nova_plugin/stat.js';

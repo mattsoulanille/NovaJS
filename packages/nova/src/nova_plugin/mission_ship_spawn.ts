@@ -7,7 +7,7 @@ import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { FiringGroupComponent } from './firing_group.js';
 import { auxShipsMatchSystem, SystemInfo } from './mission_ship_logic.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import {
     GOAL_CHASE_OFF, GOAL_ESCORT, GOAL_RESCUE, ShipObjective, shipsToSpawn, GOAL_NONE } from './mission_ship_state.js';
 import { FormationComponent, NpcComponent } from './npc_ai_plugin.js';

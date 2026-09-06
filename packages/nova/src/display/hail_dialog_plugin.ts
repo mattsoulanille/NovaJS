@@ -58,7 +58,7 @@ import { SimulationTimeResource } from './simulation_time.js';
 import { NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { ShootAllWeaponsComponent } from '../nova_plugin/npc_plugin.js';
 import { PersComponent } from '../nova_plugin/pers_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import { targetIdentity } from './target_identity.js';
 import { ActiveRanksComponent } from '../nova_plugin/ncb_plugin.js';
 import {

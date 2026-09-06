@@ -34,7 +34,7 @@ import {
     beginFollowJump, InitiateJumpEvent, JumpComponent, JumpFromSystem,
     JumpSequenceSystem, TransitKind,
 } from './jump_plugin.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import {
     formationsIn, FormationComponent, FormationSystem, nextFormationSlot,
     RCS_ACCEL_FRACTION,

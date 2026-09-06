@@ -3,7 +3,7 @@ import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/bay_plugin.js';
 import { Cargo, CargoComponent, cargoUsed } from '../nova_plugin/cargo_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import {
     TradeGood, TradeWorkingState, freeCargoSpace,

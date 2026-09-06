@@ -18,7 +18,7 @@ import { GovtComponent } from './govt_component.js';
 import { ArmorComponent } from './health_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { InitiateJumpEvent } from './jump_plugin.js';
 import {
     NpcComponent, npcPlunderCredits, NPC_PLUNDER_CREDIT_FRACTION,

@@ -14,7 +14,7 @@ import { JumpComponent } from './jump_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem, SIMULATION_STEP_MS } from './make_system.js';
 import { startMissionById } from './mission_logic.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { buildMissionShipSpawns } from './mission_ship_spawn.js';
 import { ControlBitsComponent } from './ncb_plugin.js';
 import { NpcComponent } from './npc_ai_plugin.js';

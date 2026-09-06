@@ -11,8 +11,8 @@ import {
     ActiveRanksComponent, AggressionSuppressGovtsComponent,
     ControlBitsComponent,
 } from './ncb_plugin.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
-import { NpcComponent } from './npc_ai_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
+import { NpcComponent } from './npc_component.js';
 import { OutfitsStateComponent } from './outfit_plugin.js';
 import { addRecord } from './reputation.js';
 import { LegalRecordsComponent } from './reputation_plugin.js';

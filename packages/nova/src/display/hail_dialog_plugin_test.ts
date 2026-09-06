@@ -10,7 +10,7 @@ import { OwnerComponent, SourceComponent } from '../nova_plugin/fire_weapon_plug
 import { GovtComponent } from '../nova_plugin/govt_component.js';
 import { FormationComponent, NpcComponent } from '../nova_plugin/npc_ai_plugin.js';
 import { PersComponent } from '../nova_plugin/pers_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/mission_ship_plugin.js';
+import { MissionShipComponent } from '../nova_plugin/mission_ship_component.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipDataComponent } from '../nova_plugin/ship_plugin.js';
 import { TargetComponent } from '../nova_plugin/target_component.js';

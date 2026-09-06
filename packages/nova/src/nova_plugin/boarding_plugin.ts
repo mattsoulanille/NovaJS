@@ -22,7 +22,7 @@ import {
 } from './boarding_component.js';
 import { AggressionComponent } from './aggression.js';
 import { LandEvent } from './planet_plugin.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { CargoComponent, cargoUsed } from './cargo_plugin.js';
 import { CollisionHitterComponent } from './collision_interaction.js';
 import { HurtboxHullComponent } from './collisions_plugin.js';

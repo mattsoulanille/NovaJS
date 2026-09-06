@@ -24,7 +24,7 @@ import { govtDispositionTo, effectiveStrength, oddsFavorable } from './govt_disp
 import { ShieldComponent } from './health_plugin.js';
 import { JumpComponent } from './jump_plugin.js';
 import { landable } from './landable.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { AggressionSuppressGovtsComponent } from './ncb_plugin.js';
 import { NpcComponent } from './npc_component.js';
 import { FormationComponent } from './npc_formation.js';

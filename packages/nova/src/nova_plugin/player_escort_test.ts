@@ -22,7 +22,7 @@ import { ArmorComponent, FuelComponent } from './health_plugin.js';
 import { InitiateJumpEvent } from './jump_plugin.js';
 import { makeShip } from './make_ship.js';
 import { makeSystem } from './make_system.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { FormationComponent } from './npc_ai_plugin.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from './planet_plugin.js';
 import {

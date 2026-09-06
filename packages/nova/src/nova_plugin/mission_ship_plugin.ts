@@ -1,6 +1,4 @@
-import * as t from 'io-ts';
 import { Entities, GetEntity, UUID } from 'nova_ecs/arg_types';
-import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { EntityMap } from 'nova_ecs/entity_map';
 import { Optional } from 'nova_ecs/optional';
@@ -19,6 +17,9 @@ import { missionCargoKey } from './mission_logic.js';
 import {
     ShipOfferSpentComponent, ShipOfferSpentType,
 } from './mission_accept.js';
+import {
+    MissionShip, MissionShipComponent, MissionShipType,
+} from './mission_ship_component.js';
 import { ShipPhysicsComponent } from './ship_plugin.js';
 import { SystemHoldComponent } from './system_hold.js';
 import {
@@ -80,43 +81,12 @@ import {
  * (see mission_ship_state.ts for the Bible reading).
  */
 
-export const MissionShipType = t.intersection([t.type({
-    /** The owning player's active mission id (e.g. 'nova:258'). */
-    mission: t.string,
-    /** Entity uuid of the owning player's ship. */
-    owner: t.string,
-}), t.partial({
-    /** An AuxShip: mission atmosphere, not part of the goal. */
-    aux: t.boolean,
-    /**
-     * Spawned by a mission that auto-aborted at accept (the Derelict
-     * Decoy's ambush, mïsn 133): the mission never joins the owner's
-     * MissionsComponent, so the ship is tethered to the OWNER's presence
-     * only — never to the mission being active. Without this the cleanup
-     * below deleted the ambush a few ticks after it jumped in.
-     */
-    untethered: t.boolean,
-    /**
-     * The name this special ship wears, copied from the owner's
-     * ActiveMission.shipName at spawn (mïsn ShipNameID; see
-     * mission_ship_spawn.ts). Carried on the COMPONENT rather than on
-     * Entity.name — Entity.name is a debugging label that never crosses
-     * the serializer into the display world, so the target pane and the
-     * hail dialog could not see it. Read by status_bar's target pane and
-     * hail_dialog_plugin, exactly as PersComponent.name is: a named
-     * special ship shows its name in place of its ship class.
-     *
-     * Absent for aux ships (the Bible gives them no names) and for
-     * missions whose ShipNameID is -1.
-     */
-    name: t.string,
-    /** The ShipSubtitle sibling of `name`, shown in place of the ship
-     * class's own subtitle. Absent when the mission sets none. */
-    subtitle: t.string,
-})]);
-export type MissionShip = t.TypeOf<typeof MissionShipType>;
-export const MissionShipComponent =
-    new Component<MissionShip>('MissionShipComponent');
+// The tag itself lives in mission_ship_component.ts so that readers far
+// below the mission machinery (NPC AI, boarding, the escort cap, the
+// display) can depend on it without pulling this module in. Re-exported
+// for the callers that reach it through the plugin.
+export type { MissionShip };
+export { MissionShipComponent, MissionShipType };
 
 /** How close the owner must get to observe a cloak-capable ship
  * (GOAL_OBSERVE); roughly "visible onscreen". Ships that cannot cloak

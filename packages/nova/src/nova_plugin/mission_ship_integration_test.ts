@@ -9,7 +9,7 @@ import { DamagedEvent, DeathEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
 import { ArmorComponent } from './health_plugin.js';
 import { completeEntity } from './entity_data_loader.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import {
     GOAL_BOARD,
     GOAL_CHASE_OFF,

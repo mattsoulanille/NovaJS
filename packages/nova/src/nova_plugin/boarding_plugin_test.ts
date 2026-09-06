@@ -21,7 +21,7 @@ import {
     EscortRepairedEvent, reassignCapturedWing,
 } from './boarding_plugin.js';
 import { AggressionComponent } from './aggression.js';
-import { MissionShipComponent } from './mission_ship_plugin.js';
+import { MissionShipComponent } from './mission_ship_component.js';
 import { SystemHoldComponent } from './system_hold.js';
 import { BoardedComponent, BoardingComponent } from './boarding_component.js';
 import { InitiateJumpEvent } from './jump_plugin.js';
