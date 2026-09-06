@@ -329,6 +329,10 @@ export class Starmap extends Menu<string[] /* route list of systems */> {
      * plugin's lookup, for the same reason as the bits (#29).
      */
     private showProperties(systemId: string) {
+        // Cleared BEFORE the lines are computed (renderPropertyLines clears
+        // again, harmlessly): a lookup that throws part-way must leave the
+        // column blank, not the previous system's lines, as it always has.
+        this.propContainer.removeChildren();
         const { lines, ports, hazards } = systemProperties(
             this.allSystems?.find(s => s.id === systemId),
             systemId === this.systemId, this.discoveryOf(systemId),
