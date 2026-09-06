@@ -203,8 +203,11 @@ export const SaveData = t.intersection([
         // here reads as its InitialRec (see reputation.ts).
         reputations: t.array(t.tuple([t.string, t.number])),
         // Combat ratings, keyed by category; 'kills' holds the
-        // Appendix I kill points. The v2 -> v3 migration guarantees a
-        // 'kills' entry, and this build always writes one.
+        // Appendix I kill points. This build always writes a 'kills'
+        // entry and the v2 -> v3 migration adds one to a pre-v3 list
+        // without it, but the codec does not demand one: a v3 list
+        // hand-edited to lack it still decodes, and reads as zero kills
+        // (restorePlayerState), the same as it did before v3.
         combatRatings: t.array(t.tuple([t.string, t.number])),
         // The escorts that were with the player when the save was
         // written — in the system with them, held on the landed roster
@@ -495,9 +498,11 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     entity.components.set(CronStatesComponent, new Map(
         save.cronStates.map(([id, state]) => [id, { ...state }])));
     entity.components.set(LegalRecordsComponent, new Map(save.reputations));
-    // A 'kills' entry is guaranteed (the migration adds one to a list
-    // without it, and this build always writes one); the fallback only
-    // covers a hand-edited list.
+    // Every save this build writes and every pre-v3 save it migrates has a
+    // 'kills' entry, but the codec only requires `[string, number]` pairs,
+    // so a v3 payload hand-edited (or written by another tool) to a list
+    // without one decodes fine and lands here: it means zero kills, as a
+    // list without the entry always has.
     entity.components.set(CombatRatingComponent, {
         kills: save.combatRatings
             .find(([category]) => category === 'kills')?.[1] ?? 0,

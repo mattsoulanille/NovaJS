@@ -62,6 +62,11 @@ export type RawSaveData = Record<string, unknown>;
  * Also what extractSaveData writes for an entity that lacks the component
  * (a bare entity in a spec), so the two meanings of "nothing there" stay
  * one value.
+ *
+ * Every call builds fresh arrays: a caller may hand them straight into a
+ * save (extractSaveData does) or onto a raw payload (materialiseDefaults
+ * does) without two payloads ever sharing one, whatever a later writer
+ * does to them in place.
  */
 export function saveDefaults() {
     return {

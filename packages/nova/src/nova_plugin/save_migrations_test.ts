@@ -284,6 +284,35 @@ describe('save_migrations list', () => {
         expect(decodeSaveDetailed(JSON.stringify({ version: 2, data: wrong })))
             .toEqual({ ok: false, reason: jasmine.stringContaining('credits') });
     });
+
+    it('saveDefaults builds fresh arrays on every call', () => {
+        // extractSaveData hands them straight into a save and the 2 -> 3
+        // migration onto a raw payload; neither may alias the other's.
+        const a = saveDefaults();
+        const b = saveDefaults();
+        expect(a).toEqual(b);
+        for (const key of Object.keys(a) as (keyof typeof a)[]) {
+            const value = a[key];
+            if (Array.isArray(value)) {
+                expect(b[key]).not.toBe(value);
+            }
+        }
+        expect(a.date).not.toBe(b.date);
+        expect(a.combatRatings[0]).not.toBe(b.combatRatings[0]);
+    });
+
+    it('a current-version list without a kills entry reads as zero kills', () => {
+        // The codec requires [category, number] pairs, not a 'kills' entry:
+        // only the 2 -> 3 migration adds one, so a v3 payload hand-edited
+        // to lack it decodes and restores the way such a list always has.
+        const decoded = decodeSave(JSON.stringify({
+            version: SAVE_VERSION, data: current({ combatRatings: [] }),
+        }));
+        expect(decoded?.combatRatings).toEqual([]);
+        const entity = new Entity('restored');
+        restorePlayerState(entity, decoded!);
+        expect(entity.components.get(CombatRatingComponent)).toEqual({ kills: 0 });
+    });
 });
 
 describe('save_migrations historical fixtures', () => {
