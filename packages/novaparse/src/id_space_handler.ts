@@ -422,7 +422,7 @@ class IDSpaceHandler {
         // (getIDSpace awaits this.globalResources which depends on this function)
 
         const disallowedExtensions = new Set([".mp3", ".mov"]);
-        if (disallowedExtensions.has(path.extname(filePath))) {
+        if (disallowedExtensions.has(lowerExtname(filePath))) {
             return false;
         }
 
@@ -462,9 +462,16 @@ class IDSpaceHandler {
 // one of these is suspicious (empty/stripped resource fork).
 function likelyHasResources(filePath: string): boolean {
     const resourceExtensions = new Set([".plug", ".ndat", ".rez", ".npif"]);
-    const ext = path.extname(filePath).toLowerCase();
+    const ext = lowerExtname(filePath);
     // Classic Mac resource-fork plug-ins often have no extension at all.
     return resourceExtensions.has(ext) || ext === "";
+}
+
+// The extension the file-type checks above compare against. Lowercased so a
+// plug-in folder from a case-insensitive volume ("Music.MP3", "Intro.MOV")
+// is classified the same way as its lowercase twin.
+function lowerExtname(filePath: string): string {
+    return path.extname(filePath).toLowerCase();
 }
 
 // The loud "this plug-in was skipped" report: names the exact file and the
