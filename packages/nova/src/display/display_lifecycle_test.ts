@@ -4,6 +4,7 @@ import { TimePlugin } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/cargo_plugin.js';
@@ -237,7 +238,8 @@ describe('display world UI lifecycle', () => {
                 // reproduce the count, and what matters is that none is
                 // built for free.
                 const ids = await gameData.ids;
-                const planets = ids.Planet.slice(0, 5);
+                const planets = Object.values(SYNTHETIC.planets);
+                expect(planets.length).toBe(5);
                 const shipId = ids.Ship[0];
                 await MissionUniverse.shared(gameData).load();
 
@@ -250,9 +252,10 @@ describe('display world UI lifecycle', () => {
                 expect(spaceportsOn(world)).toBe(0);
                 expect(cachedTextures()).toBe(before);
 
-                // Landing at the second stellar builds ITS spaceport and
-                // nobody else's.
-                const landedAt = planets[1];
+                // Landing at one stellar (the uninhabited moon, named
+                // rather than taken by position in the id list) builds
+                // ITS spaceport and nobody else's.
+                const landedAt = SYNTHETIC.planets.moon;
                 let left = 0;
                 world.events.get(LeaveSpaceportEvent).subscribe(() => left++);
                 world.emit(OpenSpaceportEvent,
@@ -288,7 +291,7 @@ describe('display world UI lifecycle', () => {
                     return left > 1 && MenuControls.focused === undefined;
                 }, 'the spaceport let the pilot leave again');
                 world.emit(OpenSpaceportEvent,
-                    { planetId: planets[3], ship: pilot(shipId) });
+                    { planetId: SYNTHETIC.planets.vaelGate, ship: pilot(shipId) });
                 world.step();
                 expect(spaceportsOn(world)).toBe(2);
                 expect(cachedTextures() - before)
