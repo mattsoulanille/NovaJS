@@ -133,9 +133,9 @@ export class StatusBar {
         const outgoing = this.container.removeChildren();
         // Each PIXI.Text owns a generated canvas texture, so the outgoing set
         // is destroyed rather than merely detached: every text pane destroys
-        // its own build's texts (and the target pane empties its class-owned
-        // containers, which build() re-parents), and the draws bail until
-        // the rebuild has run.
+        // its own build's texts, and the draws bail until the rebuild has
+        // run. The target pane also empties its class-owned containers —
+        // see TargetPane.reset() for the full description.
         this.target.reset();
         this.navigation.reset();
         this.weapon.reset();

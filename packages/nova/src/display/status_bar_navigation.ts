@@ -28,7 +28,9 @@ import { StatusBarResource } from "./status_bar_resource.js";
  * object. REQUIRED, not Optional: a world that installs the readout without
  * a discovery record would silently name every system, which is the exact
  * leak this gate exists to close — better a loud "Missing resource" the
- * first step than a quiet one nobody notices. StatusBarPlugin sets it.
+ * first step than a quiet one nobody notices. Declared here beside the
+ * only system that reads it; StatusBarPlugin (status_bar.ts) sets it when
+ * it installs the bar.
  *
  * Reading the store on every step is what makes the name appear LIVE on
  * arrival: entering a system calls markDiscovered, and the very next
