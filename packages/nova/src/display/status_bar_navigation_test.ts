@@ -19,8 +19,9 @@ import {
     DISCOVERY_ENTERED, DISCOVERY_LANDED, DISCOVERY_UNKNOWN, DiscoveryLevel,
 } from '../nova_plugin/discovery.js';
 import {
-    DiscoveryLevelResource, DrawStatusBarNavigation, StatusBarResource,
-} from './status_bar.js';
+    DiscoveryLevelResource, DrawStatusBarNavigation,
+} from './status_bar_navigation.js';
+import { StatusBarResource } from './status_bar_resource.js';
 import { NavReadout, UNEXPLORED_SYSTEM } from './status_bar_content.js';
 
 /**
@@ -57,7 +58,9 @@ function makeWorld(names: Record<string, string> = { 'nova:129': 'Sanddown' },
     const world = new World('status bar navigation test');
     const drawn: NavReadout[] = [];
     world.resources.set(StatusBarResource, {
-        drawNavigation: (readout: NavReadout) => { drawn.push(readout); },
+        navigation: {
+            drawNavigation: (readout: NavReadout) => { drawn.push(readout); },
+        },
     } as never);
     world.resources.set(SimulationGameDataResource, fakeGameData(names));
     const levels = discovery ?? new Map<string, DiscoveryLevel>(
@@ -300,7 +303,7 @@ describe('status bar navigation: an unexplored destination is not named',
             // the readout is wired the gate cannot come off.
             const world = new World('no discovery record');
             world.resources.set(StatusBarResource,
-                { drawNavigation: () => { } } as never);
+                { navigation: { drawNavigation: () => { } } } as never);
             world.resources.set(SimulationGameDataResource,
                 fakeGameData({ 'nova:129': 'Sanddown' }));
             expect(() => world.addSystem(DrawStatusBarNavigation))

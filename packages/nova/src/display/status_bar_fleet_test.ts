@@ -10,7 +10,7 @@ import { ShipComponent } from '../nova_plugin/ship_plugin.js';
 import { sumFleetCargo } from '../spaceport/fleet_cargo.js';
 import {
     cargoDisplayOf, fleetCargoMembers, playerEscortEntities,
-} from './status_bar.js';
+} from './status_bar_cargo.js';
 
 /**
  * The status bar's cargo panel is FLEET-WIDE (Matthew's ruling: "'Free''s

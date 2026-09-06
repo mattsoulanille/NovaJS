@@ -1,4 +1,5 @@
 import 'jasmine';
+import * as PIXI from 'pixi.js';
 import { Entity } from 'nova_ecs/entity';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { World } from 'nova_ecs/world';
@@ -6,10 +7,11 @@ import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_
 import { SimulationGameDataResource } from '../nova_plugin/game_data_resource.js';
 import { PlayerShipSelector } from '../nova_plugin/player_ship_plugin.js';
 import { ShipComponent } from '../nova_plugin/ship_plugin.js';
-import {
-    CARGO_READOUT_PERIOD_MS, DrawStatusBarCargo, statFullness, StatusBar,
-    StatusBarResource,
-} from './status_bar.js';
+import { StatusBar } from './status_bar.js';
+import { CARGO_READOUT_PERIOD_MS, DrawStatusBarCargo } from './status_bar_cargo.js';
+import { statFullness } from './status_bar_gauges.js';
+import { StatusBarResource } from './status_bar_resource.js';
+import { TargetPane } from './status_bar_target.js';
 
 /**
  * The stat bars' fullness. A stat whose max is 0 — the stock Escape Pod,
@@ -39,23 +41,22 @@ describe('statFullness', () => {
  * threw on the first frame — which, with no per-system try/catch in the
  * ECS flush, skipped every later draw system that frame.
  *
- * A bar in exactly the mid-reload state, without the PIXI.Text
- * constructor (no canvas here): the prototype with the fields reload()
- * leaves behind.
+ * A target pane in exactly the mid-reload state: constructed (no
+ * PIXI.Text is made until build(), so no canvas is needed here) but
+ * never built, which is what reload() leaves behind until the new
+ * PICT arrives.
  */
 describe('StatusBar draw methods mid-reload', () => {
-    function unbuiltBar(): StatusBar {
-        const bar = Object.create(StatusBar.prototype) as StatusBar;
-        Object.assign(bar, { built: false, text: {} });
-        return bar;
+    function unbuiltPane(): TargetPane {
+        return new TargetPane({} as PIXI.IRenderer);
     }
 
     it('drawTarget waits for the rebuild instead of throwing', () => {
-        expect(() => unbuiltBar().drawTarget('Shuttle', 50, 50)).not.toThrow();
+        expect(() => unbuiltPane().drawTarget('Shuttle', 50, 50)).not.toThrow();
     });
 
     it('clearTarget waits for the rebuild instead of throwing', () => {
-        expect(() => unbuiltBar().clearTarget()).not.toThrow();
+        expect(() => unbuiltPane().clearTarget()).not.toThrow();
     });
 });
 
@@ -82,7 +83,7 @@ describe('DrawStatusBarCargo throttle', () => {
         world.resources.set(SimulationGameDataResource, gameData);
         const drawCargo = jasmine.createSpy('drawCargo');
         world.resources.set(StatusBarResource,
-            { drawCargo } as unknown as StatusBar);
+            { cargo: { drawCargo } } as unknown as StatusBar);
         world.addSystem(DrawStatusBarCargo);
         const player = new Entity('player');
         player.components.set(PlayerShipSelector, undefined);

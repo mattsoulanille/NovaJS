@@ -1,5 +1,5 @@
 import 'jasmine';
-import { TARGET_FLASH_MS, targetFlashOn } from './status_bar.js';
+import { TARGET_FLASH_MS, targetFlashOn } from './status_bar_radar.js';
 import {
     formatCredits, navReadout, abbreviateCargoName, specialCargoSummary,
     standardCargoIndex, ordinal, formatLongDate, jumpArrivalMessage,

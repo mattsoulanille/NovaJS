@@ -1,6 +1,6 @@
 import 'jasmine';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { DEFAULT_STATUS_BAR_ID, statusBarIdForShip } from './status_bar.js';
+import { DEFAULT_STATUS_BAR_ID, statusBarIdForShip } from './status_bar_interface.js';
 
 /**
  * Which ïntf resource the in-flight status bar is drawn from, per the EVN
