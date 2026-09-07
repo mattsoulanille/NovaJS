@@ -35,7 +35,7 @@ import {
 import { AnimationComponent } from '../core/index.js';
 import { blindSpotBlocksQuadrant, getQuadrant } from './blind_spots.js';
 import { CloakActiveComponent, CloakScannerComponent, isTargetable } from '../ship/index.js';
-import { ExplodingComponent } from '../ship/index.js';
+import { ExplodingComponent, ExplodingFinishedSystem } from '../ship/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { applyExitPoint, closestExitPointIndex, ExitPointData, getExitPointData } from './exit_point.js';
 import { FiringGroup, FiringGroupComponent } from '../ship/index.js';
@@ -100,7 +100,10 @@ export const WeaponsComponentProvider = Provide({
     args: [WeaponsStateComponent] as const,
     factory() {
         return new DefaultMap(defaultWeaponLocalState);
-    }
+    },
+    // #237 pin (shared: ShipExplodingComponent): FireWeaponPlugin registers
+    // after DeathPlugin.
+    after: [ExplodingFinishedSystem],
 });
 
 /**
@@ -294,9 +297,10 @@ const PointDefenseQuery = new Query([MovementStateComponent, Optional(OwnerCompo
  * ShipDataProvider so a freshly inserted ship is marked on the same tick
  * its data lands rather than the one after.
  */
-const ShipPointDefenseVulnerabilitySystem = new System({
+export const ShipPointDefenseVulnerabilitySystem = new System({
     name: 'ShipPointDefenseVulnerability',
-    after: [ShipDataProvider],
+    // WeaponsComponentProvider is a #237 pin (shared: entity).
+    after: [ShipDataProvider, WeaponsComponentProvider],
     args: [ShipDataComponent, GetEntity] as const,
     step(shipData, entity) {
         const vulnerable = shipData.vulnerableTo.includes('pointDefense');

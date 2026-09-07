@@ -214,7 +214,7 @@ export function hullFromAnimation(animation: Animation, gameData: SimulationGame
     return new MultiFrameHull(hulls);
 }
 
-const HitboxHullProvider = ProvideFromCache({
+export const HitboxHullProvider = ProvideFromCache({
     name: "HitboxProvider",
     provided: HitboxHullComponent,
     args: [AnimationComponent, SimulationGameDataResource, CollisionVulnerabilityComponent] as const,
@@ -316,7 +316,8 @@ export const UpdateHurtboxHullSystem = new System({
     name: "UpdateHurtboxHullSystem",
     args: [MovementStateComponent, HurtboxHullComponent, Optional(AnimationComponent)] as const,
     step: UpdateHitboxHullSystem.step,
-    after: [MovementSystem],
+    // #237 pin (shared: MovementState, AnimationComponent — both read-only here).
+    after: [MovementSystem, UpdateHitboxHullSystem],
 });
 
 export const CollisionSystem = new System({

@@ -74,7 +74,7 @@ export function ionizedNow(
     return ionization.current > ionization.max / 2;
 }
 
-const IonizedSystem = new System({
+export const IonizedSystem = new System({
     name: 'IonizedSystem',
     args: [IonizationComponent, Optional(IsIonizedComponent), GetEntity, UUID, Emit] as const,
     step(ionization, wasIonized, entity, uuid, emit) {

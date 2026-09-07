@@ -13,7 +13,7 @@ import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { DamagedEvent } from './death_plugin.js';
 import { DisabledComponent } from './disabled_component.js';
-import { FuelComponent, ShieldComponent } from './health_plugin.js';
+import { FuelComponent, FuelRechargeSystem, ShieldComponent } from './health_plugin.js';
 import { OutfitsState, OutfitsStateComponent } from './outfit_plugin.js';
 import { ProvideFromCache } from '../core/index.js';
 import { ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
@@ -192,6 +192,9 @@ const CloakProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveCloak,
+    // #237 pin (shared: Fuel, DisabledComponent): CloakPlugin registers
+    // after HealthPlugin's recharges.
+    after: [FuelRechargeSystem],
 });
 
 const CloakScannerProvider = ProvideFromCache({
@@ -200,6 +203,8 @@ const CloakScannerProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveCloakScanner,
+    // #237 pin (shared: entity, SimulationGameData).
+    after: [CloakProvider],
 });
 
 /** A minimal Stat-like value the pure transition helpers operate on. */
@@ -349,8 +354,9 @@ export const CloakDrainSystem = new System({
     },
     // Determinism rule 4: reads time.delta_s to drain the cloak's
     // resource cost, so it must run after TimeSystem produces this
-    // tick's delta.
-    after: [TimeSystem],
+    // tick's delta. CloakScannerProvider is a #237 pin (shared:
+    // CloakActive, Cloak, Fuel, Shield).
+    after: [TimeSystem, CloakScannerProvider],
 });
 
 /**

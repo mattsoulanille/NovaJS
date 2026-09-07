@@ -163,7 +163,7 @@ export function reconcileRouteOnArrival(entity: Entity, arrivedSystem: string,
         jumpRoute.route.shift();
     }
 }
-const JumpRouteProvider = Provide({
+export const JumpRouteProvider = Provide({
     name: 'JumpRouteProvider',
     // Every controlled ship (any peer's), not just the local player:
     // this is shared simulation state.
@@ -569,7 +569,10 @@ const PlayerJumpControl = new System({
             Math.min(shipPhysics.multiJump, jumpRoute.route.length - 1));
         beginJump(entity, systemId, destination, jumpRoute, shipPhysics,
             gameData, autoJumpsLeft);
-    }
+    },
+    // #237 pin (shared: entity): JumpPlugin registers this before its
+    // route provider.
+    before: [JumpRouteProvider],
 });
 
 /**

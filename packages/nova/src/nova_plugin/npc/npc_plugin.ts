@@ -12,13 +12,14 @@ import { Optional } from "nova_ecs/optional";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
 import { CloakActiveComponent, CloakActiveState, isTargetable } from "../ship/index.js";
-import { DeathEvent } from "../ship/index.js";
+import { DeathEvent, PlayerDeathSystem } from "../ship/index.js";
 import { DisabledComponent, DisabledState } from "../ship/index.js";
 import { makeShip } from "../ship/index.js";
 import { ShipComponent } from "../ship/index.js";
 import { TargetComponent } from "../ship/index.js";
 import { WeaponsStateComponent } from "../ship/index.js";
 import { SimulationGameDataResource } from "../core/index.js";
+import { GateArrivalSystem } from "../travel/index.js";
 
 /**
  * ============================================================================
@@ -101,7 +102,9 @@ const ChooseRandomTargetAI = new System({
     },
     // Determinism rule 4: the re-roll timer compares against time.time,
     // so this must run after TimeSystem advances the clock.
-    after: [TimeSystem],
+    // GateArrivalSystem is a #237 pin (shared: *): NpcPlugin registers
+    // after GateTransitPlugin.
+    after: [TimeSystem, GateArrivalSystem],
 });
 
 export const FollowComponent = new Component<undefined>('FollowComponent');
@@ -111,11 +114,13 @@ export const FollowAI = new System({
     step(movementState, target) {
         movementState.turnTo = target.target;
         movementState.accelerating = 1;
-    }
+    },
+    // #237 pin (shared: *): NpcPlugin's registration order.
+    after: [ChooseRandomTargetAI],
 });
 
 export const ShootAllWeaponsComponent = new Component<undefined>('ShootAllWeaponsComponent');
-const ShootAllWeaponsAI = new System({
+export const ShootAllWeaponsAI = new System({
     name: 'ShootAllWeaponsAI',
     args: [WeaponsStateComponent, SimulationGameDataResource, TargetComponent,
         Entities, ShootAllWeaponsComponent] as const,
@@ -141,7 +146,9 @@ const ShootAllWeaponsAI = new System({
             weapon.target = target;
             weapon.firing = true;
         }
-    }
+    },
+    // #237 pin (shared: *): NpcPlugin's registration order.
+    after: [FollowAI],
 });
 
 
@@ -155,7 +162,10 @@ export const DeathAISystem = new System({
         // deaths at the same ticks, so removal needs no authority or
         // message: it is deterministic.
         entities.delete(uuid);
-    }
+    },
+    // #237 pin (shared: *): among the DeathEvent handlers, after ship's
+    // player respawn.
+    after: [PlayerDeathSystem],
 })
 
 export function makeNpc(shipData: ShipData) {

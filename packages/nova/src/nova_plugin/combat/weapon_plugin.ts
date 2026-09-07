@@ -25,7 +25,8 @@ import { FoldStateComponent, foldBlocksFiring } from '../ship/index.js';
 import { WeaponEntries, WeaponLocalState, WeaponsComponent } from './fire_weapon_plugin.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { ArmorComponent, FuelComponent } from '../ship/index.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { OutfitsState, OutfitsStateComponent, OutfitWeaponProvider } from '../ship/index.js';
+import { SelectStellarSystem } from '../travel/index.js';
 import { PlatformResource } from '../core/index.js';
 import { PlayerShipSelector } from '../player/index.js';
 import { Stat } from '../core/index.js';
@@ -473,6 +474,8 @@ export const WeaponsSystem = new System({
     // Determinism rule 4: reload/burst timing compares against time.time
     // and time.delta_s, so this must run after TimeSystem.
     after: [TimeSystem],
+    // #237 pin (shared: *): WeaponPlugin registers before OutfitPlugin.
+    before: [OutfitWeaponProvider],
 });
 
 type ActiveSecondary = {
@@ -482,7 +485,7 @@ type ActiveSecondary = {
 export const ActiveSecondaryWeapon =
     new Component<ActiveSecondary>('ActiveSecondaryWeapon');
 
-const ActiveSecondaryProvider = Provide({
+export const ActiveSecondaryProvider = Provide({
     name: "ActiveSecondaryProvider",
     provided: ActiveSecondaryWeapon,
     // Every controlled ship (any peer's), not just the local player:
@@ -498,7 +501,7 @@ export const ActiveSecondaryType = t.type({
 
 registerSimulationBridgeEvent({ event: ChangeSecondaryEvent });
 
-const ControlPlayerWeapons = new System({
+export const ControlPlayerWeapons = new System({
     name: 'ControlPlayerWeapons',
     events: [ShipControlEvent],
     args: [ShipControlStateComponent, WeaponsStateComponent, WeaponsComponent,
@@ -575,7 +578,10 @@ const ControlPlayerWeapons = new System({
                 weaponState.firing = firing;
             }
         }
-    }
+    },
+    // #237 pin (shared: *): among the ShipControlEvent handlers, after
+    // travel's stellar selection.
+    after: [SelectStellarSystem],
 });
 
 export const WeaponPlugin: Plugin = {

@@ -6,7 +6,7 @@ import { ProvideFromCache } from '../core/index.js';
 import { registerEntityDeriver } from '../core/index.js';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
 import { SimulationGameDataResource } from '../core/index.js';
-import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
+import { CloakDrainSystem, OutfitsState, OutfitsStateComponent } from '../ship/index.js';
 import { LegalRecords, recordHostile, recordWith } from './reputation.js';
 import { StellarClearance } from './stellar_clearance.js';
 
@@ -295,12 +295,15 @@ export function targetCornerStyle(disposition: Disposition,
     return attackingPlayer ? 'hostile' : disposition;
 }
 
-const IffProvider = ProvideFromCache({
+export const IffProvider = ProvideFromCache({
     name: 'IffProvider',
     provided: IffComponent,
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveIff,
+    // #237 pin (shared: CloakActive, Cloak, Fuel, Shield): IffPlugin
+    // registers after CloakPlugin.
+    after: [CloakDrainSystem],
 });
 
 export const IffPlugin: Plugin = {

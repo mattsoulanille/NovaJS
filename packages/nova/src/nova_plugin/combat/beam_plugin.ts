@@ -32,6 +32,8 @@ import { zeroOrderGuidance } from './guidance.js';
 import { SoundEvent } from '../core/index.js';
 import { TargetComponent } from '../ship/index.js';
 import { intervalElapsed, WeaponsSystem } from './weapon_plugin.js';
+import { TargetIndexProvider } from './target_plugin.js';
+import { SetControlledShipSystem } from '../player/index.js';
 
 
 interface BeamState {
@@ -240,6 +242,8 @@ export const BeamResetSystem = new System({
         state.targetHit = undefined;
     },
     before: [CollisionSystem], // Before collisions so we clear previous frame's hits
+    // #237 pin (shared: BeamState): BeamPlugin registers after TargetPlugin.
+    after: [TargetIndexProvider],
 });
 
 // Based on: https://stackoverflow.com/questions/563198/how-do-you-detect-where-two-line-segments-intersect
@@ -476,6 +480,9 @@ const BeamDamageSystem = new System({
     // from time and delta_ms. after: [CollisionSystem] already pins it
     // after TimeSystem transitively; the explicit edge keeps it robust.
     after: [TimeSystem, CollisionSystem],
+    // #237 pin (shared: *): before player's SetControlledShipSystem, the
+    // last system of the step.
+    before: [SetControlledShipSystem],
 });
 
 export const BeamPlugin: Plugin = {

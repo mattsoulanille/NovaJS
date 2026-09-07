@@ -9,7 +9,7 @@ import { DisabledComponent } from '../ship/index.js';
 import { FoldStateComponent, FoldStateType, foldRatePerSecond, moveToward } from '../ship/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
-import { WeaponsSystem } from './weapon_plugin.js';
+import { ActiveSecondaryProvider, WeaponsSystem } from './weapon_plugin.js';
 
 /**
  * Whether any of the ship's weapons are currently trying to fire.
@@ -52,6 +52,8 @@ export const FoldStateProvider = new System({
             entity.components.set(FoldStateComponent, { progress: 0 });
         }
     },
+    // #237 pin (shared: entity): FoldPlugin registers after WeaponPlugin.
+    after: [ActiveSecondaryProvider],
 });
 
 /**
@@ -75,7 +77,9 @@ export const FoldAdvanceSystem = new System({
         fold.progress = moveToward(fold.progress, target,
             foldRatePerSecond(mode) * time.delta_s);
     },
-    after: [TimeSystem],
+    // FoldStateProvider is a #237 pin (shared: FoldState, WeaponsState,
+    // Disabled, Animation).
+    after: [TimeSystem, FoldStateProvider],
     before: [WeaponsSystem],
 });
 

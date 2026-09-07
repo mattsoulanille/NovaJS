@@ -20,12 +20,15 @@ import { CloakActiveComponent, isCloaked } from '../ship/index.js';
 import { IdFactoryResource } from '../core/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { BlastDamageComponent, BlastIgnoreComponent } from './blast_plugin.js';
-import { CompositeHull, hullFromAnimation, HurtboxHullComponent } from '../core/index.js';
+import { CompositeHull, HitboxHullProvider, hullFromAnimation, HurtboxHullComponent } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent, CollisionVulnerabilityComponent } from '../core/index.js';
 import { CreateTime } from '../core/index.js';
 import { DamagedEvent, ZeroArmorEvent } from '../ship/index.js';
 import { ExitPointData } from './exit_point.js';
-import { FireSubs, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
+import { FireSubs, ShipPointDefenseVulnerabilitySystem, SubCounts, WeaponConstructors, WeaponEntry } from './fire_weapon_plugin.js';
+import { ActiveSecondaryProvider } from './weapon_plugin.js';
+import { BeamCollisionSystem } from './beam_plugin.js';
+import { KillCreditSystem } from '../reputation/index.js';
 import { OwnerComponent, SourceComponent, VulnerableToPD } from '../ship/index.js';
 import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
 import { isInFlock, provokeGuidedLock } from './flock.js';
@@ -37,7 +40,7 @@ import { GovtComponent } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { guidanceAngle, Guidance, GuidanceComponent, MissileGuidanceResource } from './guidance.js';
 import { JamSteerComponent, MissileJammingSystem } from './jamming_plugin.js';
-import { ArmorComponent, ShieldComponent } from '../ship/index.js';
+import { ArmorComponent, ShieldComponent, ShipZeroArmorSystem } from '../ship/index.js';
 import { ProjectileBlastHull, ProjectileComponent, ProjectileDataComponent } from '../core/index.js';
 import { SoundEvent } from '../core/index.js';
 import { Stat } from '../core/index.js';
@@ -267,7 +270,9 @@ const ProjectileLifespanSystem = new System({
     },
     // Determinism rule 4: expiry compares the projectile's fire time
     // against time.time, so this must run after TimeSystem.
-    after: [TimeSystem],
+    // ShipPointDefenseVulnerabilitySystem is a #237 pin (shared: *):
+    // ProjectilePlugin registers after FireWeaponPlugin.
+    after: [TimeSystem, ShipPointDefenseVulnerabilitySystem],
 });
 
 export const ProjectileGuidanceSystem = new System({
@@ -328,7 +333,10 @@ export const ProjectileGuidanceSystem = new System({
         }
 
         movementState.turnTo = aim;
-    }
+    },
+    // #237 pin (shared: *): before core's HitboxHullProvider, the first
+    // system CollisionsPlugin registers.
+    before: [HitboxHullProvider],
 });
 
 export const ProjectileCollisionEventType = t.type({
@@ -352,6 +360,10 @@ const ProjectileHurtboxProvider = ProvideFromCache({
     provided: HurtboxHullComponent,
     args: [AnimationComponent, SimulationGameDataResource, CollisionHitterComponent, ProjectileComponent] as const,
     factory: hullFromAnimation,
+    // #237 pins (shared: *; entity): ProjectilePlugin registers before
+    // WeaponPlugin.
+    after: [ProjectileLifespanSystem],
+    before: [ActiveSecondaryProvider],
 });
 
 export const ProjectileCollisionSystem = new System({
@@ -470,7 +482,10 @@ export const ProjectileCollisionSystem = new System({
             ),
             projectileData,
         }, [self]);
-    }
+    },
+    // #237 pin (shared: *): among the CollisionEvent handlers, before
+    // beam's.
+    before: [BeamCollisionSystem],
 });
 
 export const ProjectileExplodeEventType = t.intersection([
@@ -580,7 +595,11 @@ const ProjectileDeathSystem = new System({
     args: [Entities, UUID, ZeroArmorEvent, ProjectileComponent] as const,
     step(entities, uuid) {
         entities.delete(uuid);
-    }
+    },
+    // #237 pins (shared: *): among the ZeroArmorEvent handlers, after
+    // ship's and before reputation's.
+    after: [ShipZeroArmorSystem],
+    before: [KillCreditSystem],
 });
 
 export const ProjectilePlugin: Plugin = {

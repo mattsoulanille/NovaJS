@@ -193,7 +193,7 @@ export function armorFullyRestored(armor?: Stat): boolean {
     return Boolean(armor && armor.max > 0 && armor.current >= armor.max);
 }
 
-const ShipZeroArmorSystem = new System({
+export const ShipZeroArmorSystem = new System({
     name: 'ShipZeroArmorSystem',
     args: [ShipDataComponent, ZeroArmorEvent, GetEntity,
         Optional(ArmorComponent)] as const,
@@ -212,7 +212,7 @@ const ShipZeroArmorSystem = new System({
     }
 });
 
-const ExplodingFinishedSystem = new System({
+export const ExplodingFinishedSystem = new System({
     name: 'ExplodingFinishedSystem',
     args: [TimeResource, ExplodingComponent, UUID, Emit] as const,
     step(time, endExplosionTime, uuid, emit) {
@@ -242,7 +242,7 @@ const ExplodingFinishedSystem = new System({
  * one DeathEvent per tick per exploding entity, and the event queue is
  * drained before the next step.
  */
-const ExplodingClearedSystem = new System({
+export const ExplodingClearedSystem = new System({
     name: 'ExplodingClearedSystem',
     events: [DeathEvent],
     args: [GetEntity] as const,
@@ -292,7 +292,7 @@ export function knockbackDirection(targetPosition: Position,
 }
 
 const MovementQuery = new Query([MovementStateComponent, Optional(BlastDamageComponent)] as const);
-const KnockbackSystem = new System({
+export const KnockbackSystem = new System({
     name: 'KnockbackSystem',
     events: [DamagedEvent],
     args: [DamagedEvent, MovementStateComponent, MovementPhysicsComponent,
@@ -316,7 +316,10 @@ const KnockbackSystem = new System({
         }
         movementState.velocity = movementState.velocity.add(
             direction.scale(damage.knockback * scale / targetMass * 5));
-    }
+    },
+    // #237 pin (shared: *): the DamagedEvent handlers run damage first,
+    // knockback second.
+    after: [DamageSystem],
 });
 
 // Tracker issue: the respawn resets shield, armor and ionization one

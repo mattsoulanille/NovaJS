@@ -1068,7 +1068,7 @@ const LiveNpcsQuery = new Query([NpcComponent] as const);
  * system edge, until the population is back at target. Mirrors
  * AsteroidRespawnSystem.
  */
-const NpcRespawnSystem = new System({
+export const NpcRespawnSystem = new System({
     name: 'NpcRespawnSystem',
     args: [NpcSpawnerComponent, LiveNpcsQuery, TimeResource, GetWorld,
         RandomResource, IdFactoryResource,

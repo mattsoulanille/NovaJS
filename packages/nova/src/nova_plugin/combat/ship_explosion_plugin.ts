@@ -70,7 +70,7 @@ import { ShipDataComponent } from '../ship/index.js';
  * made — every peer spawns an identical blast on the same tick.
  */
 
-const ShipExplosionBlastSystem = new System({
+export const ShipExplosionBlastSystem = new System({
     name: 'ShipExplosionBlastSystem',
     events: [DeathEvent],
     // Before the two systems that end a death: DeathAISystem deletes the

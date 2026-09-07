@@ -17,7 +17,7 @@ import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer
 import { Provide } from 'nova_ecs/provide';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
 import { ProvideFromCache } from '../core/index.js';
-import { AnimationComponent } from '../core/index.js';
+import { AnimationComponent, CreateTimeProvider, ProjectileAnimationProvider } from '../core/index.js';
 import { CollisionVulnerabilityComponent } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { ArmorComponent, AUTO_REFUEL_PER_SECOND, FuelComponent, IonizationColorComponent, IonizationComponent, ShieldComponent } from './health_plugin.js';
@@ -106,6 +106,9 @@ export const ShipPhysicsProvider = ProvideFromCache({
     args: [ShipDataComponent, SimulationGameDataResource, OutfitsStateComponent] as const,
     update: [ShipDataComponent, OutfitsStateComponent],
     factory: deriveShipPhysics,
+    // #237 pin (shared: entity). The ship providers run in ShipPlugin's
+    // registration order; each pins itself after the previous one.
+    after: [ShipOutfitsProvider],
 });
 
 export function getShipMovementPhysics(physics: ShipPhysics): MovementPhysics {
@@ -134,6 +137,8 @@ export const ShipMovementPhysicsProvider = Provide({
     update: [ShipPhysicsComponent],
     args: [ShipPhysicsComponent] as const,
     factory: getShipMovementPhysics,
+    // #237 pin (shared: entity).
+    after: [ShipPhysicsProvider],
 });
 
 /**
@@ -186,14 +191,16 @@ interface StatBounds {
  */
 function shipStatSystem(name: string, component: Component<Stat>,
     bounds: (physics: ShipPhysics) => StatBounds,
-    initialCurrent: (physics: ShipPhysics) => number) {
+    initialCurrent: (physics: ShipPhysics) => number,
+    after: System[]) {
     return new System({
         name,
         args: [ShipPhysicsComponent, Optional(component), GetEntity] as const,
         step(physics, stat, entity) {
             reconcileStat(entity, component, stat, bounds(physics),
                 initialCurrent(physics));
-        }
+        },
+        after,
     });
 }
 
@@ -233,6 +240,9 @@ const ShipAnimationProvider = Provide({
     update: [ShipDataComponent],
     args: [ShipDataComponent],
     factory: shipData => shipData.animation,
+    // #237 pins (shared: entity).
+    after: [ShipDataProvider],
+    before: [ShipOutfitsProvider],
 });
 
 function deriveShipVulnerability(shipData: ShipData | undefined) {
@@ -270,6 +280,10 @@ const ShipCollisionInteractionProvider = Provide({
     update: [ShipDataComponent],
     args: [ShipComponent, Optional(ShipDataComponent)] as const,
     factory: (_ship, shipData) => deriveShipVulnerability(shipData),
+    // #237 pins (shared: entity): first of the ship providers, after
+    // core's CreateTimeProvider.
+    after: [CreateTimeProvider],
+    before: [ShipDataProvider],
 });
 
 const ShipShieldProvider = shipStatSystem(
@@ -279,7 +293,9 @@ const ShipShieldProvider = shipStatSystem(
         min: -physics.shield * 0.05,
         recharge: physics.shieldRecharge,
     }),
-    physics => physics.shield);
+    physics => physics.shield,
+    // #237 pin (shared: entity).
+    [ShipMovementPhysicsProvider]);
 
 const ShipArmorProvider = shipStatSystem(
     "ShipArmorProvider", ArmorComponent,
@@ -288,7 +304,9 @@ const ShipArmorProvider = shipStatSystem(
         min: 0,
         recharge: physics.armorRecharge,
     }),
-    physics => physics.armor);
+    physics => physics.armor,
+    // #237 pin (shared: entity).
+    [ShipShieldProvider]);
 
 /**
  * A ship's fuel bounds: capacity, and the per-second recharge from three
@@ -337,6 +355,8 @@ const ShipFuelProvider = new System({
             shipFuelBounds(physics, shipData, controlledBy !== undefined),
             physics.energy);
     },
+    // #237 pin (shared: entity).
+    after: [ShipArmorProvider],
 });
 
 const ShipIonizationProvider = shipStatSystem(
@@ -346,7 +366,9 @@ const ShipIonizationProvider = shipStatSystem(
         min: 0,
         recharge: -physics.deionize,
     }),
-    () => 0);
+    () => 0,
+    // #237 pin (shared: entity).
+    [ShipFuelProvider]);
 
 /**
  * A ship's ionization colour before any ionizing weapon has hit it.
@@ -364,7 +386,9 @@ const ShipIonizationColorProvider = Provide({
     args: [] as const,
     factory() {
         return { color: DEFAULT_IONIZE_COLOR };
-    }
+    },
+    // #237 pin (shared: entity).
+    after: [ShipIonizationProvider],
 });
 
 const ShipMovementStateProvider = Provide({
@@ -381,7 +405,9 @@ const ShipMovementStateProvider = Provide({
             turning: 0,
             velocity: new Vector(0, 0),
         }
-    }
+    },
+    // #237 pin (shared: entity).
+    after: [ShipIonizationColorProvider],
 });
 
 const ShipTargetComponentProvider = Provide({
@@ -390,7 +416,11 @@ const ShipTargetComponentProvider = Provide({
     args: [ShipComponent],
     factory() {
         return { target: undefined };
-    }
+    },
+    // #237 pins (shared: entity): last of the ship providers, before
+    // core's projectile/explosion animation providers.
+    after: [ShipMovementStateProvider],
+    before: [ProjectileAnimationProvider],
 });
 
 export const ShipPlugin: Plugin = {

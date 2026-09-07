@@ -7,6 +7,7 @@ import { SimulationGameDataResource } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
 import { NpcComponent } from './npc_component.js';
 import { NpcDecisionSystem } from './npc_decision.js';
+import { NpcPlunderBoardSystem } from './npc_plunder_board.js';
 import { TargetComponent } from '../ship/index.js';
 import { suicideWeaponInReachState } from '../ship/index.js';
 import { WeaponsStateComponent } from '../ship/index.js';
@@ -174,5 +175,7 @@ export const NpcFireControlSystem = new System({
                 suicideWeaponInReachState(weapon, distanceSquared);
         }
     },
-    after: [NpcDecisionSystem],
+    // NpcPlunderBoardSystem is a #237 pin (shared: *): NpcAiPlugin's
+    // registration order.
+    after: [NpcDecisionSystem, NpcPlunderBoardSystem],
 });

@@ -11,7 +11,8 @@ import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { BayFighterComponent, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
+import { BayFighterComponent, OrphanedBayFighterSystem, ReturnWhenTargetRemovedComponent, startReturnHome } from './bay_plugin.js';
+import { ChooseTargetSystem } from '../combat/index.js';
 import { AggressionComponent, isRecentAggressor } from '../combat/index.js';
 import { blindSpotBlocksFiring } from '../combat/index.js';
 import { DisabledComponent } from '../ship/index.js';
@@ -24,9 +25,9 @@ import { GovtComponent } from '../core/index.js';
 import { AggressionSuppressGovtsComponent } from '../ncb/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { shipDisposition } from '../reputation/index.js';
-import { JumpComponent } from '../travel/index.js';
+import { JumpComponent, JumpRouteReconcileSystem } from '../travel/index.js';
 import { chooseNearest, FormationComponent, isPacifiedToward, NpcComponent, NpcSteeringSystem, RCS_ACCEL_FRACTION } from '../npc/index.js';
-import { ShootAllWeaponsComponent } from '../npc/index.js';
+import { NpcPlunderBoardSystem, ShootAllWeaponsComponent } from '../npc/index.js';
 import { LegalRecordsComponent, LegalRecordsState } from '../reputation/index.js';
 import { EscortLandingComponent, PlayerEscortComponent } from '../player/index.js';
 import { ShipComponent, ShipDataComponent, ShipPhysicsComponent } from '../ship/index.js';
@@ -130,7 +131,7 @@ type CommandAction = typeof COMMAND_ACTIONS[number];
  * Applies the player's escort-command keys to their direct escorts.
  * Runs on the commanding ship (the ShipControlEvent target).
  */
-const EscortCommandInputSystem = new System({
+export const EscortCommandInputSystem = new System({
     name: 'EscortCommandInput',
     events: [ShipControlEvent],
     args: [ShipControlStateComponent, TargetComponent, UUID, GetEntity,
@@ -174,6 +175,9 @@ const EscortCommandInputSystem = new System({
             escortEntity.components.set(EscortCommandComponent, state);
         }
     },
+    // #237 pin (shared: *): among the ShipControlEvent handlers, after
+    // combat's target cycling.
+    after: [ChooseTargetSystem],
 });
 
 /**
@@ -203,8 +207,11 @@ const EscortCommandPropagationSystem = new System({
             }
         }
     },
-    after: [TimeSystem],
-    before: [MovementSystem],
+    // OrphanedBayFighterSystem and JumpRouteReconcileSystem are #237 pins
+    // (shared: *): EscortCommandPlugin registers between BayPlugin and
+    // JumpPlugin.
+    after: [TimeSystem, OrphanedBayFighterSystem],
+    before: [MovementSystem, JumpRouteReconcileSystem],
 });
 
 /**
@@ -807,7 +814,8 @@ export const EscortCommandBehaviorSystem = new System({
         }
     },
     after: [TimeSystem, EscortCommandPropagationSystem, NpcWingCommandSystem],
-    before: [MovementSystem],
+    // NpcPlunderBoardSystem is a #237 pin (shared: *).
+    before: [MovementSystem, NpcPlunderBoardSystem],
 });
 
 export const EscortCommandPlugin: Plugin = {

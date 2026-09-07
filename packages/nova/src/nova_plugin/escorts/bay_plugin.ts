@@ -23,6 +23,7 @@ import { EscortCommandComponent } from '../player/index.js';
 import { ExitPointData } from '../combat/index.js';
 import { GovtComponent } from '../core/index.js';
 import { WeaponConstructors, WeaponEntry } from '../combat/index.js';
+import { BeamCollisionSystem, BeamResetSystem, BlastCollisionSystem, DropExplodingTargetSystem, TargetIndexProvider } from '../combat/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { DeathAIComponent } from '../npc/index.js';
 import { FormationComponent, NpcComponent, NpcSteeringSystem, nextFormationSlot } from '../npc/index.js';
@@ -315,6 +316,9 @@ const ReturnVulnerabilitySystem = new System({
             .get(CollisionVulnerabilityComponent)
             ?.vulnerableTo.add('return_escorts');
     },
+    // #237 pins (shared: *): BayPlugin registers after TargetPlugin and
+    // BeamPlugin.
+    after: [BeamResetSystem, DropExplodingTargetSystem],
 });
 
 const CollectableEscortAI = new System({
@@ -339,6 +343,10 @@ const CollectableEscortAI = new System({
         }
         entities.delete(uuid);
     },
+    // #237 pins (shared: *): among the CollisionEvent handlers, after
+    // beam's and before blast's.
+    after: [BeamCollisionSystem],
+    before: [BlastCollisionSystem],
 });
 
 /**
@@ -399,6 +407,8 @@ export const OrphanedBayFighterSystem = new System({
         entity.components.set(NpcComponent, { aiType: 3, mode: 'depart' });
     },
     before: [NpcSteeringSystem],
+    // #237 pin (shared: *): BayPlugin's registration order.
+    after: [ReturnVulnerabilitySystem],
 });
 
 /** Flips a fighter into the return-and-collect flow: fly home and be
@@ -428,7 +438,11 @@ export const ReturnAI = new System({
         }
         movementState.turnTo = owner.owner;
         movementState.accelerating = 1;
-    }
+    },
+    // #237 pins (shared: Owner, MovementState, EscortLanding, Return; *):
+    // first of BayPlugin's systems, after TargetPlugin's index provider.
+    after: [TargetIndexProvider],
+    before: [ReturnVulnerabilitySystem],
 });
 
 export const BayPlugin: Plugin = {

@@ -32,6 +32,7 @@ import {
     NPC_PLUNDER_SEEK_RANGE, npcPlunderEligible, npcPlundersHulks,
 } from './npc_plunder.js';
 import { chooseNearest } from './npc_targeting.js';
+import { ShootAllWeaponsAI } from './npc_plugin.js';
 import { PlanetComponent, PlanetDataComponent } from '../travel/index.js';
 import { ranksSuppressAggression } from '../ncb/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
@@ -580,6 +581,8 @@ export const NpcDecisionSystem = new System({
             }
         }
     },
-    after: [TimeSystem],
+    // ShootAllWeaponsAI is a #237 pin (shared: *): NpcAiPlugin registers
+    // after NpcPlugin.
+    after: [TimeSystem, ShootAllWeaponsAI],
     before: [MovementSystem],
 });

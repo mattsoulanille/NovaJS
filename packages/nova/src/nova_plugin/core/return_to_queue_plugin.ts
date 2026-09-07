@@ -11,7 +11,7 @@ export const ReturnToQueueComponent = new Component<{
     queue: FactoryQueue<Entity>
 }>('ReturnToQueueComponent');
 
-const ReturnToQueueSystem = new System({
+export const ReturnToQueueSystem = new System({
     name: 'ReturnToQueue',
     events: [DeleteEvent],
     args: [GetEntity, ReturnToQueueComponent] as const,

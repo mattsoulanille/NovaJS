@@ -15,7 +15,7 @@ import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
 import { deImmerify } from '../../util/deimmerify.js';
-import { WARP_OUT_SOUND } from './jump_plugin.js';
+import { JumpRouteProvider, WARP_OUT_SOUND } from './jump_plugin.js';
 import { LandEvent, PlanetComponent, PlanetDataComponent } from './planet_plugin.js';
 import { getShipMovementPhysics, ShipPhysicsComponent } from '../ship/index.js';
 import { PlayerSoundEvent } from '../core/index.js';
@@ -263,6 +263,9 @@ export const GateArrivalSystem = new System({
         emit(PlayerSoundEvent, { id: WARP_OUT_SOUND }, [uuid]);
         entity.components.delete(GateArrivalComponent);
     },
+    // #237 pin (shared: entity): GateTransitPlugin registers after
+    // JumpPlugin.
+    after: [JumpRouteProvider],
 });
 
 export const GateTransitPlugin: Plugin = {

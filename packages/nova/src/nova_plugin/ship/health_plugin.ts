@@ -7,7 +7,7 @@ import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { TimeResource, TimeSystem } from "nova_ecs/plugins/time_plugin";
 import { System } from "nova_ecs/system";
 import { DisabledComponent } from './disabled_component.js';
-import { applyStatDelta, getStatDelta, PartialStat, stat, Stat } from "../core/index.js";
+import { applyStatDelta, getStatDelta, HitboxHullProvider, PartialStat, stat, Stat } from "../core/index.js";
 
 
 export const ShieldComponent = new Component<Stat>('Shield');
@@ -36,9 +36,8 @@ export const AUTO_REFUEL_PER_SECOND = 2.5;
 const disableSuspendedStats = new Set<Component<Stat>>(
     [ShieldComponent, ArmorComponent, FuelComponent]);
 
-const healthStats = [ShieldComponent, ArmorComponent, IonizationComponent,
-    FuelComponent]
-    .map(statComponent => [statComponent, new System({
+function rechargeSystem(statComponent: Component<Stat>, after: System[]) {
+    return new System({
         name: `${statComponent.name}Recharge`,
         args: [statComponent, TimeResource,
             Optional(DisabledComponent)] as const,
@@ -57,17 +56,31 @@ const healthStats = [ShieldComponent, ArmorComponent, IonizationComponent,
         // edge the toposort could place it before TimeSystem after a
         // wire-baseline restore, applying the previous tick's delta and
         // diverging late joiners by one tick's worth of recharge.
-        after: [TimeSystem],
-    })] as const);
+        after: [TimeSystem, ...after],
+    });
+}
 
+// The recharges run in this order (#237 pins; shared: DisabledComponent
+// and the time resource, both read-only here). Shield's pin after
+// core's HitboxHullProvider (shared: Shield, DisabledComponent) places
+// the whole group where HealthPlugin registers.
+export const ShieldRechargeSystem = rechargeSystem(ShieldComponent, [HitboxHullProvider]);
+export const ArmorRechargeSystem = rechargeSystem(ArmorComponent, [ShieldRechargeSystem]);
 /**
  * The ionization stat's per-tick decay-and-clamp, exported so
  * IonizedSystem (ionization_plugin) can order itself BEFORE it and judge
  * "fully ionized" on the raw post-hit charge, before the clamp to
  * IonizeMax and the tick's Deionize erase the overshoot.
  */
-export const IonizationRechargeSystem = healthStats
-    .find(([component]) => component === IonizationComponent)![1];
+export const IonizationRechargeSystem = rechargeSystem(IonizationComponent, []);
+export const FuelRechargeSystem = rechargeSystem(FuelComponent, [ArmorRechargeSystem]);
+
+const healthStats = [
+    [ShieldComponent, ShieldRechargeSystem],
+    [ArmorComponent, ArmorRechargeSystem],
+    [IonizationComponent, IonizationRechargeSystem],
+    [FuelComponent, FuelRechargeSystem],
+] as const;
 
 export const IonizationColorComponent =
     new Component<{ color: number }>('IonizationColorComponent');

@@ -13,7 +13,9 @@ import { SourceComponent } from '../ship/index.js';
 import { FiringGroupComponent } from '../ship/index.js';
 import { ControlledByComponent } from '../player/index.js';
 import { ShipComponent } from '../ship/index.js';
-import { TargetComponent } from '../ship/index.js';
+import { TargetComponent, CloakDecloakOnHitSystem } from '../ship/index.js';
+import { IffProvider } from '../reputation/index.js';
+import { NpcAggressionSystem } from '../npc/index.js';
 
 /**
  * ============================================================================
@@ -123,6 +125,10 @@ const AggressionDamageSystem = new System({
             deliberate: targetingUs,
         });
     },
+    // #237 pins (shared: *): among the DamagedEvent handlers, after
+    // ship's decloak-on-hit and before npc's aggression record.
+    after: [CloakDecloakOnHitSystem],
+    before: [NpcAggressionSystem],
 });
 
 /**
@@ -143,7 +149,7 @@ const AggressionDamageSystem = new System({
  * The component is removed once empty so a ship that has been left
  * alone for half a minute carries no aggression state at all.
  */
-const AggressionSweepSystem = new System({
+export const AggressionSweepSystem = new System({
     name: 'AggressionSweepSystem',
     args: [AggressionComponent, TimeResource, GetEntity] as const,
     step(state: AggressionState, time, entity) {
@@ -155,7 +161,9 @@ const AggressionSweepSystem = new System({
     // must run after TimeSystem has advanced the clock this tick.
     // Otherwise a peer whose toposort placed it first would hold a
     // grudge one tick longer than its neighbour.
-    after: [TimeSystem],
+    // IffProvider is a #237 pin (shared: entity): AggressionPlugin
+    // registers after IffPlugin.
+    after: [TimeSystem, IffProvider],
 });
 
 export const AggressionPlugin: Plugin = {
