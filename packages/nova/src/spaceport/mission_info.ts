@@ -15,9 +15,9 @@ import {
 import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { ActiveMission, GameDateComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { Button } from './button.js';
+import { LandedTransaction } from './landed_transaction.js';
 import { MenuControls } from './menu_controls.js';
 import { activeAsOffer, offerSubstitutions } from './mission_offers.js';
-import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import { formatMapDate } from './route.js';
 import {
@@ -28,14 +28,19 @@ import { wrapIndex } from './list_selection.js';
 
 /**
  * Docked context that makes the Abort button functional: aborting runs
- * through a MissionSession over the held entity (the standard spaceport
- * working-copy/commit pattern), which is only sound while docked. In
- * flight the button stays greyed — an in-flight abort would need an
+ * on the landing's working copy — the transaction the spaceport opened
+ * (landed_transaction.ts) — which is only sound while docked. In flight
+ * the button stays greyed — an in-flight abort would need an
  * input-record path of its own.
+ *
+ * `transaction` is the landing's; without one (a caller with no landing
+ * in progress) the abort opens a transaction of its own over the entity
+ * and releases it at once.
  */
 export interface MissionInfoAbortContext {
     gameData: SimulationGameDataInterface;
     planetId: string;
+    transaction?: LandedTransaction;
 }
 
 // The Mission Info dialog on the 471x155 PICT 8517 frame: a left list of
@@ -326,8 +331,9 @@ export class MissionInfoDialog {
 
     /**
      * Aborts the selected mission (docked only): runs OnAbort, drops
-     * mission cargo and removes the mission via a MissionSession over
-     * the held entity, then re-reads the entity's mission list.
+     * mission cargo and removes the mission on the landing's working copy
+     * under a savepoint released at once (so it is on the entity when
+     * this returns), then re-reads the entity's mission list.
      */
     private async doAbort() {
         const entry = this.missions[this.selectedIndex];
@@ -341,11 +347,17 @@ export class MissionInfoDialog {
         }
         this.aborting = true;
         try {
-            const session = await MissionSession.create(this.entity,
-                this.abortContext.gameData, this.universe,
-                this.abortContext.planetId);
-            abortMission(session.machinery, id, session.outfits);
-            session.commit();
+            const transaction = this.abortContext.transaction
+                ?? await LandedTransaction.open(this.entity,
+                    this.abortContext.gameData, this.universe,
+                    this.abortContext.planetId);
+            const visit = transaction.savepoint('abort');
+            try {
+                abortMission(transaction.session.machinery, id,
+                    transaction.outfits);
+            } finally {
+                transaction.release(visit);
+            }
         } finally {
             this.aborting = false;
         }

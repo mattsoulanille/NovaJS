@@ -1,5 +1,6 @@
 import { Entity } from 'nova_ecs/entity';
 import { Resource } from 'nova_ecs/resource';
+import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 
 /**
  * A live snapshot of the docked player's spendable state, pushed by whichever
@@ -47,6 +48,16 @@ export interface DockedLiveStatus {
 export class DockedShip {
     /** Set by the spaceport while a venue is open; cleared when it closes. */
     liveStatus?: () => DockedLiveStatus;
+    /**
+     * The landing's transaction (spaceport/landed_transaction.ts), set by
+     * the spaceport once its landing has opened one. The client's docked
+     * frame settles queued escort deals THROUGH it — gated on the working
+     * balance, frozen for a hold the trade center has checked out, paid
+     * into the one ledger — rather than onto the live component behind the
+     * open venue's back (client/docking.ts). Unset before the landing's
+     * data is in, and at a hypergate dock.
+     */
+    transaction?: LandedTransaction;
     /**
      * The client's landed-escort roster for this landing, and the docked
      * ship's uuid to attribute it by. The status bar's cargo readout is

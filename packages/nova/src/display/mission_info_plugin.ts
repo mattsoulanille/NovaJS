@@ -6,6 +6,7 @@ import { Subscription } from 'rxjs';
 import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionInfoDialog } from '../spaceport/mission_info.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
@@ -21,12 +22,13 @@ const MissionInfoControlsSubscription =
  * resolves when it closes. Landed menus (the spaceport) call this for
  * their 'missions' key, passing the docked ship entity — while docked
  * the player's entity is out of the world (the spaceport holds it), so
- * it can't be looked up. In flight the plugin's own subscription below
+ * it can't be looked up — and the landing's transaction, which the
+ * dialog's Abort edits. In flight the plugin's own subscription below
  * opens it for the world's player ship. No-ops while already open.
  */
 export const OpenMissionInfoResource =
-    new Resource<(entity?: Entity, planetId?: string) => Promise<void>>(
-        'OpenMissionInfo');
+    new Resource<(entity?: Entity, planetId?: string,
+        transaction?: LandedTransaction) => Promise<void>>('OpenMissionInfo');
 
 function getPlayerShip(world: World) {
     for (const entity of world.entities.values()) {
@@ -71,7 +73,8 @@ export const MissionInfoPlugin: Plugin = {
         // A planetId marks a DOCKED open: it enables the functional
         // Abort button (session-backed, spaceport commit pattern).
         const openMissionInfo = async (entity?: Entity,
-            planetId?: string): Promise<void> => {
+            planetId?: string, transaction?: LandedTransaction):
+            Promise<void> => {
             if (dialog.container.visible || opening) {
                 return;
             }
@@ -89,7 +92,8 @@ export const MissionInfoPlugin: Plugin = {
                     screenCentre(screenSize).x, screenCentre(screenSize).y);
                 playUiSound(world, { id: BEEP_MISSION_OPEN });
                 await dialog.show(ship, planetId
-                    ? { gameData: simulationData, planetId } : undefined);
+                    ? { gameData: simulationData, planetId, transaction }
+                    : undefined);
             } finally {
                 opening = false;
                 // dialog.show resolves when the dialog closes.

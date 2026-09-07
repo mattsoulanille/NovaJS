@@ -167,9 +167,10 @@ export interface HirePlayer {
  * the pool, which is both what the original does and what stops
  * "reopen until the Leviathan shows up".
  *
- * Hiring charges the credits working copy (committed when the bar
- * session commits) and records the ship id for browser.ts to spawn
- * on launch (see pending_escorts.ts). Once spawned, the escort is an
+ * Hiring charges the landing's working balance (landed_transaction.ts;
+ * on the entity when the player leaves the bar) and records the ship id
+ * in the landing's hire list for the client to spawn on launch (see
+ * pending_escorts.ts). Once spawned, the escort is an
  * ordinary escort: it follows through hyperspace and gates
  * (nova_plugin/escorts/player_escort_plugin.ts) and is persisted in the save
  * (save_game.ts `escorts`).

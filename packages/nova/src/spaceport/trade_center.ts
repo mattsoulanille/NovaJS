@@ -7,11 +7,9 @@ import { Observable } from 'rxjs';
 import { DockedLiveStatus } from '../display/docked_ship.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
 import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
 import { dayNumber } from '../nova_plugin/player/calendar.js';
-import { CreditsComponent, GameDateComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { GameDateComponent } from '../nova_plugin/player/player_state_plugin.js';
 import { activePriceEvents, applyPriceEvents } from '../nova_plugin/economy/price_events.js';
 import {
     junkTradeGood,
@@ -21,20 +19,19 @@ import {
     TradeWorkingState,
 } from '../nova_plugin/economy/trade_logic.js';
 import { Button, ButtonClick } from './button.js';
-import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import {
-    closeFleetHolds, collectFleetHolds, commitFleetHolds, FleetCargoState,
-    FleetEscortEntry, FleetHold, fleetBuy, fleetBuyQuantity, fleetCargo,
-    fleetFreeSpace, fleetHeld, fleetSell, fleetSellQuantity, freeSpaceLines,
-    maxFleetBuyQuantity, maxFleetSellQuantity,
-    quantityColumnHeader, sumFleetCargo, withFleetHoldLease,
+    FleetCargoState, FleetEscortEntry, FleetHold, fleetBuy, fleetBuyQuantity,
+    fleetCargo, fleetFreeSpace, fleetHeld, fleetSell, fleetSellQuantity,
+    freeSpaceLines, maxFleetBuyQuantity, maxFleetSellQuantity,
+    quantityColumnHeader, sumFleetCargo,
 } from './fleet_cargo.js';
 import {
     LINE_HEIGHT, ROW_HEIGHT, SELECTION_COLOR, TRADE, TRADE_ROW_TEXT_DY,
     listRowY,
 } from './dialog_layout.js';
+import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
-import { computeCargoCapacity } from './mission_session.js';
+import { MissionUniverse } from './mission_universe.js';
 import { QuantityDialog } from './quantity_dialog.js';
 import { wrapIndex } from './list_selection.js';
 
@@ -106,11 +103,12 @@ export function missionCargoTons(cargo: ReadonlyMap<string, number>): number {
 /**
  * The commodity exchange (spöb flag 0x2): standard commodities at this
  * stellar's price tiers plus any jünk commodities traded here, bought
- * and sold against working copies of the player's cargo and credits.
- * Buy purchases as much as fits and is affordable; Sell sells the
- * whole held quantity — the original's one-click behavior. Commit on
- * Done, the outfitter/mission-session pattern. Mission cargo
- * ('mission:*') is never tradeable; it only counts against free space.
+ * and sold against the landing's working copy of the player's cargo and
+ * credits (landed_transaction.ts). Buy purchases as much as fits and is
+ * affordable; Sell sells the whole held quantity — the original's
+ * one-click behavior. The visit's edits become the landing's on Done.
+ * Mission cargo ('mission:*') is never tradeable; it only counts against
+ * free space.
  *
  * The hold traded against is the whole FLEET: the player's ship plus any
  * cargo-carrying escort that landed with them (fleet_cargo.ts). With no
@@ -125,24 +123,34 @@ export class TradeCenter extends Menu<Entity> {
     /** Standard cargo names (STR# 4000), loaded from any chär. */
     private cargoNames: string[] = [];
     private goods: TradeGood[] = [];
+    /**
+     * The landing's transaction, attached by the Spaceport; a standalone
+     * show() opens one of its own and releases it at Done.
+     */
+    transaction?: LandedTransaction;
+    private visit?: Savepoint;
+    private ownsTransaction = false;
+    /**
+     * The player's own hold, credits and capacity — the transaction's
+     * working state itself (MissionWorkingState is a TradeWorkingState),
+     * so an Sxxx mission accepted next door and a purchase here edit one
+     * Map. A placeholder until a visit opens.
+     */
     private state: TradeWorkingState = {
         cargo: new Map(),
         credits: { credits: 0 },
         cargoCapacity: 0,
     };
     /**
-     * The cargo-carrying escorts' working holds for this visit, snapshotted
-     * from the landed roster when the exchange opens (see fleet_cargo.ts on
-     * why it is a snapshot and not a live getter).
+     * The cargo-carrying escorts' working holds for this visit, checked
+     * out of the landed roster when the exchange opens and leased to the
+     * transaction for the visit (see fleet_cargo.ts on why it is a
+     * snapshot and not a live getter, and landed_transaction.ts on the
+     * lease).
      */
-    private holds: FleetHold[] = [];
-    /**
-     * The balance `state.credits` was seeded from at show(). done() commits
-     * the DIFFERENCE from it rather than the absolute, so an escort deal
-     * settling mid-visit is not erased — see credit_commit.ts, which
-     * documents the whole seam.
-     */
-    private creditsBaseline = 0;
+    private get holds(): readonly FleetHold[] {
+        return this.transaction?.holds ?? [];
+    }
     /**
      * The client's landed-escort roster and the docked ship's uuid, set
      * per-landing by the Spaceport. Unset (single-ship testing, or a
@@ -252,7 +260,7 @@ export class TradeCenter extends Menu<Entity> {
 
     /** The player's hold plus this visit's escort holds. */
     private get fleet(): FleetCargoState {
-        return { ship: this.state, holds: this.holds };
+        return { ship: this.state, holds: [...this.holds] };
     }
 
     private loadPromise?: Promise<void>;
@@ -289,41 +297,59 @@ export class TradeCenter extends Menu<Entity> {
     override async show(input: Entity): Promise<Entity> {
         try {
             await this.load();
+            if (!this.transaction) {
+                this.transaction = await LandedTransaction.open(input,
+                    this.simulationData,
+                    MissionUniverse.shared(this.simulationData), this.planetId);
+                this.ownsTransaction = true;
+            } else {
+                // The hull's cargo capacity as of now (an expansion bought
+                // next door counts).
+                await this.transaction.refresh();
+            }
         } catch (e) {
             console.warn('Trade center failed to load:', e);
             return input;
         }
-        this.creditsBaseline = creditBalance(input);
-        this.state = {
-            cargo: new Map(input.components.get(CargoComponent) ?? []),
-            credits: { credits: this.creditsBaseline },
-            cargoCapacity: await computeCargoCapacity(
-                input, this.simulationData),
-        };
-        // The escorts that landed with the player and can carry cargo
-        // (shïp InherentAI 1/2). Empty when there are none, which is what
-        // makes every readout below fall back to the solo wording.
-        this.holds = this.landedEscorts
-            ? await collectFleetHolds(this.landedEscorts(), this.playerUuid,
-                this.simulationData)
-            : [];
-        // These escorts' holds are now checked out: freeze their queued
-        // upgrade/sale deals until Done writes the holds back, so a sale
-        // cannot splice an escort off the roster while this dialog is still
-        // filling its hold (see fleet_cargo.ts's openFleetHolds).
-        // The rest of the visit runs UNDER THE LEASE, which is released
-        // either by done() (the normal close, after the holds are committed)
-        // or by withFleetHoldLease on a throw — the lease is a module-level
-        // registry entry, so leaking one freezes those escorts' queued deals
-        // for the rest of the session.
-        return withFleetHoldLease(this, this.holds,
-            () => this.showWithHolds(input));
+        if (!this.alive) {
+            return input; // Torn down while opening; nothing edited yet.
+        }
+        const transaction = this.transaction;
+        this.state = transaction.state;
+        const visit = transaction.savepoint('trade center');
+        this.visit = visit;
+        try {
+            // The escorts that landed with the player and can carry cargo
+            // (shïp InherentAI 1/2), checked out for this visit. Empty when
+            // there are none, which is what makes every readout below fall
+            // back to the solo wording. Leasing them freezes their queued
+            // upgrade/sale deals until Done writes the holds back, so a
+            // sale cannot splice an escort off the roster while this dialog
+            // is still filling its hold (landed_transaction.ts).
+            await transaction.leaseFleetHolds(
+                this.landedEscorts?.() ?? [], this.playerUuid);
+            if (!this.alive) {
+                transaction.rollback(visit);
+                this.visit = undefined;
+                return input;
+            }
+            return await this.showWithHolds(input);
+        } catch (e) {
+            // A throw anywhere before Done — a texture that would not load,
+            // a widget that would not lay out — drops the visit: its edits
+            // are undone and the lease goes with it, so those escorts'
+            // deals settle on the next docked frame as they always would.
+            transaction.rollback(visit);
+            this.visit = undefined;
+            throw e;
+        }
     }
 
     /** The rest of show(), with the hold lease held. See show(). */
     private async showWithHolds(input: Entity): Promise<Entity> {
-        const bits = input.components.get(ControlBitsComponent)
-            ?? new Set<number>();
+        // The landing's working bits (equal to the entity's at entry: every
+        // other visit released before this one opened).
+        const bits = this.transaction?.state.bits ?? new Set<number>();
         this.goods = this.planet
             ? standardTradeGoods(this.planet, this.cargoNames) : [];
         // Jünk rows follow the standard commodities, as in the
@@ -572,6 +598,9 @@ export class TradeCenter extends Menu<Entity> {
      * which stays the hull's alone.
      */
     dockedStatus(): DockedLiveStatus {
+        if (!this.transaction) {
+            return {}; // No visit (it failed to open): the bar reads the entity.
+        }
         const fleet = sumFleetCargo([
             { cargo: this.state.cargo, capacity: this.state.cargoCapacity },
             ...this.holds,
@@ -584,27 +613,25 @@ export class TradeCenter extends Menu<Entity> {
     }
 
     /**
-     * Commits the working cargo and credits back onto the entity, and each
-     * escort hold back onto its roster entity — so the escorts lift off
-     * carrying what was bought, and a save taken later records it inside
-     * their own serialized entities.
-     *
-     * The credits go back as a DELTA against the balance this visit opened
-     * with, not as the absolute the working copy holds: an escort deal that
-     * settled while the exchange was open wrote the live component directly,
-     * and an absolute write would erase it (credit_commit.ts).
-     *
-     * The hold lease is released LAST, so a deal for one of these escorts
-     * cannot settle between the commit and the release.
+     * Done: the visit's edits become the landing's. The release writes
+     * each escort hold back onto its roster entity — so the escorts lift
+     * off carrying what was bought, and a save taken later records it
+     * inside their own serialized entities — closes the lease, and (as the
+     * outermost visit) writes the cargo and the credits onto the entity,
+     * the credits as a DELTA against whatever else moved the balance
+     * meanwhile (landed_transaction.ts, credit_commit.ts). The holds are
+     * committed and the lease closed in the same synchronous step, so no
+     * deal can settle between the two.
      */
     protected override done() {
-        this.input.components.set(CargoComponent, this.state.cargo);
-        this.creditsBaseline = commitVenueCredits(
-            this.input, this.creditsBaseline,
-            () => this.input.components.set(CreditsComponent,
-                { credits: this.state.credits.credits }));
-        commitFleetHolds(this.holds);
-        closeFleetHolds(this);
+        if (this.transaction && this.visit) {
+            this.transaction.release(this.visit);
+        }
+        this.visit = undefined;
+        if (this.ownsTransaction) {
+            this.transaction = undefined;
+            this.ownsTransaction = false;
+        }
         super.done();
     }
 }

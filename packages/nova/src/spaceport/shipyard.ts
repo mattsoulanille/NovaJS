@@ -14,6 +14,7 @@ import { makeDescTextContext, playerGender, resolveConditionalBlocks }
     from '../nova_plugin/ncb/desc_text.js';
 import { Button } from './button.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
+import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { FONT } from './outfitter.js';
 import { ShipInfoDialog } from './ship_info.js';
@@ -72,6 +73,17 @@ export class Shipyard extends Menu<Entity> {
      * still be shot down or touch down mid-visit.
      */
     private deployedOutfitCounts?: DeployedOutfitCounts;
+    /**
+     * The landing's transaction (landed_transaction.ts), attached by the
+     * Spaceport. The shipyard keeps no working copy of its own: it prices
+     * and charges from the live entity at the click, which at the shipyard
+     * IS the landing's flushed working copy (every other venue released
+     * before this one opened), and hands the transaction the new hull to
+     * re-seed from (adoptPurchasedShip). Optional — a shipyard shown on
+     * its own (a grid spec) needs none.
+     */
+    transaction?: LandedTransaction;
+    private visit?: Savepoint;
     /**
      * Told the moment a purchase completes, with the NEW entity — set by
      * the Spaceport (which forwards it to the docked seam, see
@@ -289,6 +301,17 @@ export class Shipyard extends Menu<Entity> {
         this.deployedOutfitCounts = counts;
     }
 
+    /**
+     * Synchronous on purpose (no await before Menu.show): a purchase reads
+     * the live entity, so the visit's savepoint is all the transaction
+     * needs, and a caller that shows and dismisses in one turn keeps
+     * working.
+     */
+    override show(input: Entity): Promise<Entity> {
+        this.visit = this.transaction?.savepoint('shipyard');
+        return super.show(input);
+    }
+
     protected override setInput(input: Entity) {
         super.setInput(input);
         this.text.status.text = "";
@@ -445,6 +468,10 @@ export class Shipyard extends Menu<Entity> {
         // visit trades in, so the valuation must follow it immediately
         // rather than keep pricing against the ship we no longer own.
         this.currentShipData = newShip;
+        // The landing's working copy is re-seeded from the new hull — it
+        // was priced and charged from the live entity, so the entity is
+        // the truth and the copy is not — before anyone else hears of it.
+        this.transaction?.adoptPurchasedShip(this.input);
 
         this.text.status.text = "";
         this.refreshTradeState();
@@ -460,5 +487,14 @@ export class Shipyard extends Menu<Entity> {
         if (typeof window !== 'undefined') {
             window.myShip = this.input;
         }
+    }
+
+    /** Done: the visit (its purchases already adopted) is released. */
+    protected override done() {
+        if (this.transaction && this.visit) {
+            this.transaction.release(this.visit);
+        }
+        this.visit = undefined;
+        super.done();
     }
 }

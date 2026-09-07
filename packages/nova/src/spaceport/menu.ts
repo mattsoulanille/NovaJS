@@ -74,6 +74,17 @@ export abstract class Menu<T> {
         this.input = input;
     }
 
+    /**
+     * Whether this menu may still open (or draw) after an await inside
+     * its show(): the owning display world can be torn down while a
+     * venue is loading its data, destroying the container. A menu that
+     * carried on would bind a keyboard nobody gives back and draw into
+     * destroyed graphics (the spaceport's stillDocked, for the venues).
+     */
+    protected get alive(): boolean {
+        return !this.container.destroyed;
+    }
+
     async show(input: T): Promise<T> {
         this.container.visible = true;
         this.controls.bind();

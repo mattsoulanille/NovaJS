@@ -16,7 +16,7 @@ import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.
 import { ActiveMission } from '../nova_plugin/player/player_state_plugin.js';
 import { PlayerIdentitySubs, playerIdentitySubs } from './player_identity.js';
 import { Button } from './button.js';
-import { commitVenueCredits } from './credit_commit.js';
+import { LandedTransaction, Savepoint } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import {
     activeAsOffer, offerRollsForSystem, offerSubstitutions, rollOffers,
@@ -91,12 +91,19 @@ type Row =
  * mission_offers.ts — player-local UI randomness).
  */
 export class MissionBoard extends Menu<Entity> {
-    private session?: MissionSession;
     /**
-     * The balance the session's working credits were seeded from at show().
-     * done() commits the DIFFERENCE from it (credit_commit.ts).
+     * The landing's transaction (landed_transaction.ts), attached by the
+     * Spaceport; a standalone show() opens one of its own. An accept edits
+     * the landing's one working copy — the cargo the trade center just
+     * filled, the credits the bar just spent — under this visit's
+     * savepoint, released at Leave.
      */
-    private creditsBaseline = 0;
+    transaction?: LandedTransaction;
+    private visit?: Savepoint;
+    private ownsTransaction = false;
+    private get session(): MissionSession | undefined {
+        return this.transaction?.session;
+    }
     private offers: MissionOffer[] = [];
     /** <PN>/<PSN>-style identity values for this docked visit. */
     private identity: PlayerIdentitySubs = {};
@@ -262,26 +269,33 @@ export class MissionBoard extends Menu<Entity> {
     }
 
     override async show(input: Entity): Promise<Entity> {
+        let session: MissionSession;
         try {
-            this.session = await MissionSession.create(input,
-                this.simulationData, this.universe, this.planetId);
+            if (!this.transaction) {
+                this.transaction = await LandedTransaction.open(input,
+                    this.simulationData, this.universe, this.planetId);
+                this.ownsTransaction = true;
+            } else {
+                await this.transaction.refresh();
+            }
+            session = this.transaction.session;
             this.identity = await playerIdentitySubs(this.universe,
-                this.session.shipId, undefined, this.session.state.ranks);
+                session.shipId, undefined, session.state.ranks);
         } catch (e) {
             // Data failed to load; don't wedge the spaceport.
             console.warn('Mission board failed to load:', e);
             return input;
         }
-        // The balance the session's working copy was seeded from: done()
-        // commits the difference from THIS, not the absolute, so a
-        // concurrent writer survives the commit (credit_commit.ts).
-        this.creditsBaseline = this.session.state.credits.credits;
         await this.loadStrings();
+        if (!this.alive) {
+            return input; // Torn down while opening; nothing edited yet.
+        }
+        this.visit = this.transaction.savepoint('mission board');
         // The system visit's rolls (mission_offers.ts OfferRolls): closing
         // and reopening the board does not reroll a 10% mission.
-        this.offers = rollOffers(this.session, this.universe,
+        this.offers = rollOffers(session, this.universe,
             this.location, offerRollsForSystem(this.universe.systemIdOfPlanet(
-                this.planetId, this.session.state.bits)));
+                this.planetId, session.state.bits)));
         this.buildRows();
         this.selectedIndex = this.rows.findIndex(
             row => row.kind !== 'header');
@@ -545,11 +559,16 @@ export class MissionBoard extends Menu<Entity> {
         }
     }
 
+    /** Leave: the visit's accepts become the landing's (the release
+     * writes the entity when this was the outermost visit). */
     protected override done() {
-        const session = this.session;
-        if (session) {
-            this.creditsBaseline = commitVenueCredits(
-                this.input, this.creditsBaseline, () => session.commit());
+        if (this.transaction && this.visit) {
+            this.transaction.release(this.visit);
+        }
+        this.visit = undefined;
+        if (this.ownsTransaction) {
+            this.transaction = undefined;
+            this.ownsTransaction = false;
         }
         super.done();
     }

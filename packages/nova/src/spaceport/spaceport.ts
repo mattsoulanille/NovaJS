@@ -30,15 +30,14 @@ import { Bar } from './bar.js';
 import { Button } from './button.js';
 import { describeOutfitChanges, requestCheckpoint } from './checkpoint_requests.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
-import { commitVenueCredits } from './credit_commit.js';
+import { LandedTransaction } from './landed_transaction.js';
 import { Menu } from './menu.js';
 import { MenuControls } from './menu_controls.js';
 import { MissionBoard } from './mission_board.js';
 import { OfferPopup, presentOffers } from './offer_popup.js';
-import { MissionSession, processEntityLanding } from './mission_session.js';
 import { offerRollsForSystem, rollOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';
-import { presentVenueOffers } from './venue_offers.js';
+import { presentVenueOffersIn } from './venue_offers.js';
 import { Outfitter } from './outfitter.js';
 import { playerIdentitySubs } from './player_identity.js';
 import { runShipBuildWorld } from './ship_build_world.js';
@@ -107,6 +106,23 @@ export class Spaceport extends Menu<Entity> {
      * transaction's working credits/cargo before it commits to the entity.
      */
     private dockedShip?: DockedShip;
+    /**
+     * THE LANDING'S TRANSACTION (landed_transaction.ts): opened as the
+     * player docks (show), the one working copy every venue is a view
+     * onto, committed once at Leave (done) — or flushed by a teardown
+     * (dismiss). Undefined before the landing's data is in, and for a
+     * landing whose mission universe never loaded (the venues then open
+     * transactions of their own, or refuse).
+     */
+    private transaction?: LandedTransaction;
+    /**
+     * The venues, as the set the transaction is attached to per landing
+     * and the set a teardown dismisses.
+     */
+    private get venues(): { transaction?: LandedTransaction, dismiss(): void }[] {
+        return [this.outfitter, this.shipyard, this.bar, this.tradeCenter,
+            this.missionComputer];
+    }
 
     private font = {
         title: {
@@ -133,9 +149,10 @@ export class Spaceport extends Menu<Entity> {
         private openPlayerInfo?: (entity: Entity) => Promise<unknown>,
         /** Opens the mission-info dialog over the spaceport (the 'i'
          * key). Like the player-info dialog, the docked ship entity is
-         * passed explicitly (it is out of the world while docked). */
-        private openMissionInfo?: (entity: Entity, planetId?: string)
-            => Promise<unknown>) {
+         * passed explicitly (it is out of the world while docked), and
+         * with it the landing's transaction, which its Abort edits. */
+        private openMissionInfo?: (entity: Entity, planetId?: string,
+            transaction?: LandedTransaction) => Promise<unknown>) {
         super(displayAssets, simulationData, "nova:8500", controlEvents);
         this.container.name = 'Spaceport';
 
@@ -337,8 +354,11 @@ export class Spaceport extends Menu<Entity> {
                     this.input?.components.get(LegalRecordsComponent),
             }),
             properties: () => void this.openPlayerInfo?.(this.input),
-            // The planetId enables the dialog's docked-only Abort.
-            missions: () => void this.openMissionInfo?.(this.input, this.id),
+            // The planetId enables the dialog's docked-only Abort, which
+            // runs on the landing's transaction so the next venue does not
+            // flush a copy that still holds the aborted mission.
+            missions: () => void this.openMissionInfo?.(this.input, this.id,
+                this.transaction),
             depart: this.done.bind(this),
         });
     }
@@ -377,9 +397,21 @@ export class Spaceport extends Menu<Entity> {
      * client's eyes.
      */
     override dismiss() {
-        for (const venue of [this.outfitter, this.shipyard, this.bar,
-            this.tradeCenter, this.missionComputer]) {
+        for (const venue of this.venues) {
             venue.dismiss();
+        }
+        // Whatever the landing edited so far reaches the held entity —
+        // the venue dismissed above released its visit, and this catches
+        // an offer sequence still running blind — so the exit-to-title
+        // save sees the visit. The transaction stays open: the ship is
+        // still docked in the client's eyes (see above), and a release
+        // that arrives later flushes onto the same hull. One already
+        // committed (the spaceport is reused per stellar, so the teardown
+        // after a Leave dismisses it too) has nothing left to flush: the
+        // hull lifted off with the commit, and writing it again would be
+        // exactly the stray write commit() refuses (loudly) — so not here.
+        if (this.transaction && !this.transaction.isClosed) {
+            this.transaction.flush();
         }
         this.offerPopup.dismiss();
         this.popupBlocker.release();
@@ -433,12 +465,34 @@ export class Spaceport extends Menu<Entity> {
         // Quick — the stellar has been in the display world all along, so
         // its record is cached — unlike the mission-universe load below.
         await this.buildPromise;
+        // THE LANDING'S TRANSACTION: one working copy for the whole visit,
+        // seeded from the ship as it touched down and attached to every
+        // venue and to the docked handle (so the client's frame loop
+        // settles escort deals into the same ledger). Its landing pass
+        // advances the date a day and checks every active mission against
+        // this stellar (completion + payment, deadline failures, travel-leg
+        // cargo transfer) — on the ship entity, which is out of the
+        // simulation while docked.
         let events: MissionEvent[] = [];
         try {
-            events = await processEntityLanding(input,
+            this.transaction = await LandedTransaction.open(input,
                 this.simulationData, this.universe, this.id);
         } catch (e) {
-            console.warn('Mission landing processing failed:', e);
+            console.warn('Landing transaction failed to open:', e);
+            this.transaction = undefined;
+        }
+        for (const venue of this.venues) {
+            venue.transaction = this.transaction;
+        }
+        if (this.dockedShip) {
+            this.dockedShip.transaction = this.transaction;
+        }
+        if (this.transaction) {
+            try {
+                events = await this.transaction.processLanding();
+            } catch (e) {
+                console.warn('Mission landing processing failed:', e);
+            }
         }
         this.refreshRefuelButton(input);
 
@@ -599,17 +653,15 @@ export class Spaceport extends Menu<Entity> {
             }
         }
 
-        // Main-spaceport mission offers. A fresh session over the
-        // (post-landing) entity rolls and, on accept, commits the mission
-        // back — the standard docked commit pattern.
-        let session: MissionSession;
-        try {
-            session = await MissionSession.create(entity,
-                this.simulationData, this.universe, this.id);
-        } catch (e) {
-            console.warn('Spaceport offer session failed to load:', e);
+        // Main-spaceport mission offers, on the landing's transaction: the
+        // (post-landing) working copy rolls them and, on accept, holds the
+        // mission — released below, so it is on the entity before any
+        // venue opens.
+        const transaction = this.transaction;
+        if (!transaction) {
             return;
         }
+        const session = transaction.session;
         // The system visit's rolls (mission_offers.ts OfferRolls): a
         // second landing in this system sees the same AvailRandom answers.
         const offers = rollOffers(session, this.universe,
@@ -619,40 +671,36 @@ export class Spaceport extends Menu<Entity> {
         if (offers.length === 0) {
             return;
         }
-        // The balance the session's working copy was seeded from, for the
-        // delta commit below.
-        const creditsBaseline = session.state.credits.credits;
+        const visit = transaction.savepoint('landing offers');
         try {
             await presentOffers(this.offerPopup, session, this.universe,
                 offers);
         } finally {
-            // COMMITTED WHATEVER HAPPENS. presentOffers awaits a popup per
-            // offer, and every accept has already mutated the session's
-            // working copy by the time the NEXT offer's text is expanded —
-            // so a throw anywhere down that loop (a missing dësc, a PIXI
-            // failure) used to drop the whole visit on the floor, mission
-            // and all, with show()'s outer catch swallowing the error. The
-            // player had accepted; the mission simply vanished.
+            // RELEASED WHATEVER HAPPENS. presentOffers awaits a popup per
+            // offer, and every accept has already mutated the working copy
+            // by the time the NEXT offer's text is expanded — so a throw
+            // anywhere down that loop (a missing dësc, a PIXI failure) used
+            // to drop the whole visit on the floor, mission and all, with
+            // show()'s outer catch swallowing the error. The player had
+            // accepted; the mission simply vanished.
             //
-            // Committing early is harmless in the other direction: a throw
+            // Releasing early is harmless in the other direction: a throw
             // BEFORE any acceptance leaves the working copy identical to
             // the entity (presentOffers reaches its first await before it
             // touches anything, and only acceptOffer/refuseOffer write),
-            // so the commit writes back equal values and advances no date.
+            // so the flush writes back equal values and advances no date.
             // A throw from INSIDE acceptOffer's own set string is the one
-            // genuinely half-mutated case, and there committing is still
-            // right — it is the same "the session is the unit of work"
-            // rule the bar follows, where the session commits at Leave
+            // genuinely half-mutated case, and there releasing is still
+            // right — it is the same "the visit is the unit of work" rule
+            // the bar follows, where the visit is released at Leave
             // however the offer sequence ended.
             //
-            // COMMITTED AS A DELTA, like every other venue: the offer
-            // popups above await the player, and browser.ts's
-            // settleDockedEscortDeals writes the LIVE balance on every
-            // docked frame, so an escort sale that lands while an offer
-            // is on screen would be erased by the session's absolute
-            // write-back. See spaceport/credit_commit.ts.
-            commitVenueCredits(entity, creditsBaseline,
-                () => session.commit());
+            // The release flushes the credits as a DELTA, like every
+            // venue's: the offer popups above await the player, and the
+            // client settles escort deals on every docked frame meanwhile
+            // (through the same transaction, or onto the live component
+            // before one exists). See spaceport/credit_commit.ts.
+            transaction.release(visit);
         }
     }
 
@@ -666,10 +714,13 @@ export class Spaceport extends Menu<Entity> {
      * (mission_offers.ts OfferRolls), shared with the bar and the BBS.
      */
     private async presentVenueOffers(location: number) {
+        if (!this.transaction) {
+            return;
+        }
         this.popupBlocker.bind();
         try {
-            await presentVenueOffers(this.input, this.offerPopup,
-                this.universe, this.simulationData, this.id, location);
+            await presentVenueOffersIn(this.transaction, this.offerPopup,
+                location);
         } catch (e) {
             console.warn('Venue mission offers failed:', e);
         } finally {
@@ -696,8 +747,12 @@ export class Spaceport extends Menu<Entity> {
     }
 
     /**
-     * ADOPTS A SHIP BOUGHT AT THE SHIPYARD, the moment the Buy button is
-     * pressed — the one place the docked hull is replaced.
+     * ADOPTS A SHIP BOUGHT AT THE SHIPYARD (or changed by an outfit's set
+     * string), the moment the Buy button is pressed — the one place the
+     * docked hull the SPACEPORT holds is replaced. The venue has already
+     * handed the hull to the transaction (LandedTransaction's
+     * adoptPurchasedShip / adoptChangedShip, which is where the working
+     * copy follows it); this is the UI's half.
      *
      * A purchase does not mutate the docked entity: `buildPurchasedShip`
      * charges the trade-up price and returns a WHOLE NEW entity carrying
@@ -707,24 +762,17 @@ export class Spaceport extends Menu<Entity> {
      * to the docked entity between the trade and the lift-off wrote into a
      * ship nobody would ever fly:
      *
-     *  - AN ESCORT DEAL SETTLING AFTER THE TRADE. browser.ts settles queued
-     *    upgrades and sales into the held entity's CreditsComponent on
-     *    EVERY docked frame at a shipyard (spaceport/escort_deals.ts), and
-     *    escorts keep touching down while the player shops. A 40,000-credit
-     *    sale that landed after the trade was paid into the old hull and
-     *    vanished at lift-off — the escort was gone from the roster all the
-     *    same.
+     *  - AN ESCORT DEAL SETTLING AFTER THE TRADE. The client settles queued
+     *    upgrades and sales into the landing's ledger on EVERY docked frame
+     *    at a shipyard (spaceport/escort_deals.ts), and escorts keep
+     *    touching down while the player shops. A 40,000-credit sale that
+     *    landed after the trade was paid into the old hull and vanished at
+     *    lift-off — the escort was gone from the roster all the same.
      *  - EVERY OTHER DOCKED READER. The status bar's docked readouts, the
      *    player-info 'p' dialog, the mission-info dialog, the periodic save
      *    and the checkpoint writer all resolve the docked ship through the
      *    same handles this updates, and so all showed the traded-in ship's
      *    credits, cargo and stats.
-     *  - THE NEXT VENUE'S CREDIT BASELINE. A venue seeds its working
-     *    balance from the entity it is shown with and commits the DELTA back
-     *    (credit_commit.ts); shown the dead hull, the delta would land there
-     *    too. The shipyard cannot be open at the same time as another venue,
-     *    so pointing `this.input` at the new hull here is enough for every
-     *    venue opened afterwards to compose with the frame loop as before.
      *
      * NOTHING IS COPIED HERE: buildPurchasedShip has already moved the
      * player-scoped state onto the new entity (see CARRIED_COMPONENTS), so
@@ -873,9 +921,19 @@ export class Spaceport extends Menu<Entity> {
             this.refreshRefuelButton();
             return;
         }
-        // Mutating the docked entity's components is the standard
-        // spaceport commit pattern (the entity is out of the world).
-        credits.credits -= cost;
+        // A writer outside the venues: through the landing's ledger, so
+        // the working balance, the live component and the sync point move
+        // together (landed_transaction.ts's applyExternalCredits). Before
+        // the transaction exists (the landing gap, while the venue keys are
+        // dead but this one is live) the entity is written directly, and
+        // the transaction seeds from it.
+        if (this.transaction) {
+            this.transaction.applyExternalCredits(-cost);
+        } else {
+            credits.credits -= cost;
+        }
+        // Fuel is not part of the working copy (nothing a venue does while
+        // docked changes it), so the entity is the one place it lives.
         fuel.current = fuel.max;
         this.refreshRefuelButton();
     }
@@ -945,7 +1003,17 @@ export class Spaceport extends Menu<Entity> {
         this.container.addChild(this.offerPopup.container);
     }
 
+    /**
+     * Leave: THE COMMIT. The landing's working copy lands on the hull —
+     * once — and that hull is what LeaveSpaceportEvent carries to the
+     * client's lift-off, which encodes it into the insertion record every
+     * peer applies. Then the pad's own effects: parked on the stellar,
+     * repaired, de-ionized.
+     */
     protected override done() {
+        if (this.transaction) {
+            this.input = this.transaction.commit();
+        }
         if (this.data) {
             const movement = this.input.components.get(MovementStateComponent);
             if (movement) {

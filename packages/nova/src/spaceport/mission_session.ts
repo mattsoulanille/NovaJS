@@ -43,17 +43,49 @@ import { missionEventLabel, requestCheckpoint } from './checkpoint_requests.js';
 import { takeShipDoneTextShown } from './ship_done_shown.js';
 
 /**
+ * The per-hull facts a session derives from the entity and the game data
+ * when it is created (and again, through {@link MissionSession.rederive},
+ * when the hull or its outfits have changed under a long-lived session —
+ * the landing transaction keeps ONE session for the whole visit).
+ */
+interface SessionDerived {
+    cargoCapacity: number;
+    shipId: string;
+    shipGovt: string | null;
+    shipInherentAI: number | undefined;
+    playerContribute: bigint;
+    payrollShips: ReadonlyMap<string, ShipData>;
+}
+
+/**
  * A player-local editing session over the mission-related components
  * of the (docked, out-of-simulation) player entity: working copies of
  * missions, cargo, credits, bits, and outfits, plus the machinery
  * context mission_logic.ts operates on. Commit writes the copies back
- * to the entity — the same pattern the outfitter uses.
+ * to the entity.
+ *
+ * While the player is landed there is exactly ONE of these per landing,
+ * owned by spaceport/landed_transaction.ts's LandedTransaction; the
+ * venues are views onto it. The in-flight callers (ship_mission_accept.ts,
+ * processInFlightMissions) build short-lived ones of their own.
+ *
+ * THE WORKING OBJECTS KEEP THEIR IDENTITY for the session's life: every
+ * mutation — a commit's post-date-advance re-read, a {@link reseed} after
+ * a hull swap, a transaction savepoint's rollback — is applied IN PLACE
+ * (Map.clear + set, Set.clear + add, `credits.credits =`), so a view that
+ * captured `state.credits` or `outfits` when it opened keeps reading the
+ * truth.
  */
 export class MissionSession {
     readonly state: MissionWorkingState;
     readonly outfits: Map<string, number>;
     readonly machinery: MissionMachineryContext;
-    readonly currentDay: number;
+    currentDay: number;
+    shipId: string;
+    private shipGovt: string | null;
+    private shipInherentAI: number | undefined;
+    private playerContribute: bigint;
+    private payrollShips: ReadonlyMap<string, ShipData>;
     /**
      * How many of `state.events` have already been announced as
      * checkpoint requests. `events` accumulates across commits (a second
@@ -65,12 +97,7 @@ export class MissionSession {
     private constructor(private entity: Entity,
         private universe: MissionUniverse,
         public planetId: string,
-        cargoCapacity: number,
-        public shipId: string,
-        private shipGovt: string | null,
-        private shipInherentAI: number | undefined,
-        private playerContribute: bigint,
-        private payrollShips: ReadonlyMap<string, ShipData>,
+        derived: SessionDerived,
         /**
          * Whether commit() announces mission accept/abort/complete/fail
          * events as pilot-history checkpoint requests. Off for a session
@@ -81,6 +108,11 @@ export class MissionSession {
         private readonly announceCheckpoints: boolean) {
         this.currentDay = dayNumber(
             entity.components.get(GameDateComponent) ?? getDefaultGameDate());
+        this.shipId = derived.shipId;
+        this.shipGovt = derived.shipGovt;
+        this.shipInherentAI = derived.shipInherentAI;
+        this.playerContribute = derived.playerContribute;
+        this.payrollShips = derived.payrollShips;
 
         this.state = {
             missions: new Map(entity.components.get(MissionsComponent) ?? []),
@@ -90,7 +122,7 @@ export class MissionSession {
             },
             bits: new Set(entity.components.get(ControlBitsComponent) ?? []),
             ranks: new Set(entity.components.get(ActiveRanksComponent) ?? []),
-            cargoCapacity,
+            cargoCapacity: derived.cargoCapacity,
             dateAdvance: 0,
             events: [],
             records: new Map(
@@ -148,6 +180,80 @@ export class MissionSession {
     retarget(entity: Entity, shipId: string): void {
         this.entity = entity;
         this.shipId = shipId;
+    }
+
+    /** The entity this session commits onto. */
+    get target(): Entity {
+        return this.entity;
+    }
+
+    /**
+     * Rebuilds every working copy from `entity` and points the session at
+     * it — IN PLACE, so a view holding `state.credits`, `state.cargo`,
+     * `state.bits` or `outfits` keeps reading the truth.
+     *
+     * For the two moments the entity is the truth and the copies are not:
+     * a SHIPYARD PURCHASE, which builds a whole new hull priced and
+     * charged from the live entity (shipyard_rules' buildPurchasedShip),
+     * and the LANDING'S DATE ADVANCE, which runs the crons and the daily
+     * books on the entity before the visit's session is seeded
+     * (LandedTransaction.processLanding). Deliberately NOT what a
+     * mid-visit `Cxxx`/`Exxx`/`Hxxx` ship change wants: there the working
+     * credits and bits are AHEAD of the entity and only the outfits and
+     * the target move (see the outfitter's changeShip / retarget).
+     *
+     * `events` and `dateAdvance` are left alone: they are the session's own
+     * unflushed bookkeeping, not a copy of anything on the entity.
+     */
+    reseed(entity: Entity, shipId?: string): void {
+        this.entity = entity;
+        this.shipId = shipId ?? entity.components.get(ShipComponent)?.id
+            ?? this.shipId;
+        this.currentDay = dayNumber(
+            entity.components.get(GameDateComponent) ?? getDefaultGameDate());
+        const state = this.state;
+        replaceMap(state.missions,
+            entity.components.get(MissionsComponent) ?? new Map());
+        replaceMap(state.cargo, entity.components.get(CargoComponent) ?? new Map());
+        state.credits.credits =
+            entity.components.get(CreditsComponent)?.credits ?? 0;
+        replaceSet(state.bits, entity.components.get(ControlBitsComponent) ?? []);
+        if (state.ranks) {
+            replaceSet(state.ranks,
+                entity.components.get(ActiveRanksComponent) ?? []);
+        }
+        if (state.records) {
+            replaceMap(state.records,
+                entity.components.get(LegalRecordsComponent) ?? new Map());
+        }
+        if (state.autoAbortShips) {
+            state.autoAbortShips.length = 0;
+            state.autoAbortShips.push(
+                ...(entity.components.get(PendingAutoAbortShipsComponent) ?? []));
+        }
+        this.outfits.clear();
+        for (const [id, { count }] of
+            entity.components.get(OutfitsStateComponent) ?? []) {
+            this.outfits.set(id, count);
+        }
+    }
+
+    /**
+     * Re-derives the per-hull facts ({@link SessionDerived}) from the
+     * session's current entity: what {@link create} computed once, for a
+     * session that outlives an outfit purchase, a hull swap or a hire
+     * (the hires join the payroll it prices). The landing transaction
+     * runs this as each venue opens, which is exactly when a fresh
+     * per-venue session used to compute the same numbers.
+     */
+    async rederive(gameData: SimulationGameDataInterface): Promise<void> {
+        const derived = await MissionSession.derive(this.entity, gameData);
+        this.shipId = derived.shipId;
+        this.shipGovt = derived.shipGovt;
+        this.shipInherentAI = derived.shipInherentAI;
+        this.playerContribute = derived.playerContribute;
+        this.payrollShips = derived.payrollShips;
+        this.state.cargoCapacity = derived.cargoCapacity;
     }
 
     /**
@@ -208,6 +314,14 @@ export class MissionSession {
         options: { announceCheckpoints?: boolean } = {}):
         Promise<MissionSession> {
         await universe.load();
+        const derived = await MissionSession.derive(entity, gameData);
+        return new MissionSession(entity, universe, planetId, derived,
+            options.announceCheckpoints ?? true);
+    }
+
+    /** The per-hull facts for `entity` as it stands (see SessionDerived). */
+    private static async derive(entity: Entity,
+        gameData: SimulationGameDataInterface): Promise<SessionDerived> {
         const shipId = entity.components.get(ShipComponent)?.id ?? 'default';
         const cargoCapacity = await computeCargoCapacity(entity, gameData);
         // The ship's inherent gövt gates the AvailShipType ship-govt
@@ -229,10 +343,10 @@ export class MissionSession {
         // The escorts' hull prices, so a DatePostInc settled at commit can
         // charge their wages synchronously (see commitState).
         const payrollShips = await loadPayrollShips(entity, gameData);
-        return new MissionSession(entity, universe, planetId,
+        return {
             cargoCapacity, shipId, shipGovt, shipInherentAI,
             playerContribute, payrollShips,
-            options.announceCheckpoints ?? true);
+        };
     }
 
     /**
@@ -266,20 +380,30 @@ export class MissionSession {
 
     private commitState(): MissionEvent[] {
         const entity = this.entity;
-        entity.components.set(MissionsComponent, this.state.missions);
-        entity.components.set(CargoComponent, this.state.cargo);
+        // COPIES, not the working objects themselves. The session lives on
+        // after a commit (the landing transaction flushes it at every
+        // venue's Done and again at lift-off), and the working objects keep
+        // their identity for the views; handing the entity the same Map
+        // would make every later edit — and every savepoint rollback —
+        // visible on the entity before the next flush. The ActiveMission
+        // VALUES are shared, as they always were: the machinery edits
+        // them in place (mission_landing's travelDone, mission_cargo's
+        // cargoLoaded) and a seed copies the Map shallowly.
+        entity.components.set(MissionsComponent, new Map(this.state.missions));
+        entity.components.set(CargoComponent, new Map(this.state.cargo));
         entity.components.set(CreditsComponent,
             { credits: this.state.credits.credits });
-        entity.components.set(ControlBitsComponent, this.state.bits);
+        entity.components.set(ControlBitsComponent, new Set(this.state.bits));
         if (this.state.ranks) {
             // Both halves together: ActiveRanksComponent and the ränk
             // 0x0100 suppression facts the simulation reads off it (the
             // sim cannot resolve a ränk itself — see rank_logic.ts).
-            commitActiveRanks(entity, this.state.ranks,
+            commitActiveRanks(entity, new Set(this.state.ranks),
                 id => this.universe.getRank(id));
         }
         if (this.state.records) {
-            entity.components.set(LegalRecordsComponent, this.state.records);
+            entity.components.set(LegalRecordsComponent,
+                new Map(this.state.records));
         }
         // Only written when there is something to write (or something to
         // overwrite): an entity that never queued a batch does not gain an
@@ -340,11 +464,12 @@ export class MissionSession {
             // The crons and the books may have moved the very state this
             // session holds working copies of (a cron's Bxxx/Kxxx/Gxxx, a
             // salary); a second commit() must not roll them back to the
-            // pre-advance copies.
-            this.state.bits = new Set(
+            // pre-advance copies. Re-read IN PLACE: the views hold these
+            // objects (see the class doc).
+            replaceSet(this.state.bits,
                 entity.components.get(ControlBitsComponent) ?? []);
             if (this.state.ranks) {
-                this.state.ranks = new Set(
+                replaceSet(this.state.ranks,
                     entity.components.get(ActiveRanksComponent) ?? []);
             }
             this.state.credits.credits =
@@ -369,6 +494,36 @@ export class MissionSession {
         runMissionSetString(this.machinery, expression, missionPrefix,
             this.outfits);
     }
+}
+
+/** Replaces `target`'s entries with `source`'s, keeping `target`'s identity. */
+export function replaceMap<K, V>(target: Map<K, V>,
+    source: Iterable<readonly [K, V]>): void {
+    target.clear();
+    for (const [key, value] of source) {
+        target.set(key, value);
+    }
+}
+
+/** Replaces `target`'s members with `source`'s, keeping `target`'s identity. */
+export function replaceSet<T>(target: Set<T>, source: Iterable<T>): void {
+    target.clear();
+    for (const value of source) {
+        target.add(value);
+    }
+}
+
+/**
+ * The landing's mission pass on a session that has ALREADY been seeded
+ * from the date-advanced entity: every active mission is checked against
+ * this stellar (completion + payment, deadline failures, travel-leg cargo
+ * transfer). The caller commits — processEntityLanding through
+ * session.commit(), the landing transaction through its flush — and
+ * returns the events.
+ */
+export function processLandingOn(session: MissionSession): void {
+    processLanding(session.machinery, session.planetId, session.currentDay,
+        session.outfits);
 }
 
 /**
@@ -550,8 +705,7 @@ export async function processEntityLanding(entity: Entity,
 
     const session = await MissionSession.create(
         entity, gameData, universe, planetId);
-    processLanding(session.machinery, planetId, session.currentDay,
-        session.outfits);
+    processLandingOn(session);
     const events = session.commit();
 
     // Notices queued while the player was in flight surface here first —

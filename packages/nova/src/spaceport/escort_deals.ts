@@ -247,9 +247,9 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
     /**
      * Whether an escort's hold is checked out by an open venue right now, in
      * which case its deals are left QUEUED and retried on the next docked
-     * frame (see the module comment's rule, and fleet_cargo's fleetHoldOpen).
-     * Omitted — every unit test, and any caller with no venue — freezes
-     * nothing.
+     * frame (see the module comment's rule, and LandedTransaction.holdOpen
+     * in landed_transaction.ts). Omitted — every unit test, and any caller
+     * with no venue — freezes nothing.
      */
     holdOpen: (uuid: string) => boolean = () => false):
     EscortDealSettlement {
