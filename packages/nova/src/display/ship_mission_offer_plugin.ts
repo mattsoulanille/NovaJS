@@ -47,6 +47,8 @@ import {
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
 import { showStatusMessage } from './status_message_plugin.js';
+import { ProjectileSpinSystem } from "./projectile_spin_plugin.js";
+import { SweepPlanetCornersSystem } from "./planet_corners_plugin.js";
 
 /**
  * ============================================================================
@@ -510,7 +512,7 @@ async function sayHailQuote(world: World, state: HailQuoteState,
  * another player's radio traffic, and sorted by uuid so several people
  * announcing themselves on the same frame do so in a stable order.
  */
-const PersHailQuoteSystem = new System({
+export const PersHailQuoteSystem = new System({
     name: 'PersHailQuoteSystem',
     args: [HailQuoteStateResource, SimulationGameDataResource, Entities,
         PlayerShipSelector, GetWorld] as const,
@@ -531,6 +533,9 @@ const PersHailQuoteSystem = new System({
                 });
         }
     },
+    // #156 pin (shared: *): ShipMissionOfferPlugin registers after
+    // ProjectileSpinPlugin.
+    after: [ProjectileSpinSystem, SweepPlanetCornersSystem],
 });
 
 export const ShipMissionOfferPlugin: Plugin = {

@@ -26,6 +26,10 @@ import {
     ActiveMission, CreditsComponent, Missions, MissionsComponent,
 } from '../player/index.js';
 import { DeathAISystem } from '../npc/index.js';
+import { NpcRespawnSystem } from '../spawn/index.js';
+import { AttributionResetSystem } from '../reputation/index.js';
+import { MarkPlayerEscortsSystem } from '../escorts/index.js';
+import { ShipExplosionBlastSystem } from '../combat/index.js';
 import {
     registerShip,
     shipDeparted,
@@ -318,7 +322,9 @@ const MissionShipTrackSystem = new System({
             shipEntity.components.delete(SystemHoldComponent);
         }
     },
-    after: [TimeSystem],
+    // NpcRespawnSystem is a #237 pin (shared: *): MissionShipPlugin
+    // registers after NpcSpawnPlugin.
+    after: [TimeSystem, NpcRespawnSystem],
 });
 
 /**
@@ -338,6 +344,9 @@ const MissionShipDeathSystem = new System({
         }
     },
     before: [DeathAISystem],
+    // #237 pin (shared: *): among the DeathEvent handlers, after
+    // reputation's attribution reset.
+    after: [AttributionResetSystem],
 });
 
 /**
@@ -361,7 +370,8 @@ const MissionShipDepartureSystem = new System({
             }
         }
     },
-    after: [TimeSystem],
+    // MissionShipTrackSystem is a #237 pin (shared: *).
+    after: [TimeSystem, MissionShipTrackSystem],
 });
 
 /**
@@ -386,7 +396,8 @@ const MissionShipCleanupSystem = new System({
             entities.delete(uuid);
         }
     },
-    after: [TimeSystem],
+    // MissionShipDepartureSystem is a #237 pin (shared: *).
+    after: [TimeSystem, MissionShipDepartureSystem],
 });
 
 /**
@@ -427,7 +438,11 @@ const MissionPlayerDisabledSystem = new System({
     step(missions) {
         failPlayerMissionsOnLoss(missions);
     },
-    after: [TimeSystem],
+    // MissionShipCleanupSystem is a #237 pin (shared: *).
+    after: [TimeSystem, MissionShipCleanupSystem],
+    // #237 pin (shared: *): MissionShipPlugin registers before
+    // PlayerEscortPlugin.
+    before: [MarkPlayerEscortsSystem],
 });
 
 /**
@@ -444,7 +459,11 @@ const MissionPlayerDeathSystem = new System({
     step(_death, missions) {
         failPlayerMissionsOnLoss(missions);
     },
-    before: [DeathAISystem],
+    // ShipExplosionBlastSystem is a #237 pin (shared: *): MissionShipPlugin
+    // registers before ShipExplosionPlugin.
+    before: [DeathAISystem, ShipExplosionBlastSystem],
+    // #237 pin (shared: *): among the DeathEvent handlers.
+    after: [MissionShipDeathSystem],
 });
 
 export const MissionShipPlugin: Plugin = {

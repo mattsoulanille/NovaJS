@@ -10,7 +10,7 @@ import * as PIXI from "pixi.js";
 import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
 import { currentIfDraft } from "../util/deimmerify.js";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
-import { AnimationComponent, TumbleAnimationComponent } from "../nova_plugin/core/animation_plugin.js";
+import { AnimationComponent, ExplosionAnimationProvider, TumbleAnimationComponent } from "../nova_plugin/core/animation_plugin.js";
 import { AsteroidComponent, DebrisComponent } from "../nova_plugin/combat/asteroid_plugin.js";
 import { PlanetComponent } from "../nova_plugin/travel/planet_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
@@ -74,7 +74,10 @@ const AnimationGraphicLoader = ProvideAsync({
         }
 
         return graphic;
-    }
+    },
+    // #156 pin (shared: entity): AnimationGraphicPlugin registers after the
+    // core AnimationPlugin.
+    after: [ExplosionAnimationProvider],
 });
 
 // Attaches a graphic to the space container and makes it visible. Pooled
@@ -105,7 +108,9 @@ export const AnimationGraphicProvider = Provide({
             space.removeChild(graphic.container);
         }
         return graphic;
-    }
+    },
+    // #156 pin (shared: *).
+    after: [AnimationGraphicLoader],
 });
 
 export const ObjectDrawSystem = new System({
@@ -133,7 +138,8 @@ export const ObjectDrawSystem = new System({
             + wrapNearestDelta(movementState.position.y - cameraFocus.y);
         graphic.rotation = movementState.rotation.angle;
     },
-    after: [MovementSystem],
+    // AnimationGraphicProvider is a #156 pin (shared: *).
+    after: [MovementSystem, AnimationGraphicProvider],
 });
 
 /**
@@ -168,7 +174,7 @@ export const TumbleDrawSystem = new System({
     after: [ObjectDrawSystem],
 });
 
-const AnimationGraphicCleanup = new System({
+export const AnimationGraphicCleanup = new System({
     name: 'AnimationGraphicCleanup',
     events: [DeleteEvent],
     args: [AnimationGraphicComponent, AnimationGraphicPoolResource,
@@ -188,7 +194,7 @@ const AnimationGraphicCleanup = new System({
     }
 });
 
-const AnimationGraphicInsert = new System({
+export const AnimationGraphicInsert = new System({
     name: 'AnimationGraphicInsert',
     events: [AddEvent],
     args: [AnimationGraphicComponent, Space] as const,

@@ -10,8 +10,9 @@ import { System } from 'nova_ecs/system';
 import { EffectiveMovementPhysicsSystem } from '../travel/index.js';
 import { ReturnAI } from '../escorts/index.js';
 import { CloakActiveComponent, CLOAK_OFF_SOUND } from '../ship/index.js';
-import { ZeroArmorEvent } from '../ship/index.js';
-import { EscortCommandBehaviorSystem } from '../escorts/index.js';
+import { IonizationRechargeSystem, ZeroArmorEvent } from '../ship/index.js';
+import { BlastEndSystem } from '../combat/index.js';
+import { EscortCommandBehaviorSystem, EscortCommandInputSystem } from '../escorts/index.js';
 import { EscortLandingSystem } from '../escorts/index.js';
 import { FollowAI } from '../npc/index.js';
 import { deriveRepair, DisabledComponent, DisabledState, DISABLED_DECELERATION, isBelowDisableThreshold, repairedArmor, RepairComponent, rollRepairTime } from '../ship/index.js';
@@ -63,6 +64,9 @@ const RepairProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveRepair,
+    // #237 pin (shared: Ionization, Disabled): DisabledPlugin registers
+    // after IonizedPlugin, whose recharge IonizedSystem drags down here.
+    after: [IonizationRechargeSystem],
 });
 
 /**
@@ -131,7 +135,8 @@ export const ShipDisableSystem = new System({
             entity.components.delete(DisabledComponent);
         }
     },
-    after: [TimeSystem],
+    // RepairProvider is a #237 pin (shared: entity).
+    after: [TimeSystem, RepairProvider],
 });
 
 /**
@@ -230,7 +235,9 @@ export const JumpDisableCancelSystem = new System({
     // declare are the rule (see above), and ShipDisableSystem already
     // carries the ordering against the tick's time advance.
     after: [ShipDisableSystem],
-    before: [JumpSequenceSystem],
+    // BlastEndSystem is a #237 pin (shared: *): DisabledPlugin registers
+    // before BlastPlugin.
+    before: [JumpSequenceSystem, BlastEndSystem],
 });
 
 /**
@@ -291,6 +298,9 @@ export const SelfDestructSystem = new System({
         // The same event DamageSystem emits when damage zeroes armor.
         emit(ZeroArmorEvent, time, [uuid]);
     },
+    // #237 pin (shared: ShipControlState, Armor, Shield): among the
+    // ShipControlEvent handlers, after escorts' command input.
+    after: [EscortCommandInputSystem],
 });
 
 export const DisabledPlugin: Plugin = {

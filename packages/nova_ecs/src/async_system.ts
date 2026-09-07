@@ -156,7 +156,7 @@ export class AsyncSystem<StepArgTypes extends readonly ArgTypes[] = readonly Arg
     }
 }
 
-const AsyncSystemCleanup = new System({
+export const AsyncSystemCleanup = new System({
     name: 'AsyncSystemCleanup',
     events: [DeleteEvent],
     args: [UUID, AsyncSystemResource] as const,

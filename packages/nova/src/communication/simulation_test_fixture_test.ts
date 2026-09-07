@@ -23,8 +23,14 @@ describe('simulation_test_fixture package root', () => {
                 './simulation_test_fixture.js?cwd=elsewhere',
                 import.meta.url).href) as typeof fixture;
             expect(path.isAbsolute(elsewhere.SYNTHETIC_DATA_ROOT)).toBeTrue();
-            expect(elsewhere.SYNTHETIC_DATA_ROOT.startsWith(os.tmpdir()))
-                .toBeFalse();
+            // The root comes from the module's own location, not the
+            // cwd: identical to the normally-imported fixture's, and not
+            // what a cwd-relative resolution would have produced. (Not
+            // `startsWith(os.tmpdir())`: a checkout under the temp dir —
+            // the turnstone review lanes — legitimately lives there.)
+            expect(elsewhere.SYNTHETIC_DATA_ROOT).toBe(fixture.SYNTHETIC_DATA_ROOT);
+            expect(elsewhere.SYNTHETIC_DATA_ROOT).not.toBe(
+                path.join(os.tmpdir(), 'test_fixtures', 'synthetic'));
             expect(fs.statSync(path.join(elsewhere.SYNTHETIC_DATA_ROOT,
                 'Nova Files')).isDirectory()).toBeTrue();
             // And the whole aggregator works through it: the parser over

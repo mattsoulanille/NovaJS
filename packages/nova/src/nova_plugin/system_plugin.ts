@@ -1,127 +1,39 @@
 import { Plugin } from "nova_ecs/plugin";
-import { DeltaPlugin } from "nova_ecs/plugins/delta_plugin";
-import { MovementPlugin } from "nova_ecs/plugins/movement_plugin";
-import { TimePlugin } from "nova_ecs/plugins/time_plugin";
-import {
-    AnimationPlugin, CollisionsPlugin, ControlsPlugin, CreateTimePlugin,
-    PlatformPlugin, ReturnToQueuePlugin, SoundEventPlugin,
-} from "./core/index.js";
-import { PlayerStatePlugin } from "./player/index.js";
-import {
-    CargoPlugin, CloakPlugin, DeathPlugin, HealthPlugin, IonizedPlugin,
-    OutfitPlugin, ShipPlugin,
-} from "./ship/index.js";
-import { NCBPlugin } from "./ncb/index.js";
-import { IffPlugin, ReputationPlugin } from "./reputation/index.js";
-import {
-    AfterburnerPlugin, GateTransitPlugin, JumpPlugin, PlanetPlugin,
-    ShipController,
-} from "./travel/index.js";
-import { NpcAiPlugin, NpcPlugin } from "./npc/index.js";
-import {
-    AggressionPlugin, AsteroidPlugin, BeamPlugin, BlastPlugin,
-    FireWeaponPlugin, FoldPlugin, JammingPlugin, ProjectilePlugin,
-    ShipExplosionPlugin, TargetPlugin, WeaponPlugin,
-} from "./combat/index.js";
-import { NpcSpawnPlugin, PersPlugin } from "./spawn/index.js";
-import {
-    BayPlugin, EscortCommandPlugin, PlayerEscortPlugin,
-} from "./escorts/index.js";
-import { MissionShipPlugin } from "./missions/index.js";
-import { BoardingPlugin, DisabledPlugin, HailPlugin } from "./encounters/index.js";
-import { DebugCheatPlugin } from "./pilot/index.js";
+import { domainPlugin } from "./core/index.js";
+import { DOMAINS } from "./domains.js";
 
 /**
- * Every simulation plugin, in registration order.
+ * The simulation: every domain's plugins, composed domain by domain.
  *
- * THE ORDER IS A DETERMINISM INPUT. The World runs unconstrained system
- * pairs in registration order (#43), so this list — not the domain
- * directories — decides the simulation's system order, and it
- * interleaves domains on purpose: a domain's plugins are registered
- * where the systems around them expect. Each domain's index declares
- * its own plugins in the same relative order (`Domain.plugins`);
- * system_plugin_test checks the two agree and that the resulting
- * `world.systemNames` matches the frozen snapshot in
- * system_order_snapshot.ts. Change the order only with that snapshot,
- * and prove equivalence with the determinism harness.
+ * THE ORDER OF THIS LIST IS NOT A DETERMINISM INPUT. The World sorts
+ * systems by their declared before/after edges and tie-breaks the
+ * unconstrained pairs by name (#156), so registration order — of the
+ * domains here, of the plugins within a domain — cannot change the
+ * system order. What guarantees that is system_ambiguity_test: every
+ * pair of systems that could observe its order (a shared event and
+ * shared state in their args) has a declared path between them, and
+ * the count of pairs without one is pinned at 0.
+ *
+ * Most of those paths are semantic (`after: [TimeSystem]`, `before:
+ * [MovementSystem]`). The rest are the '#237 pins': edges that record
+ * the order the game shipped with before the tie-break changed —
+ * SystemPlugin used to be a flat, hand-interleaved plugin list, and
+ * an unconstrained pair ran in that list's order. Each pin names what
+ * the pair shares ('shared: entity', 'shared: *' for a system that
+ * reaches everything through Entities/GetArg/RunQuery/GetWorld). A
+ * pin may be removed once the pair provably does not interact (the
+ * ambiguity guard says whether it still counts); it must not be
+ * flipped without the determinism harness.
+ *
+ * Users must add the multiplayer plugin and a display plugin, and set
+ * the NovaData resource.
  */
-export const SYSTEM_PLUGIN_ORDER: readonly Plugin[] = [
-    TimePlugin,
-    CreateTimePlugin,
-    ReturnToQueuePlugin,
-    PlatformPlugin,
-    DeltaPlugin,
-    ShipPlugin,
-    AnimationPlugin,
-    ControlsPlugin,
-    ShipController,
-    PlanetPlugin,
-    MovementPlugin,
-    DeathPlugin,
-    FireWeaponPlugin,
-    ProjectilePlugin,
-    WeaponPlugin,
-    // After WeaponPlugin: the fold gate orders before WeaponsSystem and
-    // its state is read by the miner firing gate there.
-    FoldPlugin,
-    OutfitPlugin,
-    NCBPlugin,
-    PlayerStatePlugin,
-    ReputationPlugin,
-    // Debug cheat buttons (status_bar.ts). After PlayerState and
-    // Reputation: the cheats mutate the Credits / LegalRecords those
-    // plugins own.
-    DebugCheatPlugin,
-    JammingPlugin,
-    CollisionsPlugin,
-    HealthPlugin,
-    CloakPlugin,
-    IffPlugin,
-    // Before TargetPlugin: the 'r' key's nearest-hostile scan reads
-    // the aggression state this plugin records.
-    AggressionPlugin,
-    TargetPlugin,
-    SoundEventPlugin,
-    BeamPlugin,
-    BayPlugin,
-    EscortCommandPlugin,
-    JumpPlugin,
-    GateTransitPlugin,
-    NpcPlugin,
-    NpcAiPlugin,
-    HailPlugin,
-    PersPlugin,
-    NpcSpawnPlugin,
-    MissionShipPlugin,
-    // After NpcAiPlugin (orders against FormationSystem), JumpPlugin
-    // (orders against JumpFromSystem) and MissionShipPlugin (whose
-    // MissionShipComponent it excludes from player-escort ownership).
-    PlayerEscortPlugin,
-    IonizedPlugin,
-    AfterburnerPlugin,
-    // After every plugin whose systems it orders against (controls,
-    // jump, afterburner, NPC AI): ship disabling erases their
-    // movement writes each tick while a ship is disabled.
-    DisabledPlugin,
-    BlastPlugin,
-    // After BlastPlugin: a ship's final explosion spawns one of its
-    // blasts (and orders against DeathPlugin's and NpcPlugin's death
-    // handlers, both already added).
-    ShipExplosionPlugin,
-    CargoPlugin,
-    // After Cargo/Disabled/Reputation/EscortCommand: boarding reads
-    // cargo, requires the disabled gate, charges legal-record crimes,
-    // and converts captures into escorts.
-    BoardingPlugin,
-    AsteroidPlugin,
-];
+const DOMAIN_PLUGINS: readonly Plugin[] = DOMAINS.map(domainPlugin);
 
-// Users must add the multiplayer plugin and a display plugin.
-// Users must also add the NovaData resource.
 export const SystemPlugin: Plugin = {
     name: 'SystemPlugin',
     build(world) {
-        for (const plugin of SYSTEM_PLUGIN_ORDER) {
+        for (const plugin of DOMAIN_PLUGINS) {
             world.addPlugin(plugin);
         }
     }

@@ -102,7 +102,7 @@ export function originalIfDraft<T>(val: T): T {
     return val;
 }
 
-const AsyncProviderCleanup = new System({
+export const AsyncProviderCleanup = new System({
     name: 'AsyncProviderCleanup',
     events: [DeleteEvent],
     args: [UUID, AsyncProviderResource] as const,

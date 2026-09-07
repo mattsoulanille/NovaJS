@@ -47,7 +47,7 @@ export const TumbleAnimationComponent =
 
 const animationFactory = (a: { animation: Animation }) => a.animation;
 
-const ProjectileAnimationProvider = Provide({
+export const ProjectileAnimationProvider = Provide({
     name: "ProjectileAnimationProvider",
     provided: AnimationComponent,
     update: [ProjectileDataComponent],
@@ -58,12 +58,14 @@ const ProjectileAnimationProvider = Provide({
 export const ExplosionDataComponent
     = new Component<ExplosionData>('ExplosionData');
 
-const ExplosionAnimationProvider = Provide({
+export const ExplosionAnimationProvider = Provide({
     name: "ExplosionAnimationProvider",
     provided: AnimationComponent,
     update: [ExplosionDataComponent],
     args: [ExplosionDataComponent],
     factory: animationFactory,
+    // #237 pin (shared: entity).
+    after: [ProjectileAnimationProvider],
 });
 
 export const AnimationPlugin: Plugin = {

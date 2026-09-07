@@ -13,7 +13,7 @@ import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { disabledCancelsImmunity, FiringGroupComponent, firingImmune, victimFiringGroup } from '../ship/index.js';
 import { GovtComponent } from '../core/index.js';
 import { DisabledComponent } from '../ship/index.js';
-import { ShipExplosionComponent } from '../ship/index.js';
+import { ShipCargoProvider, ShipExplosionComponent } from '../ship/index.js';
 
 
 export { BlastDamageComponent, BlastIgnoreComponent } from '../ship/index.js';
@@ -67,19 +67,20 @@ const BlastDoneProvider = ProvideArg({
     factory: () => ({ done: false }),
 });
 // Deletes blasts after they've existed for one frame
-const BlastEndSystem = new System({
+export const BlastEndSystem = new System({
     name: 'BlastEndSystem',
     // Happens before the collision system so blasts can
     // exist for exactly one collision event (todo: maybe collision
-    // event should emit the entity value directly?)
-    before: [CollisionSystem],
+    // event should emit the entity value directly?). ShipCargoProvider
+    // is a #237 pin (shared: *): BlastPlugin registers before CargoPlugin.
+    before: [CollisionSystem, ShipCargoProvider],
     args: [Entities, UUID, BlastDoneProvider, BlastDamageComponent] as const,
     step(entities, uuid, blastDone) {
         if (blastDone.done) {
             entities.delete(uuid);
         }
         blastDone.done = true;
-    }
+    },
 });
 
 export const BlastPlugin: Plugin = {

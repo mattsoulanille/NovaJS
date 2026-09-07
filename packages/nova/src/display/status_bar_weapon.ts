@@ -9,6 +9,7 @@ import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js"
 import { ActiveSecondaryWeapon, countAmmo } from "../nova_plugin/combat/weapon_plugin.js";
 import { StatusBarFonts } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
+import { DrawStatusBarStats } from "./status_bar_gauges.js";
 
 /**
  * The secondary-weapon readout: the weapon's name (and ammo count) in
@@ -108,5 +109,8 @@ export const DrawStatusBarSecondaryWeapon = new System({
         } else {
             statusBar.weapon.drawSecondary(weaponName);
         }
-    }
+    },
+    // #156 pin (shared: ShipControl, StatusBar): StatusBarPlugin's
+    // registration order.
+    after: [DrawStatusBarStats],
 });

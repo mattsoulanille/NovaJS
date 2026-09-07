@@ -29,7 +29,7 @@ import { FiringGroupComponent } from '../ship/index.js';
 import { flockParent, MAX_FLOCK_DEPTH } from '../combat/index.js';
 import { DisabledComponent } from '../ship/index.js';
 import { GateDepartureSystem } from '../travel/index.js';
-import { FuelComponent } from '../ship/index.js';
+import { FuelComponent, IonizedSystem } from '../ship/index.js';
 import {
     beginFollowJump, InitiateJumpEvent, JumpComponent, JumpFromSystem,
     JumpSequenceSystem, TransitKind,
@@ -959,7 +959,9 @@ export const EscortFollowJumpBeginSystem = new System({
     // JumpSequenceSystem's leader check, which is what makes a sequence
     // started on a tick whose leader is cancelled harmless: it is undone on
     // that same tick.
-    before: [JumpSequenceSystem],
+    before: [JumpSequenceSystem, EscortReattachSystem],
+    // #237 pins (shared: *): PlayerEscortPlugin's registration order.
+    after: [EscortPayrollSystem],
 });
 
 /**
@@ -1053,6 +1055,8 @@ export const EscortFollowJumpSystem = new System({
         }
     },
     before: [JumpFromSystem],
+    // #237 pin (shared: *): PlayerEscortPlugin's registration order.
+    after: [EscortDepartJumpSystem],
 });
 
 /**
@@ -1118,6 +1122,8 @@ export const EscortFollowGateSystem = new System({
         }
     },
     before: [GateDepartureSystem],
+    // #237 pin (shared: *): PlayerEscortPlugin's registration order.
+    after: [EscortLandOrderSystem],
 });
 
 /**
@@ -1170,8 +1176,10 @@ export const EscortLandingSystem = new System({
         steerToStellar(movement, target, physics.acceleration, physics.speed,
             time.delta_s);
     },
-    after: [TimeSystem, EscortReattachSystem],
-    before: [MovementSystem],
+    // FormationSystem and IonizedSystem are #237 pins (shared: *):
+    // PlayerEscortPlugin registers between NpcAiPlugin and IonizedPlugin.
+    after: [TimeSystem, EscortReattachSystem, FormationSystem],
+    before: [MovementSystem, IonizedSystem],
 });
 
 export const PlayerEscortPlugin: Plugin = {

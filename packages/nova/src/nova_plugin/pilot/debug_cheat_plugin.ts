@@ -3,6 +3,8 @@ import { Plugin } from 'nova_ecs/plugin';
 import { System } from 'nova_ecs/system';
 import { CreditsComponent } from '../player/index.js';
 import { LegalRecordsComponent } from '../reputation/index.js';
+import { ControlPlayerWeapons } from '../combat/index.js';
+import { CloakControlSystem } from '../ship/index.js';
 import { ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 
 /**
@@ -48,6 +50,11 @@ export const DebugCheatSystem = new System({
             records.clear();
         }
     },
+    // #237 pins (shared: ShipControlState; Credits, LegalRecords): among
+    // the ShipControlEvent handlers, after combat's weapon controls and
+    // before ship's cloak toggle.
+    after: [ControlPlayerWeapons],
+    before: [CloakControlSystem],
 });
 
 export const DebugCheatPlugin: Plugin = {

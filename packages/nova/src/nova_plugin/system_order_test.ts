@@ -64,9 +64,7 @@ describe('load-bearing system orderings are declared', () => {
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         const world: World = await makeSystem(systemId, gameData, platform, { npcs: false });
-        // World keeps its registration list private; reachability in the
-        // declared graph is the whole point of this spec, so reach in.
-        const registered = (world as unknown as { registered: Sortable[] }).registered;
+        const registered = [...world.registeredSortables];
         return { world, registered };
     }
 

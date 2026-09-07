@@ -21,7 +21,8 @@ import {
     planCargoPlunder, plunderSpent,
 } from '../ship/index.js';
 import { AggressionComponent } from '../combat/index.js';
-import { LandEvent } from '../travel/index.js';
+import { GateDepartureSystem, LandEvent } from '../travel/index.js';
+import { SelfDestructSystem } from './disabled_plugin.js';
 import { MissionShipComponent } from '../player/index.js';
 import { CargoComponent, cargoUsed } from '../ship/index.js';
 import { CollisionHitterComponent } from '../core/index.js';
@@ -657,6 +658,9 @@ const BoardingGateSystem = new System({
         // Local boarding beep for the boarding player only.
         emit(PlayerSoundEvent, { id: BOARD_SOUND }, [uuid]);
     },
+    // #237 pin (shared: *): among the ShipControlEvent handlers, after
+    // disabled's self-destruct.
+    after: [SelfDestructSystem],
 });
 
 /**
@@ -1372,6 +1376,8 @@ const BoardingActionSystem = new System({
             }
         }
     },
+    // #237 pin (shared: *): BoardingPlugin's registration order.
+    after: [BoardingGateSystem],
 });
 
 /**
@@ -1397,6 +1403,9 @@ const BoardingLandingResetSystem = new System({
     step(entity) {
         clearPlunderRecord(entity);
     },
+    // #237 pin (shared: *): among the LandEvent handlers, after travel's
+    // gate departure.
+    after: [GateDepartureSystem],
 });
 
 export const BoardingPlugin: Plugin = {

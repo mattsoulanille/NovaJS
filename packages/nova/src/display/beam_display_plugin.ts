@@ -13,6 +13,8 @@ import { CreateTime } from "../nova_plugin/core/create_time.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { CameraFocus, Space } from "./space_resource.js";
 import { ZIndex } from "./z_index.js";
+import { SecondaryExplosionSystem } from "./explosion_plugin.js";
+import { DebrisDrawSystem } from "./asteroid_display_plugin.js";
 
 
 /**
@@ -53,7 +55,9 @@ const ClearBeams = new System({
     args: [BeamGraphicsResource, SingletonComponent] as const,
     step(beamGraphics) {
         beamGraphics.clear();
-    }
+    },
+    // #156 pin (shared: *): BeamDisplayPlugin registers after ExplosionPlugin.
+    after: [SecondaryExplosionSystem],
 });
 
 function setLineStyle(graphics: PIXI.Graphics, width: number, color: number, alpha: number = 1) {
@@ -149,7 +153,8 @@ export const BeamDisplaySystem: System = new System({
             beamGraphics.lineTo(destination.x, destination.y);
         }
     },
-    after: [ClearBeams, BeamSystem, CollisionSystem],
+    // DebrisDrawSystem is a #156 pin (shared: SimulationTime).
+    after: [ClearBeams, BeamSystem, CollisionSystem, DebrisDrawSystem],
     before: []
 });
 

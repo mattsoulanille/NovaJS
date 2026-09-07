@@ -20,13 +20,13 @@ import { SimulationGameDataInterface } from '../../client/gamedata/simulation_ga
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
 import { registerSimulationBridgeEvent } from '../../communication/simulation_bridge_events.js';
-import { AnimationComponent } from '../core/index.js';
+import { AnimationComponent, ExplosionAnimationProvider } from '../core/index.js';
 import { ControlAction } from '../core/index.js';
 import { findControlledEntity, ShipControlEvent, ShipControlStateComponent } from '../player/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { SystemIdResource } from '../core/index.js';
 import { PlayerShipSelector } from '../player/index.js';
-import { ShipComponent, ShipDataComponent } from '../ship/index.js';
+import { ExplodingFinishedSystem, ShipComponent, ShipDataComponent } from '../ship/index.js';
 import { Target } from '../ship/index.js';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { OutfitsState, OutfitsStateComponent } from '../ship/index.js';
@@ -58,6 +58,9 @@ export const PlanetDataProvider = ProvideFromCache({
     provided: PlanetDataComponent,
     args: [SimulationGameDataResource, PlanetComponent] as const,
     factory: derivePlanetData,
+    // #237 pin (shared: ShipExplodingComponent): PlanetPlugin registers
+    // before DeathPlugin.
+    before: [ExplodingFinishedSystem],
 });
 
 export const PlanetTargetComponent = new Component<Target>('PlanetTargetComponent');
@@ -67,6 +70,9 @@ const PlanetTargetProvider = Provide({
     provided: PlanetTargetComponent,
     args: [ShipComponent] as const,
     factory: () => ({ target: undefined }),
+    // #237 pin (shared: entity): PlanetPlugin registers after core's
+    // AnimationPlugin.
+    after: [ExplosionAnimationProvider],
 });
 
 export const LandEvent = new EcsEvent<{ id: string, uuid: string }>('LandEvent');
@@ -381,7 +387,7 @@ export function applySetPlanetTarget(world: World, peerId: string | undefined,
 // so no clock read / after:[TimeSystem] is needed. Display-synced via the
 // existing PlanetTargetComponent delta registration.
 const NUM_STELLAR_HOTKEYS = 9;
-const SelectStellarSystem = new System({
+export const SelectStellarSystem = new System({
     name: 'SelectStellarSystem',
     events: [ShipControlEvent] as const,
     args: [ShipControlStateComponent, PlanetTargetComponent,
@@ -420,6 +426,9 @@ const SelectStellarSystem = new System({
             return;
         }
     },
+    // #237 pin (shared: *): PlanetPlugin registers landing before stellar
+    // selection among its ShipControlEvent handlers.
+    after: [AttemptLandingSystem],
 });
 
 // Landing no longer refuels for free: the spaceport's Refuel button
@@ -434,6 +443,11 @@ const PlanetAnimationProvider = Provide({
     update: [PlanetDataComponent],
     args: [PlanetDataComponent],
     factory: planetData => planetData.animation,
+    // #237 pins (shared: entity): between the planet target and data
+    // providers; PlanetDataProvider is in turn pinned before ship's
+    // ExplodingFinishedSystem (shared: ShipExplodingComponent).
+    after: [PlanetTargetProvider],
+    before: [PlanetDataProvider],
 });
 
 export const PlanetPlugin: Plugin = {

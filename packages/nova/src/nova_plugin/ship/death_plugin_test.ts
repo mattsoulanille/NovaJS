@@ -6,7 +6,7 @@ import { SingletonComponent, World } from 'nova_ecs/world';
 import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
 import {
     armorFullyRestored, DamagedEvent, DeathEvent, ExplodingComponent,
-    ZeroArmorEvent,
+    ExplodingFinishedSystem, ZeroArmorEvent,
 } from './death_plugin.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
 import { ArmorComponent, ShieldComponent } from './health_plugin.js';
@@ -95,16 +95,18 @@ describe('player death and respawn', () => {
 
     /**
      * A stand-in beam: emitNow(DamagedEvent) from inside a step system,
-     * exactly as BeamDamageSystem does. Added last, so the toposort puts
-     * it after ExplodingFinishedSystem — the ordering every real damage
-     * source has (ProjectileCollisionSystem, BlastCollisionSystem and
+     * exactly as BeamDamageSystem does. Declared after
+     * ExplodingFinishedSystem — the ordering every real damage source
+     * has (ProjectileCollisionSystem, BlastCollisionSystem and
      * BeamDamageSystem all sort after it), and the one that queues a
-     * ZeroArmorEvent behind the death.
+     * ZeroArmorEvent behind the death. (It used to rely on being
+     * registered last; the World no longer tie-breaks by registration.)
      */
     function addBeam(world: World, firing: () => boolean) {
         world.addSystem(new System({
             name: 'TestBeamAfterExplodingFinished',
             args: [EmitNow, SingletonComponent] as const,
+            after: [ExplodingFinishedSystem],
             step(emitNow) {
                 if (firing()) {
                     emitNow(DamagedEvent,

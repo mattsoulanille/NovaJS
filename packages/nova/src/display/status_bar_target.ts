@@ -25,6 +25,7 @@ import {
 import { StatusBarResource } from "./status_bar_resource.js";
 import { targetIdentity } from "./target_identity.js";
 import { targetReadout } from "./target_readout.js";
+import { DrawStatusBarSecondaryWeapon } from "./status_bar_weapon.js";
 
 /**
  * The target pane: the locked ship's name, class subtitle and government,
@@ -322,5 +323,7 @@ export const DrawStatusBarTarget = new System({
             // the panel so it doesn't keep showing the previous target's data.
             statusBar.target.clearTarget();
         }
-    }
+    },
+    // #156 pin (shared: *): StatusBarPlugin's registration order.
+    after: [DrawStatusBarSecondaryWeapon],
 })

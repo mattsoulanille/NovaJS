@@ -38,7 +38,7 @@ import { MissionShipPlugin } from './mission_ship_plugin.js';
 
 export const MissionsDomain: Domain = {
     name: 'missions',
-    dependsOn: ['core', 'ncb', 'npc', 'player', 'reputation', 'ship', 'spawn'],
+    dependsOn: ['combat', 'core', 'escorts', 'ncb', 'npc', 'player', 'reputation', 'ship', 'spawn'],
     plugins: [MissionShipPlugin],
 };
 export const MissionsDomainPlugin = domainPlugin(MissionsDomain);

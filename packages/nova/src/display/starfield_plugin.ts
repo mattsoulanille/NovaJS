@@ -4,7 +4,7 @@
 import { BOUNDARY } from "nova_ecs/datatypes/position";
 import { Vector } from "nova_ecs/datatypes/vector";
 import { Plugin } from "nova_ecs/plugin";
-import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
+import { MovementStateComponent, MovementSystem } from "nova_ecs/plugins/movement_plugin";
 import { Resource } from "nova_ecs/resource";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
@@ -13,7 +13,7 @@ import seedrandom from 'seedrandom';
 const { alea } = seedrandom;
 import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
 import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { ResizeEvent, WorldScreenSize } from "./screen_size_plugin.js";
+import { ResizeEvent, ResizeSystem, WorldScreenSize } from "./screen_size_plugin.js";
 import { WorldLayer } from "./stage_resource.js";
 import { texturesFromFrames } from "./textures_from_frames.js";
 
@@ -203,29 +203,35 @@ class Starfield {
 
 export const StarfieldResource = new Resource<Starfield>('Starfield');
 
+// Module-level (not per `starfield()` call) so other systems can order
+// against them; every starfield plugin instance shares them.
+export const StarfieldSystem = new System({
+    name: 'StarfieldSystem',
+    args: [MovementStateComponent, StarfieldResource,
+        PlayerShipSelector] as const,
+    step(movementState, starfield) {
+        starfield.draw(movementState.position);
+    },
+    // #156 pin (shared: *): after the extrapolated movement.
+    after: [MovementSystem],
+});
+
+const StarfieldResize = new System({
+    name: 'StarfieldResize',
+    events: [ResizeEvent],
+    args: [StarfieldResource, ResizeEvent, WorldScreenSize] as const,
+    step(starfield, _resize, world) {
+        // The starfield covers the WORLD view, so it follows the
+        // world-logical viewport, not the (UI-scaled) event payload.
+        starfield.resize(world.x, world.y);
+    },
+    // #156 pin (shared: WorldScreenSize): among the ResizeEvent handlers,
+    // after the screen-size plugin's own.
+    after: [ResizeSystem],
+});
+
 export function starfield({ density = 0.00002,
     positionFactorRange = [0, 0.5] as [number, number] } = {}): Plugin {
-
-    const StarfieldSystem = new System({
-        name: 'StarfieldSystem',
-        args: [MovementStateComponent, StarfieldResource,
-            PlayerShipSelector] as const,
-        step(movementState, starfield) {
-            starfield.draw(movementState.position);
-        }
-    });
-
-    const StarfieldResize = new System({
-        name: 'StarfieldResize',
-        events: [ResizeEvent],
-        args: [StarfieldResource, ResizeEvent, WorldScreenSize] as const,
-        step(starfield, _resize, world) {
-            // The starfield covers the WORLD view, so it follows the
-            // world-logical viewport, not the (UI-scaled) event payload.
-            starfield.resize(world.x, world.y);
-        }
-    });
-
     return {
         name: 'Starfield',
         async build(world) {

@@ -17,6 +17,7 @@ import {
 } from "./particle_effects.js";
 import { CameraFocus, Space } from "./space_resource.js";
 import { ZIndex } from "./z_index.js";
+import { SweepTargetCornersSystem } from "./target_corners_plugin.js";
 
 /**
  * Weapon trails, hit sparks and asteroid breakup dust, all drawn by one
@@ -52,7 +53,10 @@ const TrailParticlesProvider = Provide({
     args: [ProjectileDataComponent] as const,
     factory(projectileData) {
         return projectileData.trailParticles;
-    }
+    },
+    // #156 pin (shared: SingletonComponent): ParticlesPlugin registers after
+    // TargetCornersPlugin.
+    after: [SweepTargetCornersSystem],
 });
 
 export const HitParticlesComponent =
@@ -64,7 +68,9 @@ const HitParticlesProvider = Provide({
     args: [ProjectileDataComponent] as const,
     factory(projectileData) {
         return projectileData.hitParticles;
-    }
+    },
+    // #156 pin (shared: entity).
+    after: [TrailParticlesProvider],
 });
 
 /**
@@ -98,7 +104,9 @@ const TrailEmissionProvider = Provide({
             lastX: movementState.position.x,
             lastY: movementState.position.y,
         };
-    }
+    },
+    // #156 pin (shared: entity).
+    after: [HitParticlesProvider],
 });
 
 /**
@@ -114,17 +122,18 @@ const ParticleTimeSystem = new System({
         CameraFocus, SingletonComponent] as const,
     // So the clock this system reads is this frame's, not the last
     // frame's, no matter what order the plugins were added in.
-    after: [TimeSystem],
+    // TrailEmissionProvider is a #156 pin (shared: SingletonComponent).
+    after: [TimeSystem, TrailEmissionProvider],
     step(particles, origin, time, cameraFocus) {
         if (origin.epochMs === undefined) {
             origin.epochMs = time.time;
         }
         particles.update((time.time - origin.epochMs) / 1000,
             cameraFocus.x, cameraFocus.y);
-    }
+    },
 });
 
-const TrailEmissionSystem = new System({
+export const TrailEmissionSystem = new System({
     name: "TrailEmissionSystem",
     args: [MovementStateComponent, TrailEmissionComponent,
         ParticleSystemResource, TimeResource] as const,
@@ -159,7 +168,7 @@ const HitParticlesSystem = new System({
     }
 });
 
-const AsteroidBreakParticlesSystem = new System({
+export const AsteroidBreakParticlesSystem = new System({
     name: "AsteroidBreakParticlesSystem",
     events: [AsteroidBreakEvent],
     args: [AsteroidBreakEvent, ParticleSystemResource,

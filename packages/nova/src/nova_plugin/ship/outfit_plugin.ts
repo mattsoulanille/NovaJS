@@ -159,7 +159,7 @@ function deriveWeaponsState(outfits: OutfitsState,
         return weaponsState;
 }
 
-const OutfitWeaponProvider = ProvideFromCache({
+export const OutfitWeaponProvider = ProvideFromCache({
     name: "OutfitWeaponProvider",
     provided: WeaponsStateComponent,
     update: [OutfitsStateComponent],

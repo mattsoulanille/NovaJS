@@ -15,7 +15,7 @@ import { FiringGroupComponent } from '../ship/index.js';
 import { SourceComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
-import { ArmorComponent } from '../ship/index.js';
+import { ArmorComponent, CloakDecloakOnHitSystem, ExplodingClearedSystem, KnockbackSystem, OutfitWeaponProvider } from '../ship/index.js';
 import { applyCrime, Crime } from './reputation.js';
 import { ShipDataComponent } from '../ship/index.js';
 import { ActiveRanksComponent, AggressionSuppressGovtsComponent } from '../ncb/index.js';
@@ -174,6 +174,10 @@ const DamageAttributionSystem = new System({
                 { root, disabledAtHit });
         }
     },
+    // #237 pins (shared: *): among the DamagedEvent handlers, after
+    // ship's damage/knockback pair and before its decloak-on-hit.
+    after: [KnockbackSystem],
+    before: [CloakDecloakOnHitSystem],
 });
 
 /**
@@ -183,7 +187,7 @@ const DamageAttributionSystem = new System({
  * records take that govt's kill penalty with ally/enemy propagation.
  * Roots without the components (NPCs) are unaffected.
  */
-const KillCreditSystem = new System({
+export const KillCreditSystem = new System({
     name: 'KillCreditSystem',
     events: [ZeroArmorEvent],
     args: [ZeroArmorEvent, ShipDataComponent, Optional(GovtComponent),
@@ -243,7 +247,7 @@ const KillCreditSystem = new System({
  * carry DisabPenalty 0 so this only ever mattered for a rescue hulk of
  * a penalising government, but the logic was wrong either way.
  */
-const DisableCreditSystem = new System({
+export const DisableCreditSystem = new System({
     name: 'DisableCreditSystem',
     args: [DamageAttributionComponent, Optional(DisabledComponent),
         Optional(ArmorComponent), Optional(GovtComponent), Entities,
@@ -278,16 +282,21 @@ const DisableCreditSystem = new System({
             chargeCrime(root, govtData, 'disable', gameData, govts);
         }
     },
+    // #237 pin (shared: *): ReputationPlugin registers after OutfitPlugin.
+    after: [OutfitWeaponProvider],
 });
 
 /** A ship that finished dying starts its next life unattributed. */
-const AttributionResetSystem = new System({
+export const AttributionResetSystem = new System({
     name: 'AttributionResetSystem',
     events: [DeathEvent],
     args: [DeathEvent, GetEntity] as const,
     step(_time, { components }) {
         components.delete(DamageAttributionComponent);
     },
+    // #237 pin (shared: entity): among the DeathEvent handlers, after
+    // ship's ExplodingClearedSystem.
+    after: [ExplodingClearedSystem],
 });
 
 export const ReputationPlugin: Plugin = {

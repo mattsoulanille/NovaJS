@@ -28,12 +28,22 @@ export class ArgModifier<Args extends readonly ArgTypes[], Result> {
      * null` explicitly marks the modifier as unknown.
      */
     readonly referencedComponents: ReadonlySet<UnknownComponent> | null;
-    constructor({ query, transform, extraComponents }: {
+    /**
+     * The args the transform resolves through its raw `GetArg`, for
+     * the ambiguity report (ambiguities.ts): with this declared, the
+     * modifier reaches its query's other args plus these, instead of
+     * "anything" (which is what an undeclared `GetArg` must be taken
+     * to mean). `Optional(x)` declares `[x]`.
+     */
+    readonly reaches: readonly ArgTypes[] | undefined;
+    constructor({ query, transform, extraComponents, reaches }: {
         query: Query<Args>, transform: Transform<Args, Result>,
         extraComponents?: ReadonlySet<UnknownComponent> | null,
+        reaches?: readonly ArgTypes[],
     }) {
         this.query = query;
-        this.transform = transform
+        this.transform = transform;
+        this.reaches = reaches;
         if (extraComponents === null) {
             this.referencedComponents = null;
         } else if (extraComponents === undefined

@@ -4,6 +4,7 @@ import { CreateTime } from "../nova_plugin/core/create_time.js";
 import { ProjectileComponent, ProjectileDataComponent } from "../nova_plugin/core/projectile_data.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
+import { DrawPlanetCornersSystem } from "./planet_corners_plugin.js";
 
 
 /**
@@ -128,7 +129,9 @@ export const ProjectileFadeSystem = new System({
             sprite.pixiSprite.alpha = alpha;
         }
     },
-    after: [ObjectDrawSystem],
+    // DrawPlanetCornersSystem is a #156 pin (shared: *): ProjectileFadePlugin
+    // registers after PlanetCornersPlugin.
+    after: [ObjectDrawSystem, DrawPlanetCornersSystem],
 });
 
 export const ProjectileFadePlugin: Plugin = {

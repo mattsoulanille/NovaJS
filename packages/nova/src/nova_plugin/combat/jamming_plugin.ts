@@ -23,6 +23,7 @@ import { ProjectileDataComponent } from '../core/index.js';
 import { ProvideFromCache } from '../core/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { TargetComponent } from '../ship/index.js';
+import { DisableCreditSystem } from '../reputation/index.js';
 
 /**
  * ============================================================================
@@ -430,6 +431,9 @@ const JammingProvider = ProvideFromCache({
         SimulationGameDataResource] as const,
     factory: (outfits, govt, gameData) =>
         deriveJamming(outfits, gameData, govt?.id),
+    // #237 pin (shared: *): JammingPlugin registers after ReputationPlugin
+    // (and the debug cheats, which order after it).
+    after: [DisableCreditSystem],
 });
 
 /**
@@ -446,8 +450,8 @@ export const MissileJammingSystem = new System({
         GetEntity, UUID, Entities, RandomResource, SystemInterferenceResource,
         TimeResource] as const,
     // Determinism rule 4: reads TimeResource (delta_ms), so it must run after
-    // TimeSystem.
-    after: [TimeSystem],
+    // TimeSystem. JammingProvider is a #237 pin (shared: *).
+    after: [TimeSystem, JammingProvider],
     step(movement, targetRef, projectileData, self, uuid, entities, random,
         systemInterference, time) {
         // Clear last frame's steer override up front so it never lingers.
@@ -486,7 +490,7 @@ export const MissileJammingSystem = new System({
         const reaction = decideJamReaction(probability, roll, reactionRoll,
             seeker);
         applyJamReaction(reaction, self, uuid, movement, entities);
-    }
+    },
 });
 
 /**

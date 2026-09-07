@@ -18,6 +18,7 @@ import {
 import { Space } from './space_resource.js';
 import { Stage } from './stage_resource.js';
 import { texturesFromFrames } from './textures_from_frames.js';
+import { JumpFadeSystem } from "./jump_fade_plugin.js";
 
 /**
  * The in-flight game cursor (space/notes.txt): while flying, the OS mouse
@@ -221,6 +222,8 @@ const DrawCursorSystem = new System({
         cursor.container.alpha = idle <= FADE_DELAY_MS ? 1
             : Math.max(0, 1 - (idle - FADE_DELAY_MS) / FADE_MS);
     },
+    // #156 pin (shared: *): CursorPlugin registers last.
+    after: [JumpFadeSystem],
 });
 
 const CursorListenersResource =

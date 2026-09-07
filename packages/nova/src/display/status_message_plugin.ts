@@ -16,6 +16,8 @@ import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEve
 import { PlayerPlunderedEvent } from "../nova_plugin/npc/npc_ai_plugin.js";
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { Stage } from "./stage_resource.js";
+import { DrawDockedStatus } from "./status_bar_docked.js";
+import { ProjectileAnimationProvider } from "../nova_plugin/core/animation_plugin.js";
 
 /**
  * The bottom-left on-screen status line the original game uses for the date on
@@ -128,6 +130,11 @@ const DrawStatusMessage = new System({
         }
         statusLine.update(time);
     },
+    // #156 pin (shared: SimulationGameData; GameDate, ShipControl):
+    // StatusMessagePlugin registers between StatusBarPlugin and the core
+    // AnimationPlugin.
+    after: [DrawDockedStatus],
+    before: [ProjectileAnimationProvider],
 });
 
 // Shows the original's too-far / too-fast land feedback on the bottom-left

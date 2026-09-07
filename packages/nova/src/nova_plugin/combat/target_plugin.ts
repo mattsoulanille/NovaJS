@@ -20,16 +20,21 @@ import { SimulationGameDataResource } from "../core/index.js";
 import { selectNearestHostile } from "./hostility.js";
 import { PlayerShipSelector } from "../player/index.js";
 import { ShipComponent } from "../ship/index.js";
-import { Target, TargetComponent } from "../ship/index.js";
+import { CloakControlSystem, Target, TargetComponent } from "../ship/index.js";
+import { ReturnToQueueSystem } from "../core/index.js";
+import { AggressionSweepSystem } from "./aggression_plugin.js";
 
 
 export const TargetIndexComponent = new Component<{ index: number }>('TargetIndexComponent');
 
-const TargetIndexProvider = Provide({
+export const TargetIndexProvider = Provide({
     name: "TargetIndexProvider",
     provided: TargetIndexComponent,
     args: [] as const,
     factory: () => ({ index: -1 }),
+    // #237 pin (shared: entity): TargetPlugin registers after
+    // AggressionPlugin.
+    after: [AggressionSweepSystem],
 });
 
 export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
@@ -37,7 +42,7 @@ export const CycleTargetEvent = new EcsEvent<Target>('CycleTargetEvent');
 const TargetsQuery = new Query([UUID, MovementStateComponent,
     Optional(OwnerComponent), ShipComponent, Optional(CloakActiveComponent),
     Optional(ExplodingComponent)] as const);
-const ChooseTargetSystem = new System({
+export const ChooseTargetSystem = new System({
     name: 'ChooseTarget',
     events: [ShipControlEvent],
     args: [ShipControlStateComponent, TargetComponent, TargetIndexComponent, UUID,
@@ -167,7 +172,10 @@ const ChooseTargetSystem = new System({
         index.index = next;
         target.target = next === -1 ? undefined : ships[next][0];
         emit(CycleTargetEvent, target);
-    }
+    },
+    // #237 pin (shared: *): among the ShipControlEvent handlers, after
+    // ship's cloak toggle.
+    after: [CloakControlSystem],
 });
 
 /**
@@ -222,7 +230,10 @@ const TargetRemovedSystem = new System({
             }
         }
         emit(TargetRemovedEvent, uuid, targetRemoved);
-    }
+    },
+    // #237 pin (shared: TargetComponent): among the DeleteEvent handlers,
+    // after core's ReturnToQueue.
+    after: [ReturnToQueueSystem],
 });
 
 // Drops any SHIP's target that has become cloaked. A ship you were
@@ -234,7 +245,7 @@ const TargetRemovedSystem = new System({
 // (it stops homing in ProjectileGuidanceSystem) and resumes on decloak,
 // per observed original-game behavior.
 const CloakedTargetQuery = new Query([UUID, CloakActiveComponent] as const);
-const DropCloakedTargetSystem = new System({
+export const DropCloakedTargetSystem = new System({
     name: 'DropCloakedTarget',
     args: [TargetComponent, ShipComponent, CloakedTargetQuery,
         Optional(CloakScannerComponent)] as const,
@@ -248,7 +259,9 @@ const DropCloakedTargetSystem = new System({
                 return;
             }
         }
-    }
+    },
+    // #237 pin (shared: Target, Ship, CloakActive, CloakScanner).
+    after: [TargetIndexProvider],
 });
 
 /**
@@ -260,7 +273,7 @@ const DropCloakedTargetSystem = new System({
  * lock on the same tick.
  */
 const ExplodingShipsQuery = new Query([UUID, ExplodingComponent] as const);
-const DropExplodingTargetSystem = new System({
+export const DropExplodingTargetSystem = new System({
     name: 'DropExplodingTarget',
     args: [TargetComponent, ExplodingShipsQuery] as const,
     step(target, explodingShips) {
@@ -273,7 +286,9 @@ const DropExplodingTargetSystem = new System({
                 return;
             }
         }
-    }
+    },
+    // #237 pin (shared: TargetComponent).
+    after: [DropCloakedTargetSystem],
 });
 
 export const TargetPlugin: Plugin = {

@@ -14,7 +14,8 @@ import { DisabledComponent } from '../ship/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
 import { GovtComponent } from '../core/index.js';
 import { JumpComponent } from '../travel/index.js';
-import { AssistingComponent, AssistingType } from '../npc/index.js';
+import { AssistingComponent, AssistingType, NpcFireControlSystem } from '../npc/index.js';
+import { NpcRespawnSystem } from '../spawn/index.js';
 import { ArmorComponent, FuelComponent, ShieldComponent } from '../ship/index.js';
 import {
     bribeAmount,
@@ -439,8 +440,10 @@ export const AssistBehaviorSystem = new System({
         }
         entity.components.delete(AssistingComponent);
     },
-    after: [TimeSystem, NpcSteeringSystem],
-    before: [MovementSystem],
+    // NpcFireControlSystem and NpcRespawnSystem are #237 pins (shared: *):
+    // HailPlugin registers between NpcAiPlugin and NpcSpawnPlugin.
+    after: [TimeSystem, NpcSteeringSystem, NpcFireControlSystem],
+    before: [MovementSystem, NpcRespawnSystem],
 });
 
 export const HailPlugin: Plugin = {

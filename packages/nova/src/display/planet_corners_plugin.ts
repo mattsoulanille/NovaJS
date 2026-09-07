@@ -9,11 +9,12 @@ import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js'
 import { AnimationGraphicComponent, ObjectDrawSystem } from './animation_graphic_plugin.js';
 import { Space } from './space_resource.js';
 import { cornersSweepSystem, TargetCorners } from "./target_corners_plugin.js";
+import { BeamDisplaySystem } from "./beam_display_plugin.js";
 
 
 const PlanetCornersResource = new Resource<TargetCorners>('PlanetCornersResource');
 
-const DrawPlanetCornersSystem = new System({
+export const DrawPlanetCornersSystem = new System({
     name: "DrawPlanetCornersSystem",
     args: [PlanetTargetComponent, TimeResource, PlanetCornersResource, Entities,
         PlayerShipSelector] as const,
@@ -37,13 +38,15 @@ const DrawPlanetCornersSystem = new System({
         targetCorners.visible = true;
         targetCorners.drawnThisStep = true;
     },
-    after: [ObjectDrawSystem],
+    // BeamDisplaySystem is a #156 pin (shared: *): PlanetCornersPlugin
+    // registers after BeamDisplayPlugin.
+    after: [ObjectDrawSystem, BeamDisplaySystem],
 });
 
 // Same sweep as the ship corners: the player's entity leaves the display
 // world on landing, so nothing would otherwise take the stellar reticle
 // down (see cornersSweepSystem).
-const SweepPlanetCornersSystem = cornersSweepSystem('SweepPlanetCornersSystem',
+export const SweepPlanetCornersSystem = cornersSweepSystem('SweepPlanetCornersSystem',
     PlanetCornersResource, DrawPlanetCornersSystem);
 
 export const PlanetCornersPlugin: Plugin = {

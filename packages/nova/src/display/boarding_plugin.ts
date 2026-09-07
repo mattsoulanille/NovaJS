@@ -37,6 +37,7 @@ import {
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { Stage } from './stage_resource.js';
+import { SpaceportAmbientSystem } from "./spaceport_plugin.js";
 
 /**
  * How long the plunder dialog is held back waiting for the simulation to
@@ -878,7 +879,7 @@ const BoardingUiResource = new Resource<BoardingUi>('BoardingUi');
 const PlayerBoardingQuery = new Query(
     [PlayerShipSelector, Optional(BoardingComponent),
         Optional(ShipDataComponent), UUID] as const);
-const BoardingUiSystem = new System({
+export const BoardingUiSystem = new System({
     name: 'BoardingUiSystem',
     args: [BoardingUiResource, PlayerBoardingQuery, Entities] as const,
     step(ui, players, entities) {
@@ -896,6 +897,9 @@ const BoardingUiSystem = new System({
                 >= MAX_ESCORTS;
         ui.update(boarding ?? undefined, target, playerCrew, atEscortCap);
     },
+    // #156 pin (shared: *): BoardingDisplayPlugin registers after
+    // SpaceportPlugin.
+    after: [SpaceportAmbientSystem],
 });
 
 export const BoardingDisplayPlugin: Plugin = {

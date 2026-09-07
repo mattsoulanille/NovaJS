@@ -49,7 +49,7 @@ const UiSoundTriggerStateResource =
 // A ship was targeted by any means (tab, click, escort cycle, hail
 // auto-target all write TargetComponent). Runs only for the local player's
 // ship (PlayerShipSelector); a change to a new, non-empty target beeps.
-const TargetShipBeepSystem = new System({
+export const TargetShipBeepSystem = new System({
     name: 'TargetShipBeep',
     args: [TargetComponent, UiSoundTriggerStateResource, Emit,
         PlayerShipSelector] as const,
@@ -75,6 +75,9 @@ const TargetPlanetBeepSystem = new System({
         }
         state.prevPlanetTarget = next;
     },
+    // #156 pin (shared: ShipControl, Emit, UiSoundTriggerState):
+    // UiSoundTriggersPlugin's registration order.
+    after: [TargetShipBeepSystem],
 });
 
 // Your own ship became disabled (DisabledComponent appears). Optional so the
@@ -90,6 +93,8 @@ const DisabledBeepSystem = new System({
         }
         state.disabled = next;
     },
+    // #156 pin (shared: ShipControl, Emit, UiSoundTriggerState).
+    after: [TargetPlanetBeepSystem],
 });
 
 // The moment a jump becomes possible (route selected + outside the no-jump
@@ -119,13 +124,15 @@ const JumpReadyBeepSystem = new System({
         }
         state.jumpReady = next;
     },
+    // #156 pin (shared: Disabled, ShipControl, Emit, UiSoundTriggerState).
+    after: [DisabledBeepSystem],
 });
 
 // A ship turned hostile to you while none was hostile before. Reuses the
 // exact hostility rule the target corners use (styleForTarget), evaluated
 // over every ship in the system, so the cue flips hostile exactly when the
 // corners would.
-const FirstHostileBeepSystem = new System({
+export const FirstHostileBeepSystem = new System({
     name: 'FirstHostileBeep',
     args: [Entities, SimulationGameDataResource, SimulationTimeResource,
         UiSoundTriggerStateResource, UUID, GetEntity, Emit,
@@ -150,6 +157,8 @@ const FirstHostileBeepSystem = new System({
         }
         state.anyHostile = next;
     },
+    // #156 pin (shared: *).
+    after: [JumpReadyBeepSystem],
 });
 
 /** The local player's ship's weapon state, or undefined while docked. */

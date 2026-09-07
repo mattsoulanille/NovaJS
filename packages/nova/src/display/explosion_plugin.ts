@@ -20,7 +20,7 @@ import { ExplosionDataComponent } from "../nova_plugin/core/animation_plugin.js"
 import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
 import { ProjectileExplodeEvent } from "../nova_plugin/combat/projectile_plugin.js";
 import { SoundEvent } from "../nova_plugin/core/sound_plugin.js";
-import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
+import { AnimationGraphicCleanup, AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import { armorFullyRestored, DeathEvent, PlayerDeathSystem, ZeroArmorEvent } from "../nova_plugin/ship/death_plugin.js";
 import { ArmorComponent } from "../nova_plugin/ship/health_plugin.js";
 import { ShipComponent, ShipDataComponent } from "../nova_plugin/ship/ship_plugin.js";
@@ -32,6 +32,9 @@ import {
 } from "../nova_plugin/ship/ship_explosion.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
+import { TrailEmissionSystem } from "./particles_plugin.js";
+import { AsyncSystemCleanup } from "nova_ecs/async_system";
+import { AsyncProviderCleanup } from "nova_ecs/provide_async";
 
 
 const ExplosionState = new Component<{
@@ -86,7 +89,9 @@ const ExplosionSystem = new System({
         if (progress > 1) {
             entities.delete(uuid);
         }
-    }
+    },
+    // #156 pin (shared: *): ExplosionPlugin registers after ParticlesPlugin.
+    after: [TrailEmissionSystem],
 });
 
 /**
@@ -207,7 +212,7 @@ function randomPointInCircle(r: number): Vector {
  * plays the Explode2 bööm's own sound — and the 371 loop stops on the
  * same death that spawns it.
  */
-const SecondaryExplosionSystem = new System({
+export const SecondaryExplosionSystem = new System({
     name: 'SecondaryExplosion',
     args: [SecondaryExplosionComponent, TimeResource, SimulationTimeResource,
         Entities, MovementStateComponent, GetEntity] as const,
@@ -421,7 +426,9 @@ const ShipDeletedFinalExplosionSystem = new System({
         components.delete(ShipDyingComponent);
         spawnFinalExplosion(ship, gameData,
             Position.fromVectorLike(movement.position), entities, emit);
-    }
+    },
+    // #156 pin (shared: *): among the DeleteEvent handlers, after the cleanups.
+    after: [AsyncSystemCleanup, AsyncProviderCleanup, AnimationGraphicCleanup],
 });
 
 /**
@@ -547,7 +554,9 @@ const ShipSecondaryExplosionSystem = new System({
                 spawned: 0,
             },
         });
-    }
+    },
+    // #156 pin (shared: entity, DisplayAssetData).
+    after: [ShipDeathSequenceStartSystem],
 });
 
 const ShipSecondaryExplosionDoneSystem = new System({
@@ -557,7 +566,9 @@ const ShipSecondaryExplosionDoneSystem = new System({
     step(entity) {
         entity.components.delete(SecondaryExplosionComponent);
         entity.components.delete(ShipDyingComponent);
-    }
+    },
+    // #156 pin (shared: *).
+    after: [ShipFinalExplosionSystem],
 });
 
 /**
@@ -595,6 +606,8 @@ const ShipSecondaryExplosionStaleSystem = new System({
         }
     },
     before: [SecondaryExplosionSystem],
+    // #156 pin (shared: *).
+    after: [ExplosionSystem],
 });
 
 // Loops the death sound (snd 371) for the whole duration of the LOCAL
@@ -618,7 +631,9 @@ const PlayerExplosionSoundStartSystem = new System({
             return;
         }
         emit(UiSoundEvent, { id: SOUND_EXPLOSION_LOOP, loop: true });
-    }
+    },
+    // #156 pin (shared: Armor, ShipControl).
+    after: [ShipSecondaryExplosionSystem],
 });
 
 const PlayerExplosionSoundStopSystem = new System({
@@ -627,7 +642,9 @@ const PlayerExplosionSoundStopSystem = new System({
     args: [PlayerShipSelector, Emit] as const,
     step(_player, emit) {
         emit(UiSoundEvent, { id: SOUND_EXPLOSION_LOOP, stop: true });
-    }
+    },
+    // #156 pin (shared: ShipControl).
+    after: [ShipSecondaryExplosionDoneSystem],
 });
 
 /**

@@ -5,6 +5,8 @@ import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js"
 import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { StatusBarResource } from "./status_bar_resource.js";
+import { DrawRadar } from "./status_bar_radar.js";
+import { DrawStatusBarStats } from "./status_bar_gauges.js";
 
 export const StatusBarResize = new System({
     name: 'StatusBarResize',
@@ -86,4 +88,8 @@ export const SelectStatusBarInterface = new System({
             }
         })();
     },
+    // #156 pin (shared: Ship, ShipControl, SimulationGameData, StatusBar):
+    // StatusBarPlugin's registration order.
+    after: [DrawRadar],
+    before: [DrawStatusBarStats],
 });

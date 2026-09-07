@@ -43,7 +43,7 @@ import { AsteroidPlugin } from './asteroid_plugin.js';
 
 export const CombatDomain: Domain = {
     name: 'combat',
-    dependsOn: ['core', 'ncb', 'npc', 'player', 'reputation', 'ship'],
+    dependsOn: ['core', 'ncb', 'npc', 'player', 'reputation', 'ship', 'travel'],
     plugins: [FireWeaponPlugin, ProjectilePlugin, WeaponPlugin, FoldPlugin, JammingPlugin, AggressionPlugin, TargetPlugin, BeamPlugin, BlastPlugin, ShipExplosionPlugin, AsteroidPlugin],
 };
 export const CombatDomainPlugin = domainPlugin(CombatDomain);

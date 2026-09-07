@@ -34,7 +34,10 @@ import { IdFactory, IdFactoryResource } from '../core/index.js';
 import { DecoyTargetComponent } from './jamming_plugin.js';
 import { OutfitsStateComponent } from '../ship/index.js';
 import { ProjectileDataComponent } from '../core/index.js';
-import { ShipPhysicsComponent } from '../ship/index.js';
+import { ShipCargoProvider, ShipPhysicsComponent } from '../ship/index.js';
+import { ControlShipSystem } from '../travel/index.js';
+import { NpcAggressionSystem } from '../npc/index.js';
+import { BlastCollisionSystem } from './blast_plugin.js';
 
 /**
  * The asteroid field is a square of this half-size centered on the
@@ -244,7 +247,9 @@ const AsteroidMotionSystem = new System({
     // delta_s = 0 on a world's very first step but the previous delta
     // on the first step after a wire-baseline restore, so a late
     // joiner's asteroids would drift one extra step out of lockstep.
-    after: [TimeSystem],
+    // ShipCargoProvider is a #237 pin (shared: Asteroid, MovementState):
+    // AsteroidPlugin registers last of all.
+    after: [TimeSystem, ShipCargoProvider],
     before: [UpdateHitboxHullSystem, UpdateHurtboxHullSystem],
 });
 
@@ -263,7 +268,8 @@ const DebrisMotionSystem = new System({
     },
     // See AsteroidMotionSystem: after TimeSystem is load-bearing for
     // late-join determinism.
-    after: [TimeSystem],
+    // AsteroidMotionSystem is a #237 pin (shared: *).
+    after: [TimeSystem, AsteroidMotionSystem],
     before: [UpdateHitboxHullSystem, UpdateHurtboxHullSystem],
 });
 
@@ -527,7 +533,11 @@ const AsteroidRespawnSystem = new System({
     },
     // Determinism rule 4: the respawn timer compares against time.time,
     // so this must run after TimeSystem advances the clock.
-    after: [TimeSystem],
+    // DebrisMotionSystem is a #237 pin (shared: *).
+    after: [TimeSystem, DebrisMotionSystem],
+    // #237 pin (shared: *): before travel's player ship control, the
+    // first of the systems that MovementSystem drags to the end.
+    before: [ControlShipSystem],
 });
 
 const DamagerQuery = new Query([Optional(ProjectileDataComponent),
@@ -634,6 +644,9 @@ const AsteroidDamageSystem = new System({
             radius: asteroidRadius(gameData, data),
         });
     },
+    // #237 pin (shared: *): among the DamagedEvent handlers, after npc's
+    // aggression record.
+    after: [NpcAggressionSystem],
 });
 
 /**
@@ -669,6 +682,9 @@ const ScoopSystem = new System({
         cargo.set(debris.commodity, (cargo.get(debris.commodity) ?? 0) + 1);
         entities.delete(collision.other);
     },
+    // #237 pin (shared: *): among the CollisionEvent handlers, after
+    // blast's.
+    after: [BlastCollisionSystem],
 });
 
 function deriveAsteroidData(gameData: SimulationGameDataInterface,

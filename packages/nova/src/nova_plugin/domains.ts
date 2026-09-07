@@ -17,6 +17,8 @@ import { PilotDomain } from './pilot/index.js';
  * Every domain under nova_plugin/, lowest first: each entry's
  * `dependsOn` names only earlier entries. domain_graph_test checks
  * that this list, the directories on disk and the import graph agree.
+ * SystemPlugin registers the domains in this order; the system order
+ * does not depend on it (see Domain).
  *
  * The files that stay at nova_plugin/'s root (this one, system_plugin,
  * make_system, snapshot_policies, server_plugin, nova_plugin) are the

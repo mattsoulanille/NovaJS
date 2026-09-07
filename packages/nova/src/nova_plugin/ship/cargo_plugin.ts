@@ -40,7 +40,7 @@ export function cargoUsed(cargo: Cargo): number {
     return used;
 }
 
-const ShipCargoProvider = Provide({
+export const ShipCargoProvider = Provide({
     name: "ShipCargoProvider",
     provided: CargoComponent,
     args: [ShipComponent] as const,
