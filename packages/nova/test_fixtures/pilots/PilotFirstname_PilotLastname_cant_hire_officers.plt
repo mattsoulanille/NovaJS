@@ -1,10 +1,10 @@
 {
   "format": "novajs-pilot",
   "version": 1,
-  "name": "Shane Merrol",
+  "name": "PilotFirstname PilotLastname",
   "profile": {
-    "name": "Shane Merrol",
-    "nickname": "Hawkeye",
+    "name": "PilotFirstname PilotLastname",
+    "nickname": "PilotNickname",
     "gender": "male",
     "strict": false,
     "shipNumber": 552

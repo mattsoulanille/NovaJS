@@ -353,8 +353,8 @@ describe('save_migrations real pilot files', () => {
         ['title/fixtures PILOT_FILE_WITH_ESCORT', PILOT_FILE_WITH_ESCORT],
     ];
     // Jasmine runs with cwd = packages/nova (see nova_data_gate.ts).
-    for (const name of ['Shane_Merrol_cant_hire_officers.plt',
-        'Shane_Merrol_misisons_bug.plt']) {
+    for (const name of ['PilotFirstname_PilotLastname_cant_hire_officers.plt',
+        'PilotFirstname_PilotLastname_misisons_bug.plt']) {
         files.push([`test_fixtures/pilots/${name}`, JSON.parse(fs.readFileSync(
             path.join(process.cwd(), 'test_fixtures', 'pilots', name), 'utf8'))]);
     }

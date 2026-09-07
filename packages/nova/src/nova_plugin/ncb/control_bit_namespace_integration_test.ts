@@ -189,7 +189,7 @@ describe('Control bit namespacing across real plug-ins', () => {
 describe('Legacy pilot file under the namespaced plug-in set', () => {
     // Jasmine runs with cwd = packages/nova (see nova_data_gate.ts).
     const PILOT = path.join(process.cwd(), 'test_fixtures', 'pilots',
-        'Shane_Merrol_misisons_bug.plt');
+        'PilotFirstname_PilotLastname_misisons_bug.plt');
     const PLUGINS = ['arpia', 'extra-outfits', 'singularity', 'Planet Rico'];
 
     async function bench() {

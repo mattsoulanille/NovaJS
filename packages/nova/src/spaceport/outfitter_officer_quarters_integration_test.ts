@@ -170,9 +170,9 @@ describe('Extra Outfits Officer Quarters against real plug-in data', () => {
  * Matthew's actual pilot file from the report, as a fixture: its save
  * must load and round-trip idempotently under a namespaced build.
  */
-describe('Pilot file Shane_Merrol_cant_hire_officers.plt', () => {
+describe('Pilot file PilotFirstname_PilotLastname_cant_hire_officers.plt', () => {
     const FIXTURE = path.join(process.cwd(), 'test_fixtures', 'pilots',
-        'Shane_Merrol_cant_hire_officers.plt');
+        'PilotFirstname_PilotLastname_cant_hire_officers.plt');
     const PLUGINS = ['arpia', 'extra-outfits', 'singularity', 'Planet Rico'];
 
     it('is save->load->save idempotent, and loses no bit from either field',
