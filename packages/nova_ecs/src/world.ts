@@ -450,6 +450,16 @@ export class World {
     }
 
     /**
+     * Every system and marker registered so far, in registration
+     * order, with their declared edges: the input the system order is
+     * computed from. For order tooling (`reportAmbiguities`,
+     * reachability specs); not for stepping.
+     */
+    get registeredSortables(): readonly Sortable[] {
+        return this.registered;
+    }
+
+    /**
      * Add a `Marker` to the world.
      *
      * `Marker`s can be placed in the `before` and `after` fields of Systems

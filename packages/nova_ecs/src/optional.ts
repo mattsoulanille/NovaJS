@@ -11,6 +11,7 @@ export function Optional<V extends ArgTypes>(value: V):
         // is cached, so the wrapped arg's components are part of the
         // enclosing query's staleness set.
         extraComponents: referencedComponentsOfArg(value),
+        reaches: [value],
         transform: (getArg) => {
             const result = getArg(value);
             if (isRight(result)) {
