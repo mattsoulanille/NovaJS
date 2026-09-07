@@ -13,10 +13,12 @@ import { DeltaFrameEncoder, SimulationFrame, SimulationFrameType } from './simul
 import { WireTick } from './simulation_input.js';
 import { avroWireCodec, decodeWireOrThrow, jsonWireCodec } from './wire_codec.js';
 import {
-    communicatorMessageDerivation, novaCodecHooks, rollbackProtocolDerivation,
-    RollbackEnvelopeType, roomMessageDerivation, simulationFrameDerivation,
-    socketMessageDerivation,
+    communicatorMessageDerivation, liveWireCodec, liveWireFingerprint, novaCodecHooks,
+    rollbackProtocolDerivation, RollbackEnvelopeType, roomMessageDerivation,
+    simulationFrameDerivation, socketMessageDerivation, wireMessageDerivation,
+    WireMessageType,
 } from './wire_schemas.js';
+import { MessageType } from './communicator_message.js';
 
 /** Encode with avro, decode, validate with the codec: what a receiver sees. */
 function roundTrip(codec: t.Any, value: unknown, options: DerivationOptions = {}): unknown {
@@ -327,13 +329,64 @@ describe('io-ts to Avro derivation', () => {
 
     describe('over the real wire codecs', () => {
         it('types every envelope but the payload it carries', () => {
-            // The socket, communicator and room layers each wrap an
-            // untyped `message`: a schema'd wire format needs the
-            // payload typed by its own codec, not the envelope.
+            // The socket, communicator and room layers each gate their
+            // own envelope with an untyped `message` (the runtime
+            // codecs); the payload is typed by threading its codec
+            // through, below.
             expect(summarize(socketMessageDerivation().failures)).toEqual(['untyped $.message']);
             expect(summarize(communicatorMessageDerivation().failures))
                 .toEqual(['untyped $<1>.message']);
             expect(summarize(roomMessageDerivation().failures)).toEqual(['untyped $.message']);
+        });
+
+        it('the live wire schema types the envelopes end to end', () => {
+            // What is left opaque is exactly the rollback protocol's
+            // own t.unknown nodes, plus the component lists (the socket
+            // has no serializer; see wireMessageDerivation).
+            const { failures } = wireMessageDerivation();
+            expect(summarize(failures)).toEqual([
+                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.entities[].components[][1]',
+                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.resources[]',
+                'untyped $.message<1>.message.message.rollback<catchUp>.baseline.snapshot.singleton[][1]',
+                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.mission',
+                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.missionsStarted[][1]',
+                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<acceptMission>.accepted.ships[].entity',
+                'untyped $.message<1>.message.message.rollback<inputs>.record.inputs[]<addEntity>.entity.components[][1]',
+            ]);
+            expect(liveWireCodec().encoding).toBe('avro');
+            expect(liveWireFingerprint()).toMatch(/^[0-9a-f]{16}$/);
+        });
+
+        it('round-trips every envelope shape the socket sends through the live codec', () => {
+            const codec = liveWireCodec();
+            const messages: t.TypeOf<typeof WireMessageType>[] = [
+                { ping: true },
+                { pong: true },
+                { message: { type: MessageType.uuid, uuid: 'u' } },
+                { message: { type: MessageType.peers, peers: new Set(['a', 'b']) } },
+                { message: { type: MessageType.message, source: 'server', message: { room: 'r', peers: new Set(['a']) } } },
+                { message: { type: MessageType.message, destination: 'server', message: { room: 'r', inRoom: true } } },
+                { message: { type: MessageType.message, destination: new Set(['x', 'y']), message: { room: 'r', getPeers: true } } },
+                {
+                    message: {
+                        type: MessageType.message, destination: 'server', message: {
+                            room: 'r', message: { rollback: { kind: 'inputs', record: { tick: 3, seq: 1, inputs: [{ kind: 'analogControl', heading: -0, throttle: NaN }] } } },
+                        },
+                    },
+                },
+                {
+                    message: {
+                        type: MessageType.message, source: 'server', message: {
+                            room: 'r', message: { rollback: { kind: 'joinRefused', reason: 'no' } },
+                        },
+                    },
+                },
+            ];
+            for (const message of messages) {
+                const bytes = codec.encode(WireMessageType.encode(message));
+                const back = decodeWireOrThrow(codec, WireMessageType, bytes);
+                expect(back).withContext(JSON.stringify(WireMessageType.encode(message))).toEqual(message);
+            }
         });
 
         it('leaves exactly the t.unknown nodes of the rollback protocol opaque', () => {

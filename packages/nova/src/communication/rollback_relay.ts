@@ -3,6 +3,7 @@ import { Subscription } from "rxjs";
 import { warnThrottled } from "../common/log_throttle.js";
 import { SIMULATION_STEP_MS } from "../nova_plugin/make_system.js";
 import { ArchiveBaseline, canonicalDesyncHash, DesyncDump, InputRecord, PROTOCOL_VERSION, STATE_HASH_INTERVAL, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
+import { liveWireFingerprint } from "./wire_schemas.js";
 
 /** Everything the relay knows about a convicted desync, for the
  * incident recorder. */
@@ -397,6 +398,22 @@ export class RollbackRelay {
             case 'joinRequest': {
                 const protocol = message.protocol ?? 0;
                 this.peerProtocols.set(source, protocol);
+                // THE SCHEMA GATE. A peer whose wire schema fingerprint
+                // differs from this build's encodes every frame
+                // differently; the build handshake should have refused
+                // it at the socket, and this is the room-level check
+                // behind that: refuse the join with the reason rather
+                // than serve a baseline it will misread.
+                const schema = liveWireFingerprint();
+                if (message.schema !== undefined && schema !== undefined
+                    && message.schema !== schema) {
+                    const reason = `wire schema mismatch: peer ${message.schema}, `
+                        + `server ${schema} (protocol ${PROTOCOL_VERSION})`;
+                    console.warn(`Refusing join of ${source}: ${reason}`);
+                    this.room.sendMessage(wrapRollbackMessage(
+                        { kind: 'joinRefused', reason }), source);
+                    break;
+                }
                 if (protocol !== PROTOCOL_VERSION) {
                     // A version-mismatched peer WILL desync no matter
                     // how healthy the netcode is. Loud, and stamped

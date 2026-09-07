@@ -4,6 +4,7 @@ import { resetWarnThrottle } from '../common/log_throttle.js';
 import { RollbackRelay } from './rollback_relay.js';
 import { canonicalDesyncHash, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { SimulationInput } from './simulation_input.js';
+import { liveWireFingerprint } from './wire_schemas.js';
 
 const CONTROL: SimulationInput[] = [
     { kind: 'control', events: [{ action: 'accelerate', state: 'start' }] },
@@ -148,6 +149,31 @@ describe('RollbackRelay', () => {
             && plainReply.baseline?.tick).toBe(60);
         expect(plainReply?.kind === 'catchUp'
             && plainReply.records.map(r => r.tick)).toEqual([100, 250, 350]);
+    });
+
+    it('refuses a join whose wire schema fingerprint differs, and serves one that matches', () => {
+        const warn = spyOn(console, 'warn');
+        peerB.allMessages.length = 0;
+        peerB.sendMessage(wrapRollbackMessage({
+            kind: 'joinRequest', schema: '0000000000000000',
+        }) as never, 'server');
+        const refusal = received(peerB).find(m => m.kind === 'joinRefused');
+        expect(refusal?.kind === 'joinRefused' && refusal.reason)
+            .toMatch(/wire schema mismatch: peer 0000000000000000, server [0-9a-f]{16}/);
+        expect(received(peerB).some(m => m.kind === 'catchUp')).toBeFalse();
+        expect(warn).toHaveBeenCalledWith(jasmine.stringMatching(/Refusing join of b/));
+
+        peerB.allMessages.length = 0;
+        peerB.sendMessage(wrapRollbackMessage({
+            kind: 'joinRequest', schema: liveWireFingerprint(),
+        }) as never, 'server');
+        expect(received(peerB).some(m => m.kind === 'catchUp')).toBeTrue();
+        expect(received(peerB).some(m => m.kind === 'joinRefused')).toBeFalse();
+        // A joiner that sends no fingerprint (an unschema'd wire) is
+        // served: the check is a comparison, not a requirement.
+        peerB.allMessages.length = 0;
+        peerB.sendMessage(wrapRollbackMessage({ kind: 'joinRequest' }) as never, 'server');
+        expect(received(peerB).some(m => m.kind === 'catchUp')).toBeTrue();
     });
 
     it('serves the input log from a tick to late joiners', () => {

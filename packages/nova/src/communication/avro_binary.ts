@@ -597,7 +597,7 @@ class Compiler {
         };
     }
 
-    private kindUnion(schema: AvroSchemaNode): Codec {
+    private kindUnion(schema: AvroSchemaNode): UnionCodec {
         const discriminator = schema.discriminator!;
         const branchSchemas = schema.type as AvroSchema[];
         const branches = branchSchemas.map(branch => this.compile(branch));
@@ -619,6 +619,8 @@ class Compiler {
         }
         return {
             bucket: 'object',
+            branches,
+            nullIndex,
             write: (value, out) => {
                 if (value === null || value === undefined) {
                     if (nullIndex < 0) {

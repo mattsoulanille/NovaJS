@@ -2,6 +2,7 @@ import { Communicator } from "nova_ecs/plugins/multiplayer_plugin";
 import { Subscription } from "rxjs";
 import { warnThrottled } from "../common/log_throttle.js";
 import { InputRecord, PROTOCOL_VERSION, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from "./rollback_protocol.js";
+import { liveWireFingerprint } from "./wire_schemas.js";
 
 /**
  * The bridge host's side of the rollback protocol transport: which
@@ -81,7 +82,9 @@ export type CatchUpMessage = Extract<RollbackProtocolMessage, { kind: 'catchUp' 
  * it has one), retrying until it answers or `timeoutMs` passes.
  * `onCatchUp` runs synchronously on the reply, before the returned
  * promise settles, so the caller's bookkeeping happens ahead of any
- * microtask that could observe the reply.
+ * microtask that could observe the reply. A `joinRefused` (the relay's
+ * wire schema differs) ends the attempt at once, with the reason
+ * logged: retrying would be refused again.
  */
 export function requestCatchUp(
     communicator: Communicator,
@@ -102,6 +105,12 @@ export function requestCatchUp(
                 subscription.unsubscribe();
                 onCatchUp(rollbackMessage);
                 resolve(rollbackMessage);
+            } else if (rollbackMessage?.kind === 'joinRefused') {
+                clearInterval(retry);
+                clearTimeout(timeout);
+                subscription.unsubscribe();
+                console.error(`The relay refused the join: ${rollbackMessage.reason}`);
+                resolve(undefined);
             }
         });
         const request = () => {
@@ -111,10 +120,12 @@ export function requestCatchUp(
                 // tail over a fresh baseline is just the transit
                 // window, so recovery costs ~200ms instead of the
                 // 1-2s rebuild of an up-to-30s-old baseline's tail.
+                const schema = liveWireFingerprint();
                 communicator.sendMessage(wrapRollbackMessage({
                     kind: 'joinRequest',
                     protocol: PROTOCOL_VERSION,
                     ...(fresh ? { fresh } : {}),
+                    ...(schema !== undefined ? { schema } : {}),
                 }), server);
             }
         };
