@@ -790,8 +790,19 @@ export class Outfitter extends Menu<Entity> {
      * grants here intentionally bypass the purchase checks.
      */
     private runSetString(expression: string, resourcePrefix = 'nova') {
+        if (!expression) {
+            return;
+        }
         const session = this.missionSession;
-        if (!expression || !session) {
+        if (!session) {
+            // Unreachable while the shop is open: show() refuses the visit
+            // when no transaction can be opened (the landing's, or one of
+            // this shop's own), so no purchase can happen whose set string
+            // has nowhere to run — there is no bit-only fallback to fall
+            // to any more. If it is ever reached, say so rather than drop
+            // a purchase's effects on the floor.
+            console.warn(`Outfit set string "${expression}" dropped: the `
+                + 'outfitter has no landing transaction to run it in.');
             return;
         }
         // Buying/selling a freeCargo outfit changes the hold; refresh

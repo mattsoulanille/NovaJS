@@ -601,4 +601,78 @@ describe('the seams between landed venues', () => {
                         .toBe(10);
                 });
         });
+
+    // ── The transaction's edges, through the real spaceport ───────────
+
+    describe('a landing whose transaction cannot open', () => {
+        // The outfitter's bit-only no-session fallback is gone (tracker
+        // #247 asks for the player-facing message). What must hold in its
+        // place: no venue that runs set strings opens without a
+        // transaction to run them in — so a purchase's OnPurchase can
+        // never be dropped on the floor — and the ship lifts off exactly
+        // as it landed.
+        it('opens no outfitter, says why, and lifts off with the ship as it '
+            + 'landed', async () => {
+                const warn = spyOn(console, 'warn');
+                spyOn(MissionUniverse.prototype, 'load')
+                    .and.rejectWith(new Error('the fetch storm lost'));
+                const controlEvents = new Subject<ControlEvent>();
+                const spaceport = new Spaceport(displayAssets(),
+                    gameData({ hasOutfitter: true }), PLANET_ID, controlEvents);
+                await spaceport.buildPromise;
+                const entity = landedPilot(100_000);
+                entity.components.get(ControlBitsComponent)!.add(4000);
+                const dockedShip = new DockedShip(entity, () => { });
+                spaceport.setDockedShip(dockedShip);
+                const departed = spaceport.show(entity);
+                await waitFor(() => spaceport.onMainScreen, 'the spaceport opened');
+                expect(dockedShip.transaction).toBeUndefined();
+                expect(warn.calls.allArgs().map(args => args[0]))
+                    .toContain('Landing transaction failed to open:');
+
+                const outfitter = (spaceport as unknown as
+                    { outfitter: Outfitter }).outfitter;
+                controlEvents.next({ action: 'outfitter', state: 'start' });
+                await settle();
+                // The shop tried a transaction of its own, could not, and
+                // refused the visit: never shown, no savepoint, and the
+                // spaceport has its keys back.
+                expect(outfitter.container.visible).toBe(false);
+                expect((outfitter as unknown as { visit?: unknown }).visit)
+                    .toBeUndefined();
+                expect(warn.calls.allArgs().map(args => args[0]))
+                    .toContain('Outfitter mission session unavailable:');
+                expect(spaceport.onMainScreen).toBe(true);
+                expect(MenuControls.focused)
+                    .toBe((spaceport as unknown as
+                        { controls: MenuControls }).controls);
+
+                controlEvents.next({ action: 'depart', state: 'start' });
+                expect(await departed).toBe(entity);
+                expect(creditBalance(entity)).toBe(100_000);
+                expect(entity.components.get(OutfitsStateComponent)!.size)
+                    .toBe(0);
+                expect([...entity.components.get(ControlBitsComponent)!])
+                    .toEqual([4000]);
+            });
+
+        it('runs an outfit\'s set string only through a transaction: '
+            + 'without one the string is refused aloud, not run bit-only',
+            async () => {
+                // The branch show() makes unreachable, pinned directly so a
+                // future caller that reaches it cannot be silent.
+                const outfitter = new Outfitter(displayAssets(),
+                    gameData({ hasOutfitter: true }),
+                    new Subject<ControlEvent>());
+                await outfitter.buildPromise;
+                const warn = spyOn(console, 'warn');
+                (outfitter as unknown as {
+                    runSetString(expression: string): void,
+                }).runSetString('b4000');
+                expect(warn).toHaveBeenCalledTimes(1);
+                expect(warn.calls.mostRecent().args[0])
+                    .toContain('Outfit set string "b4000" dropped');
+            });
+    });
+
 });
