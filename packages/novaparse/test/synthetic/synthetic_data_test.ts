@@ -10,8 +10,9 @@ import {
 import { buildSyntheticResources } from "../../src/synthetic/resources.js";
 import { SPRITE_GEOMETRY } from "../../src/synthetic/art.js";
 import {
-    BITS, CHARS, CLOAK_MODVAL, DUDES, FLETS, GOVTS, MISNS, OUTFS, RANKS, RLED,
-    SHIPS, sid, SPOBS, STRN, SYNTHETIC, SYST, SYSTS, WEAPS,
+    AVAIL_LOC, BITS, CHARS, CLOAK_MODVAL, DIALOG_PICT_SIZES, DUDES, FLETS, GOVTS,
+    JUNKS, MISNS, OUTFS, PERSONS, RANKS, RLED, SHIPS, sid, SPOBS, STRN, SYNTHETIC,
+    SYST, SYSTS, VEIL_MODVAL, WEAPS,
 } from "../../src/synthetic/universe.js";
 
 /**
@@ -96,6 +97,8 @@ describe("the synthetic Nova data set", () => {
                 expect(sorted(ids.Fleet)).toEqual(sorted(FLETS.map(f => sid(f.id))));
                 expect(sorted(ids.Mission)).toEqual(sorted(MISNS.map(m => sid(m.id))));
                 expect(sorted(ids.Rank)).toEqual(sorted(RANKS.map(r => sid(r.id))));
+                expect(sorted(ids.Pers)).toEqual(sorted(PERSONS.map(p => sid(p.id))));
+                expect(sorted(ids.Junk)).toEqual(sorted(JUNKS.map(j => sid(j.id))));
                 expect(ids.PlayerStart).toEqual(CHARS.map(c => sid(c.id)));
                 // The fixtures that take "the sorted-first system/ship".
                 expect([...ids.System].sort()[0]).toEqual(SYNTHETIC.systems.thessaly);
@@ -284,7 +287,7 @@ describe("the synthetic Nova data set", () => {
                 expect(outfit.max).toEqual(def.max);
                 expect(outfit.physics.freeMass).toEqual(def.mass);
                 expect(outfit.pict).toEqual(sid(def.id - 128 + 6000));
-                expect(outfit.buyRandom).toEqual(100);
+                expect(outfit.buyRandom).toEqual(def.availableRandom);
             }
             const cloak = await novaParse.data.Outfit.get(SYNTHETIC.outfits.cloak);
             expect(cloak.cloak.isCloak).toBeTrue();
@@ -391,6 +394,247 @@ describe("the synthetic Nova data set", () => {
             const misc = await novaParse.data.StringTable.get(sid(STRN.misc));
             expect(misc.strings.length).toEqual(360);
             expect(misc.strings[358]).toEqual("Postings");
+        });
+
+        it("has persons bound to a system, to anywhere, and to a govt range, "
+            + "with quotes, a hail-gated one and two mission carriers", async () => {
+                for (const def of PERSONS) {
+                    const person = await novaParse.data.Pers.get(sid(def.id));
+                    expect(person.name).toEqual(def.name);
+                    expect(person.subtitle).toEqual(def.subtitle);
+                    expect(person.ship).toEqual(sid(def.ship));
+                    expect(person.govt).toEqual(def.govt >= 128 ? sid(def.govt) : null);
+                    expect(person.aiType).toEqual(def.aiType);
+                    expect(person.activeOn).toEqual(def.activeOn);
+                    expect(person.linkMission)
+                        .toEqual(def.linkMission >= 128 ? sid(def.linkMission) : null);
+                }
+                const lask = await novaParse.data.Pers.get(SYNTHETIC.persons.lask);
+                expect(lask.linkSyst).toEqual({ type: "system", id: SYNTHETIC.systems.kestrel });
+                expect(lask.flags.keepsGrudge).toBeTrue();
+                expect(lask.weapons).toEqual([{ id: SYNTHETIC.weapons.missile, count: 1, ammo: 4 }]);
+                expect(lask.shieldMod).toEqual(130);
+                expect(lask.commQuote).toEqual("You are in Verge water, courier. Turn around.");
+                expect(lask.hailQuote).toEqual("<OSN>: The Night-Warden sees you.");
+                const pell = await novaParse.data.Pers.get(SYNTHETIC.persons.pell);
+                expect(pell.linkSyst).toEqual({ type: "any" });
+                expect(pell.flags.hailOnlyWhenLikesPlayer).toBeTrue();
+                const vey = await novaParse.data.Pers.get(SYNTHETIC.persons.vey);
+                expect(vey.linkSyst)
+                    .toEqual({ type: "notGovtSystems", govt: SYNTHETIC.govts.meridian });
+                expect(vey.activeOn).toEqual(`!b${BITS.courierDone}`);
+                const stranded = await novaParse.data.Pers.get(SYNTHETIC.persons.stranded);
+                expect(stranded.flags.replaceWithSpecialShip).toBeTrue();
+                expect(stranded.linkMission).toEqual(SYNTHETIC.missions.rescue);
+                expect(stranded.hailQuote).toEqual("<OSN>: I need assistance, can you help?");
+                const wreck = await novaParse.data.Pers.get(SYNTHETIC.persons.wreck);
+                expect(wreck.flags.offerMissionOnBoarding).toBeTrue();
+                expect(wreck.govt).toEqual(SYNTHETIC.govts.wrecks);
+
+                // The sÿst Person lists: two in the starting system, an
+                // empty one in Vael Hollow.
+                const thessaly = await novaParse.data.System.get(SYNTHETIC.systems.thessaly);
+                expect(thessaly.persons).toEqual([
+                    { id: SYNTHETIC.persons.pell, chance: 30 },
+                    { id: SYNTHETIC.persons.stranded, chance: 10 },
+                ]);
+                const vael = await novaParse.data.System.get(SYNTHETIC.systems.vael);
+                expect(vael.persons).toEqual([]);
+            });
+
+        it("has two jünk commodities traded between the port and the refuge",
+            async () => {
+                const resin = await novaParse.data.Junk.get(SYNTHETIC.junk.resin);
+                expect(resin.name).toEqual("Amber Resin");
+                expect(resin.soldAt).toEqual([SYNTHETIC.planets.port]);
+                expect(resin.boughtAt).toEqual([SYNTHETIC.planets.refuge]);
+                expect(resin.basePrice).toEqual(800);
+                expect(resin.decays).toBeFalse();
+                expect(resin.abbrev).toEqual("Resin");
+                const alloy = await novaParse.data.Junk.get(SYNTHETIC.junk.alloy);
+                expect(alloy.soldAt).toEqual([SYNTHETIC.planets.refuge]);
+                expect(alloy.boughtAt)
+                    .toEqual([SYNTHETIC.planets.port, SYNTHETIC.planets.coldharbour]);
+                expect(alloy.decays).toBeTrue();
+                expect(alloy.buyOn).toEqual(`b${BITS.surveyAccepted}`);
+                expect(alloy.lcName).toEqual("gate alloy");
+            });
+
+        it("has a link-less wormhole pair, a MinStatus-0 world, an unlandable "
+            + "giant and a rock beside a gate", async () => {
+                for (const id of [SYNTHETIC.planets.ossoryRift, SYNTHETIC.planets.vaelRift]) {
+                    const rift = await novaParse.data.Planet.get(id);
+                    expect(rift.gate).toEqual({
+                        kind: "wormhole", destinations: [], emergenceAngle: null,
+                    });
+                    expect(rift.flags.canLand).toBeTrue();
+                    expect(rift.flags.uninhabited).toBeTrue();
+                }
+                const ossory = await novaParse.data.System.get(SYNTHETIC.systems.ossory);
+                expect(ossory.planets)
+                    .toEqual([SYNTHETIC.planets.refuge, SYNTHETIC.planets.ossoryRift]);
+
+                const cold = await novaParse.data.Planet.get(SYNTHETIC.planets.coldharbour);
+                expect(cold.minStatus).toEqual(0);
+                expect(cold.govt).toEqual(SYNTHETIC.govts.compact);
+                expect(cold.flags).toEqual(jasmine.objectContaining({
+                    canLand: true, isStation: false, uninhabited: false,
+                    hasCommodityExchange: true, hasBar: true, hasOutfitter: false,
+                }));
+                expect(cold.barDesc).toContain("{G ");
+                expect(cold.barDesc).toContain(`{b${BITS.surveyAccepted} `);
+                const giant = await novaParse.data.Planet.get(SYNTHETIC.planets.giant);
+                expect(giant.flags.canLand).toBeFalse();
+                const thessaly = await novaParse.data.System.get(SYNTHETIC.systems.thessaly);
+                // The port and the moon are still the first two stellars.
+                expect(thessaly.planets.slice(0, 2))
+                    .toEqual([SYNTHETIC.planets.port, SYNTHETIC.planets.moon]);
+                expect(thessaly.planets.length).toEqual(4);
+                const rock = await novaParse.data.Planet.get(SYNTHETIC.planets.kestrelRock);
+                expect(rock.flags.canLand).toBeTrue();
+                expect(rock.gate).toBeNull();
+                const kestrel = await novaParse.data.System.get(SYNTHETIC.systems.kestrel);
+                expect(kestrel.planets)
+                    .toEqual([SYNTHETIC.planets.kestrelGate, SYNTHETIC.planets.kestrelRock]);
+            });
+
+        it("has an allied, bribable, strongly jamming govt and a derelict one",
+            async () => {
+                const compact = await novaParse.data.Govt.get(SYNTHETIC.govts.compact);
+                expect(compact.allies).toEqual([1]);
+                expect(compact.enemies).toEqual([]);
+                expect(compact.flags.largerBribes).toBeTrue();
+                expect(compact.flags.planetsTakeBribes).toBeTrue();
+                expect(compact.inhJam).toEqual([50, 50, 35, 20]);
+                const raiders = await novaParse.data.Govt.get(SYNTHETIC.govts.raiders);
+                expect(raiders.inhJam).toEqual([7, 5, 0, 0]);
+                const meridian = await novaParse.data.Govt.get(SYNTHETIC.govts.meridian);
+                expect(meridian.inhJam).toEqual([0, 0, 0, 0]);
+                expect(meridian.flags.largerBribes).toBeFalse();
+                const wrecks = await novaParse.data.Govt.get(SYNTHETIC.govts.wrecks);
+                expect(wrecks.flags.startsDisabled).toBeTrue();
+                expect(wrecks.allies).toEqual([]);
+                expect(wrecks.enemies).toEqual([]);
+            });
+
+        it("has the off-traffic hulls, the rule weapons and the flagged outfits",
+            async () => {
+                const ghost = await novaParse.data.Ship.get(SYNTHETIC.ships.ghost);
+                expect(ghost.outfits[SYNTHETIC.outfits.veil]).toEqual(1);
+                expect(ghost.outfits[SYNTHETIC.outfits.irBaffler]).toEqual(1);
+                expect(ghost.outfits[SYNTHETIC.outfits.radarBaffler]).toEqual(1);
+                expect(ghost.vulnerableTo).toEqual(["normal"]);
+                expect(ghost.appearOn).toEqual(`b${BITS.surveyAccepted}`);
+                const hulk = await novaParse.data.Ship.get(SYNTHETIC.ships.hulk);
+                expect(hulk.physics.mass).toEqual(10000);
+                expect(hulk.inherentAI).toEqual(2);
+                expect(hulk.appearOn).toEqual(`!b${BITS.surveyAccepted}`);
+                const mote = await novaParse.data.Ship.get(SYNTHETIC.ships.mote);
+                expect(mote.physics.mass).toEqual(10);
+                expect(mote.appearOn).toEqual("");
+                // No system's traffic carries them.
+                for (const def of SYSTS) {
+                    const system = await novaParse.data.System.get(sid(def.id));
+                    for (const { id } of system.dudes) {
+                        const dude = await novaParse.data.Dude.get(id);
+                        for (const ship of dude.ships) {
+                            expect([SYNTHETIC.ships.ghost, SYNTHETIC.ships.hulk,
+                                SYNTHETIC.ships.mote]).not.toContain(ship.id);
+                        }
+                    }
+                }
+                const variants = await novaParse.data.Dude.get(SYNTHETIC.dudes.variants);
+                expect(variants.ships.map(s => s.id)).toEqual(
+                    [SYNTHETIC.ships.ghost, SYNTHETIC.ships.hulk, SYNTHETIC.ships.mote]);
+
+                const arc = await novaParse.data.Weapon.get(SYNTHETIC.weapons.arcTurret);
+                expect(arc.type === "BeamWeaponData" && arc.guidance).toEqual("beamTurret");
+                const needle = await novaParse.data.Weapon.get(SYNTHETIC.weapons.needleBeam);
+                expect(needle.type === "BeamWeaponData" && needle.guidance).toEqual("beam");
+                expect(needle.reload).toEqual(0);
+                expect(needle.accuracy).toEqual(5);
+                const wide = await novaParse.data.Weapon.get(SYNTHETIC.weapons.wideLance);
+                // Fifteen frames against the needle's one, whatever the unit.
+                if (needle.type === "BeamWeaponData" && wide.type === "BeamWeaponData") {
+                    expect(wide.shotDuration).toBeCloseTo(needle.shotDuration * 15, 6);
+                } else {
+                    fail("the Needle Beam and the Wide Lance are beams");
+                }
+                const chaser = await novaParse.data.Weapon.get(SYNTHETIC.weapons.bowChaser);
+                expect(chaser.type === "ProjectileWeaponData" && chaser.guidance)
+                    .toEqual("frontQuadrant");
+                const ghostBay = await novaParse.data.Weapon.get(SYNTHETIC.weapons.ghostBay);
+                expect(ghostBay.type === "BayWeaponData" && ghostBay.shipID)
+                    .toEqual(SYNTHETIC.ships.ghost);
+
+                const veil = await novaParse.data.Outfit.get(SYNTHETIC.outfits.veil);
+                expect(veil.cloak.rawModVal).toEqual(VEIL_MODVAL);
+                expect(veil.cloak.hidesFromRadar).toBeFalse();
+                expect(veil.cloak.shieldPerSecond).toEqual(4);
+                expect(veil.cloak.deactivatesWhenHit).toBeTrue();
+                const ir = await novaParse.data.Outfit.get(SYNTHETIC.outfits.irBaffler);
+                expect(ir.jamming).toEqual([20, 0, 0, 0]);
+                const radar = await novaParse.data.Outfit.get(SYNTHETIC.outfits.radarBaffler);
+                expect(radar.jamming).toEqual([0, 15, 0, 0]);
+                const seal = await novaParse.data.Outfit.get(SYNTHETIC.outfits.warrantSeal);
+                expect(BigInt(seal.require)).toEqual(1n << BigInt(BITS.warrantHolder));
+                expect(BigInt(seal.contribute)).toEqual(1n << 4n);
+                expect(seal.hideUnlessRequirementsMet).toBeTrue();
+                const charter = await novaParse.data.Outfit.get(SYNTHETIC.outfits.charter);
+                expect(charter.persistent).toBeTrue();
+                expect(charter.cantSell).toBeTrue();
+                expect(charter.price).toEqual(0);
+                const bonded = await novaParse.data.Outfit.get(SYNTHETIC.outfits.bondedCharter);
+                expect(bonded.persistent).toBeTrue();
+                expect(bonded.cantSell).toBeFalse();
+                const refit = await novaParse.data.Outfit.get(SYNTHETIC.outfits.wardenRefit);
+                expect(refit.removeAfterPurchase).toBeTrue();
+                expect(refit.onPurchase).toEqual(`H${SHIPS[2].id}`);
+                const voucher = await novaParse.data.Outfit.get(SYNTHETIC.outfits.dockVoucher);
+                expect(voucher.buyRandom).toEqual(0);
+            });
+
+        it("has a ship-offered rescue, a boarding salvage, three venue jobs "
+            + "and a revocable cover rank", async () => {
+                const rescue = await novaParse.data.Mission.get(SYNTHETIC.missions.rescue);
+                expect(rescue.availLoc).toEqual(AVAIL_LOC.fromShip);
+                expect(rescue.shipGoal).toEqual(5);
+                expect(rescue.flags.autoAbort).toBeTrue();
+                expect(rescue.flags.remove100FuelOnAutoAbort).toBeTrue();
+                expect(rescue.flags.applyPayOnAutoAbort).toBeTrue();
+                expect(rescue.flags.invisible).toBeTrue();
+                expect(rescue.payVal).toEqual(2000);
+                const salvage = await novaParse.data.Mission.get(SYNTHETIC.missions.salvage);
+                expect(salvage.availLoc).toEqual(AVAIL_LOC.fromShip);
+                const errand = await novaParse.data.Mission.get(SYNTHETIC.missions.outfitterErrand);
+                expect(errand.availLoc).toEqual(AVAIL_LOC.outfitter);
+                expect(errand.availStelId).toEqual(SYNTHETIC.planets.port);
+                expect(errand.cargoQty).toEqual(20);
+                expect(errand.onRefuse).toEqual(`b${BITS.errandRefused}`);
+                expect(errand.briefText).toEqual("");
+                const yard = await novaParse.data.Mission.get(SYNTHETIC.missions.shipyardErrand);
+                expect(yard.availLoc).toEqual(AVAIL_LOC.shipyard);
+                expect(yard.briefText).toEqual("");
+                expect(yard.timeLimit).toEqual(10);
+                const trade = await novaParse.data.Mission.get(SYNTHETIC.missions.tradeErrand);
+                expect(trade.availLoc).toEqual(AVAIL_LOC.tradeCenter);
+                expect(trade.availRating).toEqual(10);
+                expect(trade.availBits).toEqual(`b${BITS.tradeErrandOpen}`);
+                const cover = await novaParse.data.Rank.get(SYNTHETIC.ranks.cover);
+                expect(cover.affilGovt).toEqual(SYNTHETIC.govts.raiders);
+                expect(cover.rankFlags.dropIfDestroyGovtOrAllyShip).toBeTrue();
+                expect(cover.rankFlags.dropIfCrimeAgainstGovt).toBeTrue();
+                expect(cover.rankFlags.govtShipsWontAttack).toBeTrue();
+            });
+
+        it("draws the landed-UI frames at the stock sizes", async () => {
+            for (const [id, [width, height]] of Object.entries(DIALOG_PICT_SIZES)) {
+                const png = PNG.sync.read(Buffer.from(
+                    await novaParse.data.PictImage.get(sid(Number(id)))));
+                expect([png.width, png.height]).withContext(id).toEqual([width, height]);
+            }
+            const button = PNG.sync.read(Buffer.from(await novaParse.data.PictImage.get(sid(7501))));
+            expect([button.width, button.height]).toEqual([2, 25]);
         });
 
         it("decodes every sprite sheet at its drawn size and frame count, "

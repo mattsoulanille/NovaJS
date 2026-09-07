@@ -35,9 +35,10 @@ export function placeholderImage(width: number, height: number,
  * carrying an 8-bit indexed PixMap with an explicit colour table and
  * PackBits-compressed rows, and the end-of-picture opcode.
  *
- * Row bytes are kept under 251 so each packed row is prefixed by a
- * one-byte length, and even (QuickDraw's rule), which for 8-bit pixels
- * means the width is rounded up to even.
+ * Each packed row is prefixed by its length: one byte when the row is
+ * 250 bytes or narrower, two bytes beyond that (QuickDraw's rule, which
+ * pict_parse.ts follows). Row bytes are even (QuickDraw's other rule),
+ * which for 8-bit pixels means the width is rounded up to even.
  */
 export function encodePict(image: IndexedImage): number[] {
     const { width, height, palette, indices } = image;
@@ -48,9 +49,10 @@ export function encodePict(image: IndexedImage): number[] {
         throw new Error("An 8-bit PICT palette holds 1-256 colours");
     }
     const rowBytes = width + (width % 2);
-    if (rowBytes > 250) {
-        throw new Error("Placeholder PICTs are kept narrower than 251 bytes a row");
+    if (rowBytes > 0x3fff) {
+        throw new Error("A PixMap's rowBytes field holds 14 bits");
     }
+    const wideRows = rowBytes > 250;
 
     const w = new ByteWriter();
     w.uint16(0); // Picture size (unused since PICT 2; low word only).
@@ -97,7 +99,12 @@ export function encodePict(image: IndexedImage): number[] {
             row.push(x < width ? indices[y * width + x] : 0);
         }
         const packed = packBits(row);
-        w.uint8(packed.length).raw(packed);
+        if (wideRows) {
+            w.uint16(packed.length);
+        } else {
+            w.uint8(packed.length);
+        }
+        w.raw(packed);
     }
     if (w.length % 2 !== 0) {
         w.uint8(0); // Opcodes are word-aligned.
