@@ -84,7 +84,7 @@ export function clientToUi(client: number, scale: DisplayScales): number {
     return client / ((scale.global || 1) * (scale.ui || 1));
 }
 
-const ResizeSystem = new System({
+export const ResizeSystem = new System({
     name: 'ResizeSystem',
     events: [ResizeEvent],
     args: [ResizeEvent, ScreenSize, WorldScreenSize] as const,

@@ -29,6 +29,7 @@ import {
     CARGO_VALUE_X, StatusBarFonts,
 } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
+import { DrawStatusBarNavigation } from "./status_bar_navigation.js";
 
 /**
  * The cargo panel: a manifest in the left column and the
@@ -375,5 +376,7 @@ export const DrawStatusBarCargo = new System({
         } else {
             entity.components.set(CargoReadoutTime, { lastTime: time });
         }
-    }
+    },
+    // #156 pin (shared: *): StatusBarPlugin's registration order.
+    after: [DrawStatusBarNavigation],
 });

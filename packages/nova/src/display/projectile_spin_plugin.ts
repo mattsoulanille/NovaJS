@@ -5,6 +5,7 @@ import { ProjectileComponent, ProjectileDataComponent } from "../nova_plugin/cor
 import { mod } from "../util/mod.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
+import { ProjectileFadeSystem } from "./projectile_fade_plugin.js";
 
 
 /**
@@ -147,7 +148,9 @@ export const ProjectileSpinSystem = new System({
             sprite.pixiSprite.rotation = 0;
         }
     },
-    after: [ObjectDrawSystem],
+    // ProjectileFadeSystem is a #156 pin (shared: AnimationGraphic, Projectile,
+    // ProjectileData, ProjectileFireTime, SimulationTime).
+    after: [ObjectDrawSystem, ProjectileFadeSystem],
 });
 
 export const ProjectileSpinPlugin: Plugin = {

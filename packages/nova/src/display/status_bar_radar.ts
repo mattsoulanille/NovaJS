@@ -27,6 +27,8 @@ import { ShipDataComponent } from "../nova_plugin/ship/ship_plugin.js";
 import { TargetComponent } from "../nova_plugin/ship/target_component.js";
 import { SimulationTimeResource } from "./simulation_time.js";
 import { StatusBarResource } from "./status_bar_resource.js";
+import { MurkOutfitSystem } from "./system_environment_plugin.js";
+import { DrawStatusBarTarget } from "./status_bar_target.js";
 
 
 /** Full on+off period of the blinking system-center radar arrow, in ms. */
@@ -437,7 +439,10 @@ export const DrawRadar = new System({
                 planetColors);
             radarTime.lastTime = time;
         }
-    }
+    },
+    // #156 pin (shared: OutfitsState, ShipControl, SimulationGameData):
+    // StatusBarPlugin registers after SystemEnvironmentPlugin.
+    after: [MurkOutfitSystem],
 });
 
 /**
@@ -460,4 +465,6 @@ export const DrawStatusBarInterference = new System({
             statusBar.radar.interferenceReduction = reduction;
         }
     },
+    // #156 pin (shared: *): StatusBarPlugin's registration order.
+    after: [DrawStatusBarTarget],
 });

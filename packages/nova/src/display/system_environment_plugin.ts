@@ -11,9 +11,9 @@ import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js"
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { SystemIdResource } from "../nova_plugin/core/system_id_resource.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
-import { ShipAnimationSystem } from "./ship_animation_plugin.js";
+import { ShipAnimationSystem, ShipBaseSetAnimationSystem } from "./ship_animation_plugin.js";
 import { PixiAppResource } from "./pixi_app_resource.js";
-import { StarfieldResource } from "./starfield_plugin.js";
+import { StarfieldResource, StarfieldSystem } from "./starfield_plugin.js";
 import { WorldLayer } from "./stage_resource.js";
 
 /**
@@ -172,6 +172,8 @@ export const MurkFadeSystem = new System({
         graphic.container.alpha = murkAlpha(distance, murk) * graphic.cloakAlpha;
     },
     after: [ObjectDrawSystem, ShipAnimationSystem],
+    // #156 pin (shared: AnimationGraphic).
+    before: [ShipBaseSetAnimationSystem],
 });
 
 /** The effective murk each starfield was last dimmed for. */
@@ -195,7 +197,10 @@ const MurkAmbienceSystem = new System({
             appliedStarfieldMurk.set(starfield, m);
             starfield.dim(factor => starfieldMurkAlpha(factor, murk));
         }
-    }
+    },
+    // #156 pin (shared: ShipControl, Starfield): SystemEnvironmentPlugin
+    // registers after the starfield.
+    after: [StarfieldSystem],
 });
 
 /**
@@ -220,6 +225,8 @@ export const MurkOutfitSystem = new System({
             (murk as { murkReduction: number }).murkReduction = cleared;
         }
     },
+    // #156 pin (shared: ShipControl, Murk).
+    after: [MurkAmbienceSystem],
 });
 
 /** Sums murkClear over the player's outfits (undefined until data caches). */

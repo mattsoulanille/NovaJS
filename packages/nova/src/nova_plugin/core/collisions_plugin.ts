@@ -316,7 +316,8 @@ export const UpdateHurtboxHullSystem = new System({
     name: "UpdateHurtboxHullSystem",
     args: [MovementStateComponent, HurtboxHullComponent, Optional(AnimationComponent)] as const,
     step: UpdateHitboxHullSystem.step,
-    // #237 pin (shared: MovementState, AnimationComponent — both read-only here).
+    // #237 pin (shared: MovementState, AnimationComponent — both read-only
+    // here).
     after: [MovementSystem, UpdateHitboxHullSystem],
 });
 

@@ -5,6 +5,8 @@ import {
 import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
 import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import { ProvideFromCache } from '../nova_plugin/core/provide_from_cache.js';
+import { ShipPhysicsProvider } from "../nova_plugin/ship/ship_plugin.js";
+import { MovementSystem } from "nova_ecs/plugins/movement_plugin";
 
 /**
  * Derives CloakComponent and CloakScannerComponent in the DISPLAY world.
@@ -41,6 +43,9 @@ const CloakDisplayProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveCloak,
+    // #156 pin (shared: entity, SimulationGameData): CloakDisplayPlugin
+    // registers after ShipPhysicsDisplayPlugin.
+    after: [ShipPhysicsProvider],
 });
 
 const CloakScannerDisplayProvider = ProvideFromCache({
@@ -49,6 +54,10 @@ const CloakScannerDisplayProvider = ProvideFromCache({
     update: [OutfitsStateComponent],
     args: [OutfitsStateComponent, SimulationGameDataResource] as const,
     factory: deriveCloakScanner,
+    // #156 pin (shared: entity, SimulationGameData; *): before the
+    // extrapolated movement.
+    after: [CloakDisplayProvider],
+    before: [MovementSystem],
 });
 
 export const CloakDisplayPlugin: Plugin = {

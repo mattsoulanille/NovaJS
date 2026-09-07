@@ -8,7 +8,7 @@ import {
     defaultDiscoveryStore, DiscoveryStoreResource,
 } from "../nova_plugin/player/discovery_store.js";
 import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { AnimationGraphicPlugin } from "./animation_graphic_plugin.js";
+import { AnimationGraphicPlugin, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { AsteroidDisplayPlugin } from "./asteroid_display_plugin.js";
 import { BeamDisplayPlugin } from "./beam_display_plugin.js";
 import { CloakSoundPlugin } from "./cloak_sound_plugin.js";
@@ -45,7 +45,7 @@ import { StarmapPlugin } from "./starmap_plugin.js";
 import { StatusBarPlugin } from "./status_bar.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 import { StatusMessagePlugin } from "./status_message_plugin.js";
-import { TargetCornersPlugin } from "./target_corners_plugin.js";
+import { DrawTargetCornersSystem, TargetCornersPlugin } from "./target_corners_plugin.js";
 import { UiSoundTriggersPlugin } from "./ui_sound_triggers_plugin.js";
 
 
@@ -83,11 +83,25 @@ const CenterShipSystem = new System({
     // The camera must read the position MovementExtrapolationPlugin
     // integrated THIS step, or the player ship drifts off-center by one
     // frame of motion.
-    after: [MovementSystem],
+    // ObjectDrawSystem is a #156 pin (shared: MovementState, CameraFocus).
+    after: [MovementSystem, ObjectDrawSystem],
+    // #156 pin (shared: *).
+    before: [DrawTargetCornersSystem],
 });
 
 const starfieldPlugin = starfield();
 
+/**
+ * The display world's plugins. Their registration order below does not
+ * decide the system order: the World sorts by declared edges and
+ * tie-breaks unconstrained pairs by name (#156). The '#156 pins' on
+ * the display systems record the order this list gave them while the
+ * tie-break was registration order (62 edges, derived mechanically
+ * from the pairs whose args share state — see nova_ecs/ambiguities),
+ * so the picture is drawn in exactly the order it always was. A pin
+ * may go once the pair provably does not interact; the display world
+ * has no ambiguity guard of its own yet (it needs a headless build).
+ */
 export const Display: Plugin = {
     name: 'Display',
     async build(world) {

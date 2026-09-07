@@ -14,10 +14,11 @@ import { JumpComponent, JumpRouteComponent, JUMP_DISTANCE } from "../nova_plugin
 import { canJump, jumpRadiusFor } from "../nova_plugin/travel/jump_readiness.js";
 import { PlanetDataComponent, PlanetTargetComponent } from "../nova_plugin/travel/planet_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { ShipPhysicsComponent } from "../nova_plugin/ship/ship_plugin.js";
+import { ShipPhysicsComponent, ShipPhysicsProvider } from "../nova_plugin/ship/ship_plugin.js";
 import { navReadout, NavReadout } from "./status_bar_content.js";
 import { NAV_HEADER_Y, NAV_VALUE_Y, StatusBarFonts } from "./status_bar_layout.js";
 import { StatusBarResource } from "./status_bar_resource.js";
+import { DrawStatusBarInterference } from "./status_bar_radar.js";
 
 /**
  * How much the pilot knows about a system, for the navigation readout's
@@ -195,5 +196,12 @@ export const DrawStatusBarNavigation = new System({
 
         statusBar.navigation.drawNavigation(navReadout(
             destinationName, stellarName, jumpReady, destinationExplored));
-    }
+    },
+    // The no-jump zone comes from ShipPhysicsComponent, which the
+    // display world DERIVES (ShipPhysicsDisplayPlugin) — so the readout
+    // must follow the provider or dim a frame late. Registration order
+    // used to imply this; it is now declared (#156).
+    // DrawStatusBarInterference is a #156 pin (shared: *): StatusBarPlugin's
+    // registration order.
+    after: [ShipPhysicsProvider, DrawStatusBarInterference],
 });

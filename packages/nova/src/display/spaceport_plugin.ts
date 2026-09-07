@@ -24,6 +24,7 @@ import {
 import { Stage } from './stage_resource.js';
 import { OpenStarmapResource } from './starmap_plugin.js';
 import { UiSoundEvent } from './ui_sound.js';
+import { MissionShipDoneSystem } from "./mission_ship_done_plugin.js";
 
 
 /**
@@ -189,7 +190,7 @@ const SpaceportAmbientState =
  * stop() resets playback, so re-entering the main screen restarts the loop
  * rather than resuming mid-sample.
  */
-const SpaceportAmbientSystem = new System({
+export const SpaceportAmbientSystem = new System({
     name: 'SpaceportAmbientSound',
     args: [SpaceportAmbientState, RunQuery, DisplayAssetDataResource, Emit,
         SingletonComponent] as const,
@@ -211,7 +212,10 @@ const SpaceportAmbientSystem = new System({
             emit(UiSoundEvent, { id: desiredId, loop: true });
             state.currentId = desiredId;
         }
-    }
+    },
+    // #156 pin (shared: *): SpaceportPlugin registers after
+    // MissionShipDonePlugin.
+    after: [MissionShipDoneSystem],
 });
 
 export const SpaceportPlugin: Plugin = {

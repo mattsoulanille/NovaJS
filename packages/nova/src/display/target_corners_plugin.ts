@@ -12,7 +12,7 @@ import { TargetCornerStyle } from "../nova_plugin/reputation/iff_plugin.js";
 import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
 import { TargetComponent } from "../nova_plugin/ship/target_component.js";
 import { mod } from "../util/mod.js";
-import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
+import { AnimationGraphicComponent, ObjectDrawSystem, TumbleDrawSystem } from "./animation_graphic_plugin.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { Space } from "./space_resource.js";
 import { ZIndex } from "./z_index.js";
@@ -152,7 +152,7 @@ export function cornersSweepSystem(name: string,
     });
 }
 
-const DrawTargetCornersSystem = new System({
+export const DrawTargetCornersSystem = new System({
     name: "DrawTargetCornersSystem",
     args: [TargetComponent, TimeResource, SimulationTimeResource,
         TargetCornersResource, Entities, UUID, GetEntity,
@@ -182,10 +182,12 @@ const DrawTargetCornersSystem = new System({
         targetCorners.visible = true;
         targetCorners.drawnThisStep = true;
     },
-    after: [ObjectDrawSystem],
+    // TumbleDrawSystem is a #156 pin (shared: *): TargetCornersPlugin
+    // registers after AnimationGraphicPlugin.
+    after: [ObjectDrawSystem, TumbleDrawSystem],
 });
 
-const SweepTargetCornersSystem = cornersSweepSystem('SweepTargetCornersSystem',
+export const SweepTargetCornersSystem = cornersSweepSystem('SweepTargetCornersSystem',
     TargetCornersResource, DrawTargetCornersSystem);
 
 export const TargetCornersPlugin: Plugin = {

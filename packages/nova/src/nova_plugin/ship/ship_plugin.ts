@@ -16,6 +16,7 @@ import { MovementPhysics, MovementPhysicsComponent, MovementStateComponent, Move
 import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { Provide } from 'nova_ecs/provide';
 import { RandomResource } from 'nova_ecs/plugins/random_plugin';
+import { TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { ProvideFromCache } from '../core/index.js';
 import { AnimationComponent, CreateTimeProvider, ProjectileAnimationProvider } from '../core/index.js';
 import { CollisionVulnerabilityComponent } from '../core/index.js';
@@ -108,7 +109,9 @@ export const ShipPhysicsProvider = ProvideFromCache({
     factory: deriveShipPhysics,
     // #237 pin (shared: entity). The ship providers run in ShipPlugin's
     // registration order; each pins itself after the previous one.
-    after: [ShipOutfitsProvider],
+    // TimeSystem is the display world's pin (#156): there this provider
+    // runs alone (ShipPhysicsDisplayPlugin), after the clock.
+    after: [TimeSystem, ShipOutfitsProvider],
 });
 
 export function getShipMovementPhysics(physics: ShipPhysics): MovementPhysics {

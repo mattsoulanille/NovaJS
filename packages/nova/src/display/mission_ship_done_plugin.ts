@@ -31,6 +31,7 @@ import { playerIdentitySubs } from '../spaceport/player_identity.js';
 import { markShipDoneTextShown } from '../spaceport/ship_done_shown.js';
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
+import { PersHailQuoteSystem } from "./ship_mission_offer_plugin.js";
 
 /**
  * ============================================================================
@@ -398,7 +399,7 @@ export async function presentShipDoneText(world: World,
  * place of the plunder dialog (see the module note). Sorted by mission
  * id so two goals completing on the same frame queue in a stable order.
  */
-const MissionShipDoneSystem = new System({
+export const MissionShipDoneSystem = new System({
     name: 'MissionShipDoneSystem',
     args: [ShipDoneStateResource, SimulationGameDataResource,
         PlayerShipSelector, MissionsComponent, GetWorld] as const,
@@ -429,6 +430,9 @@ const MissionShipDoneSystem = new System({
             });
         }
     },
+    // #156 pin (shared: *): MissionShipDonePlugin registers after
+    // ShipMissionOfferPlugin.
+    after: [PersHailQuoteSystem],
 });
 
 export const MissionShipDonePlugin: Plugin = {

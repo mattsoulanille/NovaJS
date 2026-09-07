@@ -11,6 +11,7 @@ import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_pl
 import { FinishJumpEvent, JumpComponent, JUMP_DEPART_DELAY_MS, WARP_OUT_SOUND, WARP_UP_FAST_SOUND, WARP_UP_SOUND } from '../nova_plugin/travel/jump_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { PixiAppResource } from './pixi_app_resource.js';
+import { ShipBaseSetAnimationSystem } from "./ship_animation_plugin.js";
 
 /**
  * How the origin -> destination transition is drawn.
@@ -112,7 +113,7 @@ const JumpFadeOverlayResource = new Resource<PIXI.Graphics>('JumpFadeOverlay');
  * loads) no player entity exists, this system doesn't run, and the
  * overlay stays white in both modes.
  */
-const JumpFadeSystem = new System({
+export const JumpFadeSystem = new System({
     name: 'JumpFadeSystem',
     args: [TimeResource, PixiAppResource, JumpFadeOverlayResource,
         Optional(JumpComponent), PlayerShipSelector] as const,
@@ -139,7 +140,10 @@ const JumpFadeSystem = new System({
         }
         overlay.alpha = clamp01(overlay.alpha + rate * time.delta_s);
         overlay.visible = overlay.alpha > 0;
-    }
+    },
+    // #156 pin (shared: JumpSequence, time): JumpFadePlugin registers after
+    // ShipAnimationPlugin.
+    after: [ShipBaseSetAnimationSystem],
 });
 
 export const JumpFadePlugin: Plugin = {

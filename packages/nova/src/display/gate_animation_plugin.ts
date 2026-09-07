@@ -18,7 +18,9 @@ import { MissionsComponent } from '../nova_plugin/player/player_state_plugin.js'
 import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
 import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
-import { AnimationGraphicComponent, ObjectDrawSystem } from './animation_graphic_plugin.js';
+import { AnimationGraphicComponent, AnimationGraphicInsert, ObjectDrawSystem } from './animation_graphic_plugin.js';
+import { BoardingUiSystem } from "./boarding_plugin.js";
+import { TargetShipBeepSystem } from "./ui_sound_triggers_plugin.js";
 
 /**
  * Hypergate open/close animation (display-only, player-local).
@@ -148,6 +150,9 @@ const GateAnimationProvider = Provide({
     args: [PlanetDataComponent] as const,
     factory: (): GateAnimationState =>
         ({ mode: 'closed', frame: 0, lastAdvance: 0 }),
+    // #156 pin (shared: *): GateAnimationPlugin registers after
+    // BoardingDisplayPlugin.
+    after: [BoardingUiSystem],
 });
 
 /**
@@ -205,6 +210,9 @@ const ShipArrivedAtGateSystem = new System({
             }
         }
     },
+    // #156 pin (shared: *): among the AddEvent handlers, after the graphic
+    // insert.
+    after: [AnimationGraphicInsert],
 });
 
 /**
@@ -283,7 +291,10 @@ export const GateAnimationSystem = new System({
             sprite.frame = Math.min(frames - 1, state.frame);
         }
     },
-    after: [ObjectDrawSystem],
+    // GateAnimationProvider is a #156 pin (shared: *).
+    after: [ObjectDrawSystem, GateAnimationProvider],
+    // #156 pin (shared: *): before the UI sound triggers.
+    before: [TargetShipBeepSystem],
 });
 
 export const GateAnimationPlugin: Plugin = {

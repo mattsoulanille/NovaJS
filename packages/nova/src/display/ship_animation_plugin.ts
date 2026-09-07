@@ -22,6 +22,7 @@ import { WeaponsStateComponent } from "../nova_plugin/ship/weapons_state.js";
 import { AnimationGraphic } from "./animation_graphic.js";
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { blinkPhaseFromUuid, runningLightState } from "./running_light_blink.js";
+import { FirstHostileBeepSystem } from "./ui_sound_triggers_plugin.js";
 
 // How visible a ship is while cloaked. Other ships fade to nearly
 // invisible; your own ship stays faintly visible so you can still fly it
@@ -346,6 +347,9 @@ export const ShipAnimationSystem = new System({
         animation.cloakAlpha = cloakAlpha;
         animation.container.alpha = cloakAlpha;
     },
+    // #156 pin (shared: *): ShipAnimationPlugin registers after
+    // UiSoundTriggersPlugin.
+    after: [FirstHostileBeepSystem],
 });
 
 /**
