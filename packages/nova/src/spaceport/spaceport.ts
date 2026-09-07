@@ -405,8 +405,14 @@ export class Spaceport extends Menu<Entity> {
         // an offer sequence still running blind — so the exit-to-title
         // save sees the visit. The transaction stays open: the ship is
         // still docked in the client's eyes (see above), and a release
-        // that arrives later flushes onto the same hull.
-        this.transaction?.flush();
+        // that arrives later flushes onto the same hull. One already
+        // committed (the spaceport is reused per stellar, so the teardown
+        // after a Leave dismisses it too) has nothing left to flush: the
+        // hull lifted off with the commit, and writing it again would be
+        // exactly the stray write commit() refuses (loudly) — so not here.
+        if (this.transaction && !this.transaction.isClosed) {
+            this.transaction.flush();
+        }
         this.offerPopup.dismiss();
         this.popupBlocker.release();
         this.controls.release();

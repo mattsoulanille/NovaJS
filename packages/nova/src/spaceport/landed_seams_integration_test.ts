@@ -675,4 +675,32 @@ describe('the seams between landed venues', () => {
             });
     });
 
+    describe('the spaceport after its Leave', () => {
+        it('is torn down without writing the lifted-off hull again',
+            async () => {
+                // The spaceport is reused per stellar, and the world's
+                // teardown (a jump out of the system) dismisses every one
+                // it built — including the one the player already Left.
+                // Its transaction is committed: the dismiss's flush for the
+                // exit-to-title save must leave it alone, silently (the
+                // stray-write guard is for writes that would have landed).
+                const visit = await land(100_000, { hasOutfitter: true });
+                await visit.enter('outfitter');
+                const outfit = OUTFITS.get(OUTFIT)!;
+                (visit.venues.outfitter as unknown as {
+                    applyBuy(outfit: OutfitData): void,
+                }).applyBuy(outfit);
+                await visit.leaveVenue();
+                await visit.press('depart');
+                const lifted = await visit.departed;
+                expect(lifted).toBe(visit.entity);
+                expect(creditBalance(lifted)).toBe(99_500);
+                expect(visit.transaction.isClosed).toBe(true);
+
+                const warn = spyOn(console, 'warn');
+                visit.spaceport.dismiss();
+                expect(warn).not.toHaveBeenCalled();
+                expect(creditBalance(lifted)).toBe(99_500);
+            });
+    });
 });

@@ -265,9 +265,9 @@ describe('the landed transaction', () => {
         });
 
     it('commit releases every open savepoint, flushes once, and returns the '
-        + 'hull; a release that arrives later still lands on it', async () => {
+        + 'hull; a release that arrives later is dropped, loudly', async () => {
             const { entity, transaction } = await landing();
-            transaction.savepoint('bar');
+            const bar = transaction.savepoint('bar');
             transaction.credits.credits -= 1_000;
             const popup = transaction.savepoint('bar offer');
             transaction.credits.credits -= 2_000;
@@ -275,12 +275,30 @@ describe('the landed transaction', () => {
             expect(transaction.isClosed).toBe(true);
             expect(transaction.depth).toBe(0);
             expect(creditBalance(entity)).toBe(97_000);
-            // A popup sequence still running blind under the Leave accepts
-            // something and releases: the same hull gets it, as the old
-            // per-venue commit-in-finally did.
+            // The hull has lifted off: the client encodes it on its next
+            // frame, after which this entity object is nobody's. A popup
+            // sequence still running blind under the Leave (or a venue's
+            // Done from a listener that outlived the visit) edits and
+            // releases: nothing lands, and the drop is named.
+            const warn = spyOn(console, 'warn');
             transaction.credits.credits -= 500;
             transaction.release(popup);
-            expect(creditBalance(entity)).toBe(96_500);
+            expect(creditBalance(entity)).toBe(97_000);
+            expect(warn).toHaveBeenCalledTimes(1);
+            expect(warn.calls.mostRecent().args[0])
+                .toContain('release of "bar offer" after the lift-off commit');
+            // Nor does the enclosing visit's, a bare flush, or a second
+            // commit; each says so.
+            transaction.release(bar);
+            expect(transaction.flush()).toEqual([]);
+            expect(transaction.commit()).toBe(entity);
+            expect(creditBalance(entity)).toBe(97_000);
+            expect(warn).toHaveBeenCalledTimes(4);
+            // A rollback of a savepoint the commit released is the same
+            // no-op it always was (and touches neither entity nor copy).
+            transaction.rollback(bar);
+            expect(transaction.credits.credits).toBe(96_500);
+            expect(creditBalance(entity)).toBe(97_000);
         });
 
     describe('the client\'s escort-deal settlement, through the visit', () => {

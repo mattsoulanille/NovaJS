@@ -247,7 +247,10 @@ export class LandedTransaction {
         return this.leasedHolds;
     }
 
-    /** Whether commit() has run. Later flushes still land (see commit). */
+    /**
+     * Whether commit() has run: the hull has been handed over for the
+     * lift-off, and nothing writes it through here again (see commit).
+     */
     get isClosed(): boolean {
         return this.closed;
     }
@@ -318,18 +321,17 @@ export class LandedTransaction {
      * inside it), pops them, and — if that was the outermost — FLUSHES the
      * working copy onto the entity. A lease opened under one of the popped
      * savepoints commits its holds onto the escorts and closes. A savepoint
-     * that is no longer open (released or rolled back already) is a no-op
-     * while the landing is in progress, so a Done that fires twice cannot
-     * flush an enclosing visit's half-made edits; AFTER commit() it
-     * flushes — the lift-off has happened, every savepoint was released
-     * with it, and whatever a sequence still running blind under the
-     * Leave then edits belongs on the same hull (see commit).
+     * that is no longer open (released or rolled back already) is a no-op,
+     * so a Done that fires twice cannot flush an enclosing visit's
+     * half-made edits. AFTER commit() every release is a no-op too, and a
+     * loud one (see commit): the hull has lifted off, so there is nothing
+     * left for the edits to land on.
      */
     release(savepoint: Savepoint): void {
         const popped = this.pop(savepoint);
         if (popped === undefined) {
             if (this.closed) {
-                this.flush();
+                this.warnAbandoned(`release of "${savepoint.label}"`);
             }
             return;
         }
@@ -453,9 +455,14 @@ export class LandedTransaction {
      * Returns the mission events raised since the previous flush. Callers
      * inside a venue do not call this: release() does, at the outermost
      * savepoint. It is public for the transaction-level writers (the
-     * spaceport's teardown, the mission-info abort) and the specs.
+     * spaceport's teardown, the mission-info abort) and the specs. A no-op
+     * (with a warning) once commit() has run: see there.
      */
     flush(): MissionEvent[] {
+        if (this.closed) {
+            this.warnAbandoned('flush');
+            return [];
+        }
         const entity = this.hull;
         let events: MissionEvent[] = [];
         this.creditsBaseline = commitVenueCredits(entity, this.creditsBaseline,
@@ -472,14 +479,26 @@ export class LandedTransaction {
     }
 
     /**
-     * THE LIFT-OFF (or the exit-to-title teardown): every open savepoint
-     * is released, the working copy is flushed, and the hull that carries
-     * it all is returned for the client to encode. Marked closed; a
-     * release that arrives later (a popup sequence still running blind
-     * under a Leave) still flushes onto this same hull, which is what the
-     * old per-venue commits did too.
+     * THE LIFT-OFF: every open savepoint is released, the working copy is
+     * flushed, and the hull that carries it all is returned for the
+     * client to encode. Then the transaction is CLOSED: the client encodes
+     * that hull into the lift-off's insertion record on its next frame,
+     * after which the entity object here is nobody's — the ship flying is
+     * a decoded copy. A release or flush that arrives later (a venue's
+     * Done from a listener that outlived the visit, a popup sequence
+     * still running blind under the Leave, the world teardown's dismiss)
+     * therefore lands nowhere: it is dropped, with a warning naming it,
+     * rather than written onto the abandoned hull where it would land or
+     * be lost depending on whether the frame had run yet. (The old
+     * per-venue commit-in-finally raced exactly that way.) The
+     * exit-to-title teardown is not a commit — Spaceport.dismiss flushes
+     * and leaves the transaction open, since the ship stays docked.
      */
     commit(): Entity {
+        if (this.closed) {
+            this.warnAbandoned('commit');
+            return this.hull;
+        }
         while (this.savepoints.length > 0) {
             this.release(this.savepoints[0]);
         }
@@ -487,6 +506,11 @@ export class LandedTransaction {
         this.endLease();
         this.closed = true;
         return this.hull;
+    }
+
+    private warnAbandoned(what: string): void {
+        console.warn(`LandedTransaction: ${what} after the lift-off commit `
+            + 'dropped; the hull left the pad with what commit() flushed.');
     }
 
     // ── Credits shared with writers outside the venues ──────────────────
