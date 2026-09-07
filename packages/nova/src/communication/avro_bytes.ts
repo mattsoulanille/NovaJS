@@ -190,6 +190,15 @@ export class ByteWriter {
     bytes(): Uint8Array {
         return this.buffer.slice(0, this.length);
     }
+
+    /**
+     * A VIEW of what has been written, valid until the next write:
+     * for a caller that copies it out at once (OPAQUE.write), sparing
+     * the copy `bytes()` makes.
+     */
+    written(): Uint8Array {
+        return this.buffer.subarray(0, this.length);
+    }
 }
 
 export class ByteReader {

@@ -209,14 +209,30 @@ const BYTES: Codec = {
     read: input => input.readBytes(),
 };
 
+/**
+ * The scratch OPAQUE.write encodes into: one per process, reused,
+ * because a catchUp baseline carries an opaque node per component of
+ * every entity (thousands per message) and allocating a fresh writer
+ * for each was the codec's largest cost on that path. Taken while in
+ * use so a re-entrant write (a dynamic encoding never calls back into
+ * a codec, but nothing here relies on that) allocates its own.
+ */
+let opaqueScratch: ByteWriter | undefined = new ByteWriter(256);
+
 const OPAQUE: Codec = {
     bucket: 'any',
     write: (value, out) => {
         // Length-prefixed like `bytes`: write the dynamic encoding to
-        // a scratch, then copy. Opaque nodes are rare and small.
-        const scratch = new ByteWriter(64);
-        writeDynamic(value, scratch);
-        out.writeBytes(scratch.bytes());
+        // the scratch, then copy it in behind its length.
+        const scratch = opaqueScratch ?? new ByteWriter(256);
+        opaqueScratch = undefined;
+        try {
+            scratch.length = 0;
+            writeDynamic(value, scratch);
+            out.writeBytes(scratch.written());
+        } finally {
+            opaqueScratch = scratch;
+        }
     },
     read: input => {
         const bytes = input.readBytes();
