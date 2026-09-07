@@ -10,28 +10,27 @@ import { Plugin } from 'nova_ecs/plugin';
  * undeclared import and a stale declaration both fail. The graph is
  * the design: a domain may read everything below it and nothing above.
  *
- * `plugins` is the domain's share of the simulation, in the relative
- * order SystemPlugin registers them. It is NOT the case that composing
- * domains as blocks reproduces the simulation: the World orders
- * unconstrained systems by registration order (#43), and today's
- * registration interleaves domains (ShipPlugin, then travel's
- * controller, then core's MovementPlugin, ...). SystemPlugin therefore
- * keeps the flat, explicit registration list; a spec checks that list
- * against every domain's `plugins` (same members, same relative order)
- * and against a frozen snapshot of `world.systemNames`.
+ * `plugins` is the domain's share of the simulation. SystemPlugin
+ * composes the simulation as `DOMAINS.map(domainPlugin)`, one block
+ * per domain, which is sound because the system order does not depend
+ * on registration order at all: the World sorts by declared edges and
+ * tie-breaks by name (#156), and system_ambiguity_test guards that
+ * every pair of systems that could observe its order has an edge
+ * (#237). A plugin may still need to register after another when its
+ * systems take a resource the other sets (addSystem checks that).
  */
 export interface Domain {
     readonly name: string;
     /** Domains whose index this domain's modules import from. */
     readonly dependsOn: readonly string[];
-    /** This domain's simulation plugins, in SystemPlugin's relative order. */
+    /** This domain's simulation plugins. */
     readonly plugins: readonly Plugin[];
 }
 
 /**
- * The domain as one Plugin: its `plugins` in order. For building a
- * world from a subset of the game (tools, focused specs); see the
- * caveat on `Domain` before using it to build the simulation.
+ * The domain as one Plugin: its `plugins` in order. SystemPlugin is
+ * built from these; they also serve building a world from a subset of
+ * the game (tools, focused specs).
  */
 export function domainPlugin(domain: Domain): Plugin {
     return {
