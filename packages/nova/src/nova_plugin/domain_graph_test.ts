@@ -12,23 +12,56 @@ import { DOMAINS } from './domains.js';
  * complete graph, type-only imports included) and over the BUILT files
  * this spec runs from (the runtime graph, which must be a subset).
  *
- * Specs are exempt: a spec may reach into any module it exercises.
+ * The same rule holds OUTSIDE nova_plugin: display, spaceport, client,
+ * title, server, communication, the package's root files and every spec
+ * among them reach a domain only through its index, so a domain's index
+ * is its whole public surface and a module can move within its domain
+ * without touching an importer. A site that must bypass the index says
+ * why with a `// deep import: <reason>` comment on the line above the
+ * statement (none today).
+ *
+ * Specs INSIDE nova_plugin are exempt: a spec may reach into any module
+ * of any domain it exercises.
  */
 describe('nova_plugin domain graph', () => {
     const builtRoot = path.dirname(fileURLToPath(import.meta.url));
     const sourceRoot = path.resolve(builtRoot, '../../../src/nova_plugin');
     const byName = new Map(DOMAINS.map(domain => [domain.name, domain]));
 
-    /** Relative import specifiers of a module: static, side-effect and dynamic. */
-    function specifiers(file: string): string[] {
+    interface Specifier {
+        specifier: string;
+        /** Carries a `// deep import: <reason>` comment on the line above. */
+        exempt: boolean;
+    }
+
+    /**
+     * Relative import specifiers of a module: static, side-effect and
+     * dynamic. `exempt` reads the line above the statement the specifier
+     * belongs to (comments survive into the built files).
+     */
+    function specifiersOf(file: string): Specifier[] {
         const text = fs.readFileSync(file, 'utf8');
-        const out: string[] = [];
+        const out: Specifier[] = [];
         const pattern =
             /(?:\bfrom\s*|^\s*import\s+|\bimport\s*\(\s*)["'](\.\.?\/[^"']+)["']/gm;
         for (const match of text.matchAll(pattern)) {
-            out.push(match[1]!);
+            const statementStart = Math.max(
+                text.lastIndexOf('\nimport', match.index!),
+                text.lastIndexOf('\nexport', match.index!),
+                text.lastIndexOf('import(', match.index!));
+            const lineBreak = text.lastIndexOf('\n', statementStart);
+            const lineAbove = text.slice(
+                text.lastIndexOf('\n', lineBreak - 1) + 1, Math.max(lineBreak, 0));
+            out.push({
+                specifier: match[1]!,
+                exempt: /\/\/\s*deep import:/.test(lineAbove),
+            });
         }
         return out;
+    }
+
+    function specifiers(file: string): string[] {
+        return specifiersOf(file).map(entry => entry.specifier);
     }
 
     interface Edge { from: string; specifier: string; toDomain: string; deep: boolean; }
@@ -163,4 +196,74 @@ describe('nova_plugin domain graph', () => {
             }
         }
     });
+
+    /** Every module of the package outside nova_plugin, specs included. */
+    function outsideModules(pluginRoot: string, ext: string): string[] {
+        const packageSrc = path.resolve(pluginRoot, '..');
+        const out: string[] = [];
+        const walk = (dir: string): void => {
+            for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                const file = path.join(dir, entry.name);
+                if (entry.isDirectory()) {
+                    if (file !== pluginRoot) {
+                        walk(file);
+                    }
+                } else if (entry.name.endsWith(ext)
+                    && !entry.name.endsWith(`.d${ext}`)
+                    && !entry.name.endsWith(`_bundle${ext}`)) {
+                    out.push(file);
+                }
+            }
+        };
+        walk(packageSrc);
+        out.push(path.resolve(packageSrc, `../server${ext}`));
+        return out;
+    }
+
+    it('is reached from outside nova_plugin only through the domain indexes',
+        () => {
+            let checked = 0;
+            for (const [root, ext] of [[sourceRoot, '.ts'], [builtRoot, '.js']] as const) {
+                for (const file of outsideModules(root, ext)) {
+                    for (const { specifier, exempt } of specifiersOf(file)) {
+                        const relative = path.relative(
+                            root, path.resolve(path.dirname(file), specifier));
+                        const parts = relative.split(path.sep);
+                        if (relative.startsWith('..') || parts.length === 1 || exempt) {
+                            continue; // not a domain module, or a declared exception
+                        }
+                        checked++;
+                        expect(parts)
+                            .withContext(`${path.relative(root, file)}: ${specifier}`)
+                            .toEqual([parts[0]!, 'index.js']);
+                    }
+                }
+            }
+            expect(checked).toBeGreaterThan(100);
+        });
+
+    it('exports no two different things under one name across the domain indexes',
+        async () => {
+            // A name two indexes export from different modules would make
+            // an importer of both domains ambiguous; the index that
+            // re-exports under an alias resolves it (missions'
+            // missionFreeCargoSpace, reputation's govtStellarRecord).
+            // Checked over the built modules, by binding identity, so only
+            // runtime values are covered; types are the compiler's.
+            const owners = new Map<string, { domain: string; value: unknown }>();
+            for (const domain of DOMAINS) {
+                const module: Record<string, unknown> =
+                    await import(`./${domain.name}/index.js`);
+                for (const [name, value] of Object.entries(module)) {
+                    const owner = owners.get(name);
+                    if (owner === undefined) {
+                        owners.set(name, { domain: domain.name, value });
+                        continue;
+                    }
+                    expect(owner.value).withContext(
+                        `${name} is exported by both ${owner.domain} and ${domain.name}`)
+                        .toBe(value);
+                }
+            }
+        });
 });
