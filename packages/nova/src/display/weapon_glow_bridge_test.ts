@@ -6,8 +6,9 @@ import {
     Serializer, SerializerResource,
 } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
-import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
-import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
+import {
+    getSyntheticGameData, makeSimulationBridgeHarness,
+} from '../communication/simulation_test_fixture.js';
 import {
     WeaponsState, WeaponsStateComponent,
 } from '../nova_plugin/ship/weapons_state.js';
@@ -33,10 +34,8 @@ describe('weapon-glow lastFired sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
-    beforeEach(requireNovaData);
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(getSyntheticGameData());
         simWorld = harness.world;
         serializer = simWorld.resources.get(SerializerResource)!;
     });
@@ -50,7 +49,7 @@ describe('weapon-glow lastFired sim -> display wiring', () => {
         async () => {
             // A fresh harness so this snapshot is the bridge's FIRST and
             // the entity arrives in `added` with its full component list.
-            const { client, world } = await makeSimulationBridgeHarness();
+            const { client, world } = await makeSimulationBridgeHarness(getSyntheticGameData());
             const weapons: WeaponsState = new Map([
                 ['nova:143', { count: 2, firing: false, lastFired: 4200 }],
             ]);

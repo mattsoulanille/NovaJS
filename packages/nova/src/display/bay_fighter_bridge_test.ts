@@ -7,8 +7,9 @@ import {
     Serializer, SerializerResource,
 } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
-import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
-import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
+import {
+    getSyntheticGameData, makeSimulationBridgeHarness,
+} from '../communication/simulation_test_fixture.js';
 import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
 import {
     OwnerComponent, SourceComponent,
@@ -35,10 +36,8 @@ describe('BayFighterComponent sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
-    beforeEach(requireNovaData);
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(getSyntheticGameData());
         simWorld = harness.world;
         serializer = simWorld.resources.get(SerializerResource)!;
     });
@@ -53,7 +52,7 @@ describe('BayFighterComponent sim -> display wiring', () => {
         async () => {
             // A fresh harness so this is the bridge's FIRST snapshot and
             // every entity arrives in `added` with its full component list.
-            const { client, world } = await makeSimulationBridgeHarness();
+            const { client, world } = await makeSimulationBridgeHarness(getSyntheticGameData());
             world.entities.set('bay-fighter-uuid', new Entity('bay fighter')
                 .addComponent(SourceComponent, 'carrier-uuid')
                 .addComponent(BayFighterComponent,

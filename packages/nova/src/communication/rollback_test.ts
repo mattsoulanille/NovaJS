@@ -3,10 +3,12 @@ import { restoreWorld, snapshotWorld, SnapshotPoliciesResource } from "nova_ecs/
 import { hashWorld } from "nova_ecs/plugins/world_hash";
 import { deriveEntityComponents } from "../nova_plugin/core/entity_factory.js";
 import { makeDeterminismWorld } from "./determinism_harness.js";
+import { getSyntheticGameData } from "./simulation_test_fixture.js";
 
 describe("World snapshot", () => {
     it("restores exactly and resimulates identically through combat", async () => {
-        const world = await makeDeterminismWorld(4);
+        const world = await makeDeterminismWorld(4, 'worker',
+            getSyntheticGameData());
         for (let i = 0; i < 60; i++) {
             world.step();
         }
@@ -44,7 +46,8 @@ describe("World snapshot", () => {
     }, 120_000);
 
     it("can restore the same snapshot repeatedly", async () => {
-        const world = await makeDeterminismWorld(2);
+        const world = await makeDeterminismWorld(2, 'worker',
+            getSyntheticGameData());
         for (let i = 0; i < 60; i++) {
             world.step();
         }

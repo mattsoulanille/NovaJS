@@ -11,7 +11,9 @@ import { World } from 'nova_ecs/world';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
+import {
+    getSyntheticGameData, makeSimulationBridgeHarness,
+} from '../communication/simulation_test_fixture.js';
 import { ControlEvent, ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
     DisplayAssetDataResource, SimulationGameDataResource,
@@ -62,7 +64,8 @@ describe('jump readiness in the display world', () => {
     it('is not something the simulation syncs', async () => {
         // The premise: if this ever starts crossing the bridge, the
         // display-side derivation below is redundant rather than load-bearing.
-        const { world } = await makeSimulationBridgeHarness();
+        const { world } = await makeSimulationBridgeHarness(
+            getSyntheticGameData());
         const serializer = world.resources.get(SerializerResource)!;
         expect(serializer.hasComponent(ShipDataComponent as UnknownComponent))
             .withContext('ship data crosses').toBeTrue();

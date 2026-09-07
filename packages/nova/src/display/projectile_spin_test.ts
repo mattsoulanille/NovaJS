@@ -10,7 +10,9 @@ import { ProjectileWeaponData } from 'novadatainterface/weapon_data';
 import { CreateTime } from '../nova_plugin/core/create_time.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import { ProjectileComponent, ProjectileDataComponent } from '../nova_plugin/core/projectile_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { AnimationGraphic } from './animation_graphic.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
@@ -157,7 +159,9 @@ describe('spinningShotFrame', () => {
 // Pin the parsed flag on the real stock data, so a template/offset
 // regression in the wëap parser fails loudly rather than silently
 // switching the spin off. Runs wëap -> WeaponParse ->
-// ProjectileWeaponData.spinFrameInterval.
+// ProjectileWeaponData.spinFrameInterval. STAYS ON STOCK DATA: the
+// named weapons, their BeamWidth periods and the count of spinning
+// weapons in the set ARE the assertions.
 describe('shot spin (real Nova data)', () => {
     let fpc: ProjectileWeaponData;
     let nonSpinning: ProjectileWeaponData;
@@ -435,10 +439,12 @@ describe('shot spin sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
-    beforeEach(requireNovaData);
+    // The world here exists only to produce a real simulation
+    // serializer, which registers the same components whichever set it
+    // parsed — so it is built from the synthetic scenario. The spec
+    // below still needs a STOCK spinning shot and gates itself.
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         simWorld = await makeSystem(systemId, gameData, undefined,
@@ -446,7 +452,10 @@ describe('shot spin sim -> display wiring', () => {
         serializer = simWorld.resources.get(SerializerResource)!;
     });
 
+    // STAYS ON REAL DATA: a spinning shot needs wëap Flags 0x0001 and a
+    // 36-frame shot sheet, and no synthetic weapon sets that flag.
     it('spins a Fusion Pulse Cannon shot rebuilt from the wire', async () => {
+        requireNovaData();
         const gameData = await getIntegrationGameData();
         const fpc = await gameData.data.Weapon.get('nova:143');
         expect(fpc.type).toEqual('ProjectileWeaponData');

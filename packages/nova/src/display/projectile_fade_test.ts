@@ -11,8 +11,11 @@ import { ProjectileWeaponData } from 'novadatainterface/weapon_data';
 import { CreateTime } from '../nova_plugin/core/create_time.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
 import { ProjectileComponent, ProjectileDataComponent } from '../nova_plugin/core/projectile_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../communication/simulation_test_fixture.js';
+import { requireNovaData } from '../test_support/nova_data_gate.js';
 import { AnimationGraphic } from './animation_graphic.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
 import {
@@ -180,9 +183,12 @@ describe('projectileFadeAlpha', () => {
 });
 
 // Pin the fade curve on the real Fusion Pulse Cannon and a real railgun —
-// the stock weapons the user reports fading. Runs against the real Nova
-// game data (Nova_Data): wëap -> WeaponParse -> ProjectileWeaponData.falloff,
-// then through projectileFadeAlpha.
+// the stock weapons the user reports fading. STAYS ON STOCK DATA: naming
+// those weapons and their Falloff values IS the point, and no synthetic
+// weapon carries a Falloff at all. Runs against the real Nova game data
+// (Nova_Data): wëap -> WeaponParse -> ProjectileWeaponData.falloff, then
+// through projectileFadeAlpha. (getIntegrationGameData pends each spec
+// from the beforeEach when the data is absent.)
 describe('projectile fade (real Nova data)', () => {
     let fpc: ProjectileWeaponData;
     let railgun: ProjectileWeaponData;
@@ -368,10 +374,8 @@ describe('projectile fade sim -> display wiring', () => {
     let simWorld: World;
     let serializer: Serializer;
 
-    beforeEach(requireNovaData);
     beforeAll(async () => {
-        if (!novaDataInstalled()) return; // each spec pends instead
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
         const systemId = [...ids.System].sort()[0]!;
         // A real simulation world, built the way every simulating
@@ -390,7 +394,8 @@ describe('projectile fade sim -> display wiring', () => {
 
     it('encodes ProjectileFireTime into a mirrored projectile', () => {
         const shot = new Entity('projectile')
-            .addComponent(ProjectileComponent, { id: 'nova:156' })
+            .addComponent(ProjectileComponent,
+                { id: SYNTHETIC.weapons.blaster })
             .addComponent(CreateTime, 1234);
         const encoded = serializer.encode(shot) as EncodedEntity;
         const names = encoded.components.map(([name]) => name);
@@ -398,8 +403,14 @@ describe('projectile fade sim -> display wiring', () => {
         expect(names).toContain('ProjectileFireTime');
     });
 
+    // STAYS ON REAL DATA: the fade needs a weapon with a NON-ZERO wëap
+    // Falloff, and the synthetic scenario has none (its only falloff
+    // values are the beams' corona falloff, a different field). The
+    // serializer above is the synthetic world's, which is what makes
+    // this an `it`-level gate rather than a suite-level one.
     it('fades a projectile rebuilt from the wire, as the mirror builds it',
         async () => {
+            requireNovaData();
             const gameData = await getIntegrationGameData();
             const railgun = await gameData.data.Weapon.get('nova:156');
             expect(railgun.type).toEqual('ProjectileWeaponData');

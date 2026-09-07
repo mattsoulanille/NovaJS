@@ -7,7 +7,8 @@ import { GovtComponent } from '../nova_plugin/core/govt_component.js';
 import { NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { TargetComponent } from '../nova_plugin/ship/target_component.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { showsHailQuote } from '../spaceport/ship_mission_offer.js';
 import { boardingDialogPhase } from './boarding_plugin.js';
 import { shipOfferGates } from './ship_mission_offer_plugin.js';
@@ -100,7 +101,7 @@ describe('shipOfferGates (what the world says about a përs)', () => {
 
     it('reads "disabled" off the same component the hulk carries',
         async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const adrift = new Entity('derelict');
             adrift.components.set(DisabledComponent,
                 { repairAt: null, hulk: true });
@@ -113,7 +114,7 @@ describe('shipOfferGates (what the world says about a përs)', () => {
 
     it('calls a ship attacking the PLAYER attacking, and nothing else',
         async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const attacker = new Entity('pirate');
             attacker.components.set(TargetComponent, { target: 'player' });
             attacker.components.set(NpcComponent,
@@ -134,22 +135,26 @@ describe('shipOfferGates (what the world says about a përs)', () => {
                 .attackingPlayer).toBeFalse();
         });
 
-    it('says a Civvies trader likes a player with no government',
+    it('says a mail runner\'s government likes a player with no government',
         async () => {
-            // gövt 157 (Civvies) flies every Refuel Trader and every
-            // Escort Merchant. Their përs all set 0x0008 ("HailQuote only
-            // shown when ship likes player"), so if "likes" meant ALLIED
-            // — which Civvies is with nobody the player can join — none of
-            // those 141 quotes would ever be heard.
-            const gameData = await getIntegrationGameData();
+            // Old Pell flies for the Concord of Meridian, whose allies
+            // list is EMPTY — it is allied with nobody at all, let alone
+            // with anyone the player can join. His përs sets 0x0008
+            // ("HailQuote only shown when ship likes player"), so if
+            // "likes" meant ALLIED his quote would never be heard. (The
+            // stock set says the same thing at scale: Civvies, gövt 157,
+            // flies every Refuel Trader and Escort Merchant, and its 141
+            // përs quotes are all gated this way.)
+            const gameData = await getSyntheticGameData();
             const trader = new Entity('trader');
-            trader.components.set(GovtComponent, { id: 'nova:157' });
+            trader.components.set(GovtComponent,
+                { id: SYNTHETIC.govts.meridian });
             const gates = await shipOfferGates(makeWorld(trader), trader,
                 gameData);
             expect(gates.likesPlayer).toBeTrue();
 
-            const pers = await gameData.data.Pers.get('nova:225');
-            expect(pers.govt).toEqual('nova:157');
+            const pers = await gameData.data.Pers.get(SYNTHETIC.persons.pell);
+            expect(pers.govt).toEqual(SYNTHETIC.govts.meridian);
             expect(pers.flags.hailOnlyWhenLikesPlayer).toBeTrue();
             expect(showsHailQuote(pers, {
                 ...gates, missionAvailable: true, alreadyShown: false,
@@ -158,11 +163,12 @@ describe('shipOfferGates (what the world says about a përs)', () => {
 
     it('says a xenophobic government does NOT like the player',
         async () => {
-            // gövt 141 is the Wild Geese... the point is only that a
-            // hostile disposition turns the gate off, whichever govt it
-            // comes from; alwaysAttacksPlayer / xenophobic are the two
-            // flags shipDisposition reads without any legal record.
-            const gameData = await getIntegrationGameData();
+            // Here that is the Verge Raiders (xenophobic AND
+            // alwaysAttacksPlayer), but the point is only that a hostile
+            // disposition turns the gate off, whichever govt it comes
+            // from; alwaysAttacksPlayer / xenophobic are the two flags
+            // shipDisposition reads without any legal record.
+            const gameData = await getSyntheticGameData();
             const ids = await gameData.ids;
             let hostileGovt: string | undefined;
             for (const id of [...ids.Govt].sort()) {
