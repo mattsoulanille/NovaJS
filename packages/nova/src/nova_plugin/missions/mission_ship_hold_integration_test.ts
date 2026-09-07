@@ -3,8 +3,9 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import {
-    getIntegrationGameData, getPluginGameData,
+    getPluginGameData, getSyntheticGameData,
 } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { GameDataAggregator } from '../../server/parsing/game_data_aggregator.js';
 import { MissionSession } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
@@ -52,13 +53,17 @@ const HYPERIOID_PLUGIN = 'More Blasters CHEAT';
 const HYPERIOID_MISSION = `${HYPERIOID_PLUGIN}:1000`;
 /** NGC-1317: the plug-in's target system, with no stellars in it. */
 const NGC_1317 = 'nova:500';
-/** "25000 Credit Bounty;Bounty Hunter1a": ShipCount 1, ShipGoal 0. */
-const BOUNTY_MISSION = 'nova:258';
+/**
+ * "Bounty: Raider Wing" (synthetic): ShipCount 2, ShipGoal 0 (destroy),
+ * ShipSyst Kestrel Drift, ShipDude Verge Raiders.
+ */
+const BOUNTY_MISSION = SYNTHETIC.missions.bounty;
 
 const SECOND_STEPS = Math.round(1000 / SIMULATION_STEP_MS);
 
 /**
- * Accepts `missionId` from Rauta (the stock starting stellar) and builds
+ * Accepts `missionId` from nova:128 (the starting stellar of whichever
+ * data set is passed: Rauta on stock, Port Amberline on synthetic) and builds
  * the special ships its objective spawns, exactly the way the owner's
  * client does on entering the ships' system.
  */
@@ -138,18 +143,23 @@ async function stepSeconds(world: World, uuids: string[], seconds: number) {
 }
 
 describe('mission special ships with an outstanding goal', () => {
-    it('keeps the stock bounty target in the system for a full minute '
-        + '(mïsn nova:258)', async () => {
-            const gameData = await getIntegrationGameData();
+    it('keeps a bounty target in the system for a full minute '
+        + '(a destroy goal)', async () => {
+            const gameData = await getSyntheticGameData();
             const mission = await gameData.data.Mission.get(BOUNTY_MISSION);
             expect(mission.shipGoal).toBe(0);
-            expect(mission.shipCount).toBe(1);
+            // The synthetic bounty asks for TWO corsairs; the rule under
+            // test is per-ship, so every one of them is held.
+            expect(mission.shipCount).toBe(2);
 
             const { world, uuids, objective } =
                 await worldWithMissionShips(gameData, BOUNTY_MISSION);
-            expect(uuids.length).toBe(1);
-            expect(world.entities.get(uuids[0])!.components
-                .get(SystemHoldComponent)).toEqual({ reason: 'missionGoal' });
+            expect(uuids.length).toBe(2);
+            for (const uuid of uuids) {
+                expect(world.entities.get(uuid)!.components
+                    .get(SystemHoldComponent))
+                    .toEqual({ reason: 'missionGoal' });
+            }
 
             const { everJumped, modes, present } =
                 await stepSeconds(world, uuids, 60);

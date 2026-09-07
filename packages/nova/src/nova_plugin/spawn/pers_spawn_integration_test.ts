@@ -2,8 +2,10 @@ import 'jasmine';
 import { Random } from 'nova_ecs/plugins/random_plugin';
 import {
     getIntegrationGameData,
+    getSyntheticGameData,
     makeSimulationBridgeHarness,
 } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { IdFactory } from '../core/id_factory.js';
 import { PersComponent } from './pers_plugin.js';
 import { DisabledComponent } from '../ship/disabled_component.js';
@@ -18,11 +20,16 @@ import {
 } from './npc_spawn_plugin.js';
 
 /**
- * përs spawning against real Nova data: table construction pins known
- * stock people, and the spawn path is deterministic (same seed, same
- * table => identical people at identical positions on every world).
+ * përs spawning. The MECHANISM specs run on the synthetic scenario (its
+ * Person lists, its stranded rescue përs, its derelict govt); the specs
+ * that pin what STOCK data happens to contain — named stock people, Sol's
+ * authored cast, the 160-of-228 LinkSyst overlap, Jack Folstam's ActiveOn
+ * — keep the real data, which is what they are for. Either way the spawn
+ * path is deterministic: same seed, same table => identical people at
+ * identical positions on every world.
  */
-describe('përs spawning against real Nova data', () => {
+describe('përs spawning', () => {
+    // Stays on REAL data: named stock people and their stock fields.
     it('parses known stock people', async () => {
         const gameData = await getIntegrationGameData();
         // Jack Folstam, the Night-Master of Booster: a warship pilot
@@ -47,6 +54,7 @@ describe('përs spawning against real Nova data', () => {
             .toEqual({ type: 'notGovtSystems', govt: 'nova:135' });
     }, 30_000);
 
+    // Stays on REAL data: Sol's authored cast, by name and percent.
     it("parses Sol's sÿst Person list", async () => {
         const gameData = await getIntegrationGameData();
         const sol = await gameData.data.System.get('nova:130');
@@ -66,6 +74,8 @@ describe('përs spawning against real Nova data', () => {
             ['Terrapin', 'Valkyrie', 'Drifting Derelict', 'Galadriel']);
     }, 60_000);
 
+    // Stays on REAL data: the 160-of-228 LinkSyst overlap and the
+    // derelict-Leviathan-at-Sol regression are facts about stock data.
     it("draws a listing system's people from its Person fields only",
         async () => {
             const harness = await makeSimulationBridgeHarness();
@@ -108,6 +118,8 @@ describe('përs spawning against real Nova data', () => {
             expect(table.some(entry => entry.id === 'nova:227')).toBeTrue();
         }, 120_000);
 
+    // Stays on REAL data: "480 of the 545 stock systems", and stock
+    // Terrapin nova:142's own fields, are the point of the spec.
     it('falls back to the LinkSyst pool where no Person list is authored',
         async () => {
             const harness = await makeSimulationBridgeHarness();
@@ -153,6 +165,7 @@ describe('përs spawning against real Nova data', () => {
             }
         }, 120_000);
 
+    // Stays on REAL data: Jack Folstam's stock ActiveOn "b0 & !b8".
     it('excludes people whose ActiveOn needs a control bit', async () => {
         const harness = await makeSimulationBridgeHarness();
         const gameData = await getIntegrationGameData();
@@ -176,9 +189,13 @@ describe('përs spawning against real Nova data', () => {
 
     it('spawns people deterministically, at most one of each',
         async () => {
-            const [a, b] = await Promise.all(
-                [makeSimulationBridgeHarness(), makeSimulationBridgeHarness()]);
-            const gameData = await getIntegrationGameData();
+            const [a, b] = await Promise.all([
+                makeSimulationBridgeHarness(getSyntheticGameData()),
+                makeSimulationBridgeHarness(getSyntheticGameData()),
+            ]);
+            const gameData = await getSyntheticGameData();
+            // Thessaly Reach, the sorted-first system, whose Person list
+            // is Old Pell at 30% and the Stranded Courier at 10%.
             const systemData =
                 await gameData.data.System.get(a.systemId);
 
@@ -214,10 +231,13 @@ describe('përs spawning against real Nova data', () => {
         }, 240_000);
 
     it('consumes exactly one draw per spawn attempt', async () => {
-        const harness = await makeSimulationBridgeHarness();
-        const gameData = await getIntegrationGameData();
-        const sol = await gameData.data.System.get('nova:130');
-        const table = await buildPersSpawnTable(harness.world, 'nova:130', sol);
+        const harness = await makeSimulationBridgeHarness(
+            getSyntheticGameData());
+        const gameData = await getSyntheticGameData();
+        const thessaly = await gameData.data.System.get(
+            SYNTHETIC.systems.thessaly);
+        const table = await buildPersSpawnTable(harness.world,
+            SYNTHETIC.systems.thessaly, thessaly);
         const ids = new IdFactory();
 
         // The pers stage must not let transient state (an empty table,
@@ -233,7 +253,9 @@ describe('përs spawning against real Nova data', () => {
         };
         oneDraw([]);                                  // no people here
         oneDraw(table.map(e => ({ ...e, chance: 0 })));  // nobody can win
-        oneDraw(table);                               // a miss (98.5%)
+        // A miss: Thessaly's 30 + 10 fills 40% of the Bible's 5% window,
+        // so 98% of rolls pick nobody, and this seed's first roll does.
+        oneDraw(table);
 
         // Now with everyone alive: spawn from a saturated table until
         // every listed person exists, then every further attempt must
@@ -257,39 +279,43 @@ describe('përs spawning against real Nova data', () => {
         }
     }, 120_000);
 
-    it('spawns a Refuel Trader HELD in the system', async () => {
+    it('spawns a rescue-offering përs HELD in the system', async () => {
         // Matthew's ruling: "a ship shouldn't leave before being refuelled
-        // if it offers a 'refuel me' mission". Sol's authored cast
-        // includes përs nova:227 (Valkyrie), whose LinkMission is mïsn
-        // nova:141 "Refuel Trader" — ShipGoal 5, "Rescue them" — so she is
-        // stranded and must still be there when the player arrives.
-        const harness = await makeSimulationBridgeHarness();
-        const gameData = await getIntegrationGameData();
-        const systemData = await gameData.data.System.get('nova:130');
+        // if it offers a 'refuel me' mission". Thessaly's authored cast
+        // includes the Stranded Courier, whose LinkMission is the rescue
+        // job — ShipGoal 5, "Rescue them" — so she is stranded and must
+        // still be there when the player arrives.
+        const STRANDED = SYNTHETIC.persons.stranded;
+        const harness = await makeSimulationBridgeHarness(
+            getSyntheticGameData());
+        const gameData = await getSyntheticGameData();
+        const system = SYNTHETIC.systems.thessaly;
+        const systemData = await gameData.data.System.get(system);
 
-        const valkyrie = await gameData.data.Pers.get('nova:227');
-        expect(valkyrie.linkMission).toBe('nova:141');
-        const refuel = await gameData.data.Mission.get('nova:141');
-        expect(refuel.name).toBe('Refuel Trader');
-        expect(refuel.shipGoal).toBe(GOAL_RESCUE);
+        const stranded = await gameData.data.Pers.get(STRANDED);
+        expect(stranded.linkMission).toBe(SYNTHETIC.missions.rescue);
+        const rescue = await gameData.data.Mission.get(
+            SYNTHETIC.missions.rescue);
+        expect(rescue.name).toBe('Stranded Courier');
+        expect(rescue.shipGoal).toBe(GOAL_RESCUE);
 
         // The flag is resolved at GENESIS, where the mïsn can be awaited
         // — the spawner itself never touches mission data.
         const table = await buildPersSpawnTable(
-            harness.world, 'nova:130', systemData);
-        expect(table.find(entry => entry.id === 'nova:227')?.holdsForOffer)
+            harness.world, system, systemData);
+        expect(table.find(entry => entry.id === STRANDED)?.holdsForOffer)
             .toBeTrue();
-        // ...and nobody else in Sol's cast is held: the Drifting Derelict
-        // offers mïsn 134 (ShipGoal 1, "disable"), not a rescue.
+        // ...and nobody else in the cast is held: Old Pell offers no
+        // mission at all, so nothing holds him.
         for (const entry of table) {
-            if (entry.id !== 'nova:227') {
+            if (entry.id !== STRANDED) {
                 expect(entry.holdsForOffer).withContext(entry.id).toBeFalsy();
             }
         }
 
         // Force her slice of the 5% window and spawn until she appears.
         const certain = table.map(entry => ({
-            ...entry, chance: entry.id === 'nova:227' ? 100 : 0,
+            ...entry, chance: entry.id === STRANDED ? 100 : 0,
         }));
         const random = new Random(1234);
         const ids = new IdFactory();
@@ -297,7 +323,7 @@ describe('përs spawning against real Nova data', () => {
             spawnNpc(harness.world, gameData, ids, random, [], true, certain);
         }
         const spawned = [...harness.world.entities.values()].filter(
-            entity => entity.components.get(PersComponent)?.id === 'nova:227');
+            entity => entity.components.get(PersComponent)?.id === STRANDED);
         expect(spawned.length).toBeGreaterThan(0);
         for (const trader of spawned) {
             expect(trader.components.get(SystemHoldComponent))
@@ -305,33 +331,38 @@ describe('përs spawning against real Nova data', () => {
         }
     }, 120_000);
 
-    it('spawns Drifting Derelicts already disabled', async () => {
-        const harness = await makeSimulationBridgeHarness();
-        const gameData = await getIntegrationGameData();
-        const systemData = await gameData.data.System.get('nova:130');
+    it('spawns derelicts already disabled', async () => {
+        const WRECK = SYNTHETIC.persons.wreck;
+        const harness = await makeSimulationBridgeHarness(
+            getSyntheticGameData());
+        const gameData = await getSyntheticGameData();
+        // Ossory Shoal is where the wreck is listed; the harness's own
+        // world is only the staging ground for the table and the spawns.
+        const systemData = await gameData.data.System.get(
+            SYNTHETIC.systems.ossory);
 
-        // The Drifting Derelict përs nova:156 is bound to sÿst nova:130
-        // and belongs to the derelict govt (nova:160), whose gövt Flags1
-        // 0x0800 ("Ships start disabled") makes its ships spawn disabled.
+        // The Hollow Wreck përs is bound to Ossory Shoal and belongs to
+        // Drift Wrecks, whose gövt Flags1 0x0800 ("Ships start disabled")
+        // makes its ships spawn disabled.
         const table = await buildPersSpawnTable(
-            harness.world, 'nova:130', systemData);
-        const derelict = table.find(entry => entry.id === 'nova:156');
+            harness.world, SYNTHETIC.systems.ossory, systemData);
+        const derelict = table.find(entry => entry.id === WRECK);
         expect(derelict).toEqual(jasmine.objectContaining({
-            name: 'Drifting Derelict',
-            ship: 'nova:129',
-            govt: 'nova:160',
+            name: 'Hollow Wreck',
+            ship: SYNTHETIC.ships.warden,
+            govt: SYNTHETIC.govts.wrecks,
         }));
 
-        // Spawn from Sol's real table until the derelict's slice of the
-        // 5% window comes up (2% of it => 0.1% per draw, so this needs
-        // a lot of draws; deterministic seed, stable and repeatable).
+        // Spawn from Ossory's real table until the derelict's slice of
+        // the 5% window comes up (15% of it => 0.75% per draw, so this
+        // needs many draws; deterministic seed, stable and repeatable).
         const random = new Random(1234);
         const ids = new IdFactory();
         for (let i = 0; i < 20_000; i++) {
             spawnNpc(harness.world, gameData, ids, random, [], true, table);
         }
         const hulks = [...harness.world.entities.values()].filter(
-            entity => entity.components.get(PersComponent)?.id === 'nova:156');
+            entity => entity.components.get(PersComponent)?.id === WRECK);
         expect(hulks.length).toBeGreaterThan(0);
 
         for (const hulk of hulks) {

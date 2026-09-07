@@ -1,7 +1,10 @@
 import "jasmine";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { World } from "nova_ecs/world";
-import { getIntegrationGameData } from "../../communication/simulation_test_fixture.js";
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from "../../communication/simulation_test_fixture.js";
+import { SYNTHETIC } from "novaparse/synthetic/universe";
 import { completeEntity } from "../spawn/entity_data_loader.js";
 import { makeShip } from "../ship/make_ship.js";
 import { makeSystem } from "../make_system.js";
@@ -25,26 +28,33 @@ import {
 } from "../escorts/player_escort_plugin.js";
 import { ControlledByComponent } from "../player/ship_control.js";
 
-// Stock EV Nova hypergate pair (see the spöb scan): HG-V01 (spöb nova:1400) in
-// system VNP-001 (nova:427) links to HG-V02 (spöb nova:1401) in VNP-002
-// (nova:425), and back. Sol (nova:130) contains the link-less wormhole
-// nova:465 (the Bible's "random wormhole").
-const GATE_A_SPOB = 'nova:1400';
-const GATE_B_SPOB = 'nova:1401';
-const SYSTEM_A = 'nova:427';
-const SYSTEM_B = 'nova:425';
-const WORMHOLE_SPOB = 'nova:465';
-const WORMHOLE_SYSTEM = 'nova:130';
+// The synthetic hypergate pair: Kestrel Gate (in Kestrel Drift, emergence
+// angle 90° from CustSndID) links to Vael Gate (in Vael Hollow, 270°), and
+// back. Ossory Shoal holds the link-less wormhole Ossory Rift, whose twin
+// is Vael Rift (the Bible's "random wormhole"). Kestrel Rock is the
+// ordinary landable stellar sharing a system with a gate.
+const GATE_A_SPOB = SYNTHETIC.planets.kestrelGate;
+const GATE_B_SPOB = SYNTHETIC.planets.vaelGate;
+const SYSTEM_A = SYNTHETIC.systems.kestrel;
+const SYSTEM_B = SYNTHETIC.systems.vael;
+const PLAIN_SPOB = SYNTHETIC.planets.kestrelRock;
+const WORMHOLE_SPOB = SYNTHETIC.planets.ossoryRift;
+const WORMHOLE_TWIN = SYNTHETIC.planets.vaelRift;
+const WORMHOLE_SYSTEM = SYNTHETIC.systems.ossory;
 const SHIP_UUID = 'gate test ship';
-// HG-V0a (spöb nova:1402, in Vellos) is a LEAF of the stock network: its only
-// HyperLink is HG-V02. HG-Moash (spöb nova:1416) is four lanes away in Moash
-// (sÿst nova:366, plus its stacked NCB copies) — same network, not adjacent.
+// STOCK ids, for the one transitivity spec that stays on the real data: it
+// needs a hypergate NETWORK of three or more gates, which the synthetic
+// scenario's single linked pair cannot be. HG-V0a (spöb nova:1402, in
+// Vellos) is a LEAF of the stock network: its only HyperLink is HG-V02
+// (nova:1401). HG-Moash (spöb nova:1416) is four lanes away in Moash (sÿst
+// nova:366, plus its stacked NCB copies) — same network, not adjacent.
 const LEAF_GATE_SPOB = 'nova:1402';
+const LEAF_GATE_LINK = 'nova:1401';
 const FAR_GATE_SPOB = 'nova:1416';
 const FAR_GATE_SYSTEMS = ['nova:366', 'nova:535', 'nova:605'];
 
 async function makeGateHarness(systemId: string) {
-    const gameData = await getIntegrationGameData();
+    const gameData = await getSyntheticGameData();
     const ids = await gameData.ids;
     const world = await makeSystem(systemId, gameData);
 
@@ -105,8 +115,8 @@ describe('gate transit', () => {
 
     it('transits immediately when landing on a wormhole', async () => {
         // Wormholes offer no choice: the sim removes the ship and carries it
-        // on a GateTransitEvent. nova:465 is link-less, so the destination is
-        // null (a random other wormhole, resolved by the browser from the
+        // on a GateTransitEvent. Ossory Rift is link-less, so the destination
+        // is null (a random other wormhole, resolved by the browser from the
         // replicated draw).
         const { world } = await makeGateHarness(WORMHOLE_SYSTEM);
         world.step();
@@ -140,7 +150,7 @@ describe('gate transit', () => {
             transit = data;
         });
         world.emit(LandEvent,
-            { id: 'nova:128', uuid: 'planet nova:128' }, [SHIP_UUID]);
+            { id: PLAIN_SPOB, uuid: `planet ${PLAIN_SPOB}` }, [SHIP_UUID]);
         world.step();
         world.step();
         expect(transit).toBeUndefined();
@@ -194,14 +204,17 @@ describe('gate transit', () => {
         // ...with the "jump in" sound (snd 130 Warp out) for the pilot.
         expect(sounds).toContain(WARP_OUT_SOUND);
 
-        // The destination gate's own emergence angle (CustSndID 120°) decides
-        // the direction: 120° in clock-angle radians.
-        const expected = 120 * Math.PI / 180;
+        // The destination gate's own emergence angle (Vael Gate's CustSndID
+        // 270°) decides the direction: 270° in clock-angle radians.
+        const expected = 270 * Math.PI / 180;
         const angleOff = Math.abs(movement.rotation.angle - (
             expected >= Math.PI ? expected - 2 * Math.PI : expected));
         expect(angleOff).toBeLessThan(1e-6);
     }, 30_000);
 
+    // Stays on REAL data: the transitivity rule needs a hypergate NETWORK
+    // (a leaf gate four lanes from another), which a single linked pair
+    // cannot supply.
     it('carries the ship to a NON-ADJACENT gate under hypergate transitivity',
         async () => {
         // HG-V0a (nova:1402, Vellos) has exactly ONE HyperLink — HG-V02 — so
@@ -213,7 +226,7 @@ describe('gate transit', () => {
         // how far the named destination was.
         const gameData = await getIntegrationGameData();
         const leafGate = await gameData.data.Planet.get(LEAF_GATE_SPOB);
-        expect(leafGate.gate!.destinations).toEqual([GATE_B_SPOB]);
+        expect(leafGate.gate!.destinations).toEqual([LEAF_GATE_LINK]);
         expect(leafGate.gate!.destinations).not.toContain(FAR_GATE_SPOB);
 
         // Off: not offered at all. On: offered.
@@ -270,23 +283,23 @@ describe('gate transit', () => {
         expect(movement.velocity.dot(offset)).toBeGreaterThan(0);
     }, 60_000);
 
-    it('resolves a real hypergate pair end-to-end (system and position)',
+    it('resolves a hypergate pair end-to-end (system and position)',
         async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const resolver = new GateDestinationResolver(gameData);
 
         // The destination spöb resolves to the system that contains it.
-        const destSystem = await resolver.systemOf(GATE_B_SPOB);
-        expect([SYSTEM_B, 'nova:619']).toContain(destSystem!);
+        // (On stock data this had to admit the NCB-stacked duplicate
+        // systems; the scenario has exactly one system per gate.)
+        expect(await resolver.systemOf(GATE_B_SPOB)).toEqual(SYSTEM_B);
 
         // And the reverse link resolves back to system A.
-        const backSystem = await resolver.systemOf(GATE_A_SPOB);
-        expect([SYSTEM_A, 'nova:621']).toContain(backSystem!);
+        expect(await resolver.systemOf(GATE_A_SPOB)).toEqual(SYSTEM_A);
     }, 30_000);
 });
 
-describe('escorts following a real gate', () => {
-    it('carries the flock through a stock hypergate on the land event',
+describe('escorts following a gate', () => {
+    it('carries the flock through a hypergate on the land event',
         async () => {
             const { world, addEscort } = await makeGateHarness(SYSTEM_A);
             await addEscort('escort a');
@@ -338,7 +351,7 @@ describe('escorts following a real gate', () => {
             expect(world.entities.has(SHIP_UUID)).toBeFalse();
         }, 30_000);
 
-    it('leaves the flock alone at an ordinary stock planet', async () => {
+    it('leaves the flock alone at an ordinary planet', async () => {
         const { world, addEscort } = await makeGateHarness(SYSTEM_A);
         await addEscort('escort a');
         world.step();
@@ -346,7 +359,7 @@ describe('escorts following a real gate', () => {
         const landed: EscortLanded[] = [];
         world.events.get(EscortLandedEvent).subscribe(
             ({ data }) => landed.push(data));
-        world.emit(LandEvent, { id: 'nova:128', uuid: 'planet nova:128' },
+        world.emit(LandEvent, { id: PLAIN_SPOB, uuid: `planet ${PLAIN_SPOB}` },
             [SHIP_UUID]);
         world.step();
 
@@ -358,19 +371,21 @@ describe('escorts following a real gate', () => {
 describe('GateDestinationResolver random wormhole', () => {
     it('picks a link-less wormhole exit deterministically from a draw',
         async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const resolver = new GateDestinationResolver(gameData);
-        // A random wormhole exit is another link-less wormhole, chosen by the
-        // seeded draw. nova:465 is a link-less wormhole (destinations empty).
-        const exit0 = await resolver.randomWormholeExit('nova:465', 0);
-        const exitSame = await resolver.randomWormholeExit('nova:465', 0);
+        // A random wormhole exit is another link-less wormhole, chosen by
+        // the seeded draw. Ossory Rift is link-less (destinations empty),
+        // and so is its twin in Vael Hollow.
+        const exit0 = await resolver.randomWormholeExit(WORMHOLE_SPOB, 0);
+        const exitSame = await resolver.randomWormholeExit(WORMHOLE_SPOB, 0);
         expect(exit0).toBeDefined();
         // Same draw => same exit (deterministic).
         expect(exit0).toEqual(exitSame);
         // Never returns the departure wormhole itself.
-        expect(exit0).not.toEqual('nova:465');
+        expect(exit0).not.toEqual(WORMHOLE_SPOB);
+        expect(exit0).toEqual(WORMHOLE_TWIN);
         // The chosen exit is itself a resolvable wormhole in some system.
         const exitSystem = await resolver.systemOf(exit0!);
-        expect(exitSystem).toBeDefined();
+        expect(exitSystem).toEqual(SYSTEM_B);
     }, 30_000);
 });

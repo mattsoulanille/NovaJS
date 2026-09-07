@@ -10,8 +10,9 @@ import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import {
-    getIntegrationGameData, makeSimulationBridgeHarness,
+    getIntegrationGameData, getSyntheticGameData, makeSimulationBridgeHarness,
 } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { DamagedEvent } from './death_plugin.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
 import { IonizationColorComponent, IonizationComponent } from './health_plugin.js';
@@ -73,6 +74,8 @@ describe('resolveIonizeColor (the wëap IonizeColor zero sentinel)', () => {
     });
 });
 
+// Stays on the REAL data: it pins the IonizeColor fields of six named
+// stock weapons, which is content the synthetic scenario does not have.
 describe('stock wëap IonizeColor (parsed from real Nova data)', () => {
     let weaponColor: (id: string) => Promise<number>;
     let ionizationOf: (id: string) => Promise<number>;
@@ -123,10 +126,10 @@ describe('stock wëap IonizeColor (parsed from real Nova data)', () => {
 
 describe('the simulation records the ionizing weapon\'s colour', () => {
     async function shipWorld() {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
-        const shipData = (await gameData.data.Ship.get('nova:128'))!;
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
+        const shipData = (await gameData.data.Ship.get(SYNTHETIC.ships.skiff))!;
         const ship = makeShip(shipData);
         await completeEntity(world, ship);
         world.entities.set(SHIP, ship);
@@ -227,7 +230,7 @@ describe('the simulation records the ionizing weapon\'s colour', () => {
 describe('the ionization colour crosses the sim -> display bridge', () => {
     it('registers IonizationColorComponent with the simulation serializer',
         async () => {
-            const harness = await makeSimulationBridgeHarness();
+            const harness = await makeSimulationBridgeHarness(getSyntheticGameData());
             const serializer = harness.world.resources
                 .get(SerializerResource)!;
             expect(serializer.hasComponent(
@@ -237,7 +240,7 @@ describe('the ionization colour crosses the sim -> display bridge', () => {
 
     it('carries the recorded colour in a frame from a live world',
         async () => {
-            const { client, world } = await makeSimulationBridgeHarness();
+            const { client, world } = await makeSimulationBridgeHarness(getSyntheticGameData());
             world.entities.set('ionized-uuid', new Entity('victim')
                 .addComponent(IonizationColorComponent, { color: 0xff00ff }));
 

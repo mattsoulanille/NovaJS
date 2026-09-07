@@ -1,7 +1,10 @@
 import 'jasmine';
 import { MissionData } from 'novadatainterface/mission_data';
 import { Entity } from 'nova_ecs/entity';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { MissionSession, advanceEntityDate, processEntityLanding } from '../../spaceport/mission_session.js';
 import { MissionUniverse } from '../../spaceport/mission_universe.js';
 import { dayNumber, daysPerJump } from '../player/calendar.js';
@@ -978,9 +981,18 @@ describe('missions against real Nova data', () => {
             expect(completed).toEqual(['nova:211', 'nova:418']);
             expect(entity.components.get(MissionsComponent)!.size).toBe(0);
         });
+});
 
+/**
+ * Two MissionSession seams that are about the MACHINERY, not the
+ * scenario — the commit's date idempotence and the outfitter's capacity
+ * refresh — so they run on the SYNTHETIC data set. Everything above pins
+ * stock content (named missions, stock counts, the Brass duplicates) and
+ * stays on the real files.
+ */
+describe('MissionSession commit and capacity seams', () => {
     it('does not double-apply dateAdvance on a second commit (L5)', async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
 
@@ -1014,7 +1026,7 @@ describe('missions against real Nova data', () => {
 
     it('refreshes cargo capacity so an outfitter-run cargo mission sees ' +
         'the current hold (L6)', async () => {
-            const gameData = await getIntegrationGameData();
+            const gameData = await getSyntheticGameData();
             const universe = MissionUniverse.shared(gameData);
             await universe.load();
 
@@ -1036,9 +1048,10 @@ describe('missions against real Nova data', () => {
             // enlarges the hold and pushes the new capacity in (L6).
             const baseFree = session.machinery.offerContext().freeCargoSpace;
             const cargoQty = baseFree + 12;
-            const template = universe.getMission('nova:128')!; // Delivery
-            // A synthetic pickup-at-start delivery with a fixed, oversized
-            // cargo requirement (returns to Earth like the template).
+            // The Amberline Courier Run: a mission-computer cargo delivery.
+            const template = universe.getMission(SYNTHETIC.missions.courier)!;
+            // A made-up pickup-at-start delivery with a fixed, oversized
+            // cargo requirement (returning where the template returns).
             const withCargo: MissionData = {
                 ...template,
                 id: 'test:cargo',
@@ -1087,12 +1100,13 @@ describe('missions against real Nova data', () => {
  */
 describe('processEntityLanding and the in-flight notice queue', () => {
     const NOTICE: PendingMissionNotice = {
-        missionId: 'nova:128', missionName: 'Delivery to Earth',
+        missionId: SYNTHETIC.missions.courier,
+        missionName: 'Amberline Courier Run',
         type: 'failed', text: 'You were too slow.',
     };
 
     async function pilotWithPendingNotice() {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
         const start = await gameData.data.PlayerStart.get('nova:128');

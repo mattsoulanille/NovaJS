@@ -3,7 +3,8 @@ import { v4 } from "uuid";
 import { MockCommunicator } from "nova_ecs/plugins/mock_communicator";
 import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugin";
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
-import { getIntegrationGameData } from "../../communication/simulation_test_fixture.js";
+import { getSyntheticGameData } from "../../communication/simulation_test_fixture.js";
+import { SYNTHETIC } from "novaparse/synthetic/universe";
 import { SimulationBridgeClient } from "../../communication/simulation_bridge_client.js";
 import { SimulationBridgeHost } from "../../communication/simulation_bridge_host.js";
 import { makeShip } from "../ship/make_ship.js";
@@ -21,10 +22,11 @@ import { PlayerShipSelector } from "../player/player_ship_plugin.js";
 // covered by simulation_bridge_close_test.ts.
 describe('gate arrival through the bridge insertion path', () => {
     it('inserts a ship carrying GateArrivalComponent via addEntity', async () => {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const ids = await gameData.ids;
-        const world = await makeSystem('nova:425', gameData, undefined,
-            { npcs: false });
+        // Kestrel Drift, the system holding the Kestrel Gate.
+        const world = await makeSystem(SYNTHETIC.systems.kestrel, gameData,
+            undefined, { npcs: false });
         const communicator = new MockCommunicator("server");
         await world.addPlugin(multiplayer(communicator));
         const serializer = world.resources.get(SerializerResource)!;
@@ -37,7 +39,7 @@ describe('gate arrival through the bridge insertion path', () => {
         ship.components.set(PlayerShipSelector, undefined);
         await completeEntity(world, ship);
         ship.components.set(GateArrivalComponent, {
-            destinationSpob: 'nova:1401',
+            destinationSpob: SYNTHETIC.planets.kestrelGate,
             emergenceAngle: null,
             randomDraw: 0.5,
         });

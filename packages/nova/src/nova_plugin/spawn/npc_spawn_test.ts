@@ -8,7 +8,8 @@ import { getDefaultSystemData } from 'novadatainterface/system_data';
 import { Random } from 'nova_ecs/plugins/random_plugin';
 import { World } from 'nova_ecs/world';
 import { SimulationGameDataInterface } from '../../client/gamedata/simulation_game_data.js';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { SimulationGameDataResource } from '../core/game_data_resource.js';
 import { makeSystem } from '../make_system.js';
 import {
@@ -471,26 +472,30 @@ describe('buildNpcSpawnTable and shïp AppearOn', () => {
         expect(sheetGet).not.toHaveBeenCalled();
     });
 
-    it('filters the stock story variants out of real düdes', async () => {
-        // düde nova:270 mixes four gated classes (nova:406/407 `b1307`,
-        // nova:357 `... & b753`, nova:408 `b324`) with two `!b333` Auroran
-        // capitals and an ungated Abomination (nova:246); düde nova:182
-        // is four nova:406 and nothing else.
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:130', gameData, undefined,
+    it('filters the story variants out of real parsed düdes', async () => {
+        // düde "Story Variants" mixes a gated class (the Shrike Ghost,
+        // AppearOn `b102`), its complement (the Bastion Hulk, `!b102`)
+        // and an ungated one (the Mote Drone); düde "Gated Only" is the
+        // Ghost and the Hulk and nothing else. Against the empty bit set
+        // the Ghost goes and the rest stay.
+        const gameData = await getSyntheticGameData();
+        const system = SYNTHETIC.systems.thessaly;
+        const world = await makeSystem(system, gameData, undefined,
             { npcs: false });
         const systemData = {
-            ...await gameData.data.System.get('nova:130'),
-            dudes: [{ id: 'nova:270', weight: 50 },
-                { id: 'nova:182', weight: 50 }],
+            ...await gameData.data.System.get(system),
+            dudes: [{ id: SYNTHETIC.dudes.variants, weight: 50 },
+                { id: SYNTHETIC.dudes.gatedOnly, weight: 50 }],
             fleets: [],
         };
-        const entries = await buildNpcSpawnTable(world, 'nova:130',
-            systemData);
-        // (Roaming flëts bound to Sol by LinkSyst join the table too;
-        // only the düde entries are under test.)
+        const entries = await buildNpcSpawnTable(world, system, systemData);
+        // (Roaming flëts whose LinkSyst admits this system join the table
+        // too; only the düde entries are under test.)
         expect(entries.filter(entry => entry.dude)
             .map(entry => entry.dude?.ships.map(({ id }) => id)))
-            .toEqual([['nova:302', 'nova:255', 'nova:246']]);
+            .toEqual([
+                [SYNTHETIC.ships.hulk, SYNTHETIC.ships.mote],
+                [SYNTHETIC.ships.hulk],
+            ]);
     }, 120_000);
 });

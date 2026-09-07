@@ -2,7 +2,7 @@ import 'jasmine';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { v4 } from 'uuid';
 import {
-    getIntegrationGameData,
+    getSyntheticGameData,
     makeSimulationBridgeHarness,
 } from '../../communication/simulation_test_fixture.js';
 import { DamagedEvent, DeathEvent } from '../ship/death_plugin.js';
@@ -73,9 +73,10 @@ function makeActive(objective: ShipObjective): ActiveMission {
 
 describe('mission ships in the shared simulation', () => {
     async function makeWorldWithMissionShip(goal: number, total = 1) {
-        const harness = await makeSimulationBridgeHarness();
+        const harness = await makeSimulationBridgeHarness(
+            getSyntheticGameData());
         const { world, shipUuid } = harness;
-        const gameData = await getIntegrationGameData();
+        const gameData = harness.gameData;
 
         const objective = makeObjective(goal, total);
         const owner = world.entities.get(shipUuid)!;
@@ -375,7 +376,7 @@ describe('mission ships in the shared simulation', () => {
         it('lets a boarded board-goal target go about its business again',
             async () => {
                 // The in-system hold is about OUTSTANDING business (see
-                // system_hold.ts). The sample is aboard; the Hyperioid is
+                // system_hold.ts). The sample is aboard; the skiff is
                 // an ordinary trader again and may fly home.
                 const { world, shipUuid, missionShipUuid, activeObjective } =
                     await makeWorldWithMissionShip(GOAL_BOARD);
@@ -622,9 +623,10 @@ describe('mission ships in the shared simulation', () => {
             };
         }
         async function makeWorldWithPlayerMission(flag: boolean) {
-            const harness = await makeSimulationBridgeHarness();
+            const harness = await makeSimulationBridgeHarness(
+                getSyntheticGameData());
             const { world, shipUuid } = harness;
-            const gameData = await getIntegrationGameData();
+            const gameData = harness.gameData;
             world.entities.get(shipUuid)!.components.set(MissionsComponent,
                 new Map([['nova:9998', flaggedMission(flag)]]));
             for (let i = 0; i < 60; i++) {
