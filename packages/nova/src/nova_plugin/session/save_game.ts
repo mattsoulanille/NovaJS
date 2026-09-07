@@ -35,6 +35,11 @@ import { CombatRatingComponent, LegalRecordsComponent } from '../reputation/inde
 import { ShipComponent } from '../ship/index.js';
 import { OwnerComponent, SourceComponent } from '../ship/index.js';
 import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bit_namespaces';
+import { migrateRaw } from '../../common/migrations.js';
+import {
+    FIRST_SAVE_VERSION, RawSaveData, SAVE_MIGRATIONS, SAVE_VERSION,
+    saveDefaults,
+} from './save_migrations.js';
 
 /**
  * Persistent save game for the local player.
@@ -45,10 +50,15 @@ import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bi
  * happens through the same path that spawns the player's ship at game start,
  * so nothing here mutates sim state mid-game.
  *
- * The schema is versioned: a top-level `version` plus a `data` payload. When
- * a stored save can't be decoded (corrupt, or written by a newer/older
- * version whose shape we don't understand), it is moved to a quarantine key
- * rather than deleted, and the game falls back to its defaults.
+ * The schema is versioned: a top-level `version` plus a `data` payload. A
+ * stored payload is first walked up to the current version through the
+ * migration list in save_migrations.ts (which is also where SAVE_VERSION
+ * comes from), and only then decoded by the STRICT `SaveData` codec below,
+ * which describes the latest shape alone. When a stored save can't be
+ * read (corrupt, a version this build does not know, or a payload the
+ * migrated shape rejects), it is moved to a quarantine key rather than
+ * deleted, with the reason on the console, and the game falls back to its
+ * defaults.
  *
  * ESCORTS are persisted, as whole ENTITIES rather than component fields:
  * an escort's value is its damage, outfits, cargo, and bay identity, all of
@@ -68,7 +78,10 @@ import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bi
  * is contained: a blob whose shape no longer decodes is skipped (see
  * `restoreSavedEscorts`) or, if the array itself no longer matches, the
  * whole save is quarantined rather than deleted. A pilot can lose escorts
- * across such a change; they never lose the save.
+ * across such a change; they never lose the save. The migration list does
+ * not reach inside the blobs: a component whose encoding must change
+ * incompatibly needs a migration of its own that rewrites every blob's
+ * entry for it, appended to save_migrations.ts beside the version bump.
  *
  * WHAT IS NOT SAVED. Only escorts that are WITH the player are: the ones
  * in the player's own system, the landed roster held while docked, and a
@@ -81,25 +94,15 @@ import { FIRST_PRIVATE_PHYSICAL_CONTROL_BIT } from 'novadatainterface/control_bi
  */
 
 /**
- * Bump when the shape of `SaveData` changes incompatibly.
- *
- * 1 -> 2 added `escorts`. That was a purely additive, optional field, so a
- * v1 payload still satisfies the v2 codec; see MIN_READABLE_SAVE_VERSION.
+ * The version this build writes and the oldest it reads, both derived
+ * from the migration list (save_migrations.ts): every version in
+ * [MIN_READABLE_SAVE_VERSION, SAVE_VERSION] is walked up to the latest
+ * shape before decoding; anything outside the range (including a NEWER
+ * save this build cannot understand) is refused with a reason and
+ * quarantined, never guessed at.
  */
-export const SAVE_VERSION = 2;
-
-/**
- * The oldest schema version this build can still read.
- *
- * Every version from here to `SAVE_VERSION` decodes with the current codec
- * because the changes between them only ADDED optional (`t.partial`)
- * fields — an older payload is simply one with those fields absent, which
- * is exactly what a pilot who never had escorts writes today. Bump this to
- * `SAVE_VERSION` on the first change that is not additive; anything outside
- * the range (including a NEWER save this build cannot understand) is
- * treated as unreadable and quarantined.
- */
-export const MIN_READABLE_SAVE_VERSION = 1;
+export { SAVE_VERSION } from './save_migrations.js';
+export const MIN_READABLE_SAVE_VERSION = FIRST_SAVE_VERSION;
 
 /** Stable localStorage key holding the current save. */
 export const SAVE_KEY = 'novajs:save';
@@ -152,14 +155,24 @@ export const SavedEscort = t.type({
 export type SavedEscort = t.TypeOf<typeof SavedEscort>;
 
 /**
- * The player state we persist.
+ * The player state we persist — the LATEST shape only (SAVE_VERSION). An
+ * older payload never meets this codec directly: the migrations in
+ * save_migrations.ts bring it here first, filling every required field
+ * whose absence used to mean one fixed thing.
  *
- * `ship`, `outfits`, and `system` exist in the simulation today and are
- * always written. The optional fields cover gameplay state that may be
- * absent (older saves keep loading because they are `t.partial`):
- * credits, the game date, active missions with their runtime state,
- * mission/scooped cargo, control bits, cron progress, legal records
- * (reputations), and the combat rating.
+ * REQUIRED: everything the player entity always carries once
+ * ensurePlayerStateComponents (spaceport/mission_session.ts) has run —
+ * the previous build filled a missing one with the same default at that
+ * point, so requiring it here changes what the save says, not what the
+ * player gets. The migration and extractSaveData draw the defaults from
+ * one table, saveDefaults().
+ *
+ * OPTIONAL: only the fields whose absence is a THIRD meaning that no
+ * default can stand in for: the control-bit fields (absent `controlBits`
+ * means "a pre-namespacing save, migrate the legacy numbers under the
+ * resolver"; absent `plugins` means "plug-in set unknown, attribute
+ * shared-range bits locally"), and `playerUuid` (absent means the writer
+ * did not know it; see the field).
  */
 export const SaveData = t.intersection([
     t.type({
@@ -169,48 +182,17 @@ export const SaveData = t.intersection([
         outfits: t.array(SavedOutfit),
         // Nova id of the system the player is in (e.g. 'nova:130').
         system: t.string,
-    }),
-    t.partial({
         credits: t.number,
         // The player's calendar date.
         date: GameDateType,
         // Active missions and their runtime state, keyed by mission id.
+        // ActiveMissionType is the MissionsComponent's wire codec, so the
+        // mission record itself stays additive (see player_state_plugin).
         missions: t.array(t.tuple([t.string, ActiveMissionType])),
-        // Set Nova control bits as PHYSICAL bit numbers, keyed by decimal
-        // bit id ("342"). The number is unused (always 1); the shape
-        // predates this field being written and stays for compatibility.
-        //
-        // LEGACY since `controlBits` below: still written (so an older
-        // build reads a sensible stock bit set) and read only when
-        // `controlBits` is absent, through the best-effort migration in
-        // control_bit_namespaces.ts.
-        novaControlBits: t.array(t.tuple([t.string, t.number])),
-        // Set Nova control bits as [namespace, raw bit] pairs — the form
-        // that survives a change of plug-in set (see
-        // control_bit_namespaces.ts): ["nova", 212] is stock b212,
-        // ["arpia", 2050] is ARPIA's own b2050. Includes bits PARKED from
-        // a plug-in that is not currently loaded, so they come back when
-        // it is. Preferred over `novaControlBits` on load.
-        //
-        // ADDITIVE and optional, like `ranks`: an older build ignores it,
-        // and a save without it reads through the legacy field.
-        controlBits: t.array(t.tuple([t.string, t.number])),
-        // The plug-in set the save was written under: every loaded plug-in
-        // prefix in load order (IDSpaceHandler's sorted order). Purely a
-        // manifest for diagnostics and future migrations — nothing is
-        // refused for it. Additive and optional.
-        plugins: t.array(t.string),
         // The player's active ränks, as global ränk ids ('nova:147').
         // Set and cleared by the same set strings the control bits are
         // (the Kxxx/Lxxx operators; see rank_logic.ts), and persisted
         // alongside them for the same reason.
-        //
-        // ADDITIVE and optional: a save written before ranks existed
-        // simply has no entry and decodes to "no active ranks", which is
-        // exactly the state a pre-ranks pilot was in. SAVE_VERSION does
-        // NOT move — bumping it would make older builds quarantine saves
-        // written by this one, whereas an unknown field is ignored by the
-        // non-exact codec.
         ranks: t.array(t.string),
         // Cargo aboard: commodity key ('mission:<id>', 'cargo:<n>',
         // 'junk:<id>') -> tons.
@@ -221,27 +203,66 @@ export const SaveData = t.intersection([
         // here reads as its InitialRec (see reputation.ts).
         reputations: t.array(t.tuple([t.string, t.number])),
         // Combat ratings, keyed by category; 'kills' holds the
-        // Appendix I kill points.
+        // Appendix I kill points. This build always writes a 'kills'
+        // entry and the v2 -> v3 migration adds one to a pre-v3 list
+        // without it, but the codec does not demand one: a v3 list
+        // hand-edited to lack it still decodes, and reads as zero kills
+        // (restorePlayerState), the same as it did before v3.
         combatRatings: t.array(t.tuple([t.string, t.number])),
         // The escorts that were with the player when the save was
         // written — in the system with them, held on the landed roster
-        // while docked, or riding a jump. Absent in a v1 save and in any
-        // save written by a pilot with no escorts; both read as "none".
+        // while docked, or riding a jump. Empty for a pilot with none.
         escorts: t.array(SavedEscort),
-            // How much the player knows about each star system, as
+        // How much the player knows about each star system, as
         // `[systemId, level]` pairs: 1 = entered, 2 = landed within (see
         // discovery.ts, which mirrors the original pilot file's own
         // three-state `exploration` array). Systems the player knows
-        // nothing about are simply absent.
-        //
-        // ADDITIVE and optional, like `ranks`: a save written before
-        // discovery existed has no entry, and the live store (its own
-        // localStorage key, discovery_store.ts) keeps answering — which
-        // is where a pre-discovery pilot's explored set was migrated to.
-        // SAVE_VERSION deliberately does NOT move; see `ranks`.
+        // nothing about are simply absent. The live store (its own
+        // localStorage key, discovery_store.ts) is merged with this on
+        // load, levels only rising.
         discovery: t.array(t.tuple([t.string, t.number])),
+        // The special ships of missions that auto-aborted at accept while
+        // the pilot was docked — the stock enforcement squads — queued for
+        // the lift-off that spawns them (PendingAutoAbortShipsComponent).
+        // Non-empty only for a save taken between accepting the warning
+        // and lifting off; restoring puts it back on the entity, and the
+        // first system entry drains it as the lift-off would have.
+        // (PR #142 review finding 2.)
+        autoAbortShips: PendingAutoAbortShipsType,
+    }),
+    t.partial({
+        // Set Nova control bits as PHYSICAL bit numbers, keyed by decimal
+        // bit id ("342"). The number is unused (always 1); the shape
+        // predates this field being written and stays for compatibility.
+        //
+        // LEGACY since `controlBits` below: still written (so an older
+        // build reads a sensible stock bit set) and read only when
+        // `controlBits` is absent, through the best-effort migration in
+        // control_bit_namespaces.ts. Absent only when the entity had no
+        // ControlBitsComponent at all (bare entities in specs).
+        novaControlBits: t.array(t.tuple([t.string, t.number])),
+        // Set Nova control bits as [namespace, raw bit] pairs — the form
+        // that survives a change of plug-in set (see
+        // control_bit_namespaces.ts): ["nova", 212] is stock b212,
+        // ["arpia", 2050] is ARPIA's own b2050. Includes bits PARKED from
+        // a plug-in that is not currently loaded, so they come back when
+        // it is. Preferred over `novaControlBits` on load.
+        //
+        // Optional because its absence carries meaning no default can:
+        // a save without it predates namespacing (or was written with no
+        // resolver to hand), and its bits are read through the legacy
+        // migration under whatever resolver loads it.
+        controlBits: t.array(t.tuple([t.string, t.number])),
+        // The plug-in set the save was written under: every loaded plug-in
+        // prefix in load order (IDSpaceHandler's sorted order). Purely a
+        // manifest for diagnostics and migrations — nothing is refused
+        // for it. Optional because "unknown set" (absent) and "no
+        // plug-ins" (empty) are different answers to restorePlayerState's
+        // attribution question.
+        plugins: t.array(t.string),
         // The uuid the PLAYER SHIP itself had when the save was written,
-        // written only when `escorts` is.
+        // written only when the writer knew it (player_save.ts writes it
+        // beside a non-empty `escorts`).
         //
         // Restoring re-mints the player under a fresh uuid, so an escort
         // blob's references to its player are stale on the way back in.
@@ -253,34 +274,26 @@ export const SaveData = t.intersection([
         // prepareCarriedEscorts already rewrites intra-batch references
         // through its uuid remap; this is the entry that lets the PLAYER
         // be remapped the same way (browser.ts threads it in as
-        // CarriedEscort.priorPlayer).
-        //
-        // Additive and optional, so this is not a schema break: a save
-        // without it (v1, v2-before-this-field, or an escortless pilot)
-        // decodes exactly as before and simply carries no remap entry.
-        // SAVE_VERSION deliberately does NOT move — bumping it would make
-        // every OLDER build quarantine saves written by this one, whereas
-        // an unknown field is ignored by the non-exact codec.
+        // CarriedEscort.priorPlayer). Absent means "unknown", which
+        // disables the phantom-fighter cleanup (see SavedFleetOwner).
         playerUuid: t.string,
-        // The special ships of missions that auto-aborted at accept while
-        // the pilot was docked — the stock enforcement squads — queued for
-        // the lift-off that spawns them (PendingAutoAbortShipsComponent).
-        // Written only while such a batch is pending, i.e. a save taken
-        // between accepting the warning and lifting off; restoring puts it
-        // back on the entity, and the first system entry drains it as the
-        // lift-off would have. Absent otherwise, so a pilot with nothing
-        // queued writes exactly the payload this build wrote before.
-        //
-        // ADDITIVE and optional, like `ranks`: an older build ignores it
-        // (and loses the squad, which is what it did anyway), and a save
-        // without it reads as "nothing pending". SAVE_VERSION deliberately
-        // does NOT move; see `ranks`. (PR #142 review finding 2.)
-        autoAbortShips: PendingAutoAbortShipsType,
     }),
 ]);
 export type SaveData = t.TypeOf<typeof SaveData>;
 
-/** The versioned envelope actually stored in localStorage. */
+/**
+ * The stored envelope BEFORE migration: a version and whatever payload
+ * that version wrote. This is all a reader may assume about a save it
+ * has not migrated yet; the pilot registry embeds it in export files for
+ * the same reason (the file may hold any readable version).
+ */
+export const RawSaveEnvelope = t.type({
+    version: t.number,
+    data: t.unknown,
+});
+export type RawSaveEnvelope = t.TypeOf<typeof RawSaveEnvelope>;
+
+/** The versioned envelope this build writes: SAVE_VERSION plus SaveData. */
 export const SaveEnvelope = t.type({
     version: t.number,
     data: SaveData,
@@ -303,6 +316,12 @@ export interface ControlBitSaveOptions {
  * Returns undefined if the entity is missing the ship type, in which case
  * there is nothing meaningful to persist.
  *
+ * Every required field is written. A component the entity lacks (a bare
+ * entity in a spec; a live player always has them all once
+ * ensurePlayerStateComponents has run) writes the same default the v2 ->
+ * v3 migration fills in for an absent field — saveDefaults() — so "no
+ * component" and "no field" have never meant two things.
+ *
  * `controlBits` supplies the namespace resolver; without one only the
  * legacy physical-number field is written (tests, and callers with no
  * game data to hand).
@@ -317,24 +336,46 @@ export function extractSaveData(entity: Entity, systemId: string,
     const outfits: SavedOutfit[] = outfitsState
         ? [...outfitsState].map(([id, { count }]) => [id, count])
         : [];
+    const defaults = saveDefaults();
     const save: SaveData = {
         ship: ship.id,
         outfits,
         system: systemId,
+        credits: entity.components.get(CreditsComponent)?.credits
+            ?? defaults.credits,
+        date: entity.components.get(GameDateComponent) ?? defaults.date,
+        missions: [...entity.components.get(MissionsComponent)
+            ?? defaults.missions],
+        // Sorted so the same active set always writes the same bytes.
+        ranks: [...entity.components.get(ActiveRanksComponent)
+            ?? defaults.ranks].sort(),
+        cargo: [...entity.components.get(CargoComponent) ?? defaults.cargo],
+        cronStates: [...entity.components.get(CronStatesComponent)
+            ?? defaults.cronStates],
+        reputations: [...entity.components.get(LegalRecordsComponent)
+            ?? defaults.reputations],
+        combatRatings: [['kills',
+            entity.components.get(CombatRatingComponent)?.kills ?? 0]],
+        // Escorts are not on the entity; player_save.ts fills these two
+        // in from the rosters and the serializer when it knows the pilot.
+        escorts: defaults.escorts,
+        // Star-system discovery is client-local UI state, not a
+        // component, so it comes from its own store rather than off the
+        // entity.
+        discovery: discoveryEntries(),
+        // Only while a batch is actually queued: MissionSession.commit
+        // leaves an emptied component behind once one has existed, and
+        // that reads as "nothing pending" like an absent one does.
+        autoAbortShips: (entity.components.get(PendingAutoAbortShipsComponent)
+            ?? defaults.autoAbortShips).map(batch => ({
+                ...batch,
+                shipObjective: {
+                    ...batch.shipObjective,
+                    live: new Map(batch.shipObjective.live),
+                },
+            })),
     };
 
-    const credits = entity.components.get(CreditsComponent);
-    if (credits) {
-        save.credits = credits.credits;
-    }
-    const date = entity.components.get(GameDateComponent);
-    if (date) {
-        save.date = date;
-    }
-    const missions = entity.components.get(MissionsComponent);
-    if (missions) {
-        save.missions = [...missions];
-    }
     const bits = entity.components.get(ControlBitsComponent);
     if (bits) {
         // Sorted so the same bit set always writes the same bytes.
@@ -350,48 +391,6 @@ export function extractSaveData(entity: Entity, systemId: string,
     if (controlBits) {
         save.plugins = [...controlBits.resolver.pluginOrder];
     }
-    const ranks = entity.components.get(ActiveRanksComponent);
-    if (ranks) {
-        // Sorted so the same active set always writes the same bytes.
-        save.ranks = [...ranks].sort();
-    }
-    const cargo = entity.components.get(CargoComponent);
-    if (cargo) {
-        save.cargo = [...cargo];
-    }
-    const cronStates = entity.components.get(CronStatesComponent);
-    if (cronStates) {
-        save.cronStates = [...cronStates];
-    }
-    const records = entity.components.get(LegalRecordsComponent);
-    if (records) {
-        save.reputations = [...records];
-    }
-    const rating = entity.components.get(CombatRatingComponent);
-    if (rating) {
-        save.combatRatings = [['kills', rating.kills]];
-    }
-    // Only while a batch is actually queued: MissionSession.commit leaves
-    // an emptied component behind once one has existed, and that must not
-    // change the bytes a batchless pilot writes.
-    const autoAbortShips = entity.components.get(PendingAutoAbortShipsComponent);
-    if (autoAbortShips && autoAbortShips.length > 0) {
-        save.autoAbortShips = autoAbortShips.map(batch => ({
-            ...batch,
-            shipObjective: {
-                ...batch.shipObjective,
-                live: new Map(batch.shipObjective.live),
-            },
-        }));
-    }
-    // Star-system discovery is client-local UI state, not a component, so
-    // it comes from its own store rather than off the entity. Left absent
-    // when the pilot knows nothing yet, so a brand-new pilot's save is
-    // exactly the payload a pre-discovery build wrote.
-    const discovery = discoveryEntries();
-    if (discovery.length > 0) {
-        save.discovery = discovery;
-    }
     return save;
 }
 
@@ -406,9 +405,16 @@ export interface RestoredPlayerState {
 }
 
 /**
- * Applies the optional player-state fields of a save onto the player
- * entity's components. The required fields (ship/outfits/system) are
- * consumed by the spawn path in browser.ts; this handles the rest.
+ * Applies a save's player-state fields onto the player entity's
+ * components. The identity fields (ship/outfits/system) are consumed by
+ * the spawn path in client/player_start.ts; this handles the rest.
+ *
+ * Every required field is applied unconditionally — a v3 save always has
+ * them, and for an older one the migration has already written the
+ * default the previous build's ensurePlayerStateComponents used to fill
+ * in after this function had skipped the absent field. The one guard
+ * left is on the fields whose absence means something (the control-bit
+ * trio; see SaveData).
  *
  * Control bits: the namespaced `controlBits` pairs are preferred, mapped
  * to physical bits under `resolver` (a default resolver, knowing no
@@ -430,16 +436,10 @@ export function restorePlayerState(entity: Entity, save: SaveData,
     getRank?: RankLookup):
     RestoredPlayerState {
     const restored: RestoredPlayerState = { parkedControlBits: [] };
-    if (save.credits !== undefined) {
-        entity.components.set(CreditsComponent, { credits: save.credits });
-    }
-    if (save.date) {
-        entity.components.set(GameDateComponent, { ...save.date });
-    }
-    if (save.missions) {
-        entity.components.set(MissionsComponent, new Map(
-            save.missions.map(([id, mission]) => [id, { ...mission }])));
-    }
+    entity.components.set(CreditsComponent, { credits: save.credits });
+    entity.components.set(GameDateComponent, { ...save.date });
+    entity.components.set(MissionsComponent, new Map(
+        save.missions.map(([id, mission]) => [id, { ...mission }])));
     if (save.controlBits) {
         const { physical, parked } = resolver.fromPairs(save.controlBits);
         // Belt and braces: a save written by this build has the same bit
@@ -492,29 +492,22 @@ export function restorePlayerState(entity: Entity, save: SaveData,
             + `${describePlugins(resolver.pluginOrder)}. Control bits of `
             + 'plug-ins that are no longer loaded are kept for when they are.');
     }
-    if (save.ranks) {
-        commitActiveRanks(entity, new Set(save.ranks),
-            getRank ?? (() => undefined));
-    }
-    if (save.cargo) {
-        entity.components.set(CargoComponent, new Map(save.cargo));
-    }
-    if (save.cronStates) {
-        entity.components.set(CronStatesComponent, new Map(
-            save.cronStates.map(([id, state]) => [id, { ...state }])));
-    }
-    if (save.reputations) {
-        entity.components.set(LegalRecordsComponent,
-            new Map(save.reputations));
-    }
-    if (save.combatRatings) {
-        const kills = save.combatRatings
-            .find(([category]) => category === 'kills')?.[1];
-        if (kills !== undefined) {
-            entity.components.set(CombatRatingComponent, { kills });
-        }
-    }
-    if (save.autoAbortShips && save.autoAbortShips.length > 0) {
+    commitActiveRanks(entity, new Set(save.ranks),
+        getRank ?? (() => undefined));
+    entity.components.set(CargoComponent, new Map(save.cargo));
+    entity.components.set(CronStatesComponent, new Map(
+        save.cronStates.map(([id, state]) => [id, { ...state }])));
+    entity.components.set(LegalRecordsComponent, new Map(save.reputations));
+    // Every save this build writes and every pre-v3 save it migrates has a
+    // 'kills' entry, but the codec only requires `[string, number]` pairs,
+    // so a v3 payload hand-edited (or written by another tool) to a list
+    // without one decodes fine and lands here: it means zero kills, as a
+    // list without the entry always has.
+    entity.components.set(CombatRatingComponent, {
+        kills: save.combatRatings
+            .find(([category]) => category === 'kills')?.[1] ?? 0,
+    });
+    if (save.autoAbortShips.length > 0) {
         // Back on the entity as it was; buildMissionShipSpawns drains it at
         // the restored pilot's first system entry.
         entity.components.set(PendingAutoAbortShipsComponent,
@@ -786,11 +779,11 @@ function phantomBayFighter(entity: Entity, owner: SavedFleetOwner,
  * caller that cannot identify the pilot must do.
  */
 export function restoreSavedEscorts(
-    escorts: readonly SavedEscort[] | undefined, serializer: Serializer,
+    escorts: readonly SavedEscort[], serializer: Serializer,
     owner?: SavedFleetOwner):
     Array<{ uuid: string, entity: Entity }> {
     const restored: Array<{ uuid: string, entity: Entity }> = [];
-    for (const { uuid, entity } of escorts ?? []) {
+    for (const { uuid, entity } of escorts) {
         const decoded = serializer.decode(entity);
         if (isLeft(decoded)) {
             console.warn(`Dropping saved escort ${uuid}; its entity no `
@@ -829,40 +822,89 @@ export function encodeSave(data: SaveData): string {
     return JSON.stringify(SaveEnvelope.encode(makeEnvelope(data)));
 }
 
+/** What reading a stored save produced. */
+export type SaveDecodeResult =
+    | {
+        readonly ok: true;
+        readonly data: SaveData;
+        /** The envelope's version before migration (SAVE_VERSION when
+         * nothing had to run). */
+        readonly version: number;
+    }
+    | {
+        readonly ok: false;
+        /** Why, in a sentence fit for the console. */
+        readonly reason: string;
+    };
+
 /**
- * Parses and validates a stored save string.
+ * Parses, migrates and validates a stored save string, saying why when it
+ * cannot. Never throws.
  *
- * Returns the decoded `SaveData` on success. Returns undefined for any
- * unreadable input — malformed JSON, wrong shape, or a version this build
- * doesn't understand — so callers can fall back to defaults. Never throws.
+ * The order matters: the loose envelope first (a version and an unknown
+ * payload — all that can be assumed of a save not yet migrated), then the
+ * migrations from that version to SAVE_VERSION (save_migrations.ts; a
+ * version outside the readable range is refused here, never guessed at),
+ * and only then the strict `SaveData` codec, which knows the latest shape
+ * alone.
  */
-export function decodeSave(raw: string | null | undefined):
-    SaveData | undefined {
+export function decodeSaveDetailed(raw: string | null | undefined):
+    SaveDecodeResult {
     if (raw == null) {
-        return undefined;
+        return { ok: false, reason: 'There is no save.' };
     }
     let parsed: unknown;
     try {
         parsed = JSON.parse(raw);
     } catch {
-        return undefined;
+        return { ok: false, reason: 'The save is not valid JSON.' };
     }
-    const envelope = SaveEnvelope.decode(parsed);
+    const envelope = RawSaveEnvelope.decode(parsed);
     if (isLeft(envelope)) {
-        return undefined;
+        return {
+            ok: false,
+            reason: 'The save is not a versioned envelope '
+                + '({ version, data }).',
+        };
     }
-    const { version } = envelope.right;
-    if (version < MIN_READABLE_SAVE_VERSION || version > SAVE_VERSION) {
-        // A save this build cannot read: either older than the oldest
-        // shape we still understand, or newer than anything we know
-        // about. Treat it as unreadable so it gets quarantined rather
-        // than misinterpreted.
-        return undefined;
+    const { version, data } = envelope.right;
+    if (typeof data !== 'object' || data === null || Array.isArray(data)) {
+        return { ok: false, reason: 'The save\'s payload is not an object.' };
     }
-    // Versions inside the range decode with the current codec because
-    // every step between them only added optional fields; the envelope
-    // above has already validated that. Nothing to migrate.
-    return envelope.right.data;
+    // The migrations rewrite in place; the parse above is ours to mutate.
+    const migrated = migrateRaw('save', FIRST_SAVE_VERSION, SAVE_MIGRATIONS,
+        version, data as RawSaveData);
+    if (!migrated.ok) {
+        return migrated;
+    }
+    const decoded = SaveData.decode(migrated.raw);
+    if (isLeft(decoded)) {
+        // The path of the first failure names the field; the whole report
+        // can run to pages for an escort blob. An intersection's member
+        // index ("0" for the required half) is not part of the path.
+        const context = decoded.left[0]?.context ?? [];
+        const where = context
+            .filter((entry, i) => i > 0
+                && !(context[i - 1].type instanceof t.IntersectionType))
+            .map(entry => entry.key)
+            .join('.');
+        return {
+            ok: false,
+            reason: `The save (version ${version}) does not match this `
+                + `build's shape${where ? ` at '${where}'` : ''}.`,
+        };
+    }
+    return { ok: true, data: decoded.right, version };
+}
+
+/**
+ * decodeSaveDetailed without the reason: the decoded `SaveData`, or
+ * undefined for anything unreadable so callers can fall back to defaults.
+ */
+export function decodeSave(raw: string | null | undefined):
+    SaveData | undefined {
+    const result = decodeSaveDetailed(raw);
+    return result.ok ? result.data : undefined;
 }
 
 /**
@@ -934,8 +976,8 @@ export function loadSave(storage?: SaveStorage): SaveData | undefined {
     if (raw == null) {
         return undefined;
     }
-    const data = decodeSave(raw);
-    if (data === undefined) {
+    const result = decodeSaveDetailed(raw);
+    if (!result.ok) {
         // Park the unreadable save instead of dropping it silently.
         const quarantine = quarantineKeyFor(key);
         try {
@@ -944,11 +986,11 @@ export function loadSave(storage?: SaveStorage): SaveData | undefined {
         } catch {
             // Best effort; ignore storage failures.
         }
-        console.warn(
-            `Ignoring an unreadable save (moved to '${quarantine}').`);
+        console.warn(`Ignoring an unreadable save (moved to '${quarantine}'): `
+            + result.reason);
         return undefined;
     }
-    return data;
+    return result.data;
 }
 
 /** Writes a save payload to storage. Never throws. */

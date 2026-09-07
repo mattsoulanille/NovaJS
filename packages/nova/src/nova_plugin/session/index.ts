@@ -6,6 +6,7 @@
  */
 export * from './debug_cheat_plugin.js';
 export * from './save_game.js';
+export * from './save_migrations.js';
 export * from './transition_prep.js';
 
 import { Domain, domainPlugin } from '../core/index.js';

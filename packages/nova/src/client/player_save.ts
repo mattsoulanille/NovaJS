@@ -132,12 +132,9 @@ export class PlayerPersistence {
         // next save, ~10s later, has one).
         const player = this.localPlayerUuid();
         if (player) {
-            const escorts = extractSavedEscorts(
+            data.escorts = extractSavedEscorts(
                 this.fleet.escortsToSave(player, live.world), live.serializer);
-            // Left absent rather than written as `[]`, so an escortless
-            // pilot's save stays exactly the payload a v1 build wrote.
-            if (escorts.length > 0) {
-                data.escorts = escorts;
+            if (data.escorts.length > 0) {
                 // The player's own uuid goes with them. Restoring re-mints
                 // the player, and a fighter launched from the player's
                 // OWN bays names it in OwnerComponent/SourceComponent;
@@ -204,7 +201,7 @@ export class PlayerPersistence {
             recordCheckpoint(getActiveSaveKey(), envelope, {
                 label: request.label,
                 kind: request.kind,
-                ...(data.date ? { date: { ...data.date } } : {}),
+                date: { ...data.date },
                 ...(system ? { system } : {}),
                 ...(stellar ? { stellar } : {}),
                 at: Date.now(),

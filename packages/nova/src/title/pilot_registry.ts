@@ -27,7 +27,7 @@ import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 import { discoveryKeyFor } from '../nova_plugin/player/discovery_store.js';
 import {
-    decodeSave, encodeSave, quarantineKeyFor, SaveEnvelope, SAVE_KEY,
+    decodeSave, encodeSave, quarantineKeyFor, RawSaveEnvelope, SAVE_KEY,
     setActiveSaveKey,
 } from '../nova_plugin/session/save_game.js';
 import {
@@ -140,8 +140,14 @@ export const PilotFile = t.intersection([
         profile: PilotProfileCodec,
         controls: ControlsOverrideCodec,
         settings: t.record(t.string, t.union([t.boolean, t.string])),
-        /** The pilot's SaveEnvelope, or null for a pilot that never played. */
-        save: t.union([SaveEnvelope, t.null]),
+        /**
+         * The pilot's save envelope, or null for a pilot that never
+         * played. RAW at this level — a version and an unknown payload —
+         * because the file may hold any version save_game can still read;
+         * importPilot runs it through decodeSave, which migrates and
+         * validates it, before anything is written.
+         */
+        save: t.union([RawSaveEnvelope, t.null]),
         /**
          * The pilot's checkpoint history (pilot_history.ts), added in a
          * later build. ADDITIVE and unvalidated at this level: an older
@@ -414,9 +420,10 @@ export function createPilot(profile: PilotProfile, storage?: PrefsStorage):
  * remaining pilot becomes active (or none).
  *
  * "Its save data" is every key derived from the pilot's save key: the
- * save itself, its checkpoint history, its discovery record
- * (`<saveKey>:discovery`, discovery_store.ts) and any quarantined
- * unreadable save (`<saveKey>:quarantine`, save_game.ts). Pilot ids are
+ * save itself, its checkpoint history (and an unreadable one parked at
+ * `<saveKey>:history:quarantine`, which removeHistory covers), its
+ * discovery record (`<saveKey>:discovery`, discovery_store.ts) and any
+ * quarantined unreadable save (`<saveKey>:quarantine`, save_game.ts). Pilot ids are
  * time+random, so a later pilot never inherits an orphan — but the
  * discovery record is a whole explored-galaxy map per pilot, and a stale
  * quarantine entry reads as a ghost in the "quarantined save" diagnostics

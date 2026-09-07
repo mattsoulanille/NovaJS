@@ -4,11 +4,13 @@ import {
     encodeSave, getActiveSaveKey, quarantineKeyFor, resetSave, SAVE_KEY,
     SaveData, setActiveSaveKey,
 } from '../nova_plugin/session/save_game.js';
+import { saveDefaults } from '../nova_plugin/session/save_migrations.js';
 import {
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, PilotProfile, PrefsStorage,
 } from './client_prefs.js';
 import {
-    checkpointState, historyKeyFor, loadHistory, recordCheckpoint,
+    checkpointState, historyKeyFor, historyQuarantineKeyFor, loadHistory,
+    recordCheckpoint,
 } from './pilot_history.js';
 import {
     applyActivePilot, createPilot, deletePilot, exportCheckpointFile,
@@ -30,6 +32,7 @@ class MemoryStorage implements PrefsStorage {
 }
 
 const SAMPLE_SAVE: SaveData = {
+    ...saveDefaults(),
     ship: 'nova:128',
     outfits: [['nova:200', 2]],
     system: 'nova:130',
@@ -38,6 +41,7 @@ const SAMPLE_SAVE: SaveData = {
 
 /** A second, distinguishable save payload. */
 const OTHER_SAVE: SaveData = {
+    ...saveDefaults(),
     ship: 'nova:129',
     outfits: [],
     system: 'nova:131',
@@ -163,6 +167,21 @@ describe('pilot registry', () => {
             expect(store.has(discoveryKeyFor(b.saveKey))).toBeTrue();
             // Deleting the active pilot falls back to a remaining one.
             expect(getActivePilot(store)?.id).toBe(b.id);
+        });
+
+        it('deletes a pilot\'s quarantined history too', () => {
+            // loadHistory parks an unreadable history at
+            // <saveKey>:history:quarantine; a deleted pilot's bytes must
+            // not survive there (PR #239 review finding F2).
+            const store = new MemoryStorage();
+            const a = createPilot(profile('Alpha'), store);
+            store.setItem(historyKeyFor(a.saveKey), '{not json');
+            spyOn(console, 'warn');
+            expect(loadHistory(a.saveKey, store)).toBeUndefined();
+            expect(store.has(historyQuarantineKeyFor(a.saveKey))).toBeTrue();
+            deletePilot(a.id, store);
+            expect(store.has(historyQuarantineKeyFor(a.saveKey))).toBeFalse();
+            expect(store.keys().filter(k => k.startsWith(a.saveKey))).toEqual([]);
         });
 
         it('disambiguates duplicate names', () => {

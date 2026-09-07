@@ -102,7 +102,7 @@ export async function preparePlayerStart(runtime: ClientRuntime,
     // the SAVE's outfits rather than from the hull we are about to build,
     // because the question is what the pilot had when the fighters were
     // written down — a ?ship= override must not change the answer.
-    fleet.restoredSave = save?.escorts
+    fleet.restoredSave = save
         ? {
             escorts: save.escorts,
             playerUuid: save.playerUuid,
