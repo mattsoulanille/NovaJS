@@ -15,7 +15,7 @@ import { QueryCache } from "./query_cache.js";
 import { Resource, UnknownResource } from "./resource.js";
 import { ResourceMapWrapped } from "./resource_map.js";
 import { Marker, Phase, Sortable, System, SystemSet } from "./system.js";
-import { DefaultMap, isPromise, topologicalSortList } from './utils.js';
+import { DefaultMap, isPromise, sortableNameOrder, topologicalSortList } from './utils.js';
 
 // Idea: Run other nova systems in webworkers and pass the state to the main
 // thread when you jump between systems.
@@ -61,13 +61,16 @@ export class World {
 
     /**
      * Every system and marker in registration (addSystem/addMarker)
-     * order. `sortables` is always `topologicalSortList(registered)`:
-     * a pure function of registration order and declared edges. (It
-     * used to be the previous sorted output re-sorted with the new node
-     * appended, which made an unconstrained pair's order depend on the
-     * sort history — #43.) Registration order is deterministic today
-     * because every simulation plugin registers synchronously in a
-     * fixed order; `systemNames` lets peers check they agree.
+     * order. `sortables` is always `topologicalSortList(registered,
+     * sortableNameOrder)`: a pure function of the registered SET and
+     * the declared edges. Unconstrained pairs sort by name, so
+     * registration order does not matter (#156) — it used to be the
+     * tie-break, and before that the previous sorted output re-sorted
+     * with the new node appended, which made an unconstrained pair's
+     * order depend on the sort history (#43). Pairs that could observe
+     * their order must declare it: `reportAmbiguities` (ambiguities.ts)
+     * lists the ones that do not. `systemNames` lets peers check they
+     * agree.
      */
     private registered: Array<Sortable> = [];
     private sortables: Array<Sortable> = []; // This includes systems and markers
@@ -430,7 +433,7 @@ export class World {
         if (!this.registered.includes(sortable)) {
             this.registered.push(sortable);
         }
-        this.sortables = topologicalSortList(this.registered);
+        this.sortables = topologicalSortList(this.registered, sortableNameOrder);
         this.setSystems(filterSystems(this.sortables));
     }
 
@@ -513,7 +516,7 @@ export class World {
         if (index >= 0) {
             this.registered.splice(index, 1);
         }
-        this.sortables = topologicalSortList(this.registered);
+        this.sortables = topologicalSortList(this.registered, sortableNameOrder);
         this.setSystems(filterSystems(this.sortables));
 
         return this;

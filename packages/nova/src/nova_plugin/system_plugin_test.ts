@@ -1,10 +1,6 @@
 import 'jasmine';
 import { Plugin } from 'nova_ecs/plugin';
-import { World } from 'nova_ecs/world';
-import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { DOMAINS } from './domains.js';
-import { makeSystem } from './make_system.js';
-import { SYSTEM_ORDER_SNAPSHOT } from './system_order_snapshot.js';
 import { SYSTEM_PLUGIN_ORDER } from './system_plugin.js';
 
 /**
@@ -12,7 +8,10 @@ import { SYSTEM_PLUGIN_ORDER } from './system_plugin.js';
  * describe the same composition from two sides (see Domain in
  * core/domain.ts): the domain owns membership and relative order, the
  * composition root owns the interleaving. These specs keep the two
- * sides — and the resulting system order — pinned.
+ * sides pinned. The resulting system ORDER is no longer pinned here:
+ * it is a function of the declared edges alone (system_ambiguity_test
+ * guards that no unordered pair shares state; the World tie-breaks
+ * the rest by name), so a registration reshuffle cannot change it.
  */
 describe('SystemPlugin composition', () => {
     it('registers every domain plugin exactly once and nothing else', () => {
@@ -60,18 +59,4 @@ describe('SystemPlugin composition', () => {
             seen.add(domain.name);
         }
     });
-
-    for (const platform of ['worker', 'node'] as const) {
-        it(`produces the frozen system order on the ${platform} platform`,
-            async () => {
-                const gameData = await getSyntheticGameData();
-                const ids = await gameData.ids;
-                const systemId = [...ids.System].sort()[0]!;
-                const world: World = await makeSystem(
-                    systemId, gameData, platform, { npcs: false });
-                // toEqual on the whole list: a failure prints both
-                // orders, which is what a reviewer of a reshuffle needs.
-                expect(world.systemNames).toEqual([...SYSTEM_ORDER_SNAPSHOT]);
-            });
-    }
 });

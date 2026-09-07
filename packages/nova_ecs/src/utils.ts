@@ -51,20 +51,19 @@ export function topologicalSortList(list: Sortable[],
 }
 
 /**
- * Opt-in tie-break for `topologicalSortList` that makes the order a
+ * The World's tie-break for `topologicalSortList`: makes the order a
  * function of the sortable SET and the edges alone (independent of
  * registration order): by name, compared code unit by code unit (NOT
  * localeCompare, which is locale-dependent and so would differ between
  * peers). Unnamed markers sort after named ones; two unnamed (or
  * same-named) sortables fall through to the list-position tie-break.
  *
- * Not the World's default. Measured against the real game (#43, at
- * 7f4e013e): switching the simulation world to this order moved 140 of
- * its 144 systems (4623 unconstrained pairs flipped — TimeSystem from
- * position 2 to 100, every Provider after its consumers) and failed
- * three specs on orderings that hold only by registration order. The
- * game must declare those edges before this can be adopted; the World
- * exposes `systemNames` so peers can at least verify they agree.
+ * Adopted for the World in #156 once every pair of simulation systems
+ * that could observe its order had a declared edge (ambiguities.ts
+ * reports the ones that do not). Measured against the real game before
+ * that (#43, at 7f4e013e), switching moved 140 of 144 systems and
+ * failed three specs on orderings that held only by registration
+ * order — which is why the edges had to come first.
  */
 export function sortableNameOrder(a: Sortable, b: Sortable): number {
     if (a.name === undefined) {
