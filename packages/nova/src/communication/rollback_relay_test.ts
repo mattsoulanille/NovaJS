@@ -2,7 +2,7 @@ import 'jasmine';
 import { MockCommunicator } from 'nova_ecs/plugins/mock_communicator';
 import { resetWarnThrottle } from '../common/log_throttle.js';
 import { RollbackRelay } from './rollback_relay.js';
-import { canonicalDesyncHash, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
+import { canonicalDesyncHash, PROTOCOL_VERSION, RollbackProtocolMessage, unwrapRollbackMessage, wrapRollbackMessage } from './rollback_protocol.js';
 import { SimulationInput } from './simulation_input.js';
 import { liveWireFingerprint } from './wire_schemas.js';
 
@@ -131,7 +131,7 @@ describe('RollbackRelay', () => {
         // replaying a 30s-old baseline's tail is the recovery hiccup).
         peerB.allMessages.length = 0;
         peerB.sendMessage(wrapRollbackMessage({
-            kind: 'joinRequest', fresh: true,
+            kind: 'joinRequest', fresh: true, schema: liveWireFingerprint(),
         }) as never, 'server');
         const freshReply = received(peerB).find(m => m.kind === 'catchUp');
         expect(freshReply?.kind === 'catchUp'
@@ -142,7 +142,7 @@ describe('RollbackRelay', () => {
         // A plain request gets the periodic baseline and full tail.
         peerB.allMessages.length = 0;
         peerB.sendMessage(wrapRollbackMessage({
-            kind: 'joinRequest',
+            kind: 'joinRequest', schema: liveWireFingerprint(),
         }) as never, 'server');
         const plainReply = received(peerB).find(m => m.kind === 'catchUp');
         expect(plainReply?.kind === 'catchUp'
@@ -169,11 +169,20 @@ describe('RollbackRelay', () => {
         }) as never, 'server');
         expect(received(peerB).some(m => m.kind === 'catchUp')).toBeTrue();
         expect(received(peerB).some(m => m.kind === 'joinRefused')).toBeFalse();
-        // A joiner that sends no fingerprint (an unschema'd wire) is
-        // served: the check is a comparison, not a requirement.
+    });
+
+    it('refuses a join that omits the fingerprint: protocol 7 requires it', () => {
+        const warn = spyOn(console, 'warn');
         peerB.allMessages.length = 0;
-        peerB.sendMessage(wrapRollbackMessage({ kind: 'joinRequest' }) as never, 'server');
-        expect(received(peerB).some(m => m.kind === 'catchUp')).toBeTrue();
+        peerB.sendMessage(wrapRollbackMessage({
+            kind: 'joinRequest', protocol: PROTOCOL_VERSION,
+        }) as never, 'server');
+        const refusal = received(peerB).find(m => m.kind === 'joinRefused');
+        expect(refusal?.kind === 'joinRefused' && refusal.reason).toMatch(
+            /wire schema fingerprint missing: protocol \d+ requires joinRequest\.schema \(server [0-9a-f]{16}\)/);
+        expect(received(peerB).some(m => m.kind === 'catchUp')).toBeFalse();
+        expect(warn).toHaveBeenCalledWith(jasmine.stringMatching(
+            /Refusing join of b: wire schema fingerprint missing/));
     });
 
     it('serves the input log from a tick to late joiners', () => {

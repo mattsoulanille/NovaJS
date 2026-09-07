@@ -403,11 +403,18 @@ export class RollbackRelay {
                 // differently; the build handshake should have refused
                 // it at the socket, and this is the room-level check
                 // behind that: refuse the join with the reason rather
-                // than serve a baseline it will misread.
+                // than serve a baseline it will misread. Since protocol
+                // 7 the fingerprint is REQUIRED, not compared when
+                // offered: a joiner that omits it is refused too. The
+                // only wire that sends none is the json rollback
+                // (wire_codec.ts WIRE_ENCODING), and a relay on that
+                // wire has no fingerprint of its own to require.
                 const schema = liveWireFingerprint();
-                if (message.schema !== undefined && schema !== undefined
-                    && message.schema !== schema) {
-                    const reason = `wire schema mismatch: peer ${message.schema}, `
+                if (schema !== undefined && message.schema !== schema) {
+                    const reason = message.schema === undefined
+                        ? `wire schema fingerprint missing: protocol ${PROTOCOL_VERSION} `
+                        + `requires joinRequest.schema (server ${schema})`
+                        : `wire schema mismatch: peer ${message.schema}, `
                         + `server ${schema} (protocol ${PROTOCOL_VERSION})`;
                     console.warn(`Refusing join of ${source}: ${reason}`);
                     this.room.sendMessage(wrapRollbackMessage(

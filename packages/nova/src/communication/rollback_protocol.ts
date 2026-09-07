@@ -209,8 +209,11 @@ export type RollbackProtocolMessage =
      * while a fresh baseline's tail is just the transit window. */
     /** `schema`: the joiner's wire-schema fingerprint (wire_schemas.ts
      * liveWireFingerprint), so a relay built from a different schema
-     * refuses the join instead of misreading every frame. Absent from a
-     * peer whose wire is not schema'd. */
+     * refuses the join instead of misreading every frame. REQUIRED
+     * since protocol 7: a schema'd relay refuses a join that omits it
+     * (rollback_relay.ts, "wire schema fingerprint missing"). Optional
+     * in the codec only for the json rollback wire (wire_codec.ts
+     * WIRE_ENCODING), which has no fingerprint on either end. */
     | { kind: 'joinRequest', fresh?: boolean, protocol?: number, schema?: string }
     /** The relay will not serve this joiner: its wire schema differs
      * (server -> peer). The peer gives up the join; nothing it sent
