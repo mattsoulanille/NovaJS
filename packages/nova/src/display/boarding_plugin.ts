@@ -4,7 +4,7 @@ import { Query } from 'nova_ecs/query';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { EcsEvent } from 'nova_ecs/events';
-import { Entities } from 'nova_ecs/arg_types';
+import { Entities, UUID } from 'nova_ecs/arg_types';
 import { Optional } from 'nova_ecs/optional';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
@@ -15,7 +15,9 @@ import {
     BoardingComponent, BoardingState, capturable, captureChance,
 } from '../nova_plugin/ship/boarding_component.js';
 import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escorts/escort_cap.js';
+import {
+    cappedEscortCount, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
+} from '../nova_plugin/escorts/escort_cap.js';
 import { FuelComponent } from '../nova_plugin/ship/health_plugin.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
@@ -134,10 +136,14 @@ const PLUNDER_ROWS = 4;
  *            planAmmoPlunder decides, and the dialog only reads its sum);
  *   Energy   the victim's FuelComponent has fuel left;
  *   Capture  the contest is available: the victim is not being flown
- *            (`capturable`), no attempt has been made yet, and the
+ *            (`capturable`), no attempt has been made yet, the
  *            boarder has crew to send (Bible, shïp Crew: "Ships with 0
  *            crew can't be boarded, nor can they capture any other
- *            ships").
+ *            ships"), and the player is UNDER THE ESCORT CAP (ruling
+ *            #250: at MAX_ESCORTS hired-or-captured escorts the option
+ *            is greyed, not refused on press — escort_cap.ts's count
+ *            over the display world, which carries the synced
+ *            PlayerEscort / BayFighter / MissionShip markers).
  *
  * ONE ATTEMPT. `capture !== 'none'` greys the Capture row for good: the
  * player gets a single attempt per session, and a repelled one ends the
@@ -189,7 +195,10 @@ export function cargoKeyDisplayName(key: string,
 
 export function plunderDialogContent(boarding: BoardingState,
     target: Entity | undefined, playerCrew: number,
-    cargoName: (key: string) => string = key => cargoKeyDisplayName(key)): {
+    cargoName: (key: string) => string = key => cargoKeyDisplayName(key),
+    /** Whether the player already has MAX_ESCORTS hired-or-captured
+     * escorts (escort_cap.ts), in which case Capture is greyed (#250). */
+    atEscortCap = false): {
         rows: PlunderRow[], notes: string[], lines: string[],
         enabledByAction: Record<string, boolean>
     } {
@@ -198,10 +207,11 @@ export function plunderDialogContent(boarding: BoardingState,
         ? [...cargo.values()].reduce((a, b) => a + b, 0) : 0;
     const fuel = target?.components.get(FuelComponent);
     const targetCrew = target?.components.get(ShipDataComponent)?.crew ?? 0;
-    // No capture is possible against a ship somebody is flying, and none
-    // is possible with nobody to send across (Bible, shïp Crew).
+    // No capture is possible against a ship somebody is flying, none is
+    // possible with nobody to send across (Bible, shïp Crew), and none at
+    // the escort cap (ruling #250).
     const captureBlocked = (target !== undefined && !capturable(target))
-        || playerCrew <= 0;
+        || playerCrew <= 0 || atEscortCap;
 
     // Booty readout mirroring board_ship.png: Cargo / Credits / Ammo /
     // Energy, with capture odds inline. Cargo is summarised on one line
@@ -239,12 +249,14 @@ export function plunderDialogContent(boarding: BoardingState,
         notes.push('Her captain still holds the bridge: cannot capture.');
     } else if (playerCrew <= 0) {
         notes.push('You have no crew to send across: cannot capture.');
+    } else if (atEscortCap && boarding.capture === 'none') {
+        // Why Capture is grey at the escort cap (rulings #161 / #250):
+        // the same STR# 2002 #123 line the bar's hire dialog gives, off
+        // the same constant. A note beside a greyed button, not a refusal
+        // — nothing is pressed to see it, and nothing happens on a press.
+        notes.push(MAX_ESCORTS_MESSAGE);
     } else if (boarding.capture === 'failed') {
         notes.push('You were repelled while attempting to capture!');
-    } else if (boarding.capture === 'refused') {
-        // The escort cap (ruling #161): the same STR# 2002 #123 refusal
-        // the bar's hire dialog gives, off the same constant.
-        notes.push(MAX_ESCORTS_MESSAGE);
     }
     const lines = [
         ...rows.map(r => `${r.label}  ${r.value}`
@@ -517,11 +529,11 @@ class PlunderDialog {
 
     /** Refreshes button enable/label state and the booty summary from
      * the synced boarding + victim state. `playerCrew` is the boarder's
-     * crew, for the capture-odds readout. */
+     * crew, for the capture-odds readout; `atEscortCap` greys Capture. */
     refresh(boarding: BoardingState, target: Entity | undefined,
-        playerCrew: number) {
-        const { rows, notes, enabledByAction } =
-            plunderDialogContent(boarding, target, playerCrew, this.cargoName);
+        playerCrew: number, atEscortCap: boolean) {
+        const { rows, notes, enabledByAction } = plunderDialogContent(
+            boarding, target, playerCrew, this.cargoName, atEscortCap);
         this.readout.forEach((cells, i) => {
             const row = rows[i];
             cells.label.text = row?.label ?? '';
@@ -741,7 +753,7 @@ class BoardingUi {
     }
 
     update(boarding: BoardingState | undefined, target: Entity | undefined,
-        playerCrew: number) {
+        playerCrew: number, atEscortCap = false) {
         this.reposition();
         if (boarding && this.offerMission
             && !this.offered.has(boarding.target)) {
@@ -850,7 +862,8 @@ class BoardingUi {
             case 'plunder':
                 this.assignment.close();
                 this.plunder.open();
-                this.plunder.refresh(boarding!, target, playerCrew);
+                this.plunder.refresh(boarding!, target, playerCrew,
+                    atEscortCap);
                 return;
         }
     }
@@ -864,16 +877,24 @@ const BoardingUiResource = new Resource<BoardingUi>('BoardingUi');
 // when no boarding is in progress.
 const PlayerBoardingQuery = new Query(
     [PlayerShipSelector, Optional(BoardingComponent),
-        Optional(ShipDataComponent)] as const);
+        Optional(ShipDataComponent), UUID] as const);
 const BoardingUiSystem = new System({
     name: 'BoardingUiSystem',
     args: [BoardingUiResource, PlayerBoardingQuery, Entities] as const,
     step(ui, players, entities) {
         const boarding = players[0]?.[1] ?? undefined;
         const playerCrew = players[0]?.[2]?.crew ?? 0;
+        const playerUuid = players[0]?.[3];
         const target = boarding
             ? entities.get(boarding.target) : undefined;
-        ui.update(boarding ?? undefined, target, playerCrew);
+        // The escort cap, off the same count and the same synced markers
+        // the sim's capture gate reads (ruling #250). The player is in
+        // flight while boarding, so the client's carried rosters are
+        // empty and the display world is the whole fleet.
+        const atEscortCap = boarding !== undefined && playerUuid !== undefined
+            && cappedEscortCount(playerUuid, { world: entities })
+                >= MAX_ESCORTS;
+        ui.update(boarding ?? undefined, target, playerCrew, atEscortCap);
     },
 });
 

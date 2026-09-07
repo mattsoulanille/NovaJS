@@ -93,17 +93,19 @@ export const BoardingState = t.type({
      *              the write. The literal is kept in the codec because
      *              the wire shape is additive-only.
      *  'succeeded' the ship was captured; the assignment dialog is up,
-     *  'assigned'  the captured ship has been taken as an escort,
-     *  'refused'   the player tried to keep it but already has the most
-     *              escorts allowed (escort_cap.ts, ruling #161): the prize
-     *              is not converted, the session stays open on the plunder
-     *              dialog (which says why, and greys Capture), and the
-     *              hulk is released at Done. Additive literal.
+     *  'assigned'  the captured ship has been taken as an escort.
+     *
+     * There is no 'refused': at the escort cap (escort_cap.ts, rulings
+     * #161 / #250) the capture ATTEMPT is unavailable — the plunder dialog
+     * greys Capture and the sim ignores the press — rather than the keep
+     * being refused afterwards. The literal that #161 first shipped for
+     * that refusal was never persisted (a save extracts named fields from
+     * the player entity, never this component, and only a player's own
+     * press could set it), so it is dropped from the codec outright.
      */
     capture: t.union([
         t.literal('none'), t.literal('failed'),
-        t.literal('succeeded'), t.literal('assigned'),
-        t.literal('refused')]),
+        t.literal('succeeded'), t.literal('assigned')]),
     /** Whether the BoardPenalty crime has been charged this session. */
     crimeApplied: t.boolean,
 });

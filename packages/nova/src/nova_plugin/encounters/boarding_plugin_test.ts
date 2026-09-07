@@ -468,13 +468,15 @@ describe('boarding in a live world', () => {
 
     /**
      * ========================================================================
-     * THE ESCORT CAP (maintainer ruling #161)
+     * THE ESCORT CAP (maintainer rulings #161 and #250)
      * ========================================================================
-     * A captured prize the player keeps is an escort, so keeping it is
-     * refused — with the bar's own STR# 2002 #123 message, via
-     * capture 'refused' — once the player already has MAX_ESCORTS
-     * hired-or-captured escorts in the world. Mission escorts and bay
-     * fighters do not count.
+     * A captured prize the player keeps is an escort, so once the player
+     * already has MAX_ESCORTS hired-or-captured escorts in the world the
+     * capture ATTEMPT is unavailable: the plunder dialog greys Capture
+     * (display/boarding_dialog_test) and the sim ignores the press — no
+     * roll, no state change, no crime, the session open and the booty on
+     * offer. Nothing is refused with a message any more. Mission escorts
+     * and bay fighters do not count.
      */
     describe('the escort cap on a capture', () => {
         function flock(world: World, n: number,
@@ -494,70 +496,68 @@ describe('boarding in a live world', () => {
             }
         }
 
-        it('refuses to keep the prize at the cap, and keeps the session open',
-            async () => {
+        it('ignores a capture attempt at the cap: no roll, the session '
+            + 'open, the booty on offer, Done releases the hulk', async () => {
                 const { world, boarder, target } = await boardingWorld({
                     boarderCrew: 500, targetCrew: 1,
                 });
                 flock(world, MAX_ESCORTS);
-                forceCaptureRoll(world, true);
+                // A roll that would succeed — if one were made. It is not:
+                // the attempt is unavailable, and the seeded stream is
+                // untouched (a press that drew would desync a peer whose
+                // dialog greyed the button off the same count).
+                const random = new Random();
+                let draws = 0;
+                random.next = () => { draws++; return 0; };
+                world.resources.set(RandomResource, random);
                 press(world, BOARDER, 'board');
                 press(world, BOARDER, 'plunderCapture');
+                expect(draws).toBe(0);
                 expect(boarder.components.get(BoardingComponent)?.capture)
-                    .toEqual('succeeded');
-
-                press(world, BOARDER, 'plunderCaptureEscort');
-                expect(boarder.components.get(BoardingComponent)?.capture)
-                    .toEqual('refused');
+                    .toEqual('none');
                 // Not converted: no escort link, still the hulk it was.
                 expect(target.components.has(PlayerEscortComponent)).toBeFalse();
                 expect(target.components.has(FormationComponent)).toBeFalse();
                 expect(target.components.has(GovtComponent)).toBeTrue();
                 expect(target.components.has(DisabledComponent)).toBeTrue();
-                // The refusal is a plunder-dialog note, not the end of the
-                // session: pressing again changes nothing, Done releases.
+                // The keep press has nothing to keep either.
                 press(world, BOARDER, 'plunderCaptureEscort');
                 expect(boarder.components.get(BoardingComponent)?.capture)
-                    .toEqual('refused');
+                    .toEqual('none');
                 expect(target.components.has(PlayerEscortComponent)).toBeFalse();
+                // The booty is still there for the taking...
+                press(world, BOARDER, 'plunderCargo');
+                expect(boarder.components.get(BoardingComponent)?.cargoTaken)
+                    .toBeTrue();
+                // ...and Done releases the hulk as ever.
                 press(world, BOARDER, 'plunderDone');
                 expect(boarder.components.has(BoardingComponent)).toBeFalse();
                 expect(target.components.has(PlayerEscortComponent)).toBeFalse();
             });
 
         /**
-         * Review of PR #212, finding 4: a refused keep is not a crime —
-         * nothing happened to the hulk. What IS charged is the capture
-         * ATTEMPT, at the roll, and that charge stands unchanged through
-         * the refusal (and through a second press of it).
+         * An unavailable attempt is not an attempt: the piracy charge is
+         * for the capture ROLL ("either way"), and no roll was made. The
+         * plunder itself still charges, as it always did.
          */
-        it('charges no crime for the refusal: the attempt\'s charge stands',
-            async () => {
-                const { world, boarder } = await boardingWorld({
-                    boarderCrew: 500, targetCrew: 1,
-                });
-                flock(world, MAX_ESCORTS);
-                forceCaptureRoll(world, true);
-                const record = () =>
-                    boarder.components.get(LegalRecordsComponent)!
-                        .get('nova:128');
-                press(world, BOARDER, 'board');
-                expect(record()).toBeUndefined();
-                press(world, BOARDER, 'plunderCapture');
-                const charged = record();
-                expect(charged).toBeLessThan(0);
-                expect(boarder.components.get(BoardingComponent)?.crimeApplied)
-                    .toBeTrue();
-
-                press(world, BOARDER, 'plunderCaptureEscort');
-                expect(boarder.components.get(BoardingComponent)?.capture)
-                    .toEqual('refused');
-                expect(record()).toEqual(charged);
-                press(world, BOARDER, 'plunderCaptureEscort');
-                expect(record()).toEqual(charged);
-                press(world, BOARDER, 'plunderDone');
-                expect(record()).toEqual(charged);
+        it('charges no crime for an attempt that was unavailable', async () => {
+            const { world, boarder } = await boardingWorld({
+                boarderCrew: 500, targetCrew: 1,
             });
+            flock(world, MAX_ESCORTS);
+            forceCaptureRoll(world, true);
+            const record = () =>
+                boarder.components.get(LegalRecordsComponent)!
+                    .get('nova:128');
+            press(world, BOARDER, 'board');
+            expect(record()).toBeUndefined();
+            press(world, BOARDER, 'plunderCapture');
+            expect(record()).toBeUndefined();
+            expect(boarder.components.get(BoardingComponent)?.crimeApplied)
+                .toBeFalse();
+            press(world, BOARDER, 'plunderCargo');
+            expect(record()).toBeLessThan(0);
+        });
 
         it('keeps the prize one under the cap, and it then fills the cap',
             async () => {

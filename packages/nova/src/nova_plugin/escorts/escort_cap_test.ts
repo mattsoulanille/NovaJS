@@ -11,10 +11,11 @@ import { EscortProvenance, PlayerEscortComponent } from '../player/player_escort
 /**
  * Maintainer ruling #161: six escorts, counting only the ones the player
  * hired or captured. Mission-granted escorts and bay fighters neither
- * count nor are limited. The bar (spaceport/hire_escort_test) and the
- * plunder session (boarding_plugin_test) each pin their refusal; this
- * pins the number and the ONE count they share, wherever an escort
- * happens to be when it is counted.
+ * count nor are limited. The bar (spaceport/hire_escort_test) pins its
+ * refusal and the plunder session (boarding_plugin_test,
+ * boarding_dialog_test) its greyed Capture (#250); this pins the number
+ * and the ONE count they share, wherever an escort happens to be when it
+ * is counted.
  */
 describe('the escort cap (#161)', () => {
     const PLAYER = 'player-uuid';

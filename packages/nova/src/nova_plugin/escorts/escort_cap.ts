@@ -19,13 +19,14 @@ import { PlayerEscortComponent } from '../player/index.js';
  *   - fighters LAUNCHED FROM BAYS — the player's own or a carrier
  *     escort's — are outfits flying, not escorts, and are unlimited.
  *
- * The cap is enforced at the two places an escort is acquired, with the
- * same refusal (STR# 2002 index 123): the bar's hire dialog
- * (spaceport/hire_escort.ts) and the plunder session's "keep as escort"
- * (boarding_plugin.ts). Both count through ONE function,
- * {@link cappedEscortCount}, which counts an escort wherever it happens
- * to be at that moment — see its doc for the places, and for what each
- * caller can and cannot see.
+ * The cap is enforced at the two places an escort is acquired: the bar's
+ * hire dialog (spaceport/hire_escort.ts) refuses with STR# 2002 index 123,
+ * and the plunder dialog's Capture is GREYED — unavailable, no refusal on
+ * press — with the same line as its note (ruling #250; the sim's capture
+ * gate in boarding_plugin.ts ignores a press off the same predicate).
+ * Both count through ONE function, {@link cappedEscortCount}, which
+ * counts an escort wherever it happens to be at that moment — see its
+ * doc for the places, and for what each caller can and cannot see.
  *
  * The original refuses a hire past a cap but the Bible never states the
  * number; six is the maintainer's ruling from the original game.
@@ -133,8 +134,8 @@ export interface EscortCapSources {
  * (browser.ts: lift-off, jump arrival, and the held batch of a
  * multi-jump chain or a gate arrival once carriedBatchSettled), but the
  * re-inserts arrive as input records a few ticks later, and a capture
- * assigned inside those ticks is counted against the world alone. A
- * boarding takes a disabled target, an approach, and three presses, so
+ * attempted inside those ticks is counted against the world alone. A
+ * boarding takes a disabled target, an approach, and two presses, so
  * the ticks are not a practical way past the cap; it is documented here
  * rather than closed because closing it would mean syncing the roster.
  */

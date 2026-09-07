@@ -235,7 +235,7 @@ describe('plunder dialog content', () => {
      */
     describe('the capture row after the one attempt', () => {
         for (const capture of
-            ['failed', 'succeeded', 'assigned', 'refused'] as const) {
+            ['failed', 'succeeded', 'assigned'] as const) {
             it(`is grey once capture is '${capture}'`, () => {
                 expect(plunderDialogContent(
                     boardingState({ capture }), victim(), 100)
@@ -252,19 +252,43 @@ describe('plunder dialog content', () => {
             expect(enabledByAction['plunderCapture']).toBeFalse();
         });
 
-        it('says why a kept prize was refused at the escort cap (#161), '
-            + 'on the plunder dialog, with the booty still on offer', () => {
-                const { enabledByAction, notes } = plunderDialogContent(
-                    boardingState({ capture: 'refused' }), victim(), 100);
-                // The bar's own refusal, verbatim.
-                expect(notes).toEqual([MAX_ESCORTS_MESSAGE]);
-                expect(enabledByAction['plunderCargo']).toBeTrue();
+    });
+
+    /**
+     * THE ESCORT CAP (ruling #250): at MAX_ESCORTS hired-or-captured
+     * escorts the Capture option is GREYED — unavailable before any
+     * press, with the bar's own STR# 2002 #123 line as the note and no
+     * odds to show — while the booty stays on offer. There is no refused
+     * state to render any more: nothing happens on a press.
+     */
+    describe('the capture row at the escort cap', () => {
+        it('greys Capture, drops the odds, and says why, with the booty '
+            + 'still on offer', () => {
+                const { enabledByAction, notes, rows } = plunderDialogContent(
+                    boardingState(), victim(), 100, undefined, true);
                 expect(enabledByAction['plunderCapture']).toBeFalse();
-                // The assignment dialog is not re-opened for a refusal.
-                expect(boardingDialogPhase(boardingState({ capture: 'refused' }),
-                    false)).toBe('plunder');
-                expect(boardingDialogPhase(boardingState({ capture: 'succeeded' }),
-                    false)).toBe('capture');
+                expect(enabledByAction['plunderCargo']).toBeTrue();
+                expect(enabledByAction['plunderDone']).toBeTrue();
+                expect(notes).toEqual([MAX_ESCORTS_MESSAGE]);
+                expect(rows[3].rightLabel).toBeUndefined();
+            });
+
+        it('lights Capture under the cap, exactly as before', () => {
+            const { enabledByAction, notes } = plunderDialogContent(
+                boardingState(), victim(), 100, undefined, false);
+            expect(enabledByAction['plunderCapture']).toBeTrue();
+            expect(notes).toEqual([]);
+        });
+
+        it('lets the other reasons speak first: a flown ship is "cannot '
+            + 'capture" whether or not the fleet is full', () => {
+                const flown = victim();
+                flown.components.set(ControlledByComponent,
+                    { peerId: 'someone' });
+                const { notes } = plunderDialogContent(
+                    boardingState(), flown, 100, undefined, true);
+                expect(notes).toEqual(
+                    ['Her captain still holds the bridge: cannot capture.']);
             });
     });
 
