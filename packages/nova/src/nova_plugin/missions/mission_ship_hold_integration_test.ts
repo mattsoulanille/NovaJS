@@ -13,6 +13,8 @@ import { BoardedComponent } from '../ship/boarding_component.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
 import { JumpComponent } from '../travel/jump_plugin.js';
 import { makeShip } from '../ship/make_ship.js';
+import { ArmorComponent } from '../ship/health_plugin.js';
+import { Stat } from '../core/stat.js';
 import { makeSystem, SIMULATION_STEP_MS } from '../make_system.js';
 import { startMissionById } from './mission_logic.js';
 import { MissionShipComponent } from '../player/mission_ship_component.js';
@@ -91,10 +93,12 @@ async function acceptAndSpawn(gameData: GameDataAggregator,
 
 /**
  * Builds `systemId` (without its own NPC traffic, so nothing distracts the
- * AI) with the mission's owner and its special ships in it.
+ * AI) with the mission's owner and its special ships in it. With
+ * `unkillable`, each special ship is seeded with an armour it cannot lose
+ * in a minute (the armour Stat's Provide keeps an existing `current`).
  */
 async function worldWithMissionShips(gameData: GameDataAggregator,
-    missionId: string) {
+    missionId: string, { unkillable = false } = {}) {
     const { owner, ships, systemId } = await acceptAndSpawn(gameData,
         missionId);
     const world = await makeSystem(systemId, gameData, undefined,
@@ -105,6 +109,11 @@ async function worldWithMissionShips(gameData: GameDataAggregator,
     const uuids: string[] = [];
     for (const ship of ships) {
         ship.components.set(MultiplayerData, { owner: 'owner' });
+        if (unkillable) {
+            ship.components.set(ArmorComponent, new Stat({
+                current: 1_000_000, max: 1_000_000, min: 0, recharge: 0,
+            }));
+        }
         const uuid = v4();
         await completeEntity(world, ship);
         world.entities.set(uuid, ship);
@@ -152,8 +161,13 @@ describe('mission special ships with an outstanding goal', () => {
             // test is per-ship, so every one of them is held.
             expect(mission.shipCount).toBe(2);
 
-            const { world, uuids, objective } =
-                await worldWithMissionShips(gameData, BOUNTY_MISSION);
+            // The hold is what is under test, not the ships' survival: a
+            // pair of missile-armed raiders at close quarters can blast
+            // each other within the minute (seed-dependent), and a
+            // DESTROYED special ship is a different exit from the system
+            // than the despawn the hold forbids.
+            const { world, uuids, objective } = await worldWithMissionShips(
+                gameData, BOUNTY_MISSION, { unkillable: true });
             expect(uuids.length).toBe(2);
             for (const uuid of uuids) {
                 expect(world.entities.get(uuid)!.components

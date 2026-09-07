@@ -359,7 +359,14 @@ describe('escorts following a gate', () => {
         const landed: EscortLanded[] = [];
         world.events.get(EscortLandedEvent).subscribe(
             ({ data }) => landed.push(data));
-        world.emit(LandEvent, { id: PLAIN_SPOB, uuid: `planet ${PLAIN_SPOB}` },
+        // An ordinary planet that is NOT in this system (Port Amberline,
+        // nova:128, in Thessaly Reach — the shape the stock version had
+        // with Earth): the gate path has nothing to do with the landing,
+        // and the escort-landing rule for a planet in the SAME system
+        // (which would land the flock with the player, and rightly so)
+        // is not what this spec is about.
+        const elsewhere = SYNTHETIC.planets.port;
+        world.emit(LandEvent, { id: elsewhere, uuid: `planet ${elsewhere}` },
             [SHIP_UUID]);
         world.step();
 
