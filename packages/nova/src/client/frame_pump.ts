@@ -362,8 +362,10 @@ export class FramePump {
                     return;
                 }
                 // The frame's game-data references resolve in the
-                // display's own caches: stage them before applying.
-                await stageSimulationFrameGameData(runtime.gameData, frame);
+                // display's own caches (ExplosionData in its asset
+                // data): stage them before applying.
+                await stageSimulationFrameGameData(runtime.gameData, frame,
+                    runtime.displayAssetData);
                 if (liveSystem(runtime.state.state) !== live) {
                     return;
                 }

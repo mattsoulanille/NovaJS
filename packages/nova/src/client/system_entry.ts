@@ -466,8 +466,10 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     syncedComponents.clear();
     warnedUnsyncableEntities.clear();
     // The frame's game-data references (ShipData & co.) resolve in the
-    // display's own caches: stage them before applying.
-    await scope.race(stageSimulationFrameGameData(gameData, initialFrame));
+    // display's own caches (ExplosionData in its asset data): stage
+    // them before applying.
+    await scope.race(stageSimulationFrameGameData(gameData, initialFrame,
+        runtime.displayAssetData));
     applySimulationFrame(initialFrame, serializer, displayWorld);
     // The last thing that can fail is behind us: the session is checked
     // one final time so a world is never published over a title screen.

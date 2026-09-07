@@ -4,6 +4,7 @@ import { Entity } from "nova_ecs/entity";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { Serializer } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
+import type { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
 import { SimulationTimeResource } from "../display/simulation_time.js";
 import { stageEncodedComponentsGameData } from "../nova_plugin/core/game_data_ref.js";
@@ -139,17 +140,19 @@ function applyEntityDelta(uuid: string, delta: EntityDelta, serializer: Serializ
 /**
  * Loads the game data a frame's components REFER to (ShipData & co.
  * cross as ids: nova_plugin/core/game_data_ref.ts) into the display's
- * own caches, so `applySimulationFrame` decodes them synchronously.
- * The worker staged them for its world; the display's cache is its
- * own. Call before every apply — a cache miss at apply time drops the
- * component with a warning.
+ * own caches — `gameData` for the simulation's tables, `displayAssets`
+ * for ExplosionData, whose table is the display's — so
+ * `applySimulationFrame` decodes them synchronously. The worker staged
+ * them for its world; the display's cache is its own. Call before
+ * every apply — a cache miss at apply time drops the component with a
+ * warning.
  */
 export async function stageSimulationFrameGameData(gameData: SimulationGameDataInterface,
-    frame: SimulationFrame): Promise<void> {
+    frame: SimulationFrame, displayAssets?: DisplayAssetDataInterface): Promise<void> {
     await stageEncodedComponentsGameData(gameData, [
         ...frame.added.map(([, entity]) => entity.components),
         ...frame.changed.map(([, delta]) => delta.changed),
-    ]);
+    ], displayAssets);
 }
 
 export function applySimulationFrame(frame: SimulationFrame,
