@@ -8,7 +8,10 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../../communication/simulation_test_fixture.js';
 import { CloakActiveComponent } from '../ship/cloak_plugin.js';
 import {
     deriveRepair,
@@ -137,17 +140,32 @@ describe('disable thresholds against real Nova data', () => {
  * World-level behavior against the real simulation stack. Worlds build
  * with the 'worker' platform (control systems included) in an
  * asteroid-free system with NPC traffic off — a controlled battlefield.
+ *
+ * Almost everything here runs on the SYNTHETIC scenario: the Wren Skiff
+ * is the 33%-threshold hull and the Shrike Ghost (shïp Flags 0x0010) the
+ * 10% one. The few specs that need an outfit the scenario has no
+ * counterpart for — a stock Afterburner, a ModType 49 repair system —
+ * pass `stock: true` and run on the real Nova data, and say so.
  */
 describe('ship disabling in a live world', () => {
     const SHIP = 'ship under test';
+    /** No shïp Flags 0x0010: disables at 33%, and carries a blaster. */
+    const SKIFF = SYNTHETIC.ships.skiff;
+    /** shïp Flags 0x0010: disables at 10%. */
+    const GHOST = SYNTHETIC.ships.ghost;
+    /** The stock hulls the two `stock: true` specs use. */
+    const SHUTTLE = 'nova:128';
 
     async function shipWorld(shipId: string, {
         controlled = false,
         extraOutfits = {} as { [id: string]: number },
+        stock = false,
     } = {}) {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
+        const gameData = stock
+            ? await getIntegrationGameData() : await getSyntheticGameData();
+        const world = await makeSystem(
+            stock ? 'nova:226' : SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
         const shipData = (await gameData.data.Ship.get(shipId))!;
         const ship = makeShip(shipData);
         if (controlled) {
@@ -190,7 +208,7 @@ describe('ship disabling in a live world', () => {
 
     it('keeps a full-armor hulk disabled, and un-disables it only when '
         + 'the component is deleted (boarding repair)', async () => {
-        const { world, ship } = await shipWorld('nova:128');
+        const { world, ship } = await shipWorld(SKIFF);
         // A spawn-disabled derelict: full armor + shields, hulk flag
         // (Matthew's playtest observation: the original's derelicts read
         // "disabled" yet take a whole hull's worth of shots to destroy).
@@ -208,10 +226,10 @@ describe('ship disabling in a live world', () => {
         expect(ship.components.get(DisabledComponent)).toBeUndefined();
     });
 
-    it('enters at 33% for a Shuttle and NOT at 33% for a Fed Destroyer',
+    it('enters at 33% for a Wren Skiff and NOT at 33% for a Shrike Ghost',
         async () => {
             {
-                const { world, ship } = await shipWorld('nova:128');
+                const { world, ship } = await shipWorld(SKIFF);
                 damageToFraction(ship, 0.34);
                 world.step();
                 expect(ship.components.has(DisabledComponent)).toBeFalse();
@@ -220,8 +238,8 @@ describe('ship disabling in a live world', () => {
                 expect(ship.components.has(DisabledComponent)).toBeTrue();
             }
             {
-                // The destroyer keeps fighting at 33% and disables at 10%.
-                const { world, ship } = await shipWorld('nova:141');
+                // The Ghost keeps fighting at 33% and disables at 10%.
+                const { world, ship } = await shipWorld(GHOST);
                 damageToFraction(ship, 0.33);
                 world.step();
                 expect(ship.components.has(DisabledComponent)).toBeFalse();
@@ -231,11 +249,14 @@ describe('ship disabling in a live world', () => {
             }
         }, 120_000);
 
+    // STAYS ON REAL DATA: the synthetic scenario has no afterburner
+    // outfit (no ModType 30/31), so there is nothing there whose fuel
+    // burn a disable could suspend.
     it('spends no afterburner fuel while disabled', async () => {
         // The stock Shuttle has no afterburner; fit the stock Afterburner
         // outfit (nova:197, 37 fuel/s) through the real provider path.
-        const { world, ship } = await shipWorld('nova:128', {
-            extraOutfits: { 'nova:197': 1 },
+        const { world, ship } = await shipWorld(SHUTTLE, {
+            stock: true, extraOutfits: { 'nova:197': 1 },
         });
         expect(ship.components.get(ShipPhysicsComponent)!.afterburner)
             .toBeGreaterThan(0);
@@ -264,7 +285,7 @@ describe('ship disabling in a live world', () => {
 
     it('suspends thrust and turning, and the ship slows to rest',
         async () => {
-            const { world, ship } = await shipWorld('nova:128');
+            const { world, ship } = await shipWorld(SKIFF);
             const movement = ship.components.get(MovementStateComponent)!;
             movement.velocity = new Vector(100, 0);
             damageToFraction(ship, 0.2);
@@ -297,12 +318,12 @@ describe('ship disabling in a live world', () => {
             .filter(([, entity]) =>
                 entity.components.get(SourceComponent) === SHIP).length;
 
-        // Control case: a healthy shuttle firing its primary spawns
+        // Control case: a healthy skiff firing its primary spawns
         // projectiles once past the initial reload window. (Controlled:
         // the trigger->firing translation only runs for controlled
         // ships, which carry ActiveSecondaryWeapon.)
         {
-            const { world, ship } = await shipWorld('nova:128',
+            const { world, ship } = await shipWorld(SKIFF,
                 { controlled: true });
             for (let i = 0; i < 300; i++) {
                 holdControls(world, ship, { firePrimary: true });
@@ -312,7 +333,7 @@ describe('ship disabling in a live world', () => {
         }
         // Disabled: the same trigger-holding spawns nothing.
         {
-            const { world, ship } = await shipWorld('nova:128',
+            const { world, ship } = await shipWorld(SKIFF,
                 { controlled: true });
             damageToFraction(ship, 0.2);
             world.step();
@@ -326,7 +347,7 @@ describe('ship disabling in a live world', () => {
     }, 120_000);
 
     it('suspends shield/armor/fuel recharge but still clamps', async () => {
-        const { world, ship } = await shipWorld('nova:128');
+        const { world, ship } = await shipWorld(SKIFF);
         const armor = armorOf(ship);
         const shield = ship.components.get(ShieldComponent)!;
         const fuel = ship.components.get(FuelComponent)!;
@@ -355,9 +376,11 @@ describe('ship disabling in a live world', () => {
     }, 120_000);
 
     it('decloaks once on disable and blocks re-cloaking', async () => {
-        // nova:269 is the stock Polaris cloaking device.
-        const { world, ship } = await shipWorld('nova:128',
-            { extraOutfits: { 'nova:269': 1 } });
+        // The Shadow Cloak: the scenario's ModType 17 cloaking device.
+        // CLOAK_OFF_SOUND is a constant in cloak_plugin, not a snd
+        // resource lookup, so the sound assertion holds on any data set.
+        const { world, ship } = await shipWorld(SKIFF,
+            { extraOutfits: { [SYNTHETIC.outfits.cloak]: 1 } });
 
         let cloakOffSounds = 0;
         world.addSystem(new System({
@@ -393,11 +416,14 @@ describe('ship disabling in a live world', () => {
         expect(ship.components.get(CloakActiveComponent)?.active).toBeFalse();
     }, 120_000);
 
+    // STAYS ON REAL DATA: nothing in the synthetic scenario is a ModType
+    // 49 repair system, so there is no outfit there to put a ship on the
+    // outfit repair schedule.
     it('repairs on the outfit schedule to above the threshold and resumes',
         async () => {
             // nova:437: the stock ModType 49 repair-system outfit.
-            const { world, ship } = await shipWorld('nova:128',
-                { extraOutfits: { 'nova:437': 1 } });
+            const { world, ship } = await shipWorld(SHUTTLE,
+                { stock: true, extraOutfits: { 'nova:437': 1 } });
             expect(ship.components.get(RepairComponent))
                 .toEqual({ hasRepairSystem: true });
 
@@ -426,10 +452,12 @@ describe('ship disabling in a live world', () => {
             expect(shield.current).toBeGreaterThan(before);
         }, 120_000);
 
+    // STAYS ON REAL DATA for the same reason: the outfit repair schedule
+    // needs a ModType 49 outfit, which only the stock data has.
     it('rolls the same repair delay for the same seed', async () => {
         const roll = async () => {
-            const { world, ship } = await shipWorld('nova:128',
-                { extraOutfits: { 'nova:437': 1 } });
+            const { world, ship } = await shipWorld(SHUTTLE,
+                { stock: true, extraOutfits: { 'nova:437': 1 } });
             damageToFraction(ship, 0.2);
             world.step();
             return ship.components.get(DisabledComponent)!.repairAt;
@@ -442,7 +470,7 @@ describe('ship disabling in a live world', () => {
 
     it('gives player-controlled ships the inherent repair droid',
         async () => {
-            const { world, ship } = await shipWorld('nova:128',
+            const { world, ship } = await shipWorld(SKIFF,
                 { controlled: true });
             expect(ship.components.get(RepairComponent))
                 .toEqual({ hasRepairSystem: false });
@@ -456,7 +484,7 @@ describe('ship disabling in a live world', () => {
         }, 120_000);
 
     it('leaves NPCs with no repair outfit stranded', async () => {
-        const { world, ship } = await shipWorld('nova:128');
+        const { world, ship } = await shipWorld(SKIFF);
         damageToFraction(ship, 0.2);
         world.step();
         expect(ship.components.get(DisabledComponent)!.repairAt).toBeNull();
@@ -468,7 +496,7 @@ describe('ship disabling in a live world', () => {
 
     it('re-enables when outside repair lifts armor above the threshold',
         async () => {
-            const { world, ship } = await shipWorld('nova:128');
+            const { world, ship } = await shipWorld(SKIFF);
             damageToFraction(ship, 0.2);
             world.step();
             expect(ship.components.has(DisabledComponent)).toBeTrue();
@@ -479,7 +507,7 @@ describe('ship disabling in a live world', () => {
 
     it('self-destruct kills the ship through the zero-armor death path',
         async () => {
-            const { world, ship } = await shipWorld('nova:128',
+            const { world, ship } = await shipWorld(SKIFF,
                 { controlled: true });
             holdControls(world, ship, { selfDestruct: 'start' });
             world.step();
@@ -510,8 +538,8 @@ describe('ship disabling in a live world', () => {
                 ionizationColor: 0xffffff, passThroughShield: 1,
                 knockback: 0,
             };
-            // Both threshold flavors: 33% Shuttle and 10% Fed Destroyer.
-            for (const shipId of ['nova:128', 'nova:141']) {
+            // Both threshold flavors: 33% Wren Skiff and 10% Shrike Ghost.
+            for (const shipId of [SKIFF, GHOST]) {
                 const { world, ship } = await shipWorld(shipId);
                 world.emit(DamagedEvent,
                     { damage: ionBarrage, damager: 'nobody' }, [SHIP]);
@@ -536,6 +564,9 @@ describe('ship disabling in a live world', () => {
             }
         }, 120_000);
 
+    // STAYS ON REAL DATA: no synthetic wëap sets the disable-only
+    // (ionising, non-lethal) damage type, and the assertion is about the
+    // stock resources that do.
     it('pins the stock disable-only weapons (real data)', async () => {
         const gameData = await getIntegrationGameData();
         const damageOf = async (id: string) => {
@@ -555,36 +586,35 @@ describe('ship disabling in a live world', () => {
     }, 120_000);
 
     it('NPC warships drop disabled ships as attack targets', async () => {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
         const { makeNpcShip } = await import('../spawn/npc_spawn_plugin.js');
         const { NpcComponent } = await import('../npc/npc_ai_plugin.js');
         const { TargetComponent } = await import('../ship/target_component.js');
         const { Position } = await import('nova_ecs/datatypes/position');
         const { Angle } = await import('nova_ecs/datatypes/angle');
 
-        // A Federation destroyer warship and a nearby Auroran-governed
-        // ship (the Federation's govt enemies include the Aurorans).
-        const destroyerData = (await gameData.data.Ship.get('nova:141'))!;
-        const warship = makeNpcShip(destroyerData, 3, 'nova:128',
+        // A Meridian Heron Warden warship and a nearby raider-governed
+        // ship (Meridian's gövt enemies name the raiders' class).
+        const wardenData = (await gameData.data.Ship.get(
+            SYNTHETIC.ships.warden))!;
+        const warship = makeNpcShip(wardenData, 3, SYNTHETIC.govts.meridian,
             new Position(0, 0), new Angle(0), new Vector(0, 0));
         await completeEntity(world, warship);
         world.entities.set('warship', warship);
 
-        const preyData = (await gameData.data.Ship.get('nova:128'))!;
-        const prey = makeNpcShip(preyData, 1, 'nova:129',
+        const preyData = (await gameData.data.Ship.get(SKIFF))!;
+        const prey = makeNpcShip(preyData, 1, SYNTHETIC.govts.raiders,
             new Position(400, 0), new Angle(0), new Vector(0, 0));
         await completeEntity(world, prey);
         world.entities.set('prey', prey);
 
         // Let the decision system run (1s think interval, faster with
-        // govt SkillMult). Only as far as the first think: the moment
-        // the warship's first GUIDED missile locks on, the lock itself
-        // provokes the wimpy prey into fleeing (guided-missile
-        // provocation), so a long dogfight now ends with the prey
-        // destroyed rather than intact — this spec is about the
-        // disabled-target drop, so keep the shooting window short.
+        // govt SkillMult). Only as far as the first think: a long
+        // dogfight would end with the prey destroyed rather than intact —
+        // this spec is about the disabled-target drop, so keep the
+        // shooting window short.
         for (let i = 0; i < 70; i++) {
             world.step();
         }
@@ -624,9 +654,9 @@ describe('ship disabling in a live world', () => {
             // The playtest bug: formation keeping's RCS regime writes
             // movement.velocity DIRECTLY, so DisabledMovementSystem running
             // afterwards could not undo it and a hulk kept station.
-            const { world, ship: leader } = await shipWorld('nova:128');
-            const gameData = await getIntegrationGameData();
-            const shipData = await gameData.data.Ship.get('nova:128');
+            const { world, ship: leader } = await shipWorld(SKIFF);
+            const gameData = await getSyntheticGameData();
+            const shipData = await gameData.data.Ship.get(SKIFF);
             const follower = makeShip(shipData);
             await completeEntity(world, follower);
             world.entities.set('follower', follower);
@@ -669,9 +699,9 @@ describe('ship disabling in a live world', () => {
             // The control for the test above: without the disable, station
             // keeping pulls the escort in, so the assertion there is really
             // about the disabled gate and not about a dead formation.
-            const { world, ship: leader } = await shipWorld('nova:128');
-            const gameData = await getIntegrationGameData();
-            const shipData = await gameData.data.Ship.get('nova:128');
+            const { world, ship: leader } = await shipWorld(SKIFF);
+            const gameData = await getSyntheticGameData();
+            const shipData = await gameData.data.Ship.get(SKIFF);
             const follower = makeShip(shipData);
             await completeEntity(world, follower);
             world.entities.set('follower', follower);
@@ -701,7 +731,7 @@ describe('ship disabling in a live world', () => {
 
     it('self-destruct works while disabled (the escape hatch)',
         async () => {
-            const { world, ship } = await shipWorld('nova:128',
+            const { world, ship } = await shipWorld(SKIFF,
                 { controlled: true });
             damageToFraction(ship, 0.2);
             world.step();

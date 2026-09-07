@@ -1,6 +1,7 @@
 import 'jasmine';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
 import { DEBUG_CREDITS_GRANT } from './debug_cheat_plugin.js';
 import { makeShip } from '../ship/make_ship.js';
@@ -11,28 +12,29 @@ import { recordHostile, recordWith } from '../reputation/reputation.js';
 import { ShipControlEvent, ShipControlStateComponent } from '../player/ship_control.js';
 
 /**
- * The debug cheats in a LIVE world (real game data, the full simulation
- * stack): a synthetic control edge on the player's ship — exactly the
- * input record browser.ts forwards when a debug button is clicked —
- * grants credits or clears the legal record, deterministically.
+ * The debug cheats in a LIVE world (parsed game data, the full simulation
+ * stack): a control edge on the player's ship — exactly the input record
+ * browser.ts forwards when a debug button is clicked — grants credits or
+ * clears the legal record, deterministically.
  */
 describe('debug cheats in a live world', () => {
     const PLAYER = 'player ship';
-    // Federation govt (CrimeTol 10 in stock data).
-    const FED = 'nova:128';
+    // The Concord of Meridian (CrimeTol 20).
+    const MERIDIAN = SYNTHETIC.govts.meridian;
 
     async function makeWorld() {
-        const gameData = await getIntegrationGameData();
-        // nova:226: asteroid-free plugin system; NPCs off for control.
-        const world = await makeSystem('nova:226', gameData, 'worker',
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        // Thessaly Reach: asteroid-free; NPCs off for control.
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            'worker', { npcs: false });
         return { gameData, world };
     }
 
     async function addPlayer(world: World,
         gameData: Awaited<ReturnType<typeof makeWorld>>['gameData'],
         records = new Map<string, number>()) {
-        const player = makeShip(await gameData.data.Ship.get('nova:128'));
+        const player = makeShip(
+            await gameData.data.Ship.get(SYNTHETIC.ships.skiff));
         player.components.set(CreditsComponent, { credits: 0 });
         player.components.set(LegalRecordsComponent, records);
         await completeEntity(world, player);
@@ -67,14 +69,14 @@ describe('debug cheats in a live world', () => {
     it('Clear Legal Record restores a hostile record to neutral',
         async () => {
             const { gameData, world } = await makeWorld();
-            // Deep in criminal Federation territory (record < -CrimeTol).
+            // Deep in criminal Meridian territory (record < -CrimeTol).
             const player = await addPlayer(world, gameData,
-                new Map([[FED, -100]]));
+                new Map([[MERIDIAN, -100]]));
             world.step();
 
-            const fedGovt = await gameData.data.Govt.get(FED);
+            const govt = await gameData.data.Govt.get(MERIDIAN);
             const records = player.components.get(LegalRecordsComponent)!;
-            expect(recordHostile(records.get(FED)!, fedGovt.crimeTol))
+            expect(recordHostile(records.get(MERIDIAN)!, govt.crimeTol))
                 .toBeTrue();
 
             press(world, 'debugClearRecord');
@@ -82,7 +84,7 @@ describe('debug cheats in a live world', () => {
             // Every stored record is gone, so the govt reads as its
             // neutral default and is no longer hostile.
             expect(records.size).toBe(0);
-            expect(recordHostile(recordWith(records, FED, fedGovt),
-                fedGovt.crimeTol)).toBeFalse();
+            expect(recordHostile(recordWith(records, MERIDIAN, govt),
+                govt.crimeTol)).toBeFalse();
         });
 });

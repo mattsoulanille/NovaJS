@@ -1,16 +1,20 @@
 import 'jasmine';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../../communication/simulation_test_fixture.js';
 import { completeEntity } from '../spawn/entity_data_loader.js';
 import { GovtComponent } from './govt_component.js';
 import { JammingComponent } from '../combat/jamming_plugin.js';
 import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
 
-// These assertions run against the real Nova game data (Nova_Data). They pin a
-// few known governments' parsed values (allies/enemies/MaxOdds/InhJam) and
-// exercise the GovtData -> GovtComponent -> InhJam-folded JammingComponent
-// pipeline end to end.
+// These assertions stay on the real Nova game data (Nova_Data): the whole
+// point of this describe is to pin a few known STOCK governments' parsed
+// values (allies/enemies/MaxOdds/InhJam), which no other data set has. The
+// GovtData -> GovtComponent -> InhJam-folded JammingComponent pipeline is
+// exercised on the synthetic scenario in the describe below.
 describe('GovtData against real Nova data', () => {
     it("pins the Federation's (nova:128) parsed values", async () => {
         const gameData = await getIntegrationGameData();
@@ -76,61 +80,65 @@ describe('GovtData against real Nova data', () => {
     });
 });
 
-describe('inherent jamming from a ship\'s government (real data)', () => {
-    it("folds a Federation ship's InhJam into a jammer-less ship", async () => {
-        const gameData = await getIntegrationGameData();
-        const system = await makeSystem('nova:130', gameData, undefined, { npcs: false });
+describe('inherent jamming from a ship\'s government', () => {
+    it("folds a weak-InhJam govt into a jammer-less ship", async () => {
+        const gameData = await getSyntheticGameData();
+        const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
 
-        // nova:128 (Shuttle) carries no jamming outfits, so its jamming comes
-        // entirely from its government. The Federation (nova:128) has
+        // The Wren Skiff carries no jamming outfits, so its jamming comes
+        // entirely from its government. The Verge Raiders have
         // InhJam [7, 5, 0, 0].
-        const shipData = await gameData.data.Ship.get('nova:128');
+        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.skiff);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
-        ship.components.set(GovtComponent, { id: 'nova:128' });
+        ship.components.set(GovtComponent, { id: SYNTHETIC.govts.raiders });
         await completeEntity(system, ship);
 
         expect(ship.components.get(JammingComponent)).toEqual([7, 5, 0, 0]);
     });
 
     it("takes the max of outfit jamming and a strong govt's InhJam", async () => {
-        const gameData = await getIntegrationGameData();
-        const system = await makeSystem('nova:130', gameData, undefined, { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
 
-        // nova:133 (Starbridge) stocks jammers summing to [20, 15, 0, 0].
-        // The Vell-os (nova:136) have InhJam [50, 50, 35, 20], which dominates
-        // every type, so the per-type max is the Vell-os InhJam.
-        const shipData = await gameData.data.Ship.get('nova:133');
+        // The Shrike Ghost stocks jammers summing to [20, 15, 0, 0].
+        // The Amber Compact has InhJam [50, 50, 35, 20], which dominates
+        // every type, so the per-type max is the Compact's InhJam.
+        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
-        ship.components.set(GovtComponent, { id: 'nova:136' });
+        ship.components.set(GovtComponent, { id: SYNTHETIC.govts.compact });
         await completeEntity(system, ship);
 
         expect(ship.components.get(JammingComponent)).toEqual([50, 50, 35, 20]);
     });
 
     it("leaves a ship's outfit jamming intact where it out-jams its govt", async () => {
-        const gameData = await getIntegrationGameData();
-        const system = await makeSystem('nova:130', gameData, undefined, { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
 
-        // nova:133 (Starbridge) jammers -> [20, 15, 0, 0]; the Federation
-        // (nova:128) InhJam is [7, 5, 0, 0], weaker on every type, so the
-        // outfit values win the per-type max.
-        const shipData = await gameData.data.Ship.get('nova:133');
+        // The Shrike Ghost's jammers -> [20, 15, 0, 0]; the Verge Raiders'
+        // InhJam is [7, 5, 0, 0], weaker on every type, so the outfit
+        // values win the per-type max.
+        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
-        ship.components.set(GovtComponent, { id: 'nova:128' });
+        ship.components.set(GovtComponent, { id: SYNTHETIC.govts.raiders });
         await completeEntity(system, ship);
 
         expect(ship.components.get(JammingComponent)).toEqual([20, 15, 0, 0]);
     });
 
     it('leaves a ship with no GovtComponent unchanged (outfit-only)', async () => {
-        const gameData = await getIntegrationGameData();
-        const system = await makeSystem('nova:130', gameData, undefined, { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const system = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
 
-        // Same Starbridge, but with no government: jamming stays outfit-only.
-        const shipData = await gameData.data.Ship.get('nova:133');
+        // The same Ghost, but with no government: jamming stays outfit-only.
+        const shipData = await gameData.data.Ship.get(SYNTHETIC.ships.ghost);
         const ship = makeShip(shipData);
         ship.components.set(MultiplayerData, { owner: 'server' });
         await completeEntity(system, ship);

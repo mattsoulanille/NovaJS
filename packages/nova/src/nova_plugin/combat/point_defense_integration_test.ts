@@ -8,7 +8,8 @@ import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { System } from 'nova_ecs/system';
 import { UUID } from 'nova_ecs/arg_types';
 import { World } from 'nova_ecs/world';
-import { getIntegrationGameData } from '../../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../../communication/simulation_test_fixture.js';
 import { BayFighterComponent } from '../escorts/bay_plugin.js';
 import { CollisionVulnerabilityComponent } from '../core/collision_interaction.js';
 import { DamagedEvent } from '../ship/death_plugin.js';
@@ -21,22 +22,32 @@ import { makeShip } from '../ship/make_ship.js';
 import { makeSystem } from '../make_system.js';
 import { TargetComponent } from '../ship/target_component.js';
 
-// The battlefield ship: a Shuttle, which the flag happens to mark too,
+// The battlefield ship: a Wren Skiff, which the flag happens to mark too,
 // but it is only ever the SHOOTER here.
-const SHUTTLE = 'nova:128';
+const SKIFF = SYNTHETIC.ships.skiff;
 // shïp Flags2 0x0008 ("Ship can be fired on by point defense systems"):
-const FED_VIPER = 'nova:144';   // set - a fighter, and Viper Bay's payload
-const MANTA = 'nova:161';       // clear - and Manta Bay's payload
-const FED_CARRIER = 'nova:143'; // clear - a capital ship
-// wëap Guidance 9, "Point defense turret": speed 600, shotDuration 400ms,
-// so it reaches 240 units.
-const QUAD_LIGHT_BLASTER_TURRET = 'nova:133';
-const PD_RANGE = 240;
-const VIPER_BAY = 'nova:149';  // launches FED_VIPER
-const PIRATE_GOVT = 'nova:137'; // xenophobic: hostile to a flagless ship
+const PD_FIGHTER = SYNTHETIC.ships.skiff;   // set - and the Skiff Bay's payload
+const TOUGH_FIGHTER = SYNTHETIC.ships.ghost; // clear - and the Ghost Bay's payload
+const CAPITAL_SHIP = SYNTHETIC.ships.warden; // clear - a capital ship
+/**
+ * wëap Guidance 9, "Point defense turret". Its reach is
+ * shotSpeed x shotDuration, exactly as ProjectileWeapon computes
+ * pointDefenseRangeSquared. The Flak Point Defense's wëap Speed of 1400
+ * parses to 1400 x WEAP_SPEED_FACTOR (3/10) = 420 px/s, and its Count of
+ * 15 frames is 15 / 30 fps = 500 ms, so it reaches 420 x 0.5 = 210
+ * units. (The stock spec derived 240 the same way, from a parsed
+ * 600 px/s over 400 ms.)
+ */
+const FLAK_POINT_DEFENSE = SYNTHETIC.weapons.pointDefense;
+const PD_RANGE = (1400 * 3 / 10) * (15 / 30);
+const SKIFF_BAY = SYNTHETIC.weapons.skiffBay;  // launches PD_FIGHTER
+// (TOUGH_FIGHTER is the Ghost Bay's payload; the specs below place one
+// directly rather than launching it, as the stock spec did with the Manta.)
+// Xenophobic: hostile to a flagless ship.
+const RAIDER_GOVT = SYNTHETIC.govts.raiders;
 
 /**
- * POINT DEFENSE AGAINST FIGHTERS, end to end on the real Nova data.
+ * POINT DEFENSE AGAINST FIGHTERS, end to end on parsed game data.
  *
  * The EVN Bible describes point defense as firing "at incoming guided
  * weapons and nearby ships" (wëap Guidance 9/10, ~:3103), and marks the
@@ -45,40 +56,40 @@ const PIRATE_GOVT = 'nova:137'; // xenophobic: hostile to a flagless ship
  * ship_parse hardcoded `vulnerableTo: ["normal"]` with a TODO, so no
  * ship ever carried the marker a PD turret scans for.
  *
- * These specs pin the whole chain on real data: the flag off the stock
- * resources, the marker and collision tag it becomes on a live entity,
- * the missiles-first choice, and the rule that keeps a turret off its
- * own wing.
+ * These specs pin the whole chain: the flag off the parsed resources, the
+ * marker and collision tag it becomes on a live entity, the
+ * missiles-first choice, and the rule that keeps a turret off its own
+ * wing.
  */
-describe('point defense against fighters (real Nova data)', () => {
-    type GameData = Awaited<ReturnType<typeof getIntegrationGameData>>;
+describe('point defense against fighters', () => {
+    type GameData = Awaited<ReturnType<typeof getSyntheticGameData>>;
 
     describe('shïp Flags2 0x0008 parsing', () => {
-        it('marks the Fed Viper, a bay fighter, vulnerable to point defense',
+        it('marks the Wren Skiff, a bay fighter, vulnerable to point defense',
             async () => {
-                const gameData = await getIntegrationGameData();
-                const viper = await gameData.data.Ship.get(FED_VIPER);
-                expect(viper.vulnerableTo).toContain('pointDefense');
+                const gameData = await getSyntheticGameData();
+                const skiff = await gameData.data.Ship.get(PD_FIGHTER);
+                expect(skiff.vulnerableTo).toContain('pointDefense');
                 // Still hit by ordinary weapons, of course.
-                expect(viper.vulnerableTo).toContain('normal');
+                expect(skiff.vulnerableTo).toContain('normal');
             }, 120_000);
 
-        it('leaves the Fed Carrier, a capital ship, invulnerable to it',
+        it('leaves the Heron Warden, a capital ship, invulnerable to it',
             async () => {
-                const gameData = await getIntegrationGameData();
-                const carrier = await gameData.data.Ship.get(FED_CARRIER);
-                expect(carrier.vulnerableTo).not.toContain('pointDefense');
-                expect(carrier.vulnerableTo).toEqual(['normal']);
+                const gameData = await getSyntheticGameData();
+                const warden = await gameData.data.Ship.get(CAPITAL_SHIP);
+                expect(warden.vulnerableTo).not.toContain('pointDefense');
+                expect(warden.vulnerableTo).toEqual(['normal']);
             }, 120_000);
 
-        it('is per ship class, not per size: the Manta bay fighter is clear',
-            async () => {
-                // A useful reminder that this is DATA. The Manta is a bay
-                // fighter (Manta Bay, nova:154) whose class does not set
-                // the flag, so point defense leaves it alone.
-                const gameData = await getIntegrationGameData();
-                const manta = await gameData.data.Ship.get(MANTA);
-                expect(manta.vulnerableTo).not.toContain('pointDefense');
+        it('is per ship class, not per size: the Shrike Ghost bay fighter '
+            + 'is clear', async () => {
+                // A useful reminder that this is DATA. The Ghost is a bay
+                // fighter (the Ghost Bay's payload) whose class does not
+                // set the flag, so point defense leaves it alone.
+                const gameData = await getSyntheticGameData();
+                const ghost = await gameData.data.Ship.get(TOUGH_FIGHTER);
+                expect(ghost.vulnerableTo).not.toContain('pointDefense');
             }, 120_000);
     });
 
@@ -95,11 +106,11 @@ describe('point defense against fighters (real Nova data)', () => {
         });
     }
 
-    /** nova:226 (Ver'ashan) is asteroid-free, so nothing strays in. */
+    /** Thessaly Reach is asteroid-free, so nothing strays in. */
     async function makeBattlefield() {
-        const gameData = await getIntegrationGameData();
-        const world = await makeSystem('nova:226', gameData, undefined,
-            { npcs: false });
+        const gameData = await getSyntheticGameData();
+        const world = await makeSystem(SYNTHETIC.systems.thessaly, gameData,
+            undefined, { npcs: false });
         return { gameData, world };
     }
 
@@ -164,27 +175,27 @@ describe('point defense against fighters (real Nova data)', () => {
     }
 
     /**
-     * The shooter, a pirate carrier out of point defense reach, and a
-     * pirate bay fighter parked 100 units off the shooter's +x side —
-     * well inside the turret's 240. The shooter flies no flag, so the
-     * xenophobic Pirate government makes the wing HOSTILE by the one
+     * The shooter, a raider carrier out of point defense reach, and a
+     * raider bay fighter parked 100 units off the shooter's +x side —
+     * well inside the turret's 210. The shooter flies no flag, so the
+     * xenophobic Verge Raiders make the wing HOSTILE by the one
      * hostility rule (hostility.ts), with no target lock needed.
      */
     async function setUp() {
         const { gameData, world } = await makeBattlefield();
-        const shooter = await addShip(world, gameData, SHUTTLE, 'shooter',
+        const shooter = await addShip(world, gameData, SKIFF, 'shooter',
             1000, 1000);
-        const enemyCarrier = await addShip(world, gameData, SHUTTLE,
-            'enemyCarrier', 1000 + 4 * PD_RANGE, 1000, PIRATE_GOVT);
+        const enemyCarrier = await addShip(world, gameData, SKIFF,
+            'enemyCarrier', 1000 + 4 * PD_RANGE, 1000, RAIDER_GOVT);
         settle(world);
-        const viperBay = await getWeapon(world, VIPER_BAY);
-        const [hostileUuid, hostile] = launch(world, viperBay, 'enemyCarrier');
+        const skiffBay = await getWeapon(world, SKIFF_BAY);
+        const [hostileUuid, hostile] = launch(world, skiffBay, 'enemyCarrier');
         settle(world);
         pin(shooter, 1000, 1000);
         pin(enemyCarrier, 1000 + 4 * PD_RANGE, 1000);
         pin(hostile, 1100, 1000);
         return {
-            gameData, world, shooter, enemyCarrier, viperBay,
+            gameData, world, shooter, enemyCarrier, skiffBay,
             hostileUuid, hostile,
         };
     }
@@ -195,7 +206,7 @@ describe('point defense against fighters (real Nova data)', () => {
         it('carries the point defense marker and collision tag', async () => {
             const { hostile } = await setUp();
             expect(hostile.components.has(VulnerableToPD))
-                .withContext('a Fed Viper is something PD can aim at')
+                .withContext('a Wren Skiff is something PD can aim at')
                 .toBeTrue();
             expect(hostile.components.get(CollisionVulnerabilityComponent)
                 ?.vulnerableTo.has('pointDefense'))
@@ -205,13 +216,13 @@ describe('point defense against fighters (real Nova data)', () => {
 
         it('leaves a ship whose class lacks the flag unmarked', async () => {
             const { gameData, world } = await setUp();
-            const manta = await addShip(world, gameData, MANTA, 'manta',
-                1100, 1000);
+            const ghost = await addShip(world, gameData, TOUGH_FIGHTER,
+                'ghost', 1100, 1000);
             settle(world);
-            expect(manta.components.has(VulnerableToPD))
-                .withContext('the Manta class does not set Flags2 0x0008')
+            expect(ghost.components.has(VulnerableToPD))
+                .withContext('the Shrike Ghost class does not set Flags2 0x0008')
                 .toBeFalse();
-            expect(manta.components.get(CollisionVulnerabilityComponent)
+            expect(ghost.components.get(CollisionVulnerabilityComponent)
                 ?.vulnerableTo.has('pointDefense')).toBeFalse();
         }, 120_000);
     });
@@ -221,7 +232,7 @@ describe('point defense against fighters (real Nova data)', () => {
     describe('target choice', () => {
         it('engages a hostile bay fighter in range', async () => {
             const { world, hostileUuid } = await setUp();
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
             const shot = pd.fireFromEntity('shooter', false);
             expect(shot).withContext('the turret fires').toBeDefined();
             expect(pdTargetOf(shot)).toBe(hostileUuid);
@@ -231,14 +242,14 @@ describe('point defense against fighters (real Nova data)', () => {
             const { world, hostile } = await setUp();
             // Our own wing, sitting closer than the enemy's and (as a
             // formation escort can transiently be) pointed at us.
-            const viperBay = await getWeapon(world, VIPER_BAY);
-            const [, ours] = launch(world, viperBay, 'shooter');
+            const skiffBay = await getWeapon(world, SKIFF_BAY);
+            const [, ours] = launch(world, skiffBay, 'shooter');
             settle(world);
             pin(ours, 1010, 1000);
             pin(hostile, 1000 + 4 * PD_RANGE, 1000); // out of reach
             ours.components.set(TargetComponent, { target: 'shooter' });
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
             expect(pd.fireFromEntity('shooter', false))
                 .withContext('nothing hostile in reach, so nothing fires')
                 .toBeUndefined();
@@ -247,13 +258,13 @@ describe('point defense against fighters (real Nova data)', () => {
         it('picks the hostile fighter over our own when both are in range',
             async () => {
                 const { world, hostile, hostileUuid } = await setUp();
-                const viperBay = await getWeapon(world, VIPER_BAY);
-                const [, ours] = launch(world, viperBay, 'shooter');
+                const skiffBay = await getWeapon(world, SKIFF_BAY);
+                const [, ours] = launch(world, skiffBay, 'shooter');
                 settle(world);
                 pin(ours, 1010, 1000);        // ours is much closer
                 pin(hostile, 1100, 1000);
 
-                const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
                 const shot = pd.fireFromEntity('shooter', false);
                 expect(pdTargetOf(shot)).toBe(hostileUuid);
             }, 120_000);
@@ -262,16 +273,16 @@ describe('point defense against fighters (real Nova data)', () => {
             async () => {
                 const { gameData, world, hostile } = await setUp();
                 pin(hostile, 1000 + 4 * PD_RANGE, 1000); // out of reach
-                // A pirate Fed Carrier parked right on top of us, hostile
+                // A raider Heron Warden parked right on top of us, hostile
                 // and locked on: Flags2 0x0008 is clear, so PD may not
                 // shoot it (and a PD shot could not hurt it anyway).
-                const capital = await addShip(world, gameData, FED_CARRIER,
-                    'capital', 1050, 1000, PIRATE_GOVT);
+                const capital = await addShip(world, gameData, CAPITAL_SHIP,
+                    'capital', 1050, 1000, RAIDER_GOVT);
                 settle(world);
                 pin(capital, 1050, 1000);
                 capital.components.set(TargetComponent, { target: 'shooter' });
 
-                const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
                 expect(pd.fireFromEntity('shooter', false))
                     .withContext('capital ships are not point defense prey')
                     .toBeUndefined();
@@ -281,10 +292,10 @@ describe('point defense against fighters (real Nova data)', () => {
             async () => {
                 const { world, hostile } = await setUp();
                 pin(hostile, 1010, 1000);   // right on top of us
-                addMissile(world, 'missile', 1200, 1000, 'enemyCarrier',
-                    'shooter');             // nearly at the edge of reach
+                addMissile(world, 'missile', 1000 + PD_RANGE - 40, 1000,
+                    'enemyCarrier', 'shooter'); // nearly at the edge of reach
 
-                const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+                const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
                 const shot = pd.fireFromEntity('shooter', false);
                 expect(pdTargetOf(shot))
                     .withContext('a torpedo outranks a fighter')
@@ -297,7 +308,7 @@ describe('point defense against fighters (real Nova data)', () => {
             addMissile(world, 'missile', 1000 + 4 * PD_RANGE, 1000,
                 'enemyCarrier', 'shooter');
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
             const shot = pd.fireFromEntity('shooter', false);
             expect(pdTargetOf(shot)).toBe(hostileUuid);
         }, 120_000);
@@ -322,7 +333,7 @@ describe('point defense against fighters (real Nova data)', () => {
             const damaged = recordDamage(world);
             pin(hostile, 1030, 1000);
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
             expect(pd.fireFromEntity('shooter', false)).toBeDefined();
             settle(world, 30);
 
@@ -332,22 +343,22 @@ describe('point defense against fighters (real Nova data)', () => {
 
         it('and cannot damage a ship whose class lacks the flag', async () => {
             // The Bible's other half: point defense only harms missiles
-            // and PD-vulnerable ships. A Manta parked in the line of fire
-            // is untouched even though the shot passes through it.
+            // and PD-vulnerable ships. A Shrike Ghost parked in the line
+            // of fire is untouched even though the shot passes through it.
             const { gameData, world, hostile } = await setUp();
-            const manta = await addShip(world, gameData, MANTA, 'manta',
-                1030, 1000);
+            const ghost = await addShip(world, gameData, TOUGH_FIGHTER,
+                'ghost', 1030, 1000);
             settle(world);
             const damaged = recordDamage(world);
-            pin(manta, 1030, 1000);
+            pin(ghost, 1030, 1000);
             pin(hostile, 1100, 1000);
 
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
             expect(pd.fireFromEntity('shooter', false)).toBeDefined();
             settle(world, 30);
 
             expect(damaged).withContext('PD shots pass through it')
-                .not.toContain('manta');
+                .not.toContain('ghost');
         }, 120_000);
     });
 
@@ -362,13 +373,13 @@ describe('point defense against fighters (real Nova data)', () => {
          */
         async function tieBreak(order: 'forward' | 'reverse') {
             const { gameData, world } = await makeBattlefield();
-            await addShip(world, gameData, SHUTTLE, 'shooter', 1000, 1000);
+            await addShip(world, gameData, SKIFF, 'shooter', 1000, 1000);
             settle(world);
             const uuids = order === 'forward'
                 ? ['aaa_fighter', 'zzz_fighter'] : ['zzz_fighter', 'aaa_fighter'];
             for (const uuid of uuids) {
-                const fighter = await addShip(world, gameData, FED_VIPER, uuid,
-                    1100, 1000, PIRATE_GOVT);
+                const fighter = await addShip(world, gameData, PD_FIGHTER, uuid,
+                    1100, 1000, RAIDER_GOVT);
                 settle(world, 5);
                 pin(fighter, 1100, 1000); // identical position: an exact tie
             }
@@ -377,7 +388,7 @@ describe('point defense against fighters (real Nova data)', () => {
             for (const uuid of uuids) {
                 pin(world.entities.get(uuid)!, 1100, 1000);
             }
-            const pd = await getWeapon(world, QUAD_LIGHT_BLASTER_TURRET);
+            const pd = await getWeapon(world, FLAK_POINT_DEFENSE);
             return pdTargetOf(pd.fireFromEntity('shooter', false));
         }
 
