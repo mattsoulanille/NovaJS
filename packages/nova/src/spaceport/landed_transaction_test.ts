@@ -24,7 +24,7 @@ import {
     collectEscortsToSave, decodeSave, encodeSave, extractSaveData,
     extractSavedEscorts, restorePlayerState, restoreSavedEscorts,
     RosterEscort,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';

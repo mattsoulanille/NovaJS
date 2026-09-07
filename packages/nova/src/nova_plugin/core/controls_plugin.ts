@@ -19,7 +19,7 @@ import { PlatformResource } from './platform_plugin.js';
  * The active pilot's rebindings layered over the served defaults.
  *
  * Imported on demand rather than at module load: title/pilot_registry
- * decodes pilot records with the save codec (session/save_game), which
+ * decodes pilot records with the save codec (pilot/save_game), which
  * sits at the top of the domain graph and reaches back down to this
  * module. A static import here would close a module cycle core → title
  * → session → escorts → core, and since a domain's index evaluates the

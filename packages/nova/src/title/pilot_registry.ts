@@ -29,7 +29,7 @@ import { discoveryKeyFor } from '../nova_plugin/player/discovery_store.js';
 import {
     decodeSave, encodeSave, quarantineKeyFor, RawSaveEnvelope, SAVE_KEY,
     setActiveSaveKey,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 import {
     ControlsOverride, GameSettingsOverride, loadControlsOverride,
     loadGameSettings, loadPilotProfile, PilotProfile, PrefsStorage,

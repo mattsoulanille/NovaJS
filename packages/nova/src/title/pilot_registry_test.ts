@@ -3,8 +3,8 @@ import { discoveryKeyFor } from '../nova_plugin/player/discovery_store.js';
 import {
     encodeSave, getActiveSaveKey, quarantineKeyFor, resetSave, SAVE_KEY,
     SaveData, setActiveSaveKey,
-} from '../nova_plugin/session/save_game.js';
-import { saveDefaults } from '../nova_plugin/session/save_migrations.js';
+} from '../nova_plugin/pilot/save_game.js';
+import { saveDefaults } from '../nova_plugin/pilot/save_migrations.js';
 import {
     CONTROLS_OVERRIDE_KEY, PILOT_PROFILE_KEY, PilotProfile, PrefsStorage,
 } from './client_prefs.js';

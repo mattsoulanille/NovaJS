@@ -8,7 +8,7 @@
  * saved game, and the scenario's chär "player start". A fresh pilot
  * gets the chär's credits, date, OnStart control bits, legal statuses
  * and combat rating; a saved pilot gets its state restored
- * (nova_plugin/session/save_game.ts's restorePlayerState).
+ * (nova_plugin/pilot/save_game.ts's restorePlayerState).
  *
  * Also stashes what the save carries that no component holds until a
  * world exists: the escorts (as encoded blobs, decoded at the first
@@ -41,7 +41,7 @@ import {
 import {
     loadSave, resetSave, restoreClientSaveState, restorePlayerState,
     savedFleetArmament,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 import { ControlledByComponent } from '../nova_plugin/player/ship_control.js';
 import { ensurePlayerStateComponents } from '../spaceport/mission_session.js';
 import { clearPilotProfile } from '../title/client_prefs.js';

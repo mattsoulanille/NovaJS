@@ -5,7 +5,7 @@ import {
 } from 'novaparse/pilot/synthetic_pilot';
 import { simpleCrypt } from 'novaparse/pilot/simple_crypt';
 import { dayNumber } from '../nova_plugin/player/calendar.js';
-import { decodeSave, SAVE_VERSION } from '../nova_plugin/session/save_game.js';
+import { decodeSave, SAVE_VERSION } from '../nova_plugin/pilot/save_game.js';
 import { PrefsStorage } from './client_prefs.js';
 import {
     convertOriginalPilot, convertOriginalPilotBytes, looksLikeOriginalPilot,

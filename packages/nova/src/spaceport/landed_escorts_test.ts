@@ -54,7 +54,7 @@ import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
 import {
     extractSavedEscorts, restoreSavedEscorts,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 
 const PLAYER = 'player';
 const SHIP_ID = 'test:ship';

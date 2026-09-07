@@ -46,11 +46,11 @@ import {
 import { GateArrivalComponent } from '../nova_plugin/travel/gate_transit_plugin.js';
 import { reconcileRouteOnArrival } from '../nova_plugin/travel/jump_plugin.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { restoreSavedEscorts } from '../nova_plugin/session/save_game.js';
+import { restoreSavedEscorts } from '../nova_plugin/pilot/save_game.js';
 import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
 import {
     prepareCarriedEntitiesForFreshWorld,
-} from '../nova_plugin/session/transition_prep.js';
+} from '../nova_plugin/pilot/transition_prep.js';
 import {
     carriedBatchMustHold, CarriedEscort, restoreFailedTransitionBatch,
     takeEscortsForTransition,

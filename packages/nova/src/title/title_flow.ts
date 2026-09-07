@@ -30,7 +30,7 @@ import { ControlAction } from '../nova_plugin/core/controls.js';
 import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
 import { resetDiscovery } from '../nova_plugin/player/discovery_store.js';
 import { combatRatingName } from '../nova_plugin/reputation/reputation.js';
-import { loadSave } from '../nova_plugin/session/save_game.js';
+import { loadSave } from '../nova_plugin/pilot/save_game.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';

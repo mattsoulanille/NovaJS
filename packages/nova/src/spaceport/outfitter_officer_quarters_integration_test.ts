@@ -16,7 +16,7 @@ import {
 } from '../nova_plugin/player/player_state_plugin.js';
 import {
     decodeSave, encodeSave, extractSaveData, restorePlayerState,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { advanceEntityDate, MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';

@@ -11,7 +11,7 @@ import { EscortsDomain } from './escorts/index.js';
 import { MissionsDomain } from './missions/index.js';
 import { EconomyDomain } from './economy/index.js';
 import { EncountersDomain } from './encounters/index.js';
-import { SessionDomain } from './session/index.js';
+import { PilotDomain } from './pilot/index.js';
 
 /**
  * Every domain under nova_plugin/, lowest first: each entry's
@@ -37,5 +37,5 @@ export const DOMAINS: readonly Domain[] = [
     MissionsDomain,
     EconomyDomain,
     EncountersDomain,
-    SessionDomain,
+    PilotDomain,
 ];

@@ -24,7 +24,7 @@ import { displayName } from '../nova_plugin/core/display_name.js';
 import {
     decodeSave, encodeSave, extractSaveData, extractSavedEscorts,
     getActiveSaveKey, resetSave, SaveData, writeSave,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 import {
     CheckpointRequest, checkpointRequests, describeFlightChanges,
 } from '../spaceport/checkpoint_requests.js';

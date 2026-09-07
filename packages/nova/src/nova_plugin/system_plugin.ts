@@ -29,7 +29,7 @@ import {
 } from "./escorts/index.js";
 import { MissionShipPlugin } from "./missions/index.js";
 import { BoardingPlugin, DisabledPlugin, HailPlugin } from "./encounters/index.js";
-import { DebugCheatPlugin } from "./session/index.js";
+import { DebugCheatPlugin } from "./pilot/index.js";
 
 /**
  * Every simulation plugin, in registration order.

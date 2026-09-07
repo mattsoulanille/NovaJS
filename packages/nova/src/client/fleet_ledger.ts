@@ -38,7 +38,7 @@ import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
 import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
 import {
     collectEscortsToSave, EscortToSave, SavedEscort,
-} from '../nova_plugin/session/save_game.js';
+} from '../nova_plugin/pilot/save_game.js';
 import { restockCarriedEscorts } from '../spaceport/escort_restock.js';
 import {
     carriedBatchSettled, CarriedEscort, escortsAccountedFor,

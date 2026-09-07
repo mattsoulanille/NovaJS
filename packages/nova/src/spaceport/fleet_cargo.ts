@@ -65,7 +65,7 @@ import { computeCargoCapacity } from './mission_session.js';
  * ---------------------------------------------------------------------------
  * In the escort's OWN `CargoComponent`. Escorts are carried as whole
  * serialized entities (spaceport/landed_escorts.ts) and saved that way
- * (nova_plugin/session/save_game.ts's SavedEscort), and CargoComponent is
+ * (nova_plugin/pilot/save_game.ts's SavedEscort), and CargoComponent is
  * serializer-registered, so escort cargo needs no new persisted shape and
  * no new save version: it rides inside the record that already exists.
  *

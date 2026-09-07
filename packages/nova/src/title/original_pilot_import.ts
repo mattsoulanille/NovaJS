@@ -48,8 +48,8 @@ import {
     DISCOVERY_UNKNOWN, toDiscoveryLevel,
 } from '../nova_plugin/player/discovery.js';
 import { ActiveMission } from '../nova_plugin/player/player_state_plugin.js';
-import { SaveData } from '../nova_plugin/session/save_game.js';
-import { saveDefaults } from '../nova_plugin/session/save_migrations.js';
+import { SaveData } from '../nova_plugin/pilot/save_game.js';
+import { saveDefaults } from '../nova_plugin/pilot/save_migrations.js';
 import { PilotProfile } from './client_prefs.js';
 
 /** Arrays in a pilot file are indexed by resource id - 128. */
