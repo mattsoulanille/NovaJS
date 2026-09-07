@@ -1449,8 +1449,13 @@ export const BoardingPlugin: Plugin = {
  * such boarding IS piracy whatever the boarder's government calls
  * itself — the Bible's own definition of the act is "pirating one of
  * this govt's ships" (BoardPenalty) — so no govt-class predicate is
- * applied. A rival PLAYER boarding the owner is not an NPC pirate and
- * does not count. Marks the flagged missions failed exactly as the
+ * applied. MAINTAINER RULING (tracker #159, closed): any gövt carrying
+ * 0x1000 counts — in stock data that is sixteen governments, the three
+ * Families, Pirate, the Bounty Hunters' and Free Traders' guilds,
+ * Ambrosia, the Houseless Warriors, Spanner, Marauder and Shards among
+ * them — and no narrower predicate is wanted. A rival PLAYER boarding
+ * the owner is not an NPC pirate and does not count. Marks the flagged
+ * missions failed exactly as the
  * player-loss systems do (mission_ship_plugin's
  * failPlayerMissionsOnLoss); the OnFailure and the notice follow at the
  * next date advance. Runs identically on every peer off the same event,
