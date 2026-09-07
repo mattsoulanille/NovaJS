@@ -20,7 +20,13 @@ export * from './mission_auto_abort.js';
 export * from './mission_availability.js';
 export * from './mission_offer.js';
 export * from './mission_machinery.js';
-export * from './mission_cargo.js';
+// Explicit so `freeCargoSpace` (the MissionWorkingState one) does not
+// collide with economy's freeCargoSpace(TradeWorkingState) for a module
+// importing both domains; every other export keeps its name.
+export {
+    STANDARD_CARGO_NAMES, cargoName, missionCargoKey, loadMissionCargo,
+    unloadMissionCargo, freeCargoSpace as missionFreeCargoSpace,
+} from './mission_cargo.js';
 export * from './mission_map_marks.js';
 export * from './mission_payval.js';
 export * from './mission_accept_offer.js';

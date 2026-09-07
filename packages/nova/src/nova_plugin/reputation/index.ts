@@ -8,7 +8,19 @@
  */
 export * from './reputation.js';
 export * from './govt_disposition.js';
-export * from './stellar_clearance.js';
+// Explicit so `stellarRecord` (by the planet's govt) does not collide with
+// missions' stellarRecord(StellarInfo, ...) — which mission_logic's facade
+// re-exports — for a module importing both domains; every other export
+// keeps its name.
+export {
+    MIN_STATUS_IGNORED, MIN_STATUS_NEVER, contributeBits, govtRequirementsMet,
+    isMissionDestination, stellarClearance, clearanceDenial, planetClearance,
+    stellarRecord as govtStellarRecord,
+} from './stellar_clearance.js';
+export type {
+    ClearanceDenial, StellarClearance, ClearanceStellar, ClearancePlayer,
+    MissionDestinations,
+} from './stellar_clearance.js';
 export * from './iff_plugin.js';
 export * from './hail.js';
 export * from './reputation_plugin.js';
