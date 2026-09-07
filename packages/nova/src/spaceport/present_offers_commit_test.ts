@@ -58,7 +58,7 @@ describe('presentOffers and the session commit boundary', () => {
      * accepting one shows no briefing popup and the show() call indices
      * the scripts below count on are the offers' own texts.
      */
-    const FIRST = SYNTHETIC.missions.outfitterErrand;
+    const FIRST = SYNTHETIC.missions.tradeErrand;
     const SECOND = SYNTHETIC.missions.shipyardErrand;
 
     /**

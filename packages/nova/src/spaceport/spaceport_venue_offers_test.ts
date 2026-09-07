@@ -44,23 +44,19 @@ describe('spaceport venue offers', () => {
     const PORT = SYNTHETIC.planets.port;
     const WARDEN = SYNTHETIC.ships.warden;
 
-    // The scenario's job NAMES read across the wrong way against the
-    // Bible's AvailLoc numbering (4 trading, 5 shipyard, 6 outfit): its
-    // "Outfitter Errand" is AvailLoc 4 and so a TRADE CENTER job, and its
-    // "Trade Errand" is AvailLoc 6 and so an OUTFITTER job. See
-    // venue_offers_test.ts. These names are the venue each really appears
-    // at.
-    /** "Trade Errand", AvailLoc 6. */
-    const OUTFITTER_JOB = SYNTHETIC.missions.tradeErrand;
+    // The Bible's AvailLoc numbering: 4 trading, 5 shipyard, 6 outfit
+    // (see venue_offers_test.ts).
+    /** "Outfitter Errand", AvailLoc 6. */
+    const OUTFITTER_JOB = SYNTHETIC.missions.outfitterErrand;
     /** "Shipyard Errand", AvailLoc 5. */
     const SHIPYARD_JOB = SYNTHETIC.missions.shipyardErrand;
-    /** "Outfitter Errand", AvailLoc 4. */
-    const TRADING_JOB = SYNTHETIC.missions.outfitterErrand;
+    /** "Trade Errand", AvailLoc 4. */
+    const TRADING_JOB = SYNTHETIC.missions.tradeErrand;
 
     /** The first words of each job's offer text (dësc 4000 + n). */
-    const OUTFITTER_OFFER = 'A trader will pay well for five tons of luxuries';
+    const OUTFITTER_OFFER = 'The outfitter will pay well for five tons of luxuries';
     const SHIPYARD_OFFER = 'The shipwright wants a hull scan';
-    const TRADING_OFFER = 'The outfitter has twenty tons of equipment';
+    const TRADING_OFFER = 'A trader on the exchange floor has twenty tons of equipment';
 
     /** Walks back out of whatever a spec left open (see the shipyard
      * docked-swap spec for why the focus stack must be left clean). */
@@ -93,7 +89,7 @@ describe('spaceport venue offers', () => {
         entity.components.set(GameDateComponent, { ...start.date });
         entity.components.set(CreditsComponent, { credits: start.credits });
         entity.components.set(ControlBitsComponent,
-            new Set([BITS.tradeErrandOpen]));
+            new Set([BITS.outfitterErrandOpen]));
         entity.components.set(ActiveRanksComponent, new Set());
         entity.components.set(MissionsComponent, new Map());
         entity.components.set(CargoComponent, new Map());
@@ -157,7 +153,7 @@ describe('spaceport venue offers', () => {
         // to under the pilot's bits.
         const universe = MissionUniverse.shared(gameData);
         const rolls = offerRollsForSystem(universe.systemIdOfPlanet(
-            PORT, new Set([BITS.tradeErrandOpen])));
+            PORT, new Set([BITS.outfitterErrandOpen])));
         for (const mission of universe.missions) {
             rolls.set(mission.id, 0);
         }

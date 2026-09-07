@@ -606,20 +606,24 @@ describe("the synthetic Nova data set", () => {
                 expect(rescue.payVal).toEqual(2000);
                 const salvage = await novaParse.data.Mission.get(SYNTHETIC.missions.salvage);
                 expect(salvage.availLoc).toEqual(AVAIL_LOC.fromShip);
-                const errand = await novaParse.data.Mission.get(SYNTHETIC.missions.outfitterErrand);
-                expect(errand.availLoc).toEqual(AVAIL_LOC.outfitter);
-                expect(errand.availStelId).toEqual(SYNTHETIC.planets.port);
-                expect(errand.cargoQty).toEqual(20);
-                expect(errand.onRefuse).toEqual(`b${BITS.errandRefused}`);
-                expect(errand.briefText).toEqual("");
+                // The Bible's AvailLoc numbering: 4 is the TRADING dialog,
+                // 6 the OUTFIT dialog.
+                expect(AVAIL_LOC.tradeCenter).toEqual(4);
+                expect(AVAIL_LOC.outfitter).toEqual(6);
+                const trade = await novaParse.data.Mission.get(SYNTHETIC.missions.tradeErrand);
+                expect(trade.availLoc).toEqual(AVAIL_LOC.tradeCenter);
+                expect(trade.availStelId).toEqual(SYNTHETIC.planets.port);
+                expect(trade.cargoQty).toEqual(20);
+                expect(trade.onRefuse).toEqual(`b${BITS.errandRefused}`);
+                expect(trade.briefText).toEqual("");
                 const yard = await novaParse.data.Mission.get(SYNTHETIC.missions.shipyardErrand);
                 expect(yard.availLoc).toEqual(AVAIL_LOC.shipyard);
                 expect(yard.briefText).toEqual("");
                 expect(yard.timeLimit).toEqual(10);
-                const trade = await novaParse.data.Mission.get(SYNTHETIC.missions.tradeErrand);
-                expect(trade.availLoc).toEqual(AVAIL_LOC.tradeCenter);
-                expect(trade.availRating).toEqual(10);
-                expect(trade.availBits).toEqual(`b${BITS.tradeErrandOpen}`);
+                const outfitter = await novaParse.data.Mission.get(SYNTHETIC.missions.outfitterErrand);
+                expect(outfitter.availLoc).toEqual(AVAIL_LOC.outfitter);
+                expect(outfitter.availRating).toEqual(10);
+                expect(outfitter.availBits).toEqual(`b${BITS.outfitterErrandOpen}`);
                 const cover = await novaParse.data.Rank.get(SYNTHETIC.ranks.cover);
                 expect(cover.affilGovt).toEqual(SYNTHETIC.govts.raiders);
                 expect(cover.rankFlags.dropIfDestroyGovtOrAllyShip).toBeTrue();

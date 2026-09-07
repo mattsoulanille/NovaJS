@@ -54,7 +54,7 @@ export const DUDE = { traders: 128, patrol: 129, raiders: 130, variants: 131, ga
 export const FLET = { raiderWing: 128 } as const;
 export const MISN = {
     courier: 128, gateSurvey: 129, bounty: 130, rescue: 131, salvage: 132,
-    outfitterErrand: 133, shipyardErrand: 134, tradeErrand: 135,
+    tradeErrand: 133, shipyardErrand: 134, outfitterErrand: 135,
 } as const;
 export const RANK = { warrant: 128, confidant: 129, cover: 130 } as const;
 export const PERS = { lask: 128, pell: 129, vey: 130, stranded: 131, wreck: 132 } as const;
@@ -85,7 +85,7 @@ export const STRN = {
 /** Control bits the missions set; the scenario's own numbering. */
 export const BITS = {
     courierAccepted: 100, courierDone: 101, surveyAccepted: 102,
-    errandAccepted: 103, errandRefused: 104, tradeErrandOpen: 105,
+    errandAccepted: 103, errandRefused: 104, outfitterErrandOpen: 105,
     /** The Require bit the Warrant Seal outfit asks for (a Contribute bit index). */
     warrantHolder: 3,
 } as const;
@@ -1301,9 +1301,13 @@ export const MISN_FLAGS = {
     autoAbortOnBoard: 0x0001, takesFuelOnAutoAbort: 0x0008, invisible: 0x0400,
 } as const;
 export const MISN_FLAGS2 = { paysOnAutoAbort: 0x0002 } as const;
-/** mïsn AvailLoc values: where the offer is made. */
+/**
+ * mïsn AvailLoc values: where the offer is made (EVN Bible: 0 mission
+ * computer, 1 bar, 2 from a ship, 3 main spaceport dialog, 4 the TRADING
+ * dialog, 5 the shipyard, 6 the OUTFIT dialog).
+ */
 export const AVAIL_LOC = {
-    missionComputer: 0, bar: 1, fromShip: 2, outfitter: 4, shipyard: 5, tradeCenter: 6,
+    missionComputer: 0, bar: 1, fromShip: 2, tradeCenter: 4, shipyard: 5, outfitter: 6,
 } as const;
 
 /** dësc ids for the mission briefings, from 5000 in threes. */
@@ -1403,14 +1407,14 @@ export const MISNS: MisnDef[] = [
         compText: "A Compact clerk takes the log and pays.",
         quickBrief: "Return the wreck's log to Port Amberline.",
     },
-    // --- The venue jobs: offered from the outfitter, the shipyard and the
-    // trade centre of Port Amberline. The first two have NO briefing
-    // text (accepting shows the offer popup and nothing more); the
-    // outfitter errand carries cargo and runs set strings on both accept
-    // and refuse.
+    // --- The venue jobs: offered from the trade centre, the shipyard and
+    // the outfitter of Port Amberline. The first two have NO briefing
+    // text (accepting shows the offer popup and nothing more); the trade
+    // errand carries cargo and runs set strings on both accept and
+    // refuse.
     {
-        id: MISN.outfitterErrand, name: "Outfitter Errand",
-        availStel: SPOB.port, availLoc: AVAIL_LOC.outfitter, availRecord: 0,
+        id: MISN.tradeErrand, name: "Trade Errand",
+        availStel: SPOB.port, availLoc: AVAIL_LOC.tradeCenter, availRecord: 0,
         availRating: -1, availRandom: 100, travelStel: SPOB.coldharbour, returnStel: -4,
         cargoType: 5, cargoQty: 20, pickupMode: 0, dropoffMode: 0,
         payVal: 4000, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
@@ -1421,8 +1425,8 @@ export const MISNS: MisnDef[] = [
         onSuccess: `!b${BITS.errandAccepted}`, onFailure: `!b${BITS.errandAccepted}`,
         onAbort: `!b${BITS.errandAccepted}`,
         dispWeight: 2,
-        offerText: "The outfitter has twenty tons of equipment for Coldharbour. "
-            + "Take it and come back.",
+        offerText: "A trader on the exchange floor has twenty tons of equipment "
+            + "for Coldharbour. Take it and come back.",
         briefText: "", compText: "Coldharbour signs for the equipment.",
         quickBrief: "Deliver equipment to Coldharbour, then return.",
     },
@@ -1443,20 +1447,20 @@ export const MISNS: MisnDef[] = [
     },
     {
         // Gated on a control bit and a combat rating.
-        id: MISN.tradeErrand, name: "Trade Errand",
-        availStel: SPOB.port, availLoc: AVAIL_LOC.tradeCenter, availRecord: 0,
+        id: MISN.outfitterErrand, name: "Outfitter Errand",
+        availStel: SPOB.port, availLoc: AVAIL_LOC.outfitter, availRecord: 0,
         availRating: 10, availRandom: 100, travelStel: SPOB.refuge, returnStel: -4,
         cargoType: 3, cargoQty: 5, pickupMode: 0, dropoffMode: 0,
         payVal: 9000, shipCount: -1, shipSyst: -1, shipDude: -1, shipGoal: -1,
         shipBehav: -1, shipStart: 0, compGovt: GOVT.meridian, compReward: 1,
         timeLimit: -1, canAbort: 1, flags: 0,
-        availBits: `b${BITS.tradeErrandOpen}`, onAccept: "", onSuccess: "",
+        availBits: `b${BITS.outfitterErrandOpen}`, onAccept: "", onSuccess: "",
         onFailure: "", onAbort: "",
         dispWeight: 1,
-        offerText: "A trader will pay well for five tons of luxuries run to "
-            + "Halden Refuge, no questions asked.",
+        offerText: "The outfitter will pay well for five tons of luxuries run "
+            + "to Halden Refuge, no questions asked.",
         briefText: "Take five tons of luxuries to Halden Refuge and return.",
-        compText: "The trader pays, and asks no questions.",
+        compText: "The outfitter pays, and asks no questions.",
         quickBrief: "Run luxuries to Halden Refuge, then return.",
     },
 ];

@@ -34,35 +34,30 @@ import { presentVenueOffers } from './venue_offers.js';
  * authored for a venue could only ever begin through an `Sxxx` (stock's
  * Federation, Gli-tech and Sigma Shipyards strings among them). Pinned
  * here against the synthetic scenario at Port Amberline, which has all
- * three venues and one job at each: the Outfitter Errand (AvailLoc 4, 20
+ * three venues and one job at each: the Trade Errand (AvailLoc 4, 20
  * tons of equipment for Coldharbour, PickupMode 0, OnAccept b103, OnRefuse
  * b104, AvailBits `!b103 & !b104`), the Shipyard Errand (AvailLoc 5) and
- * the Trade Errand (AvailLoc 6).
- *
- * MIND THE NAMES. The Bible's AvailLoc numbering is "4 In the trading
- * dialog, 5 In the shipyard dialog, 6 In the outfit dialog" (p. 1257), so
- * the scenario's job NAMES read across the wrong way: its "Outfitter
- * Errand" is AvailLoc 4 and therefore a TRADE CENTER job, and its "Trade
- * Errand" is AvailLoc 6 and therefore an OUTFITTER job. Only the Shipyard
- * Errand's name matches its venue. The locations below are the AvailLoc
- * each mission actually carries.
+ * the Outfitter Errand (AvailLoc 6). The Bible's AvailLoc numbering is
+ * "4 In the trading dialog, 5 In the shipyard dialog, 6 In the outfit
+ * dialog" (p. 1257); the locations below are the AvailLoc each mission
+ * carries.
  */
 
 /** shïp "Heron Warden": 60 tons of hold (the AvailLoc 4 job carries 20). */
 const WARDEN = SYNTHETIC.ships.warden;
 const PORT = SYNTHETIC.planets.port;
 
-/** "Outfitter Errand", AvailLoc 4 — offered in the TRADING dialog. */
-const TRADING_JOB = SYNTHETIC.missions.outfitterErrand;
+/** "Trade Errand", AvailLoc 4 — offered in the TRADING dialog. */
+const TRADING_JOB = SYNTHETIC.missions.tradeErrand;
 /** "Shipyard Errand", AvailLoc 5. */
 const SHIPYARD_JOB = SYNTHETIC.missions.shipyardErrand;
-/** "Trade Errand", AvailLoc 6 — offered in the OUTFIT dialog. */
-const OUTFIT_JOB = SYNTHETIC.missions.tradeErrand;
+/** "Outfitter Errand", AvailLoc 6 — offered in the OUTFIT dialog. */
+const OUTFIT_JOB = SYNTHETIC.missions.outfitterErrand;
 
 /** The first words of each job's offer text (dësc 4000 + n). */
-const TRADING_OFFER = 'The outfitter has twenty tons of equipment';
+const TRADING_OFFER = 'A trader on the exchange floor has twenty tons of equipment';
 const SHIPYARD_OFFER = 'The shipwright wants a hull scan';
-const OUTFIT_OFFER = 'A trader will pay well for five tons of luxuries';
+const OUTFIT_OFFER = 'The outfitter will pay well for five tons of luxuries';
 /** The AvailLoc 6 job's briefing, shown after the accept. */
 const OUTFIT_BRIEF = 'Take five tons of luxuries to Halden Refuge';
 
@@ -80,7 +75,7 @@ async function pilot(): Promise<Entity> {
     entity.components.set(GameDateComponent, { ...start.date });
     entity.components.set(CreditsComponent, { credits: start.credits });
     entity.components.set(ControlBitsComponent,
-        new Set([BITS.tradeErrandOpen]));
+        new Set([BITS.outfitterErrandOpen]));
     entity.components.set(ActiveRanksComponent, new Set());
     entity.components.set(MissionsComponent, new Map());
     entity.components.set(CargoComponent, new Map());
