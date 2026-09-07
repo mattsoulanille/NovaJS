@@ -2,7 +2,10 @@ import 'jasmine';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
 import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
@@ -36,6 +39,10 @@ import {
  *    a real price), and Drop Bear Repellent (319).
  *  - oütf 342 "Area Map - Vell-os" is NOT persistent, despite the name:
  *    it is the separate availability-gated duplicate of the map.
+ *
+ * STAYS ON THE STOCK DATA: every claim here is a claim about the shipped
+ * game's own outfit table. The RULES those facts justify are driven on
+ * the synthetic data set, in the describe below.
  */
 describe('shipyard rules against real Nova data', () => {
     async function allOutfits(): Promise<OutfitData[]> {
@@ -116,112 +123,139 @@ describe('shipyard rules against real Nova data', () => {
         expect(byId.get('nova:342')!.persistent).toBe(false);
     });
 
-    describe('buying a real ship', () => {
-        async function pilot(credits: number, outfits: [string, number][]) {
-            const gameData = await getIntegrationGameData();
-            const byId = new Map((await allOutfits()).map(o => [o.id, o]));
-            const start = await gameData.data.PlayerStart.get('nova:128');
-            const currentShip = await gameData.data.Ship.get(start.ship);
-            const entity = makeShip(currentShip);
-            entity.components.set(CreditsComponent, { credits });
-            entity.components.set(MultiplayerData, { owner: 'peer-1' });
-            entity.components.set(OutfitsStateComponent, new Map(
-                outfits.map(([id, count]) => [id, { count }])));
-            entity.components.set(CargoComponent, new Map());
-            const context: ShipPurchaseContext = {
-                currentShip,
-                outfits: new Map(outfits),
-                getOutfit: id => byId.get(id),
-                credits,
-            };
-            return { gameData, entity, context, currentShip };
+});
+
+/**
+ * The same persistence and pricing rules, driven end to end on the
+ * synthetic data set. Its stand-ins for the stock shapes above:
+ *
+ *  - Courier Charter: persistent, cantSell, massless and free — the
+ *    Vell-os plot item's shape, the thing that must ride to the new hull.
+ *  - Shield Capacitor: an ordinary bought outfit, not persistent, and not
+ *    part of the target hull's own loadout — the mundane gear that is lost.
+ *  - Bonded Charter: persistent WITH a price (5,000 cr), the Fed Cloaking
+ *    Device's shape — if persistence leaked into the valuation it shows
+ *    here.
+ */
+describe('buying a ship on the synthetic data set', () => {
+    /** Persistent, cantSell, mass 0, price 0. */
+    const CHARTER = SYNTHETIC.outfits.charter;
+    /** Persistent, 5,000 cr. */
+    const BONDED_CHARTER = SYNTHETIC.outfits.bondedCharter;
+    /** A plain bought outfit, absent from every hull's default loadout. */
+    const SHIELD_CAPACITOR = SYNTHETIC.outfits.shieldCapacitor;
+
+    async function allOutfits(): Promise<OutfitData[]> {
+        const gameData = await getSyntheticGameData();
+        const ids = (await gameData.ids).Outfit;
+        return await Promise.all(ids.map(id => gameData.data.Outfit.get(id)));
+    }
+
+    async function pilot(credits: number, outfits: [string, number][]) {
+        const gameData = await getSyntheticGameData();
+        const byId = new Map((await allOutfits()).map(o => [o.id, o]));
+        const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
+        const currentShip = await gameData.data.Ship.get(start.ship);
+        const entity = makeShip(currentShip);
+        entity.components.set(CreditsComponent, { credits });
+        entity.components.set(MultiplayerData, { owner: 'peer-1' });
+        entity.components.set(OutfitsStateComponent, new Map(
+            outfits.map(([id, count]) => [id, { count }])));
+        entity.components.set(CargoComponent, new Map());
+        const context: ShipPurchaseContext = {
+            currentShip,
+            outfits: new Map(outfits),
+            getOutfit: id => byId.get(id),
+            credits,
+        };
+        return { gameData, entity, context, currentShip };
+    }
+
+    /** A ship the starting pilot could plausibly trade up to. */
+    async function targetShip(): Promise<ShipData> {
+        const gameData = await getSyntheticGameData();
+        const ids = (await gameData.ids).Ship;
+        const ships = await Promise.all(
+            ids.map(id => gameData.data.Ship.get(id)));
+        const target = ships.find(s => s.price > 0);
+        if (!target) {
+            throw new Error('No priced ship in the data set');
         }
+        return target;
+    }
 
-        /** A ship the starting pilot could plausibly trade up to. */
-        async function targetShip(): Promise<ShipData> {
-            const gameData = await getIntegrationGameData();
-            const ids = (await gameData.ids).Ship;
-            const ships = await Promise.all(
-                ids.map(id => gameData.data.Ship.get(id)));
-            const target = ships.find(s => s.price > 0);
-            if (!target) {
-                throw new Error('No priced ship in stock data');
-            }
-            return target;
-        }
+    it('charges price minus 25% of the hull, leaving the rest', async () => {
+        const { context, currentShip } = await pilot(10000000, []);
+        const target = await targetShip();
+        const expected = Math.max(0,
+            target.price - Math.floor(currentShip.price * 0.25));
+        expect(tradeInValue(context))
+            .toBe(Math.floor(currentShip.price * 0.25));
+        expect(shipPurchasePrice(target, context)).toBe(expected);
+    });
 
-        it('charges price minus 25% of the hull, leaving the rest', async () => {
-            const { context, currentShip } = await pilot(10000000, []);
-            const target = await targetShip();
-            const expected = Math.max(0,
-                target.price - Math.floor(currentShip.price * 0.25));
-            expect(tradeInValue(context))
-                .toBe(Math.floor(currentShip.price * 0.25));
-            expect(shipPurchasePrice(target, context)).toBe(expected);
-        });
+    it('does not zero the player credits on a purchase', async () => {
+        // The regression this whole change exists for: buying a ship
+        // used to drop the CreditsComponent entirely, so the player
+        // read as 0 credits afterwards.
+        const { entity, context } = await pilot(10000000, []);
+        const target = await targetShip();
+        const bought = buildPurchasedShip(entity, target, context);
+        const after = bought.components.get(CreditsComponent)!.credits;
+        expect(after).toBe(10000000 - shipPurchasePrice(target, context));
+        expect(after).toBeGreaterThan(0);
+    });
 
-        it('does not zero the player credits on a purchase', async () => {
-            // The regression this whole change exists for: buying a ship
-            // used to drop the CreditsComponent entirely, so the player
-            // read as 0 credits afterwards.
-            const { entity, context } = await pilot(10000000, []);
-            const target = await targetShip();
-            const bought = buildPurchasedShip(entity, target, context);
-            const after = bought.components.get(CreditsComponent)!.credits;
-            expect(after).toBe(10000000 - shipPurchasePrice(target, context));
-            expect(after).toBeGreaterThan(0);
-        });
+    it('refuses a ship the player cannot afford', async () => {
+        const { context } = await pilot(0, []);
+        const gameData = await getSyntheticGameData();
+        const ids = (await gameData.ids).Ship;
+        const ships = await Promise.all(
+            ids.map(id => gameData.data.Ship.get(id)));
+        // The Bastion Hulk, at 1,500,000 credits.
+        const expensive = ships.reduce((a, b) => a.price > b.price ? a : b);
+        const check = canBuyShip(expensive, context);
+        expect(check.allowed).toBe(false);
+        expect(check.allowed ? '' : check.reason).toBe('credits');
+    });
 
-        it('refuses a ship the player cannot afford', async () => {
-            const { context } = await pilot(0, []);
-            const gameData = await getIntegrationGameData();
-            const ids = (await gameData.ids).Ship;
-            const ships = await Promise.all(
-                ids.map(id => gameData.data.Ship.get(id)));
-            const expensive = ships.reduce((a, b) => a.price > b.price ? a : b);
-            const check = canBuyShip(expensive, context);
-            expect(check.allowed).toBe(false);
-            expect(check.allowed ? '' : check.reason).toBe('credits');
-        });
-
-        it('carries the Vell-os set onto the new hull, losing mundane gear',
-            async () => {
-                // A Vell-os beam (persistent) and a Storm Chaingun (not).
-                const { entity, context } = await pilot(10000000,
-                    [['nova:221', 1], ['nova:215', 1]]);
-                const target = await targetShip();
-                const bought = buildPurchasedShip(entity, target, context);
-                const outfits = bought.components.get(OutfitsStateComponent)!;
-                expect(outfits.get('nova:221')).toEqual({ count: 1 });
-                expect(outfits.has('nova:215')).toBe(false);
-                expect(bought.components.get(ShipComponent))
-                    .toEqual({ id: target.id });
-            });
-
-        it('does not pay the player for a persistent outfit it keeps',
-            async () => {
-                const target = await targetShip();
-                const bare = await pilot(10000000, []);
-                // The Fed Cloaking Device is the one persistent outfit
-                // with a real price (3.5M) -- if persistence leaked into
-                // the valuation it would be obvious here.
-                const cloaked = await pilot(10000000, [['nova:211', 1]]);
-                expect(shipPurchasePrice(target, cloaked.context))
-                    .toBe(shipPurchasePrice(target, bare.context));
-                const bought = buildPurchasedShip(
-                    cloaked.entity, target, cloaked.context);
-                expect(bought.components.get(OutfitsStateComponent)!
-                    .get('nova:211')).toEqual({ count: 1 });
-            });
-
-        it('gives the new hull its own stock loadout', async () => {
-            const { entity, context } = await pilot(10000000, []);
+    it('carries the persistent set onto the new hull, losing mundane gear',
+        async () => {
+            // The Courier Charter (persistent) and a Shield Capacitor (not).
+            const { entity, context } = await pilot(10000000,
+                [[CHARTER, 1], [SHIELD_CAPACITOR, 1]]);
             const target = await targetShip();
             const bought = buildPurchasedShip(entity, target, context);
             const outfits = bought.components.get(OutfitsStateComponent)!;
-            for (const [id, count] of Object.entries(target.outfits)) {
-                expect(outfits.get(id)).withContext(id).toEqual({ count });
-            }
+            expect(outfits.get(CHARTER)).toEqual({ count: 1 });
+            expect(outfits.has(SHIELD_CAPACITOR)).toBe(false);
+            expect(bought.components.get(ShipComponent))
+                .toEqual({ id: target.id });
         });
+
+    it('does not pay the player for a persistent outfit it keeps',
+        async () => {
+            const target = await targetShip();
+            const bare = await pilot(10000000, []);
+            // The Bonded Charter is the persistent outfit with a real
+            // price (5,000) -- if persistence leaked into the valuation
+            // it would be obvious here.
+            const bonded = await pilot(10000000, [[BONDED_CHARTER, 1]]);
+            expect(shipPurchasePrice(target, bonded.context))
+                .toBe(shipPurchasePrice(target, bare.context));
+            const bought = buildPurchasedShip(
+                bonded.entity, target, bonded.context);
+            expect(bought.components.get(OutfitsStateComponent)!
+                .get(BONDED_CHARTER)).toEqual({ count: 1 });
+        });
+
+    it('gives the new hull its own stock loadout', async () => {
+        const { entity, context } = await pilot(10000000, []);
+        const target = await targetShip();
+        const bought = buildPurchasedShip(entity, target, context);
+        const outfits = bought.components.get(OutfitsStateComponent)!;
+        for (const [id, count] of Object.entries(target.outfits)) {
+            expect(outfits.get(id)).withContext(id).toEqual({ count });
+        }
     });
 });

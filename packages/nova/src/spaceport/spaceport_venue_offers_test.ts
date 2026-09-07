@@ -2,8 +2,9 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
+import { BITS, SYNTHETIC } from 'novaparse/synthetic/universe';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
 import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
 import { makeShip } from '../nova_plugin/ship/make_ship.js';
@@ -28,20 +29,38 @@ import { Spaceport } from './spaceport.js';
  * The spaceport presents a venue's mission offers as the player walks in
  * ============================================================================
  *
- * The real Spaceport, driven headlessly against the real stock data, with
- * the venue dialogs themselves stubbed to "open and close at once": what
- * is pinned here is the WIRING — pressing Outfitter / Shipyard / Trade
- * Center rolls that venue's AvailLoc and presents its offers (see
- * venue_offers.ts for the offers themselves). The same pilot as
- * venue_offers_test: an Argosy at Earth, rating 150, Federation record 5,
- * b9200 set.
+ * The real Spaceport, driven headlessly against the parsed synthetic data
+ * set, with the venue dialogs themselves stubbed to "open and close at
+ * once": what is pinned here is the WIRING — pressing Outfitter /
+ * Shipyard / Trade Center rolls that venue's AvailLoc and presents its
+ * offers (see venue_offers.ts for the offers themselves). The same pilot
+ * as venue_offers_test: a Heron Warden at Port Amberline, rating 10,
+ * Meridian record 5, b105 set.
  */
 describe('spaceport venue offers', () => {
     beforeAll(() => installHeadlessPixi());
     afterEach(() => resetOfferRolls());
 
-    const EARTH = 'nova:128';
-    const ARGOSY = 'nova:138';
+    const PORT = SYNTHETIC.planets.port;
+    const WARDEN = SYNTHETIC.ships.warden;
+
+    // The scenario's job NAMES read across the wrong way against the
+    // Bible's AvailLoc numbering (4 trading, 5 shipyard, 6 outfit): its
+    // "Outfitter Errand" is AvailLoc 4 and so a TRADE CENTER job, and its
+    // "Trade Errand" is AvailLoc 6 and so an OUTFITTER job. See
+    // venue_offers_test.ts. These names are the venue each really appears
+    // at.
+    /** "Trade Errand", AvailLoc 6. */
+    const OUTFITTER_JOB = SYNTHETIC.missions.tradeErrand;
+    /** "Shipyard Errand", AvailLoc 5. */
+    const SHIPYARD_JOB = SYNTHETIC.missions.shipyardErrand;
+    /** "Outfitter Errand", AvailLoc 4. */
+    const TRADING_JOB = SYNTHETIC.missions.outfitterErrand;
+
+    /** The first words of each job's offer text (dësc 4000 + n). */
+    const OUTFITTER_OFFER = 'A trader will pay well for five tons of luxuries';
+    const SHIPYARD_OFFER = 'The shipwright wants a hull scan';
+    const TRADING_OFFER = 'The outfitter has twenty tons of equipment';
 
     /** Walks back out of whatever a spec left open (see the shipyard
      * docked-swap spec for why the focus stack must be left clean). */
@@ -68,18 +87,20 @@ describe('spaceport venue offers', () => {
     }
 
     async function pilot(): Promise<Entity> {
-        const gameData = await getIntegrationGameData();
-        const start = await gameData.data.PlayerStart.get('nova:128');
-        const entity = makeShip(await gameData.data.Ship.get(ARGOSY));
+        const gameData = await getSyntheticGameData();
+        const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
+        const entity = makeShip(await gameData.data.Ship.get(WARDEN));
         entity.components.set(GameDateComponent, { ...start.date });
         entity.components.set(CreditsComponent, { credits: start.credits });
-        entity.components.set(ControlBitsComponent, new Set([9200]));
+        entity.components.set(ControlBitsComponent,
+            new Set([BITS.tradeErrandOpen]));
         entity.components.set(ActiveRanksComponent, new Set());
         entity.components.set(MissionsComponent, new Map());
         entity.components.set(CargoComponent, new Map());
         entity.components.set(OutfitsStateComponent, new Map());
-        entity.components.set(CombatRatingComponent, { kills: 150 });
-        entity.components.set(LegalRecordsComponent, new Map([[EARTH, 5]]));
+        entity.components.set(CombatRatingComponent, { kills: 10 });
+        entity.components.set(LegalRecordsComponent,
+            new Map([[SYNTHETIC.govts.meridian, 5]]));
         return entity;
     }
 
@@ -103,15 +124,15 @@ describe('spaceport venue offers', () => {
      * whose text starts with `acceptText` and refuses every other offer.
      */
     async function land(acceptText: string) {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         await MissionUniverse.shared(gameData).load();
         const controlEvents = new Subject<ControlEvent>();
-        const spaceport = new Spaceport(displayAssets(), gameData, EARTH,
+        const spaceport = new Spaceport(displayAssets(), gameData, PORT,
             controlEvents);
         await spaceport.buildPromise;
         // The venues open and close at once: their own dialogs are not
         // what is under test, and the real outfitter would page through
-        // every stock oütf's art.
+        // every oütf's art.
         const venues = spaceport as unknown as {
             outfitter: { show(e: Entity): Promise<Entity> },
             shipyard: { show(e: Entity): Promise<Entity> },
@@ -133,10 +154,10 @@ describe('spaceport venue offers', () => {
         } as unknown as OfferPopup;
         // Every AvailRandom roll of this visit wins. Keyed the way the
         // spaceport keys it: by the SYSTEM the landing stellar resolves
-        // to under the pilot's bits (Earth's is not sÿst nova:128).
+        // to under the pilot's bits.
         const universe = MissionUniverse.shared(gameData);
-        const rolls = offerRollsForSystem(
-            universe.systemIdOfPlanet(EARTH, new Set([9200])));
+        const rolls = offerRollsForSystem(universe.systemIdOfPlanet(
+            PORT, new Set([BITS.tradeErrandOpen])));
         for (const mission of universe.missions) {
             rolls.set(mission.id, 0);
         }
@@ -159,53 +180,43 @@ describe('spaceport venue offers', () => {
         return { entity, shown, press, venues };
     }
 
-    it('offers the Federation string at the outfitter (nova:428)',
-        async () => {
-            const { entity, shown, press, venues } =
-                await land('As you wander around the outfitting area');
-            expect(shown.length).toBe(0);
-            await press('outfitter');
-            expect(venues.outfitter.show).toHaveBeenCalled();
-            expect(shown.some(text =>
-                text.startsWith('As you wander around the outfitting area')))
-                .toBeTrue();
-            expect(entity.components.get(MissionsComponent)!.has('nova:428'))
-                .toBeTrue();
-        });
-
-    it('offers the Sigma Shipyards string at the shipyard (nova:555)',
-        async () => {
-            const { entity, shown, press } =
-                await land('As you wander through the shipyard');
-            await press('shipyard');
-            expect(shown.some(text =>
-                text.startsWith('As you wander through the shipyard')))
-                .toBeTrue();
-            expect(entity.components.get(MissionsComponent)!.has('nova:555'))
-                .toBeTrue();
-        });
-
-    it('offers Tutorial 002 at the trade center (nova:630)', async () => {
-        const { entity, shown, press } =
-            await land('"This is the lifeblood of our civilization,"');
-        await press('tradeCenter');
-        expect(shown.some(text =>
-            text.startsWith('"This is the lifeblood of our civilization,"')))
+    it('offers the AvailLoc 6 job at the outfitter', async () => {
+        const { entity, shown, press, venues } = await land(OUTFITTER_OFFER);
+        expect(shown.length).toBe(0);
+        await press('outfitter');
+        expect(venues.outfitter.show).toHaveBeenCalled();
+        expect(shown.some(text => text.startsWith(OUTFITTER_OFFER)))
             .toBeTrue();
-        expect(entity.components.get(MissionsComponent)!.has('nova:630'))
+        expect(entity.components.get(MissionsComponent)!.has(OUTFITTER_JOB))
+            .toBeTrue();
+    });
+
+    it('offers the AvailLoc 5 job at the shipyard', async () => {
+        const { entity, shown, press } = await land(SHIPYARD_OFFER);
+        await press('shipyard');
+        expect(shown.some(text => text.startsWith(SHIPYARD_OFFER)))
+            .toBeTrue();
+        expect(entity.components.get(MissionsComponent)!.has(SHIPYARD_JOB))
+            .toBeTrue();
+    });
+
+    it('offers the AvailLoc 4 job at the trade center', async () => {
+        const { entity, shown, press } = await land(TRADING_OFFER);
+        await press('tradeCenter');
+        expect(shown.some(text => text.startsWith(TRADING_OFFER))).toBeTrue();
+        expect(entity.components.get(MissionsComponent)!.has(TRADING_JOB))
             .toBeTrue();
     });
 
     it('does not re-offer at a second visit to the same venue', async () => {
-        const { shown, press } =
-            await land('As you wander around the outfitting area');
-        await press('outfitter');
+        const { shown, press } = await land(TRADING_OFFER);
+        await press('tradeCenter');
         const afterFirst = shown.length;
         expect(afterFirst).toBeGreaterThan(0);
-        await press('outfitter');
-        // nova:428 is active now (missions are not offered twice) and its
-        // OnAccept b511 fails its own AvailBits; nothing else at the
-        // outfitter qualifies.
+        await press('tradeCenter');
+        // The AvailLoc 4 job is active now (missions are not offered
+        // twice) and its OnAccept b103 fails its own AvailBits
+        // (`!b103 & !b104`); nothing else at the trade center qualifies.
         expect(shown.length).toBe(afterFirst);
     });
 });

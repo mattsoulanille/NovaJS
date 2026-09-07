@@ -1,6 +1,9 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { BITS, SYNTHETIC } from 'novaparse/synthetic/universe';
+import {
+    getIntegrationGameData, getSyntheticGameData,
+} from '../communication/simulation_test_fixture.js';
 import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
 import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
@@ -27,43 +30,69 @@ import { presentVenueOffers } from './venue_offers.js';
  * Missions offered by the trade center, the shipyard and the outfitter
  * ============================================================================
  *
- * mïsn AvailLoc 4/5/6. Nothing rolled these three locations, so stock's
- * Federation, Gli-tech and Sigma Shipyards strings never began. Pinned
- * against the real data at Earth (a Federation stellar with all three
- * venues): nova:428 "Federation Resupply;Fed1" at the outfitter, nova:555
- * "Sigma Shipyards Delivery;Sigma1" at the shipyard, nova:630 "Trade
- * between Earth and Port Kane;Tutorial 002" at the trade center.
+ * mïsn AvailLoc 4/5/6. Nothing rolled these three locations, so a mission
+ * authored for a venue could only ever begin through an `Sxxx` (stock's
+ * Federation, Gli-tech and Sigma Shipyards strings among them). Pinned
+ * here against the synthetic scenario at Port Amberline, which has all
+ * three venues and one job at each: the Outfitter Errand (AvailLoc 4, 20
+ * tons of equipment for Coldharbour, PickupMode 0, OnAccept b103, OnRefuse
+ * b104, AvailBits `!b103 & !b104`), the Shipyard Errand (AvailLoc 5) and
+ * the Trade Errand (AvailLoc 6).
+ *
+ * MIND THE NAMES. The Bible's AvailLoc numbering is "4 In the trading
+ * dialog, 5 In the shipyard dialog, 6 In the outfit dialog" (p. 1257), so
+ * the scenario's job NAMES read across the wrong way: its "Outfitter
+ * Errand" is AvailLoc 4 and therefore a TRADE CENTER job, and its "Trade
+ * Errand" is AvailLoc 6 and therefore an OUTFITTER job. Only the Shipyard
+ * Errand's name matches its venue. The locations below are the AvailLoc
+ * each mission actually carries.
  */
 
-/** shïp nova:138 "Argosy": 50 tons of hold (nova:428 carries 20). */
-const ARGOSY = 'nova:138';
-const EARTH = 'nova:128';
+/** shïp "Heron Warden": 60 tons of hold (the AvailLoc 4 job carries 20). */
+const WARDEN = SYNTHETIC.ships.warden;
+const PORT = SYNTHETIC.planets.port;
+
+/** "Outfitter Errand", AvailLoc 4 — offered in the TRADING dialog. */
+const TRADING_JOB = SYNTHETIC.missions.outfitterErrand;
+/** "Shipyard Errand", AvailLoc 5. */
+const SHIPYARD_JOB = SYNTHETIC.missions.shipyardErrand;
+/** "Trade Errand", AvailLoc 6 — offered in the OUTFIT dialog. */
+const OUTFIT_JOB = SYNTHETIC.missions.tradeErrand;
+
+/** The first words of each job's offer text (dësc 4000 + n). */
+const TRADING_OFFER = 'The outfitter has twenty tons of equipment';
+const SHIPYARD_OFFER = 'The shipwright wants a hull scan';
+const OUTFIT_OFFER = 'A trader will pay well for five tons of luxuries';
+/** The AvailLoc 6 job's briefing, shown after the accept. */
+const OUTFIT_BRIEF = 'Take five tons of luxuries to Halden Refuge';
 
 /**
- * A pilot that qualifies for all three: nova:428 wants AvailRating 150,
- * AvailRecord 2 with the Federation, none of b50/b511/b515/b6666 and room
- * for 20 tons; nova:555 wants AvailRating 10 and none of b33/b149/b424/
- * b6300/b6302; nova:630 wants b9200 (which also silences Tutorial 001's
- * landing offer, `!(b9200 | b9215)`).
+ * A pilot that qualifies for all three. The two ungated jobs need only
+ * the room (20 tons); the AvailLoc 6 job is the gated one — AvailBits
+ * `b105` and AvailRating 10 — so the pilot carries b105 and ten kills.
+ * The Meridian legal record is there because a venue job may ask for one
+ * (these three ask for AvailRecord 0).
  */
 async function pilot(): Promise<Entity> {
-    const gameData = await getIntegrationGameData();
-    const start = await gameData.data.PlayerStart.get('nova:128');
-    const entity = makeShip(await gameData.data.Ship.get(ARGOSY));
+    const gameData = await getSyntheticGameData();
+    const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
+    const entity = makeShip(await gameData.data.Ship.get(WARDEN));
     entity.components.set(GameDateComponent, { ...start.date });
     entity.components.set(CreditsComponent, { credits: start.credits });
-    entity.components.set(ControlBitsComponent, new Set([9200]));
+    entity.components.set(ControlBitsComponent,
+        new Set([BITS.tradeErrandOpen]));
     entity.components.set(ActiveRanksComponent, new Set());
     entity.components.set(MissionsComponent, new Map());
     entity.components.set(CargoComponent, new Map());
     entity.components.set(OutfitsStateComponent, new Map());
-    entity.components.set(CombatRatingComponent, { kills: 150 });
-    entity.components.set(LegalRecordsComponent, new Map([[EARTH, 5]]));
+    entity.components.set(CombatRatingComponent, { kills: 10 });
+    entity.components.set(LegalRecordsComponent,
+        new Map([[SYNTHETIC.govts.meridian, 5]]));
     return entity;
 }
 
 async function universeFor() {
-    const gameData = await getIntegrationGameData();
+    const gameData = await getSyntheticGameData();
     const universe = MissionUniverse.shared(gameData);
     await universe.load();
     return { gameData, universe };
@@ -92,50 +121,62 @@ function scriptedPopup(answer: (text: string, hasRefuse: boolean) =>
 }
 
 describe('venue mission offers (AvailLoc 4/5/6)', () => {
-    it('rolls the outfitter, shipyard and trade-center missions at their '
+    it('rolls the trading, shipyard and outfit missions at their '
         + 'own locations', async () => {
             const { gameData, universe } = await universeFor();
             const session = await MissionSession.create(await pilot(),
-                gameData, universe, EARTH);
+                gameData, universe, PORT);
             const rolls = winningRolls(universe);
             const ids = (location: number) => rollOffers(session, universe,
                 location, rolls).map(o => o.data.id);
-            expect(ids(LOCATION_OUTFIT)).toContain('nova:428');
-            expect(ids(LOCATION_SHIPYARD)).toContain('nova:555');
-            expect(ids(LOCATION_TRADING)).toContain('nova:630');
+            expect(ids(LOCATION_TRADING)).toContain(TRADING_JOB);
+            expect(ids(LOCATION_SHIPYARD)).toContain(SHIPYARD_JOB);
+            expect(ids(LOCATION_OUTFIT)).toContain(OUTFIT_JOB);
             // The locations are disjoint.
-            expect(ids(LOCATION_OUTFIT)).not.toContain('nova:555');
-            expect(ids(LOCATION_SHIPYARD)).not.toContain('nova:428');
+            expect(ids(LOCATION_TRADING)).not.toContain(SHIPYARD_JOB);
+            expect(ids(LOCATION_SHIPYARD)).not.toContain(TRADING_JOB);
         });
 
-    it('presents the outfitter\'s offer and commits an accept to the '
-        + 'entity before the venue opens (nova:428)', async () => {
+    it('presents the venue\'s offer and commits an accept to the '
+        + 'entity before the venue opens', async () => {
             const { gameData, universe } = await universeFor();
             const entity = await pilot();
             const { popup, shown } = scriptedPopup((text, hasRefuse) =>
-                text.startsWith('As you wander around the outfitting area')
-                    || !hasRefuse ? 'accept' : 'refuse');
+                text.startsWith(TRADING_OFFER) || !hasRefuse
+                    ? 'accept' : 'refuse');
             await presentVenueOffers(entity, popup, universe, gameData,
-                EARTH, LOCATION_OUTFIT, winningRolls(universe));
-            expect(shown.some(text =>
-                text.startsWith('As you wander around the outfitting area')))
+                PORT, LOCATION_TRADING, winningRolls(universe));
+            expect(shown.some(text => text.startsWith(TRADING_OFFER)))
                 .toBeTrue();
-            // The briefing followed the accept.
-            expect(shown.some(text =>
-                text.startsWith('The Federation official sits down')))
-                .toBeTrue();
-            // Committed: the mission is active and its 20 tons of IR
-            // missiles (PickupMode 0) are aboard, ready for the outfitter
+            // Committed: the mission is active and its 20 tons of
+            // equipment (PickupMode 0) are aboard, ready for the venue
             // to build its working copy from.
             const active = entity.components.get(MissionsComponent)!
-                .get('nova:428');
+                .get(TRADING_JOB);
             expect(active).toBeDefined();
             expect(active!.cargoLoaded).toBeTrue();
             expect(entity.components.get(CargoComponent)!
-                .get(missionCargoKey('nova:428'))).toBe(20);
-            expect(entity.components.get(ControlBitsComponent)!.has(511))
-                .toBeTrue();
+                .get(missionCargoKey(TRADING_JOB))).toBe(20);
+            expect(entity.components.get(ControlBitsComponent)!
+                .has(BITS.errandAccepted)).toBeTrue();
         });
+
+    it('shows the accepted job\'s briefing after the accept', async () => {
+        // The briefing half of the spec above, at the outfitter: the
+        // AvailLoc 4 and 5 jobs both have an EMPTY BriefText (no briefing
+        // popup at all), and the AvailLoc 6 job is the venue job that
+        // carries one.
+        const { gameData, universe } = await universeFor();
+        const entity = await pilot();
+        const { popup, shown } = scriptedPopup((text, hasRefuse) =>
+            text.startsWith(OUTFIT_OFFER) || !hasRefuse ? 'accept' : 'refuse');
+        await presentVenueOffers(entity, popup, universe, gameData,
+            PORT, LOCATION_OUTFIT, winningRolls(universe));
+        expect(shown.some(text => text.startsWith(OUTFIT_OFFER))).toBeTrue();
+        expect(shown.some(text => text.startsWith(OUTFIT_BRIEF))).toBeTrue();
+        expect(entity.components.get(MissionsComponent)!.has(OUTFIT_JOB))
+            .toBeTrue();
+    });
 
     it('runs OnRefuse and commits that too', async () => {
         const { gameData, universe } = await universeFor();
@@ -143,18 +184,43 @@ describe('venue mission offers (AvailLoc 4/5/6)', () => {
         const { popup } = scriptedPopup((_text, hasRefuse) =>
             hasRefuse ? 'refuse' : 'accept');
         await presentVenueOffers(entity, popup, universe, gameData,
-            EARTH, LOCATION_OUTFIT, winningRolls(universe));
-        // nova:428's OnRefuse is "b6666", which also takes it off the
-        // table for good.
-        expect(entity.components.get(MissionsComponent)!.has('nova:428'))
-            .toBeFalse();
-        expect(entity.components.get(ControlBitsComponent)!.has(6666))
-            .toBeTrue();
+            PORT, LOCATION_TRADING, winningRolls(universe));
+        // The AvailLoc 4 job's OnRefuse is "b104", which its own AvailBits
+        // (`!b103 & !b104`) then takes off the table for good.
+        expect(entity.components.get(MissionsComponent)!
+            .has(TRADING_JOB)).toBeFalse();
+        expect(entity.components.get(ControlBitsComponent)!
+            .has(BITS.errandRefused)).toBeTrue();
     });
+});
+
+/**
+ * STAYS ON THE STOCK DATA. A missed AvailRandom roll can only silence a
+ * mission whose AvailRandom is under 100 (rollOffers does not even draw
+ * for a 100% mission), and every mïsn in the synthetic scenario is 100%.
+ * Stock nova:428 "Federation Resupply;Fed1", in the outfit dialog at
+ * Earth, is a job with a real roll.
+ */
+describe('venue mission offers that lose their AvailRandom roll', () => {
+    const EARTH = 'nova:128';
+    const ARGOSY = 'nova:138';
 
     it('is silent when nothing rolls', async () => {
-        const { gameData, universe } = await universeFor();
-        const entity = await pilot();
+        const gameData = await getIntegrationGameData();
+        const universe = MissionUniverse.shared(gameData);
+        await universe.load();
+        const start = await gameData.data.PlayerStart.get(EARTH);
+        const entity = makeShip(await gameData.data.Ship.get(ARGOSY));
+        entity.components.set(GameDateComponent, { ...start.date });
+        entity.components.set(CreditsComponent, { credits: start.credits });
+        entity.components.set(ControlBitsComponent, new Set([9200]));
+        entity.components.set(ActiveRanksComponent, new Set());
+        entity.components.set(MissionsComponent, new Map());
+        entity.components.set(CargoComponent, new Map());
+        entity.components.set(OutfitsStateComponent, new Map());
+        entity.components.set(CombatRatingComponent, { kills: 150 });
+        entity.components.set(LegalRecordsComponent, new Map([[EARTH, 5]]));
+
         // Every roll misses.
         const losing: OfferRolls = new Map();
         for (const mission of universe.missions) {

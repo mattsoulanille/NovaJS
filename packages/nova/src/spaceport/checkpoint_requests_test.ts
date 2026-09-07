@@ -1,6 +1,7 @@
 import 'jasmine';
 import { Subscription } from 'rxjs';
-import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
+import { SYNTHETIC } from 'novaparse/synthetic/universe';
+import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
 import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
     abortMission, startMissionById,
@@ -75,7 +76,7 @@ describe('checkpoint labels', () => {
     });
 });
 
-describe('MissionSession checkpoint announcements (real Nova data)', () => {
+describe('MissionSession checkpoint announcements (parsed Nova data)', () => {
     let received: CheckpointRequest[];
     let subscription: Subscription;
     beforeEach(() => {
@@ -86,10 +87,10 @@ describe('MissionSession checkpoint announcements (real Nova data)', () => {
 
     async function dockedPilot(planetId: string,
         options?: { announceCheckpoints?: boolean }) {
-        const gameData = await getIntegrationGameData();
+        const gameData = await getSyntheticGameData();
         const universe = MissionUniverse.shared(gameData);
         await universe.load();
-        const start = await gameData.data.PlayerStart.get('nova:128');
+        const start = await gameData.data.PlayerStart.get(SYNTHETIC.playerStart);
         const shipData = await gameData.data.Ship.get(start.ship);
         const entity = makeShip(shipData);
         entity.components.set(CreditsComponent, { credits: 100000 });
@@ -98,7 +99,10 @@ describe('MissionSession checkpoint announcements (real Nova data)', () => {
         return { gameData, universe, entity, session };
     }
 
-    /** A stock mission that a scripted start can resolve from Earth. */
+    /**
+     * A mission a scripted start can resolve from Port Amberline — the
+     * scenario's courier run is the first one that takes.
+     */
     async function startableMission(universe: MissionUniverse,
         session: MissionSession): Promise<string> {
         for (const { id } of universe.missions) {
@@ -107,12 +111,13 @@ describe('MissionSession checkpoint announcements (real Nova data)', () => {
                 return id;
             }
         }
-        throw new Error('No startable stock mission');
+        throw new Error('No startable mission in the scenario');
     }
 
     it('announces accept and abort with the committed entity, once each',
         async () => {
-            const { universe, entity, session } = await dockedPilot('nova:128');
+            const { universe, entity, session } =
+                await dockedPilot(SYNTHETIC.planets.port);
             const id = await startableMission(universe, session);
             const name = displayName(universe.getMission(id)!.name);
 
@@ -121,7 +126,7 @@ describe('MissionSession checkpoint announcements (real Nova data)', () => {
             expect(received[0].label).toBe(`Accepted: ${name}`);
             expect(received[0].kind).toBe('mission');
             expect(received[0].entity).toBe(entity);
-            expect(received[0].stellar).toBe('nova:128');
+            expect(received[0].stellar).toBe(SYNTHETIC.planets.port);
             // The entity already holds the accepted mission when the
             // request goes out (announced after the write).
             expect(entity.components.get(MissionsComponent)!.has(id)).toBeTrue();
@@ -147,7 +152,7 @@ describe('MissionSession checkpoint announcements (real Nova data)', () => {
 
     it('announces nothing when the session opts out (detached copies)',
         async () => {
-            const { universe, session } = await dockedPilot('nova:128',
+            const { universe, session } = await dockedPilot(SYNTHETIC.planets.port,
                 { announceCheckpoints: false });
             await startableMission(universe, session);
             session.commit();
