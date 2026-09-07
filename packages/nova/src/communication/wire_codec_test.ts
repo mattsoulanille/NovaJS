@@ -3,7 +3,7 @@ import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
 import { deriveAvroSchema } from './io_ts_to_avro.js';
 import {
-    avroWireCodec, decodeWire, jsonWireCodec, makeWireCodec, msgpackWireCodec,
+    avroWireCodec, decodeWire, jsonWireCodec, makeWireCodec,
     WIRE_ENCODING, WireCodec,
 } from './wire_codec.js';
 
@@ -16,14 +16,14 @@ type Message = t.TypeOf<typeof Message>;
 describe('WireCodec', () => {
     const sample: Message = { id: 'a', values: [1, 2.5, -3], nested: { flag: true } };
     const avro = avroWireCodec(deriveAvroSchema(Message, { name: 'Message' }).schema);
-    const codecs: WireCodec[] = [jsonWireCodec, msgpackWireCodec, avro];
+    const codecs: WireCodec[] = [jsonWireCodec, avro];
 
-    it('json stays the active encoding', () => {
-        expect(WIRE_ENCODING).toBe('json');
-        expect(makeWireCodec(WIRE_ENCODING, () => 'null')).toBe(jsonWireCodec);
+    it('avro is the live encoding', () => {
+        expect(WIRE_ENCODING).toBe('avro');
+        expect(makeWireCodec(WIRE_ENCODING, () => 'null').encoding).toBe('avro');
     });
 
-    it('json encodes exactly what the socket sends today', () => {
+    it('json encodes exactly what the socket sent before protocol 7', () => {
         const bytes = jsonWireCodec.encode(sample);
         expect(new TextDecoder().decode(bytes)).toBe(JSON.stringify(sample));
     });
@@ -68,7 +68,6 @@ describe('WireCodec', () => {
         let derived = 0;
         const schema = () => { derived++; return deriveAvroSchema(Message).schema; };
         expect(makeWireCodec('json', schema).encoding).toBe('json');
-        expect(makeWireCodec('msgpack', schema).encoding).toBe('msgpack');
         expect(derived).toBe(0);
         expect(makeWireCodec('avro', schema).encoding).toBe('avro');
         expect(derived).toBe(1);
@@ -84,15 +83,6 @@ describe('WireCodec', () => {
             expect(Number.isNaN(back.n)).toBeTrue();
         });
 
-        it('msgpack keeps NaN but not −0 (a safe integer goes as an int)', () => {
-            // Documented limitation: @msgpack/msgpack encodes -0 as the
-            // integer 0 unless every number is forced to float64. Should
-            // a future version change this, the report's caveat goes.
-            const back = msgpackWireCodec.decode(msgpackWireCodec.encode({ z: -0, n: NaN })) as { z: number, n: number };
-            expect(Object.is(back.z, -0)).toBeFalse();
-            expect(Number.isNaN(back.n)).toBeTrue();
-        });
-
         it('json keeps neither', () => {
             const back = jsonWireCodec.decode(jsonWireCodec.encode({ z: -0, n: NaN })) as { z: number, n: unknown };
             expect(Object.is(back.z, -0)).toBeFalse();
@@ -102,7 +92,7 @@ describe('WireCodec', () => {
 
     it('avro exposes a schema fingerprint that changes with the shape', () => {
         const other = avroWireCodec(deriveAvroSchema(t.type({ id: t.string }), { name: 'Message' }).schema);
-        expect(avro.fingerprint).toMatch(/^[0-9a-f]{32}$/);
+        expect(avro.fingerprint).toMatch(/^[0-9a-f]{16}$/);
         expect(other.fingerprint).not.toBe(avro.fingerprint);
         expect(avroWireCodec(deriveAvroSchema(Message, { name: 'Message' }).schema).fingerprint)
             .toBe(avro.fingerprint);

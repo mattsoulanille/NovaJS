@@ -11,7 +11,7 @@ import { makeDeterminismWorld } from './determinism_harness.js';
 import { AvroSchema, AvroSchemaNode, DerivationFailure, DerivationOptions, deriveAvroSchema } from './io_ts_to_avro.js';
 import { DeltaFrameEncoder, SimulationFrame, SimulationFrameType } from './simulation_frame.js';
 import { WireTick } from './simulation_input.js';
-import { avroWireCodec, decodeWireOrThrow, jsonWireCodec, msgpackWireCodec } from './wire_codec.js';
+import { avroWireCodec, decodeWireOrThrow, jsonWireCodec } from './wire_codec.js';
 import {
     communicatorMessageDerivation, novaCodecHooks, rollbackProtocolDerivation,
     RollbackEnvelopeType, roomMessageDerivation, simulationFrameDerivation,
@@ -208,8 +208,10 @@ describe('io-ts to Avro derivation', () => {
             };
             expect(() => avroWireCodec([{ type: 'array', items: 'double' }, tupleRecord]))
                 .toThrowError(/ambiguous union.*array/);
-            expect(() => avroWireCodec([{ type: 'map', values: 'double' }, tupleRecord]))
-                .toThrowError(/ambiguous union.*on the wire/);
+            // (A map beside a tuple is unambiguous to the binary codec,
+            // which reads the branch INDEX rather than the value's kind;
+            // the deriver still refuses it, above, for the reference
+            // plan's sake.)
         });
 
         it('maps tuples to records read and written as arrays', () => {
@@ -299,18 +301,17 @@ describe('io-ts to Avro derivation', () => {
             expect(wire.explain({ tick: 7 })).toBeUndefined();
         });
 
-        it('explain judges the original message by its round trip, not the plan-encoded one', () => {
-            // A message the schema admits can still come back changed:
-            // the plan's transforms and the opaque fallback happen
-            // before avsc validates anything. The opaque node here is
-            // msgpack, which folds −0 (and keeps NaN).
+        it('explain judges the original message by its round trip', () => {
+            // A message the schema admits can still come back changed.
+            // An opaque node rides as the dynamic encoding, which keeps
+            // −0 and NaN; what it cannot carry is a function.
             const codec = t.type({ tick: WireTick, payload: t.unknown });
             const { schema } = deriveAvroSchema(codec, { hooks: novaCodecHooks() });
             const wire = avroWireCodec(schema);
-            expect(wire.explain({ tick: 7, payload: { z: -0 } }))
-                .toMatch(/lossy: \$\.payload\.z: -0 came back as 0/);
+            expect(wire.explain({ tick: 7, payload: { z: -0 } })).toBeUndefined();
             expect(wire.explain({ tick: 7, payload: { n: NaN, list: [1, 'two', null] } })).toBeUndefined();
             expect(wire.explain({ tick: 7, payload: undefined })).toBeUndefined();
+            expect(wire.explain({ tick: 7, payload: { f: () => 1 } })).toMatch(/round trip failed/);
             // Shapes the plan reshapes on purpose are not differences: a
             // Position instance comes back a plain object, an undefined
             // optional comes back absent, a tuple goes through a record.
@@ -415,7 +416,7 @@ describe('io-ts to Avro derivation', () => {
                 },
             ];
             for (const message of messages) {
-                for (const codec of [jsonWireCodec, msgpackWireCodec, avro]) {
+                for (const codec of [jsonWireCodec, avro]) {
                     const bytes = codec.encode(RollbackEnvelopeType.encode(message));
                     expect(decodeWireOrThrow(codec, RollbackEnvelopeType, bytes))
                         .withContext(`${message.rollback.kind} via ${codec.encoding}`)
@@ -476,7 +477,7 @@ describe('io-ts to Avro derivation', () => {
             const serializer = world.resources.get(SerializerResource)!;
             const avro = avroWireCodec(simulationFrameDerivation(serializer).schema);
             expect(frame.added.length).toBeGreaterThan(2);
-            for (const codec of [jsonWireCodec, msgpackWireCodec, avro]) {
+            for (const codec of [jsonWireCodec, avro]) {
                 const back = decodeWireOrThrow(codec, SimulationFrameType, codec.encode(frame));
                 expect(asJson(back)).withContext(codec.encoding).toEqual(asJson(frame));
             }
@@ -519,32 +520,28 @@ describe('io-ts to Avro derivation', () => {
             expect(jsonBack.velocity.x).toBeNull();
         });
 
-        it('loses −0 inside an opaque component (the msgpack fallback), and explain says so', () => {
-            // The caveat behind "avro keeps −0": only where the schema
-            // types the field. A component the derivation could not map
-            // rides as msgpack bytes, and msgpack folds −0 to +0. The
-            // `failures` list is therefore also the list of where −0
-            // does not survive; nothing else reports it.
+        it('keeps −0 and NaN inside an opaque node too (the dynamic encoding)', () => {
+            // A node the derivation could not type — here a bridge
+            // event's `data`, which is `t.unknown` — rides as the
+            // self-describing dynamic encoding, whose numbers are IEEE
+            // doubles like the schema'd fields. The `failures` list is
+            // therefore NOT a list of where −0 is lost: nothing on this
+            // wire folds it.
             const serializer = world.resources.get(SerializerResource)!;
             const derivation = simulationFrameDerivation(serializer);
-            expect(summarize(derivation.failures))
-                .toContain('unmapped $.added[][1].components[].ShipData');
+            expect(summarize(derivation.failures)).toContain('untyped $.events[].data');
             const avro = avroWireCodec(derivation.schema);
-            const [uuid, entity] = frame.added.find(([, delta]) =>
-                delta.components.some(([name]) => name === 'ShipData'))!;
-            const [name, data] = entity.components.find(([name]) => name === 'ShipData')!;
-            expect(typeof (data as { deathDelay: unknown }).deathDelay).toBe('number');
             const tweaked: SimulationFrame = {
-                added: [[uuid, { components: [[name, { ...(data as object), deathDelay: -0 }]] }]],
-                changed: [], removed: [], events: [],
+                added: [], changed: [], removed: [],
+                events: [{ name: 'ev', data: { z: -0, n: NaN, nested: [{ w: -0 }] } }],
             };
             expect(avro.explain(frame)).toBeUndefined();
-            expect(avro.explain(tweaked))
-                .toMatch(/lossy: \$\.added\[0\]\[1\]\.components\[0\]\[1\]\.deathDelay: -0 came back as 0/);
+            expect(avro.explain(tweaked)).toBeUndefined();
             const back = decodeWireOrThrow(avro, SimulationFrameType, avro.encode(tweaked));
-            const shipData = back.added[0]![1].components[0]![1] as { deathDelay: number };
-            expect(Object.is(shipData.deathDelay, -0)).toBeFalse();
-            expect(shipData.deathDelay).toBe(0);
+            const data = back.events[0]!.data as { z: number, n: number, nested: [{ w: number }] };
+            expect(Object.is(data.z, -0)).toBeTrue();
+            expect(Number.isNaN(data.n)).toBeTrue();
+            expect(Object.is(data.nested[0].w, -0)).toBeTrue();
         });
     });
 });

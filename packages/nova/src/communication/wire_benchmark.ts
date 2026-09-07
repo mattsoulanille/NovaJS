@@ -1,6 +1,8 @@
 /**
- * Wire encoding benchmark: json (today) vs msgpack vs avro over a
- * recorded set of real messages from the determinism harness world.
+ * Wire encoding benchmark: json (the wire before protocol 7) vs msgpack
+ * vs avsc (the reference Avro implementation) vs avro (the in-house
+ * codec, the live wire) over a recorded set of real messages from the
+ * determinism harness world.
  *
  *   node dist/src/communication/wire_benchmark.js [npcCount] [ticks] [reps]
  *
@@ -21,7 +23,8 @@ import { makeDeterminismWorld } from './determinism_harness.js';
 import { AvroSchema, AvroSchemaNode, deriveAvroSchema, formatDerivationFailures } from './io_ts_to_avro.js';
 import { DeltaFrameEncoder, SimulationFrame, SimulationFrameType } from './simulation_frame.js';
 import { applyInputRecords, InputRecord } from './simulation_input.js';
-import { avroWireCodec, jsonWireCodec, msgpackWireCodec, WireCodec } from './wire_codec.js';
+import { avscReferenceCodec, msgpackCodec, NamedCodec } from './avsc_reference.js';
+import { avroWireCodec, jsonWireCodec } from './wire_codec.js';
 import { novaCodecHooks, rollbackProtocolDerivation, RollbackEnvelopeType, simulationFrameDerivation } from './wire_schemas.js';
 
 const npcCount = Number(process.argv[2] ?? 12);
@@ -62,15 +65,19 @@ interface Family {
     name: string;
     messages: unknown[];
     type: t.Type<unknown, unknown, unknown>;
-    avro: WireCodec;
+    /** The in-house avro codec and the avsc reference over the family's schema. */
+    avro: NamedCodec;
+    avsc: NamedCodec;
 }
+
+const jsonCodec: NamedCodec = { name: 'json', ...jsonWireCodec };
 
 function fmt(n: number, digits = 1): string {
     return n.toFixed(digits).padStart(9);
 }
 
 function benchFamily(family: Family) {
-    const codecs: WireCodec[] = [jsonWireCodec, msgpackWireCodec, family.avro];
+    const codecs: NamedCodec[] = [jsonCodec, msgpackCodec, family.avsc, family.avro];
     const gate = family.type;
     console.log(`\n${family.name} (${family.messages.length} messages)`);
     console.log(`  ${'encoding'.padEnd(8)}${'bytes/msg'.padStart(10)}${'encode µs'.padStart(11)}`
@@ -79,7 +86,7 @@ function benchFamily(family: Family) {
     for (const codec of codecs) {
         const encoded = family.messages.map(message => codec.encode(message));
         const bytes = encoded.reduce((sum, b) => sum + b.length, 0) / encoded.length;
-        if (codec.encoding === 'json') {
+        if (codec.name === 'json') {
             jsonBytes = bytes;
         }
         const encodeUs = timePerItem(family.messages, message => codec.encode(message));
@@ -88,10 +95,10 @@ function benchFamily(family: Family) {
         const gateUs = timePerItem(decoded, raw => {
             const result = gate.decode(raw);
             if (result._tag === 'Left') {
-                throw new Error(`${family.name}: ${codec.encoding} failed the io-ts gate`);
+                throw new Error(`${family.name}: ${codec.name} failed the io-ts gate`);
             }
         });
-        console.log(`  ${codec.encoding.padEnd(8)}${fmt(bytes, 0).padStart(10)}${fmt(encodeUs).padStart(11)}`
+        console.log(`  ${codec.name.padEnd(8)}${fmt(bytes, 0).padStart(10)}${fmt(encodeUs).padStart(11)}`
             + `${fmt(decodeUs).padStart(11)}${fmt(gateUs).padStart(10)}`
             + `${(bytes / jsonBytes * 100).toFixed(0).padStart(8)}%`);
     }
@@ -156,20 +163,22 @@ async function main() {
     for (const line of formatDerivationFailures([...rollback.failures, ...frame.failures])) {
         console.log(`  ${line}`);
     }
-    const rollbackAvro = avroWireCodec(rollback.schema);
-    const frameAvro = avroWireCodec(frame.schema);
+    const rollbackAvro: NamedCodec = { name: 'avro', ...avroWireCodec(rollback.schema) };
+    const frameAvro: NamedCodec = { name: 'avro', ...avroWireCodec(frame.schema) };
+    const rollbackAvsc: NamedCodec = { name: 'avsc', ...avscReferenceCodec(rollback.schema) };
+    const frameAvsc: NamedCodec = { name: 'avsc', ...avscReferenceCodec(frame.schema) };
     const envelope = RollbackEnvelopeType as t.Type<unknown, unknown, unknown>;
     const frameType = SimulationFrameType as t.Type<unknown, unknown, unknown>;
 
     const families: Family[] = [
-        { name: 'inputs (per-tick control records)', messages: records.map(record => ({ rollback: { kind: 'inputs', record } })), type: envelope, avro: rollbackAvro },
-        { name: 'tickSync', messages: [{ rollback: { kind: 'tickSync', tick: ticks } }], type: envelope, avro: rollbackAvro },
-        { name: 'joinRequest', messages: [{ rollback: { kind: 'joinRequest', fresh: true, protocol: 5 } }], type: envelope, avro: rollbackAvro },
-        { name: 'stateHash', messages: [{ rollback: { kind: 'stateHash', tick: ticks, hash: 'deadbeef' } }], type: envelope, avro: rollbackAvro },
-        { name: `inputLog (${records.length} records)`, messages: [{ rollback: { kind: 'inputLog', records } }], type: envelope, avro: rollbackAvro },
-        { name: 'catchUp (baseline snapshot + log)', messages: [catchUp], type: envelope, avro: rollbackAvro },
-        { name: 'frame: full (first snapshot)', messages: [fullFrame], type: frameType, avro: frameAvro },
-        { name: 'frame: delta (steady state)', messages: deltaFrames, type: frameType, avro: frameAvro },
+        { name: 'inputs (per-tick control records)', messages: records.map(record => ({ rollback: { kind: 'inputs', record } })), type: envelope, avro: rollbackAvro, avsc: rollbackAvsc },
+        { name: 'tickSync', messages: [{ rollback: { kind: 'tickSync', tick: ticks } }], type: envelope, avro: rollbackAvro, avsc: rollbackAvsc },
+        { name: 'joinRequest', messages: [{ rollback: { kind: 'joinRequest', fresh: true, protocol: 5 } }], type: envelope, avro: rollbackAvro, avsc: rollbackAvsc },
+        { name: 'stateHash', messages: [{ rollback: { kind: 'stateHash', tick: ticks, hash: 'deadbeef' } }], type: envelope, avro: rollbackAvro, avsc: rollbackAvsc },
+        { name: `inputLog (${records.length} records)`, messages: [{ rollback: { kind: 'inputLog', records } }], type: envelope, avro: rollbackAvro, avsc: rollbackAvsc },
+        { name: 'catchUp (baseline snapshot + log)', messages: [catchUp], type: envelope, avro: rollbackAvro, avsc: rollbackAvsc },
+        { name: 'frame: full (first snapshot)', messages: [fullFrame], type: frameType, avro: frameAvro, avsc: frameAvsc },
+        { name: 'frame: delta (steady state)', messages: deltaFrames, type: frameType, avro: frameAvro, avsc: frameAvsc },
     ];
     for (const family of families) {
         benchFamily(family);
@@ -215,7 +224,7 @@ async function main() {
         const t2 = performance.now();
         const packed = new Map<string, Uint8Array>();
         for (const [key, [, encoded]] of pairs) {
-            const bytes = msgpackWireCodec.encode(encoded);
+            const bytes = msgpackCodec.encode(encoded);
             packed.set(key, bytes);
             const last = lastMsgpack.get(key);
             if (!last || !bytesEqual(last, bytes)) {
