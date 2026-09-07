@@ -2,17 +2,32 @@ import 'jasmine';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
+import { Angle } from 'nova_ecs/datatypes/angle';
+import { Position } from 'nova_ecs/datatypes/position';
+import { Vector } from 'nova_ecs/datatypes/vector';
 import { Entity } from 'nova_ecs/entity';
+import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
+import { makeSystem } from '../nova_plugin/make_system.js';
 import { dayNumber } from '../nova_plugin/player/calendar.js';
 import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
 import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
 import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
+import {
+    escortDeal, PlayerEscortComponent, withEscortDeal,
+} from '../nova_plugin/player/player_escort.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
 } from '../nova_plugin/player/player_state_plugin.js';
+import {
+    collectEscortsToSave, decodeSave, encodeSave, extractSaveData,
+    extractSavedEscorts, restorePlayerState, restoreSavedEscorts,
+    RosterEscort,
+} from '../nova_plugin/session/save_game.js';
+import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
 import { creditBalance } from './credit_commit.js';
 import { EscortDealEntry } from './escort_deals.js';
 import {
@@ -371,4 +386,133 @@ describe('the landed transaction', () => {
             expect(transaction.session.currentDay).toBe(before + 1);
             expect(transaction.landingEvents).toBe(events);
         });
+
+    /**
+     * The seam between the transaction and the save: a save taken while
+     * landed reads the docked entity (client/player_save.ts's
+     * buildSaveData) and the landed rosters, so it sees exactly what the
+     * last flush put there; restoring it (restorePlayerState writes every
+     * required field unconditionally, save_game.ts) hands a fresh entity to
+     * a new transaction, whose seed COPIES the restored Maps and Sets into
+     * its working objects (mission_session.ts's create / reseed) and whose
+     * lift-off flush writes copies back. Nothing on either side may be
+     * shared by reference or dropped on the way round: what lifts off from
+     * the restored pilot is what lifted off from the original.
+     */
+    describe('a save taken while landed, restored, and lifted off', () => {
+        const SYSTEM = 'test:system';
+        const ESCORT = 'test:escort';
+        const BETTER = 'test:escort-2';
+
+        it('lands, buys an outfit, queues an escort deal, saves, restores '
+            + 'and lifts off with the same state and the deal still queued',
+            async () => {
+                // ── Land, and shop ──────────────────────────────────────
+                const data = gameData();
+                const universe = new MissionUniverse(data);
+                const entity = pilot();
+                const transaction = await LandedTransaction.open(entity, data,
+                    universe, PLANET);
+                const visit = transaction.savepoint('outfitter');
+                transaction.credits.credits -= 500;
+                transaction.outfits.set(OUTFIT, 1);
+                transaction.state.cargo.set('cargo:0', 7);
+                transaction.state.bits.add(42);
+                transaction.state.missions.set('nova:500', {
+                    id: 'nova:500', acceptedDay: 1, acceptedAt: PLANET,
+                    travelPlanet: null, returnPlanet: PLANET, cargoType: -1,
+                    cargoQty: 0, cargoLoaded: false, travelDone: false,
+                    deadlineDay: null,
+                });
+                transaction.release(visit);
+                expect(creditBalance(entity)).toBe(99_500);
+
+                // ── Queue a deal on a landed escort ─────────────────────
+                // The roster holds the escort whole (landed_escorts.ts); the
+                // deal is the same marker escort_action.ts writes in flight.
+                const mock = new MockGameData();
+                for (const id of [ESCORT, BETTER]) {
+                    mock.data.Ship.map.set(id, {
+                        ...getDefaultShipData(), id,
+                        ...(id === ESCORT ? {
+                            escortUpgradeShip: BETTER, escortUpgradeCost: 1_000,
+                        } : {}),
+                    });
+                    await mock.data.Ship.get(id);
+                }
+                const world = await makeSystem(SYSTEM,
+                    mock as unknown as SimulationGameDataInterface, undefined,
+                    { npcs: false });
+                const serializer = world.resources.get(SerializerResource)!;
+                const escort = makeShip(mock.data.Ship.map.get(ESCORT)!);
+                escort.components.set(MovementStateComponent, {
+                    accelerating: 0, position: new Position(500, 500),
+                    rotation: new Angle(0), turnBack: false, turning: 0,
+                    velocity: new Vector(0, 0),
+                });
+                escort.components.set(PlayerEscortComponent, withEscortDeal(
+                    { player: PLAYER, parent: PLAYER, provenance: 'captured' },
+                    { kind: 'upgrade', toShip: BETTER }));
+                await completeEntity(world, escort);
+                const roster: RosterEscort[] =
+                    [{ player: PLAYER, uuid: 'escort-uuid', entity: escort }];
+
+                // ── Save, as buildSaveData does while docked ────────────
+                const before = extractSaveData(entity, SYSTEM)!;
+                const stored = encodeSave({
+                    ...before,
+                    escorts: extractSavedEscorts(
+                        collectEscortsToSave(PLAYER, [], [roster]), serializer),
+                    playerUuid: PLAYER,
+                });
+                const save = decodeSave(stored)!;
+                expect(save.credits).toBe(99_500);
+                expect(save.outfits).toEqual([[OUTFIT, 1]]);
+
+                // ── Restore onto a fresh pilot, as player_start does ────
+                const fresh = new Entity('restored pilot')
+                    .addComponent(ShipComponent, { id: save.ship })
+                    .addComponent(OutfitsStateComponent, new Map(
+                        save.outfits.map(([id, count]) => [id, { count }])));
+                restorePlayerState(fresh, save);
+                const escorts = restoreSavedEscorts(save.escorts, serializer,
+                    { player: PLAYER, armament: new Set() });
+                expect(escorts.map(({ uuid }) => uuid)).toEqual(['escort-uuid']);
+
+                // The restored pilot is still landed: its transaction seeds
+                // from the restored components — copies, not the objects
+                // restorePlayerState wrote — and sees the purchase.
+                const reopened = await LandedTransaction.open(fresh, data,
+                    universe, PLANET);
+                expect(reopened.spendable()).toBe(99_500);
+                expect(reopened.outfits.get(OUTFIT)).toBe(1);
+                expect(reopened.state.cargo).not.toBe(
+                    fresh.components.get(CargoComponent)!);
+                expect(reopened.state.bits).not.toBe(
+                    fresh.components.get(ControlBitsComponent)!);
+
+                // ── Lift off ────────────────────────────────────────────
+                const hull = reopened.commit();
+                expect(hull).toBe(fresh);
+                for (const component of [CargoComponent, ControlBitsComponent,
+                    MissionsComponent, OutfitsStateComponent, CreditsComponent,
+                    GameDateComponent]) {
+                    expect(hull.components.get(component))
+                        .withContext(component.name)
+                        .toEqual(entity.components.get(component));
+                }
+                // Everything the save reads is what it read before the trip.
+                expect(extractSaveData(hull, SYSTEM)).toEqual(before);
+                // And the deal is still queued for the next shipyard, in the
+                // encoding the settlement reads.
+                const marker = escorts[0].entity.components
+                    .get(PlayerEscortComponent);
+                expect(escortDeal(marker))
+                    .toEqual({ kind: 'upgrade', toShip: BETTER });
+                expect(marker).toEqual(
+                    escort.components.get(PlayerEscortComponent)!);
+                expect(escorts[0].entity.components.get(ShipDataComponent)?.id)
+                    .toBe(ESCORT);
+            });
+    });
 });

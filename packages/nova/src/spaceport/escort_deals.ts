@@ -2,7 +2,8 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { replaceEscortShipClass } from '../nova_plugin/escorts/escort_action.js';
 import {
-    escortProvenance, PlayerEscort, PlayerEscortComponent,
+    escortDeal, escortProvenance, NO_DEAL, PlayerEscort, PlayerEscortComponent,
+    withEscortDeal,
 } from '../nova_plugin/player/player_escort.js';
 import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
 import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
@@ -16,8 +17,12 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  * the button over the comm channel only queues the deal ("Will be upgraded
  * at next shipyard" / "Will be sold off at next shipyard" — STR# 2002 291
  * and 294), and nothing happens until the player next puts down somewhere
- * with a shipyard. nova_plugin/escorts/escort_action.ts writes the two flags; THIS
- * module is the other end, where the money moves.
+ * with a shipyard. nova_plugin/escorts/escort_action.ts queues the deal
+ * (player_escort.ts's EscortDeal, written with withEscortDeal); THIS module
+ * is the other end, where the money moves. The deal is READ through
+ * escortDeal and CLEARED through withEscortDeal(marker, NO_DEAL) here as
+ * everywhere else, so the pendingUpgrade / pendingSale encoding has one
+ * reader and one writer.
  *
  * ---------------------------------------------------------------------------
  * WHY IT RUNS ON THE CLIENT'S LANDED ROSTER
@@ -58,7 +63,8 @@ import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
  *  - A SALE WINS over an upgrade if both are somehow set. They are mutually
  *    exclusive by construction (queueing either clears the other), so this
  *    is only reachable through a hand-edited save; selling is the reading
- *    that cannot leave the player holding a hull they did not want.
+ *    that cannot leave the player holding a hull they did not want. That
+ *    reading is escortDeal's, not a rule of this module.
  *  - INSUFFICIENT CREDITS: the upgrade is SKIPPED AND STAYS QUEUED. The
  *    player can come back when they can afford it — a deal they never got
  *    is not a deal they should lose. (A sale never fails this way: it pays
@@ -157,8 +163,10 @@ export interface EscortDealSettlement {
  *
  * Deliberately not filtered by the stale-target or affordability rules:
  * loading a class that then turns out not to be needed costs a cache entry,
- * while missing one silently leaves a legitimate deal queued forever.
- * Sorted and de-duplicated so the loads are a fixed set.
+ * while missing one silently leaves a legitimate deal queued forever. (A
+ * marker that somehow carries a sale as well reads as the sale — see
+ * escortDeal — and the sale settles first and clears both, so its target
+ * is never needed.) Sorted and de-duplicated so the loads are a fixed set.
  */
 export function queuedUpgradeTargets(roster: readonly EscortDealEntry[],
     player: string): string[] {
@@ -167,26 +175,23 @@ export function queuedUpgradeTargets(roster: readonly EscortDealEntry[],
         if (entry.player !== player) {
             continue;
         }
-        const pending = entry.entity.components
-            .get(PlayerEscortComponent)?.pendingUpgrade;
-        if (pending !== undefined) {
-            targets.add(pending);
+        const deal = escortDeal(entry.entity.components.get(PlayerEscortComponent));
+        if (deal.kind === 'upgrade') {
+            targets.add(deal.toShip);
         }
     }
     return [...targets].sort();
 }
 
 /**
- * Writes an escort's ownership marker with the queued-deal flags cleared.
- * Deleting rather than writing `undefined` keeps the encoded shape (and so
- * the desync hash) identical to an escort that never had a deal queued —
- * the same rule escort_action.ts's setEscortDeal follows.
+ * Writes an escort's ownership marker with its queued deal cleared —
+ * through withEscortDeal, which removes the deal's fields rather than
+ * writing `undefined`, so the encoded shape (and so the desync hash) is
+ * identical to an escort that never had a deal queued: the same rule
+ * escort_action.ts's setEscortDeal follows, because it is the same writer.
  */
 function clearDeals(entity: Entity, marker: PlayerEscort): void {
-    const next: PlayerEscort = { ...marker };
-    delete next.pendingUpgrade;
-    delete next.pendingSale;
-    entity.components.set(PlayerEscortComponent, next);
+    entity.components.set(PlayerEscortComponent, withEscortDeal(marker, NO_DEAL));
 }
 
 /**
@@ -260,7 +265,8 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
     // ── Sales first (they fund the upgrades; see above) ──────────────────
     for (const entry of [...roster]) {
         const marker = entry.entity.components.get(PlayerEscortComponent);
-        if (entry.player !== player || !marker?.pendingSale) {
+        if (entry.player !== player || !marker
+            || escortDeal(marker).kind !== 'sale') {
             continue;
         }
         // The sale takes the escort's whole WING with it, so any open hold
@@ -296,10 +302,11 @@ export function settleEscortDeals(roster: EscortDealEntry[], player: string,
     // ── Then the upgrades ────────────────────────────────────────────────
     for (const entry of roster) {
         const marker = entry.entity.components.get(PlayerEscortComponent);
-        const pending = marker?.pendingUpgrade;
-        if (entry.player !== player || !marker || pending === undefined) {
+        const deal = escortDeal(marker);
+        if (entry.player !== player || !marker || deal.kind !== 'upgrade') {
             continue;
         }
+        const pending = deal.toShip;
         if (holdOpen(entry.uuid)) {
             // The class swap rewrites this escort's cargo and capacity; an
             // open hold would overwrite both from a pre-swap copy. Stays

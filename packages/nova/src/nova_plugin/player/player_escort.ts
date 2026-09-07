@@ -148,10 +148,11 @@ export type PlayerEscort = t.TypeOf<typeof PlayerEscort>;
  * both flags, so the upgrade would never have happened), escortDealFields
  * encodes, and the encoding is exactly the bytes the previous build
  * wrote, so the desync hash, the wire and every existing save are
- * untouched. The in-memory marker keeps the flag fields for the readers
- * that still take them raw (spaceport/escort_deals.ts); turning the
- * marker itself into the explicit shape is the follow-up that needs the
- * protocol bump.
+ * untouched. The in-memory marker keeps the flag fields because they ARE
+ * the codec's fields; every reader (escort_action.ts, the settlement in
+ * spaceport/escort_deals.ts, the hail dialog's view) goes through
+ * escortDeal, and turning the marker itself into the explicit shape is
+ * the follow-up that needs the protocol bump.
  */
 export type EscortDeal =
     | { readonly kind: 'none' }
