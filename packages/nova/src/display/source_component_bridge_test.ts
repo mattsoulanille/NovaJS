@@ -12,14 +12,10 @@ import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
 import { makeSimulationBridgeHarness } from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
-import { BeamDataComponent } from '../nova_plugin/combat/beam_plugin.js';
-import {
-    OwnerComponent, SourceComponent,
-} from '../nova_plugin/combat/fire_weapon_plugin.js';
-import { FormationComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
+import { BeamDataComponent, OwnerComponent, SourceComponent } from '../nova_plugin/combat/index.js';
+import { FormationComponent } from '../nova_plugin/npc/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
+import { ShipDataComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import { computeContext } from './hail_dialog_plugin.js';
 import {
     ActiveBeamsQuery, shouldShowFiringAnimation,

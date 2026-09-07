@@ -6,7 +6,7 @@ import {
 } from "../communication/simulation_test_fixture.js";
 import { novaDataInstalled, requireNovaData } from "../test_support/nova_data_gate.js";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
-import { isPort, systemIsInhabited } from "../nova_plugin/core/landable.js";
+import { isPort, systemIsInhabited } from "../nova_plugin/core/index.js";
 import {
     SYSTEM_INHABITED_COLOR, SYSTEM_UNEXPLORED_COLOR,
     SYSTEM_UNINHABITED_COLOR, systemDotColor,

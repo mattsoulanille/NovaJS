@@ -1,6 +1,6 @@
 import * as t from 'io-ts';
 import { Serializer } from 'nova_ecs/plugins/serializer_plugin';
-import { stat } from '../nova_plugin/core/stat.js';
+import { stat } from '../nova_plugin/core/index.js';
 import { CommunicatorMessage } from './communicator_message.js';
 import { CodecHook, CodecHooks, Derivation, deriveAvroSchema } from './io_ts_to_avro.js';
 import { RoomMessage } from './multi_room_communicator.js';

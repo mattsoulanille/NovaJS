@@ -3,7 +3,7 @@
  * ECS so the rules are unit-testable. The rendering systems resolve components
  * and game data, then hand plain values to these helpers.
  */
-import type { GateKind, LandingBlockReason } from '../nova_plugin/travel/planet_plugin.js';
+import type { GateKind, LandingBlockReason } from '../nova_plugin/travel/index.js';
 
 /** One line of the cargo manifest: an (abbreviated) name and a quantity. */
 export interface CargoLine {

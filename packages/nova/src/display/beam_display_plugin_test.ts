@@ -7,7 +7,7 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { World } from 'nova_ecs/world';
 import { BeamWeaponData } from 'novadatainterface/weapon_data';
-import { BeamDataComponent, BeamStateComponent } from '../nova_plugin/combat/beam_plugin.js';
+import { BeamDataComponent, BeamStateComponent } from '../nova_plugin/combat/index.js';
 import {
     BeamDisplaySystem, BeamGraphicsResource, beamOrigin,
 } from './beam_display_plugin.js';

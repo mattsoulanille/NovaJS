@@ -3,12 +3,10 @@ import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/bay_plugin.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { TradeGood } from '../nova_plugin/economy/trade_logic.js';
+import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/index.js';
+import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
+import { MissionShipComponent } from '../nova_plugin/player/index.js';
+import { TradeGood } from '../nova_plugin/economy/index.js';
 import {
     carriesCargo, collectFleetHolds, commitFleetHolds, FleetCargoState,
     FleetEscortEntry, FleetHold, fleetBuy, fleetBuyQuantity, fleetCapacity,

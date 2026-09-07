@@ -6,9 +6,9 @@ import { Space } from './display/space_resource.js';
 import {
     clientToWorld, DisplayScaleResource,
 } from './display/screen_size_plugin.js';
-import { PlanetComponent } from './nova_plugin/travel/planet_plugin.js';
-import { ControlledByComponent } from './nova_plugin/player/ship_control.js';
-import { ShipComponent } from './nova_plugin/ship/ship_plugin.js';
+import { PlanetComponent } from './nova_plugin/travel/index.js';
+import { ControlledByComponent } from './nova_plugin/player/index.js';
+import { ShipComponent } from './nova_plugin/ship/index.js';
 
 /**
  * Tap (or click — this works with a mouse too) on the game view:

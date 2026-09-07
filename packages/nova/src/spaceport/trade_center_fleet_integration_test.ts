@@ -1,11 +1,9 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/bay_plugin.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { standardTradeGoods, TradeGood } from '../nova_plugin/economy/trade_logic.js';
+import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/index.js';
+import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
+import { standardTradeGoods, TradeGood } from '../nova_plugin/economy/index.js';
 import {
     collectFleetHolds, commitFleetHolds, FleetCargoState, FleetEscortEntry,
     fleetBuy, fleetFreeSpace, fleetHeld, fleetSell, freeSpaceLines,

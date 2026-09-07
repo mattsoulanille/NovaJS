@@ -8,19 +8,17 @@ import * as PIXI from 'pixi.js';
 import { Observable, Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { ControlEvent } from "../nova_plugin/core/controls_plugin.js";
-import { NCBParseError, NCBSetOperation, parseNCBSet } from "../nova_plugin/ncb/ncb.js";
-import { ControlBits } from "../nova_plugin/ncb/ncb_plugin.js";
-import { playerDiscovery } from "../nova_plugin/player/discovery_store.js";
-import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/ncb/desc_text.js';
-import { cleanRecords, LegalRecords } from "../nova_plugin/reputation/reputation.js";
-import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
+import { ControlEvent } from "../nova_plugin/core/index.js";
+import {
+    NCBParseError, NCBSetOperation, parseNCBSet, ControlBits, makeDescTextContext, playerGender,
+    resolveConditionalBlocks, rankContribute,
+} from '../nova_plugin/ncb/index.js';
+import { playerDiscovery, dayNumber, GameDateComponent } from '../nova_plugin/player/index.js';
+import { cleanRecords, LegalRecords } from "../nova_plugin/reputation/index.js";
+import { ShipComponent, CargoComponent, cargoUsed } from '../nova_plugin/ship/index.js';
 import {
     numericId, resolveNumberedResource, setStringPrefix,
-} from "../nova_plugin/missions/mission_logic.js";
-import { dayNumber } from "../nova_plugin/player/calendar.js";
-import { GameDateComponent } from "../nova_plugin/player/player_state_plugin.js";
+} from "../nova_plugin/missions/index.js";
 import { Button, ButtonClick } from "./button.js";
 import { DEBUG_FLAGS } from "../debug_flags.js";
 import { formatPrice } from "./format_price.js";
@@ -30,10 +28,8 @@ import { Menu } from "./menu.js";
 import { MissionSession } from "./mission_session.js";
 import { applyMapOutfit } from "./map_outfit.js";
 import { MissionUniverse } from "./mission_universe.js";
-import { rankContribute } from "../nova_plugin/ncb/rank_logic.js";
 import { DeployedOutfitCounts } from "./deployed_outfits.js";
 import { AMMO_SELL_INDICES, AMMO_SELL_STRINGS, AmmoSellStrings, BuyDenialReason, canBuyOutfit, canSellOutfit, freeCargo, freeMass, govtsAllied, hasPurchaseSideEffects, installedMass, maxBuyCount, maxSellCount, sellRefund, outfitPrice, OutfitterContext, OutfitterStellar, SELL_REFUSAL_TABLE, stellarOf, visibleOutfits } from "./outfitter_rules.js";
-import { CargoComponent, cargoUsed } from "../nova_plugin/ship/cargo_plugin.js";
 import { PlanetData } from "novadatainterface/planet_data";
 import { QuantityDialog } from "./quantity_dialog.js";
 import { buildChangedShip, ShipChangeMode } from "./shipyard_rules.js";

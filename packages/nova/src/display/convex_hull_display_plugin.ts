@@ -7,7 +7,7 @@ import { Provide } from "nova_ecs/provide";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import SAT from "sat";
-import { HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from "../nova_plugin/core/collisions_plugin.js";
+import { HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from "../nova_plugin/core/index.js";
 import { Space } from "./space_resource.js";
 import { ZIndex } from "./z_index.js";
 

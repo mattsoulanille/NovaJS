@@ -9,21 +9,20 @@ import { Optional } from 'nova_ecs/optional';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { ControlAction } from '../nova_plugin/core/controls.js';
-import { ControlEvent, ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
-    BoardingComponent, BoardingState, capturable, captureChance,
-} from '../nova_plugin/ship/boarding_component.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
+    ControlAction, ControlEvent, ControlsSubject, DisplayAssetDataResource,
+    SimulationGameDataResource,
+} from '../nova_plugin/core/index.js';
+import {
+    BoardingComponent, BoardingState, capturable, captureChance, CargoComponent, FuelComponent,
+    ShipDataComponent,
+} from '../nova_plugin/ship/index.js';
 import {
     cappedEscortCount, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
-} from '../nova_plugin/escorts/escort_cap.js';
-import { FuelComponent } from '../nova_plugin/ship/health_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
+} from '../nova_plugin/escorts/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/mission_logic.js';
+import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/index.js';
 import { formatCredits, standardCargoIndex } from './status_bar_content.js';
 import { Button } from '../spaceport/button.js';
 import {

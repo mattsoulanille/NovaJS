@@ -15,12 +15,12 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { PlanetData } from 'novadatainterface/planet_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { WeaponData } from 'novadatainterface/weapon_data';
-import { DiscoveryAccess } from '../nova_plugin/player/discovery.js';
+import { DiscoveryAccess } from '../nova_plugin/player/index.js';
 import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
-} from '../nova_plugin/missions/mission_logic.js';
-import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb/ncb.js';
-import { installedOutfitMass } from '../nova_plugin/ship/outfit_plugin.js';
+} from '../nova_plugin/missions/index.js';
+import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb/index.js';
+import { installedOutfitMass } from '../nova_plugin/ship/index.js';
 import {
     dayRoll, passesDayRoll, resourceNumber as resourceNumberOf,
 } from './day_roll.js';

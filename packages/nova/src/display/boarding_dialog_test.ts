@@ -1,15 +1,14 @@
 import 'jasmine';
 import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { BoardingState } from '../nova_plugin/ship/boarding_component.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { FuelComponent } from '../nova_plugin/ship/health_plugin.js';
-import { ControlledByComponent } from '../nova_plugin/player/ship_control.js';
-import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { Stat } from '../nova_plugin/core/stat.js';
+import {
+    BoardingState, CargoComponent, FuelComponent, ShipDataComponent,
+} from '../nova_plugin/ship/index.js';
+import { ControlledByComponent } from '../nova_plugin/player/index.js';
+import { Stat } from '../nova_plugin/core/index.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/mission_logic.js';
-import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escorts/escort_cap.js';
+import { STANDARD_CARGO_NAMES } from '../nova_plugin/missions/index.js';
+import { MAX_ESCORTS_MESSAGE } from '../nova_plugin/escorts/index.js';
 import {
     boardingDialogPhase, cargoKeyDisplayName, plunderDialogContent,
 } from './boarding_plugin.js';

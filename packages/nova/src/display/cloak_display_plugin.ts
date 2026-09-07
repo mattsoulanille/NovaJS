@@ -1,11 +1,9 @@
 import { Plugin } from 'nova_ecs/plugin';
 import {
-    CloakComponent, CloakScannerComponent, deriveCloak, deriveCloakScanner,
-} from '../nova_plugin/ship/cloak_plugin.js';
-import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { ProvideFromCache } from '../nova_plugin/core/provide_from_cache.js';
-import { ShipPhysicsProvider } from "../nova_plugin/ship/ship_plugin.js";
+    CloakComponent, CloakScannerComponent, deriveCloak, deriveCloakScanner, OutfitsStateComponent,
+    ShipPhysicsProvider,
+} from '../nova_plugin/ship/index.js';
+import { SimulationGameDataResource, ProvideFromCache } from '../nova_plugin/core/index.js';
 import { MovementSystem } from "nova_ecs/plugins/movement_plugin";
 
 /**

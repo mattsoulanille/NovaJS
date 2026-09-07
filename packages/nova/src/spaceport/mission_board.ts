@@ -3,17 +3,13 @@ import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { dateFromDayNumber } from '../nova_plugin/player/calendar.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import { dateFromDayNumber, ActiveMission } from '../nova_plugin/player/index.js';
 import {
-    acceptOffer,
-    MissionMapMark,
-    missionMapMarks,
-    MissionOffer,
-} from '../nova_plugin/missions/mission_logic.js';
-import { expandMissionText, missionDisplayName } from '../nova_plugin/missions/mission_text.js';
-import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.js';
-import { ActiveMission } from '../nova_plugin/player/player_state_plugin.js';
+    acceptOffer, MissionMapMark, missionMapMarks, MissionOffer, expandMissionText,
+    missionDisplayName,
+} from '../nova_plugin/missions/index.js';
+import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
 import { PlayerIdentitySubs, playerIdentitySubs } from './player_identity.js';
 import { Button } from './button.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';

@@ -3,12 +3,11 @@ import * as PIXI from "pixi.js";
 import { Observable } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { ControlEvent } from "../nova_plugin/core/controls_plugin.js";
+import { ControlEvent, isPort, landable } from '../nova_plugin/core/index.js';
 import {
     DISCOVERY_LANDED, DiscoveryLevel,
-} from "../nova_plugin/player/discovery.js";
-import { isPort, landable } from "../nova_plugin/core/landable.js";
-import { MissionMapMark } from "../nova_plugin/missions/mission_logic.js";
+} from "../nova_plugin/player/index.js";
+import { MissionMapMark } from "../nova_plugin/missions/index.js";
 import { Button } from "./button.js";
 import {
     DEFAULT_HYPERGATE_TRANSITIVITY, gateMapDestinations, HypergateNetwork,

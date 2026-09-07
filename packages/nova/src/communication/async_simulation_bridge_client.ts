@@ -1,10 +1,10 @@
 import { Entity } from "nova_ecs/entity";
 import { EncodedEntity, Serializer } from "nova_ecs/plugins/serializer_plugin";
-import { ControlEvent } from "../nova_plugin/core/controls_plugin.js";
-import { EscortAction } from "../nova_plugin/escorts/escort_action.js";
-import { HailAction } from "../nova_plugin/encounters/hail_plugin.js";
-import { AcceptedMission } from "../nova_plugin/missions/mission_accept.js";
-import { AnalogControlState } from "../nova_plugin/player/ship_control.js";
+import { ControlEvent } from "../nova_plugin/core/index.js";
+import { EscortAction } from "../nova_plugin/escorts/index.js";
+import { HailAction } from "../nova_plugin/encounters/index.js";
+import { AcceptedMission } from "../nova_plugin/missions/index.js";
+import { AnalogControlState } from "../nova_plugin/player/index.js";
 import { AsyncSimulationBridgeHostApi } from "./simulation_bridge_api.js";
 import { decodeEntityOrThrow } from "./simulation_bridge_client.js";
 import { SimulationFrame } from "./simulation_frame.js";

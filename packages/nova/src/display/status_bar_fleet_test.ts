@@ -1,12 +1,9 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/bay_plugin.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { ReturnWhenTargetRemovedComponent } from '../nova_plugin/escorts/index.js';
+import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
+import { MissionShipComponent, PlayerEscortComponent } from '../nova_plugin/player/index.js';
 import { sumFleetCargo } from '../spaceport/fleet_cargo.js';
 import {
     cargoDisplayOf, fleetCargoMembers, playerEscortEntities,

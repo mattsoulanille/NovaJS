@@ -10,24 +10,20 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { dayNumber } from '../nova_plugin/player/calendar.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
 import {
-    escortDeal, PlayerEscortComponent, withEscortDeal,
-} from '../nova_plugin/player/player_escort.js';
+    dayNumber, escortDeal, PlayerEscortComponent, withEscortDeal, CreditsComponent,
+    GameDateComponent, MissionsComponent,
+} from '../nova_plugin/player/index.js';
 import {
-    CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
+    CargoComponent, OutfitsStateComponent, makeShip, ShipComponent, ShipDataComponent,
+} from '../nova_plugin/ship/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
     collectEscortsToSave, decodeSave, encodeSave, extractSaveData,
     extractSavedEscorts, restorePlayerState, restoreSavedEscorts,
     RosterEscort,
-} from '../nova_plugin/pilot/save_game.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
+} from '../nova_plugin/pilot/index.js';
+import { completeEntity } from '../nova_plugin/spawn/index.js';
 import { creditBalance } from './credit_commit.js';
 import { EscortDealEntry } from './escort_deals.js';
 import { LandedTransaction } from './landed_transaction.js';

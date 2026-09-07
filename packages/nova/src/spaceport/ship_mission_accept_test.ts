@@ -1,28 +1,20 @@
 import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { GOAL_RESCUE } from '../nova_plugin/player/mission_ship_state.js';
-import { buildAcceptedMissionShips } from '../nova_plugin/missions/mission_ship_spawn.js';
-import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
+import {
+    CargoComponent, makeShip, DisabledComponent, FuelComponent, TargetComponent,
+} from '../nova_plugin/ship/index.js';
+import {
+    GOAL_RESCUE, MissionShipComponent, ActiveMissionType, CreditsComponent, GameDateComponent,
+    MissionsComponent,
+} from '../nova_plugin/player/index.js';
+import { buildAcceptedMissionShips, expandMissionText } from '../nova_plugin/missions/index.js';
 import {
     ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb/ncb_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
-import { FuelComponent } from '../nova_plugin/ship/health_plugin.js';
-import { Stat } from '../nova_plugin/core/stat.js';
-import { NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
-import { recordWith } from '../nova_plugin/reputation/reputation.js';
-import {
-    CombatRatingComponent,
-} from '../nova_plugin/reputation/reputation_plugin.js';
-import {
-    ActiveMissionType, CreditsComponent, GameDateComponent,
-    MissionsComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
+} from '../nova_plugin/ncb/index.js';
+import { Stat } from '../nova_plugin/core/index.js';
+import { NpcComponent } from '../nova_plugin/npc/index.js';
+import { recordWith, CombatRatingComponent } from '../nova_plugin/reputation/index.js';
 import { MissionUniverse } from './mission_universe.js';
 import {
     buildShipMissionAccept, buildShipMissionOffer,
@@ -552,7 +544,7 @@ describe('the Refuel Trader replacement ship (përs Flags 0x0040)', () => {
             expect(special.length).toEqual(1);
             expect(ships.length - special.length).toEqual(3);
             const { ShipComponent } =
-                await import('../nova_plugin/ship/ship_plugin.js');
+                await import('../nova_plugin/ship/index.js');
             expect(special[0].components.get(ShipComponent)?.id)
                 .toEqual('nova:136');
         });

@@ -37,7 +37,7 @@
  */
 import { ShipData } from 'novadatainterface/ship_data';
 import { meetsTechLevel } from './outfitter_rules.js';
-import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb/ncb.js';
+import { evaluateNCBTest, NCBParseError } from '../nova_plugin/ncb/index.js';
 import {
     BUY_RANDOM_DAY_ROLL_ENABLED, dayRoll as sharedDayRoll, DayRollShop,
     passesDayRoll, resourceNumber,

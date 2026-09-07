@@ -21,12 +21,11 @@
  * into, and the save that stands is the last one written".
  */
 import type { Entity } from 'nova_ecs/entity';
-import { daysPerJump } from '../nova_plugin/player/calendar.js';
-import { GateArrivalComponent } from '../nova_plugin/travel/gate_transit_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
+import { daysPerJump } from '../nova_plugin/player/index.js';
 import {
-    planGateTransitRecovery, planHyperspaceJumpRecovery,
-} from '../nova_plugin/travel/transit_recovery.js';
+    GateArrivalComponent, planGateTransitRecovery, planHyperspaceJumpRecovery,
+} from '../nova_plugin/travel/index.js';
+import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/index.js';
 import { advanceEntityDate } from '../spaceport/mission_session.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {

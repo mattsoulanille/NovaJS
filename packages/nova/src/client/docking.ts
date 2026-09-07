@@ -24,11 +24,11 @@ import type { World } from 'nova_ecs/world';
 import { v4 } from 'uuid';
 import { OpenGateMapEvent } from '../display/gate_map_plugin.js';
 import { OpenSpaceportEvent } from '../display/spaceport_plugin.js';
-import { DISCOVERY_LANDED } from '../nova_plugin/player/discovery.js';
-import { markDiscovered } from '../nova_plugin/player/discovery_store.js';
-import { PlanetTargetComponent } from '../nova_plugin/travel/planet_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
+import {
+    DISCOVERY_LANDED, markDiscovered, PlayerShipSelector,
+} from '../nova_plugin/player/index.js';
+import { PlanetTargetComponent } from '../nova_plugin/travel/index.js';
+import { TargetComponent } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from '../spaceport/pending_escorts.js';
 import {
     dock, dockAtGate, gateLaunched, land, landAtGate, launched, LiveSystem,

@@ -8,15 +8,13 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { LOCATION_MAIN_SPACEPORT } from '../nova_plugin/missions/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { CargoComponent, OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import { LOCATION_MAIN_SPACEPORT } from '../nova_plugin/missions/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+} from '../nova_plugin/player/index.js';
 import { Button } from './button.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { MenuControls } from './menu_controls.js';

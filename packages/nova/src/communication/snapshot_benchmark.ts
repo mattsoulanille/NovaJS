@@ -17,10 +17,10 @@ import { multiplayer, MultiplayerData } from "nova_ecs/plugins/multiplayer_plugi
 import { SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { v4 } from "uuid";
-import { makeNpc } from "../nova_plugin/npc/npc_plugin.js";
-import { makeShip } from "../nova_plugin/ship/make_ship.js";
+import { makeNpc } from "../nova_plugin/npc/index.js";
+import { makeShip } from "../nova_plugin/ship/index.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
+import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SimulationFrame } from "./simulation_frame.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";

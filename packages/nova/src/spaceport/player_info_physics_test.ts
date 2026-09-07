@@ -2,8 +2,7 @@ import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { OutfitsState } from '../nova_plugin/ship/outfit_plugin.js';
-import { deriveShipPhysics } from '../nova_plugin/ship/ship_plugin.js';
+import { OutfitsState, deriveShipPhysics } from '../nova_plugin/ship/index.js';
 import { dialogShipPhysics, InfoRow, physicsRows } from './player_info.js';
 
 /**

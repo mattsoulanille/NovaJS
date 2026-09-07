@@ -8,15 +8,16 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { hashWorld } from 'nova_ecs/plugins/world_hash';
 import { TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { GameDataAggregator } from '../server/parsing/game_data_aggregator.js';
-import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
-import { WeaponEntries } from '../nova_plugin/combat/fire_weapon_plugin.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { completeEntity } from '../nova_plugin/spawn/index.js';
+import { WeaponEntries } from '../nova_plugin/combat/index.js';
+import {
+    makeShip, OutfitsStateComponent, ShipPhysicsComponent, WeaponsStateComponent,
+} from '../nova_plugin/ship/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { ActiveMissionType, CreditsComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { ControlledByComponent, PEER_LOCAL_COMPONENTS } from '../nova_plugin/player/ship_control.js';
-import { ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
+import {
+    ActiveMissionType, CreditsComponent, MissionsComponent, ControlledByComponent,
+    PEER_LOCAL_COMPONENTS,
+} from '../nova_plugin/player/index.js';
 import { applyInputRecords, InputRecord, loadInputRecordsGameData } from './simulation_input.js';
 import { getIntegrationGameData, makeIntegrationGameData } from './simulation_test_fixture.js';
 

@@ -36,21 +36,18 @@ import { LeaveSpaceportEvent } from '../display/spaceport_plugin.js';
 import { SetJumpRouteEvent } from '../display/starmap_plugin.js';
 import { AddEnemyEvent, DebugActionEvent } from '../display/status_bar.js';
 import { isTextEntryActive } from '../input_focus.js';
-import { ControlEvent, EcsControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { Controls, getActions } from '../nova_plugin/core/controls.js';
-import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { GateTransitEvent } from '../nova_plugin/travel/gate_transit_plugin.js';
-import { FinishJumpEvent } from '../nova_plugin/travel/jump_plugin.js';
-import type { AcceptedMission } from '../nova_plugin/missions/mission_accept.js';
+import {
+    ControlEvent, EcsControlEvent, Controls, getActions, SimulationGameDataResource,
+} from '../nova_plugin/core/index.js';
+import { GateTransitEvent, FinishJumpEvent, LandEvent } from '../nova_plugin/travel/index.js';
+import type { AcceptedMission } from '../nova_plugin/missions/index.js';
 import { MultiRoomResource, NovaPlugin } from '../nova_plugin/nova_plugin.js';
-import { LandEvent } from '../nova_plugin/travel/planet_plugin.js';
 import {
     EscortJumpEvent, EscortLandedEvent,
-} from '../nova_plugin/escorts/player_escort_plugin.js';
-import { DeathEvent } from '../nova_plugin/ship/death_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { resetMostRecentlyActivatedRank } from '../nova_plugin/ncb/rank_logic.js';
-import { AnalogControlState } from '../nova_plugin/player/ship_control.js';
+} from '../nova_plugin/escorts/index.js';
+import { DeathEvent } from '../nova_plugin/ship/index.js';
+import { PlayerShipSelector, AnalogControlState } from '../nova_plugin/player/index.js';
+import { resetMostRecentlyActivatedRank } from '../nova_plugin/ncb/index.js';
 import type { CarriedEscort } from '../spaceport/landed_escorts.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';

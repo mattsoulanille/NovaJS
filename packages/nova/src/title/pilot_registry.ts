@@ -25,11 +25,11 @@
 
 import { isLeft } from 'fp-ts/lib/Either.js';
 import * as t from 'io-ts';
-import { discoveryKeyFor } from '../nova_plugin/player/discovery_store.js';
+import { discoveryKeyFor } from '../nova_plugin/player/index.js';
 import {
     decodeSave, encodeSave, quarantineKeyFor, RawSaveEnvelope, SAVE_KEY,
     setActiveSaveKey,
-} from '../nova_plugin/pilot/save_game.js';
+} from '../nova_plugin/pilot/index.js';
 import {
     ControlsOverride, GameSettingsOverride, loadControlsOverride,
     loadGameSettings, loadPilotProfile, PilotProfile, PrefsStorage,

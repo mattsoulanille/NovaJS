@@ -5,19 +5,14 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { ControlEvent, ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
-    DisplayAssetDataResource, SimulationGameDataResource,
-} from '../nova_plugin/core/game_data_resource.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { MissionUniverse } from '../spaceport/mission_universe.js';
+    ControlEvent, ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
+} from '../nova_plugin/core/index.js';
 import {
-    GOAL_BOARD, GOAL_DESTROY, GOAL_RESCUE, ShipObjective,
-} from '../nova_plugin/player/mission_ship_state.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import {
+    MissionShipComponent, GOAL_BOARD, GOAL_DESTROY, GOAL_RESCUE, ShipObjective, PlayerShipSelector,
     ActiveMission, MissionsComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
+} from '../nova_plugin/player/index.js';
+import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';
 import {
     clearShipDoneTextShown, takeShipDoneTextShown,
@@ -30,7 +25,7 @@ import {
 import { installHeadlessPixi } from '../spaceport/headless_pixi_fixture.js';
 import { ScreenSize } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
-import { BoardingState } from '../nova_plugin/ship/boarding_component.js';
+import { BoardingState } from '../nova_plugin/ship/index.js';
 
 /**
  * ============================================================================

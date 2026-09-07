@@ -3,11 +3,10 @@ import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import {
+    CargoComponent, makeShip, OutfitsStateComponent, ShipComponent,
+} from '../nova_plugin/ship/index.js';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 import {
     buildPurchasedShip,
     canBuyShip,

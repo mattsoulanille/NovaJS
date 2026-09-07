@@ -3,9 +3,10 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
-import { DisplayAssetDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { PlayerSoundEvent, SoundEvent, SoundEventData } from '../nova_plugin/core/sound_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import {
+    DisplayAssetDataResource, PlayerSoundEvent, SoundEvent, SoundEventData,
+} from '../nova_plugin/core/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { PREWARM_UI_SOUNDS, UiSoundEvent } from './ui_sound.js';
 import { SoundStartLimiter } from './sound_limiter.js';

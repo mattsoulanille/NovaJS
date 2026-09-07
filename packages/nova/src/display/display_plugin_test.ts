@@ -2,7 +2,7 @@ import "jasmine";
 import * as PIXI from "pixi.js";
 import { cameraCentre, Display } from "./display_plugin.js";
 import { AnimationGraphicPlugin } from "./animation_graphic_plugin.js";
-import { AnimationPlugin } from "../nova_plugin/core/animation_plugin.js";
+import { AnimationPlugin } from "../nova_plugin/core/index.js";
 import { MovementExtrapolationPlugin } from "./movement_extrapolation_plugin.js";
 import { ScreenSizePlugin } from "./screen_size_plugin.js";
 import { DisplayRoot, Stage, WorldLayer } from "./stage_resource.js";

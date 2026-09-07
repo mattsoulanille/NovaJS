@@ -1,6 +1,6 @@
 import 'jasmine';
-import { resetDiscovery } from '../nova_plugin/player/discovery_store.js';
-import { SAVE_KEY, setActiveSaveKey } from '../nova_plugin/pilot/save_game.js';
+import { resetDiscovery } from '../nova_plugin/player/index.js';
+import { SAVE_KEY, setActiveSaveKey } from '../nova_plugin/pilot/index.js';
 
 /**
  * Every spec starts as a fresh client. Jasmine helper (jasmine.json), run

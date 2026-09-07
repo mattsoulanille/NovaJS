@@ -1,5 +1,5 @@
 import { Entity } from 'nova_ecs/entity';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 
 /**
  * ============================================================================

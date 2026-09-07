@@ -1,8 +1,8 @@
 import 'jasmine';
 import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
-import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
-import { SourceComponent } from '../nova_plugin/combat/fire_weapon_plugin.js';
+import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
+import { SourceComponent } from '../nova_plugin/combat/index.js';
 import { countLandedFighters, mergeDeployedCounts } from './deployed_outfits.js';
 
 const PLAYER = 'player-uuid';

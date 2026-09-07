@@ -22,42 +22,32 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { Component } from 'nova_ecs/component';
 import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { Cargo, CargoComponent, cargoUsed } from '../nova_plugin/ship/cargo_plugin.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
 import {
-    ActiveRanksComponent, AggressionSuppressGovtsComponent,
-    ControlBitsComponent,
-} from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+    Cargo, CargoComponent, cargoUsed, makeShip, OutfitsStateComponent, ShipPhysicsComponent,
+    WeaponsStateComponent,
+} from '../nova_plugin/ship/index.js';
 import {
-    CreditsComponent,
-    CronStatesComponent,
-    GameDateComponent,
-    MissionsComponent,
-    PendingAutoAbortShipsComponent,
-    PendingMissionNoticesComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
+    ActiveRanksComponent, AggressionSuppressGovtsComponent, ControlBitsComponent,
+    makeControlBitHooks, NCBParseError, runNCBSet, ShipChangeMode, commitActiveRanks,
+} from '../nova_plugin/ncb/index.js';
+import {
+    PlayerShipSelector, CreditsComponent, CronStatesComponent, GameDateComponent,
+    MissionsComponent, PendingAutoAbortShipsComponent, PendingMissionNoticesComponent,
+    ControlledByComponent, EscortPayrollComponent, DiscoveryAccess,
+} from '../nova_plugin/player/index.js';
 import {
     CombatRatingComponent,
     LegalRecordsComponent,
-} from '../nova_plugin/reputation/reputation_plugin.js';
-import { ControlledByComponent } from '../nova_plugin/player/ship_control.js';
-import { EscortPayrollComponent } from '../nova_plugin/player/player_escort.js';
+} from '../nova_plugin/reputation/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { ensurePlayerStateComponents } from './mission_session.js';
 import { outfitPrice } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';
-import { DiscoveryAccess } from '../nova_plugin/player/discovery.js';
 import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
-} from '../nova_plugin/missions/mission_logic.js';
-import { makeControlBitHooks, NCBParseError, runNCBSet, ShipChangeMode } from '../nova_plugin/ncb/ncb.js';
-import { commitActiveRanks } from '../nova_plugin/ncb/ncb_plugin.js';
+} from '../nova_plugin/missions/index.js';
 import { RankData } from 'novadatainterface/rank_data';
-import { ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
 
 /**
  * The fraction of the current ship-and-outfits value that is credited
@@ -644,7 +634,7 @@ function buildShipEntity(oldShip: Entity, newShip: ShipData,
  * three names ncb.ts's parser produces for the C/E/H letters, defined
  * there (with the Bible text) and re-exported here for the venues.
  */
-export type { ShipChangeMode } from '../nova_plugin/ncb/ncb.js';
+export type { ShipChangeMode } from '../nova_plugin/ncb/index.js';
 
 /**
  * The outfits aboard after a Cxxx/Exxx/Hxxx ship change (see

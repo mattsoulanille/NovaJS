@@ -5,13 +5,12 @@ import { DefaultMap } from 'nova_ecs/utils';
 import {
     getPluginGameData, pluginControlBit,
 } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { idPrefix } from '../nova_plugin/missions/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
+import { idPrefix } from '../nova_plugin/missions/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
     CreditsComponent, GameDateComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
+} from '../nova_plugin/player/index.js';
 import { MissionSession } from './mission_session.js';
 import { MissionUniverse } from './mission_universe.js';
 import {

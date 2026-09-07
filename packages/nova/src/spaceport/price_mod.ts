@@ -1,6 +1,5 @@
 import { Entity } from 'nova_ecs/entity';
-import { ActiveRanksComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { RankLookup, rankPriceMod } from '../nova_plugin/ncb/rank_logic.js';
+import { ActiveRanksComponent, RankLookup, rankPriceMod } from '../nova_plugin/ncb/index.js';
 
 /**
  * ============================================================================

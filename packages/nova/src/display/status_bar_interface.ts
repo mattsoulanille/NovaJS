@@ -1,8 +1,8 @@
 import { System } from "nova_ecs/system";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
+import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/core/index.js";
+import { PlayerShipSelector } from "../nova_plugin/player/index.js";
+import { ShipComponent } from "../nova_plugin/ship/index.js";
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { StatusBarResource } from "./status_bar_resource.js";
 import { DrawRadar } from "./status_bar_radar.js";

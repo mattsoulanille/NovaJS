@@ -5,26 +5,23 @@ import { Entity } from 'nova_ecs/entity';
 import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
-import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/ncb/desc_text.js';
+import {
+    makeDescTextContext, playerGender, resolveConditionalBlocks, ActiveRanksComponent,
+    ControlBitsComponent,
+} from '../nova_plugin/ncb/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, ShieldComponent } from '../nova_plugin/ship/health_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
 import {
-    LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT,
-    LOCATION_SHIPYARD, LOCATION_TRADING, MissionEvent, MissionMapMark,
-    missionMapMarks,
-} from '../nova_plugin/missions/mission_logic.js';
-import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
+    ArmorComponent, FUEL_PER_JUMP, FuelComponent, IonizationComponent, ShieldComponent,
+    ShipComponent, ShipPhysicsComponent, WeaponsStateComponent, OutfitsStateComponent,
+} from '../nova_plugin/ship/index.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb/ncb_plugin.js';
-import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
+    LOCATION_MAIN_SPACEPORT, LOCATION_MISSION_COMPUTER, LOCATION_OUTFIT, LOCATION_SHIPYARD,
+    LOCATION_TRADING, MissionEvent, MissionMapMark, missionMapMarks, expandMissionText,
+} from '../nova_plugin/missions/index.js';
+import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player/index.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { DockedLiveStatus, DockedShip } from '../display/docked_ship.js';
 import { Bar } from './bar.js';
 import { Button } from './button.js';

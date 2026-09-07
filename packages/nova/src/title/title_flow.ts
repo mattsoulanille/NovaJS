@@ -25,12 +25,10 @@ import {
 import type { ClientRuntime } from '../client/runtime.js';
 import { isMuted } from '../client/mute.js';
 import { isTextEntryActive } from '../input_focus.js';
-import { formatDate } from '../nova_plugin/player/calendar.js';
-import { ControlAction } from '../nova_plugin/core/controls.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { resetDiscovery } from '../nova_plugin/player/discovery_store.js';
-import { combatRatingName } from '../nova_plugin/reputation/reputation.js';
-import { loadSave } from '../nova_plugin/pilot/save_game.js';
+import { formatDate, resetDiscovery } from '../nova_plugin/player/index.js';
+import { ControlAction, ControlEvent } from '../nova_plugin/core/index.js';
+import { combatRatingName } from '../nova_plugin/reputation/index.js';
+import { loadSave } from '../nova_plugin/pilot/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { OfferPopup } from '../spaceport/offer_popup.js';

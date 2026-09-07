@@ -3,9 +3,10 @@ import { Entity } from "nova_ecs/entity";
 import { TimePlugin } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
-import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { PlayerSoundEvent, SoundEvent } from "../nova_plugin/core/sound_plugin.js";
+import {
+    DisplayAssetDataResource, PlayerSoundEvent, SoundEvent,
+} from '../nova_plugin/core/index.js';
+import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { SoundPlugin } from "./sound_plugin.js";
 import { SOUND_EXPLOSION_LOOP, UiSoundEvent } from "./ui_sound.js";
 

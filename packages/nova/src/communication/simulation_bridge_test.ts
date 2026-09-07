@@ -20,11 +20,12 @@ import {
 } from 'nova_ecs/plugins/movement_plugin';
 import { Angle } from 'nova_ecs/datatypes/angle';
 import { Vector } from 'nova_ecs/datatypes/vector';
-import { FinishJumpEvent, FinishJumpEventType, JumpRouteComponent } from '../nova_plugin/travel/jump_plugin.js';
-import { LandEvent, LandEventType } from '../nova_plugin/travel/planet_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { ProjectileCollisionEvent, ProjectileCollisionEventType } from '../nova_plugin/combat/projectile_plugin.js';
-import { SoundEvent, SoundEventType } from '../nova_plugin/core/sound_plugin.js';
+import {
+    FinishJumpEvent, FinishJumpEventType, JumpRouteComponent, LandEvent, LandEventType,
+} from '../nova_plugin/travel/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
+import { ProjectileCollisionEvent, ProjectileCollisionEventType } from '../nova_plugin/combat/index.js';
+import { SoundEvent, SoundEventType } from '../nova_plugin/core/index.js';
 import { SimulationBridgeClient } from './simulation_bridge_client.js';
 import { SimulationBridgeHost } from './simulation_bridge_host.js';
 import { emitSimulationBridgeEvent } from './simulation_bridge_events.js';

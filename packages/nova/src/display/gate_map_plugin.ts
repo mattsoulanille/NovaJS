@@ -5,12 +5,12 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
-import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
-import { DiscoveryStoreResource } from '../nova_plugin/player/discovery_store.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
+import {
+    ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
+} from '../nova_plugin/core/index.js';
+import { DiscoveryStoreResource, MissionsComponent } from '../nova_plugin/player/index.js';
+import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import { GateMap } from '../spaceport/gate_map.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import {

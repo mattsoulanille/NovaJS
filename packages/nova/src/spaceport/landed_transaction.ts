@@ -3,9 +3,9 @@ import { Entity } from 'nova_ecs/entity';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import {
     MissionEvent, MissionWorkingState,
-} from '../nova_plugin/missions/mission_logic.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
+} from '../nova_plugin/missions/index.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import {
     EscortDealEntry, EscortDealSettlement, settleEscortDeals,

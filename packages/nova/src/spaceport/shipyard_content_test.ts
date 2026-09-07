@@ -3,9 +3,8 @@ import { getDefaultOutfitData, OutfitData } from 'novadatainterface/outfit_data'
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
+import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 import {
     buttonRightEdge,
     SHIPYARD_BUTTONS,

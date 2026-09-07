@@ -5,15 +5,14 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/ncb/desc_text.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import {
+    makeDescTextContext, playerGender, resolveConditionalBlocks, ControlBitsComponent,
+} from '../nova_plugin/ncb/index.js';
 import {
     cappedEscortCount, CarriedEscortEntry, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
-} from '../nova_plugin/escorts/escort_cap.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+} from '../nova_plugin/escorts/index.js';
+import { OutfitsStateComponent, ShipComponent } from '../nova_plugin/ship/index.js';
 import { PendingEscortsComponent } from './pending_escorts.js';
 import { Button } from './button.js';
 import { HIRE } from './dialog_layout.js';

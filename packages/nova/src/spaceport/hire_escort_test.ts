@@ -1,14 +1,12 @@
 import 'jasmine';
 import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
 import {
-    cappedEscortCount, CarriedEscortEntry,
-} from '../nova_plugin/escorts/escort_cap.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
+    BayFighterComponent, cappedEscortCount, CarriedEscortEntry,
+} from '../nova_plugin/escorts/index.js';
 import {
-    EscortPayrollComponent, PlayerEscortComponent,
-} from '../nova_plugin/player/player_escort.js';
+    MissionShipComponent, EscortPayrollComponent, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
 import {
     hirePrice, hireRefusal, MAX_ESCORTS, MAX_ESCORTS_MESSAGE,
     NO_SHIPS_FOR_HIRE,

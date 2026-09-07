@@ -1,13 +1,12 @@
 import 'jasmine';
 import { SYNTHETIC } from 'novaparse/synthetic/universe';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { acceptOffer } from '../nova_plugin/missions/mission_accept_offer.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { CargoComponent, makeShip } from '../nova_plugin/ship/index.js';
+import { acceptOffer } from '../nova_plugin/missions/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
     CreditsComponent, GameDateComponent, MissionsComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
+} from '../nova_plugin/player/index.js';
 import { MissionSession } from './mission_session.js';
 import { rollOffers } from './mission_offers.js';
 import { MissionUniverse } from './mission_universe.js';

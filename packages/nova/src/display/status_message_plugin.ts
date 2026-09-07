@@ -6,18 +6,17 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { BEEP_CANT_DO, UiSoundEvent } from "./ui_sound.js";
 import * as PIXI from "pixi.js";
-import { SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { GameDateComponent } from "../nova_plugin/player/player_state_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { SystemIdResource } from "../nova_plugin/core/system_id_resource.js";
+import {
+    SimulationGameDataResource, SystemIdResource, ProjectileAnimationProvider,
+} from '../nova_plugin/core/index.js';
+import { GameDateComponent, PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { bayCaptureMessage, boardingBlockedMessage, captureRepelledMessage, escortRepairedMessage, jumpArrivalMessage, landingBlockedMessage, playerPlunderedMessage } from "./status_bar_content.js";
-import { LandingBlockedEvent } from "../nova_plugin/travel/planet_plugin.js";
-import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent } from "../nova_plugin/encounters/boarding_plugin.js";
-import { PlayerPlunderedEvent } from "../nova_plugin/npc/npc_ai_plugin.js";
+import { LandingBlockedEvent } from "../nova_plugin/travel/index.js";
+import { BayCaptureEvent, BOARD_SOUND, BoardingBlockedEvent, BoardingRepelledEvent, EscortRepairedEvent } from "../nova_plugin/encounters/index.js";
+import { PlayerPlunderedEvent } from "../nova_plugin/npc/index.js";
 import { ResizeEvent, ScreenSize } from "./screen_size_plugin.js";
 import { Stage } from "./stage_resource.js";
 import { DrawDockedStatus } from "./status_bar_docked.js";
-import { ProjectileAnimationProvider } from "../nova_plugin/core/animation_plugin.js";
 
 /**
  * The bottom-left on-screen status line the original game uses for the date on

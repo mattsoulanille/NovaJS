@@ -1,6 +1,6 @@
 import 'jasmine';
 import { getDefaultMissionData, MissionData } from 'novadatainterface/mission_data';
-import { MissionContext } from '../nova_plugin/missions/mission_logic.js';
+import { MissionContext } from '../nova_plugin/missions/index.js';
 import {
     OfferRolls, offerRollsForSystem, resetOfferRolls, rollOffers,
 } from './mission_offers.js';

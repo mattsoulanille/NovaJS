@@ -4,10 +4,10 @@ import { Observable } from 'rxjs';
 import { DockedLiveStatus } from '../display/docked_ship.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/ncb/desc_text.js';
-import { LOCATION_BAR } from '../nova_plugin/missions/mission_logic.js';
+    from '../nova_plugin/ncb/index.js';
+import { LOCATION_BAR } from '../nova_plugin/missions/index.js';
 import { Button } from './button.js';
 import { BAR, LINE_HEIGHT } from './dialog_layout.js';
 import { FleetEscortEntry } from './fleet_cargo.js';

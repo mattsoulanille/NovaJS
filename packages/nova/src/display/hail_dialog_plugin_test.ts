@@ -6,26 +6,27 @@ import { getDefaultShipData } from 'novadatainterface/ship_data';
 import { MockGameData } from 'novadatainterface/mock_game_data';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { OwnerComponent, SourceComponent } from '../nova_plugin/combat/fire_weapon_plugin.js';
-import { GovtComponent } from '../nova_plugin/core/govt_component.js';
-import { FormationComponent, NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
-import { PersComponent } from '../nova_plugin/spawn/pers_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
-import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
+import { OwnerComponent, SourceComponent } from '../nova_plugin/combat/index.js';
+import { GovtComponent } from '../nova_plugin/core/index.js';
 import {
-    ASSIST_GRANTED_FALLBACK, ASSIST_GRANTED_FIRST_INDEX,
-    BUSY_RESPONSE_FALLBACK, BUSY_RESPONSE_FIRST_INDEX, CHANNEL_OPEN_FALLBACK,
-    CHANNEL_OPEN_FIRST_INDEX, GENERIC_GREETING_FIRST_INDEX,
-    HAIL_RESPONSE_TABLE, HOSTILE_RESPONSE_FALLBACK,
-    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK,
-    MERCY_ACCEPTED_FIRST_INDEX, MISC_STRING_TABLE, miscString,
-    NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
-    NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE,
-} from '../nova_plugin/reputation/hail.js';
+    FormationComponent, NpcComponent, ShootAllWeaponsComponent,
+} from '../nova_plugin/npc/index.js';
+import { PersComponent } from '../nova_plugin/spawn/index.js';
+import {
+    MissionShipComponent, PlayerShipSelector, PlayerEscortComponent, CreditsComponent,
+} from '../nova_plugin/player/index.js';
+import {
+    ShipDataComponent, TargetComponent, DisabledComponent, OutfitsStateComponent,
+} from '../nova_plugin/ship/index.js';
+import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
+import {
+    ASSIST_GRANTED_FALLBACK, ASSIST_GRANTED_FIRST_INDEX, BUSY_RESPONSE_FALLBACK,
+    BUSY_RESPONSE_FIRST_INDEX, CHANNEL_OPEN_FALLBACK, CHANNEL_OPEN_FIRST_INDEX,
+    GENERIC_GREETING_FIRST_INDEX, HAIL_RESPONSE_TABLE, HOSTILE_RESPONSE_FALLBACK,
+    HOSTILE_RESPONSE_FIRST_INDEX, MERCY_ACCEPTED_FALLBACK, MERCY_ACCEPTED_FIRST_INDEX,
+    MISC_STRING_TABLE, miscString, NO_NEED_RESPONSE_FALLBACK, NO_NEED_RESPONSE_FIRST_INDEX,
+    NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, STELLAR_RESPONSE_TABLE, LegalRecordsComponent,
+} from '../nova_plugin/reputation/index.js';
 import {
     CANNOT_UPGRADE_TEXT, escortReadout, HailContext, HailPage, HailPress,
     hailPress, SALE_QUEUED_TEXT, UPGRADE_QUEUED_TEXT,
@@ -34,18 +35,13 @@ import {
     commButtonSlots, escortButtonSlots,
 } from '../spaceport/hail_layout.js';
 import { getDefaultOutfitData } from 'novadatainterface/outfit_data';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
     StellarBribesComponent,
-} from '../nova_plugin/travel/planet_plugin.js';
+} from '../nova_plugin/travel/index.js';
 import { TimePlugin, TimeResource } from 'nova_ecs/plugins/time_plugin';
 import { SimulationTimeResource } from './simulation_time.js';
-import { ShootAllWeaponsComponent } from '../nova_plugin/npc/npc_plugin.js';
 import {
     assistAnswer, computeContext, hailIsUnanswerable, shipIdentityBlock,
     targetIsFighting,

@@ -34,8 +34,8 @@
  */
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { Entity } from 'nova_ecs/entity';
-import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
-import { OwnerComponent, SourceComponent } from '../nova_plugin/ship/weapon_components.js';
+import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
+import { OwnerComponent, SourceComponent } from '../nova_plugin/ship/index.js';
 
 /**
  * Outfit global id -> how many units of it the player owns that are not

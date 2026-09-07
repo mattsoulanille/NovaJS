@@ -11,12 +11,11 @@ import { World } from 'nova_ecs/world';
 import * as PIXI from 'pixi.js';
 import { applySimulationFrame } from '../communication/apply_simulation_frame.js';
 import { SimulationFrame } from '../communication/simulation_frame.js';
-import { BayFighterComponent } from '../nova_plugin/escorts/bay_plugin.js';
+import { BayFighterComponent } from '../nova_plugin/escorts/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { completeEntity } from '../nova_plugin/spawn/entity_data_loader.js';
+import { MissionShipComponent, PlayerEscortComponent } from '../nova_plugin/player/index.js';
+import { makeShip } from '../nova_plugin/ship/index.js';
+import { completeEntity } from '../nova_plugin/spawn/index.js';
 import { FleetLedger } from './fleet_ledger.js';
 
 /**

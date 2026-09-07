@@ -6,18 +6,17 @@ import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
-import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
-import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
-import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { FuelComponent, FUEL_PER_JUMP } from '../nova_plugin/ship/health_plugin.js';
-import { selectNearestHostile, styleForTarget } from '../nova_plugin/combat/hostility.js';
-import { JumpComponent, JumpRouteComponent, JUMP_DISTANCE } from '../nova_plugin/travel/jump_plugin.js';
-import { jumpBlocker, jumpRadiusFor } from '../nova_plugin/travel/jump_readiness.js';
-import { PlanetTargetComponent } from '../nova_plugin/travel/planet_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
-import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
+import { ControlsSubject, SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import {
+    DisabledComponent, FuelComponent, FUEL_PER_JUMP, ShipComponent, ShipPhysicsComponent,
+    TargetComponent, WeaponsStateComponent,
+} from '../nova_plugin/ship/index.js';
+import { selectNearestHostile, styleForTarget } from '../nova_plugin/combat/index.js';
+import {
+    JumpComponent, JumpRouteComponent, JUMP_DISTANCE, jumpBlocker, jumpRadiusFor,
+    PlanetTargetComponent,
+} from '../nova_plugin/travel/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { defaultSimulationTime, SimulationTimeResource } from './simulation_time.js';
 import {

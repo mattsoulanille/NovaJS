@@ -6,12 +6,12 @@ import * as PIXI from 'pixi.js';
 import { Observable } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import { ShipComponent } from '../nova_plugin/ship/index.js';
+import {
+    ControlBitsComponent, makeDescTextContext, playerGender, resolveConditionalBlocks,
+} from '../nova_plugin/ncb/index.js';
 import { MissionUniverse } from './mission_universe.js';
-import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/ncb/desc_text.js';
 import { Button } from './button.js';
 import { ItemGrid, ItemTile } from './item_grid.js';
 import { LandedTransaction, Savepoint } from './landed_transaction.js';
@@ -34,7 +34,7 @@ import {
     runShipTradeSetStrings,
     ShipPurchaseContext,
 } from './shipyard_rules.js';
-import { playerDiscovery } from '../nova_plugin/player/discovery_store.js';
+import { playerDiscovery } from '../nova_plugin/player/index.js';
 import { DeployedOutfitCounts } from './deployed_outfits.js';
 import { shipGateContext } from './ship_gate_context.js';
 import {

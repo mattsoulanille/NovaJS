@@ -7,15 +7,16 @@ import { Provide } from "nova_ecs/provide";
 import { originalIfDraft, ProvideAsync } from "nova_ecs/provide_async";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { DisplayAssetDataResource } from "../nova_plugin/core/game_data_resource.js";
+import {
+    DisplayAssetDataResource, AnimationComponent, ExplosionAnimationProvider,
+    TumbleAnimationComponent, ProjectileComponent,
+} from '../nova_plugin/core/index.js';
 import { currentIfDraft } from "../util/deimmerify.js";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
-import { AnimationComponent, ExplosionAnimationProvider, TumbleAnimationComponent } from "../nova_plugin/core/animation_plugin.js";
-import { AsteroidComponent, DebrisComponent } from "../nova_plugin/combat/asteroid_plugin.js";
-import { PlanetComponent } from "../nova_plugin/travel/planet_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { ProjectileComponent } from "../nova_plugin/core/projectile_data.js";
-import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
+import { AsteroidComponent, DebrisComponent } from "../nova_plugin/combat/index.js";
+import { PlanetComponent } from "../nova_plugin/travel/index.js";
+import { PlayerShipSelector } from "../nova_plugin/player/index.js";
+import { ShipComponent } from "../nova_plugin/ship/index.js";
 import { wrapNearestDelta } from "nova_ecs/datatypes/position";
 import { AnimationGraphic } from "./animation_graphic.js";
 import { AnimationGraphicPool, AnimationGraphicPoolResource } from "./animation_graphic_pool.js";

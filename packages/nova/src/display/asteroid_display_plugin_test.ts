@@ -2,7 +2,7 @@ import 'jasmine';
 import * as PIXI from 'pixi.js';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
-import { DebrisComponent, DEBRIS_LIFETIME_MS } from '../nova_plugin/combat/asteroid_plugin.js';
+import { DebrisComponent, DEBRIS_LIFETIME_MS } from '../nova_plugin/combat/index.js';
 import { AnimationGraphic } from './animation_graphic.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
 import { DebrisDrawSystem, DEBRIS_FADE_MS, DEBRIS_SCALE } from './asteroid_display_plugin.js';

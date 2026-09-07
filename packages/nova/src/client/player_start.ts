@@ -18,31 +18,24 @@
 import { Entity } from 'nova_ecs/entity';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import {
-    ControlBitResolver,
-} from '../nova_plugin/ncb/control_bit_namespaces.js';
-import { playerDiscovery } from '../nova_plugin/player/discovery_store.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
+    ControlBitResolver, makeControlBitHooks, NCBParseError, runNCBSet, commitActiveRanks,
+    ControlBitsComponent,
+} from '../nova_plugin/ncb/index.js';
+import {
+    playerDiscovery, PlayerShipSelector, CreditsComponent, GameDateComponent,
+    ControlledByComponent,
+} from '../nova_plugin/player/index.js';
+import { makeShip, OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import {
     resolveNumberedResource, setStringPrefix, systemDiscoveryOperators,
-} from '../nova_plugin/missions/mission_logic.js';
-import { makeControlBitHooks, NCBParseError, runNCBSet } from '../nova_plugin/ncb/ncb.js';
+} from '../nova_plugin/missions/index.js';
 import {
-    commitActiveRanks, ControlBitsComponent,
-} from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import {
-    CreditsComponent, GameDateComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
-import { initialRecordsFromGovtStatuses } from '../nova_plugin/reputation/reputation.js';
-import {
-    CombatRatingComponent, LegalRecordsComponent,
-} from '../nova_plugin/reputation/reputation_plugin.js';
+    initialRecordsFromGovtStatuses, CombatRatingComponent, LegalRecordsComponent,
+} from '../nova_plugin/reputation/index.js';
 import {
     loadSave, resetSave, restoreClientSaveState, restorePlayerState,
     savedFleetArmament,
-} from '../nova_plugin/pilot/save_game.js';
-import { ControlledByComponent } from '../nova_plugin/player/ship_control.js';
+} from '../nova_plugin/pilot/index.js';
 import { ensurePlayerStateComponents } from '../spaceport/mission_session.js';
 import { clearPilotProfile } from '../title/client_prefs.js';
 import type { ClientRuntime } from './runtime.js';

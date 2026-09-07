@@ -5,74 +5,44 @@ import { Resource } from 'nova_ecs/resource';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
-import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
-import { escortParent } from '../nova_plugin/escorts/escort_command_plugin.js';
-import { SourceComponent } from '../nova_plugin/ship/weapon_components.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { GovtComponent } from '../nova_plugin/core/govt_component.js';
 import {
-    assistGrantedText,
-    ASSIST_GRANTED_FALLBACK,
-    bribeAmount,
-    busyResponseText,
-    BUSY_RESPONSE_FALLBACK,
-    assistIsFree,
-    canRequestAssistance,
-    channelOpenText,
-    CLEARED_TO_DOCK_INDEX,
-    CLEARED_TO_LAND_INDEX,
-    DOCKING_DENIED_INDEX,
-    genericGreetings,
-    greetingText,
-    HAIL_RESPONSE_TABLE,
-    hashString,
-    hostileResponseText,
-    LANDING_DENIED_INDEX,
-    mercyAcceptedText,
-    MISC_STRING_TABLE,
-    miscString,
-    noNeedResponseText,
-    NO_NEED_RESPONSE_FALLBACK,
-    NO_RESPONSE_FALLBACK,
-    NO_RESPONSE_INDEX,
-    planetTakesBribes,
-    shipHailResponse,
-    shipIsFighting,
-    shipTakesBribes,
-    stellarBribeOfferText,
-    stellarBribeRefusedText,
-    stellarChannelOpenText,
-    STELLAR_RESPONSE_TABLE,
-    STELLAR_STATUS_FORBIDDEN_INDEX,
-    STELLAR_STATUS_HOSTILE_INDEX,
-} from '../nova_plugin/reputation/hail.js';
+    ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, GovtComponent,
+    SoundEvent, isPort, landable, displayName,
+} from '../nova_plugin/core/index.js';
+import {
+    DisabledComponent, SourceComponent, FuelComponent, OutfitsStateComponent, ShipDataComponent,
+    TargetComponent,
+} from '../nova_plugin/ship/index.js';
+import { escortParent, EscortAction } from '../nova_plugin/escorts/index.js';
+import {
+    assistGrantedText, ASSIST_GRANTED_FALLBACK, bribeAmount, busyResponseText,
+    BUSY_RESPONSE_FALLBACK, assistIsFree, canRequestAssistance, channelOpenText,
+    CLEARED_TO_DOCK_INDEX, CLEARED_TO_LAND_INDEX, DOCKING_DENIED_INDEX, genericGreetings,
+    greetingText, HAIL_RESPONSE_TABLE, hashString, hostileResponseText, LANDING_DENIED_INDEX,
+    mercyAcceptedText, MISC_STRING_TABLE, miscString, noNeedResponseText,
+    NO_NEED_RESPONSE_FALLBACK, NO_RESPONSE_FALLBACK, NO_RESPONSE_INDEX, planetTakesBribes,
+    shipHailResponse, shipIsFighting, shipTakesBribes, stellarBribeOfferText,
+    stellarBribeRefusedText, stellarChannelOpenText, STELLAR_RESPONSE_TABLE,
+    STELLAR_STATUS_FORBIDDEN_INDEX, STELLAR_STATUS_HOSTILE_INDEX, planetDisposition,
+    shipDisposition, LegalRecordsComponent,
+} from '../nova_plugin/reputation/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { HailAction } from '../nova_plugin/encounters/hail_plugin.js';
-import { SoundEvent } from '../nova_plugin/core/sound_plugin.js';
-import { FuelComponent } from '../nova_plugin/ship/health_plugin.js';
-import { planetDisposition, shipDisposition } from '../nova_plugin/reputation/iff_plugin.js';
-import { isPort, landable } from '../nova_plugin/core/landable.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import { HailAction } from '../nova_plugin/encounters/index.js';
 import { SimulationTimeResource } from './simulation_time.js';
-import { NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
-import { ShootAllWeaponsComponent } from '../nova_plugin/npc/npc_plugin.js';
-import { PersComponent } from '../nova_plugin/spawn/pers_plugin.js';
-import { MissionShipComponent } from '../nova_plugin/player/mission_ship_component.js';
-import { targetIdentity } from './target_identity.js';
-import { ActiveRanksComponent } from '../nova_plugin/ncb/ncb_plugin.js';
+import { NpcComponent, ShootAllWeaponsComponent } from '../nova_plugin/npc/index.js';
+import { PersComponent } from '../nova_plugin/spawn/index.js';
 import {
-    ranksAllowAssistance, ranksGiveFreeRepair,
-} from '../nova_plugin/ncb/rank_logic.js';
+    MissionShipComponent, PlayerShipSelector, CreditsComponent, MissionsComponent,
+    escortProvenance, escortSaleQueued, pendingEscortUpgrade,
+} from '../nova_plugin/player/index.js';
+import { targetIdentity } from './target_identity.js';
+import {
+    ActiveRanksComponent, ranksAllowAssistance, ranksGiveFreeRepair,
+} from '../nova_plugin/ncb/index.js';
 import {
     PlanetComponent, PlanetDataComponent, PlanetTargetComponent,
     stellarClearanceFor, StellarBribesComponent,
-} from '../nova_plugin/travel/planet_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { CreditsComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
-import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
+} from '../nova_plugin/travel/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import {
     EscortManagement, EscortPressAction, escortReadout, HailContext,
@@ -81,10 +51,6 @@ import {
 import {
     escortDailyFee, escortSellValue, escortUpgradeCost,
 } from '../spaceport/escort_fees.js';
-import {
-    escortProvenance, escortSaleQueued, pendingEscortUpgrade,
-} from '../nova_plugin/player/player_escort.js';
-import { EscortAction } from '../nova_plugin/escorts/escort_action.js';
 import { shipGateContext } from '../spaceport/ship_gate_context.js';
 import {
     ShipyardContext, shipStockGatesPass,
@@ -92,7 +58,6 @@ import {
 import { ShipData } from 'novadatainterface/ship_data';
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';
 import { Stage } from './stage_resource.js';
-import { displayName } from '../nova_plugin/core/display_name.js';
 import { presentShipOffer } from './ship_mission_offer_plugin.js';
 import { showStatusMessage } from './status_message_plugin.js';
 import { BEEP_CANT_DO, playUiSound } from './ui_sound.js';

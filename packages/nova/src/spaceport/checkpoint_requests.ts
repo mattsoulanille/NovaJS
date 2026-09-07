@@ -17,8 +17,8 @@
 import { Entity } from 'nova_ecs/entity';
 import { Subject } from 'rxjs';
 import type { CheckpointKind } from '../title/pilot_history.js';
-import type { MissionEvent } from '../nova_plugin/missions/mission_logic.js';
-import { displayName } from '../nova_plugin/core/display_name.js';
+import type { MissionEvent } from '../nova_plugin/missions/index.js';
+import { displayName } from '../nova_plugin/core/index.js';
 
 export interface CheckpointRequest {
     /** Human-readable, e.g. "Accepted: Delivery to Sirius". */

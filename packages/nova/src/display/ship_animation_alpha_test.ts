@@ -10,13 +10,12 @@ import { World } from 'nova_ecs/world';
 import { getDefaultCloakData } from 'novadatainterface/cloak_data';
 import { getDefaultCloakScannerData } from 'novadatainterface/cloak_scanner_data';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { CloakActiveComponent } from '../nova_plugin/ship/cloak_plugin.js';
-import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { IsIonizedComponent } from '../nova_plugin/ship/ionization_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
-import { WeaponsStateComponent } from '../nova_plugin/ship/weapons_state.js';
+import {
+    CloakActiveComponent, IsIonizedComponent, OutfitsStateComponent, ShipComponent,
+    WeaponsStateComponent,
+} from '../nova_plugin/ship/index.js';
+import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { AnimationGraphic } from './animation_graphic.js';
 import { AnimationGraphicComponent } from './animation_graphic_plugin.js';
 import { CloakDisplayPlugin } from './cloak_display_plugin.js';

@@ -18,7 +18,7 @@ import {
 } from '../display/display_scale.js';
 import { keyLabel } from './key_labels.js';
 import { makeDescTextContext, playerGender, resolveConditionalBlocks }
-    from '../nova_plugin/ncb/desc_text.js';
+    from '../nova_plugin/ncb/index.js';
 import {
     loadPilotControls, loadPilotSettings, savePilotControls,
     savePilotSettings,

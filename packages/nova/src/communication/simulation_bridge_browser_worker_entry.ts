@@ -17,11 +17,11 @@ for (const level of ['log', 'warn', 'error'] as const) {
 }
 import { Communicator, CommunicatorResource, Peers } from "nova_ecs/plugins/multiplayer_plugin";
 import { SimulationGameData } from "../client/gamedata/simulation_game_data.js";
-import { ControlEvent } from "../nova_plugin/core/controls_plugin.js";
-import { AnalogControlState } from "../nova_plugin/player/ship_control.js";
-import { HailAction } from "../nova_plugin/encounters/hail_plugin.js";
-import { EscortAction } from "../nova_plugin/escorts/escort_action.js";
-import { AcceptedMission } from "../nova_plugin/missions/mission_accept.js";
+import { ControlEvent } from "../nova_plugin/core/index.js";
+import { AnalogControlState } from "../nova_plugin/player/index.js";
+import { HailAction } from "../nova_plugin/encounters/index.js";
+import { EscortAction } from "../nova_plugin/escorts/index.js";
+import { AcceptedMission } from "../nova_plugin/missions/index.js";
 import { makeSystem } from "../nova_plugin/make_system.js";
 import { SimulationBridgeHost } from "./simulation_bridge_host.js";
 import { SimulationFrame } from "./simulation_frame.js";

@@ -3,10 +3,10 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
-import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
+import {
+    ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
+} from '../nova_plugin/core/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { PlayerInfoDialog } from '../spaceport/player_info.js';
 import { ScreenSize, screenCentre } from './screen_size_plugin.js';

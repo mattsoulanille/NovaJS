@@ -51,9 +51,8 @@ import {
 } from "./display/screen_size_plugin.js";
 import { Stage } from "./display/stage_resource.js";
 import { showStatusMessage } from "./display/status_message_plugin.js";
-import { ControlEvent } from "./nova_plugin/core/controls_plugin.js";
-import { Controls, SavedControls } from "./nova_plugin/core/controls.js";
-import { GateDestinationResolver } from "./nova_plugin/travel/gate_destination_resolver.js";
+import { ControlEvent, Controls, SavedControls } from './nova_plugin/core/index.js';
+import { GateDestinationResolver } from "./nova_plugin/travel/index.js";
 import {
     DisplaySettings, loadDisplaySettings, mergeControls, saveDisplaySettings,
 } from "./title/client_prefs.js";

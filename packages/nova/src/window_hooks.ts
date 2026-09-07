@@ -30,7 +30,7 @@ import type { Starmap } from './spaceport/starmap.js';
 import type { DiscoveryHooks } from './display/starmap_plugin.js';
 import type { JumpVisual } from './display/jump_fade_plugin.js';
 import type { GpuParticleSystem } from './display/gpu_particles.js';
-import type { ControlEvent } from './nova_plugin/core/controls_plugin.js';
+import type { ControlEvent } from './nova_plugin/core/index.js';
 import type { DisplaySettings } from './title/client_prefs.js';
 import type { TitleMusic } from './title/title_music.js';
 import type { TitleScreen } from './title/title_screen.js';

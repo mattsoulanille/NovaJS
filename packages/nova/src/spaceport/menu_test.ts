@@ -1,7 +1,7 @@
 import 'jasmine';
 import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { Menu } from './menu.js';

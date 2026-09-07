@@ -1,7 +1,7 @@
 import { Plugin } from 'nova_ecs/plugin';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent } from 'nova_ecs/world';
-import { EcsControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { EcsControlEvent } from '../nova_plugin/core/index.js';
 import { PixiAppResource } from './pixi_app_resource.js';
 
 

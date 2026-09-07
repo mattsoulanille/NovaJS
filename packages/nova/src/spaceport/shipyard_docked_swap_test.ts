@@ -10,16 +10,15 @@ import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import { DockedShip } from '../display/docked_ship.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { ActiveRanksComponent, ControlBitsComponent }
-    from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { PlayerEscortComponent } from '../nova_plugin/player/player_escort.js';
 import {
-    CreditsComponent, GameDateComponent,
-} from '../nova_plugin/player/player_state_plugin.js';
-import { ShipComponent, ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
+    CargoComponent, OutfitsStateComponent, ShipComponent, ShipDataComponent,
+} from '../nova_plugin/ship/index.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import { ActiveRanksComponent, ControlBitsComponent }
+    from '../nova_plugin/ncb/index.js';
+import {
+    PlayerEscortComponent, CreditsComponent, GameDateComponent,
+} from '../nova_plugin/player/index.js';
 import { commitVenueCredits, creditBalance } from './credit_commit.js';
 import { EscortDealEntry, settleEscortDeals } from './escort_deals.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';

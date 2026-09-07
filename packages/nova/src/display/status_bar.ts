@@ -4,10 +4,10 @@ import { Plugin } from "nova_ecs/plugin";
 import * as PIXI from "pixi.js";
 import { Subject } from "rxjs";
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
-import { ControlAction } from "../nova_plugin/core/controls.js";
-import { DiscoveryStoreResource } from "../nova_plugin/player/discovery_store.js";
-import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { SystemIdResource } from "../nova_plugin/core/system_id_resource.js";
+import {
+    ControlAction, DisplayAssetDataResource, SimulationGameDataResource, SystemIdResource,
+} from '../nova_plugin/core/index.js';
+import { DiscoveryStoreResource } from "../nova_plugin/player/index.js";
 import { Button, ButtonClick } from "../spaceport/button.js";
 import { DockedShipResource } from "./docked_ship.js";
 import { PixiAppResource } from "./pixi_app_resource.js";

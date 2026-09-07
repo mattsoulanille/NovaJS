@@ -6,23 +6,20 @@ import { MovementStateComponent } from 'nova_ecs/plugins/movement_plugin';
 import { MultiplayerData } from 'nova_ecs/plugins/multiplayer_plugin';
 import {
     BayFighterComponent, ReturnWhenTargetRemovedComponent,
-} from '../nova_plugin/escorts/bay_plugin.js';
-import { EscortCommandComponent } from '../nova_plugin/player/escort_command.js';
+} from '../nova_plugin/escorts/index.js';
+import {
+    EscortCommandComponent, durableEscortFields, EscortLandingComponent, PlayerEscortComponent,
+} from '../nova_plugin/player/index.js';
 import {
     OwnerComponent, SourceComponent,
-} from '../nova_plugin/combat/fire_weapon_plugin.js';
-import { FiringGroupComponent } from '../nova_plugin/ship/firing_group.js';
-import { GateArrivalComponent } from '../nova_plugin/travel/gate_transit_plugin.js';
+} from '../nova_plugin/combat/index.js';
+import { FiringGroupComponent, TargetComponent } from '../nova_plugin/ship/index.js';
 import {
-    JumpComponent, MultiJumpContinueComponent,
-} from '../nova_plugin/travel/jump_plugin.js';
+    GateArrivalComponent, JumpComponent, MultiJumpContinueComponent,
+} from '../nova_plugin/travel/index.js';
 import {
     FormationComponent, formationSlotPosition, NpcComponent,
-} from '../nova_plugin/npc/npc_ai_plugin.js';
-import {
-    durableEscortFields, EscortLandingComponent, PlayerEscortComponent,
-} from '../nova_plugin/player/player_escort.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
+} from '../nova_plugin/npc/index.js';
 
 /**
  * ============================================================================

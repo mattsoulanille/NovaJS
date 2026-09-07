@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import {
     buttonRowY, commButtonSlots, COMM_ESCORT, COMM_HAGGLE, COMM_LINE_HEIGHT,

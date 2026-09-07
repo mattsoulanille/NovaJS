@@ -6,8 +6,7 @@ import { ShipData } from 'novadatainterface/ship_data';
 import { GameDataAggregator }
     from '../server/parsing/game_data_aggregator.js';
 import { getPluginGameData } from '../communication/simulation_test_fixture.js';
-import { makeControlBitHooks, runNCBSet } from '../nova_plugin/ncb/ncb.js';
-import { rankPriceMod } from '../nova_plugin/ncb/rank_logic.js';
+import { makeControlBitHooks, runNCBSet, rankPriceMod } from '../nova_plugin/ncb/index.js';
 import { hirePrice } from './hire_escort.js';
 import { outfitPrice, outfitResaleValue } from './outfitter_rules.js';
 import { modifiedPrice } from './price_mod.js';

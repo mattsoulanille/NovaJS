@@ -3,9 +3,10 @@ import { Plugin } from 'nova_ecs/plugin';
 import { Resource } from 'nova_ecs/resource';
 import { World } from 'nova_ecs/world';
 import { Subscription } from 'rxjs';
-import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
+import {
+    ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource,
+} from '../nova_plugin/core/index.js';
+import { PlayerShipSelector } from '../nova_plugin/player/index.js';
 import type { LandedTransaction } from '../spaceport/landed_transaction.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionInfoDialog } from '../spaceport/mission_info.js';

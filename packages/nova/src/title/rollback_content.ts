@@ -10,7 +10,7 @@
  * back to the raw id for anything not loaded.
  */
 
-import { formatDate } from '../nova_plugin/player/calendar.js';
+import { formatDate } from '../nova_plugin/player/index.js';
 import { CheckpointKind, checkpointState, PilotHistory } from './pilot_history.js';
 
 /**

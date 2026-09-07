@@ -4,18 +4,19 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { formatDate } from '../nova_plugin/player/calendar.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { ArmorComponent, FuelComponent, ShieldComponent } from '../nova_plugin/ship/health_plugin.js';
-import { cargoName, missionCargoKey } from '../nova_plugin/missions/mission_logic.js';
-import { OutfitsState, OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { CreditsComponent, GameDateComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
 import {
-    combatRatingName, legalStatusInSystem, statusGovtOf,
-} from '../nova_plugin/reputation/reputation.js';
-import { CombatRatingComponent, LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
-import { deriveShipPhysics, ShipComponent, ShipPhysicsComponent } from '../nova_plugin/ship/ship_plugin.js';
+    formatDate, CreditsComponent, GameDateComponent, MissionsComponent,
+} from '../nova_plugin/player/index.js';
+import {
+    CargoComponent, ArmorComponent, FuelComponent, ShieldComponent, OutfitsState,
+    OutfitsStateComponent, deriveShipPhysics, ShipComponent, ShipPhysicsComponent,
+} from '../nova_plugin/ship/index.js';
+import { ControlEvent, displayName } from '../nova_plugin/core/index.js';
+import { cargoName, missionCargoKey } from '../nova_plugin/missions/index.js';
+import {
+    combatRatingName, legalStatusInSystem, statusGovtOf, CombatRatingComponent,
+    LegalRecordsComponent,
+} from '../nova_plugin/reputation/index.js';
 import { Button } from './button.js';
 import { frameOrigin, INK_TO_BOX } from './hail_layout.js';
 import { MenuControls } from './menu_controls.js';
@@ -23,10 +24,8 @@ import {
     computeCargoCapacity, loadPayrollShips, playerPayroll,
 } from './mission_session.js';
 import { DailyBudget, dailyBudget } from './daily_budget.js';
-import { ActiveRanksComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { activeRankData } from '../nova_plugin/ncb/rank_logic.js';
+import { ActiveRanksComponent, activeRankData } from '../nova_plugin/ncb/index.js';
 import { RankData } from 'novadatainterface/rank_data';
-import { displayName } from '../nova_plugin/core/display_name.js';
 import { outfitPrice } from './outfitter_rules.js';
 
 // The player-info dialog composes the three PICTs 8518 (top strip,

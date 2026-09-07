@@ -10,13 +10,12 @@ import { Vector } from "nova_ecs/datatypes/vector";
 import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { diffWorldHashes, hashWorld } from "nova_ecs/plugins/world_hash";
 import { World } from "nova_ecs/world";
-import { completeEntity } from "../nova_plugin/spawn/entity_data_loader.js";
-import { makeNpc } from "../nova_plugin/npc/npc_plugin.js";
-import { makeShip } from "../nova_plugin/ship/make_ship.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { ControlledByComponent } from "../nova_plugin/player/ship_control.js";
+import { completeEntity } from "../nova_plugin/spawn/index.js";
+import { makeNpc } from "../nova_plugin/npc/index.js";
+import { makeShip } from "../nova_plugin/ship/index.js";
+import { PlayerShipSelector, ControlledByComponent } from '../nova_plugin/player/index.js';
 import { makeSystem } from "../nova_plugin/make_system.js";
-import { Platform } from "../nova_plugin/core/platform_plugin.js";
+import { Platform } from "../nova_plugin/core/index.js";
 import { getIntegrationGameData } from "./simulation_test_fixture.js";
 import { GameDataAggregator } from "../server/parsing/game_data_aggregator.js";
 

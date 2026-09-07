@@ -1,6 +1,6 @@
 import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
 import { beginPixiTextEntry } from '../input_focus.js';
 import { MenuControls } from './menu_controls.js';
 

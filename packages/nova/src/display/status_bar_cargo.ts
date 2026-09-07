@@ -7,14 +7,14 @@ import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { CargoComponent } from "../nova_plugin/ship/cargo_plugin.js";
-import { SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { STANDARD_CARGO_NAMES } from "../nova_plugin/missions/mission_logic.js";
-import { OutfitsState, OutfitsStateComponent, sumOutfitField } from "../nova_plugin/ship/outfit_plugin.js";
-import { PlayerEscortComponent } from "../nova_plugin/player/player_escort.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { CreditsComponent } from "../nova_plugin/player/player_state_plugin.js";
-import { ShipComponent } from "../nova_plugin/ship/ship_plugin.js";
+import {
+    CargoComponent, OutfitsState, OutfitsStateComponent, sumOutfitField, ShipComponent,
+} from '../nova_plugin/ship/index.js';
+import { SimulationGameDataResource } from "../nova_plugin/core/index.js";
+import { STANDARD_CARGO_NAMES } from "../nova_plugin/missions/index.js";
+import {
+    PlayerEscortComponent, PlayerShipSelector, CreditsComponent,
+} from '../nova_plugin/player/index.js';
 import {
     entityCarriesFleetCargo, FleetMemberCargo, sumFleetCargo,
 } from "../spaceport/fleet_cargo.js";

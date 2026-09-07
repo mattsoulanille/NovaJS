@@ -4,17 +4,16 @@ import { Optional } from "nova_ecs/optional";
 import { Query } from "nova_ecs/query";
 import { System } from "nova_ecs/system";
 import * as PIXI from "pixi.js";
-import { DisabledComponent } from "../nova_plugin/ship/disabled_component.js";
-import { displayName, govtTargetName } from "../nova_plugin/core/display_name.js";
-import { SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { GovtComponent } from "../nova_plugin/core/govt_component.js";
-import { ArmorComponent, ShieldComponent } from "../nova_plugin/ship/health_plugin.js";
-import { MissionShipComponent } from "../nova_plugin/player/mission_ship_component.js";
-import { PersComponent } from "../nova_plugin/spawn/pers_plugin.js";
-import { PlayerEscortComponent } from "../nova_plugin/player/player_escort.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { ShipDataComponent } from "../nova_plugin/ship/ship_plugin.js";
-import { TargetComponent } from "../nova_plugin/ship/target_component.js";
+import {
+    DisabledComponent, ArmorComponent, ShieldComponent, ShipDataComponent, TargetComponent,
+} from '../nova_plugin/ship/index.js';
+import {
+    displayName, govtTargetName, SimulationGameDataResource, GovtComponent,
+} from '../nova_plugin/core/index.js';
+import {
+    MissionShipComponent, PlayerEscortComponent, PlayerShipSelector,
+} from '../nova_plugin/player/index.js';
+import { PersComponent } from "../nova_plugin/spawn/index.js";
 import { AnimationGraphic } from "./animation_graphic.js";
 import { AnimationGraphicComponent } from "./animation_graphic_plugin.js";
 import { targetGovtLabel } from "./status_bar_content.js";

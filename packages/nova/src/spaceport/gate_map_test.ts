@@ -7,10 +7,10 @@ import { Entity } from "nova_ecs/entity";
 import * as PIXI from "pixi.js";
 import { getIntegrationGameData } from "../communication/simulation_test_fixture.js";
 import { gateMapMissionMarks } from "../display/gate_map_plugin.js";
-import { MissionMapMark } from "../nova_plugin/missions/mission_logic.js";
-import { ControlBitsComponent } from "../nova_plugin/ncb/ncb_plugin.js";
-import { ActiveMission, MissionsComponent } from "../nova_plugin/player/player_state_plugin.js";
-import { landable } from "../nova_plugin/core/landable.js";
+import { MissionMapMark } from "../nova_plugin/missions/index.js";
+import { ControlBitsComponent } from "../nova_plugin/ncb/index.js";
+import { ActiveMission, MissionsComponent } from "../nova_plugin/player/index.js";
+import { landable } from "../nova_plugin/core/index.js";
 import {
     computeGateMapSelection, computeSelectableSystems, gateMapGraphOptions,
 } from "./gate_map.js";

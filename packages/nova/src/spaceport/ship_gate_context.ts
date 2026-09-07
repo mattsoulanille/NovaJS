@@ -2,14 +2,12 @@ import { Entity } from 'nova_ecs/entity';
 import { getDefaultGameDate } from 'novadatainterface/player_start_data';
 import { OutfitData } from 'novadatainterface/outfit_data';
 import { ShipData } from 'novadatainterface/ship_data';
-import { dayNumber } from '../nova_plugin/player/calendar.js';
-import { numericId } from '../nova_plugin/missions/mission_logic.js';
+import { dayNumber, GameDateComponent } from '../nova_plugin/player/index.js';
+import { numericId } from '../nova_plugin/missions/index.js';
 import {
-    ActiveRanksComponent, ControlBitsComponent,
-} from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { GameDateComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { RankLookup, rankContribute } from '../nova_plugin/ncb/rank_logic.js';
+    ActiveRanksComponent, ControlBitsComponent, RankLookup, rankContribute,
+} from '../nova_plugin/ncb/index.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import { stellarPriceMod } from './price_mod.js';
 import { ShipyardContext, ShipyardStellar } from './shipyard_stock_rules.js';
 

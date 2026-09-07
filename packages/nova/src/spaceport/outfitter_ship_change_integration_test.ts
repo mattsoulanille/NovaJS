@@ -4,13 +4,12 @@ import * as PIXI from 'pixi.js';
 import { Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CargoComponent } from '../nova_plugin/ship/cargo_plugin.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
-import { CreditsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { ShipComponent } from '../nova_plugin/ship/ship_plugin.js';
+import {
+    CargoComponent, makeShip, OutfitsStateComponent, ShipComponent,
+} from '../nova_plugin/ship/index.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { CreditsComponent } from '../nova_plugin/player/index.js';
 import { creditBalance } from './credit_commit.js';
 import { installHeadlessPixi } from './headless_pixi_fixture.js';
 import { Outfitter } from './outfitter.js';

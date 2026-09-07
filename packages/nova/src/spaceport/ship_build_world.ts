@@ -4,16 +4,14 @@ import { Entity } from 'nova_ecs/entity';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
 import {
-    DisplayAssetDataResource,
-    SimulationGameDataResource,
-} from '../nova_plugin/core/game_data_resource.js';
+    DisplayAssetDataResource, SimulationGameDataResource, IdFactory, IdFactoryResource,
+    SystemIdResource,
+} from '../nova_plugin/core/index.js';
 import {
     DEFAULT_MISSILE_GUIDANCE,
     MissileGuidanceResource,
-} from '../nova_plugin/combat/guidance.js';
-import { IdFactory, IdFactoryResource } from '../nova_plugin/core/id_factory.js';
+} from '../nova_plugin/combat/index.js';
 import { AsyncSystemResource } from 'nova_ecs/async_system';
-import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
 import { SystemPlugin } from '../nova_plugin/system_plugin.js';
 
 /**

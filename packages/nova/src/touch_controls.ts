@@ -1,5 +1,5 @@
 import { ControlSinks } from './autopilot.js';
-import { ControlAction } from './nova_plugin/core/controls.js';
+import { ControlAction } from './nova_plugin/core/index.js';
 
 /**
  * On-screen touch controls, sized for tablets:

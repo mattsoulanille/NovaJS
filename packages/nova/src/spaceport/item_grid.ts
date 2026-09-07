@@ -1,7 +1,7 @@
 import * as PIXI from 'pixi.js';
 import { BehaviorSubject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
-import { displayName } from '../nova_plugin/core/display_name.js';
+import { displayName } from '../nova_plugin/core/index.js';
 
 
 const TILE_SIZE = [83, 54];

@@ -4,7 +4,7 @@ import { getDefaultShipData, ShipData } from 'novadatainterface/ship_data';
 import { getDefaultProjectileWeaponData, WeaponData } from 'novadatainterface/weapon_data';
 import {
     DISCOVERY_ENTERED, DISCOVERY_UNKNOWN, DiscoveryAccess,
-} from '../nova_plugin/player/discovery.js';
+} from '../nova_plugin/player/index.js';
 import {
     ammoCapacity,
     availableForSale,

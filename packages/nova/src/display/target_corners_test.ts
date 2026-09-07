@@ -4,12 +4,12 @@ import { Entity } from 'nova_ecs/entity';
 import { Resource } from 'nova_ecs/resource';
 import { System } from 'nova_ecs/system';
 import { SingletonComponent, World } from 'nova_ecs/world';
-import { DisabledComponent } from '../nova_plugin/ship/disabled_component.js';
-import { GovtComponent } from '../nova_plugin/core/govt_component.js';
-import { FormationComponent, NpcComponent } from '../nova_plugin/npc/npc_ai_plugin.js';
-import { ShootAllWeaponsComponent } from '../nova_plugin/npc/npc_plugin.js';
-import { EscortCommandComponent } from '../nova_plugin/player/escort_command.js';
-import { TargetComponent } from '../nova_plugin/ship/target_component.js';
+import { DisabledComponent, TargetComponent } from '../nova_plugin/ship/index.js';
+import { GovtComponent } from '../nova_plugin/core/index.js';
+import {
+    FormationComponent, NpcComponent, ShootAllWeaponsComponent,
+} from '../nova_plugin/npc/index.js';
+import { EscortCommandComponent } from '../nova_plugin/player/index.js';
 import {
     cornersSweepSystem, styleForTarget, TargetCorners,
 } from './target_corners_plugin.js';

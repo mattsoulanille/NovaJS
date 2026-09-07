@@ -18,10 +18,10 @@ import type { MultiRoom } from '../communication/multi_room_communicator.js';
 import {
     SimulationBridgeClosedError,
 } from '../communication/async_simulation_bridge_client.js';
-import type { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+import type { ControlEvent } from '../nova_plugin/core/index.js';
 import type {
     GateDestinationResolver,
-} from '../nova_plugin/travel/gate_destination_resolver.js';
+} from '../nova_plugin/travel/index.js';
 import type { DisplayAssetData } from './gamedata/display_asset_data.js';
 import type { SimulationGameData } from './gamedata/simulation_game_data.js';
 import type { ClientStateSlot } from './client_state.js';

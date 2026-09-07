@@ -1,11 +1,11 @@
 import { ShipData } from 'novadatainterface/ship_data';
 import { Entity } from 'nova_ecs/entity';
-import { replaceEscortShipClass } from '../nova_plugin/escorts/escort_action.js';
+import { replaceEscortShipClass } from '../nova_plugin/escorts/index.js';
 import {
     escortDeal, escortProvenance, NO_DEAL, PlayerEscort, PlayerEscortComponent,
     withEscortDeal,
-} from '../nova_plugin/player/player_escort.js';
-import { ShipDataComponent } from '../nova_plugin/ship/ship_plugin.js';
+} from '../nova_plugin/player/index.js';
+import { ShipDataComponent } from '../nova_plugin/ship/index.js';
 import { escortSellValue, escortUpgradeCost } from './escort_fees.js';
 import { formatPrice } from './format_price.js';
 

@@ -1,5 +1,5 @@
 import { ShipData } from 'novadatainterface/ship_data';
-import { RankLookup, rankSalaryBreakdown } from '../nova_plugin/ncb/rank_logic.js';
+import { RankLookup, rankSalaryBreakdown } from '../nova_plugin/ncb/index.js';
 import { escortPayrollFee } from './escort_fees.js';
 
 /**

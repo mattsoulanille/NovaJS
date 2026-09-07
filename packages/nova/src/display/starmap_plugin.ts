@@ -5,21 +5,19 @@ import { EcsEvent } from 'nova_ecs/events';
 import { Subscription } from 'rxjs';
 import { Component } from 'nova_ecs/component';
 import { OutfitData } from 'novadatainterface/outfit_data';
-import { DisplayAssetDataResource, SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { ControlsSubject } from '../nova_plugin/core/controls_plugin.js';
 import {
-    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel,
-} from '../nova_plugin/player/discovery.js';
-import { DiscoveryStoreResource } from '../nova_plugin/player/discovery_store.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+    DisplayAssetDataResource, SimulationGameDataResource, ControlsSubject, SystemIdResource,
+} from '../nova_plugin/core/index.js';
+import {
+    DISCOVERY_ENTERED, DISCOVERY_LANDED, DiscoveryLevel, DiscoveryStoreResource,
+    PlayerShipSelector, GameDateComponent, MissionsComponent,
+} from '../nova_plugin/player/index.js';
+import { OutfitsStateComponent } from '../nova_plugin/ship/index.js';
 import { applyOwnedMapOutfits } from '../spaceport/map_outfit.js';
-import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/jump_plugin.js';
-import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/mission_logic.js';
-import { ControlBitsComponent } from '../nova_plugin/ncb/ncb_plugin.js';
-import { PlayerShipSelector } from '../nova_plugin/player/player_ship_plugin.js';
-import { GameDateComponent, MissionsComponent } from '../nova_plugin/player/player_state_plugin.js';
-import { LegalRecordsComponent } from '../nova_plugin/reputation/reputation_plugin.js';
-import { SystemIdResource } from '../nova_plugin/core/system_id_resource.js';
+import { JumpComponent, JumpRouteComponent } from '../nova_plugin/travel/index.js';
+import { MissionMapMark, missionMapMarks } from '../nova_plugin/missions/index.js';
+import { ControlBitsComponent } from '../nova_plugin/ncb/index.js';
+import { LegalRecordsComponent } from '../nova_plugin/reputation/index.js';
 import { MenuControls } from '../spaceport/menu_controls.js';
 import { MissionUniverse } from '../spaceport/mission_universe.js';
 import { emptyRouteState } from '../spaceport/route.js';

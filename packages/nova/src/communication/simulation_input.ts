@@ -5,17 +5,18 @@ import { CommunicatorResource, MultiplayerData } from "nova_ecs/plugins/multipla
 import { EncodedEntity, SerializerResource } from "nova_ecs/plugins/serializer_plugin";
 import { World } from "nova_ecs/world";
 import { warnThrottled } from "../common/log_throttle.js";
-import { ControlEvent, ControlEventType, ControlsSubject } from "../nova_plugin/core/controls_plugin.js";
-import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/spawn/entity_data_loader.js";
-import { deriveEntityComponents } from "../nova_plugin/core/entity_factory.js";
-import { JumpRouteComponent } from "../nova_plugin/travel/jump_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { applyAnalogControl, applyControlEvents, ControlledByComponent } from "../nova_plugin/player/ship_control.js";
-import { applySetTarget } from "../nova_plugin/combat/target_plugin.js";
-import { applySetPlanetTarget } from "../nova_plugin/travel/planet_plugin.js";
-import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/hail_plugin.js";
-import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/missions/mission_accept.js";
-import { applyEscortAction, EscortAction, EscortActionType } from "../nova_plugin/escorts/escort_action.js";
+import {
+    ControlEvent, ControlEventType, ControlsSubject, deriveEntityComponents,
+} from '../nova_plugin/core/index.js';
+import { loadEntityGameData, loadOutfitsGameData } from "../nova_plugin/spawn/index.js";
+import { JumpRouteComponent, applySetPlanetTarget } from '../nova_plugin/travel/index.js';
+import {
+    PlayerShipSelector, applyAnalogControl, applyControlEvents, ControlledByComponent,
+} from '../nova_plugin/player/index.js';
+import { applySetTarget } from "../nova_plugin/combat/index.js";
+import { applyHail, HailAction, HailActionType } from "../nova_plugin/encounters/index.js";
+import { AcceptedMission, AcceptedMissionType, applyAcceptMission } from "../nova_plugin/missions/index.js";
+import { applyEscortAction, EscortAction, EscortActionType } from "../nova_plugin/escorts/index.js";
 
 /**
  * Everything that changes the simulation from outside is an input,

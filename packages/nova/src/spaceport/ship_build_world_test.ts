@@ -1,7 +1,7 @@
 import 'jasmine';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import { getSyntheticGameData } from '../communication/simulation_test_fixture.js';
-import { makeShip } from '../nova_plugin/ship/make_ship.js';
+import { makeShip } from '../nova_plugin/ship/index.js';
 import { runShipBuildWorld } from './ship_build_world.js';
 
 // On the synthetic data set: any purchasable hull exercises the scratch

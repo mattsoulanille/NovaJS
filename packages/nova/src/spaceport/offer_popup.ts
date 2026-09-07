@@ -2,13 +2,10 @@ import * as PIXI from 'pixi.js';
 import { firstValueFrom, Observable, Subject } from 'rxjs';
 import { DisplayAssetDataInterface } from '../client/gamedata/display_asset_data.js';
 import {
-    acceptOffer,
-    MissionOffer,
-    refuseOffer,
-} from '../nova_plugin/missions/mission_logic.js';
-import { expandMissionText } from '../nova_plugin/missions/mission_text.js';
-import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/desc_text.js';
-import { ControlEvent } from '../nova_plugin/core/controls_plugin.js';
+    acceptOffer, MissionOffer, refuseOffer, expandMissionText,
+} from '../nova_plugin/missions/index.js';
+import { makeDescTextContext, playerGender } from '../nova_plugin/ncb/index.js';
+import { ControlEvent } from '../nova_plugin/core/index.js';
 import { Button } from './button.js';
 import { MenuControls } from './menu_controls.js';
 import { offerSubstitutions } from './mission_offers.js';

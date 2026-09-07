@@ -1,7 +1,8 @@
 import { Plugin } from "nova_ecs/plugin";
 import { System } from "nova_ecs/system";
-import { CreateTime } from "../nova_plugin/core/create_time.js";
-import { ProjectileComponent, ProjectileDataComponent } from "../nova_plugin/core/projectile_data.js";
+import {
+    CreateTime, ProjectileComponent, ProjectileDataComponent,
+} from '../nova_plugin/core/index.js';
 import { AnimationGraphicComponent, ObjectDrawSystem } from "./animation_graphic_plugin.js";
 import { defaultSimulationTime, SimulationTimeResource } from "./simulation_time.js";
 import { DrawPlanetCornersSystem } from "./planet_corners_plugin.js";

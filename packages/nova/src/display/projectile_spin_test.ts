@@ -7,9 +7,10 @@ import {
 } from 'nova_ecs/plugins/serializer_plugin';
 import { World } from 'nova_ecs/world';
 import { ProjectileWeaponData } from 'novadatainterface/weapon_data';
-import { CreateTime } from '../nova_plugin/core/create_time.js';
+import {
+    CreateTime, ProjectileComponent, ProjectileDataComponent,
+} from '../nova_plugin/core/index.js';
 import { makeSystem } from '../nova_plugin/make_system.js';
-import { ProjectileComponent, ProjectileDataComponent } from '../nova_plugin/core/projectile_data.js';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { AnimationGraphic } from './animation_graphic.js';

@@ -2,9 +2,10 @@ import 'jasmine';
 import { Entity } from 'nova_ecs/entity';
 import { World } from 'nova_ecs/world';
 import { getIntegrationGameData } from '../communication/simulation_test_fixture.js';
-import { CloakComponent, CloakScannerComponent } from '../nova_plugin/ship/cloak_plugin.js';
-import { SimulationGameDataResource } from '../nova_plugin/core/game_data_resource.js';
-import { OutfitsStateComponent } from '../nova_plugin/ship/outfit_plugin.js';
+import {
+    CloakComponent, CloakScannerComponent, OutfitsStateComponent,
+} from '../nova_plugin/ship/index.js';
+import { SimulationGameDataResource } from '../nova_plugin/core/index.js';
 import { novaDataInstalled, requireNovaData } from '../test_support/nova_data_gate.js';
 import { CloakDisplayPlugin } from './cloak_display_plugin.js';
 import { radarHidesShip } from './status_bar_radar.js';

@@ -6,21 +6,20 @@ import { MovementStateComponent } from "nova_ecs/plugins/movement_plugin";
 import { TimeResource } from "nova_ecs/plugins/time_plugin";
 import { World } from "nova_ecs/world";
 import { Subject } from "rxjs";
-import { ControlEvent, ControlsSubject } from "../nova_plugin/core/controls_plugin.js";
+import {
+    ControlEvent, ControlsSubject, DisplayAssetDataResource, SimulationGameDataResource, Stat,
+    GovtComponent,
+} from '../nova_plugin/core/index.js';
 import { DisplayAssetDataInterface } from "../client/gamedata/display_asset_data.js";
 import { SimulationGameDataInterface } from "../client/gamedata/simulation_game_data.js";
-import { DisabledComponent } from "../nova_plugin/ship/disabled_component.js";
-import { DeathEvent, ZeroArmorEvent } from "../nova_plugin/ship/death_plugin.js";
-import { DisplayAssetDataResource, SimulationGameDataResource } from "../nova_plugin/core/game_data_resource.js";
-import { ArmorComponent, FuelComponent } from "../nova_plugin/ship/health_plugin.js";
-import { Stat } from "../nova_plugin/core/stat.js";
-import { JumpComponent, JumpRouteComponent } from "../nova_plugin/travel/jump_plugin.js";
-import { PlanetTargetComponent } from "../nova_plugin/travel/planet_plugin.js";
-import { PlayerShipSelector } from "../nova_plugin/player/player_ship_plugin.js";
-import { GovtComponent } from "../nova_plugin/core/govt_component.js";
-import { ShipComponent, ShipPhysicsComponent } from "../nova_plugin/ship/ship_plugin.js";
-import { TargetComponent } from "../nova_plugin/ship/target_component.js";
-import { WeaponsStateComponent } from "../nova_plugin/ship/weapons_state.js";
+import {
+    DisabledComponent, DeathEvent, ZeroArmorEvent, ArmorComponent, FuelComponent, ShipComponent,
+    ShipPhysicsComponent, TargetComponent, WeaponsStateComponent,
+} from '../nova_plugin/ship/index.js';
+import {
+    JumpComponent, JumpRouteComponent, PlanetTargetComponent,
+} from '../nova_plugin/travel/index.js';
+import { PlayerShipSelector } from "../nova_plugin/player/index.js";
 import { ExplosionPlugin } from "./explosion_plugin.js";
 import { SoundPlugin } from "./sound_plugin.js";
 import { UiSoundTriggersPlugin } from "./ui_sound_triggers_plugin.js";

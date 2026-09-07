@@ -19,12 +19,12 @@
  * ship). Client-local: the simulation is never involved.
  */
 import type { Entity } from 'nova_ecs/entity';
-import type { ControlBitPair, ControlBitResolver } from '../nova_plugin/ncb/control_bit_namespaces.js';
-import { displayName } from '../nova_plugin/core/display_name.js';
+import type { ControlBitPair, ControlBitResolver } from '../nova_plugin/ncb/index.js';
+import { displayName } from '../nova_plugin/core/index.js';
 import {
     decodeSave, encodeSave, extractSaveData, extractSavedEscorts,
     getActiveSaveKey, resetSave, SaveData, writeSave,
-} from '../nova_plugin/pilot/save_game.js';
+} from '../nova_plugin/pilot/index.js';
 import {
     CheckpointRequest, checkpointRequests, describeFlightChanges,
 } from '../spaceport/checkpoint_requests.js';

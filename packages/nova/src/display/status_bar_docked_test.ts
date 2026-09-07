@@ -1,6 +1,6 @@
 import 'jasmine';
 import { SimulationGameDataInterface } from '../client/gamedata/simulation_game_data.js';
-import { OutfitsState } from '../nova_plugin/ship/outfit_plugin.js';
+import { OutfitsState } from '../nova_plugin/ship/index.js';
 import { cargoCapacityOf, cargoDisplayOf } from './status_bar_cargo.js';
 
 /**
