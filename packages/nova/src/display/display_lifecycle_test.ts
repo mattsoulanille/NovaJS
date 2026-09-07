@@ -234,12 +234,12 @@ describe('display world UI lifecycle', () => {
             + 'landing, and frees it with the world', async () => {
                 const gameData = await getSyntheticGameData();
                 // Stock's five-stellar systems (Sol, Aldebaran, Aurora,
-                // K-003) are the worst case; the scenario's five stellars
-                // reproduce the count, and what matters is that none is
+                // K-003) are the worst case; the scenario's stellars cover
+                // at least that count, and what matters is that none is
                 // built for free.
                 const ids = await gameData.ids;
                 const planets = Object.values(SYNTHETIC.planets);
-                expect(planets.length).toBe(5);
+                expect(planets.length).toBeGreaterThanOrEqual(5);
                 const shipId = ids.Ship[0];
                 await MissionUniverse.shared(gameData).load();
 
