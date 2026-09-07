@@ -27,8 +27,8 @@ import { World } from 'nova_ecs/world';
 import { filter, firstValueFrom, Subscription, timeout } from 'rxjs';
 import { v4 } from 'uuid';
 import {
-    applySimulationFrame, movementSyncedSinceStep, syncedComponents,
-    warnedUnsyncableEntities,
+    applySimulationFrame, movementSyncedSinceStep, stageSimulationFrameGameData,
+    syncedComponents, warnedUnsyncableEntities,
 } from '../communication/apply_simulation_frame.js';
 import type { AsyncSimulationBridgeClient } from '../communication/async_simulation_bridge_client.js';
 import {
@@ -465,6 +465,9 @@ async function enterSystem(runtime: ClientRuntime, plan: TransitPlan,
     // bookkeeping from the previous system's sync.
     syncedComponents.clear();
     warnedUnsyncableEntities.clear();
+    // The frame's game-data references (ShipData & co.) resolve in the
+    // display's own caches: stage them before applying.
+    await scope.race(stageSimulationFrameGameData(gameData, initialFrame));
     applySimulationFrame(initialFrame, serializer, displayWorld);
     // The last thing that can fail is behind us: the session is checked
     // one final time so a world is never published over a title screen.

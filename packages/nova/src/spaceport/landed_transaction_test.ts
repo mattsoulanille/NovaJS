@@ -527,8 +527,14 @@ describe('the landed transaction', () => {
                     .toEqual({ kind: 'upgrade', toShip: BETTER });
                 expect(marker).toEqual(
                     escort.components.get(PlayerEscortComponent)!);
-                expect(escorts[0].entity.components.get(ShipDataComponent)?.id)
+                // The class rides on ShipComponent; ShipData is DERIVED
+                // game data that a save does not persist (it is
+                // re-derived when the escort is inserted, see
+                // save_game.ts withoutGameDataComponents).
+                expect(escorts[0].entity.components.get(ShipComponent)?.id)
                     .toBe(ESCORT);
+                expect(escorts[0].entity.components.has(ShipDataComponent))
+                    .toBeFalse();
             });
     });
 });

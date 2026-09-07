@@ -268,6 +268,31 @@ export function passthroughType<Data>(name: string): t.Type<Data, unknown, unkno
     );
 }
 
+/**
+ * A hand-written codec that DECLARES the shape of its encoded form.
+ *
+ * A bare `new t.Type` exposes nothing but a name, so a wire-schema
+ * reflection (nova's io_ts_to_avro.ts) cannot type it and has to carry
+ * it opaquely. A codec whose encode and decode are custom — a
+ * game-data reference resolved against a cache, say — describes what
+ * `encode` produces and `decode` accepts as `wireShape`, an ordinary
+ * (reflectable) io-ts codec over the encoded type, and the reflection
+ * types the node by that. `wireShape` is a description, not a gate:
+ * `decode` does its own validation.
+ */
+export class WireShapedType<A, O> extends t.Type<A, O, unknown> {
+    readonly _tag = 'WireShapedType' as const;
+    constructor(
+        name: string,
+        is: t.Is<A>,
+        validate: t.Validate<unknown, A>,
+        encode: t.Encode<A, O>,
+        readonly wireShape: t.Type<O, O, unknown>,
+    ) {
+        super(name, is, validate, encode);
+    }
+}
+
 export const markerType = new t.Type<undefined, null, unknown>(
     'marker',
     (u): u is undefined => u === undefined,

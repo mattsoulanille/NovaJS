@@ -1,7 +1,7 @@
 import * as t from 'io-ts';
 import { PositionType } from 'nova_ecs/datatypes/position';
 import { AngleType, VectorType } from 'nova_ecs/datatypes/vector';
-import { EncodedComponentList, markerType, Serializer } from 'nova_ecs/plugins/serializer_plugin';
+import { EncodedComponentList, markerType, Serializer, WireShapedType } from 'nova_ecs/plugins/serializer_plugin';
 
 /**
  * ============================================================================
@@ -469,6 +469,12 @@ class Deriver {
                 return this.opaque('unmapped', path, codec, 'functions cannot cross a wire');
             case 'RecursiveType':
                 return this.recursive(codec as t.RecursiveType<t.Any>, path, nameHint);
+            case 'WireShapedType':
+                // A hand-written codec that declares its encoded shape
+                // (nova_ecs serializer_plugin WireShapedType): the
+                // shape is what crosses the wire.
+                return this.derive((codec as WireShapedType<unknown, unknown>).wireShape,
+                    path, nameHint);
             default:
                 return this.opaque('unmapped', path, codec,
                     `custom codec (${tag ?? 'no _tag'}); its encoded shape is not reflectable`

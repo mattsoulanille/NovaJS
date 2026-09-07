@@ -8,6 +8,7 @@ import { AsteroidComponent, loadAsteroidGameData } from "../combat/index.js";
 import { WeaponEntries } from "../combat/index.js";
 import { SimulationGameDataResource } from "../core/index.js";
 import { GovtComponent } from "../core/index.js";
+import { stageEncodedComponentsGameData } from "../core/index.js";
 import { loadWithRetries } from "../core/index.js";
 import { OutfitsStateComponent } from "../ship/index.js";
 import { PlanetComponent } from "../travel/index.js";
@@ -248,9 +249,18 @@ export async function completeEntity(world: World, entity: Entity) {
 /**
  * Loads the game data every entity in a wire snapshot needs, so
  * restoring it (and deriving the omitted components) is synchronous.
+ * The game-data REFERENCES the entities carry (core/game_data_ref.ts)
+ * are staged first, since decoding an entity resolves them; then each
+ * decoded entity's closure, as genesis stages it.
  */
 export async function loadWireSnapshotGameData(
     world: World, snapshot: WireWorldSnapshot) {
+    const gameData = world.resources.get(SimulationGameDataResource);
+    if (!gameData) {
+        throw new Error('Expected SimulationGameDataResource to exist');
+    }
+    await stageEncodedComponentsGameData(gameData,
+        snapshot.entities.map(entity => entity.components));
     for (const wireEntity of snapshot.entities) {
         await loadEntityGameData(world, decodeWireEntity(world, wireEntity));
     }

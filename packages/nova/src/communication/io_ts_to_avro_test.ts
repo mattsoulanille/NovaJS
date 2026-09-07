@@ -507,23 +507,19 @@ describe('io-ts to Avro derivation', () => {
             };
         }, 60000);
 
-        it('types every registered component but the game-data codecs', () => {
+        it('types every registered component; only a bridge event\'s data stays opaque', () => {
             const serializer = world.resources.get(SerializerResource)!;
-            const { failures } = simulationFrameDerivation(serializer);
-            // The components carrying PARSED GAME DATA are custom codecs
-            // over novadatainterface shapes with no io-ts description
-            // (entity_data_loader.ts); every simulation-state component
-            // is typed.
-            expect(summarize(failures)).toEqual([
-                'unmapped $.added[][1].components[].AnimationComponent',
-                'unmapped $.added[][1].components[].BeamData',
-                'unmapped $.added[][1].components[].BeamState',
-                'unmapped $.added[][1].components[].ExplosionData',
-                'unmapped $.added[][1].components[].PlanetData',
-                'unmapped $.added[][1].components[].ProjectileData',
-                'unmapped $.added[][1].components[].ShipData',
-                'untyped $.events[].data',
-            ]);
+            const { failures, schema } = simulationFrameDerivation(serializer);
+            // The components carrying PARSED GAME DATA cross as
+            // references (nova_plugin/core/game_data_ref.ts), whose
+            // codecs declare their wire shape; BeamState has its real
+            // codec. Every simulation-state component is typed.
+            expect(summarize(failures)).toEqual(['untyped $.events[].data']);
+            // The reference records are shared, by name.
+            const text = JSON.stringify(schema);
+            expect(text).toContain('"name":"GameDataRef"');
+            expect(text).toContain('"name":"AnimationRef"');
+            expect(text.split('"name":"GameDataRef"').length).toBe(2);
         });
 
         it('round-trips a full frame and an addEntity through the typed component list', () => {

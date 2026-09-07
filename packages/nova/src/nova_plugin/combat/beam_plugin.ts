@@ -8,7 +8,8 @@ import { Entity } from 'nova_ecs/entity';
 import { Optional } from 'nova_ecs/optional';
 import { Plugin } from 'nova_ecs/plugin';
 import { MovementState, MovementStateComponent, MovementSystem } from 'nova_ecs/plugins/movement_plugin';
-import { passthroughType, SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import { SerializerResource } from 'nova_ecs/plugins/serializer_plugin';
+import * as t from 'io-ts';
 import { TimeResource, TimeSystem } from 'nova_ecs/plugins/time_plugin';
 import { Query } from 'nova_ecs/query';
 import { System } from 'nova_ecs/system';
@@ -16,6 +17,7 @@ import SAT from "sat";
 import { CollisionSystem, CompositeHull, HitboxHullComponent, HurtboxHullComponent, UpdateHitboxHullSystem, UpdateHurtboxHullSystem } from '../core/index.js';
 import { CollisionEvent, CollisionHitterComponent } from '../core/index.js';
 import { SimulationGameDataResource } from '../core/index.js';
+import { gameDataRefType } from '../core/index.js';
 import { ShipComponent } from '../ship/index.js';
 import { isInFlock } from './flock.js';
 import { pointDefenseMayDamage } from './point_defense.js';
@@ -36,7 +38,7 @@ import { TargetIndexProvider } from './target_plugin.js';
 import { SetControlledShipSystem } from '../player/index.js';
 
 
-interface BeamState {
+export interface BeamState {
     pointToTarget?: boolean,
     exitPointData?: ExitPointData,
     hitDist?: number;
@@ -57,6 +59,24 @@ interface BeamState {
 
 export const BeamStateComponent = new Component<BeamState>('BeamState');
 export const BeamDataComponent = new Component<BeamWeaponData>('BeamData');
+
+/**
+ * BeamState's wire shape: per-beam STATE (not game data — the one of
+ * the seven formerly-passthrough component codecs that is), so it has
+ * a real codec rather than a reference (core/game_data_ref.ts).
+ */
+const ExitPointDataType: t.Type<ExitPointData> = t.type({
+    position: t.tuple([t.number, t.number, t.number]),
+    upCompress: t.tuple([t.number, t.number]),
+    downCompress: t.tuple([t.number, t.number]),
+});
+export const BeamStateType: t.Type<BeamState> = t.exact(t.partial({
+    pointToTarget: t.boolean,
+    exitPointData: ExitPointDataType,
+    hitDist: t.number,
+    targetHit: t.string,
+    aimOffset: t.number,
+}));
 
 const BeamSubsQuery = new Query([MovementStateComponent] as const);
 
@@ -492,10 +512,14 @@ export const BeamPlugin: Plugin = {
         if (!weaponConstructors) {
             throw new Error('Expected WeaponConstructors to exist');
         }
+        // On the wire as `{id}`, resolved in this world's Weapon data and
+        // checked to be a beam weapon (core/game_data_ref.ts).
         world.resources.get(SerializerResource)?.addComponent(
-            BeamDataComponent, passthroughType<BeamWeaponData>('BeamDataComponentType'));
+            BeamDataComponent, gameDataRefType<BeamWeaponData>(world, 'Weapon', 'BeamData',
+                (data): data is BeamWeaponData =>
+                    (data as WeaponData).type === 'BeamWeaponData'));
         world.resources.get(SerializerResource)?.addComponent(
-            BeamStateComponent, passthroughType<BeamState>('BeamStateComponentType'));
+            BeamStateComponent, BeamStateType);
         weaponConstructors.set('BeamWeaponData', BeamWeaponEntry);
 
         world.addSystem(BeamResetSystem);
